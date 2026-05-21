@@ -1,0 +1,10 @@
+{
+  "name": "@hebron/typescript-config",
+  "version": "0.0.0",
+  "private": true,
+  "exports": {
+    "./base": "./base.json",
+    "./nextjs": "./nextjs.json"
+  },
+  "files": ["base.json", "nextjs.json"]
+}

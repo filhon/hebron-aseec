@@ -1,0 +1,31 @@
+{
+  "name": "@hebron/email",
+  "version": "0.0.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./templates/*": "./src/templates/*.tsx"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "email:dev": "email dev --dir src/templates"
+  },
+  "dependencies": {
+    "@hebron/types": "workspace:*",
+    "@react-email/components": "^0.0.26",
+    "react-email": "^3.0.1",
+    "resend": "^4.0.0"
+  },
+  "devDependencies": {
+    "@hebron/eslint-config": "workspace:*",
+    "@hebron/typescript-config": "workspace:*",
+    "@types/react": "^19.0.0",
+    "eslint": "^9.13.0",
+    "react": "^19.0.0",
+    "typescript": "^5.6.3"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  }
+}
