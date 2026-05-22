@@ -25,6 +25,7 @@
     "@hebron/eslint-config": "workspace:*",
     "@hebron/typescript-config": "workspace:*",
     "@types/node": "^22.0.0",
+    "dotenv": "^16.4.5",
     "drizzle-kit": "^0.28.0",
     "eslint": "^9.13.0",
     "typescript": "^5.6.3"
