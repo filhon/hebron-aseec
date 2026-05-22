@@ -1,0 +1,282 @@
+"use client";
+
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { Trash2 } from "lucide-react";
+import {
+  Button,
+  FormField,
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@hebron/ui";
+import { designationSchema, type DesignationInput } from "@hebron/validators";
+import type { Designation, User } from "@hebron/types/admin";
+import { SCOPES } from "@hebron/types/roles";
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const SCOPE_LABELS: Record<string, string> = {
+  global: "Organização inteira",
+  admin: "Administração",
+  projetos: "Projetos",
+  plataforma: "Plataforma",
+  radio: "Rádio",
+  financeiro: "Financeiro",
+  intranet: "Intranet",
+  documentos: "Documentos",
+  flats: "Flats",
+  tarefas: "Tarefas",
+};
+
+const DESIGNATION_TYPE_LABELS = {
+  gestor: "Gestor",
+  autorizador: "Autorizador",
+} as const;
+
+// ─── Props ────────────────────────────────────────────────────────────────────
+
+interface DesignationFormProps {
+  /** Apenas usuários com papel de diretor */
+  directors: User[];
+  designations: Designation[];
+  onAssign: (data: DesignationInput) => void | Promise<void>;
+  onRevoke: (designationId: string) => void | Promise<void>;
+  isLoading?: boolean;
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export function DesignationForm({
+  directors,
+  designations,
+  onAssign,
+  onRevoke,
+  isLoading,
+}: DesignationFormProps) {
+  const {
+    handleSubmit,
+    setValue,
+    watch,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<DesignationInput>({
+    resolver: zodResolver(designationSchema),
+    defaultValues: {
+      userId: "",
+      type: "gestor",
+      scope: null,
+    },
+  });
+
+  const loading = isLoading ?? isSubmitting;
+  const watchedUserId = watch("userId");
+  const watchedType = watch("type");
+  const watchedScope = watch("scope");
+
+  async function handleAssign(data: DesignationInput) {
+    await onAssign(data);
+    reset();
+  }
+
+  const activeDesignations = designations.filter((d) => d.revokedAt === null);
+
+  return (
+    <div className="flex flex-col gap-8">
+      {/* Form */}
+      <form
+        onSubmit={handleSubmit(handleAssign)}
+        className="flex flex-col gap-5"
+        noValidate
+      >
+        <div>
+          <h3 className="text-[--text-sm] font-semibold text-[--color-foreground]">
+            Configurar designação
+          </h3>
+          <p className="mt-1 text-[--text-xs] text-[--color-muted-foreground]">
+            Somente diretores podem ser designados como gestor ou autorizador.
+          </p>
+        </div>
+
+        {directors.length === 0 ? (
+          <div className="rounded-[--radius] border border-[--color-border] px-4 py-6 text-center">
+            <p className="text-[--text-sm] text-[--color-muted-foreground]">
+              Nenhum diretor encontrado. Atribua o papel de diretor a um usuário
+              primeiro.
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="grid gap-4 sm:grid-cols-3">
+              {/* Diretor */}
+              <FormField
+                id="userId"
+                label="Diretor"
+                required
+                error={errors.userId?.message}
+              >
+                <Select
+                  value={watchedUserId}
+                  onValueChange={(v) =>
+                    setValue("userId", v, { shouldValidate: true })
+                  }
+                >
+                  <SelectTrigger id="userId" hasError={!!errors.userId}>
+                    <SelectValue placeholder="Selecione um diretor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {directors.map((d) => (
+                      <SelectItem key={d.id} value={d.id}>
+                        {d.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormField>
+
+              {/* Tipo */}
+              <FormField
+                id="type"
+                label="Tipo"
+                required
+                error={errors.type?.message}
+              >
+                <Select
+                  value={watchedType}
+                  onValueChange={(v) =>
+                    setValue("type", v as DesignationInput["type"], {
+                      shouldValidate: true,
+                    })
+                  }
+                >
+                  <SelectTrigger id="type" hasError={!!errors.type}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="gestor">Gestor</SelectItem>
+                    <SelectItem value="autorizador">Autorizador</SelectItem>
+                  </SelectContent>
+                </Select>
+              </FormField>
+
+              {/* Escopo */}
+              <FormField
+                id="scope"
+                label="Escopo"
+                hint="Vazio = organização inteira"
+                error={errors.scope?.message}
+              >
+                <Select
+                  value={watchedScope ?? "__null__"}
+                  onValueChange={(v) =>
+                    setValue(
+                      "scope",
+                      v === "__null__"
+                        ? null
+                        : (v as DesignationInput["scope"]),
+                      { shouldValidate: true },
+                    )
+                  }
+                >
+                  <SelectTrigger id="scope" hasError={!!errors.scope}>
+                    <SelectValue placeholder="Organização inteira" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__null__">
+                      Organização inteira
+                    </SelectItem>
+                    {SCOPES.filter((s) => s !== "global").map((scope) => (
+                      <SelectItem key={scope} value={scope}>
+                        {SCOPE_LABELS[scope] ?? scope}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormField>
+            </div>
+
+            <div className="flex justify-end">
+              <Button type="submit" loading={loading}>
+                Designar
+              </Button>
+            </div>
+          </>
+        )}
+      </form>
+
+      {/* Active designations */}
+      {activeDesignations.length > 0 && (
+        <div className="flex flex-col gap-3">
+          <h3 className="text-[--text-sm] font-semibold text-[--color-foreground]">
+            Designações ativas
+          </h3>
+          <div className="overflow-hidden rounded-[--radius] border border-[--color-border]">
+            <table className="w-full text-[--text-sm]">
+              <thead>
+                <tr className="border-b border-[--color-border] bg-[--color-muted]/40">
+                  <th className="px-4 py-2.5 text-left font-medium text-[--color-muted-foreground]">
+                    Diretor
+                  </th>
+                  <th className="px-4 py-2.5 text-left font-medium text-[--color-muted-foreground]">
+                    Tipo
+                  </th>
+                  <th className="px-4 py-2.5 text-left font-medium text-[--color-muted-foreground]">
+                    Escopo
+                  </th>
+                  <th className="px-4 py-2.5 text-left font-medium text-[--color-muted-foreground]">
+                    Desde
+                  </th>
+                  <th className="w-12 px-4 py-2.5" />
+                </tr>
+              </thead>
+              <tbody>
+                {activeDesignations.map((d, idx) => (
+                  <tr
+                    key={d.id}
+                    className={[
+                      "transition-colors duration-[--transition-fast]",
+                      idx % 2 === 0 ? "" : "bg-[--color-muted]/20",
+                      "hover:bg-[--color-primary]/4",
+                    ].join(" ")}
+                  >
+                    <td className="px-4 py-3 text-[--color-foreground]">
+                      {d.directorName}
+                    </td>
+                    <td className="px-4 py-3 text-[--color-foreground]">
+                      {DESIGNATION_TYPE_LABELS[d.type]}
+                    </td>
+                    <td className="px-4 py-3 text-[--color-foreground]">
+                      {d.scope
+                        ? (SCOPE_LABELS[d.scope] ?? d.scope)
+                        : "Organização inteira"}
+                    </td>
+                    <td className="px-4 py-3 text-[--color-muted-foreground]">
+                      {d.assignedAt.toLocaleDateString("pt-BR")}
+                    </td>
+                    <td className="px-4 py-3">
+                      <button
+                        type="button"
+                        onClick={() => onRevoke(d.id)}
+                        className={[
+                          "flex h-7 w-7 items-center justify-center rounded-[--radius-sm]",
+                          "text-[--color-muted-foreground] transition-colors duration-[--transition-fast]",
+                          "hover:bg-[--color-destructive]/10 hover:text-[--color-destructive]",
+                        ].join(" ")}
+                        title="Revogar designação"
+                        aria-label={`Revogar designação de ${d.directorName}`}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

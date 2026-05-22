@@ -37,6 +37,9 @@ importers:
       "@hebron/validators":
         specifier: workspace:*
         version: link:../../packages/validators
+      "@hookform/resolvers":
+        specifier: ^5.4.0
+        version: 5.4.0(react-hook-form@7.76.0(react@19.2.6))
       "@tanstack/react-table":
         specifier: ^8.21.0
         version: 8.21.3(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -52,6 +55,9 @@ importers:
       react-dom:
         specifier: ^19.0.0
         version: 19.2.6(react@19.2.6)
+      react-hook-form:
+        specifier: ^7.76.0
+        version: 7.76.0(react@19.2.6)
     devDependencies:
       "@hebron/eslint-config":
         specifier: workspace:*
@@ -1692,6 +1698,14 @@ packages:
         integrity: sha512-RiB/yIh78pcIxl6lLMG0CgBXAZ2Y0eVHqMPYugu+9U0AeT6YBeiJpf7lbdJNIugFP5SIjwNRgo4DhR1Qxi26Gg==,
       }
 
+  "@hookform/resolvers@5.4.0":
+    resolution:
+      {
+        integrity: sha512-EIsqr/t/qbinPIhGjMdtvutIN1Kk4uwbROE9/UQ93CAVGR7GkA7Y92+fX80OzXi/OB67jVFYwKGO1WzkxmkFZw==,
+      }
+    peerDependencies:
+      react-hook-form: ^7.55.0
+
   "@humanfs/core@0.19.2":
     resolution:
       {
@@ -3038,6 +3052,12 @@ packages:
     resolution:
       {
         integrity: sha512-9BCxFwvbGg/RsZK9tjXd8s4UcwR0MWeFQ1XEKIQVVvAGJyINdrqKMcTRyLoK8Rse1GjzLV9cwjWV1olXRWEXVA==,
+      }
+
+  "@standard-schema/utils@0.3.0":
+    resolution:
+      {
+        integrity: sha512-e7Mew686owMaPJVNNLs55PUvgz371nKgwsc4vxE49zsODpJEnxgxRo2y/OKrqueavXgZNMDVj3DdHFlaSAeU8g==,
       }
 
   "@supabase/auth-js@2.106.1":
@@ -5209,6 +5229,15 @@ packages:
     engines: { node: ">=18.0.0" }
     hasBin: true
 
+  react-hook-form@7.76.0:
+    resolution:
+      {
+        integrity: sha512-eKtLGgFeSgkHqQD8J59AMZ9a4uD1D83iSIzt4YlTGD7liDen5rrjcUO1rVIGd9yC1gofryjtHbv+4ny4hkLWlw==,
+      }
+    engines: { node: ">=18.0.0" }
+    peerDependencies:
+      react: ^16.8.0 || ^17 || ^18 || ^19
+
   react-promise-suspense@0.3.4:
     resolution:
       {
@@ -6125,6 +6154,11 @@ snapshots:
 
   "@floating-ui/utils@0.2.11": {}
 
+  "@hookform/resolvers@5.4.0(react-hook-form@7.76.0(react@19.2.6))":
+    dependencies:
+      "@standard-schema/utils": 0.3.0
+      react-hook-form: 7.76.0(react@19.2.6)
+
   "@humanfs/core@0.19.2":
     dependencies:
       "@humanfs/types": 0.15.0
@@ -6906,6 +6940,8 @@ snapshots:
       selderee: 0.11.0
 
   "@socket.io/component-emitter@3.1.2": {}
+
+  "@standard-schema/utils@0.3.0": {}
 
   "@supabase/auth-js@2.106.1":
     dependencies:
@@ -8173,6 +8209,10 @@ snapshots:
       - sass
       - supports-color
       - utf-8-validate
+
+  react-hook-form@7.76.0(react@19.2.6):
+    dependencies:
+      react: 19.2.6
 
   react-promise-suspense@0.3.4:
     dependencies:
