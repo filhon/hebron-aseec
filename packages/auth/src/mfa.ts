@@ -89,9 +89,7 @@ export async function verifytotpEnrollment(
  * Issue a new TOTP challenge for the user's first verified factor.
  * Returns the challenge ID required for verification.
  */
-export async function createTotpChallenge(
-  supabase: SupabaseClient,
-): Promise<{
+export async function createTotpChallenge(supabase: SupabaseClient): Promise<{
   challengeId: string | null;
   factorId: string | null;
   error: unknown;

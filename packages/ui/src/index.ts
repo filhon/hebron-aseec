@@ -61,3 +61,35 @@ export type { ToastProps, ToastActionElement } from "./components/toast";
 
 export { FormField, Label } from "./components/form-field";
 export type { FormFieldProps } from "./components/form-field";
+
+// Layout
+export { AppShell } from "./components/app-shell";
+export type { AppShellProps } from "./components/app-shell";
+
+export { NavigationSidebar } from "./components/navigation-sidebar";
+export type {
+  NavigationSidebarProps,
+  NavSection,
+  NavItem,
+  AppShortcut,
+} from "./components/navigation-sidebar";
+
+export { PageHeader } from "./components/page-header";
+export type { PageHeaderProps, BreadcrumbItem } from "./components/page-header";
+
+export { UserMenu, Avatar } from "./components/user-menu";
+export type {
+  UserMenuProps,
+  UserMenuUser,
+  AvatarProps,
+} from "./components/user-menu";
+
+// States
+export { EmptyState } from "./components/empty-state";
+export type { EmptyStateProps, BibleQuote } from "./components/empty-state";
+
+export { ErrorState } from "./components/error-state";
+export type { ErrorStateProps } from "./components/error-state";
+
+export { LoadingState } from "./components/loading-state";
+export type { LoadingStateProps } from "./components/loading-state";
