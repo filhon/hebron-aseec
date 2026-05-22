@@ -33,7 +33,8 @@ export function anyRoleRequiresMfa(roles: Role[]): boolean {
 export async function getAssuranceLevel(
   supabase: SupabaseClient,
 ): Promise<AuthAssuranceLevel> {
-  const { data, error } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
+  const { data, error } =
+    await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
   if (error) {
     return { currentLevel: null, nextLevel: null };
   }
@@ -90,16 +91,19 @@ export async function verifytotpEnrollment(
  */
 export async function createTotpChallenge(
   supabase: SupabaseClient,
-): Promise<{ challengeId: string | null; factorId: string | null; error: unknown }> {
-  const { data: factors, error: listError } = await supabase.auth.mfa.listFactors();
+): Promise<{
+  challengeId: string | null;
+  factorId: string | null;
+  error: unknown;
+}> {
+  const { data: factors, error: listError } =
+    await supabase.auth.mfa.listFactors();
 
   if (listError || !factors) {
     return { challengeId: null, factorId: null, error: listError };
   }
 
-  const totp = factors.totp.find(
-    (f: TotpFactor) => f.status === "verified",
-  );
+  const totp = factors.totp.find((f: TotpFactor) => f.status === "verified");
 
   if (!totp) {
     return {
@@ -109,7 +113,9 @@ export async function createTotpChallenge(
     };
   }
 
-  const { data, error } = await supabase.auth.mfa.challenge({ factorId: totp.id });
+  const { data, error } = await supabase.auth.mfa.challenge({
+    factorId: totp.id,
+  });
 
   if (error || !data) {
     return { challengeId: null, factorId: null, error };

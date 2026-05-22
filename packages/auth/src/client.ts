@@ -6,8 +6,7 @@ import type { SignInResult } from "./types";
 // can statically inline them for the browser. Bracket notation (process.env[name])
 // is not detected by Next.js and resolves to undefined on the client.
 function resolveEnv(value: string | undefined, name: string): string {
-  if (!value)
-    throw new Error(`Missing required environment variable: ${name}`);
+  if (!value) throw new Error(`Missing required environment variable: ${name}`);
   return value;
 }
 
