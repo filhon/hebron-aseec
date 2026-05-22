@@ -2,7 +2,11 @@ import type { DesignationType, Role, Scope } from "../roles";
 
 // ─── User ─────────────────────────────────────────────────────────────────────
 
-export type UserStatus = "active" | "suspended" | "pending_approval" | "invited";
+export type UserStatus =
+  | "active"
+  | "suspended"
+  | "pending_approval"
+  | "invited";
 
 export interface User {
   id: string;
@@ -131,7 +135,11 @@ export interface EmailTemplate {
 // ─── MeetingSession ───────────────────────────────────────────────────────────
 
 export type MeetingType = "mensal" | "ordinaria" | "extraordinaria";
-export type MeetingStatus = "scheduled" | "in_progress" | "concluded" | "cancelled";
+export type MeetingStatus =
+  | "scheduled"
+  | "in_progress"
+  | "concluded"
+  | "cancelled";
 
 export interface MeetingSession {
   id: string;

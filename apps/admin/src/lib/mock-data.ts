@@ -492,7 +492,11 @@ export const mockAuditLog: AuditLogEntry[] = [
     targetId: "ff-002",
     targetType: "feature_flag",
     action: "feature_flag.toggled",
-    payload: { key: "mfa_enforcement_diretor", previousValue: false, newValue: true },
+    payload: {
+      key: "mfa_enforcement_diretor",
+      previousValue: false,
+      newValue: true,
+    },
     ipAddress: "177.92.10.1",
     userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
     createdAt: new Date("2026-02-14T09:00:00Z"),
@@ -528,7 +532,11 @@ export const mockAuditLog: AuditLogEntry[] = [
     targetId: "ms-001",
     targetType: "meeting_session",
     action: "meeting.updated",
-    payload: { field: "status", previousValue: "scheduled", newValue: "concluded" },
+    payload: {
+      field: "status",
+      previousValue: "scheduled",
+      newValue: "concluded",
+    },
     ipAddress: "189.14.55.22",
     userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
     createdAt: new Date("2026-05-07T19:45:00Z"),
@@ -576,7 +584,11 @@ export const mockAuditLog: AuditLogEntry[] = [
     targetId: "u-008",
     targetType: "user",
     action: "user.updated",
-    payload: { field: "name", previousValue: "Marina S.", newValue: "Marina Souza" },
+    payload: {
+      field: "name",
+      previousValue: "Marina S.",
+      newValue: "Marina Souza",
+    },
     ipAddress: "189.14.55.22",
     userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
     createdAt: new Date("2025-09-15T08:00:00Z"),
@@ -656,7 +668,8 @@ export const mockSystemSettings: SystemSetting[] = [
     value: "true",
     valueType: "boolean",
     label: "Janela de submissão de projetos",
-    description: "Habilita o formulário de submissão de projetos anuais para submissores",
+    description:
+      "Habilita o formulário de submissão de projetos anuais para submissores",
     isPublic: true,
     updatedBy: "u-001",
     updatedAt: new Date("2026-03-01T08:00:00Z"),
@@ -667,7 +680,8 @@ export const mockSystemSettings: SystemSetting[] = [
     value: "2026-07-31",
     valueType: "string",
     label: "Data de encerramento da janela",
-    description: "Data limite para submissão de projetos anuais (formato YYYY-MM-DD)",
+    description:
+      "Data limite para submissão de projetos anuais (formato YYYY-MM-DD)",
     isPublic: true,
     updatedBy: "u-001",
     updatedAt: new Date("2026-03-01T08:00:00Z"),
@@ -678,7 +692,8 @@ export const mockSystemSettings: SystemSetting[] = [
     value: "true",
     valueType: "boolean",
     label: "IA de triagem de projetos",
-    description: "Ativa o scoring automático por GPT-4.1 ao receber novos projetos",
+    description:
+      "Ativa o scoring automático por GPT-4.1 ao receber novos projetos",
     isPublic: false,
     updatedBy: "u-001",
     updatedAt: new Date("2026-04-01T09:00:00Z"),
@@ -769,8 +784,7 @@ export const mockEmailTemplates: EmailTemplate[] = [
     subject: "Sua conta foi aprovada — Hebron Aseec",
     bodyHtml:
       "<p>Olá, {{name}}.</p><p>Sua conta no sistema Hebron Aseec foi aprovada. Acesse em <a href='{{login_url}}'>{{login_url}}</a>.</p>",
-    bodyText:
-      "Olá, {{name}}.\nSua conta foi aprovada. Acesse: {{login_url}}.",
+    bodyText: "Olá, {{name}}.\nSua conta foi aprovada. Acesse: {{login_url}}.",
     variables: ["name", "login_url"],
     updatedBy: "u-001",
     updatedAt: new Date("2024-01-10T08:00:00Z"),
@@ -828,7 +842,8 @@ export const mockMeetingSessions: MeetingSession[] = [
     type: "extraordinaria",
     chairUserId: "u-003",
     status: "concluded",
-    notes: "Reunião extraordinária para deliberação sobre caso urgente de projeto.",
+    notes:
+      "Reunião extraordinária para deliberação sobre caso urgente de projeto.",
     createdAt: new Date("2026-05-14T09:00:00Z"),
     updatedAt: new Date("2026-05-15T16:30:00Z"),
   },
