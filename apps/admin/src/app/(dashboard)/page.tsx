@@ -1,10 +1,23 @@
-import { Users, Mail, AlertTriangle, Activity, Shield } from "lucide-react";
+import { Suspense } from "react";
+import {
+  Users,
+  Mail,
+  AlertTriangle,
+  Activity,
+  Shield,
+  RotateCcw,
+} from "lucide-react";
 import {
   mockUsers,
   mockInvitations,
   mockRoleAssignments,
   mockAuditLog,
 } from "../../lib/mock-data";
+import { DashboardSkeleton } from "../../components/dashboard-skeleton";
+
+// ─── Fade-in keyframe (injected once per page render) ─────────────────────────
+
+const fadeInStyle = `@keyframes hb-fade-in { from { opacity: 0; } to { opacity: 1; } }`;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -42,28 +55,6 @@ function getActionLabel(action: string): string {
   };
   return labels[action] ?? action;
 }
-
-// ─── Computed data ─────────────────────────────────────────────────────────────
-
-const activeUsers = mockUsers.filter((u) => u.status === "active").length;
-const pendingApproval = mockUsers.filter(
-  (u) => u.status === "pending_approval",
-).length;
-const pendingInvites = mockInvitations.filter(
-  (i) => i.status === "pending",
-).length;
-const suspendedUsers = mockUsers.filter((u) => u.status === "suspended").length;
-
-const roleCountMap = mockRoleAssignments
-  .filter((ra) => ra.revokedAt === null)
-  .reduce<Record<string, number>>((acc, ra) => {
-    acc[ra.role] = (acc[ra.role] ?? 0) + 1;
-    return acc;
-  }, {});
-
-const recentAudit = [...mockAuditLog]
-  .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-  .slice(0, 8);
 
 // ─── Sub-components ────────────────────────────────────────────────────────────
 
@@ -142,42 +133,157 @@ function StatCard({ label, value, icon, variant = "default" }: StatCardProps) {
   );
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+// ─── Error state ──────────────────────────────────────────────────────────────
 
-export default function DashboardPage() {
+function DashboardError() {
   return (
     <div
+      role="alert"
       style={{
-        padding: "1.5rem",
-        maxWidth: "72rem",
-        margin: "0 auto",
         display: "flex",
         flexDirection: "column",
-        gap: "2rem",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "1rem",
+        padding: "4rem 1.5rem",
+        textAlign: "center",
+        animation: "hb-fade-in 0.2s ease-out",
       }}
     >
-      {/* Header */}
+      <div
+        aria-hidden="true"
+        style={{
+          width: "3rem",
+          height: "3rem",
+          borderRadius: "var(--radius-full)",
+          backgroundColor: "var(--color-destructive-muted)",
+          color: "var(--color-destructive)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <AlertTriangle size={20} />
+      </div>
       <div>
-        <h1
-          style={{
-            fontSize: "var(--text-2xl)",
-            fontWeight: "var(--font-weight-bold)",
-            color: "var(--color-foreground)",
-          }}
-        >
-          Dashboard
-        </h1>
         <p
           style={{
             fontSize: "var(--text-sm)",
+            fontWeight: "var(--font-weight-semibold)",
+            color: "var(--color-foreground)",
+          }}
+        >
+          Não foi possível carregar o painel
+        </p>
+        <p
+          style={{
+            fontSize: "var(--text-xs)",
             color: "var(--color-muted-foreground)",
             marginTop: "0.25rem",
           }}
         >
-          Visão geral do ecossistema Hebron Aseec
+          Verifique sua conexão e tente novamente.
         </p>
       </div>
+      {/* GET form — clears query params and reloads, no JS required */}
+      <form method="get">
+        <button
+          type="submit"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "0.375rem",
+            padding: "0.5rem 1rem",
+            fontSize: "var(--text-sm)",
+            fontWeight: "var(--font-weight-medium)",
+            color: "var(--color-primary-foreground)",
+            backgroundColor: "var(--color-primary)",
+            border: "none",
+            borderRadius: "var(--radius)",
+            cursor: "pointer",
+          }}
+        >
+          <RotateCcw size={14} aria-hidden="true" />
+          Tentar novamente
+        </button>
+      </form>
+    </div>
+  );
+}
 
+// ─── Empty state (recent audit) ───────────────────────────────────────────────
+
+function NoRecentActivity() {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "0.5rem",
+        padding: "2rem 1rem",
+        textAlign: "center",
+        animation: "hb-fade-in 0.2s ease-out",
+      }}
+    >
+      <p
+        style={{
+          fontSize: "var(--text-sm)",
+          color: "var(--color-muted-foreground)",
+        }}
+      >
+        Nenhuma ação registrada recentemente.
+      </p>
+      <p
+        style={{
+          fontSize: "var(--text-xs)",
+          color: "var(--color-muted-foreground)",
+          fontStyle: "italic",
+          maxWidth: "22rem",
+        }}
+      >
+        "Sede firmes e constantes, sempre abundando na obra do Senhor"
+        <br />— 1 Coríntios 15:58
+      </p>
+    </div>
+  );
+}
+
+// ─── Dashboard content (async — ready for real data fetching) ─────────────────
+
+async function DashboardContent() {
+  const activeUsers = mockUsers.filter((u) => u.status === "active").length;
+  const pendingApproval = mockUsers.filter(
+    (u) => u.status === "pending_approval",
+  ).length;
+  const pendingInvites = mockInvitations.filter(
+    (i) => i.status === "pending",
+  ).length;
+  const suspendedUsers = mockUsers.filter(
+    (u) => u.status === "suspended",
+  ).length;
+
+  const roleCountMap = mockRoleAssignments
+    .filter((ra) => ra.revokedAt === null)
+    .reduce<Record<string, number>>((acc, ra) => {
+      acc[ra.role] = (acc[ra.role] ?? 0) + 1;
+      return acc;
+    }, {});
+
+  const recentAudit = [...mockAuditLog]
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .slice(0, 8);
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "2rem",
+        animation: "hb-fade-in 0.2s ease-out",
+      }}
+    >
       {/* Stat cards */}
       <div
         style={{
@@ -251,42 +357,54 @@ export default function DashboardPage() {
           >
             Usuários por papel
           </h2>
-          <ul
-            role="list"
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "0.625rem",
-            }}
-          >
-            {Object.entries(roleCountMap)
-              .sort((a, b) => b[1] - a[1])
-              .map(([role, count]) => (
-                <li
-                  key={role}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    fontSize: "var(--text-sm)",
-                  }}
-                >
-                  <span style={{ color: "var(--color-foreground)" }}>
-                    {role.replace("_", " ")}
-                  </span>
-                  <span
+          {Object.keys(roleCountMap).length === 0 ? (
+            <p
+              style={{
+                fontSize: "var(--text-sm)",
+                color: "var(--color-muted-foreground)",
+                fontStyle: "italic",
+              }}
+            >
+              Nenhum papel atribuído.
+            </p>
+          ) : (
+            <ul
+              role="list"
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.625rem",
+              }}
+            >
+              {Object.entries(roleCountMap)
+                .sort((a, b) => b[1] - a[1])
+                .map(([role, count]) => (
+                  <li
+                    key={role}
                     style={{
-                      fontWeight: "var(--font-weight-semibold)",
-                      color: "var(--color-primary)",
-                      minWidth: "1.5rem",
-                      textAlign: "right",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      fontSize: "var(--text-sm)",
                     }}
                   >
-                    {count}
-                  </span>
-                </li>
-              ))}
-          </ul>
+                    <span style={{ color: "var(--color-foreground)" }}>
+                      {role.replace("_", " ")}
+                    </span>
+                    <span
+                      style={{
+                        fontWeight: "var(--font-weight-semibold)",
+                        color: "var(--color-primary)",
+                        minWidth: "1.5rem",
+                        textAlign: "right",
+                      }}
+                    >
+                      {count}
+                    </span>
+                  </li>
+                ))}
+            </ul>
+          )}
         </section>
 
         {/* Recent audit activity */}
@@ -311,48 +429,109 @@ export default function DashboardPage() {
           >
             Últimas ações
           </h2>
-          <ul
-            role="list"
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "0.75rem",
-            }}
-          >
-            {recentAudit.map((entry) => (
-              <li
-                key={entry.id}
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "0.125rem",
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: "var(--text-sm)",
-                    color: "var(--color-foreground)",
-                  }}
-                >
-                  {getActionLabel(entry.action)}
-                </span>
-                <div
+          {recentAudit.length === 0 ? (
+            <NoRecentActivity />
+          ) : (
+            <ul
+              role="list"
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.75rem",
+              }}
+            >
+              {recentAudit.map((entry) => (
+                <li
+                  key={entry.id}
                   style={{
                     display: "flex",
-                    gap: "0.375rem",
-                    fontSize: "var(--text-xs)",
-                    color: "var(--color-muted-foreground)",
+                    flexDirection: "column",
+                    gap: "0.125rem",
                   }}
                 >
-                  <span>{entry.actorName}</span>
-                  <span aria-hidden="true">·</span>
-                  <span>{formatRelativeDate(entry.createdAt)}</span>
-                </div>
-              </li>
-            ))}
-          </ul>
+                  <span
+                    style={{
+                      fontSize: "var(--text-sm)",
+                      color: "var(--color-foreground)",
+                    }}
+                  >
+                    {getActionLabel(entry.action)}
+                  </span>
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "0.375rem",
+                      fontSize: "var(--text-xs)",
+                      color: "var(--color-muted-foreground)",
+                    }}
+                  >
+                    <span>{entry.actorName}</span>
+                    <span aria-hidden="true">·</span>
+                    <span>{formatRelativeDate(entry.createdAt)}</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
       </div>
     </div>
+  );
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ state?: string }>;
+}) {
+  const { state } = await searchParams;
+
+  return (
+    <>
+      <style>{fadeInStyle}</style>
+      <div
+        style={{
+          padding: "1.5rem",
+          maxWidth: "72rem",
+          margin: "0 auto",
+          display: "flex",
+          flexDirection: "column",
+          gap: "2rem",
+        }}
+      >
+        {/* Header — always visible, no loading state */}
+        <div>
+          <h1
+            style={{
+              fontSize: "var(--text-2xl)",
+              fontWeight: "var(--font-weight-bold)",
+              color: "var(--color-foreground)",
+            }}
+          >
+            Dashboard
+          </h1>
+          <p
+            style={{
+              fontSize: "var(--text-sm)",
+              color: "var(--color-muted-foreground)",
+              marginTop: "0.25rem",
+            }}
+          >
+            Visão geral do ecossistema Hebron Aseec
+          </p>
+        </div>
+
+        {/* Content — skeleton while loading, error state on failure */}
+        {state === "error" ? (
+          <DashboardError />
+        ) : (
+          <Suspense fallback={<DashboardSkeleton />}>
+            <DashboardContent />
+          </Suspense>
+        )}
+      </div>
+    </>
   );
 }
