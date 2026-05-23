@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Shield, Clock } from "lucide-react";
+import { Button } from "@hebron/ui";
 import {
   mockUsers,
   mockRoleAssignments,
@@ -166,6 +167,7 @@ export default async function UserDetailPage({ params }: Props) {
                 fontSize: "var(--text-xl)",
                 fontWeight: "var(--font-weight-bold)",
                 color: "var(--color-foreground)",
+                fontFamily: "var(--font-editorial)",
               }}
             >
               {user.name}
@@ -273,62 +275,33 @@ export default async function UserDetailPage({ params }: Props) {
         {/* Actions */}
         {user.status === "active" && (
           <div style={{ paddingTop: "0.5rem" }}>
-            <button
-              type="button"
-              style={{
-                padding: "0.5rem 1rem",
-                fontSize: "var(--text-sm)",
-                fontWeight: "var(--font-weight-medium)",
-                color: "var(--color-destructive)",
-                backgroundColor: "transparent",
-                border: "1px solid var(--color-destructive)",
-                borderRadius: "var(--radius)",
-                cursor: "pointer",
-              }}
+            <Button
+              variant="destructive"
               aria-label={`Suspender conta de ${user.name}`}
             >
               Suspender conta
-            </button>
+            </Button>
           </div>
         )}
         {user.status === "suspended" && (
           <div style={{ paddingTop: "0.5rem" }}>
-            <button
-              type="button"
-              style={{
-                padding: "0.5rem 1rem",
-                fontSize: "var(--text-sm)",
-                fontWeight: "var(--font-weight-medium)",
-                color: "var(--color-support-green)",
-                backgroundColor: "transparent",
-                border: "1px solid var(--color-support-green)",
-                borderRadius: "var(--radius)",
-                cursor: "pointer",
-              }}
+            <Button
+              variant="outline"
+              className="border-[--color-support-green] text-[--color-support-green] hover:border-[--color-support-green] hover:bg-[--color-support-green-muted] hover:text-[--color-support-green]"
               aria-label={`Reativar conta de ${user.name}`}
             >
               Reativar conta
-            </button>
+            </Button>
           </div>
         )}
         {user.status === "pending_approval" && (
           <div style={{ paddingTop: "0.5rem" }}>
-            <button
-              type="button"
-              style={{
-                padding: "0.5rem 1rem",
-                fontSize: "var(--text-sm)",
-                fontWeight: "var(--font-weight-medium)",
-                color: "var(--color-accent-foreground)",
-                backgroundColor: "var(--color-accent)",
-                border: "none",
-                borderRadius: "var(--radius)",
-                cursor: "pointer",
-              }}
+            <Button
+              variant="accent"
               aria-label={`Aprovar conta de ${user.name}`}
             >
               Aprovar acesso
-            </button>
+            </Button>
           </div>
         )}
       </section>

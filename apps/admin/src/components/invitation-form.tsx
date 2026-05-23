@@ -83,7 +83,7 @@ export function InvitationForm({ onSubmit, isLoading }: InvitationFormProps) {
 
       {/* Papéis */}
       <fieldset className="flex flex-col gap-3">
-        <legend className="text-[--text-sm] font-medium text-[--color-foreground]">
+        <legend className="text-[--text-sm] font-medium">
           Papéis{" "}
           <span
             className="ml-0.5 text-[--color-destructive]"
@@ -142,10 +142,7 @@ export function InvitationForm({ onSubmit, isLoading }: InvitationFormProps) {
         </div>
 
         {errors.roles && (
-          <p
-            role="alert"
-            className="text-[--text-xs] text-[--color-destructive]"
-          >
+          <p role="alert" className="text-[--text-xs]">
             {errors.roles.message ??
               (errors.roles as { root?: { message?: string } }).root?.message}
           </p>

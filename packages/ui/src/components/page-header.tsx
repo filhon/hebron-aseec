@@ -69,7 +69,7 @@ export function PageHeader({
 
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1">
-          <h1 className="text-[--text-2xl] font-[--font-weight-bold] leading-[--leading-tight] text-[--color-foreground]">
+          <h1 className="font-[--font-editorial] text-[--text-2xl] font-[--font-weight-bold] leading-[--leading-tight] text-[--color-foreground]">
             {title}
           </h1>
           {description && (

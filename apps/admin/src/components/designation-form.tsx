@@ -92,17 +92,17 @@ export function DesignationForm({
         noValidate
       >
         <div>
-          <h3 className="text-[--text-sm] font-semibold text-[--color-foreground]">
+          <h3 className="text-[--text-sm] font-semibold">
             Configurar designação
           </h3>
-          <p className="mt-1 text-[--text-xs] text-[--color-muted-foreground]">
+          <p className="mt-1 text-[--text-xs]">
             Somente diretores podem ser designados como gestor ou autorizador.
           </p>
         </div>
 
         {directors.length === 0 ? (
           <div className="rounded-[--radius] border border-[--color-border] px-4 py-6 text-center">
-            <p className="text-[--text-sm] text-[--color-muted-foreground]">
+            <p className="text-[--text-sm]">
               Nenhum diretor encontrado. Atribua o papel de diretor a um usuário
               primeiro.
             </p>
@@ -209,9 +209,7 @@ export function DesignationForm({
       {/* Active designations */}
       {activeDesignations.length > 0 && (
         <div className="flex flex-col gap-3">
-          <h3 className="text-[--text-sm] font-semibold text-[--color-foreground]">
-            Designações ativas
-          </h3>
+          <h3 className="text-[--text-sm] font-semibold">Designações ativas</h3>
           <div className="overflow-hidden rounded-[--radius] border border-[--color-border]">
             <table className="w-full text-[--text-sm]">
               <thead>

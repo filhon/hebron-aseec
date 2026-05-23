@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { Plus, CalendarDays, Info } from "lucide-react";
+import { PageHeader, EmptyState, Button } from "@hebron/ui";
 import type { MeetingSession } from "@hebron/types/admin";
 import { mockMeetingSessions, mockUsers } from "../../../lib/mock-data";
 
@@ -46,7 +47,7 @@ function MeetingStatusBadge({ status }: { status: MeetingSession["status"] }) {
     concluded: {
       label: "Realizada",
       bg: "var(--color-support-green-muted)",
-      color: "var(--color-support-sky-foreground)",
+      color: "var(--color-support-green-foreground)",
     },
     cancelled: {
       label: "Cancelada",
@@ -123,59 +124,19 @@ export default function ReunioesPage() {
         gap: "1.5rem",
       }}
     >
-      {/* Header */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          gap: "1rem",
-          flexWrap: "wrap",
-        }}
-      >
-        <div>
-          <h1
-            style={{
-              fontSize: "var(--text-2xl)",
-              fontWeight: "var(--font-weight-bold)",
-              color: "var(--color-foreground)",
-            }}
-          >
-            Reuniões
-          </h1>
-          <p
-            style={{
-              fontSize: "var(--text-sm)",
-              color: "var(--color-muted-foreground)",
-              marginTop: "0.25rem",
-            }}
-          >
-            {scheduledCount > 0
-              ? `${scheduledCount} agendada${scheduledCount !== 1 ? "s" : ""}`
-              : "Nenhuma reunião agendada"}
-          </p>
-        </div>
-
-        <button
-          type="button"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "0.375rem",
-            padding: "0.5rem 1rem",
-            fontSize: "var(--text-sm)",
-            fontWeight: "var(--font-weight-medium)",
-            color: "var(--color-primary-foreground)",
-            backgroundColor: "var(--color-primary)",
-            border: "none",
-            borderRadius: "var(--radius)",
-            cursor: "pointer",
-          }}
-        >
-          <Plus size={16} aria-hidden="true" />
-          Nova reunião
-        </button>
-      </div>
+      <PageHeader
+        title="Reuniões"
+        description={
+          scheduledCount > 0
+            ? `${scheduledCount} agendada${scheduledCount !== 1 ? "s" : ""}`
+            : "Nenhuma reunião agendada"
+        }
+        actions={
+          <Button leftIcon={<Plus size={16} aria-hidden="true" />}>
+            Nova reunião
+          </Button>
+        }
+      />
 
       {/* Auto-creation notice */}
       <div
@@ -214,22 +175,14 @@ export default function ReunioesPage() {
 
       {/* Meetings list */}
       {sorted.length === 0 ? (
-        <div
-          style={{
-            textAlign: "center",
-            padding: "3rem 1rem",
-            color: "var(--color-muted-foreground)",
+        <EmptyState
+          title="Nenhuma reunião registrada."
+          icon={CalendarDays}
+          quote={{
+            text: "Onde dois ou três estiverem reunidos em meu nome, aí estou no meio deles",
+            reference: "Mateus 18:20",
           }}
-        >
-          <CalendarDays
-            size={32}
-            aria-hidden="true"
-            style={{ margin: "0 auto 0.75rem", opacity: 0.4 }}
-          />
-          <p style={{ fontSize: "var(--text-sm)" }}>
-            Nenhuma reunião registrada.
-          </p>
-        </div>
+        />
       ) : (
         <ul
           role="list"
@@ -334,20 +287,9 @@ export default function ReunioesPage() {
                   Criada em {formatShortDate(meeting.createdAt)}
                 </span>
                 {meeting.status === "scheduled" && (
-                  <button
-                    type="button"
-                    style={{
-                      fontSize: "var(--text-xs)",
-                      fontWeight: "var(--font-weight-medium)",
-                      color: "var(--color-primary)",
-                      backgroundColor: "transparent",
-                      border: "none",
-                      cursor: "pointer",
-                      padding: "0",
-                    }}
-                  >
+                  <Button type="button" variant="link" size="xs">
                     Editar
-                  </button>
+                  </Button>
                 )}
               </div>
             </li>

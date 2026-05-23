@@ -6,13 +6,16 @@
 //   @import "@hebron/ui/tokens.css";
 //
 // Tipografia via next/font (no layout.tsx de cada app):
-//   import { Inter, Source_Serif_4 } from 'next/font/google'
-//   const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
-//   const serif = Source_Serif_4({
-//     subsets: ['latin'], weight: ['400', '600', '700'],
-//     variable: '--font-source-serif-4',
+//   import { Parkinsans, Titillium_Web } from 'next/font/google'
+//   const parkinsans = Parkinsans({
+//     subsets: ['latin'],
+//     variable: '--font-parkinsans',
 //   })
-//   <html className={`${inter.variable} ${serif.variable}`}>
+//   const titillium = Titillium_Web({
+//     subsets: ['latin'], weight: ['400', '600', '700'],
+//     variable: '--font-titillium',
+//   })
+//   <html className={`${parkinsans.variable} ${titillium.variable}`}>
 // ——————————————————————————————————————
 
 // Primitivos
@@ -72,10 +75,14 @@ export type {
   NavSection,
   NavItem,
   AppShortcut,
+  LinkComponent,
 } from "./components/navigation-sidebar";
 
 export { PageHeader } from "./components/page-header";
 export type { PageHeaderProps, BreadcrumbItem } from "./components/page-header";
+
+export { BrandMark } from "./components/brand-mark";
+export type { BrandMarkProps } from "./components/brand-mark";
 
 export { UserMenu, Avatar } from "./components/user-menu";
 export type {

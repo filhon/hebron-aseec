@@ -59,7 +59,7 @@ function RoleCheckboxes({
 
   return (
     <fieldset className="flex flex-col gap-3">
-      <legend className="text-[--text-sm] font-medium text-[--color-foreground]">
+      <legend className="text-[--text-sm] font-medium">
         Papéis{" "}
         <span className="ml-0.5 text-[--color-destructive]" aria-hidden="true">
           *
@@ -69,7 +69,7 @@ function RoleCheckboxes({
       {hasConflict && (
         <div className="flex items-start gap-2 rounded-[--radius] border border-amber-400/40 bg-amber-50 px-3 py-2.5">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-          <p className="text-[--text-sm] text-amber-700">
+          <p className="text-[--text-sm]">
             Conflito de interesse: diretores e conselheiros não devem acumular
             os papéis de submissor ou hóspede.
           </p>
@@ -125,7 +125,7 @@ function RoleCheckboxes({
       </div>
 
       {error && (
-        <p role="alert" className="text-[--text-xs] text-[--color-destructive]">
+        <p role="alert" className="text-[--text-xs]">
           {error}
         </p>
       )}
@@ -142,10 +142,10 @@ function ModuleAccessCheckboxes({
 }) {
   return (
     <fieldset className="flex flex-col gap-3">
-      <legend className="text-[--text-sm] font-medium text-[--color-foreground]">
+      <legend className="text-[--text-sm] font-medium">
         Suspensão granular por módulo
       </legend>
-      <p className="text-[--text-xs] text-[--color-muted-foreground]">
+      <p className="text-[--text-xs]">
         Marque os módulos que este usuário <strong>não</strong> pode acessar.
         Vazio = acesso total.
       </p>
@@ -323,9 +323,7 @@ export function UserCreateForm({ onSubmit, isLoading }: UserCreateFormProps) {
             </svg>
           )}
         </span>
-        <span className="text-[--text-sm] text-[--color-foreground]">
-          Enviar convite por e-mail
-        </span>
+        <span className="text-[--text-sm]">Enviar convite por e-mail</span>
       </label>
 
       <div className="flex items-center justify-end gap-3 border-t border-[--color-border] pt-4">

@@ -9,6 +9,7 @@ import {
   NavigationSidebar,
   type NavSection,
   type AppShortcut,
+  type LinkComponent,
 } from "./navigation-sidebar";
 import { UserMenu, type UserMenuUser } from "./user-menu";
 
@@ -38,6 +39,11 @@ export interface AppShellProps {
   logo?: React.ReactNode;
   /** Nome do app exibido no topbar */
   appName?: string;
+  /**
+   * Componente de link para soft navigation.
+   * Passe `Link` do Next.js. Se omitido, usa `<a>` nativo.
+   */
+  LinkComponent?: LinkComponent;
   className?: string;
 }
 
@@ -52,6 +58,7 @@ interface MobileSidebarProps {
   apps?: AppShortcut[];
   currentPath?: string;
   logo?: React.ReactNode;
+  LinkComponent?: LinkComponent;
 }
 
 function MobileSidebar({
@@ -61,6 +68,7 @@ function MobileSidebar({
   apps,
   currentPath,
   logo,
+  LinkComponent,
 }: MobileSidebarProps) {
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
@@ -106,6 +114,7 @@ function MobileSidebar({
               currentPath={currentPath}
               showCollapseToggle={false}
               onNavItemClick={() => onOpenChange(false)}
+              LinkComponent={LinkComponent}
               className={logo ? "h-[calc(100%-3.5rem)]" : "h-full"}
             />
           </div>
@@ -129,6 +138,7 @@ export function AppShell({
   currentPath,
   logo,
   appName,
+  LinkComponent,
   className,
 }: AppShellProps) {
   const [desktopCollapsed, setDesktopCollapsed] = React.useState(false);
@@ -156,7 +166,7 @@ export function AppShell({
         >
           {logo}
           {!desktopCollapsed && appName && (
-            <span className="ml-2 truncate text-[--text-sm] font-[--font-weight-semibold] text-[--color-foreground]">
+            <span className="ml-2 truncate text-[--text-sm] font-[--font-weight-semibold]">
               {appName}
             </span>
           )}
@@ -169,6 +179,7 @@ export function AppShell({
           onCollapsedChange={setDesktopCollapsed}
           currentPath={currentPath}
           showCollapseToggle={true}
+          LinkComponent={LinkComponent}
           className="h-[calc(100%-3.5rem)]"
         />
       </aside>
@@ -181,6 +192,7 @@ export function AppShell({
         apps={apps}
         currentPath={currentPath}
         logo={logo}
+        LinkComponent={LinkComponent}
       />
 
       {/* ── Topbar ──────────────────────────────────────────── */}
@@ -213,7 +225,7 @@ export function AppShell({
           <div className="flex items-center gap-2 lg:hidden">
             {logo}
             {appName && (
-              <span className="text-[--text-sm] font-[--font-weight-semibold] text-[--color-foreground]">
+              <span className="text-[--text-sm] font-[--font-weight-semibold]">
                 {appName}
               </span>
             )}

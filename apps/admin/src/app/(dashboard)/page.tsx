@@ -13,6 +13,7 @@ import {
   mockRoleAssignments,
   mockAuditLog,
 } from "../../lib/mock-data";
+import { PageHeader, ErrorState, Button } from "@hebron/ui";
 import { DashboardSkeleton } from "../../components/dashboard-skeleton";
 
 // ─── Fade-in keyframe (injected once per page render) ─────────────────────────
@@ -129,84 +130,6 @@ function StatCard({ label, value, icon, variant = "default" }: StatCardProps) {
           {label}
         </p>
       </div>
-    </div>
-  );
-}
-
-// ─── Error state ──────────────────────────────────────────────────────────────
-
-function DashboardError() {
-  return (
-    <div
-      role="alert"
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: "1rem",
-        padding: "4rem 1.5rem",
-        textAlign: "center",
-        animation: "hb-fade-in 0.2s ease-out",
-      }}
-    >
-      <div
-        aria-hidden="true"
-        style={{
-          width: "3rem",
-          height: "3rem",
-          borderRadius: "var(--radius-full)",
-          backgroundColor: "var(--color-destructive-muted)",
-          color: "var(--color-destructive)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <AlertTriangle size={20} />
-      </div>
-      <div>
-        <p
-          style={{
-            fontSize: "var(--text-sm)",
-            fontWeight: "var(--font-weight-semibold)",
-            color: "var(--color-foreground)",
-          }}
-        >
-          Não foi possível carregar o painel
-        </p>
-        <p
-          style={{
-            fontSize: "var(--text-xs)",
-            color: "var(--color-muted-foreground)",
-            marginTop: "0.25rem",
-          }}
-        >
-          Verifique sua conexão e tente novamente.
-        </p>
-      </div>
-      {/* GET form — clears query params and reloads, no JS required */}
-      <form method="get">
-        <button
-          type="submit"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "0.375rem",
-            padding: "0.5rem 1rem",
-            fontSize: "var(--text-sm)",
-            fontWeight: "var(--font-weight-medium)",
-            color: "var(--color-primary-foreground)",
-            backgroundColor: "var(--color-primary)",
-            border: "none",
-            borderRadius: "var(--radius)",
-            cursor: "pointer",
-          }}
-        >
-          <RotateCcw size={14} aria-hidden="true" />
-          Tentar novamente
-        </button>
-      </form>
     </div>
   );
 }
@@ -389,7 +312,10 @@ async function DashboardContent() {
                     }}
                   >
                     <span style={{ color: "var(--color-foreground)" }}>
-                      {role.replace("_", " ")}
+                      {role
+                        .split("_")
+                        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+                        .join(" ")}
                     </span>
                     <span
                       style={{
@@ -501,31 +427,26 @@ export default async function DashboardPage({
           gap: "2rem",
         }}
       >
-        {/* Header — always visible, no loading state */}
-        <div>
-          <h1
-            style={{
-              fontSize: "var(--text-2xl)",
-              fontWeight: "var(--font-weight-bold)",
-              color: "var(--color-foreground)",
-            }}
-          >
-            Dashboard
-          </h1>
-          <p
-            style={{
-              fontSize: "var(--text-sm)",
-              color: "var(--color-muted-foreground)",
-              marginTop: "0.25rem",
-            }}
-          >
-            Visão geral do ecossistema Hebron Aseec
-          </p>
-        </div>
+        <PageHeader
+          title="Dashboard"
+          description="Visão geral do ecossistema Hebron Aseec"
+        />
 
-        {/* Content — skeleton while loading, error state on failure */}
         {state === "error" ? (
-          <DashboardError />
+          <ErrorState
+            title="Não foi possível carregar o painel"
+            description="Verifique sua conexão e tente novamente."
+            action={
+              <form method="get">
+                <Button
+                  type="submit"
+                  leftIcon={<RotateCcw size={14} aria-hidden="true" />}
+                >
+                  Tentar novamente
+                </Button>
+              </form>
+            }
+          />
         ) : (
           <Suspense fallback={<DashboardSkeleton />}>
             <DashboardContent />

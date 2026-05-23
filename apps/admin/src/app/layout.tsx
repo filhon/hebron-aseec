@@ -1,17 +1,18 @@
 import type { Metadata } from "next";
-import { Inter, Source_Serif_4 } from "next/font/google";
+import { Parkinsans, Titillium_Web } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({
+const parkinsans = Parkinsans({
   subsets: ["latin"],
-  variable: "--font-inter",
+  variable: "--font-parkinsans",
   display: "swap",
+  adjustFontFallback: false,
 });
 
-const sourceSerif4 = Source_Serif_4({
+const titillium = Titillium_Web({
   subsets: ["latin"],
   weight: ["400", "600", "700"],
-  variable: "--font-source-serif-4",
+  variable: "--font-titillium",
   display: "swap",
 });
 
@@ -26,7 +27,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="pt-BR" className={`${inter.variable} ${sourceSerif4.variable}`}>
+    <html
+      lang="pt-BR"
+      className={`${parkinsans.variable} ${titillium.variable}`}
+    >
       <body>{children}</body>
     </html>
   );

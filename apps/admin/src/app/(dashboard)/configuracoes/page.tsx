@@ -1,7 +1,16 @@
 "use client";
 
 import * as React from "react";
-import { UserCheck, UserCog, Mail, Flag, Settings2 } from "lucide-react";
+import {
+  UserCheck,
+  UserCog,
+  Mail,
+  Flag,
+  Settings2,
+  ChevronUp,
+  ChevronDown,
+} from "lucide-react";
+import { PageHeader } from "@hebron/ui";
 import {
   mockFeatureFlags,
   mockDesignations,
@@ -429,14 +438,18 @@ function EmailTemplatesSection() {
                 </p>
               </div>
               <span
+                aria-hidden="true"
                 style={{
-                  fontSize: "var(--text-xs)",
+                  flexShrink: 0,
                   color: "var(--color-muted-foreground)",
-                  whiteSpace: "nowrap",
                   marginTop: "0.125rem",
                 }}
               >
-                {isExpanded ? "▲" : "▼"}
+                {isExpanded ? (
+                  <ChevronUp size={15} />
+                ) : (
+                  <ChevronDown size={15} />
+                )}
               </span>
             </button>
 
@@ -551,26 +564,10 @@ export default function ConfiguracoesPage() {
         gap: "1.5rem",
       }}
     >
-      <div>
-        <h1
-          style={{
-            fontSize: "var(--text-2xl)",
-            fontWeight: "var(--font-weight-bold)",
-            color: "var(--color-foreground)",
-          }}
-        >
-          Configurações
-        </h1>
-        <p
-          style={{
-            fontSize: "var(--text-sm)",
-            color: "var(--color-muted-foreground)",
-            marginTop: "0.25rem",
-          }}
-        >
-          Gerencie funcionalidades, designações e configurações do sistema
-        </p>
-      </div>
+      <PageHeader
+        title="Configurações"
+        description="Gerencie funcionalidades, designações e configurações do sistema"
+      />
 
       {/* Tabs */}
       <div

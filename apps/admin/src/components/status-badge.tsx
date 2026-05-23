@@ -13,15 +13,47 @@ const STATUS_CONFIG: Record<
   { label: string; bg: string; color: string }
 > = {
   // UserStatus
-  active: { label: "Ativo", bg: "#a1c520", color: "#1d2800" },
-  suspended: { label: "Suspenso", bg: "#c0392b", color: "#fff" },
-  pending_approval: { label: "Pend. aprovação", bg: "#d97706", color: "#fff" },
-  invited: { label: "Convidado", bg: "#07b4e7", color: "#003a52" },
+  active: {
+    label: "Ativo",
+    bg: "var(--color-support-green)",
+    color: "var(--color-support-green-foreground)",
+  },
+  suspended: {
+    label: "Suspenso",
+    bg: "var(--color-destructive)",
+    color: "var(--color-destructive-foreground)",
+  },
+  pending_approval: {
+    label: "Pend. aprovação",
+    bg: "var(--color-accent)",
+    color: "var(--color-accent-foreground)",
+  },
+  invited: {
+    label: "Convidado",
+    bg: "var(--color-support-sky)",
+    color: "var(--color-support-sky-foreground)",
+  },
   // InvitationStatus
-  pending: { label: "Pendente", bg: "#d97706", color: "#fff" },
-  accepted: { label: "Aceito", bg: "#a1c520", color: "#1d2800" },
-  expired: { label: "Expirado", bg: "#64748b", color: "#fff" },
-  revoked: { label: "Revogado", bg: "#c0392b", color: "#fff" },
+  pending: {
+    label: "Pendente",
+    bg: "var(--color-accent)",
+    color: "var(--color-accent-foreground)",
+  },
+  accepted: {
+    label: "Aceito",
+    bg: "var(--color-support-green)",
+    color: "var(--color-support-green-foreground)",
+  },
+  expired: {
+    label: "Expirado",
+    bg: "var(--color-primary-muted)",
+    color: "var(--color-primary)",
+  },
+  revoked: {
+    label: "Revogado",
+    bg: "var(--color-destructive)",
+    color: "var(--color-destructive-foreground)",
+  },
 };
 
 export function StatusBadge({ status, size = "md" }: StatusBadgeProps) {

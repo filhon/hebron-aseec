@@ -16,6 +16,14 @@ function cn(...inputs: ClassValue[]) {
 // Types
 // ——————————————————————————————————————
 
+/** Componente de link polimórfico — aceita next/link ou <a> nativo */
+export type LinkComponent = React.ForwardRefExoticComponent<
+  React.AnchorHTMLAttributes<HTMLAnchorElement> & {
+    href: string;
+    children?: React.ReactNode;
+  } & React.RefAttributes<HTMLAnchorElement>
+>;
+
 export interface NavItem {
   label: string;
   href: string;
@@ -49,8 +57,28 @@ export interface NavigationSidebarProps {
   showCollapseToggle?: boolean;
   /** Chamado ao clicar em um item de navegação (útil para fechar drawer mobile) */
   onNavItemClick?: () => void;
+  /**
+   * Componente de link a ser usado na navegação.
+   * Passe `Link` do Next.js para soft navigation no App Router.
+   * Se omitido, usa `<a>` nativo.
+   */
+  LinkComponent?: LinkComponent;
   className?: string;
 }
+
+// ——————————————————————————————————————
+// Default link (plain anchor — funciona sem Next.js)
+// ——————————————————————————————————————
+
+const DefaultLink: LinkComponent = React.forwardRef<
+  HTMLAnchorElement,
+  React.AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }
+>(({ href, children, ...props }, ref) => (
+  <a ref={ref} href={href} {...props}>
+    {children}
+  </a>
+));
+DefaultLink.displayName = "DefaultLink";
 
 // ——————————————————————————————————————
 // Helpers
@@ -87,7 +115,7 @@ function NavTooltip({ label, collapsed, children }: NavTooltipProps) {
           sideOffset={8}
           className={cn(
             "z-[--z-tooltip] rounded-[--radius] px-2.5 py-1.5",
-            "bg-[--color-foreground] text-[--text-xs] text-[--color-background]",
+            "bg-[--color-foreground] text-[--text-xs]",
             "shadow-[--shadow-md]",
             "animate-in fade-in-0 zoom-in-95",
           )}
@@ -109,6 +137,7 @@ interface NavItemButtonProps {
   collapsed: boolean;
   active: boolean;
   onClick?: () => void;
+  LinkComponent: LinkComponent;
 }
 
 function NavItemButton({
@@ -116,12 +145,13 @@ function NavItemButton({
   collapsed,
   active,
   onClick,
+  LinkComponent: Link,
 }: NavItemButtonProps) {
   const Icon = item.icon;
 
   return (
     <NavTooltip label={item.label} collapsed={collapsed}>
-      <a
+      <Link
         href={item.href}
         onClick={onClick}
         aria-current={active ? "page" : undefined}
@@ -152,7 +182,7 @@ function NavItemButton({
             {item.badge !== undefined && (
               <span
                 className={cn(
-                  "ml-auto inline-flex h-5 min-w-[20px] items-center justify-center",
+                  "ml-auto inline-flex h-5 min-w-5 items-center justify-center",
                   "rounded-full px-1.5 text-[--text-xs] font-[--font-weight-medium]",
                   active
                     ? "bg-[--color-primary] text-[--color-primary-foreground]"
@@ -164,7 +194,7 @@ function NavItemButton({
             )}
           </>
         )}
-      </a>
+      </Link>
     </NavTooltip>
   );
 }
@@ -176,14 +206,19 @@ function NavItemButton({
 interface AppShortcutButtonProps {
   app: AppShortcut;
   collapsed: boolean;
+  LinkComponent: LinkComponent;
 }
 
-function AppShortcutButton({ app, collapsed }: AppShortcutButtonProps) {
+function AppShortcutButton({
+  app,
+  collapsed,
+  LinkComponent: Link,
+}: AppShortcutButtonProps) {
   const Icon = app.icon;
 
   return (
     <NavTooltip label={app.label} collapsed={collapsed}>
-      <a
+      <Link
         href={app.href}
         aria-label={app.label}
         className={cn(
@@ -207,7 +242,7 @@ function AppShortcutButton({ app, collapsed }: AppShortcutButtonProps) {
           aria-hidden="true"
         />
         {!collapsed && <span className="truncate">{app.label}</span>}
-      </a>
+      </Link>
     </NavTooltip>
   );
 }
@@ -224,6 +259,7 @@ export function NavigationSidebar({
   currentPath = "",
   showCollapseToggle = true,
   onNavItemClick,
+  LinkComponent = DefaultLink,
   className,
 }: NavigationSidebarProps) {
   const CollapseIcon = collapsed ? ChevronRight : ChevronLeft;
@@ -287,6 +323,7 @@ export function NavigationSidebar({
                       collapsed={collapsed}
                       active={isItemActive(item.href, currentPath, item.exact)}
                       onClick={onNavItemClick}
+                      LinkComponent={LinkComponent}
                     />
                   </li>
                 ))}
@@ -304,7 +341,7 @@ export function NavigationSidebar({
                   className="h-3.5 w-3.5 text-[--color-muted-foreground]"
                   aria-hidden="true"
                 />
-                <p className="text-[--text-xs] font-[--font-weight-semibold] uppercase tracking-wider text-[--color-muted-foreground]">
+                <p className="text-[--text-xs] font-[--font-weight-semibold] uppercase tracking-wider">
                   Apps
                 </p>
               </div>
@@ -326,7 +363,11 @@ export function NavigationSidebar({
             <ul className="space-y-0.5 px-2">
               {apps.map((app) => (
                 <li key={app.id}>
-                  <AppShortcutButton app={app} collapsed={collapsed} />
+                  <AppShortcutButton
+                    app={app}
+                    collapsed={collapsed}
+                    LinkComponent={LinkComponent}
+                  />
                 </li>
               ))}
             </ul>

@@ -1,5 +1,6 @@
 import { Suspense } from "react";
-import { Users, AlertTriangle, RotateCcw } from "lucide-react";
+import { Users, RotateCcw } from "lucide-react";
+import { PageHeader, EmptyState, ErrorState, Button } from "@hebron/ui";
 import { UserTable } from "../../../components/user-table";
 import { UserTableSkeleton } from "../../../components/user-table-skeleton";
 import { mockUsers, mockRoleAssignments } from "../../../lib/mock-data";
@@ -8,139 +9,6 @@ import { mockUsers, mockRoleAssignments } from "../../../lib/mock-data";
 
 const fadeInStyle = `@keyframes hb-fade-in { from { opacity: 0; } to { opacity: 1; } }`;
 
-// ─── Error state ──────────────────────────────────────────────────────────────
-
-function UsersError() {
-  return (
-    <div
-      role="alert"
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: "1rem",
-        padding: "5rem 1.5rem",
-        textAlign: "center",
-        animation: "hb-fade-in 0.2s ease-out",
-      }}
-    >
-      <div
-        aria-hidden="true"
-        style={{
-          width: "3rem",
-          height: "3rem",
-          borderRadius: "var(--radius-full)",
-          backgroundColor: "var(--color-destructive-muted)",
-          color: "var(--color-destructive)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <AlertTriangle size={20} />
-      </div>
-      <div>
-        <p
-          style={{
-            fontSize: "var(--text-sm)",
-            fontWeight: "var(--font-weight-semibold)",
-            color: "var(--color-foreground)",
-          }}
-        >
-          Não foi possível carregar os usuários
-        </p>
-        <p
-          style={{
-            fontSize: "var(--text-xs)",
-            color: "var(--color-muted-foreground)",
-            marginTop: "0.25rem",
-          }}
-        >
-          Verifique sua conexão e tente novamente.
-        </p>
-      </div>
-      {/* GET form — clears query params and reloads, no JS required */}
-      <form method="get">
-        <button
-          type="submit"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "0.375rem",
-            padding: "0.5rem 1rem",
-            fontSize: "var(--text-sm)",
-            fontWeight: "var(--font-weight-medium)",
-            color: "var(--color-primary-foreground)",
-            backgroundColor: "var(--color-primary)",
-            border: "none",
-            borderRadius: "var(--radius)",
-            cursor: "pointer",
-          }}
-        >
-          <RotateCcw size={14} aria-hidden="true" />
-          Tentar novamente
-        </button>
-      </form>
-    </div>
-  );
-}
-
-// ─── Empty state ──────────────────────────────────────────────────────────────
-
-function UsersEmpty() {
-  return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        gap: "0.75rem",
-        padding: "5rem 1.5rem",
-        textAlign: "center",
-        animation: "hb-fade-in 0.2s ease-out",
-      }}
-    >
-      <div
-        aria-hidden="true"
-        style={{
-          width: "3rem",
-          height: "3rem",
-          borderRadius: "var(--radius-full)",
-          backgroundColor: "var(--color-primary-muted)",
-          color: "var(--color-primary)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <Users size={20} />
-      </div>
-      <p
-        style={{
-          fontSize: "var(--text-sm)",
-          fontWeight: "var(--font-weight-medium)",
-          color: "var(--color-foreground)",
-        }}
-      >
-        Nenhum usuário cadastrado ainda.
-      </p>
-      <p
-        style={{
-          fontSize: "var(--text-xs)",
-          color: "var(--color-muted-foreground)",
-          fontStyle: "italic",
-          maxWidth: "24rem",
-        }}
-      >
-        "A colheita é grande, mas os obreiros são poucos"
-        <br />— Mateus 9:37
-      </p>
-    </div>
-  );
-}
-
 // ─── Users content (async — ready for real data fetching) ─────────────────────
 
 async function UsersContent() {
@@ -148,7 +16,16 @@ async function UsersContent() {
   const roleAssignments = mockRoleAssignments;
 
   if (users.length === 0) {
-    return <UsersEmpty />;
+    return (
+      <EmptyState
+        title="Nenhum usuário cadastrado ainda."
+        icon={Users}
+        quote={{
+          text: "A colheita é grande, mas os obreiros são poucos",
+          reference: "Mateus 9:37",
+        }}
+      />
+    );
   }
 
   return (
@@ -180,31 +57,26 @@ export default async function UsuariosPage({
           gap: "1.5rem",
         }}
       >
-        {/* Header */}
-        <div>
-          <h1
-            style={{
-              fontSize: "var(--text-2xl)",
-              fontWeight: "var(--font-weight-bold)",
-              color: "var(--color-foreground)",
-            }}
-          >
-            Usuários
-          </h1>
-          <p
-            style={{
-              fontSize: "var(--text-sm)",
-              color: "var(--color-muted-foreground)",
-              marginTop: "0.25rem",
-            }}
-          >
-            {mockUsers.length} usuários cadastrados no sistema
-          </p>
-        </div>
+        <PageHeader
+          title="Usuários"
+          description={`${mockUsers.length} usuários cadastrados no sistema`}
+        />
 
-        {/* Content — skeleton while loading, error state on failure */}
         {state === "error" ? (
-          <UsersError />
+          <ErrorState
+            title="Não foi possível carregar os usuários"
+            description="Verifique sua conexão e tente novamente."
+            action={
+              <form method="get">
+                <Button
+                  type="submit"
+                  leftIcon={<RotateCcw size={14} aria-hidden="true" />}
+                >
+                  Tentar novamente
+                </Button>
+              </form>
+            }
+          />
         ) : (
           <Suspense fallback={<UserTableSkeleton />}>
             <UsersContent />

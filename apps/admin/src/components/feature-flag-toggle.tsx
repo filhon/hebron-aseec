@@ -166,7 +166,7 @@ export function FeatureFlagToggle({
               width: "1rem",
               height: "1rem",
               borderRadius: "var(--radius-full)",
-              backgroundColor: "#fff",
+              backgroundColor: "var(--color-background)",
               boxShadow: "var(--shadow-xs)",
               transform: optimisticEnabled
                 ? "translateX(1.125rem)"

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
@@ -9,7 +10,12 @@ import {
   Settings,
   CalendarDays,
 } from "lucide-react";
-import { AppShell, type NavSection } from "@hebron/ui";
+import {
+  AppShell,
+  BrandMark,
+  type NavSection,
+  type LinkComponent,
+} from "@hebron/ui";
 
 const SECTIONS: NavSection[] = [
   {
@@ -85,7 +91,9 @@ export default function DashboardLayout({
       profileHref="/perfil"
       onLogout={() => router.push("/login")}
       currentPath={pathname}
-      appName="Admin"
+      appName="Hebron ASEEC"
+      logo={<BrandMark compact />}
+      LinkComponent={Link as LinkComponent}
     >
       {children}
     </AppShell>

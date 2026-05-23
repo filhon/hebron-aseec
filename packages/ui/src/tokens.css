@@ -3,16 +3,20 @@
 
   Cores definidas pelo Manual de Identidade Visual da Hebron Aseec.
 
-  Tipografia: as variáveis --font-ui e --font-editorial são preenchidas
+  Tipografia: as variáveis --font-display e --font-ui são preenchidas
   por cada app via next/font. No layout.tsx de cada app:
 
-    import { Inter, Source_Serif_4 } from 'next/font/google'
-    const inter = Inter({ subsets: ['latin'], variable: '--font-inter' })
-    const sourceSerif4 = Source_Serif_4({
-      subsets: ['latin'], weight: ['400', '600', '700'],
-      variable: '--font-source-serif-4'
+    import { Parkinsans, Titillium_Web } from 'next/font/google'
+    const parkinsans = Parkinsans({
+      subsets: ['latin'],
+      variable: '--font-parkinsans'
     })
-    <html className={`${inter.variable} ${sourceSerif4.variable}`}>
+    const titillium = Titillium_Web({
+      subsets: ['latin'],
+      weight: ['400', '600', '700'],
+      variable: '--font-titillium'
+    })
+    <html className={`${parkinsans.variable} ${titillium.variable}`}>
 */
 
 :root {
@@ -69,14 +73,15 @@
 
   /* === Tipografia === */
   /* Preenchidas via next/font em cada app (veja comentário acima) */
-  --font-ui: var(--font-inter, "Inter", system-ui, -apple-system, sans-serif);
-  --font-editorial: var(
-    --font-source-serif-4,
-    "Source Serif 4",
-    Georgia,
-    "Times New Roman",
-    serif
+  --font-display: var(--font-parkinsans, "Parkinsans", system-ui, sans-serif);
+  --font-ui: var(
+    --font-titillium,
+    "Titillium Web",
+    system-ui,
+    -apple-system,
+    sans-serif
   );
+  --font-editorial: var(--font-display);
   --font-mono:
     ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, monospace;
 

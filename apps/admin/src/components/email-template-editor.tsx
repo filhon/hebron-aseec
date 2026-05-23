@@ -47,7 +47,7 @@ export function EmailTemplateEditor({
     return html.replace(
       /\{\{(\w+)\}\}/g,
       (_, name: string) =>
-        `<span style="background:#202C85;color:#fff;padding:0 4px;border-radius:3px;font-family:monospace;font-size:12px;">{{${name}}}</span>`,
+        `<span style="background:var(--color-primary);color:var(--color-primary-foreground);padding:0 4px;border-radius:3px;font-family:monospace;font-size:12px;">{{${name}}}</span>`,
     );
   }
 

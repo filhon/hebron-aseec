@@ -1,7 +1,8 @@
 "use client";
 
 import * as React from "react";
-import { Plus } from "lucide-react";
+import { Plus, Mail } from "lucide-react";
+import { PageHeader, EmptyState, Button } from "@hebron/ui";
 import {
   Select,
   SelectContent,
@@ -50,57 +51,15 @@ export default function ConvitesPage() {
         gap: "1.5rem",
       }}
     >
-      {/* Header */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          gap: "1rem",
-          flexWrap: "wrap",
-        }}
-      >
-        <div>
-          <h1
-            style={{
-              fontSize: "var(--text-2xl)",
-              fontWeight: "var(--font-weight-bold)",
-              color: "var(--color-foreground)",
-            }}
-          >
-            Convites
-          </h1>
-          <p
-            style={{
-              fontSize: "var(--text-sm)",
-              color: "var(--color-muted-foreground)",
-              marginTop: "0.25rem",
-            }}
-          >
-            {pendingCount} pendente{pendingCount !== 1 ? "s" : ""}
-          </p>
-        </div>
-
-        <button
-          type="button"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "0.375rem",
-            padding: "0.5rem 1rem",
-            fontSize: "var(--text-sm)",
-            fontWeight: "var(--font-weight-medium)",
-            color: "var(--color-primary-foreground)",
-            backgroundColor: "var(--color-primary)",
-            border: "none",
-            borderRadius: "var(--radius)",
-            cursor: "pointer",
-          }}
-        >
-          <Plus size={16} aria-hidden="true" />
-          Novo convite
-        </button>
-      </div>
+      <PageHeader
+        title="Convites"
+        description={`${pendingCount} pendente${pendingCount !== 1 ? "s" : ""}`}
+        actions={
+          <Button leftIcon={<Plus size={16} aria-hidden="true" />}>
+            Novo convite
+          </Button>
+        }
+      />
 
       {/* Filter */}
       <div style={{ maxWidth: "14rem" }}>
@@ -133,16 +92,14 @@ export default function ConvitesPage() {
 
       {/* Cards */}
       {filtered.length === 0 ? (
-        <div
-          style={{
-            textAlign: "center",
-            padding: "3rem 1rem",
-            color: "var(--color-muted-foreground)",
-            fontSize: "var(--text-sm)",
+        <EmptyState
+          title="Nenhum convite encontrado."
+          icon={Mail}
+          quote={{
+            text: "Ide, pois, e fazei discípulos de todas as nações",
+            reference: "Mateus 28:19",
           }}
-        >
-          Nenhum convite encontrado.
-        </div>
+        />
       ) : (
         <div
           style={{

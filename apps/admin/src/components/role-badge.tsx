@@ -7,14 +7,46 @@ interface RoleBadgeProps {
 
 const ROLE_CONFIG: Record<Role, { label: string; bg: string; color: string }> =
   {
-    super_admin: { label: "Super Admin", bg: "#202c85", color: "#fff" },
-    diretor: { label: "Diretor", bg: "#4338ca", color: "#fff" },
-    conselheiro: { label: "Conselheiro", bg: "#7c3aed", color: "#fff" },
-    colaborador: { label: "Colaborador", bg: "#a1c520", color: "#1d2800" },
-    submissor: { label: "Submissor", bg: "#ea5a06", color: "#fff" },
-    aluno: { label: "Aluno", bg: "#07b4e7", color: "#003a52" },
-    hospede: { label: "Hóspede", bg: "#64748b", color: "#fff" },
-    ouvinte: { label: "Ouvinte", bg: "#d97706", color: "#fff" },
+    super_admin: {
+      label: "Super Admin",
+      bg: "var(--color-primary)",
+      color: "var(--color-primary-foreground)",
+    },
+    diretor: {
+      label: "Diretor",
+      bg: "var(--color-accent)",
+      color: "var(--color-accent-foreground)",
+    },
+    conselheiro: {
+      label: "Conselheiro",
+      bg: "var(--color-support-sky)",
+      color: "var(--color-support-sky-foreground)",
+    },
+    colaborador: {
+      label: "Colaborador",
+      bg: "var(--color-support-green)",
+      color: "var(--color-support-green-foreground)",
+    },
+    submissor: {
+      label: "Submissor",
+      bg: "var(--color-accent-muted)",
+      color: "var(--color-accent)",
+    },
+    aluno: {
+      label: "Aluno",
+      bg: "var(--color-support-sky-muted)",
+      color: "var(--color-support-sky-foreground)",
+    },
+    hospede: {
+      label: "Hóspede",
+      bg: "var(--color-primary-muted)",
+      color: "var(--color-primary)",
+    },
+    ouvinte: {
+      label: "Ouvinte",
+      bg: "var(--color-support-green-muted)",
+      color: "var(--color-support-green-foreground)",
+    },
   };
 
 export function RoleBadge({ role, size = "md" }: RoleBadgeProps) {
