@@ -1,14 +1,11 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Shield, Clock } from "lucide-react";
-import { Button } from "@hebron/ui";
+import { ChevronLeft, Shield, Clock, Edit, KeyRound, Eye } from "lucide-react";
 import {
   mockUsers,
   mockRoleAssignments,
   mockAuditLog,
 } from "../../../../lib/mock-data";
-import { RoleBadge } from "../../../../components/role-badge";
-import { StatusBadge } from "../../../../components/status-badge";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -17,12 +14,26 @@ function getInitials(name: string): string {
     .split(" ")
     .filter(Boolean)
     .slice(0, 2)
-    .map((n) => n[0])
+    .map((n) => n[0] ?? "")
     .join("")
     .toUpperCase();
 }
 
-function formatDate(date: Date | null): string {
+function getAvatarColor(name: string): string {
+  const palette = [
+    "#202c85",
+    "#ea5a06",
+    "#07b4e7",
+    "#a1c520",
+    "#6b4ec8",
+    "#0a8a7d",
+    "#b8852a",
+  ];
+  const hash = name.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
+  return palette[hash % palette.length] ?? "#202c85";
+}
+
+function formatDateTime(date: Date | null): string {
   if (!date) return "Nunca";
   return new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",
@@ -52,13 +63,35 @@ function getActionLabel(action: string): string {
     "role.revoked": "Papel revogado",
     "invitation.created": "Convite enviado",
     "setting.updated": "Configuração alterada",
-    "feature_flag.toggled": "Feature flag alterada",
     "meeting.created": "Reunião criada",
     "designation.assigned": "Designação atribuída",
-    "designation.revoked": "Designação removida",
   };
   return labels[action] ?? action;
 }
+
+function getTimelineClass(action: string): string {
+  if (action.startsWith("user.impersonated")) return "warm";
+  if (action.startsWith("user.created") || action.startsWith("user.approved"))
+    return "cool";
+  return "";
+}
+
+const ROLE_LABELS: Record<string, string> = {
+  super_admin: "Super Admin",
+  diretor: "Diretor",
+  conselheiro: "Conselheiro",
+  colaborador: "Colaborador",
+  submissor: "Submissor",
+  aluno: "Aluno",
+  hospede: "Hóspede",
+  ouvinte: "Ouvinte",
+};
+
+const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
+  active: { label: "Ativo", cls: "hb-status-active" },
+  pending_approval: { label: "Pendente", cls: "hb-status-pending_approval" },
+  suspended: { label: "Suspenso", cls: "hb-status-suspended" },
+};
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -84,368 +117,338 @@ export default async function UserDetailPage({ params }: Props) {
 
   const activityLog = mockAuditLog
     .filter((e) => e.actorId === user.id || e.targetId === user.id)
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    .slice(0, 10);
 
   const approvedByUser = user.approvedBy
     ? mockUsers.find((u) => u.id === user.approvedBy)
     : null;
 
+  const initials = getInitials(user.name);
+  const bg = getAvatarColor(user.name);
+  const statusCfg = STATUS_CONFIG[user.status] ?? {
+    label: user.status,
+    cls: "",
+  };
+
   return (
-    <div
-      style={{
-        padding: "1.5rem",
-        maxWidth: "56rem",
-        margin: "0 auto",
-        display: "flex",
-        flexDirection: "column",
-        gap: "1.5rem",
-      }}
-    >
-      {/* Back link */}
-      <Link
-        href="/usuarios"
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: "0.375rem",
-          fontSize: "var(--text-sm)",
-          color: "var(--color-muted-foreground)",
-          textDecoration: "none",
-        }}
-      >
-        <ArrowLeft size={15} aria-hidden="true" />
+    <div className="hb-page">
+      {/* Back */}
+      <Link href="/usuarios" className="hb-back-link">
+        <ChevronLeft size={14} aria-hidden="true" />
         Voltar para usuários
       </Link>
 
-      {/* Profile card */}
-      <section
-        aria-labelledby="profile-heading"
-        style={{
-          backgroundColor: "var(--color-background)",
-          border: "1px solid var(--color-border)",
-          borderRadius: "var(--radius-lg)",
-          boxShadow: "var(--shadow-sm)",
-          padding: "1.5rem",
-          display: "flex",
-          flexDirection: "column",
-          gap: "1.25rem",
-        }}
-      >
-        {/* Avatar + name + email */}
-        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+      {/* Profile header */}
+      <div className="hb-detail-header">
+        <div
+          className="hb-avatar hb-avatar-xl"
+          style={{ background: bg }}
+          aria-hidden="true"
+        >
+          {initials}
+        </div>
+        <div className="hb-detail-header-meta">
+          <div className="hb-role-stack" style={{ marginBottom: 6 }}>
+            {roles.map((r) => (
+              <span key={r} className={`hb-badge hb-role-${r}`}>
+                {ROLE_LABELS[r] ?? r}
+              </span>
+            ))}
+          </div>
+          <h1>{user.name}</h1>
+          <div className="hb-detail-email">{user.email}</div>
           <div
-            aria-hidden="true"
             style={{
-              flexShrink: 0,
-              width: "4rem",
-              height: "4rem",
-              borderRadius: "var(--radius-full)",
-              backgroundColor: "var(--color-primary-muted)",
-              color: "var(--color-primary)",
+              marginTop: 12,
               display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "var(--text-xl)",
-              fontWeight: "var(--font-weight-semibold)",
-              overflow: "hidden",
+              gap: 16,
+              flexWrap: "wrap",
+              fontSize: 13,
             }}
           >
-            {user.avatarUrl ? (
-              <img
-                src={user.avatarUrl}
-                alt={user.name}
-                style={{ width: "100%", height: "100%", objectFit: "cover" }}
-              />
-            ) : (
-              getInitials(user.name)
-            )}
-          </div>
-          <div>
-            <h1
-              id="profile-heading"
-              style={{
-                fontSize: "var(--text-xl)",
-                fontWeight: "var(--font-weight-bold)",
-                color: "var(--color-foreground)",
-                fontFamily: "var(--font-editorial)",
-              }}
-            >
-              {user.name}
-            </h1>
-            <p
-              style={{
-                fontSize: "var(--text-sm)",
-                color: "var(--color-muted-foreground)",
-                marginTop: "0.125rem",
-              }}
-            >
-              {user.email}
-            </p>
+            <span>
+              <b style={{ color: "#131737" }}>Status:</b>{" "}
+              <span
+                className={`hb-badge ${statusCfg.cls}`}
+                style={{ marginLeft: 4 }}
+              >
+                <span className="hb-badge-dot" />
+                {statusCfg.label}
+              </span>
+            </span>
+            <span style={{ color: "#6b7280" }}>
+              <b style={{ color: "#131737" }}>Criado em:</b>{" "}
+              {formatShortDate(user.createdAt)}
+            </span>
+            <span style={{ color: "#6b7280" }}>
+              <b style={{ color: "#131737" }}>Último acesso:</b>{" "}
+              {formatDateTime(user.lastLoginAt)}
+            </span>
           </div>
         </div>
+        <div className="hb-detail-header-actions">
+          <button className="hb-btn hb-btn-secondary hb-btn-sm" type="button">
+            <Edit size={13} aria-hidden="true" />
+            Editar
+          </button>
+          <button className="hb-btn hb-btn-secondary hb-btn-sm" type="button">
+            <KeyRound size={13} aria-hidden="true" />
+            Resetar senha
+          </button>
+          {user.status !== "active" && (
+            <button className="hb-btn hb-btn-primary hb-btn-sm" type="button">
+              Aprovar acesso
+            </button>
+          )}
+          {user.status === "active" && (
+            <button className="hb-btn hb-btn-accent hb-btn-sm" type="button">
+              <Eye size={13} aria-hidden="true" />
+              Impersonar
+            </button>
+          )}
+        </div>
+      </div>
 
-        {/* Status + MFA */}
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-          <StatusBadge status={user.status} />
-          {user.mfaEnabled && (
-            <span
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "0.25rem",
-                fontSize: "var(--text-xs)",
-                color: "var(--color-support-sky)",
-                fontWeight: "var(--font-weight-medium)",
-              }}
+      <div className="hb-grid hb-grid-stat">
+        {/* Left col */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          {/* Activity */}
+          <div className="hb-card">
+            <div className="hb-card-header">
+              <h3>Atividade recente</h3>
+            </div>
+            <div
+              className="hb-card-body"
+              style={{ paddingTop: 8, paddingBottom: 8 }}
             >
-              <Shield size={13} />
-              MFA ativado
-            </span>
+              {activityLog.length === 0 ? (
+                <div className="hb-empty" style={{ padding: "32px 20px" }}>
+                  <b>Sem atividade registrada</b>
+                  <div className="hb-empty-quote">
+                    "Mesmo o que ainda não fez, será feito a seu tempo."
+                    <cite className="hb-empty-cite">— Eclesiastes 3:11</cite>
+                  </div>
+                </div>
+              ) : (
+                <ul className="hb-timeline" aria-label="Atividade do usuário">
+                  {activityLog.map((entry) => (
+                    <li
+                      key={entry.id}
+                      className={`hb-timeline-item ${getTimelineClass(entry.action)}`}
+                    >
+                      <div className="hb-timeline-time">
+                        {formatDateTime(entry.createdAt)}
+                        {" · "}
+                        <span
+                          style={{
+                            fontFamily: "ui-monospace,monospace",
+                            fontSize: 10.5,
+                          }}
+                        >
+                          {entry.action}
+                        </span>
+                      </div>
+                      <div className="hb-timeline-text">
+                        {(entry.payload as { summary?: string }).summary ??
+                          getActionLabel(entry.action)}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+
+          {/* Revoked roles */}
+          {revokedRoles.length > 0 && (
+            <div className="hb-card">
+              <div className="hb-card-header">
+                <h3>Papéis anteriores</h3>
+              </div>
+              <div
+                className="hb-card-body"
+                style={{ paddingTop: 6, paddingBottom: 6 }}
+              >
+                {revokedRoles.map((ra) => (
+                  <div
+                    key={ra.id}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                      padding: "10px 0",
+                      borderBottom: "1px solid rgba(19,23,55,0.07)",
+                      opacity: 0.7,
+                    }}
+                  >
+                    <span className={`hb-badge hb-role-${ra.role}`}>
+                      {ROLE_LABELS[ra.role] ?? ra.role}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 12,
+                        color: "#6b7280",
+                        marginLeft: "auto",
+                      }}
+                    >
+                      removido em{" "}
+                      {ra.revokedAt ? formatShortDate(ra.revokedAt) : "—"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
         </div>
 
-        {/* Roles */}
-        {roles.length > 0 && (
-          <div>
-            <p
+        {/* Right col */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          {/* Identity & security */}
+          <div className="hb-card">
+            <div className="hb-card-header">
+              <h3>Identidade & segurança</h3>
+            </div>
+            <div className="hb-card-body">
+              <dl className="hb-meta-list">
+                <dt>ID interno</dt>
+                <dd
+                  style={{ fontFamily: "ui-monospace,monospace", fontSize: 12 }}
+                >
+                  {user.id}
+                </dd>
+                <dt>Email</dt>
+                <dd>{user.email}</dd>
+                <dt>MFA (TOTP)</dt>
+                <dd>
+                  {user.mfaEnabled ? (
+                    <span
+                      style={{
+                        color: "#5e7a10",
+                        fontWeight: 600,
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: 4,
+                      }}
+                    >
+                      <Shield size={13} aria-hidden="true" /> Habilitado
+                    </span>
+                  ) : (
+                    <span style={{ color: "#c24a03", fontWeight: 600 }}>
+                      Não habilitado
+                    </span>
+                  )}
+                </dd>
+                <dt>Cadastrado em</dt>
+                <dd>{formatShortDate(user.createdAt)}</dd>
+                <dt>Aprovado por</dt>
+                <dd>{approvedByUser?.name ?? "—"}</dd>
+                <dt>Aprovado em</dt>
+                <dd>
+                  {user.approvedAt ? formatShortDate(user.approvedAt) : "—"}
+                </dd>
+              </dl>
+            </div>
+          </div>
+
+          {/* Pending approval callout */}
+          {user.status === "pending_approval" && (
+            <div
+              className="hb-card"
               style={{
-                fontSize: "var(--text-xs)",
-                fontWeight: "var(--font-weight-semibold)",
-                color: "var(--color-muted-foreground)",
-                textTransform: "uppercase",
-                letterSpacing: "0.05em",
-                marginBottom: "0.5rem",
+                borderColor: "rgba(234,90,6,0.3)",
+                background: "rgba(234,90,6,0.03)",
               }}
             >
-              Papéis ativos
-            </p>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.375rem" }}>
-              {roles.map((role) => (
-                <RoleBadge key={role} role={role} />
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Meta info */}
-        <dl
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(12rem, 1fr))",
-            gap: "0.75rem",
-            paddingTop: "1rem",
-            borderTop: "1px solid var(--color-border)",
-          }}
-        >
-          {[
-            { label: "Cadastrado em", value: formatShortDate(user.createdAt) },
-            { label: "Último acesso", value: formatDate(user.lastLoginAt) },
-            {
-              label: "Aprovado por",
-              value: approvedByUser?.name ?? "—",
-            },
-            {
-              label: "Aprovado em",
-              value: user.approvedAt ? formatShortDate(user.approvedAt) : "—",
-            },
-          ].map(({ label, value }) => (
-            <div key={label}>
-              <dt
-                style={{
-                  fontSize: "var(--text-xs)",
-                  color: "var(--color-muted-foreground)",
-                  marginBottom: "0.125rem",
-                }}
-              >
-                {label}
-              </dt>
-              <dd
-                style={{
-                  fontSize: "var(--text-sm)",
-                  fontWeight: "var(--font-weight-medium)",
-                  color: "var(--color-foreground)",
-                }}
-              >
-                {value}
-              </dd>
-            </div>
-          ))}
-        </dl>
-
-        {/* Actions */}
-        {user.status === "active" && (
-          <div style={{ paddingTop: "0.5rem" }}>
-            <Button
-              variant="destructive"
-              aria-label={`Suspender conta de ${user.name}`}
-            >
-              Suspender conta
-            </Button>
-          </div>
-        )}
-        {user.status === "suspended" && (
-          <div style={{ paddingTop: "0.5rem" }}>
-            <Button
-              variant="outline"
-              className="border-[--color-support-green] text-[--color-support-green] hover:border-[--color-support-green] hover:bg-[--color-support-green-muted] hover:text-[--color-support-green]"
-              aria-label={`Reativar conta de ${user.name}`}
-            >
-              Reativar conta
-            </Button>
-          </div>
-        )}
-        {user.status === "pending_approval" && (
-          <div style={{ paddingTop: "0.5rem" }}>
-            <Button
-              variant="accent"
-              aria-label={`Aprovar conta de ${user.name}`}
-            >
-              Aprovar acesso
-            </Button>
-          </div>
-        )}
-      </section>
-
-      {/* Revoked roles history */}
-      {revokedRoles.length > 0 && (
-        <section
-          aria-labelledby="revoked-roles-heading"
-          style={{
-            backgroundColor: "var(--color-background)",
-            border: "1px solid var(--color-border)",
-            borderRadius: "var(--radius-lg)",
-            boxShadow: "var(--shadow-sm)",
-            padding: "1.25rem",
-          }}
-        >
-          <h2
-            id="revoked-roles-heading"
-            style={{
-              fontSize: "var(--text-sm)",
-              fontWeight: "var(--font-weight-semibold)",
-              color: "var(--color-foreground)",
-              marginBottom: "0.75rem",
-            }}
-          >
-            Papéis anteriores
-          </h2>
-          <ul
-            role="list"
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "0.5rem",
-            }}
-          >
-            {revokedRoles.map((ra) => (
-              <li
-                key={ra.id}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.5rem",
-                  fontSize: "var(--text-sm)",
-                  color: "var(--color-muted-foreground)",
-                }}
-              >
-                <RoleBadge role={ra.role} size="sm" />
-                <span>
-                  removido em{" "}
-                  {ra.revokedAt ? formatShortDate(ra.revokedAt) : "—"}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      {/* Activity log */}
-      <section
-        aria-labelledby="activity-heading"
-        style={{
-          backgroundColor: "var(--color-background)",
-          border: "1px solid var(--color-border)",
-          borderRadius: "var(--radius-lg)",
-          boxShadow: "var(--shadow-sm)",
-          padding: "1.25rem",
-        }}
-      >
-        <h2
-          id="activity-heading"
-          style={{
-            fontSize: "var(--text-sm)",
-            fontWeight: "var(--font-weight-semibold)",
-            color: "var(--color-foreground)",
-            marginBottom: "0.75rem",
-          }}
-        >
-          Histórico de atividade
-        </h2>
-
-        {activityLog.length === 0 ? (
-          <p
-            style={{
-              fontSize: "var(--text-sm)",
-              color: "var(--color-muted-foreground)",
-              fontStyle: "italic",
-            }}
-          >
-            Nenhuma atividade registrada.
-          </p>
-        ) : (
-          <ul
-            role="list"
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "0",
-            }}
-          >
-            {activityLog.map((entry, i) => (
-              <li
-                key={entry.id}
-                style={{
-                  display: "flex",
-                  gap: "0.75rem",
-                  paddingBottom: i < activityLog.length - 1 ? "1rem" : "0",
-                  paddingTop: i > 0 ? "1rem" : "0",
-                  borderTop: i > 0 ? "1px solid var(--color-border)" : "none",
-                }}
-              >
+              <div className="hb-card-body">
                 <div
-                  aria-hidden="true"
+                  style={{ display: "flex", gap: 10, alignItems: "flex-start" }}
+                >
+                  <div
+                    style={{
+                      width: 32,
+                      height: 32,
+                      background: "#ea5a06",
+                      color: "white",
+                      borderRadius: 8,
+                      display: "grid",
+                      placeItems: "center",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Clock size={16} aria-hidden="true" />
+                  </div>
+                  <div>
+                    <b
+                      style={{
+                        fontFamily:
+                          "var(--font-display,'Parkinsans',sans-serif)",
+                        fontSize: 14.5,
+                      }}
+                    >
+                      Aprovação pendente
+                    </b>
+                    <p
+                      style={{
+                        margin: "4px 0 14px",
+                        fontSize: 13,
+                        color: "#6b7280",
+                      }}
+                    >
+                      Este usuário se auto-cadastrou. Valide vínculo e papéis
+                      antes de liberar o acesso.
+                    </p>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button
+                        className="hb-btn hb-btn-primary hb-btn-sm"
+                        type="button"
+                      >
+                        Aprovar cadastro
+                      </button>
+                      <button
+                        className="hb-btn hb-btn-ghost hb-btn-sm"
+                        type="button"
+                      >
+                        Recusar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Suspended callout */}
+          {user.status === "suspended" && (
+            <div
+              className="hb-card"
+              style={{
+                borderColor: "rgba(184,51,26,0.25)",
+                background: "rgba(184,51,26,0.03)",
+              }}
+            >
+              <div className="hb-card-body">
+                <b style={{ fontSize: 14, color: "#b8331a" }}>Conta suspensa</b>
+                <p
                   style={{
-                    flexShrink: 0,
-                    marginTop: "0.125rem",
-                    color: "var(--color-muted-foreground)",
+                    margin: "4px 0 12px",
+                    fontSize: 13,
+                    color: "#6b7280",
                   }}
                 >
-                  <Clock size={14} />
-                </div>
-                <div>
-                  <p
-                    style={{
-                      fontSize: "var(--text-sm)",
-                      color: "var(--color-foreground)",
-                    }}
-                  >
-                    {getActionLabel(entry.action)}
-                  </p>
-                  <p
-                    style={{
-                      fontSize: "var(--text-xs)",
-                      color: "var(--color-muted-foreground)",
-                      marginTop: "0.125rem",
-                    }}
-                  >
-                    {entry.actorName} · {formatDate(entry.createdAt)}
-                  </p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
+                  O usuário não tem acesso a nenhum módulo do ecossistema.
+                </p>
+                <button
+                  className="hb-btn hb-btn-secondary hb-btn-sm"
+                  type="button"
+                >
+                  Reativar conta
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

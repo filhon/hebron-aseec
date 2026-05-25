@@ -2,15 +2,16 @@
 
 import * as React from "react";
 import {
+  Shield,
+  Flag,
+  Mail,
+  Settings2,
+  AlertCircle,
   UserCheck,
   UserCog,
-  Mail,
-  Flag,
-  Settings2,
-  ChevronUp,
-  ChevronDown,
+  Check,
+  Eye,
 } from "lucide-react";
-import { PageHeader } from "@hebron/ui";
 import {
   mockFeatureFlags,
   mockDesignations,
@@ -18,33 +19,20 @@ import {
   mockEmailTemplates,
   mockUsers,
 } from "../../../lib/mock-data";
-import { FeatureFlagToggle } from "../../../components/feature-flag-toggle";
 
-// ─── Tab types ────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-type TabId =
-  | "feature-flags"
-  | "designacoes"
-  | "configuracoes"
-  | "email-templates";
+type TabId = "designacoes" | "feature-flags" | "email-templates" | "sistema";
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
-  { id: "feature-flags", label: "Feature flags", icon: <Flag size={15} /> },
-  {
-    id: "designacoes",
-    label: "Designações",
-    icon: <UserCheck size={15} />,
-  },
-  {
-    id: "configuracoes",
-    label: "Sistema",
-    icon: <Settings2 size={15} />,
-  },
+  { id: "designacoes", label: "Designações", icon: <Shield size={14} /> },
+  { id: "feature-flags", label: "Feature flags", icon: <Flag size={14} /> },
   {
     id: "email-templates",
-    label: "Templates de e-mail",
-    icon: <Mail size={15} />,
+    label: "Templates de email",
+    icon: <Mail size={14} />,
   },
+  { id: "sistema", label: "Sistema", icon: <Settings2 size={14} /> },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -57,493 +45,336 @@ function formatDate(date: Date): string {
   }).format(date);
 }
 
-// ─── Sub-sections ─────────────────────────────────────────────────────────────
-
-function FeatureFlagsSection() {
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-      <p
-        style={{
-          fontSize: "var(--text-sm)",
-          color: "var(--color-muted-foreground)",
-        }}
-      >
-        Ative ou desative funcionalidades experimentais sem redeploy. Alterações
-        são registradas no log de auditoria.
-      </p>
-      {mockFeatureFlags.map((flag) => (
-        <FeatureFlagToggle key={flag.id} flag={flag} />
-      ))}
-    </div>
-  );
+function formatDateTime(date: Date): string {
+  return new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
 }
 
-function DesignacoesSection() {
+function getInitials(name: string): string {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((n) => n[0] ?? "")
+    .join("")
+    .toUpperCase();
+}
+
+// ─── Designações ──────────────────────────────────────────────────────────────
+
+function DesignacoesPanel() {
   const activeDesignations = mockDesignations.filter(
     (d) => d.revokedAt === null,
   );
-  const revokedDesignations = mockDesignations.filter(
-    (d) => d.revokedAt !== null,
-  );
+  const revokedDesignations = mockDesignations
+    .filter((d) => d.revokedAt !== null)
+    .sort(
+      (a, b) => (b.revokedAt?.getTime() ?? 0) - (a.revokedAt?.getTime() ?? 0),
+    );
 
-  const getAssignedByUser = (assignedBy: string) =>
-    mockUsers.find((u) => u.id === assignedBy);
+  const getAssignedByName = (id: string) =>
+    mockUsers.find((u) => u.id === id)?.name ?? id;
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-      <p
-        style={{
-          fontSize: "var(--text-sm)",
-          color: "var(--color-muted-foreground)",
-        }}
-      >
-        Designações de gestor e autorizador para o módulo de projetos. A
-        governança dual exige as duas funções preenchidas para aprovações
-        financeiras.
-      </p>
+    <div>
+      <div className="hb-governance-callout">
+        <AlertCircle
+          size={18}
+          aria-hidden="true"
+          style={{ flexShrink: 0, marginTop: 1 }}
+        />
+        <div>
+          <b>Governança dual.</b> Toda despesa exige aprovação por{" "}
+          <b>Diretor Gestor</b> e autorização por <b>Diretor Autorizador</b> —
+          duas pessoas distintas, em duas etapas. Não use o mesmo nome para os
+          dois papéis.
+        </div>
+      </div>
 
-      {/* Active */}
-      <section aria-labelledby="active-des-heading">
-        <h3
-          id="active-des-heading"
-          style={{
-            fontSize: "var(--text-sm)",
-            fontWeight: "var(--font-weight-semibold)",
-            color: "var(--color-foreground)",
-            marginBottom: "0.75rem",
-          }}
-        >
-          Designações ativas
-        </h3>
-
-        {activeDesignations.length === 0 ? (
-          <p
-            style={{
-              fontSize: "var(--text-sm)",
-              color: "var(--color-muted-foreground)",
-              fontStyle: "italic",
-            }}
-          >
-            Nenhuma designação ativa.
-          </p>
-        ) : (
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "0.75rem",
-            }}
-          >
-            {activeDesignations.map((d) => {
-              const assignedBy = getAssignedByUser(d.assignedBy);
-              return (
+      <div className="hb-grid hb-grid-2 hb-designation-grid">
+        {activeDesignations.map((d) => {
+          const isGestor = d.type === "gestor";
+          const color = isGestor ? "#ea5a06" : "#07b4e7";
+          const Icon = isGestor ? UserCheck : UserCog;
+          return (
+            <div
+              key={d.id}
+              className="hb-card hb-designation-card"
+              style={{ borderColor: color, background: `${color}08` }}
+            >
+              <div className="hb-designation-card-header">
                 <div
-                  key={d.id}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "0.875rem 1rem",
-                    backgroundColor: "var(--color-muted)",
-                    borderRadius: "var(--radius-md)",
-                    gap: "1rem",
-                    flexWrap: "wrap",
-                  }}
+                  className="hb-designation-icon"
+                  style={{ background: color }}
                 >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.625rem",
-                    }}
-                  >
-                    <div
-                      aria-hidden="true"
-                      style={{
-                        width: "2rem",
-                        height: "2rem",
-                        borderRadius: "var(--radius-full)",
-                        backgroundColor:
-                          d.type === "gestor"
-                            ? "var(--color-primary-muted)"
-                            : "var(--color-accent-muted)",
-                        color:
-                          d.type === "gestor"
-                            ? "var(--color-primary)"
-                            : "var(--color-accent)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexShrink: 0,
-                      }}
-                    >
-                      {d.type === "gestor" ? (
-                        <UserCheck size={14} />
-                      ) : (
-                        <UserCog size={14} />
-                      )}
-                    </div>
-                    <div>
-                      <p
-                        style={{
-                          fontSize: "var(--text-sm)",
-                          fontWeight: "var(--font-weight-medium)",
-                          color: "var(--color-foreground)",
-                        }}
-                      >
-                        {d.directorName}
-                      </p>
-                      <p
-                        style={{
-                          fontSize: "var(--text-xs)",
-                          color: "var(--color-muted-foreground)",
-                        }}
-                      >
-                        {d.type === "gestor" ? "Gestor" : "Autorizador"} · desde{" "}
-                        {formatDate(d.assignedAt)}
-                      </p>
-                    </div>
-                  </div>
-                  <p
-                    style={{
-                      fontSize: "var(--text-xs)",
-                      color: "var(--color-muted-foreground)",
-                    }}
-                  >
-                    por {assignedBy?.name ?? d.assignedBy}
+                  <Icon size={18} aria-hidden="true" />
+                </div>
+                <div>
+                  <h3 className="hb-designation-title">
+                    Diretor {isGestor ? "Gestor" : "Autorizador"}
+                  </h3>
+                  <p className="hb-designation-desc">
+                    {isGestor
+                      ? "Aprova lotes de pagamento e preside reuniões mensais."
+                      : "Autoriza pagamentos no banco. Nunca pode ser o mesmo que o gestor."}
                   </p>
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
+              </div>
 
-      {/* History */}
-      {revokedDesignations.length > 0 && (
-        <section aria-labelledby="revoked-des-heading">
-          <h3
-            id="revoked-des-heading"
-            style={{
-              fontSize: "var(--text-sm)",
-              fontWeight: "var(--font-weight-semibold)",
-              color: "var(--color-foreground)",
-              marginBottom: "0.75rem",
-            }}
-          >
-            Histórico
-          </h3>
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "0.5rem",
-            }}
-          >
-            {revokedDesignations.map((d) => (
-              <div
-                key={d.id}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  padding: "0.625rem 1rem",
-                  backgroundColor: "var(--color-background)",
-                  border: "1px solid var(--color-border)",
-                  borderRadius: "var(--radius-md)",
-                  gap: "1rem",
-                  opacity: 0.7,
-                }}
-              >
-                <span
-                  style={{
-                    fontSize: "var(--text-sm)",
-                    color: "var(--color-muted-foreground)",
-                  }}
+              <div className="hb-designation-preview">
+                <div
+                  className="hb-avatar hb-avatar-sm"
+                  style={{ background: color }}
+                  aria-hidden="true"
                 >
-                  {d.directorName} —{" "}
+                  {getInitials(d.directorName)}
+                </div>
+                <div>
+                  <div className="hb-designation-preview-name">
+                    {d.directorName}
+                  </div>
+                  <div className="hb-designation-preview-sub">
+                    Designado em {formatDate(d.assignedAt)} · por{" "}
+                    {getAssignedByName(d.assignedBy)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {revokedDesignations.length > 0 && (
+        <div className="hb-card">
+          <div className="hb-card-header">
+            <h3>Histórico de designações</h3>
+          </div>
+          <div className="hb-card-body hb-card-body-tight">
+            {revokedDesignations.map((d) => (
+              <div key={d.id} className="hb-designation-history-row">
+                <span className="hb-designation-history-name">
+                  {d.directorName}
+                </span>
+                <span className="hb-badge">
                   {d.type === "gestor" ? "Gestor" : "Autorizador"}
                 </span>
-                <span
-                  style={{
-                    fontSize: "var(--text-xs)",
-                    color: "var(--color-muted-foreground)",
-                  }}
-                >
+                <span className="hb-designation-history-date">
                   removido em {d.revokedAt ? formatDate(d.revokedAt) : "—"}
                 </span>
               </div>
             ))}
           </div>
-        </section>
+        </div>
       )}
     </div>
   );
 }
 
-function SistemaSection() {
+// ─── Feature Flags ────────────────────────────────────────────────────────────
+
+function FeatureFlagsPanel() {
+  const [flags, setFlags] = React.useState(() =>
+    mockFeatureFlags.map((f) => ({ ...f })),
+  );
+
+  function toggle(id: string) {
+    setFlags((fs) =>
+      fs.map((f) => (f.id === id ? { ...f, enabled: !f.enabled } : f)),
+    );
+  }
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-      <p
-        style={{
-          fontSize: "var(--text-sm)",
-          color: "var(--color-muted-foreground)",
-        }}
-      >
-        Configurações gerais do sistema. Alterações são registradas no log de
-        auditoria.
-      </p>
-      {mockSystemSettings.map((setting) => (
-        <div
-          key={setting.id}
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            gap: "1rem",
-            padding: "1rem",
-            backgroundColor: "var(--color-background)",
-            border: "1px solid var(--color-border)",
-            borderRadius: "var(--radius-lg)",
-            flexWrap: "wrap",
-          }}
-        >
-          <div style={{ flex: 1, minWidth: "12rem" }}>
-            <p
-              style={{
-                fontSize: "var(--text-sm)",
-                fontWeight: "var(--font-weight-medium)",
-                color: "var(--color-foreground)",
-              }}
-            >
-              {setting.label}
-            </p>
-            <p
-              style={{
-                fontSize: "var(--text-xs)",
-                color: "var(--color-muted-foreground)",
-                marginTop: "0.25rem",
-              }}
-            >
-              {setting.description}
-            </p>
-            <p
-              style={{
-                fontSize: "var(--text-xs)",
-                color: "var(--color-muted-foreground)",
-                marginTop: "0.5rem",
-              }}
-            >
-              Chave: <code>{setting.key}</code>
-            </p>
-          </div>
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "flex-end",
-              gap: "0.25rem",
-              flexShrink: 0,
-            }}
-          >
-            <span
-              style={{
-                fontSize: "var(--text-sm)",
-                fontWeight: "var(--font-weight-semibold)",
-                fontFamily: "var(--font-mono)",
-                padding: "0.25rem 0.5rem",
-                backgroundColor: "var(--color-muted)",
-                borderRadius: "var(--radius-sm)",
-                color: "var(--color-foreground)",
-              }}
-            >
-              {setting.value}
-            </span>
-            <span
-              style={{
-                fontSize: "var(--text-xs)",
-                color: "var(--color-muted-foreground)",
-              }}
-            >
-              {formatDate(setting.updatedAt)}
-            </span>
-          </div>
+    <div>
+      <div className="hb-info-banner">
+        <b>Apenas para flags técnicas.</b> Controles de negócio (datas de
+        janela, valores limite, percentuais de quórum) ficam em{" "}
+        <i>Janelas & calendário</i> — feature flags são para deploys
+        progressivos.
+      </div>
+
+      <div className="hb-card">
+        <div className="hb-flag-list">
+          {flags.map((f) => (
+            <div key={f.id} className="hb-flag-row">
+              <div className="hb-flag-meta">
+                <div className="hb-flag-key-badge">{f.key}</div>
+                {f.description && (
+                  <div className="hb-flag-desc">{f.description}</div>
+                )}
+                <div className="hb-flag-meta-row">
+                  {f.rolloutPercent > 0 && f.rolloutPercent < 100 && (
+                    <span>{f.rolloutPercent}% de rollout</span>
+                  )}
+                  <span>{formatDateTime(f.updatedAt)}</span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                role="switch"
+                aria-checked={f.enabled}
+                aria-label={`${f.enabled ? "Desativar" : "Ativar"} ${f.key}`}
+                onClick={() => toggle(f.id)}
+                className={`hb-switch${f.enabled ? " on" : ""}`}
+              />
+            </div>
+          ))}
         </div>
-      ))}
+      </div>
     </div>
   );
 }
 
-function EmailTemplatesSection() {
-  const [expandedId, setExpandedId] = React.useState<string | null>(null);
+// ─── Email Templates ──────────────────────────────────────────────────────────
+
+function renderWithHighlights(text: string) {
+  const parts = text.split(/(\{\{[^}]+\}\})/g);
+  return parts.map((p, i) =>
+    /^\{\{.+\}\}$/.test(p) ? (
+      <span key={i} className="hb-tpl-var">
+        {p}
+      </span>
+    ) : (
+      <React.Fragment key={i}>{p}</React.Fragment>
+    ),
+  );
+}
+
+function EmailTemplatesPanel() {
+  const [selectedId, setSelectedId] = React.useState(
+    mockEmailTemplates[0]?.id ?? "",
+  );
+  const selected = mockEmailTemplates.find((t) => t.id === selectedId);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-      <p
-        style={{
-          fontSize: "var(--text-sm)",
-          color: "var(--color-muted-foreground)",
-        }}
-      >
-        Templates de e-mail transacional enviados via Resend. Variáveis
-        disponíveis mostradas em cada template.
-      </p>
-      {mockEmailTemplates.map((tpl) => {
-        const isExpanded = expandedId === tpl.id;
-        return (
-          <div
-            key={tpl.id}
-            style={{
-              backgroundColor: "var(--color-background)",
-              border: "1px solid var(--color-border)",
-              borderRadius: "var(--radius-lg)",
-              overflow: "hidden",
-            }}
+    <div className="hb-settings-dual-col">
+      {/* Sidebar */}
+      <div className="hb-card hb-card-overflow">
+        <div className="hb-tpl-sidebar-label">Templates</div>
+        {mockEmailTemplates.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            className={`hb-tpl-sidebar-item${selectedId === t.id ? " active" : ""}`}
+            onClick={() => setSelectedId(t.id)}
           >
-            <button
-              type="button"
-              onClick={() => setExpandedId(isExpanded ? null : tpl.id)}
-              style={{
-                width: "100%",
-                padding: "1rem",
-                textAlign: "left",
-                backgroundColor: "transparent",
-                border: "none",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "flex-start",
-                justifyContent: "space-between",
-                gap: "0.75rem",
-              }}
-              aria-expanded={isExpanded}
-            >
-              <div>
-                <p
-                  style={{
-                    fontSize: "var(--text-sm)",
-                    fontWeight: "var(--font-weight-semibold)",
-                    color: "var(--color-foreground)",
-                  }}
-                >
-                  {tpl.key}
-                </p>
-                <p
-                  style={{
-                    fontSize: "var(--text-xs)",
-                    color: "var(--color-muted-foreground)",
-                    marginTop: "0.125rem",
-                  }}
-                >
-                  {tpl.subject}
-                </p>
-              </div>
-              <span
-                aria-hidden="true"
-                style={{
-                  flexShrink: 0,
-                  color: "var(--color-muted-foreground)",
-                  marginTop: "0.125rem",
-                }}
-              >
-                {isExpanded ? (
-                  <ChevronUp size={15} />
-                ) : (
-                  <ChevronDown size={15} />
-                )}
-              </span>
-            </button>
+            <div className="hb-tpl-sidebar-item-name">{t.key}</div>
+            <div className="hb-tpl-sidebar-item-key">{t.subject}</div>
+            <div className="hb-tpl-sidebar-item-date">
+              {formatDate(t.updatedAt)}
+            </div>
+          </button>
+        ))}
+      </div>
 
-            {isExpanded && (
-              <div
-                style={{
-                  padding: "0 1rem 1rem",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "0.75rem",
-                  borderTop: "1px solid var(--color-border)",
-                }}
-              >
-                <div>
-                  <p
-                    style={{
-                      fontSize: "var(--text-xs)",
-                      fontWeight: "var(--font-weight-semibold)",
-                      color: "var(--color-muted-foreground)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.05em",
-                      marginBottom: "0.375rem",
-                      marginTop: "0.75rem",
-                    }}
-                  >
-                    Variáveis
-                  </p>
-                  <div
-                    style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: "0.375rem",
-                    }}
-                  >
-                    {tpl.variables.map((v) => (
-                      <code
-                        key={v}
-                        style={{
-                          fontSize: "var(--text-xs)",
-                          padding: "0.125rem 0.375rem",
-                          backgroundColor: "var(--color-primary-muted)",
-                          color: "var(--color-primary)",
-                          borderRadius: "var(--radius-sm)",
-                          fontFamily: "var(--font-mono)",
-                        }}
-                      >
-                        {"{{"}
-                        {v}
-                        {"}}"}
-                      </code>
-                    ))}
-                  </div>
+      {/* Editor + preview */}
+      {selected && (
+        <div className="hb-tpl-editor">
+          <div className="hb-card hb-designation-card">
+            <div className="hb-tpl-editor-header">
+              <div>
+                <div className="hb-tpl-editor-title">{selected.key}</div>
+                <div className="hb-tpl-editor-vars">
+                  Variáveis:{" "}
+                  {selected.variables.map((v, i) => (
+                    <span key={i} className="hb-tpl-var">{`{{${v}}}`}</span>
+                  ))}
                 </div>
-                <div>
-                  <p
-                    style={{
-                      fontSize: "var(--text-xs)",
-                      fontWeight: "var(--font-weight-semibold)",
-                      color: "var(--color-muted-foreground)",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.05em",
-                      marginBottom: "0.375rem",
-                    }}
-                  >
-                    Texto (plain)
-                  </p>
-                  <pre
-                    style={{
-                      fontSize: "var(--text-xs)",
-                      color: "var(--color-foreground)",
-                      backgroundColor: "var(--color-muted)",
-                      padding: "0.75rem",
-                      borderRadius: "var(--radius-md)",
-                      whiteSpace: "pre-wrap",
-                      wordBreak: "break-word",
-                      fontFamily: "var(--font-mono)",
-                    }}
-                  >
-                    {tpl.bodyText}
-                  </pre>
-                </div>
-                <p
-                  style={{
-                    fontSize: "var(--text-xs)",
-                    color: "var(--color-muted-foreground)",
-                  }}
-                >
-                  Última atualização: {formatDate(tpl.updatedAt)}
-                </p>
               </div>
-            )}
+              <div className="hb-tpl-editor-actions">
+                <button className="hb-btn hb-btn-ghost hb-btn-sm" type="button">
+                  <Mail size={13} aria-hidden="true" />
+                  Enviar teste
+                </button>
+                <button
+                  className="hb-btn hb-btn-primary hb-btn-sm"
+                  type="button"
+                >
+                  <Check size={13} aria-hidden="true" />
+                  Salvar
+                </button>
+              </div>
+            </div>
+
+            <div className="hb-form-row">
+              <label>Assunto</label>
+              <input
+                className="hb-form-input"
+                defaultValue={selected.subject}
+              />
+            </div>
+            <div className="hb-form-row">
+              <label>Corpo do email</label>
+              <textarea
+                className="hb-form-textarea hb-form-textarea-mono"
+                defaultValue={selected.bodyText}
+                rows={8}
+              />
+              <div className="hb-form-hint">
+                Variáveis no formato <code>{"{{nome}}"}</code> são substituídas
+                no envio.
+              </div>
+            </div>
           </div>
-        );
-      })}
+
+          <div className="hb-card">
+            <div className="hb-card-header">
+              <h3>Pré-visualização</h3>
+              <div className="hb-card-header-actions">
+                <span className="hb-card-header-hint">
+                  <Eye size={13} aria-hidden="true" />
+                  Variáveis aparecem destacadas.
+                </span>
+              </div>
+            </div>
+            <div className="hb-card-body">
+              <div className="hb-tpl-preview-subject">
+                {renderWithHighlights(selected.subject)}
+              </div>
+              <pre className="hb-tpl-preview-body">
+                {renderWithHighlights(selected.bodyText)}
+              </pre>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Sistema ──────────────────────────────────────────────────────────────────
+
+function SistemaPanel() {
+  return (
+    <div>
+      <div className="hb-note-banner">
+        Configurações gerais do sistema. Alterações são registradas no log de
+        auditoria.
+      </div>
+      <div className="hb-card hb-card-overflow">
+        {mockSystemSettings.map((setting) => (
+          <div key={setting.id} className="hb-setting-row">
+            <div>
+              <div className="hb-setting-label">{setting.label}</div>
+              {setting.description && (
+                <div className="hb-setting-desc">{setting.description}</div>
+              )}
+              <div className="hb-setting-key">{setting.key}</div>
+            </div>
+            <div className="hb-setting-value">
+              <span className="hb-setting-value-badge">{setting.value}</span>
+              <span className="hb-setting-value-date">
+                {formatDate(setting.updatedAt)}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -551,69 +382,34 @@ function EmailTemplatesSection() {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function ConfiguracoesPage() {
-  const [activeTab, setActiveTab] = React.useState<TabId>("feature-flags");
+  const [activeTab, setActiveTab] = React.useState<TabId>("designacoes");
 
   return (
-    <div
-      style={{
-        padding: "1.5rem",
-        maxWidth: "56rem",
-        margin: "0 auto",
-        display: "flex",
-        flexDirection: "column",
-        gap: "1.5rem",
-      }}
-    >
-      <PageHeader
-        title="Configurações"
-        description="Gerencie funcionalidades, designações e configurações do sistema"
-      />
+    <div className="hb-page">
+      <div className="hb-page-header">
+        <div className="hb-page-header-meta">
+          <div className="hb-eyebrow">Painel · operação do sistema</div>
+          <h1 className="hb-page-title">Configurações</h1>
+          <p className="hb-page-subtitle">
+            Designações de governança, feature flags técnicas e textos
+            institucionais que circulam por todo o ecossistema.
+          </p>
+        </div>
+      </div>
 
-      {/* Tabs */}
       <div
+        className="hb-tabs"
         role="tablist"
         aria-label="Seções de configuração"
-        style={{
-          display: "flex",
-          gap: "0.25rem",
-          borderBottom: "1px solid var(--color-border)",
-          overflowX: "auto",
-        }}
       >
         {TABS.map((tab) => (
           <button
             key={tab.id}
+            type="button"
             role="tab"
             aria-selected={activeTab === tab.id}
-            aria-controls={`tabpanel-${tab.id}`}
-            id={`tab-${tab.id}`}
-            type="button"
+            className={`hb-tab${activeTab === tab.id ? " active" : ""}`}
             onClick={() => setActiveTab(tab.id)}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "0.375rem",
-              padding: "0.625rem 0.875rem",
-              fontSize: "var(--text-sm)",
-              fontWeight:
-                activeTab === tab.id
-                  ? "var(--font-weight-semibold)"
-                  : "var(--font-weight-normal)",
-              color:
-                activeTab === tab.id
-                  ? "var(--color-primary)"
-                  : "var(--color-muted-foreground)",
-              backgroundColor: "transparent",
-              border: "none",
-              borderBottom:
-                activeTab === tab.id
-                  ? "2px solid var(--color-primary)"
-                  : "2px solid transparent",
-              cursor: "pointer",
-              whiteSpace: "nowrap",
-              marginBottom: "-1px",
-              transition: "color var(--transition-fast)",
-            }}
           >
             {tab.icon}
             {tab.label}
@@ -621,16 +417,11 @@ export default function ConfiguracoesPage() {
         ))}
       </div>
 
-      {/* Tab panels */}
-      <div
-        id={`tabpanel-${activeTab}`}
-        role="tabpanel"
-        aria-labelledby={`tab-${activeTab}`}
-      >
-        {activeTab === "feature-flags" && <FeatureFlagsSection />}
-        {activeTab === "designacoes" && <DesignacoesSection />}
-        {activeTab === "configuracoes" && <SistemaSection />}
-        {activeTab === "email-templates" && <EmailTemplatesSection />}
+      <div role="tabpanel">
+        {activeTab === "designacoes" && <DesignacoesPanel />}
+        {activeTab === "feature-flags" && <FeatureFlagsPanel />}
+        {activeTab === "email-templates" && <EmailTemplatesPanel />}
+        {activeTab === "sistema" && <SistemaPanel />}
       </div>
     </div>
   );
