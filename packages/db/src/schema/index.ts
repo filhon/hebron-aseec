@@ -30,3 +30,31 @@ export type {
 export { notificationChannelEnum, notifications } from "./notifications";
 
 export type { Notification, NewNotification } from "./notifications";
+
+// Admin schema
+export {
+  auditActionEnum,
+  meetingTypeEnum,
+  meetingStatusEnum,
+  auditLog,
+  invitations,
+  emailTemplates,
+  meetingSessions,
+  featureFlags,
+  systemSettings,
+} from "./admin";
+
+export type {
+  AuditLog,
+  NewAuditLog,
+  Invitation,
+  NewInvitation,
+  EmailTemplate,
+  NewEmailTemplate,
+  MeetingSession,
+  NewMeetingSession,
+  FeatureFlag,
+  NewFeatureFlag,
+  SystemSetting,
+  NewSystemSetting,
+} from "./admin";

@@ -1,4 +1,5 @@
 import {
+  jsonb,
   pgEnum,
   pgSchema,
   pgTable,
@@ -38,6 +39,12 @@ export const users = pgTable("users", {
   email: text("email").notNull().unique(),
   fullName: text("full_name"),
   avatarUrl: text("avatar_url"),
+  phone: text("phone"),
+  documentCpf: text("document_cpf").unique(),
+  suspendedModules: jsonb("suspended_modules")
+    .$type<string[]>()
+    .notNull()
+    .default([]),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
