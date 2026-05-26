@@ -1,7 +1,19 @@
 import { Suspense } from "react";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
+import { eq, desc, count, sql } from "drizzle-orm";
+import { users } from "@hebron/db/schema";
+import { auditLog } from "@hebron/db/schema";
 import { Download, ShieldAlert, FileText, RotateCcw } from "lucide-react";
-import { mockAuditLog } from "../../../lib/mock-data";
 import { ErrorState, Button } from "@hebron/ui";
+
+// ─── DB ───────────────────────────────────────────────────────────────────────
+
+function getDb() {
+  const url = process.env.DATABASE_URL;
+  if (!url) throw new Error("DATABASE_URL não configurado");
+  return drizzle(postgres(url, { prepare: false }));
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -16,7 +28,7 @@ function formatDateTime(date: Date): string {
 }
 
 function formatRelative(date: Date): string {
-  const now = new Date("2026-05-23T10:00:00Z");
+  const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffMin = Math.floor(diffMs / 60000);
   const diffH = Math.floor(diffMs / 3600000);
@@ -32,7 +44,7 @@ function isImpersonation(action: string): boolean {
   return action.startsWith("user.impersonated");
 }
 
-// ─── Stat Card Small ──────────────────────────────────────────────────────────
+// ─── Stat Card ────────────────────────────────────────────────────────────────
 
 function StatCardSmall({
   label,
@@ -62,15 +74,38 @@ function StatCardSmall({
 // ─── Audit Content ────────────────────────────────────────────────────────────
 
 async function AuditContent() {
-  const entries = [...mockAuditLog].sort(
-    (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
-  );
+  const db = getDb();
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
 
-  const today = new Date("2026-05-23T00:00:00Z");
-  const todayCount = entries.filter((e) => e.createdAt >= today).length;
-  const impersonations = entries.filter((e) =>
-    isImpersonation(e.action),
-  ).length;
+  const [entries, statsRows] = await Promise.all([
+    db
+      .select({
+        id: auditLog.id,
+        action: auditLog.action,
+        actorId: auditLog.actorId,
+        actorName: users.fullName,
+        entity: auditLog.entity,
+        entityId: auditLog.entityId,
+        diff: auditLog.diff,
+        ip: auditLog.ip,
+        createdAt: auditLog.createdAt,
+      })
+      .from(auditLog)
+      .innerJoin(users, eq(auditLog.actorId, users.id))
+      .orderBy(desc(auditLog.createdAt))
+      .limit(200),
+
+    db
+      .select({
+        total: count(),
+        todayCount: sql<number>`count(case when ${auditLog.createdAt} >= ${todayStart.toISOString()}::timestamptz then 1 end)::int`,
+        impersonations: sql<number>`count(case when ${auditLog.action} = 'user.impersonated' then 1 end)::int`,
+      })
+      .from(auditLog),
+  ]);
+
+  const stats = statsRows[0] ?? { total: 0, todayCount: 0, impersonations: 0 };
 
   if (entries.length === 0) {
     return (
@@ -93,18 +128,22 @@ async function AuditContent() {
     <>
       {/* Stats */}
       <div className="hb-grid hb-grid-4" style={{ marginBottom: 22 }}>
-        <StatCardSmall label="Eventos hoje" value={todayCount} dot="#202c85" />
+        <StatCardSmall
+          label="Eventos hoje"
+          value={stats.todayCount ?? 0}
+          dot="#202c85"
+        />
         <StatCardSmall
           label="Total de eventos"
-          value={entries.length}
+          value={stats.total}
           dot="#07b4e7"
         />
         <StatCardSmall
           label="Impersonações"
-          value={impersonations}
+          value={stats.impersonations ?? 0}
           dot="#ea5a06"
         />
-        <StatCardSmall label="Falhas de login" value="0" dot="#a1c520" />
+        <StatCardSmall label="Falhas de login" value="—" dot="#a1c520" />
       </div>
 
       {/* Table */}
@@ -115,7 +154,7 @@ async function AuditContent() {
               <th style={{ width: 150 }}>Quando</th>
               <th>Ator</th>
               <th>Ação</th>
-              <th>Resumo</th>
+              <th>Entidade</th>
               <th style={{ width: 120 }}>IP</th>
             </tr>
           </thead>
@@ -141,7 +180,7 @@ async function AuditContent() {
                       color: "#131737",
                     }}
                   >
-                    {entry.actorName}
+                    {entry.actorName ?? "—"}
                   </td>
                   <td>
                     <span
@@ -165,7 +204,19 @@ async function AuditContent() {
                       maxWidth: 360,
                     }}
                   >
-                    {(entry.payload as { summary?: string }).summary ?? "—"}
+                    <span style={{ color: "#6b7280" }}>{entry.entity}</span>
+                    {entry.entityId && (
+                      <span
+                        style={{
+                          fontFamily: "ui-monospace,monospace",
+                          fontSize: 11,
+                          color: "#b7bdd0",
+                          marginLeft: 6,
+                        }}
+                      >
+                        {entry.entityId.slice(0, 8)}…
+                      </span>
+                    )}
                   </td>
                   <td
                     style={{
@@ -174,7 +225,7 @@ async function AuditContent() {
                       color: "#6b7280",
                     }}
                   >
-                    {entry.ipAddress ?? "—"}
+                    {entry.ip ?? "—"}
                   </td>
                 </tr>
               );

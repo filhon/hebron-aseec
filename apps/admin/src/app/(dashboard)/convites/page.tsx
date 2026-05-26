@@ -1,11 +1,88 @@
-"use client";
-
-import * as React from "react";
+import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
+import { eq, desc } from "drizzle-orm";
+import { users } from "@hebron/db/schema";
+import { invitations } from "@hebron/db/schema";
 import { Plus, Mail, RotateCcw } from "lucide-react";
-import type { InvitationStatus } from "@hebron/types/admin";
-import { mockInvitations, mockUsers } from "../../../lib/mock-data";
+import { revokeInvitation, sendInvitation } from "../../../actions/invitations";
 
-// ─── Helpers ────────────────��─────────────────────────────────────────────────
+// ─── DB ───────────────────────────────────────────────────────────────────────
+
+function getDb() {
+  const url = process.env.DATABASE_URL;
+  if (!url) throw new Error("DATABASE_URL não configurado");
+  return drizzle(postgres(url, { prepare: false }));
+}
+
+// ─── Server Actions ───────────────────────────────────────────────────────────
+
+async function handleRevoke(formData: FormData) {
+  "use server";
+  const id = formData.get("invitationId") as string;
+  const result = await revokeInvitation({ id });
+  if (result?.serverError) {
+    redirect(`/convites?error=${encodeURIComponent(result.serverError)}`);
+  }
+  revalidatePath("/convites");
+  revalidatePath("/");
+  redirect("/convites?success=revogado");
+}
+
+async function handleResend(formData: FormData) {
+  "use server";
+  const email = formData.get("email") as string;
+  const rolesRaw = formData.get("roles") as string;
+  const roles = rolesRaw.split(",").filter(Boolean);
+  if (roles.length === 0) {
+    redirect("/convites?error=Papéis inválidos");
+  }
+  // Validate roles
+  const validRoles = [
+    "super_admin",
+    "diretor",
+    "conselheiro",
+    "colaborador",
+    "submissor",
+    "aluno",
+    "hospede",
+    "ouvinte",
+  ] as const;
+  type ValidRole = (typeof validRoles)[number];
+  const filteredRoles = roles.filter((r): r is ValidRole =>
+    (validRoles as readonly string[]).includes(r),
+  );
+  if (filteredRoles.length === 0) {
+    redirect("/convites?error=Papéis inválidos");
+  }
+  const result = await sendInvitation({
+    email,
+    roles: filteredRoles,
+    expiresInDays: 7,
+  });
+  if (result?.serverError) {
+    redirect(`/convites?error=${encodeURIComponent(result.serverError)}`);
+  }
+  revalidatePath("/convites");
+  revalidatePath("/");
+  redirect("/convites?success=reenviado");
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+type InvStatus = "pending" | "accepted" | "expired" | "revoked";
+
+function getInvStatus(inv: {
+  acceptedAt: Date | null;
+  revokedAt: Date | null;
+  expiresAt: Date;
+}): InvStatus {
+  if (inv.revokedAt) return "revoked";
+  if (inv.acceptedAt) return "accepted";
+  if (inv.expiresAt < new Date()) return "expired";
+  return "pending";
+}
 
 function formatDate(date: Date): string {
   return new Intl.DateTimeFormat("pt-BR", {
@@ -16,7 +93,7 @@ function formatDate(date: Date): string {
 }
 
 function formatRelative(date: Date): string {
-  const now = new Date("2026-05-23T10:00:00Z");
+  const now = new Date();
   const diffD = Math.floor((now.getTime() - date.getTime()) / 86400000);
   if (diffD === 0) return "hoje";
   if (diffD === 1) return "ontem";
@@ -24,7 +101,7 @@ function formatRelative(date: Date): string {
   return formatDate(date);
 }
 
-const STATUS_TABS: { value: InvitationStatus | "all"; label: string }[] = [
+const STATUS_TABS: { value: InvStatus | "all"; label: string }[] = [
   { value: "all", label: "Todos" },
   { value: "pending", label: "Pendentes" },
   { value: "accepted", label: "Aceitos" },
@@ -32,7 +109,7 @@ const STATUS_TABS: { value: InvitationStatus | "all"; label: string }[] = [
   { value: "revoked", label: "Revogados" },
 ];
 
-const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
+const STATUS_CONFIG: Record<InvStatus, { label: string; cls: string }> = {
   pending: { label: "Pendente", cls: "hb-status-pending" },
   accepted: { label: "Aceito", cls: "hb-status-aceito" },
   expired: { label: "Expirado", cls: "hb-status-expirado" },
@@ -50,28 +127,59 @@ const ROLE_LABELS: Record<string, string> = {
   ouvinte: "Ouvinte",
 };
 
-// ─── Page ────────────────��─────────────────────────────────────��──────────────
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function ConvitesPage() {
-  const [filter, setFilter] = React.useState<InvitationStatus | "all">("all");
+export default async function ConvitesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    filter?: string;
+    success?: string;
+    error?: string;
+  }>;
+}) {
+  const params = await searchParams;
+  const filter = (params.filter ?? "all") as InvStatus | "all";
+  const db = getDb();
 
-  const invitationsWithSender = mockInvitations.map((inv) => {
-    const sender = mockUsers.find((u) => u.id === inv.invitedBy);
-    return { ...inv, senderName: sender?.name ?? "Desconhecido" };
-  });
+  // Fetch invitations with sender info
+  const allInvitations = await db
+    .select({
+      id: invitations.id,
+      email: invitations.email,
+      roles: invitations.roles,
+      invitedBy: invitations.invitedBy,
+      expiresAt: invitations.expiresAt,
+      acceptedAt: invitations.acceptedAt,
+      revokedAt: invitations.revokedAt,
+      createdAt: invitations.createdAt,
+      senderName: users.fullName,
+      senderEmail: users.email,
+    })
+    .from(invitations)
+    .innerJoin(users, eq(invitations.invitedBy, users.id))
+    .orderBy(desc(invitations.createdAt));
 
-  const counts: Record<string, number> = React.useMemo(() => {
-    const c: Record<string, number> = { all: mockInvitations.length };
-    mockInvitations.forEach((i) => {
-      c[i.status] = (c[i.status] ?? 0) + 1;
-    });
-    return c;
-  }, []);
+  // Annotate with derived status
+  const annotated = allInvitations.map((inv) => ({
+    ...inv,
+    status: getInvStatus(inv),
+  }));
 
+  // Count per status
+  const counts: Record<string, number> = { all: annotated.length };
+  for (const inv of annotated) {
+    counts[inv.status] = (counts[inv.status] ?? 0) + 1;
+  }
+
+  // Filter
   const filtered =
-    filter === "all"
-      ? invitationsWithSender
-      : invitationsWithSender.filter((i) => i.status === filter);
+    filter === "all" ? annotated : annotated.filter((i) => i.status === filter);
+
+  // Tab URL builder
+  function tabUrl(v: InvStatus | "all") {
+    return v === "all" ? "/convites" : `/convites?filter=${v}`;
+  }
 
   return (
     <div className="hb-page">
@@ -87,29 +195,62 @@ export default function ConvitesPage() {
           </p>
         </div>
         <div className="hb-page-header-actions">
-          <button className="hb-btn hb-btn-primary hb-btn-sm" type="button">
+          <a href="/convites/novo" className="hb-btn hb-btn-primary hb-btn-sm">
             <Plus size={14} aria-hidden="true" />
             Novo convite
-          </button>
+          </a>
         </div>
       </div>
 
-      {/* Tab chips */}
+      {/* Feedback */}
+      {params.success && (
+        <div
+          style={{
+            background: "rgba(161,197,32,0.12)",
+            border: "1px solid rgba(161,197,32,0.4)",
+            borderRadius: 12,
+            padding: "12px 18px",
+            fontSize: 13.5,
+            color: "#4a6009",
+            marginBottom: 16,
+          }}
+        >
+          {params.success === "revogado" && "Convite revogado com sucesso."}
+          {params.success === "reenviado" &&
+            "Novo convite enviado com sucesso."}
+        </div>
+      )}
+      {params.error && (
+        <div
+          style={{
+            background: "rgba(184,51,26,0.08)",
+            border: "1px solid rgba(184,51,26,0.3)",
+            borderRadius: 12,
+            padding: "12px 18px",
+            fontSize: 13.5,
+            color: "#b8331a",
+            marginBottom: 16,
+          }}
+        >
+          {decodeURIComponent(params.error)}
+        </div>
+      )}
+
+      {/* Tab chips — URL-based navigation */}
       <div
         style={{ display: "flex", gap: 6, marginBottom: 18, flexWrap: "wrap" }}
       >
         {STATUS_TABS.map((t) => (
-          <button
+          <a
             key={t.value}
-            type="button"
+            href={tabUrl(t.value)}
             className={`hb-chip${filter === t.value ? " active" : ""}`}
-            onClick={() => setFilter(t.value)}
           >
             {t.label}
             <span style={{ opacity: 0.6, fontSize: 11 }}>
               · {counts[t.value] ?? 0}
             </span>
-          </button>
+          </a>
         ))}
       </div>
 
@@ -130,10 +271,13 @@ export default function ConvitesPage() {
               <cite className="hb-empty-cite">— Marcos 16:15</cite>
             </div>
             <div style={{ marginTop: 18 }}>
-              <button className="hb-btn hb-btn-primary hb-btn-sm" type="button">
+              <a
+                href="/convites/novo"
+                className="hb-btn hb-btn-primary hb-btn-sm"
+              >
                 <Plus size={14} aria-hidden="true" />
                 Novo convite
-              </button>
+              </a>
             </div>
           </div>
         ) : (
@@ -151,11 +295,8 @@ export default function ConvitesPage() {
             </thead>
             <tbody>
               {filtered.map((inv) => {
-                const cfg = STATUS_CONFIG[inv.status] ?? {
-                  label: inv.status,
-                  cls: "",
-                };
-                const roles: string[] = inv.role ? [inv.role] : [];
+                const cfg = STATUS_CONFIG[inv.status];
+                const roles = Array.isArray(inv.roles) ? inv.roles : [];
                 return (
                   <tr key={inv.id}>
                     <td>
@@ -174,7 +315,7 @@ export default function ConvitesPage() {
                     </td>
                     <td>
                       <div className="hb-role-stack">
-                        {roles.map((r) => (
+                        {roles.slice(0, 2).map((r) => (
                           <span key={r} className={`hb-badge hb-role-${r}`}>
                             {ROLE_LABELS[r] ?? r}
                           </span>
@@ -187,7 +328,7 @@ export default function ConvitesPage() {
                       </div>
                     </td>
                     <td style={{ color: "#6b7280", fontSize: 13 }}>
-                      {inv.senderName}
+                      {inv.senderName ?? inv.senderEmail}
                     </td>
                     <td>
                       <span className={`hb-badge ${cfg.cls}`}>
@@ -196,7 +337,7 @@ export default function ConvitesPage() {
                       </span>
                     </td>
                     <td style={{ color: "#6b7280", fontSize: 12.5 }}>
-                      {formatRelative(inv.invitedAt)}
+                      {formatRelative(inv.createdAt)}
                     </td>
                     <td
                       style={{
@@ -205,35 +346,64 @@ export default function ConvitesPage() {
                       }}
                     >
                       {inv.status === "accepted"
-                        ? `aceito ${formatRelative(inv.acceptedAt ?? inv.invitedAt)}`
+                        ? `aceito ${formatRelative(inv.acceptedAt ?? inv.createdAt)}`
                         : formatDate(inv.expiresAt)}
                     </td>
                     <td>
                       {inv.status === "pending" && (
                         <div style={{ display: "flex", gap: 5 }}>
-                          <button
-                            className="hb-btn hb-btn-ghost hb-btn-xs"
-                            type="button"
-                          >
-                            <RotateCcw size={12} aria-hidden="true" />
-                            Reenviar
-                          </button>
-                          <button
-                            className="hb-btn hb-btn-ghost hb-btn-xs"
-                            type="button"
-                          >
-                            Revogar
-                          </button>
+                          {/* Resend — creates a new invitation for same email */}
+                          <form action={handleResend}>
+                            <input
+                              type="hidden"
+                              name="email"
+                              value={inv.email}
+                            />
+                            <input
+                              type="hidden"
+                              name="roles"
+                              value={roles.join(",")}
+                            />
+                            <button
+                              type="submit"
+                              className="hb-btn hb-btn-ghost hb-btn-xs"
+                            >
+                              <RotateCcw size={12} aria-hidden="true" />
+                              Reenviar
+                            </button>
+                          </form>
+                          {/* Revoke */}
+                          <form action={handleRevoke}>
+                            <input
+                              type="hidden"
+                              name="invitationId"
+                              value={inv.id}
+                            />
+                            <button
+                              type="submit"
+                              className="hb-btn hb-btn-ghost hb-btn-xs"
+                            >
+                              Revogar
+                            </button>
+                          </form>
                         </div>
                       )}
                       {inv.status === "expired" && (
-                        <button
-                          className="hb-btn hb-btn-secondary hb-btn-xs"
-                          type="button"
-                        >
-                          <Mail size={12} aria-hidden="true" />
-                          Renovar
-                        </button>
+                        <form action={handleResend}>
+                          <input type="hidden" name="email" value={inv.email} />
+                          <input
+                            type="hidden"
+                            name="roles"
+                            value={roles.join(",")}
+                          />
+                          <button
+                            type="submit"
+                            className="hb-btn hb-btn-secondary hb-btn-xs"
+                          >
+                            <Mail size={12} aria-hidden="true" />
+                            Renovar
+                          </button>
+                        </form>
                       )}
                       {inv.status === "accepted" && (
                         <span style={{ fontSize: 12, color: "#6b7280" }}>

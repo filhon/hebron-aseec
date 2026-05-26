@@ -1,6 +1,14 @@
-"use client";
-
-import * as React from "react";
+import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
+import { eq, asc } from "drizzle-orm";
+import { users, designations } from "@hebron/db/schema";
+import {
+  featureFlags,
+  systemSettings,
+  emailTemplates,
+} from "@hebron/db/schema";
 import {
   Shield,
   Flag,
@@ -9,16 +17,17 @@ import {
   AlertCircle,
   UserCheck,
   UserCog,
-  Check,
   Eye,
 } from "lucide-react";
-import {
-  mockFeatureFlags,
-  mockDesignations,
-  mockSystemSettings,
-  mockEmailTemplates,
-  mockUsers,
-} from "../../../lib/mock-data";
+import { toggleFeatureFlag } from "../../../actions/settings";
+
+// ─── DB ───────────────────────────────────────────────────────────────────────
+
+function getDb() {
+  const url = process.env.DATABASE_URL;
+  if (!url) throw new Error("DATABASE_URL não configurado");
+  return drizzle(postgres(url, { prepare: false }));
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -34,6 +43,17 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   },
   { id: "sistema", label: "Sistema", icon: <Settings2 size={14} /> },
 ];
+
+// ─── Server Actions ───────────────────────────────────────────────────────────
+
+async function handleToggleFlag(formData: FormData) {
+  "use server";
+  const key = formData.get("key") as string;
+  const currentEnabled = formData.get("enabled") === "true";
+  await toggleFeatureFlag({ key, enabled: !currentEnabled });
+  revalidatePath("/configuracoes");
+  redirect("/configuracoes?tab=feature-flags");
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -55,7 +75,8 @@ function formatDateTime(date: Date): string {
   }).format(date);
 }
 
-function getInitials(name: string): string {
+function getInitials(name: string | null): string {
+  if (!name) return "?";
   return name
     .split(" ")
     .filter(Boolean)
@@ -65,21 +86,35 @@ function getInitials(name: string): string {
     .toUpperCase();
 }
 
-// ─── Designações ──────────────────────────────────────────────────────────────
-
-function DesignacoesPanel() {
-  const activeDesignations = mockDesignations.filter(
-    (d) => d.revokedAt === null,
+function renderWithHighlights(text: string) {
+  const parts = text.split(/(\{\{[^}]+\}\})/g);
+  return parts.map((p, i) =>
+    /^\{\{.+\}\}$/.test(p) ? (
+      <span key={i} className="hb-tpl-var">
+        {p}
+      </span>
+    ) : (
+      <span key={i}>{p}</span>
+    ),
   );
-  const revokedDesignations = mockDesignations
-    .filter((d) => d.revokedAt !== null)
-    .sort(
-      (a, b) => (b.revokedAt?.getTime() ?? 0) - (a.revokedAt?.getTime() ?? 0),
-    );
+}
 
-  const getAssignedByName = (id: string) =>
-    mockUsers.find((u) => u.id === id)?.name ?? id;
+// ─── Sub-panels (RSC) ─────────────────────────────────────────────────────────
 
+function DesignacoesPanel({
+  activeDesignations,
+  revokedCount,
+}: {
+  activeDesignations: Array<{
+    id: string;
+    type: "gestor" | "autorizador";
+    userId: string;
+    assignedBy: string | null;
+    assignedAt: Date;
+    userName: string | null;
+  }>;
+  revokedCount: number;
+}) {
   return (
     <div>
       <div className="hb-governance-callout">
@@ -96,98 +131,93 @@ function DesignacoesPanel() {
         </div>
       </div>
 
-      <div className="hb-grid hb-grid-2 hb-designation-grid">
-        {activeDesignations.map((d) => {
-          const isGestor = d.type === "gestor";
-          const color = isGestor ? "#ea5a06" : "#07b4e7";
-          const Icon = isGestor ? UserCheck : UserCog;
-          return (
-            <div
-              key={d.id}
-              className="hb-card hb-designation-card"
-              style={{ borderColor: color, background: `${color}08` }}
-            >
-              <div className="hb-designation-card-header">
-                <div
-                  className="hb-designation-icon"
-                  style={{ background: color }}
-                >
-                  <Icon size={18} aria-hidden="true" />
-                </div>
-                <div>
-                  <h3 className="hb-designation-title">
-                    Diretor {isGestor ? "Gestor" : "Autorizador"}
-                  </h3>
-                  <p className="hb-designation-desc">
-                    {isGestor
-                      ? "Aprova lotes de pagamento e preside reuniões mensais."
-                      : "Autoriza pagamentos no banco. Nunca pode ser o mesmo que o gestor."}
-                  </p>
-                </div>
-              </div>
-
-              <div className="hb-designation-preview">
-                <div
-                  className="hb-avatar hb-avatar-sm"
-                  style={{ background: color }}
-                  aria-hidden="true"
-                >
-                  {getInitials(d.directorName)}
-                </div>
-                <div>
-                  <div className="hb-designation-preview-name">
-                    {d.directorName}
-                  </div>
-                  <div className="hb-designation-preview-sub">
-                    Designado em {formatDate(d.assignedAt)} · por{" "}
-                    {getAssignedByName(d.assignedBy)}
-                  </div>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {revokedDesignations.length > 0 && (
+      {activeDesignations.length === 0 ? (
         <div className="hb-card">
-          <div className="hb-card-header">
-            <h3>Histórico de designações</h3>
-          </div>
-          <div className="hb-card-body hb-card-body-tight">
-            {revokedDesignations.map((d) => (
-              <div key={d.id} className="hb-designation-history-row">
-                <span className="hb-designation-history-name">
-                  {d.directorName}
-                </span>
-                <span className="hb-badge">
-                  {d.type === "gestor" ? "Gestor" : "Autorizador"}
-                </span>
-                <span className="hb-designation-history-date">
-                  removido em {d.revokedAt ? formatDate(d.revokedAt) : "—"}
-                </span>
-              </div>
-            ))}
+          <div className="hb-empty">
+            <b>Nenhuma designação ativa</b>
+            <div className="hb-empty-body">
+              Atribua um Diretor Gestor e um Diretor Autorizador para habilitar
+              a governança dual.
+            </div>
           </div>
         </div>
+      ) : (
+        <div className="hb-grid hb-grid-2 hb-designation-grid">
+          {activeDesignations.map((d) => {
+            const isGestor = d.type === "gestor";
+            const color = isGestor ? "#ea5a06" : "#07b4e7";
+            const Icon = isGestor ? UserCheck : UserCog;
+            return (
+              <div
+                key={d.id}
+                className="hb-card hb-designation-card"
+                style={{ borderColor: color, background: `${color}08` }}
+              >
+                <div className="hb-designation-card-header">
+                  <div
+                    className="hb-designation-icon"
+                    style={{ background: color }}
+                  >
+                    <Icon size={18} aria-hidden="true" />
+                  </div>
+                  <div>
+                    <h3 className="hb-designation-title">
+                      Diretor {isGestor ? "Gestor" : "Autorizador"}
+                    </h3>
+                    <p className="hb-designation-desc">
+                      {isGestor
+                        ? "Aprova lotes de pagamento e preside reuniões mensais."
+                        : "Autoriza pagamentos no banco. Nunca pode ser o mesmo que o gestor."}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="hb-designation-preview">
+                  <div
+                    className="hb-avatar hb-avatar-sm"
+                    style={{ background: color }}
+                    aria-hidden="true"
+                  >
+                    {getInitials(d.userName)}
+                  </div>
+                  <div>
+                    <div className="hb-designation-preview-name">
+                      {d.userName ?? "—"}
+                    </div>
+                    <div className="hb-designation-preview-sub">
+                      Designado em {formatDate(d.assignedAt)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {revokedCount > 0 && (
+        <p style={{ marginTop: 12, fontSize: 12.5, color: "#6b7280" }}>
+          {revokedCount} designaç
+          {revokedCount === 1 ? "ão anterior" : "ões anteriores"} no histórico
+          (ver trilha de auditoria).
+        </p>
       )}
     </div>
   );
 }
 
-// ─── Feature Flags ────────────────────────────────────────────────────────────
-
-function FeatureFlagsPanel() {
-  const [flags, setFlags] = React.useState(() =>
-    mockFeatureFlags.map((f) => ({ ...f })),
-  );
-
-  function toggle(id: string) {
-    setFlags((fs) =>
-      fs.map((f) => (f.id === id ? { ...f, enabled: !f.enabled } : f)),
-    );
-  }
-
+function FeatureFlagsPanel({
+  flags,
+}: {
+  flags: Array<{
+    id: string;
+    key: string;
+    enabled: boolean;
+    description: string | null;
+    rolloutPercent: number;
+    updatedAt: Date;
+  }>;
+}) {
   return (
     <div>
       <div className="hb-info-banner">
@@ -200,7 +230,9 @@ function FeatureFlagsPanel() {
       <div className="hb-card">
         <div className="hb-flag-list">
           {flags.map((f) => (
-            <div key={f.id} className="hb-flag-row">
+            <form action={handleToggleFlag} key={f.id} className="hb-flag-row">
+              <input type="hidden" name="key" value={f.key} />
+              <input type="hidden" name="enabled" value={String(f.enabled)} />
               <div className="hb-flag-meta">
                 <div className="hb-flag-key-badge">{f.key}</div>
                 {f.description && (
@@ -213,91 +245,77 @@ function FeatureFlagsPanel() {
                   <span>{formatDateTime(f.updatedAt)}</span>
                 </div>
               </div>
-
               <button
-                type="button"
+                type="submit"
                 role="switch"
                 aria-checked={f.enabled}
                 aria-label={`${f.enabled ? "Desativar" : "Ativar"} ${f.key}`}
-                onClick={() => toggle(f.id)}
                 className={`hb-switch${f.enabled ? " on" : ""}`}
               />
-            </div>
+            </form>
           ))}
+          {flags.length === 0 && (
+            <p style={{ padding: "24px 20px", fontSize: 13, color: "#6b7280" }}>
+              Nenhuma feature flag cadastrada.
+            </p>
+          )}
         </div>
       </div>
     </div>
   );
 }
 
-// ─── Email Templates ──────────────────────────────────────────────────────────
-
-function renderWithHighlights(text: string) {
-  const parts = text.split(/(\{\{[^}]+\}\})/g);
-  return parts.map((p, i) =>
-    /^\{\{.+\}\}$/.test(p) ? (
-      <span key={i} className="hb-tpl-var">
-        {p}
-      </span>
-    ) : (
-      <React.Fragment key={i}>{p}</React.Fragment>
-    ),
-  );
-}
-
-function EmailTemplatesPanel() {
-  const [selectedId, setSelectedId] = React.useState(
-    mockEmailTemplates[0]?.id ?? "",
-  );
-  const selected = mockEmailTemplates.find((t) => t.id === selectedId);
+function EmailTemplatesPanel({
+  templates,
+  selectedSlug,
+}: {
+  templates: Array<{
+    id: string;
+    slug: string;
+    subject: string;
+    bodyHtml: string;
+    bodyText: string;
+    variables: string[];
+    updatedAt: Date;
+  }>;
+  selectedSlug: string;
+}) {
+  const selected =
+    templates.find((t) => t.slug === selectedSlug) ?? templates[0];
 
   return (
     <div className="hb-settings-dual-col">
       {/* Sidebar */}
       <div className="hb-card hb-card-overflow">
         <div className="hb-tpl-sidebar-label">Templates</div>
-        {mockEmailTemplates.map((t) => (
-          <button
+        {templates.map((t) => (
+          <a
             key={t.id}
-            type="button"
-            className={`hb-tpl-sidebar-item${selectedId === t.id ? " active" : ""}`}
-            onClick={() => setSelectedId(t.id)}
+            href={`/configuracoes?tab=email-templates&template=${t.slug}`}
+            className={`hb-tpl-sidebar-item${selected?.slug === t.slug ? " active" : ""}`}
           >
-            <div className="hb-tpl-sidebar-item-name">{t.key}</div>
+            <div className="hb-tpl-sidebar-item-name">{t.slug}</div>
             <div className="hb-tpl-sidebar-item-key">{t.subject}</div>
             <div className="hb-tpl-sidebar-item-date">
               {formatDate(t.updatedAt)}
             </div>
-          </button>
+          </a>
         ))}
       </div>
 
-      {/* Editor + preview */}
+      {/* Preview */}
       {selected && (
         <div className="hb-tpl-editor">
           <div className="hb-card hb-designation-card">
             <div className="hb-tpl-editor-header">
               <div>
-                <div className="hb-tpl-editor-title">{selected.key}</div>
+                <div className="hb-tpl-editor-title">{selected.slug}</div>
                 <div className="hb-tpl-editor-vars">
                   Variáveis:{" "}
                   {selected.variables.map((v, i) => (
                     <span key={i} className="hb-tpl-var">{`{{${v}}}`}</span>
                   ))}
                 </div>
-              </div>
-              <div className="hb-tpl-editor-actions">
-                <button className="hb-btn hb-btn-ghost hb-btn-sm" type="button">
-                  <Mail size={13} aria-hidden="true" />
-                  Enviar teste
-                </button>
-                <button
-                  className="hb-btn hb-btn-primary hb-btn-sm"
-                  type="button"
-                >
-                  <Check size={13} aria-hidden="true" />
-                  Salvar
-                </button>
               </div>
             </div>
 
@@ -306,6 +324,8 @@ function EmailTemplatesPanel() {
               <input
                 className="hb-form-input"
                 defaultValue={selected.subject}
+                readOnly
+                aria-label="Assunto do template (somente leitura)"
               />
             </div>
             <div className="hb-form-row">
@@ -314,10 +334,11 @@ function EmailTemplatesPanel() {
                 className="hb-form-textarea hb-form-textarea-mono"
                 defaultValue={selected.bodyText}
                 rows={8}
+                readOnly
+                aria-label="Corpo do template (somente leitura)"
               />
               <div className="hb-form-hint">
-                Variáveis no formato <code>{"{{nome}}"}</code> são substituídas
-                no envio.
+                Edição de templates disponível em breve via interface dedicada.
               </div>
             </div>
           </div>
@@ -347,9 +368,19 @@ function EmailTemplatesPanel() {
   );
 }
 
-// ─── Sistema ──────────────────────────────────────────────────────────────────
-
-function SistemaPanel() {
+function SistemaPanel({
+  settings,
+}: {
+  settings: Array<{
+    id: string;
+    key: string;
+    value: unknown;
+    label: string;
+    description: string | null;
+    isPublic: boolean;
+    updatedAt: Date;
+  }>;
+}) {
   return (
     <div>
       <div className="hb-note-banner">
@@ -357,7 +388,7 @@ function SistemaPanel() {
         auditoria.
       </div>
       <div className="hb-card hb-card-overflow">
-        {mockSystemSettings.map((setting) => (
+        {settings.map((setting) => (
           <div key={setting.id} className="hb-setting-row">
             <div>
               <div className="hb-setting-label">{setting.label}</div>
@@ -367,13 +398,20 @@ function SistemaPanel() {
               <div className="hb-setting-key">{setting.key}</div>
             </div>
             <div className="hb-setting-value">
-              <span className="hb-setting-value-badge">{setting.value}</span>
+              <span className="hb-setting-value-badge">
+                {String(setting.value)}
+              </span>
               <span className="hb-setting-value-date">
                 {formatDate(setting.updatedAt)}
               </span>
             </div>
           </div>
         ))}
+        {settings.length === 0 && (
+          <p style={{ padding: "24px 20px", fontSize: 13, color: "#6b7280" }}>
+            Nenhuma configuração encontrada.
+          </p>
+        )}
       </div>
     </div>
   );
@@ -381,8 +419,39 @@ function SistemaPanel() {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function ConfiguracoesPage() {
-  const [activeTab, setActiveTab] = React.useState<TabId>("designacoes");
+export default async function ConfiguracoesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ tab?: string; template?: string }>;
+}) {
+  const params = await searchParams;
+  const activeTab = (params.tab ?? "designacoes") as TabId;
+  const selectedTemplate = params.template ?? "";
+
+  const db = getDb();
+
+  // Fetch all data upfront (tabs switch client-side via URL)
+  const [designationRows, flagRows, templateRows, settingRows] =
+    await Promise.all([
+      db
+        .select({
+          id: designations.id,
+          type: designations.type,
+          userId: designations.userId,
+          assignedBy: designations.assignedBy,
+          assignedAt: designations.assignedAt,
+          userName: users.fullName,
+        })
+        .from(designations)
+        .innerJoin(users, eq(designations.userId, users.id))
+        .orderBy(asc(designations.assignedAt)),
+
+      db.select().from(featureFlags).orderBy(asc(featureFlags.key)),
+
+      db.select().from(emailTemplates).orderBy(asc(emailTemplates.slug)),
+
+      db.select().from(systemSettings).orderBy(asc(systemSettings.key)),
+    ]);
 
   return (
     <div className="hb-page">
@@ -397,31 +466,43 @@ export default function ConfiguracoesPage() {
         </div>
       </div>
 
+      {/* Tab navigation — URL-based */}
       <div
         className="hb-tabs"
         role="tablist"
         aria-label="Seções de configuração"
       >
         {TABS.map((tab) => (
-          <button
+          <a
             key={tab.id}
-            type="button"
+            href={`/configuracoes?tab=${tab.id}`}
             role="tab"
             aria-selected={activeTab === tab.id}
             className={`hb-tab${activeTab === tab.id ? " active" : ""}`}
-            onClick={() => setActiveTab(tab.id)}
           >
             {tab.icon}
             {tab.label}
-          </button>
+          </a>
         ))}
       </div>
 
       <div role="tabpanel">
-        {activeTab === "designacoes" && <DesignacoesPanel />}
-        {activeTab === "feature-flags" && <FeatureFlagsPanel />}
-        {activeTab === "email-templates" && <EmailTemplatesPanel />}
-        {activeTab === "sistema" && <SistemaPanel />}
+        {activeTab === "designacoes" && (
+          <DesignacoesPanel
+            activeDesignations={designationRows}
+            revokedCount={0}
+          />
+        )}
+        {activeTab === "feature-flags" && (
+          <FeatureFlagsPanel flags={flagRows} />
+        )}
+        {activeTab === "email-templates" && (
+          <EmailTemplatesPanel
+            templates={templateRows}
+            selectedSlug={selectedTemplate}
+          />
+        )}
+        {activeTab === "sistema" && <SistemaPanel settings={settingRows} />}
       </div>
     </div>
   );

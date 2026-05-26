@@ -1,26 +1,25 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import {
-  Users,
-  Shield,
-  Activity,
-  ChevronRight,
-  Plus,
-  RotateCcw,
-} from "lucide-react";
-import {
-  mockUsers,
-  mockInvitations,
-  mockRoleAssignments,
-  mockAuditLog,
-  mockMeetingSessions,
-} from "../../lib/mock-data";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
+import { eq, desc, asc, count, isNull, gte, sql, and } from "drizzle-orm";
+import { users, roleAssignments } from "@hebron/db/schema";
+import { auditLog, invitations, meetingSessions } from "@hebron/db/schema";
+import { Users, Activity, ChevronRight, Plus, RotateCcw } from "lucide-react";
 import { ErrorState, Button } from "@hebron/ui";
+
+// ─── DB ───────────────────────────────────────────────────────────────────────
+
+function getDb() {
+  const url = process.env.DATABASE_URL;
+  if (!url) throw new Error("DATABASE_URL não configurado");
+  return drizzle(postgres(url, { prepare: false }));
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatRelative(date: Date): string {
-  const now = new Date("2026-05-23T10:00:00Z");
+  const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffMin = Math.floor(diffMs / 60000);
   const diffH = Math.floor(diffMs / 3600000);
@@ -76,20 +75,78 @@ function StatCard({
 // ─── Dashboard Content ────────────────────────────────────────────────────────
 
 async function DashboardContent() {
-  const activeUsers = mockUsers.filter((u) => u.status === "active").length;
-  const pendingApproval = mockUsers.filter(
-    (u) => u.status === "pending_approval",
-  ).length;
-  const pendingInvites = mockInvitations.filter(
-    (i) => i.status === "pending",
-  ).length;
+  const db = getDb();
+  const now = new Date();
 
-  const roleCountMap = mockRoleAssignments
-    .filter((ra) => ra.revokedAt === null)
-    .reduce<Record<string, number>>((acc, ra) => {
-      acc[ra.role] = (acc[ra.role] ?? 0) + 1;
+  const [
+    userCountRows,
+    pendingInviteRows,
+    roleDistRows,
+    recentAuditRows,
+    upcomingMeetingRows,
+  ] = await Promise.all([
+    db
+      .select({
+        total: count(),
+        suspended: sql<number>`count(case when ${users.suspendedModules} @> '["global"]'::jsonb then 1 end)::int`,
+      })
+      .from(users),
+
+    db
+      .select({ total: count() })
+      .from(invitations)
+      .where(
+        and(
+          isNull(invitations.revokedAt),
+          isNull(invitations.acceptedAt),
+          gte(invitations.expiresAt, now),
+        ),
+      ),
+
+    db
+      .select({ role: roleAssignments.role, total: count() })
+      .from(roleAssignments)
+      .groupBy(roleAssignments.role),
+
+    db
+      .select({
+        id: auditLog.id,
+        action: auditLog.action,
+        actorName: users.fullName,
+        createdAt: auditLog.createdAt,
+      })
+      .from(auditLog)
+      .innerJoin(users, eq(auditLog.actorId, users.id))
+      .orderBy(desc(auditLog.createdAt))
+      .limit(6),
+
+    db
+      .select({
+        id: meetingSessions.id,
+        date: meetingSessions.date,
+        type: meetingSessions.type,
+        chairName: users.fullName,
+      })
+      .from(meetingSessions)
+      .leftJoin(users, eq(meetingSessions.chairUserId, users.id))
+      .where(eq(meetingSessions.status, "scheduled"))
+      .orderBy(asc(meetingSessions.date))
+      .limit(2),
+  ]);
+
+  const userStats = userCountRows[0] ?? { total: 0, suspended: 0 };
+  const suspended = userStats.suspended ?? 0;
+  const activeUsers = userStats.total - suspended;
+  const pendingInvites = pendingInviteRows[0]?.total ?? 0;
+
+  const roleCountMap = roleDistRows.reduce<Record<string, number>>(
+    (acc, row) => {
+      acc[row.role] = row.total;
       return acc;
-    }, {});
+    },
+    {},
+  );
+  const totalRoles = roleDistRows.reduce((s, r) => s + r.total, 0);
 
   const rolePalette: Record<string, string> = {
     super_admin: "#202c85",
@@ -102,39 +159,47 @@ async function DashboardContent() {
     ouvinte: "#b7bdd0",
   };
 
-  const recentAudit = [...mockAuditLog]
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-    .slice(0, 6);
-
-  const upcomingMeetings = mockMeetingSessions
-    .filter((m) => m.status === "scheduled")
-    .sort((a, b) => a.date.getTime() - b.date.getTime())
-    .slice(0, 2);
-
-  const pendingUsers = mockUsers.filter((u) => u.status === "pending_approval");
-
-  const totalRoles = Object.values(roleCountMap).reduce((a, b) => a + b, 0);
-
   return (
     <div className="hb-page">
       {/* Welcome card */}
       <div className="hb-welcome-card">
         <div className="hb-welcome-card-inner">
-          <div className="hb-welcome-eyebrow">
-            Painel administrativo · 23 maio 2026
-          </div>
+          <div className="hb-welcome-eyebrow">Painel administrativo</div>
           <h2>
-            Bom dia, Filipe. Hoje há{" "}
-            <span style={{ color: "#07b4e7" }}>
-              {pendingApproval} cadastros
-            </span>{" "}
-            aguardando aprovação e{" "}
-            <span style={{ color: "#ea5a06" }}>{pendingInvites} convites</span>{" "}
-            em aberto.
+            {pendingInvites > 0 ? (
+              <>
+                Há{" "}
+                <span style={{ color: "#07b4e7" }}>
+                  {pendingInvites} convite{pendingInvites !== 1 ? "s" : ""}
+                </span>{" "}
+                em aberto
+                {suspended > 0 && (
+                  <>
+                    {" "}
+                    e{" "}
+                    <span style={{ color: "#ea5a06" }}>
+                      {suspended} suspenso{suspended !== 1 ? "s" : ""}
+                    </span>
+                  </>
+                )}
+                .
+              </>
+            ) : suspended > 0 ? (
+              <>
+                Há{" "}
+                <span style={{ color: "#ea5a06" }}>
+                  {suspended} conta{suspended !== 1 ? "s" : ""} suspensa
+                  {suspended !== 1 ? "s" : ""}
+                </span>{" "}
+                para verificar.
+              </>
+            ) : (
+              "Nenhuma ação pendente no momento."
+            )}
           </h2>
           <p>
-            A janela de submissão de projetos anuais 2026 abre em 01/07.
-            Mantenha designações e templates de email em dia antes disso.
+            Gerencie usuários, convites, designações e reuniões do ecossistema
+            Hebron Aseec.
           </p>
           <div className="hb-welcome-actions">
             <Link href="/convites" className="hb-btn hb-btn-welcome-primary">
@@ -143,11 +208,10 @@ async function DashboardContent() {
             </Link>
             <Link href="/usuarios" className="hb-btn hb-btn-welcome-secondary">
               <Users size={15} aria-hidden="true" />
-              Aprovar cadastros
+              Usuários
             </Link>
           </div>
         </div>
-        {/* Decorative circles */}
         <svg
           className="hb-welcome-deco-circles"
           viewBox="0 0 200 200"
@@ -166,26 +230,26 @@ async function DashboardContent() {
         <StatCard
           label="Usuários ativos"
           value={activeUsers}
-          sub={`${mockUsers.length} no total`}
+          sub={`${userStats.total} no total`}
           dotColor="#a1c520"
         />
         <StatCard
-          label="Pendentes de aprovação"
-          value={pendingApproval}
-          sub={pendingApproval > 0 ? "requer ação" : "tudo em dia"}
+          label="Contas suspensas"
+          value={suspended}
+          sub={suspended > 0 ? "requer verificação" : "tudo em dia"}
           dotColor="#ea5a06"
-          flag={pendingApproval > 0}
+          flag={suspended > 0}
         />
         <StatCard
           label="Convites em aberto"
           value={pendingInvites}
-          sub="expiram em 7 dias"
+          sub="expiram em até 7 dias"
           dotColor="#07b4e7"
         />
         <StatCard
-          label="Cobertura MFA"
-          value="100%"
-          sub="diretores + super_admin"
+          label="Total de papéis"
+          value={totalRoles}
+          sub={`${Object.keys(roleCountMap).length} tipos`}
           dotColor="#202c85"
           up
         />
@@ -208,33 +272,36 @@ async function DashboardContent() {
             className="hb-card-body"
             style={{ paddingTop: 8, paddingBottom: 8 }}
           >
-            <ul className="hb-timeline" aria-label="Atividade recente">
-              {recentAudit.map((entry) => (
-                <li
-                  key={entry.id}
-                  className={`hb-timeline-item ${getTimelineClass(entry.action)}`}
-                >
-                  <div className="hb-timeline-time">
-                    {formatRelative(entry.createdAt)}
-                    {" · "}
-                    <span
-                      style={{
-                        fontFamily: "ui-monospace,monospace",
-                        fontSize: 11,
-                      }}
-                    >
-                      {entry.action}
-                    </span>
-                  </div>
-                  <div className="hb-timeline-text">
-                    <b>{entry.actorName}</b>
-                    {(entry.payload as { summary?: string }).summary
-                      ? ` · ${(entry.payload as { summary?: string }).summary}`
-                      : ""}
-                  </div>
-                </li>
-              ))}
-            </ul>
+            {recentAuditRows.length === 0 ? (
+              <p style={{ padding: "16px 0", color: "#6b7280", fontSize: 13 }}>
+                Nenhuma atividade registrada.
+              </p>
+            ) : (
+              <ul className="hb-timeline" aria-label="Atividade recente">
+                {recentAuditRows.map((entry) => (
+                  <li
+                    key={entry.id}
+                    className={`hb-timeline-item ${getTimelineClass(entry.action)}`}
+                  >
+                    <div className="hb-timeline-time">
+                      {formatRelative(entry.createdAt)}
+                      {" · "}
+                      <span
+                        style={{
+                          fontFamily: "ui-monospace,monospace",
+                          fontSize: 11,
+                        }}
+                      >
+                        {entry.action}
+                      </span>
+                    </div>
+                    <div className="hb-timeline-text">
+                      <b>{entry.actorName ?? "—"}</b>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
 
@@ -246,41 +313,47 @@ async function DashboardContent() {
               <h3>Distribuição de papéis</h3>
             </div>
             <div className="hb-card-body">
-              <div className="hb-role-count-list">
-                {Object.entries(roleCountMap)
-                  .sort((a, b) => b[1] - a[1])
-                  .map(([role, count]) => {
-                    const pct = Math.round(
-                      (count / Math.max(1, totalRoles)) * 100,
-                    );
-                    const color = rolePalette[role] ?? "#b7bdd0";
-                    const label = role
-                      .split("_")
-                      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-                      .join(" ");
-                    return (
-                      <div key={role} className="hb-role-count-row">
-                        <span
-                          className="hb-role-count-swatch"
-                          style={{ background: color }}
-                        />
-                        <span className="hb-role-count-name">{label}</span>
-                        <div className="hb-role-count-bar">
-                          <div
-                            className="hb-role-count-fill"
-                            style={{ width: `${pct}%`, background: color }}
+              {Object.keys(roleCountMap).length === 0 ? (
+                <p style={{ fontSize: 13, color: "#6b7280" }}>
+                  Nenhum papel atribuído.
+                </p>
+              ) : (
+                <div className="hb-role-count-list">
+                  {Object.entries(roleCountMap)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([role, cnt]) => {
+                      const pct = Math.round(
+                        (cnt / Math.max(1, totalRoles)) * 100,
+                      );
+                      const color = rolePalette[role] ?? "#b7bdd0";
+                      const label = role
+                        .split("_")
+                        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+                        .join(" ");
+                      return (
+                        <div key={role} className="hb-role-count-row">
+                          <span
+                            className="hb-role-count-swatch"
+                            style={{ background: color }}
                           />
+                          <span className="hb-role-count-name">{label}</span>
+                          <div className="hb-role-count-bar">
+                            <div
+                              className="hb-role-count-fill"
+                              style={{ width: `${pct}%`, background: color }}
+                            />
+                          </div>
+                          <span className="hb-role-count-value">{cnt}</span>
                         </div>
-                        <span className="hb-role-count-value">{count}</span>
-                      </div>
-                    );
-                  })}
-              </div>
+                      );
+                    })}
+                </div>
+              )}
             </div>
           </div>
 
           {/* Upcoming meetings */}
-          {upcomingMeetings.length > 0 && (
+          {upcomingMeetingRows.length > 0 && (
             <div className="hb-card">
               <div className="hb-card-header">
                 <h3>Próximas reuniões</h3>
@@ -298,7 +371,7 @@ async function DashboardContent() {
                 className="hb-card-body"
                 style={{ padding: "6px 22px 18px" }}
               >
-                {upcomingMeetings.map((m) => {
+                {upcomingMeetingRows.map((m) => {
                   const d = m.date;
                   const day = d.toLocaleDateString("pt-BR", { day: "2-digit" });
                   const month = d
@@ -369,6 +442,7 @@ async function DashboardContent() {
                             hour: "2-digit",
                             minute: "2-digit",
                           })}
+                          {m.chairName ? ` · ${m.chairName}` : ""}
                         </div>
                       </div>
                     </div>
@@ -379,76 +453,6 @@ async function DashboardContent() {
           )}
         </div>
       </div>
-
-      {/* Pending approvals */}
-      {pendingUsers.length > 0 && (
-        <div className="hb-card">
-          <div className="hb-card-header">
-            <h3>Cadastros aguardando aprovação</h3>
-            <div className="hb-card-header-actions">
-              <Link href="/usuarios" className="hb-btn hb-btn-ghost hb-btn-sm">
-                Ver todos
-              </Link>
-            </div>
-          </div>
-          <div style={{ padding: "4px 22px 14px" }}>
-            {pendingUsers.map((u) => {
-              const initials = u.name
-                .split(" ")
-                .filter(Boolean)
-                .slice(0, 2)
-                .map((n) => n[0])
-                .join("")
-                .toUpperCase();
-              return (
-                <div
-                  key={u.id}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 14,
-                    padding: "14px 0",
-                    borderBottom: "1px solid rgba(19,23,55,0.07)",
-                  }}
-                >
-                  <div
-                    className="hb-avatar"
-                    style={{ background: "#202c85" }}
-                    aria-hidden="true"
-                  >
-                    {initials}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div
-                      style={{
-                        fontWeight: 600,
-                        fontSize: 14,
-                        color: "#131737",
-                      }}
-                    >
-                      {u.name}
-                    </div>
-                    <div style={{ fontSize: 12.5, color: "#6b7280" }}>
-                      {u.email}
-                    </div>
-                  </div>
-                  <span className="hb-badge hb-status-pendente">
-                    <span className="hb-badge-dot" />
-                    Pendente
-                  </span>
-                  <Link
-                    href={`/usuarios/${u.id}`}
-                    className="hb-btn hb-btn-primary hb-btn-sm"
-                  >
-                    <Shield size={13} aria-hidden="true" />
-                    Aprovar
-                  </Link>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

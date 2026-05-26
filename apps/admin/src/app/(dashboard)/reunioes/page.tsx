@@ -1,17 +1,16 @@
-"use client";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
+import { eq, asc, desc, or } from "drizzle-orm";
+import { users, meetingSessions } from "@hebron/db/schema";
+import { Plus, CalendarDays, FileText, Mail, Download } from "lucide-react";
 
-import * as React from "react";
-import {
-  Plus,
-  CalendarDays,
-  FileText,
-  Mail,
-  Download,
-  Users,
-  List,
-} from "lucide-react";
-import type { MeetingSession } from "@hebron/types/admin";
-import { mockMeetingSessions, mockUsers } from "../../../lib/mock-data";
+// ─── DB ───────────────────────────────────────────────────────────────────────
+
+function getDb() {
+  const url = process.env.DATABASE_URL;
+  if (!url) throw new Error("DATABASE_URL não configurado");
+  return drizzle(postgres(url, { prepare: false }));
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -40,37 +39,77 @@ function formatLongDate(date: Date): string {
   }).format(date);
 }
 
-function getUserName(userId: string): string {
-  return mockUsers.find((u) => u.id === userId)?.name ?? userId;
-}
-
 // ─── Status config ─────────────────────────────────────────────────────────────
 
-const STATUS_CONFIG: Record<
-  MeetingSession["status"],
-  { label: string; cls: string }
-> = {
+type MeetingStatus = "scheduled" | "in_progress" | "concluded" | "cancelled";
+
+const STATUS_CONFIG: Record<MeetingStatus, { label: string; cls: string }> = {
   scheduled: { label: "Agendada", cls: "hb-status-agendada" },
   in_progress: { label: "Em andamento", cls: "hb-status-pending" },
   concluded: { label: "Realizada", cls: "hb-status-aceito" },
   cancelled: { label: "Cancelada", cls: "hb-status-suspended" },
 };
 
+function isMeetingStatus(s: string): s is MeetingStatus {
+  return ["scheduled", "in_progress", "concluded", "cancelled"].includes(s);
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
-export default function ReunioesPage() {
-  const [filter, setFilter] = React.useState<"upcoming" | "past">("upcoming");
+export default async function ReunioesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ filter?: string }>;
+}) {
+  const params = await searchParams;
+  const filter = params.filter === "past" ? "past" : "upcoming";
 
-  const upcoming = mockMeetingSessions
-    .filter((m) => m.status === "scheduled" || m.status === "in_progress")
-    .sort((a, b) => a.date.getTime() - b.date.getTime());
+  const db = getDb();
 
-  const past = mockMeetingSessions
-    .filter((m) => m.status === "concluded" || m.status === "cancelled")
-    .sort((a, b) => b.date.getTime() - a.date.getTime());
+  const [upcomingRows, pastRows] = await Promise.all([
+    db
+      .select({
+        id: meetingSessions.id,
+        date: meetingSessions.date,
+        type: meetingSessions.type,
+        status: meetingSessions.status,
+        notes: meetingSessions.notes,
+        chairUserId: meetingSessions.chairUserId,
+        chairName: users.fullName,
+      })
+      .from(meetingSessions)
+      .leftJoin(users, eq(meetingSessions.chairUserId, users.id))
+      .where(
+        or(
+          eq(meetingSessions.status, "scheduled"),
+          eq(meetingSessions.status, "in_progress"),
+        ),
+      )
+      .orderBy(asc(meetingSessions.date)),
 
-  const list = filter === "upcoming" ? upcoming : past;
-  const nextMeeting = upcoming[0];
+    db
+      .select({
+        id: meetingSessions.id,
+        date: meetingSessions.date,
+        type: meetingSessions.type,
+        status: meetingSessions.status,
+        notes: meetingSessions.notes,
+        chairUserId: meetingSessions.chairUserId,
+        chairName: users.fullName,
+      })
+      .from(meetingSessions)
+      .leftJoin(users, eq(meetingSessions.chairUserId, users.id))
+      .where(
+        or(
+          eq(meetingSessions.status, "concluded"),
+          eq(meetingSessions.status, "cancelled"),
+        ),
+      )
+      .orderBy(desc(meetingSessions.date)),
+  ]);
+
+  const list = filter === "upcoming" ? upcomingRows : pastRows;
+  const nextMeeting = upcomingRows[0];
 
   return (
     <div className="hb-page">
@@ -108,7 +147,7 @@ export default function ReunioesPage() {
             </div>
             <div className="hb-next-meeting-banner-sub">
               {getDateParts(nextMeeting.date).time} · Presidente da sessão:{" "}
-              {getUserName(nextMeeting.chairUserId)}
+              {nextMeeting.chairName ?? "—"}
             </div>
           </div>
           <div className="hb-next-meeting-banner-actions">
@@ -124,22 +163,26 @@ export default function ReunioesPage() {
         </div>
       )}
 
-      {/* Tab chips */}
+      {/* Tab chips — URL-based */}
       <div className="hb-chip-row">
-        <button
-          type="button"
+        <a
+          href="/reunioes"
           className={`hb-chip${filter === "upcoming" ? " active" : ""}`}
-          onClick={() => setFilter("upcoming")}
         >
-          Próximas <span className="hb-chip-count">· {upcoming.length}</span>
-        </button>
-        <button
-          type="button"
+          Próximas{" "}
+          <span style={{ opacity: 0.6, fontSize: 11 }}>
+            · {upcomingRows.length}
+          </span>
+        </a>
+        <a
+          href="/reunioes?filter=past"
           className={`hb-chip${filter === "past" ? " active" : ""}`}
-          onClick={() => setFilter("past")}
         >
-          Realizadas <span className="hb-chip-count">· {past.length}</span>
-        </button>
+          Realizadas{" "}
+          <span style={{ opacity: 0.6, fontSize: 11 }}>
+            · {pastRows.length}
+          </span>
+        </a>
       </div>
 
       {/* Meeting list */}
@@ -165,7 +208,10 @@ export default function ReunioesPage() {
         <div className="hb-meeting-list">
           {list.map((m) => {
             const parts = getDateParts(m.date);
-            const cfg = STATUS_CONFIG[m.status] ?? { label: m.status, cls: "" };
+            const statusKey = isMeetingStatus(m.status)
+              ? m.status
+              : "scheduled";
+            const cfg = STATUS_CONFIG[statusKey];
             const isUpcoming =
               m.status === "scheduled" || m.status === "in_progress";
             return (
@@ -182,21 +228,9 @@ export default function ReunioesPage() {
                     · {formatLongDate(m.date)}
                   </h4>
                   <div className="hb-meeting-chair">
-                    Preside: {getUserName(m.chairUserId)} · {parts.time}
+                    Preside: {m.chairName ?? "—"} · {parts.time}
                   </div>
                   <div className="hb-meeting-meta">
-                    <span className="hb-meeting-meta-item">
-                      <Users size={12} aria-hidden="true" />
-                      {((m as unknown as Record<string, unknown>)
-                        .participantCount as number | undefined) ?? "—"}{" "}
-                      convocados
-                    </span>
-                    <span className="hb-meeting-meta-item">
-                      <List size={12} aria-hidden="true" />
-                      {((m as unknown as Record<string, unknown>)
-                        .agendaItemCount as number | undefined) ?? "—"}{" "}
-                      pontos de pauta
-                    </span>
                     <span className={`hb-badge ${cfg.cls}`}>
                       <span className="hb-badge-dot" />
                       {cfg.label}

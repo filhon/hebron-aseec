@@ -1,15 +1,67 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import Link from "next/link";
-import { ChevronLeft, Shield, Clock, Edit, KeyRound, Eye } from "lucide-react";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
+import { eq, or, desc } from "drizzle-orm";
+import { users, roleAssignments } from "@hebron/db/schema";
+import { auditLog } from "@hebron/db/schema";
+import { ChevronLeft, Shield, KeyRound } from "lucide-react";
 import {
-  mockUsers,
-  mockRoleAssignments,
-  mockAuditLog,
-} from "../../../../lib/mock-data";
+  suspendUser,
+  unsuspendUser,
+  resetPassword,
+} from "../../../../actions/users";
+
+// ─── DB ───────────────────────────────────────────────────────────────────────
+
+function getDb() {
+  const url = process.env.DATABASE_URL;
+  if (!url) throw new Error("DATABASE_URL não configurado");
+  return drizzle(postgres(url, { prepare: false }));
+}
+
+// ─── Server Actions ───────────────────────────────────────────────────────────
+
+async function handleSuspendUser(formData: FormData) {
+  "use server";
+  const id = formData.get("userId") as string;
+  const result = await suspendUser({ id, modules: ["global"] });
+  if (result?.serverError) {
+    redirect(`/usuarios/${id}?error=${encodeURIComponent(result.serverError)}`);
+  }
+  revalidatePath("/usuarios");
+  revalidatePath(`/usuarios/${id}`);
+  redirect(`/usuarios/${id}?success=suspenso`);
+}
+
+async function handleUnsuspendUser(formData: FormData) {
+  "use server";
+  const id = formData.get("userId") as string;
+  const result = await unsuspendUser({ id, modules: ["global"] });
+  if (result?.serverError) {
+    redirect(`/usuarios/${id}?error=${encodeURIComponent(result.serverError)}`);
+  }
+  revalidatePath("/usuarios");
+  revalidatePath(`/usuarios/${id}`);
+  redirect(`/usuarios/${id}?success=reativado`);
+}
+
+async function handleResetPassword(formData: FormData) {
+  "use server";
+  const id = formData.get("userId") as string;
+  const result = await resetPassword({ id });
+  if (result?.serverError) {
+    redirect(`/usuarios/${id}?error=${encodeURIComponent(result.serverError)}`);
+  }
+  revalidatePath(`/usuarios/${id}`);
+  redirect(`/usuarios/${id}?success=reset-enviado`);
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function getInitials(name: string): string {
+function getInitials(name: string | null): string {
+  if (!name) return "?";
   return name
     .split(" ")
     .filter(Boolean)
@@ -19,7 +71,7 @@ function getInitials(name: string): string {
     .toUpperCase();
 }
 
-function getAvatarColor(name: string): string {
+function getAvatarColor(name: string | null): string {
   const palette = [
     "#202c85",
     "#ea5a06",
@@ -29,6 +81,7 @@ function getAvatarColor(name: string): string {
     "#0a8a7d",
     "#b8852a",
   ];
+  if (!name) return palette[0] ?? "#202c85";
   const hash = name.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
   return palette[hash % palette.length] ?? "#202c85";
 }
@@ -76,6 +129,10 @@ function getTimelineClass(action: string): string {
   return "";
 }
 
+function getUserStatus(suspendedModules: string[]): "active" | "suspended" {
+  return suspendedModules.includes("global") ? "suspended" : "active";
+}
+
 const ROLE_LABELS: Record<string, string> = {
   super_admin: "Super Admin",
   diretor: "Diretor",
@@ -89,7 +146,6 @@ const ROLE_LABELS: Record<string, string> = {
 
 const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
   active: { label: "Ativo", cls: "hb-status-active" },
-  pending_approval: { label: "Pendente", cls: "hb-status-pending_approval" },
   suspended: { label: "Suspenso", cls: "hb-status-suspended" },
 };
 
@@ -97,39 +153,43 @@ const STATUS_CONFIG: Record<string, { label: string; cls: string }> = {
 
 interface Props {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ success?: string; error?: string }>;
 }
 
-export default async function UserDetailPage({ params }: Props) {
+export default async function UserDetailPage({ params, searchParams }: Props) {
   const { id } = await params;
+  const { success, error } = await searchParams;
 
-  const user = mockUsers.find((u) => u.id === id);
+  const db = getDb();
+
+  const [userRows, userRoles, activityRows] = await Promise.all([
+    db.select().from(users).where(eq(users.id, id)),
+
+    db.select().from(roleAssignments).where(eq(roleAssignments.userId, id)),
+
+    db
+      .select({
+        id: auditLog.id,
+        action: auditLog.action,
+        actorId: auditLog.actorId,
+        entityId: auditLog.entityId,
+        diff: auditLog.diff,
+        createdAt: auditLog.createdAt,
+      })
+      .from(auditLog)
+      .where(or(eq(auditLog.actorId, id), eq(auditLog.entityId, id)))
+      .orderBy(desc(auditLog.createdAt))
+      .limit(10),
+  ]);
+
+  const user = userRows[0];
   if (!user) notFound();
 
-  const roles = mockRoleAssignments
-    .filter((ra) => ra.userId === user.id && ra.revokedAt === null)
-    .map((ra) => ra.role);
-
-  const revokedRoles = mockRoleAssignments
-    .filter((ra) => ra.userId === user.id && ra.revokedAt !== null)
-    .sort(
-      (a, b) => (b.revokedAt?.getTime() ?? 0) - (a.revokedAt?.getTime() ?? 0),
-    );
-
-  const activityLog = mockAuditLog
-    .filter((e) => e.actorId === user.id || e.targetId === user.id)
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-    .slice(0, 10);
-
-  const approvedByUser = user.approvedBy
-    ? mockUsers.find((u) => u.id === user.approvedBy)
-    : null;
-
-  const initials = getInitials(user.name);
-  const bg = getAvatarColor(user.name);
-  const statusCfg = STATUS_CONFIG[user.status] ?? {
-    label: user.status,
-    cls: "",
-  };
+  const roles = userRoles.map((ra) => ra.role);
+  const status = getUserStatus(user.suspendedModules);
+  const statusCfg = STATUS_CONFIG[status] ?? { label: status, cls: "" };
+  const initials = getInitials(user.fullName);
+  const bg = getAvatarColor(user.fullName);
 
   return (
     <div className="hb-page">
@@ -138,6 +198,42 @@ export default async function UserDetailPage({ params }: Props) {
         <ChevronLeft size={14} aria-hidden="true" />
         Voltar para usuários
       </Link>
+
+      {/* Feedback banners */}
+      {success && (
+        <div
+          style={{
+            background: "rgba(161,197,32,0.12)",
+            border: "1px solid rgba(161,197,32,0.4)",
+            borderRadius: 12,
+            padding: "12px 18px",
+            fontSize: 13.5,
+            color: "#4a6009",
+            marginBottom: 16,
+          }}
+        >
+          {success === "aprovado" && "Conta aprovada com sucesso."}
+          {success === "suspenso" && "Conta suspensa com sucesso."}
+          {success === "reativado" && "Conta reativada com sucesso."}
+          {success === "reset-enviado" &&
+            "Link de redefinição de senha enviado."}
+        </div>
+      )}
+      {error && (
+        <div
+          style={{
+            background: "rgba(184,51,26,0.08)",
+            border: "1px solid rgba(184,51,26,0.3)",
+            borderRadius: 12,
+            padding: "12px 18px",
+            fontSize: 13.5,
+            color: "#b8331a",
+            marginBottom: 16,
+          }}
+        >
+          {decodeURIComponent(error)}
+        </div>
+      )}
 
       {/* Profile header */}
       <div className="hb-detail-header">
@@ -156,7 +252,7 @@ export default async function UserDetailPage({ params }: Props) {
               </span>
             ))}
           </div>
-          <h1>{user.name}</h1>
+          <h1>{user.fullName ?? user.email}</h1>
           <div className="hb-detail-email">{user.email}</div>
           <div
             style={{
@@ -178,42 +274,44 @@ export default async function UserDetailPage({ params }: Props) {
               </span>
             </span>
             <span style={{ color: "#6b7280" }}>
-              <b style={{ color: "#131737" }}>Criado em:</b>{" "}
+              <b style={{ color: "#131737" }}>Cadastrado em:</b>{" "}
               {formatShortDate(user.createdAt)}
-            </span>
-            <span style={{ color: "#6b7280" }}>
-              <b style={{ color: "#131737" }}>Último acesso:</b>{" "}
-              {formatDateTime(user.lastLoginAt)}
             </span>
           </div>
         </div>
         <div className="hb-detail-header-actions">
-          <button className="hb-btn hb-btn-secondary hb-btn-sm" type="button">
-            <Edit size={13} aria-hidden="true" />
-            Editar
-          </button>
-          <button className="hb-btn hb-btn-secondary hb-btn-sm" type="button">
-            <KeyRound size={13} aria-hidden="true" />
-            Resetar senha
-          </button>
-          {user.status !== "active" && (
-            <button className="hb-btn hb-btn-primary hb-btn-sm" type="button">
-              Aprovar acesso
+          {/* Reset password */}
+          <form action={handleResetPassword}>
+            <input type="hidden" name="userId" value={user.id} />
+            <button type="submit" className="hb-btn hb-btn-secondary hb-btn-sm">
+              <KeyRound size={13} aria-hidden="true" />
+              Resetar senha
             </button>
+          </form>
+
+          {/* Suspend / Unsuspend */}
+          {status === "active" && (
+            <form action={handleSuspendUser}>
+              <input type="hidden" name="userId" value={user.id} />
+              <button type="submit" className="hb-btn hb-btn-accent hb-btn-sm">
+                Suspender
+              </button>
+            </form>
           )}
-          {user.status === "active" && (
-            <button className="hb-btn hb-btn-accent hb-btn-sm" type="button">
-              <Eye size={13} aria-hidden="true" />
-              Impersonar
-            </button>
+          {status === "suspended" && (
+            <form action={handleUnsuspendUser}>
+              <input type="hidden" name="userId" value={user.id} />
+              <button type="submit" className="hb-btn hb-btn-primary hb-btn-sm">
+                Reativar conta
+              </button>
+            </form>
           )}
         </div>
       </div>
 
       <div className="hb-grid hb-grid-stat">
-        {/* Left col */}
+        {/* Left col — Activity */}
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-          {/* Activity */}
           <div className="hb-card">
             <div className="hb-card-header">
               <h3>Atividade recente</h3>
@@ -222,7 +320,7 @@ export default async function UserDetailPage({ params }: Props) {
               className="hb-card-body"
               style={{ paddingTop: 8, paddingBottom: 8 }}
             >
-              {activityLog.length === 0 ? (
+              {activityRows.length === 0 ? (
                 <div className="hb-empty" style={{ padding: "32px 20px" }}>
                   <b>Sem atividade registrada</b>
                   <div className="hb-empty-quote">
@@ -232,7 +330,7 @@ export default async function UserDetailPage({ params }: Props) {
                 </div>
               ) : (
                 <ul className="hb-timeline" aria-label="Atividade do usuário">
-                  {activityLog.map((entry) => (
+                  {activityRows.map((entry) => (
                     <li
                       key={entry.id}
                       className={`hb-timeline-item ${getTimelineClass(entry.action)}`}
@@ -250,8 +348,7 @@ export default async function UserDetailPage({ params }: Props) {
                         </span>
                       </div>
                       <div className="hb-timeline-text">
-                        {(entry.payload as { summary?: string }).summary ??
-                          getActionLabel(entry.action)}
+                        {getActionLabel(entry.action)}
                       </div>
                     </li>
                   ))}
@@ -259,47 +356,6 @@ export default async function UserDetailPage({ params }: Props) {
               )}
             </div>
           </div>
-
-          {/* Revoked roles */}
-          {revokedRoles.length > 0 && (
-            <div className="hb-card">
-              <div className="hb-card-header">
-                <h3>Papéis anteriores</h3>
-              </div>
-              <div
-                className="hb-card-body"
-                style={{ paddingTop: 6, paddingBottom: 6 }}
-              >
-                {revokedRoles.map((ra) => (
-                  <div
-                    key={ra.id}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 10,
-                      padding: "10px 0",
-                      borderBottom: "1px solid rgba(19,23,55,0.07)",
-                      opacity: 0.7,
-                    }}
-                  >
-                    <span className={`hb-badge hb-role-${ra.role}`}>
-                      {ROLE_LABELS[ra.role] ?? ra.role}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: 12,
-                        color: "#6b7280",
-                        marginLeft: "auto",
-                      }}
-                    >
-                      removido em{" "}
-                      {ra.revokedAt ? formatShortDate(ra.revokedAt) : "—"}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Right col */}
@@ -319,107 +375,24 @@ export default async function UserDetailPage({ params }: Props) {
                 </dd>
                 <dt>Email</dt>
                 <dd>{user.email}</dd>
-                <dt>MFA (TOTP)</dt>
+                <dt>Telefone</dt>
+                <dd>{user.phone ?? "—"}</dd>
+                <dt>Módulos suspensos</dt>
                 <dd>
-                  {user.mfaEnabled ? (
-                    <span
-                      style={{
-                        color: "#5e7a10",
-                        fontWeight: 600,
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: 4,
-                      }}
-                    >
-                      <Shield size={13} aria-hidden="true" /> Habilitado
-                    </span>
-                  ) : (
-                    <span style={{ color: "#c24a03", fontWeight: 600 }}>
-                      Não habilitado
-                    </span>
-                  )}
+                  {user.suspendedModules.length === 0
+                    ? "Nenhum"
+                    : user.suspendedModules.join(", ")}
                 </dd>
                 <dt>Cadastrado em</dt>
                 <dd>{formatShortDate(user.createdAt)}</dd>
-                <dt>Aprovado por</dt>
-                <dd>{approvedByUser?.name ?? "—"}</dd>
-                <dt>Aprovado em</dt>
-                <dd>
-                  {user.approvedAt ? formatShortDate(user.approvedAt) : "—"}
-                </dd>
+                <dt>Atualizado em</dt>
+                <dd>{formatShortDate(user.updatedAt)}</dd>
               </dl>
             </div>
           </div>
 
-          {/* Pending approval callout */}
-          {user.status === "pending_approval" && (
-            <div
-              className="hb-card"
-              style={{
-                borderColor: "rgba(234,90,6,0.3)",
-                background: "rgba(234,90,6,0.03)",
-              }}
-            >
-              <div className="hb-card-body">
-                <div
-                  style={{ display: "flex", gap: 10, alignItems: "flex-start" }}
-                >
-                  <div
-                    style={{
-                      width: 32,
-                      height: 32,
-                      background: "#ea5a06",
-                      color: "white",
-                      borderRadius: 8,
-                      display: "grid",
-                      placeItems: "center",
-                      flexShrink: 0,
-                    }}
-                  >
-                    <Clock size={16} aria-hidden="true" />
-                  </div>
-                  <div>
-                    <b
-                      style={{
-                        fontFamily:
-                          "var(--font-display,'Parkinsans',sans-serif)",
-                        fontSize: 14.5,
-                      }}
-                    >
-                      Aprovação pendente
-                    </b>
-                    <p
-                      style={{
-                        margin: "4px 0 14px",
-                        fontSize: 13,
-                        color: "#6b7280",
-                      }}
-                    >
-                      Este usuário se auto-cadastrou. Valide vínculo e papéis
-                      antes de liberar o acesso.
-                    </p>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button
-                        className="hb-btn hb-btn-primary hb-btn-sm"
-                        type="button"
-                      >
-                        Aprovar cadastro
-                      </button>
-                      <button
-                        className="hb-btn hb-btn-ghost hb-btn-sm"
-                        type="button"
-                      >
-                        Recusar
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Suspended callout */}
-          {user.status === "suspended" && (
+          {status === "suspended" && (
             <div
               className="hb-card"
               style={{
@@ -428,7 +401,9 @@ export default async function UserDetailPage({ params }: Props) {
               }}
             >
               <div className="hb-card-body">
-                <b style={{ fontSize: 14, color: "#b8331a" }}>Conta suspensa</b>
+                <b style={{ fontSize: 14, color: "#b8331a" }}>
+                  Conta suspensa globalmente
+                </b>
                 <p
                   style={{
                     margin: "4px 0 12px",
@@ -438,15 +413,55 @@ export default async function UserDetailPage({ params }: Props) {
                 >
                   O usuário não tem acesso a nenhum módulo do ecossistema.
                 </p>
-                <button
-                  className="hb-btn hb-btn-secondary hb-btn-sm"
-                  type="button"
-                >
-                  Reativar conta
-                </button>
+                <form action={handleUnsuspendUser}>
+                  <input type="hidden" name="userId" value={user.id} />
+                  <button
+                    type="submit"
+                    className="hb-btn hb-btn-secondary hb-btn-sm"
+                  >
+                    Reativar conta
+                  </button>
+                </form>
               </div>
             </div>
           )}
+
+          {/* Roles card */}
+          <div className="hb-card">
+            <div className="hb-card-header">
+              <h3>Papéis ativos</h3>
+              <div className="hb-card-header-actions">
+                <Link
+                  href={`/configuracoes?tab=roles&userId=${user.id}`}
+                  className="hb-btn hb-btn-ghost hb-btn-sm"
+                >
+                  <Shield size={13} aria-hidden="true" />
+                  Gerenciar
+                </Link>
+              </div>
+            </div>
+            <div
+              className="hb-card-body"
+              style={{ paddingTop: 6, paddingBottom: 6 }}
+            >
+              {roles.length === 0 ? (
+                <p style={{ fontSize: 13, color: "#6b7280", padding: "8px 0" }}>
+                  Nenhum papel atribuído.
+                </p>
+              ) : (
+                <div
+                  className="hb-role-stack"
+                  style={{ flexWrap: "wrap", padding: "8px 0" }}
+                >
+                  {roles.map((r) => (
+                    <span key={r} className={`hb-badge hb-role-${r}`}>
+                      {ROLE_LABELS[r] ?? r}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>
