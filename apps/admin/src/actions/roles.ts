@@ -2,19 +2,11 @@
 
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
+import { db } from "@hebron/db/client";
 import { roleAssignments, designations } from "@hebron/db/schema";
 import type { Role } from "@hebron/types/roles";
 import { adminAction } from "../lib/safe-action";
 import { logAudit } from "../lib/audit";
-
-function getDb() {
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error("DATABASE_URL não configurado");
-  const client = postgres(url, { prepare: false });
-  return drizzle(client);
-}
 
 // ─── Conflict of interest ─────────────────────────────────────────────────────
 // Ref: BRAIN.md 6.1 — diretores/conselheiros NÃO podem ser submissores NEM hospedes.
@@ -23,7 +15,6 @@ const GOVERNANCE_ROLES: Role[] = ["diretor", "conselheiro"];
 const RESTRICTED_ROLES: Role[] = ["submissor", "hospede"];
 
 async function checkConflictOfInterest(
-  db: ReturnType<typeof getDb>,
   userId: string,
   newRole: Role,
 ): Promise<void> {
@@ -88,13 +79,7 @@ export const assignRole = adminAction
     }),
   )
   .action(async ({ parsedInput, ctx }) => {
-    const db = getDb();
-
-    await checkConflictOfInterest(
-      db,
-      parsedInput.userId,
-      parsedInput.role as Role,
-    );
+    await checkConflictOfInterest(parsedInput.userId, parsedInput.role as Role);
 
     // Prevent duplicate assignment
     const existingRows = await db
@@ -147,8 +132,6 @@ export const assignRole = adminAction
 export const revokeRole = adminAction
   .schema(z.object({ assignmentId: z.string().uuid() }))
   .action(async ({ parsedInput, ctx }) => {
-    const db = getDb();
-
     const rows = await db
       .select()
       .from(roleAssignments)
@@ -192,8 +175,6 @@ export const updateDesignation = adminAction
     }),
   )
   .action(async ({ parsedInput, ctx }) => {
-    const db = getDb();
-
     if (parsedInput.action === "revoke") {
       const activeRows = await db
         .select()

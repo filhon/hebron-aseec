@@ -10,9 +10,19 @@ if (!connectionString) {
   );
 }
 
-// `prepare: false` is required for Supabase transaction pooler mode
-const client = postgres(connectionString, { prepare: false });
+// Singleton pattern: prevents creating multiple pools on Next.js hot reloads
+// (webpack re-evaluates modules; without globalThis the pool multiplies each time)
+const globalForDb = globalThis as { __dbClient?: ReturnType<typeof postgres> };
 
-export const db = drizzle(client, { schema });
+if (!globalForDb.__dbClient) {
+  // `prepare: false` is required for Supabase transaction pooler mode
+  // `max: 5` caps per-process connections; with the pooler this is more than enough
+  globalForDb.__dbClient = postgres(connectionString, {
+    prepare: false,
+    max: 5,
+  });
+}
+
+export const db = drizzle(globalForDb.__dbClient, { schema });
 
 export type Database = typeof db;

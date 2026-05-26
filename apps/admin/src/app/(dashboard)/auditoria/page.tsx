@@ -1,6 +1,5 @@
 import { Suspense } from "react";
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
+import { db } from "@hebron/db/client";
 import { eq, desc, count, sql } from "drizzle-orm";
 import { users } from "@hebron/db/schema";
 import { auditLog } from "@hebron/db/schema";
@@ -8,12 +7,6 @@ import { Download, ShieldAlert, FileText, RotateCcw } from "lucide-react";
 import { ErrorState, Button } from "@hebron/ui";
 
 // ─── DB ───────────────────────────────────────────────────────────────────────
-
-function getDb() {
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error("DATABASE_URL não configurado");
-  return drizzle(postgres(url, { prepare: false }));
-}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -74,7 +67,6 @@ function StatCardSmall({
 // ─── Audit Content ────────────────────────────────────────────────────────────
 
 async function AuditContent() {
-  const db = getDb();
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 

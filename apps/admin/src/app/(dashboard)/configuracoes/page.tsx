@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
+import { db } from "@hebron/db/client";
 import { eq, asc } from "drizzle-orm";
 import { users, designations } from "@hebron/db/schema";
 import {
@@ -22,12 +21,6 @@ import {
 import { toggleFeatureFlag } from "../../../actions/settings";
 
 // ─── DB ───────────────────────────────────────────────────────────────────────
-
-function getDb() {
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error("DATABASE_URL não configurado");
-  return drizzle(postgres(url, { prepare: false }));
-}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -427,8 +420,6 @@ export default async function ConfiguracoesPage({
   const params = await searchParams;
   const activeTab = (params.tab ?? "designacoes") as TabId;
   const selectedTemplate = params.template ?? "";
-
-  const db = getDb();
 
   // Fetch all data upfront (tabs switch client-side via URL)
   const [designationRows, flagRows, templateRows, settingRows] =

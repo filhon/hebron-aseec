@@ -2,18 +2,10 @@
 
 import { z } from "zod";
 import { and, eq, gte, lt } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
+import { db } from "@hebron/db/client";
 import { meetingSessions } from "@hebron/db/schema";
 import { adminAction } from "../lib/safe-action";
 import { logAudit, computeDiff } from "../lib/audit";
-
-function getDb() {
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error("DATABASE_URL não configurado");
-  const client = postgres(url, { prepare: false });
-  return drizzle(client);
-}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -43,8 +35,6 @@ export const createMeeting = adminAction
     }),
   )
   .action(async ({ parsedInput, ctx }) => {
-    const db = getDb();
-
     const inserted = await db
       .insert(meetingSessions)
       .values({
@@ -92,8 +82,6 @@ export const updateMeeting = adminAction
     }),
   )
   .action(async ({ parsedInput, ctx }) => {
-    const db = getDb();
-
     const beforeRows = await db
       .select()
       .from(meetingSessions)
@@ -149,7 +137,6 @@ export const autoCreateMonthlyMeetings = adminAction
     }),
   )
   .action(async ({ parsedInput, ctx }) => {
-    const db = getDb();
     const today = new Date();
     const created: (typeof meetingSessions.$inferSelect)[] = [];
 

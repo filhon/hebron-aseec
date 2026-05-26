@@ -1,7 +1,6 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
+import { db } from "@hebron/db/client";
 import { eq, desc, asc, count, isNull, gte, sql, and } from "drizzle-orm";
 import { users, roleAssignments } from "@hebron/db/schema";
 import { auditLog, invitations, meetingSessions } from "@hebron/db/schema";
@@ -9,12 +8,6 @@ import { Users, Activity, ChevronRight, Plus, RotateCcw } from "lucide-react";
 import { ErrorState, Button } from "@hebron/ui";
 
 // ─── DB ───────────────────────────────────────────────────────────────────────
-
-function getDb() {
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error("DATABASE_URL não configurado");
-  return drizzle(postgres(url, { prepare: false }));
-}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -75,7 +68,6 @@ function StatCard({
 // ─── Dashboard Content ────────────────────────────────────────────────────────
 
 async function DashboardContent() {
-  const db = getDb();
   const now = new Date();
 
   const [

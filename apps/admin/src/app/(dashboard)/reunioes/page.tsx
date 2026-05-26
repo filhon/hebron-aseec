@@ -1,16 +1,9 @@
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
+import { db } from "@hebron/db/client";
 import { eq, asc, desc, or } from "drizzle-orm";
 import { users, meetingSessions } from "@hebron/db/schema";
 import { Plus, CalendarDays, FileText, Mail, Download } from "lucide-react";
 
 // ─── DB ───────────────────────────────────────────────────────────────────────
-
-function getDb() {
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error("DATABASE_URL não configurado");
-  return drizzle(postgres(url, { prepare: false }));
-}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -63,8 +56,6 @@ export default async function ReunioesPage({
 }) {
   const params = await searchParams;
   const filter = params.filter === "past" ? "past" : "upcoming";
-
-  const db = getDb();
 
   const [upcomingRows, pastRows] = await Promise.all([
     db

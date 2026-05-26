@@ -1,14 +1,6 @@
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
+import { db } from "@hebron/db/client";
 import { auditLog } from "@hebron/db/schema";
 import type { NewAuditLog } from "@hebron/db/schema";
-
-function getDb() {
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error("DATABASE_URL não configurado");
-  const client = postgres(url, { prepare: false });
-  return drizzle(client);
-}
 
 export type AuditAction = NewAuditLog["action"];
 
@@ -28,7 +20,6 @@ export interface LogAuditParams {
  * Usa conexão direta (DATABASE_URL = superuser postgres) que contorna RLS.
  */
 export async function logAudit(params: LogAuditParams): Promise<void> {
-  const db = getDb();
   await db.insert(auditLog).values({
     actorId: params.actorId,
     action: params.action,

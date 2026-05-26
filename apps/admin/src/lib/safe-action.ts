@@ -1,17 +1,9 @@
 import { createSafeActionClient } from "next-safe-action";
 import { cookies } from "next/headers";
 import { createClient } from "@supabase/supabase-js";
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
+import { db } from "@hebron/db/client";
 import { eq } from "drizzle-orm";
 import { roleAssignments } from "@hebron/db/schema";
-
-function getDb() {
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error("DATABASE_URL não configurado");
-  const client = postgres(url, { prepare: false });
-  return drizzle(client);
-}
 
 /**
  * Admin safe-action client.
@@ -48,7 +40,6 @@ export const adminAction = createSafeActionClient().use(async ({ next }) => {
     throw new Error("Não autenticado");
   }
 
-  const db = getDb();
   const rows = await db
     .select({ role: roleAssignments.role })
     .from(roleAssignments)
@@ -63,3 +54,9 @@ export const adminAction = createSafeActionClient().use(async ({ next }) => {
 
   return next({ ctx: { actorId: user.id } });
 });
+
+/**
+ * Public safe-action client — sem autenticação.
+ * Usar apenas em actions que aceitam tokens públicos (ex.: aceitação de convite).
+ */
+export const publicAction = createSafeActionClient();

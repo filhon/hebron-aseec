@@ -1,8 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
+import { db } from "@hebron/db/client";
 import { eq, or, desc } from "drizzle-orm";
 import { users, roleAssignments } from "@hebron/db/schema";
 import { auditLog } from "@hebron/db/schema";
@@ -14,12 +13,6 @@ import {
 } from "../../../../actions/users";
 
 // ─── DB ───────────────────────────────────────────────────────────────────────
-
-function getDb() {
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error("DATABASE_URL não configurado");
-  return drizzle(postgres(url, { prepare: false }));
-}
 
 // ─── Server Actions ───────────────────────────────────────────────────────────
 
@@ -159,8 +152,6 @@ interface Props {
 export default async function UserDetailPage({ params, searchParams }: Props) {
   const { id } = await params;
   const { success, error } = await searchParams;
-
-  const db = getDb();
 
   const [userRows, userRoles, activityRows] = await Promise.all([
     db.select().from(users).where(eq(users.id, id)),

@@ -1,22 +1,13 @@
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
+import { db } from "@hebron/db/client";
 import { count, isNull, and, gt } from "drizzle-orm";
 import { users, invitations } from "@hebron/db/schema";
 import { SidebarNav } from "../../components/sidebar-nav";
-
-function getDb() {
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error("DATABASE_URL não configurado");
-  return drizzle(postgres(url, { prepare: false }));
-}
 
 export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const db = getDb();
-
   const [userCountRows, pendingInviteRows] = await Promise.all([
     db.select({ total: count() }).from(users),
 

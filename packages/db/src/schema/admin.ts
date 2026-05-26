@@ -22,6 +22,7 @@ export const auditActionEnum = adminSchema.enum("audit_action", [
   "role.granted",
   "role.revoked",
   "invitation.created",
+  "invitation.accepted",
   "invitation.revoked",
   "setting.updated",
   "feature_flag.toggled",

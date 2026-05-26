@@ -2,21 +2,16 @@
 
 import React from "react";
 import { z } from "zod";
-import { eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
+import { and, eq, isNull, gt } from "drizzle-orm";
 import crypto from "node:crypto";
+import { db } from "@hebron/db/client";
 import { invitations, notifications } from "@hebron/db/schema";
 import { createNotification } from "@hebron/email";
-import { adminAction } from "../lib/safe-action";
+import { InvitationEmail } from "@hebron/email/templates/invitation";
+import { WelcomeEmail } from "@hebron/email/templates/welcome";
+import { adminAction, publicAction } from "../lib/safe-action";
 import { logAudit } from "../lib/audit";
-
-function getDb() {
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error("DATABASE_URL não configurado");
-  const client = postgres(url, { prepare: false });
-  return drizzle(client);
-}
+import { notifyInvitationAccepted } from "../lib/notifications";
 
 const roleEnum = z.enum([
   "super_admin",
@@ -41,7 +36,6 @@ export const sendInvitation = adminAction
     }),
   )
   .action(async ({ parsedInput, ctx }) => {
-    const db = getDb();
     const token = crypto.randomBytes(32).toString("hex");
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + parsedInput.expiresInDays);
@@ -91,7 +85,7 @@ export const sendInvitation = adminAction
       email: {
         to: parsedInput.email,
         subject: "Convite para Hebron Aseec",
-        template: buildInvitationEmail({
+        template: React.createElement(InvitationEmail, {
           inviteUrl,
           roles: parsedInput.roles,
           message: parsedInput.message,
@@ -123,8 +117,6 @@ export const sendInvitation = adminAction
 export const revokeInvitation = adminAction
   .schema(z.object({ id: z.string().uuid() }))
   .action(async ({ parsedInput, ctx }) => {
-    const db = getDb();
-
     const updated = await db
       .update(invitations)
       .set({ revokedAt: new Date() })
@@ -145,69 +137,91 @@ export const revokeInvitation = adminAction
     return { invitation };
   });
 
-// ─── Inline email builder ─────────────────────────────────────────────────────
-// Minimal React element for the invitation email.
-// Replace with a proper React Email template from packages/email when available.
+// ─── acceptInvitation ─────────────────────────────────────────────────────────
 
-const ROLE_LABELS: Record<string, string> = {
-  super_admin: "Super Admin",
-  diretor: "Diretor",
-  conselheiro: "Conselheiro",
-  colaborador: "Colaborador",
-  submissor: "Submissor",
-  aluno: "Aluno",
-  hospede: "Hóspede",
-  ouvinte: "Ouvinte",
-};
+export const acceptInvitation = publicAction
+  .schema(
+    z.object({
+      token: z.string().min(1),
+      name: z.string().min(1).max(255),
+    }),
+  )
+  .action(async ({ parsedInput }) => {
+    const now = new Date();
 
-function buildInvitationEmail(params: {
-  inviteUrl: string;
-  roles: string[];
-  message?: string;
-  expiresAt: Date;
-}): React.ReactElement {
-  const rolesText = params.roles.map((r) => ROLE_LABELS[r] ?? r).join(", ");
-  const expiryText = params.expiresAt.toLocaleDateString("pt-BR");
-
-  return React.createElement(
-    "div",
-    {
-      style: {
-        fontFamily: "Inter, sans-serif",
-        color: "#111827",
-        maxWidth: "600px",
-        margin: "0 auto",
-      },
-    },
-    React.createElement(
-      "h1",
-      { style: { color: "#202C85" } },
-      "Convite para Hebron Aseec",
-    ),
-    params.message
-      ? React.createElement("p", null, params.message)
-      : React.createElement(
-          "p",
-          null,
-          "Você foi convidado para acessar a plataforma Hebron Aseec.",
+    // Fetch and validate the invitation
+    const rows = await db
+      .select()
+      .from(invitations)
+      .where(
+        and(
+          eq(invitations.token, parsedInput.token),
+          isNull(invitations.revokedAt),
+          isNull(invitations.acceptedAt),
+          gt(invitations.expiresAt, now),
         ),
-    React.createElement("p", null, `Papel(éis): ${rolesText}`),
-    React.createElement("p", null, `Este convite expira em: ${expiryText}`),
-    React.createElement(
-      "a",
-      {
-        href: params.inviteUrl,
-        style: {
-          display: "inline-block",
-          backgroundColor: "#202C85",
-          color: "#ffffff",
-          padding: "12px 24px",
-          borderRadius: "6px",
-          textDecoration: "none",
-          marginTop: "16px",
-        },
+      )
+      .limit(1);
+
+    const invitation = rows[0];
+    if (!invitation) {
+      throw new Error("Convite inválido, expirado ou já utilizado.");
+    }
+
+    // Mark as accepted
+    await db
+      .update(invitations)
+      .set({ acceptedAt: now })
+      .where(eq(invitations.id, invitation.id));
+
+    const appUrl =
+      process.env.NEXT_PUBLIC_APP_URL ?? "https://app.hebronaseec.com.br";
+
+    // Send welcome email to the new user
+    await createNotification({
+      insert: async (data) => {
+        const notifInserted = await db
+          .insert(notifications)
+          .values({
+            userId: invitation.invitedBy,
+            title: data.title,
+            body: data.body,
+          })
+          .returning();
+        const notif = notifInserted[0];
+        if (!notif)
+          throw new Error("Falha ao inserir notificação de boas-vindas");
+        return { id: notif.id };
       },
-      "Aceitar convite",
-    ),
-  );
-}
+      data: {
+        userId: invitation.invitedBy,
+        channel: "email",
+        type: "invitation.welcome",
+        title: "Bem-vindo(a) à Hebron Aseec",
+        body: `Olá ${parsedInput.name}, sua conta foi ativada.`,
+      },
+      email: {
+        to: invitation.email,
+        subject: "Bem-vindo(a) à Hebron Aseec",
+        template: React.createElement(WelcomeEmail, {
+          name: parsedInput.name,
+          roles: invitation.roles as string[],
+          loginUrl: `${appUrl}/login`,
+        }),
+      },
+      resendApiKey: process.env.RESEND_API_KEY,
+    });
+
+    // Notify the admin who sent the invite (in_app)
+    await notifyInvitationAccepted(invitation.invitedBy, invitation.email);
+
+    await logAudit({
+      actorId: invitation.invitedBy,
+      action: "invitation.accepted",
+      entity: "invitation",
+      entityId: invitation.id,
+      diff: { acceptedAt: { before: null, after: now } },
+    });
+
+    return { email: invitation.email, roles: invitation.roles };
+  });

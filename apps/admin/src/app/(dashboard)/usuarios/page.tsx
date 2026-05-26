@@ -1,17 +1,10 @@
 import Link from "next/link";
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
+import { db } from "@hebron/db/client";
 import { eq, and, or, ilike, count, sql, inArray, asc } from "drizzle-orm";
 import { users, roleAssignments } from "@hebron/db/schema";
 import { Search, Plus, Filter, Shield } from "lucide-react";
 
 // ─── DB ───────────────────────────────────────────────────────────────────────
-
-function getDb() {
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error("DATABASE_URL não configurado");
-  return drizzle(postgres(url, { prepare: false }));
-}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -101,8 +94,6 @@ export default async function UsuariosPage({
   const roleFilter = params.role ?? "all";
   const statusFilter = params.status ?? "all";
   const currentPage = Math.max(1, parseInt(params.page ?? "1", 10));
-
-  const db = getDb();
 
   // Resolve users that have the requested role (used for role filter subquery)
   let roleFilteredIds: string[] | null = null;

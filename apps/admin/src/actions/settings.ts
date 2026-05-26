@@ -2,18 +2,10 @@
 
 import { z } from "zod";
 import { eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
+import { db } from "@hebron/db/client";
 import { featureFlags, systemSettings } from "@hebron/db/schema";
 import { adminAction } from "../lib/safe-action";
 import { logAudit, computeDiff } from "../lib/audit";
-
-function getDb() {
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error("DATABASE_URL não configurado");
-  const client = postgres(url, { prepare: false });
-  return drizzle(client);
-}
 
 // ─── toggleFeatureFlag ────────────────────────────────────────────────────────
 
@@ -26,8 +18,6 @@ export const toggleFeatureFlag = adminAction
     }),
   )
   .action(async ({ parsedInput, ctx }) => {
-    const db = getDb();
-
     const beforeRows = await db
       .select()
       .from(featureFlags)
@@ -86,8 +76,6 @@ export const updateSystemSetting = adminAction
     }),
   )
   .action(async ({ parsedInput, ctx }) => {
-    const db = getDb();
-
     const beforeRows = await db
       .select()
       .from(systemSettings)

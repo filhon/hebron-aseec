@@ -2,19 +2,11 @@
 
 import { z } from "zod";
 import { eq } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
 import { createClient } from "@supabase/supabase-js";
+import { db } from "@hebron/db/client";
 import { users } from "@hebron/db/schema";
 import { adminAction } from "../lib/safe-action";
 import { logAudit, computeDiff } from "../lib/audit";
-
-function getDb() {
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error("DATABASE_URL não configurado");
-  const client = postgres(url, { prepare: false });
-  return drizzle(client);
-}
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -49,7 +41,6 @@ export const createUser = adminAction
   )
   .action(async ({ parsedInput, ctx }) => {
     const supabase = getSupabaseAdmin();
-    const db = getDb();
 
     const { data: authData, error: authError } =
       await supabase.auth.admin.createUser({
@@ -98,8 +89,6 @@ export const updateUser = adminAction
     }),
   )
   .action(async ({ parsedInput, ctx }) => {
-    const db = getDb();
-
     const beforeRows = await db
       .select()
       .from(users)
@@ -152,8 +141,6 @@ export const suspendUser = adminAction
     }),
   )
   .action(async ({ parsedInput, ctx }) => {
-    const db = getDb();
-
     const beforeRows = await db
       .select()
       .from(users)
@@ -205,8 +192,6 @@ export const unsuspendUser = adminAction
     }),
   )
   .action(async ({ parsedInput, ctx }) => {
-    const db = getDb();
-
     const beforeRows = await db
       .select()
       .from(users)
@@ -256,7 +241,6 @@ export const unsuspendUser = adminAction
 export const resetPassword = adminAction
   .schema(z.object({ id: z.string().uuid() }))
   .action(async ({ parsedInput, ctx }) => {
-    const db = getDb();
     const supabase = getSupabaseAdmin();
 
     const userRows = await db
@@ -291,7 +275,6 @@ export const approveUser = adminAction
   .schema(z.object({ id: z.string().uuid() }))
   .action(async ({ parsedInput, ctx }) => {
     const supabase = getSupabaseAdmin();
-    const db = getDb();
 
     const userRows = await db
       .select()
