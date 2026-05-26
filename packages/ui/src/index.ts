@@ -101,6 +101,10 @@ export type { ErrorStateProps } from "./components/error-state";
 export { LoadingState } from "./components/loading-state";
 export type { LoadingStateProps } from "./components/loading-state";
 
+// Impersonation
+export { ImpersonationBanner } from "./components/impersonation-banner";
+export type { ImpersonationBannerProps } from "./components/impersonation-banner";
+
 // Notifications
 export { NotificationBell } from "./components/notification-bell";
 export type {

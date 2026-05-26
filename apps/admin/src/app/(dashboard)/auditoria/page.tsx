@@ -1,12 +1,26 @@
 import { Suspense } from "react";
 import { db } from "@hebron/db/client";
-import { eq, desc, count, sql } from "drizzle-orm";
+import {
+  eq,
+  desc,
+  count,
+  sql,
+  and,
+  ilike,
+  gte,
+  lte,
+  type SQL,
+} from "drizzle-orm";
+import type { AuditLog } from "@hebron/db/schema";
 import { users } from "@hebron/db/schema";
 import { auditLog } from "@hebron/db/schema";
-import { Download, ShieldAlert, FileText, RotateCcw } from "lucide-react";
+import { ShieldAlert, FileText, RotateCcw } from "lucide-react";
 import { ErrorState, Button } from "@hebron/ui";
-
-// ─── DB ───────────────────────────────────────────────────────────────────────
+import { AuditLogFilters } from "../../../components/audit-log-filters";
+import {
+  AuditLogExport,
+  type AuditLogEntry,
+} from "../../../components/audit-log-export";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -66,9 +80,38 @@ function StatCardSmall({
 
 // ─── Audit Content ────────────────────────────────────────────────────────────
 
-async function AuditContent() {
+interface AuditContentProps {
+  actor?: string;
+  action?: string;
+  entity?: string;
+  from?: string;
+  to?: string;
+}
+
+async function AuditContent({
+  actor,
+  action,
+  entity,
+  from,
+  to,
+}: AuditContentProps) {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
+
+  // Build WHERE conditions for filters
+  const conditions: SQL[] = [];
+  if (actor) conditions.push(ilike(users.fullName, `%${actor}%`));
+  if (action)
+    conditions.push(eq(auditLog.action, action as AuditLog["action"]));
+  if (entity) conditions.push(ilike(auditLog.entity, `%${entity}%`));
+  if (from) conditions.push(gte(auditLog.createdAt, new Date(from)));
+  if (to) {
+    const toEnd = new Date(to);
+    toEnd.setHours(23, 59, 59, 999);
+    conditions.push(lte(auditLog.createdAt, toEnd));
+  }
+
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
   const [entries, statsRows] = await Promise.all([
     db
@@ -85,8 +128,9 @@ async function AuditContent() {
       })
       .from(auditLog)
       .innerJoin(users, eq(auditLog.actorId, users.id))
+      .where(whereClause)
       .orderBy(desc(auditLog.createdAt))
-      .limit(200),
+      .limit(500),
 
     db
       .select({
@@ -98,6 +142,7 @@ async function AuditContent() {
   ]);
 
   const stats = statsRows[0] ?? { total: 0, todayCount: 0, impersonations: 0 };
+  const isFiltered = !!(actor || action || entity || from || to);
 
   if (entries.length === 0) {
     return (
@@ -106,7 +151,11 @@ async function AuditContent() {
           <div className="hb-empty-icon">
             <ShieldAlert size={22} aria-hidden="true" />
           </div>
-          <b>Nenhum registro de auditoria encontrado.</b>
+          <b>
+            {isFiltered
+              ? "Nenhum registro encontrado para estes filtros."
+              : "Nenhum registro de auditoria encontrado."}
+          </b>
           <div className="hb-empty-quote">
             "Não há nada oculto que não venha a ser revelado"
             <cite className="hb-empty-cite">— Lucas 8:17</cite>
@@ -116,27 +165,63 @@ async function AuditContent() {
     );
   }
 
+  // Serialize for export (dates must be passed as serializable values)
+  const exportEntries: AuditLogEntry[] = entries.map((e) => ({
+    id: e.id,
+    action: e.action,
+    actorId: e.actorId,
+    actorName: e.actorName,
+    entity: e.entity,
+    entityId: e.entityId,
+    diff: e.diff,
+    ip: e.ip,
+    createdAt: e.createdAt,
+  }));
+
   return (
     <>
       {/* Stats */}
-      <div className="hb-grid hb-grid-4" style={{ marginBottom: 22 }}>
-        <StatCardSmall
-          label="Eventos hoje"
-          value={stats.todayCount ?? 0}
-          dot="#202c85"
-        />
-        <StatCardSmall
-          label="Total de eventos"
-          value={stats.total}
-          dot="#07b4e7"
-        />
-        <StatCardSmall
-          label="Impersonações"
-          value={stats.impersonations ?? 0}
-          dot="#ea5a06"
-        />
-        <StatCardSmall label="Falhas de login" value="—" dot="#a1c520" />
-      </div>
+      {!isFiltered && (
+        <div className="hb-grid hb-grid-4" style={{ marginBottom: 22 }}>
+          <StatCardSmall
+            label="Eventos hoje"
+            value={stats.todayCount ?? 0}
+            dot="#202c85"
+          />
+          <StatCardSmall
+            label="Total de eventos"
+            value={stats.total}
+            dot="#07b4e7"
+          />
+          <StatCardSmall
+            label="Impersonações"
+            value={stats.impersonations ?? 0}
+            dot="#ea5a06"
+          />
+          <StatCardSmall label="Falhas de login" value="—" dot="#a1c520" />
+        </div>
+      )}
+
+      {/* Filtered result count */}
+      {isFiltered && (
+        <div
+          style={{
+            marginBottom: 14,
+            fontSize: 13,
+            color: "#6b7280",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <span>
+            <b style={{ color: "#131737" }}>{entries.length}</b> registro
+            {entries.length !== 1 ? "s" : ""} encontrado
+            {entries.length !== 1 ? "s" : ""}
+          </span>
+          <AuditLogExport entries={exportEntries} />
+        </div>
+      )}
 
       {/* Table */}
       <div className="hb-card" style={{ overflow: "hidden" }}>
@@ -253,9 +338,16 @@ async function AuditContent() {
 export default async function AuditoriaPage({
   searchParams,
 }: {
-  searchParams: Promise<{ state?: string }>;
+  searchParams: Promise<{
+    state?: string;
+    actor?: string;
+    action?: string;
+    entity?: string;
+    from?: string;
+    to?: string;
+  }>;
 }) {
-  const { state } = await searchParams;
+  const { state, actor, action, entity, from, to } = await searchParams;
 
   return (
     <div className="hb-page">
@@ -274,12 +366,11 @@ export default async function AuditoriaPage({
             <FileText size={14} aria-hidden="true" />
             JSON
           </button>
-          <button className="hb-btn hb-btn-secondary hb-btn-sm" type="button">
-            <Download size={14} aria-hidden="true" />
-            Exportar CSV
-          </button>
         </div>
       </div>
+
+      {/* Filters */}
+      <AuditLogFilters />
 
       {state === "error" ? (
         <ErrorState
@@ -314,7 +405,13 @@ export default async function AuditoriaPage({
             </div>
           }
         >
-          <AuditContent />
+          <AuditContent
+            actor={actor}
+            action={action}
+            entity={entity}
+            from={from}
+            to={to}
+          />
         </Suspense>
       )}
     </div>

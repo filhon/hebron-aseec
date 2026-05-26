@@ -6,7 +6,8 @@
     ".": "./src/index.ts",
     "./server": "./src/server.ts",
     "./client": "./src/client.ts",
-    "./middleware": "./src/middleware.ts"
+    "./middleware": "./src/middleware.ts",
+    "./impersonation": "./src/impersonation.ts"
   },
   "scripts": {
     "lint": "eslint .",

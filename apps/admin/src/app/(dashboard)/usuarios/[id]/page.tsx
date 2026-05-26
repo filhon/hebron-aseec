@@ -5,12 +5,13 @@ import { db } from "@hebron/db/client";
 import { eq, or, desc } from "drizzle-orm";
 import { users, roleAssignments } from "@hebron/db/schema";
 import { auditLog } from "@hebron/db/schema";
-import { ChevronLeft, Shield, KeyRound } from "lucide-react";
+import { ChevronLeft, Shield, KeyRound, UserCog } from "lucide-react";
 import {
   suspendUser,
   unsuspendUser,
   resetPassword,
 } from "../../../../actions/users";
+import { startImpersonationAction } from "../../../../actions/impersonation";
 
 // ─── DB ───────────────────────────────────────────────────────────────────────
 
@@ -208,6 +209,8 @@ export default async function UserDetailPage({ params, searchParams }: Props) {
           {success === "reativado" && "Conta reativada com sucesso."}
           {success === "reset-enviado" &&
             "Link de redefinição de senha enviado."}
+          {success === "impersonation-started" &&
+            "Impersonação iniciada. O banner de alerta está visível no topo."}
         </div>
       )}
       {error && (
@@ -271,6 +274,15 @@ export default async function UserDetailPage({ params, searchParams }: Props) {
           </div>
         </div>
         <div className="hb-detail-header-actions">
+          {/* Impersonate */}
+          <form action={startImpersonationAction}>
+            <input type="hidden" name="userId" value={user.id} />
+            <button type="submit" className="hb-btn hb-btn-ghost hb-btn-sm">
+              <UserCog size={13} aria-hidden="true" />
+              Impersonar
+            </button>
+          </form>
+
           {/* Reset password */}
           <form action={handleResetPassword}>
             <input type="hidden" name="userId" value={user.id} />
