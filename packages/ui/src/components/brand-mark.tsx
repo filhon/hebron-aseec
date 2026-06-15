@@ -34,7 +34,7 @@ export function BrandMark({
 
       {showName && (
         <span className="min-w-0 leading-none">
-          <span className="block truncate font-[--font-display] text-[--text-base] font-[--font-weight-bold] text-[--brand]">
+          <span className="block truncate font-[--font-display] text-[--text-base]">
             Hebron ASEEC
           </span>
           {!compact && (
