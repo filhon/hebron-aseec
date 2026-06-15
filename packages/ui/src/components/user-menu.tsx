@@ -10,10 +10,6 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-// ——————————————————————————————————————
-// Avatar
-// ——————————————————————————————————————
-
 function getInitials(name: string): string {
   return name
     .trim()
@@ -50,7 +46,7 @@ export function Avatar({
     return (
       <span
         className={cn(
-          "inline-flex shrink-0 overflow-hidden rounded-full ring-1 ring-[--color-border]",
+          "inline-flex shrink-0 overflow-hidden rounded-full ring-1 ring-[--border]",
           avatarSizes[size],
           className,
         )}
@@ -69,8 +65,8 @@ export function Avatar({
       aria-hidden="true"
       className={cn(
         "inline-flex shrink-0 select-none items-center justify-center rounded-full",
-        "bg-[--color-primary] font-[--font-weight-semibold] text-[--color-primary-foreground]",
-        "ring-1 ring-[--color-border]",
+        "bg-[--brand] font-[--font-weight-semibold] text-[--brand-fg]",
+        "ring-1 ring-[--border]",
         avatarSizes[size],
         className,
       )}
@@ -79,10 +75,6 @@ export function Avatar({
     </span>
   );
 }
-
-// ——————————————————————————————————————
-// UserMenu
-// ——————————————————————————————————————
 
 export interface UserMenuUser {
   name: string;
@@ -109,20 +101,20 @@ export function UserMenu({
         <button
           className={cn(
             "flex items-center gap-2 rounded-[--radius] px-2 py-1.5",
-            "text-[--text-sm] text-[--color-foreground]",
-            "transition-colors duration-[--transition-fast] hover:bg-[--color-muted]",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--color-ring]",
+            "text-[--text-sm]",
+            "transition-colors duration-[--transition-fast] hover:bg-[--surface-alt]",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--brand]",
             "select-none",
             className,
           )}
           aria-label="Menu do usuário"
         >
           <Avatar name={user.name} avatarUrl={user.avatarUrl} size="sm" />
-          <span className="hidden max-w-[140px] truncate font-[--font-weight-medium] sm:block">
+          <span className="hidden max-w-35 truncate font-[--font-weight-medium] sm:block">
             {user.name}
           </span>
           <ChevronDown
-            className="h-3.5 w-3.5 text-[--color-muted-foreground]"
+            className="h-3.5 w-3.5 text-[--fg-muted]"
             aria-hidden="true"
           />
         </button>
@@ -133,8 +125,8 @@ export function UserMenu({
           align="end"
           sideOffset={6}
           className={cn(
-            "z-[--z-dropdown] min-w-[200px] rounded-[--radius-md]",
-            "border border-[--color-border] bg-[--color-background]",
+            "z-[--z-dropdown] min-w-50 rounded-[--radius-md]",
+            "border border-[--border] bg-[--bg]",
             "shadow-[--shadow-md] py-1",
             "data-[state=open]:animate-in data-[state=closed]:animate-out",
             "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
@@ -142,14 +134,11 @@ export function UserMenu({
             "data-[side=bottom]:slide-in-from-top-2",
           )}
         >
-          {/* User info header */}
-          <div className="border-b border-[--color-border] px-3 py-2.5">
-            <p className="truncate text-[--text-sm] font-[--font-weight-medium] text-[--color-foreground]">
+          <div className="border-b border-[--border] px-3 py-2.5">
+            <p className="truncate text-[--text-sm] font-[--font-weight-medium]">
               {user.name}
             </p>
-            <p className="truncate text-[--text-xs] text-[--color-muted-foreground]">
-              {user.email}
-            </p>
+            <p className="truncate text-[--text-xs]">{user.email}</p>
           </div>
 
           <DropdownMenuPrimitive.Item asChild>
@@ -157,26 +146,23 @@ export function UserMenu({
               href={profileHref}
               className={cn(
                 "mx-1 mt-1 flex cursor-pointer items-center gap-2 rounded-[--radius-sm]",
-                "px-2.5 py-2 text-[--text-sm] text-[--color-foreground]",
+                "px-2.5 py-2 text-[--text-sm]",
                 "outline-none transition-colors duration-[--transition-fast]",
-                "hover:bg-[--color-muted] focus:bg-[--color-muted]",
+                "hover:bg-[--surface-alt] focus:bg-[--surface-alt]",
               )}
             >
-              <User
-                className="h-4 w-4 text-[--color-muted-foreground]"
-                aria-hidden="true"
-              />
+              <User className="h-4 w-4 text-[--fg-muted]" aria-hidden="true" />
               Meu perfil
             </a>
           </DropdownMenuPrimitive.Item>
 
-          <DropdownMenuPrimitive.Separator className="mx-1 my-1 h-px bg-[--color-border]" />
+          <DropdownMenuPrimitive.Separator className="mx-1 my-1 h-px bg-[--border]" />
 
           <DropdownMenuPrimitive.Item
             onSelect={onLogout}
             className={cn(
               "mx-1 mb-1 flex cursor-pointer items-center gap-2 rounded-[--radius-sm]",
-              "px-2.5 py-2 text-[--text-sm] text-[--color-destructive]",
+              "px-2.5 py-2 text-[--text-sm]",
               "outline-none transition-colors duration-[--transition-fast]",
               "hover:bg-[--color-destructive-muted] focus:bg-[--color-destructive-muted]",
             )}

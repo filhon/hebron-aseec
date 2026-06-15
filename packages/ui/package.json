@@ -4,6 +4,8 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
+    "./tokens.css": "./src/tokens.css",
+    "./styles/patterns.css": "./src/styles/patterns.css",
     "./*": "./src/*.ts"
   },
   "scripts": {

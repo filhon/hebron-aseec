@@ -7,137 +7,207 @@
 /* ---------- BRAND FONTS (local files) ---------- */
 /* Parkinsans — variable font, weight axis 300–800 */
 @font-face {
-  font-family: 'Parkinsans';
-  src: url('fonts/Parkinsans-VariableFont_wght.ttf') format('truetype-variations'),
-       url('fonts/Parkinsans-VariableFont_wght.ttf') format('truetype');
+  font-family: "Parkinsans";
+  src:
+    url("fonts/Parkinsans-VariableFont_wght.ttf") format("truetype-variations"),
+    url("fonts/Parkinsans-VariableFont_wght.ttf") format("truetype");
   font-weight: 300 800;
   font-style: normal;
   font-display: swap;
 }
 
 /* Titillium Web — static weights */
-@font-face { font-family: 'Titillium Web'; src: url('fonts/TitilliumWeb-ExtraLight.ttf')       format('truetype'); font-weight: 200; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Titillium Web'; src: url('fonts/TitilliumWeb-ExtraLightItalic.ttf') format('truetype'); font-weight: 200; font-style: italic; font-display: swap; }
-@font-face { font-family: 'Titillium Web'; src: url('fonts/TitilliumWeb-Light.ttf')            format('truetype'); font-weight: 300; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Titillium Web'; src: url('fonts/TitilliumWeb-LightItalic.ttf')      format('truetype'); font-weight: 300; font-style: italic; font-display: swap; }
-@font-face { font-family: 'Titillium Web'; src: url('fonts/TitilliumWeb-Regular.ttf')          format('truetype'); font-weight: 400; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Titillium Web'; src: url('fonts/TitilliumWeb-Italic.ttf')           format('truetype'); font-weight: 400; font-style: italic; font-display: swap; }
-@font-face { font-family: 'Titillium Web'; src: url('fonts/TitilliumWeb-SemiBold.ttf')         format('truetype'); font-weight: 600; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Titillium Web'; src: url('fonts/TitilliumWeb-SemiBoldItalic.ttf')   format('truetype'); font-weight: 600; font-style: italic; font-display: swap; }
-@font-face { font-family: 'Titillium Web'; src: url('fonts/TitilliumWeb-Bold.ttf')             format('truetype'); font-weight: 700; font-style: normal; font-display: swap; }
-@font-face { font-family: 'Titillium Web'; src: url('fonts/TitilliumWeb-BoldItalic.ttf')       format('truetype'); font-weight: 700; font-style: italic; font-display: swap; }
-@font-face { font-family: 'Titillium Web'; src: url('fonts/TitilliumWeb-Black.ttf')            format('truetype'); font-weight: 900; font-style: normal; font-display: swap; }
+@font-face {
+  font-family: "Titillium Web";
+  src: url("fonts/TitilliumWeb-ExtraLight.ttf") format("truetype");
+  font-weight: 200;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Titillium Web";
+  src: url("fonts/TitilliumWeb-ExtraLightItalic.ttf") format("truetype");
+  font-weight: 200;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Titillium Web";
+  src: url("fonts/TitilliumWeb-Light.ttf") format("truetype");
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Titillium Web";
+  src: url("fonts/TitilliumWeb-LightItalic.ttf") format("truetype");
+  font-weight: 300;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Titillium Web";
+  src: url("fonts/TitilliumWeb-Regular.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Titillium Web";
+  src: url("fonts/TitilliumWeb-Italic.ttf") format("truetype");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Titillium Web";
+  src: url("fonts/TitilliumWeb-SemiBold.ttf") format("truetype");
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Titillium Web";
+  src: url("fonts/TitilliumWeb-SemiBoldItalic.ttf") format("truetype");
+  font-weight: 600;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Titillium Web";
+  src: url("fonts/TitilliumWeb-Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Titillium Web";
+  src: url("fonts/TitilliumWeb-BoldItalic.ttf") format("truetype");
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Titillium Web";
+  src: url("fonts/TitilliumWeb-Black.ttf") format("truetype");
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
 
 :root {
   /* ---------- BRAND COLORS ---------- */
   /* Primary — Azul Hebron. The brand's anchor; main backgrounds, logos, headlines. */
-  --hb-blue:        #202C85;   /* Pantone Blue 072 C */
-  --hb-blue-deep:   #19236A;   /* press / shadow */
-  --hb-blue-soft:   #2A38A0;   /* hover on blue surfaces */
+  --hb-blue: #202c85; /* Pantone Blue 072 C */
+  --hb-blue-deep: #19236a; /* press / shadow */
+  --hb-blue-soft: #2a38a0; /* hover on blue surfaces */
 
   /* Accent — Laranja. Calls-to-action, highlights, the warm word in the tagline. */
-  --hb-orange:      #EA5A06;   /* Pantone Orange 021 C */
-  --hb-orange-deep: #C24A03;
+  --hb-orange: #ea5a06; /* Pantone Orange 021 C */
+  --hb-orange-deep: #c24a03;
 
   /* Accent — Verde. "Vivo, missão, vida." Use as highlight, never primary surface. */
-  --hb-green:       #A1C520;   /* Pantone 2291 C */
-  --hb-green-deep:  #82A317;
+  --hb-green: #a1c520; /* Pantone 2291 C */
+  --hb-green-deep: #82a317;
 
   /* Accent — Azul Claro. "Deus, fé, evangelho." Highlights, water/sky tones. */
-  --hb-cyan:        #07B4E7;   /* Pantone 306 C */
-  --hb-cyan-deep:   #0593BE;
+  --hb-cyan: #07b4e7; /* Pantone 306 C */
+  --hb-cyan-deep: #0593be;
 
   /* ---------- NEUTRALS ---------- */
-  --hb-white:       #FFFFFF;
-  --hb-cream:       #F7F8FC;   /* off-white surface — softer than pure white */
-  --hb-gray-50:     #EEF0F6;
-  --hb-gray-100:    #DCDFEA;
-  --hb-gray-200:    #B7BDD0;
-  --hb-gray-400:    #6C7390;
-  --hb-gray-600:    #3F4566;
-  --hb-ink:         #131737;   /* near-black with blue cast — body text on light */
+  --hb-white: #ffffff;
+  --hb-cream: #f7f8fc; /* off-white surface — softer than pure white */
+  --hb-gray-50: #eef0f6;
+  --hb-gray-100: #dcdfea;
+  --hb-gray-200: #b7bdd0;
+  --hb-gray-400: #6c7390;
+  --hb-gray-600: #3f4566;
+  --hb-ink: #131737; /* near-black with blue cast — body text on light */
 
   /* ---------- SEMANTIC ---------- */
-  --bg:             var(--hb-white);
-  --bg-alt:         var(--hb-cream);
-  --bg-invert:      var(--hb-blue);
-  --surface:        var(--hb-white);
-  --surface-alt:    var(--hb-gray-50);
+  --bg: var(--hb-white);
+  --bg-alt: var(--hb-cream);
+  --bg-invert: var(--hb-blue);
+  --surface: var(--hb-white);
+  --surface-alt: var(--hb-gray-50);
 
-  --fg:             var(--hb-ink);
-  --fg-muted:       var(--hb-gray-400);
-  --fg-subtle:      var(--hb-gray-200);
-  --fg-invert:      var(--hb-white);
-  --fg-invert-muted:#C6CCEA;
+  --fg: var(--hb-ink);
+  --fg-muted: var(--hb-gray-400);
+  --fg-subtle: var(--hb-gray-200);
+  --fg-invert: var(--hb-white);
+  --fg-invert-muted: #c6ccea;
 
-  --brand:          var(--hb-blue);
-  --brand-fg:       var(--hb-white);
-  --accent:         var(--hb-orange);
+  --brand: var(--hb-blue);
+  --brand-fg: var(--hb-white);
+  --accent: var(--hb-orange);
   --highlight-warm: var(--hb-orange);
   --highlight-cool: var(--hb-cyan);
   --highlight-life: var(--hb-green);
 
-  --border:         var(--hb-gray-100);
-  --border-strong:  var(--hb-gray-200);
-  --divider:        rgba(19,23,55,0.08);
+  --border: var(--hb-gray-100);
+  --border-strong: var(--hb-gray-200);
+  --divider: rgba(19, 23, 55, 0.08);
 
   /* ---------- TYPOGRAPHY ---------- */
-  --font-display:   'Parkinsans', 'Titillium Web', system-ui, sans-serif;
-  --font-body:      'Titillium Web', 'Parkinsans', system-ui, sans-serif;
+  --font-display: "Parkinsans", "Titillium Web", system-ui, sans-serif;
+  --font-body: "Titillium Web", "Parkinsans", system-ui, sans-serif;
 
   /* Type scale — generous, slide-friendly. */
-  --fs-display-xl:  clamp(56px, 7vw, 96px);
-  --fs-display-lg:  clamp(44px, 5.5vw, 72px);
-  --fs-h1:          clamp(36px, 4vw, 56px);
-  --fs-h2:          clamp(28px, 3vw, 40px);
-  --fs-h3:          22px;
-  --fs-h4:          18px;
-  --fs-body-lg:     20px;
-  --fs-body:        16px;
-  --fs-body-sm:     14px;
-  --fs-caption:     12px;
-  --fs-eyebrow:     13px;
+  --fs-display-xl: clamp(56px, 7vw, 96px);
+  --fs-display-lg: clamp(44px, 5.5vw, 72px);
+  --fs-h1: clamp(36px, 4vw, 56px);
+  --fs-h2: clamp(28px, 3vw, 40px);
+  --fs-h3: 22px;
+  --fs-h4: 18px;
+  --fs-body-lg: 20px;
+  --fs-body: 16px;
+  --fs-body-sm: 14px;
+  --fs-caption: 12px;
+  --fs-eyebrow: 13px;
 
-  --lh-tight:       1.05;
-  --lh-snug:        1.18;
-  --lh-base:        1.45;
-  --lh-loose:       1.65;
+  --lh-tight: 1.05;
+  --lh-snug: 1.18;
+  --lh-base: 1.45;
+  --lh-loose: 1.65;
 
   --tracking-eyebrow: 0.14em;
-  --tracking-tight:   -0.01em;
+  --tracking-tight: -0.01em;
 
   /* ---------- SPACING ---------- */
-  --sp-1:  4px;
-  --sp-2:  8px;
-  --sp-3:  12px;
-  --sp-4:  16px;
-  --sp-5:  24px;
-  --sp-6:  32px;
-  --sp-7:  48px;
-  --sp-8:  64px;
-  --sp-9:  96px;
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 24px;
+  --sp-6: 32px;
+  --sp-7: 48px;
+  --sp-8: 64px;
+  --sp-9: 96px;
 
   /* ---------- RADII ---------- */
   /* Cards, buttons, image masks all share a generous, soft radius family. */
   --radius-xs: 6px;
   --radius-sm: 10px;
   --radius-md: 16px;
-  --radius-lg: 24px;     /* default for the brand's "balão" shape body */
+  --radius-lg: 24px; /* default for the brand's "balão" shape body */
   --radius-xl: 36px;
   --radius-pill: 999px;
 
   /* ---------- SHADOWS ---------- */
   /* Hebron uses flat color blocks — shadows stay restrained, never glossy. */
-  --shadow-sm: 0 1px 2px rgba(19,23,55,0.06), 0 1px 1px rgba(19,23,55,0.04);
-  --shadow-md: 0 6px 18px rgba(19,23,55,0.08), 0 2px 4px rgba(19,23,55,0.04);
-  --shadow-lg: 0 18px 40px rgba(19,23,55,0.12), 0 4px 8px rgba(19,23,55,0.06);
-  --shadow-brand: 0 14px 40px rgba(32,44,133,0.22);
+  --shadow-sm:
+    0 1px 2px rgba(19, 23, 55, 0.06), 0 1px 1px rgba(19, 23, 55, 0.04);
+  --shadow-md:
+    0 6px 18px rgba(19, 23, 55, 0.08), 0 2px 4px rgba(19, 23, 55, 0.04);
+  --shadow-lg:
+    0 18px 40px rgba(19, 23, 55, 0.12), 0 4px 8px rgba(19, 23, 55, 0.06);
+  --shadow-brand: 0 14px 40px rgba(32, 44, 133, 0.22);
 
   /* ---------- MOTION ---------- */
   --ease-out: cubic-bezier(0.22, 0.61, 0.36, 1);
   --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
   --dur-fast: 140ms;
-  --dur-med:  220ms;
+  --dur-med: 220ms;
   --dur-slow: 420ms;
 }
 
@@ -145,7 +215,8 @@
    SEMANTIC TYPE STYLES
    ============================================================ */
 
-html, body {
+html,
+body {
   font-family: var(--font-body);
   font-size: var(--fs-body);
   line-height: var(--lh-base);
@@ -157,7 +228,10 @@ html, body {
 
 .hb-display-xl,
 .hb-display-lg,
-.hb-h1, .hb-h2, .hb-h3, .hb-h4 {
+.hb-h1,
+.hb-h2,
+.hb-h3,
+.hb-h4 {
   font-family: var(--font-display);
   font-weight: 700;
   line-height: var(--lh-snug);
@@ -166,12 +240,31 @@ html, body {
   text-wrap: balance;
 }
 
-.hb-display-xl  { font-size: var(--fs-display-xl); line-height: var(--lh-tight); font-weight: 800; }
-.hb-display-lg  { font-size: var(--fs-display-lg); line-height: var(--lh-tight); font-weight: 700; }
-.hb-h1          { font-size: var(--fs-h1); }
-.hb-h2          { font-size: var(--fs-h2); }
-.hb-h3          { font-size: var(--fs-h3); font-weight: 600; }
-.hb-h4          { font-size: var(--fs-h4); font-weight: 600; line-height: var(--lh-base); }
+.hb-display-xl {
+  font-size: var(--fs-display-xl);
+  line-height: var(--lh-tight);
+  font-weight: 800;
+}
+.hb-display-lg {
+  font-size: var(--fs-display-lg);
+  line-height: var(--lh-tight);
+  font-weight: 700;
+}
+.hb-h1 {
+  font-size: var(--fs-h1);
+}
+.hb-h2 {
+  font-size: var(--fs-h2);
+}
+.hb-h3 {
+  font-size: var(--fs-h3);
+  font-weight: 600;
+}
+.hb-h4 {
+  font-size: var(--fs-h4);
+  font-weight: 600;
+  line-height: var(--lh-base);
+}
 
 .hb-eyebrow {
   font-family: var(--font-body);
@@ -182,16 +275,38 @@ html, body {
   color: var(--hb-blue);
 }
 
-.hb-body-lg { font-size: var(--fs-body-lg); line-height: var(--lh-loose); }
-.hb-body    { font-size: var(--fs-body);    line-height: var(--lh-base); }
-.hb-body-sm { font-size: var(--fs-body-sm); line-height: var(--lh-base); }
-.hb-caption { font-size: var(--fs-caption); color: var(--fg-muted); }
+.hb-body-lg {
+  font-size: var(--fs-body-lg);
+  line-height: var(--lh-loose);
+}
+.hb-body {
+  font-size: var(--fs-body);
+  line-height: var(--lh-base);
+}
+.hb-body-sm {
+  font-size: var(--fs-body-sm);
+  line-height: var(--lh-base);
+}
+.hb-caption {
+  font-size: var(--fs-caption);
+  color: var(--fg-muted);
+}
 
 /* Tagline treatment — multi-color words on dark surfaces (see Aplicações 2). */
-.hb-tagline       { font-family: var(--font-display); font-weight: 700; line-height: var(--lh-snug); }
-.hb-tagline .word-deus  { color: var(--hb-cyan); }
-.hb-tagline .word-trans { color: var(--hb-green); }
-.hb-tagline .word-vidas { color: var(--hb-orange); }
+.hb-tagline {
+  font-family: var(--font-display);
+  font-weight: 700;
+  line-height: var(--lh-snug);
+}
+.hb-tagline .word-deus {
+  color: var(--hb-cyan);
+}
+.hb-tagline .word-trans {
+  color: var(--hb-green);
+}
+.hb-tagline .word-vidas {
+  color: var(--hb-orange);
+}
 
 /* ============================================================
    "BALÃO" — the brand's signature speech-bubble shape.
@@ -215,13 +330,31 @@ html, body {
   width: 44px;
   height: 28px;
   background: inherit;
-  -webkit-mask: radial-gradient(22px 28px at 50% -2px, transparent 98%, #000 100%);
-          mask: radial-gradient(22px 28px at 50% -2px, transparent 98%, #000 100%);
+  -webkit-mask: radial-gradient(
+    22px 28px at 50% -2px,
+    transparent 98%,
+    #000 100%
+  );
+  mask: radial-gradient(22px 28px at 50% -2px, transparent 98%, #000 100%);
   /* simple triangular tail using clip-path */
   clip-path: path("M0,0 C16,0 18,28 22,28 C26,28 28,0 44,0 Z");
 }
-.hb-balao--tail-right::after { left: auto; right: 12%; transform: none; }
-.hb-balao--orange { background: var(--hb-orange); }
-.hb-balao--green  { background: var(--hb-green); color: var(--hb-blue); }
-.hb-balao--cyan   { background: var(--hb-cyan); }
-.hb-balao--white  { background: var(--hb-white); color: var(--hb-blue); }
+.hb-balao--tail-right::after {
+  left: auto;
+  right: 12%;
+  transform: none;
+}
+.hb-balao--orange {
+  background: var(--hb-orange);
+}
+.hb-balao--green {
+  background: var(--hb-green);
+  color: var(--hb-blue);
+}
+.hb-balao--cyan {
+  background: var(--hb-cyan);
+}
+.hb-balao--white {
+  background: var(--hb-white);
+  color: var(--hb-blue);
+}

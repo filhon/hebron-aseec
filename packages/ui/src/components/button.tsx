@@ -10,60 +10,52 @@ function cn(...inputs: ClassValue[]) {
 }
 
 const buttonVariants = cva(
-  // Base
   [
     "inline-flex items-center justify-center gap-2",
     "font-medium whitespace-nowrap",
     "rounded-[--radius] border border-transparent",
     "transition-all duration-[--transition-fast]",
     "focus-visible:outline-none focus-visible:ring-2",
-    "focus-visible:ring-[--color-ring] focus-visible:ring-offset-2",
+    "focus-visible:ring-[--brand] focus-visible:ring-offset-2",
     "disabled:pointer-events-none disabled:opacity-50",
     "select-none cursor-pointer",
   ],
   {
     variants: {
       variant: {
-        // Azul institucional — ação principal
         default: [
-          "bg-[--color-primary] text-[--color-primary-foreground]",
-          "hover:bg-[--color-primary-hover]",
-          "active:bg-[--color-primary-active]",
+          "bg-[--brand] text-[--brand-fg]",
+          "hover:bg-[--hb-blue-soft]",
+          "active:bg-[--hb-blue-deep]",
           "shadow-[--shadow-xs]",
         ],
-        // Laranja — destaque / chamada para ação secundária
         accent: [
-          "bg-[--color-accent] text-[--color-accent-foreground]",
-          "hover:bg-[--color-accent-hover]",
-          "active:bg-[--color-accent-active]",
+          "bg-[--accent] text-[--fg-invert]",
+          "hover:bg-[--hb-orange-deep]",
+          "active:bg-[--hb-orange-deep]",
           "shadow-[--shadow-xs]",
         ],
-        // Destrutiva
         destructive: [
           "bg-[--color-destructive] text-[--color-destructive-foreground]",
           "hover:bg-[--color-destructive-hover]",
           "shadow-[--shadow-xs]",
         ],
-        // Borda com cor primária
         outline: [
-          "border-[--color-border] bg-transparent text-[--color-foreground]",
-          "hover:border-[--color-primary] hover:text-[--color-primary]",
-          "hover:bg-[--color-primary-muted]",
+          "border-[--border] bg-transparent text-[--fg]",
+          "hover:border-[--brand] hover:text-[--brand]",
+          "hover:bg-[--brand-muted]",
         ],
-        // Borda primária com fundo muted
         secondary: [
-          "bg-[--color-muted] text-[--color-foreground]",
-          "border-[--color-border]",
-          "hover:bg-[--color-subtle]",
+          "bg-[--surface-alt] text-[--fg]",
+          "border-[--border]",
+          "hover:bg-[--hb-gray-100]",
         ],
-        // Sem fundo, sem borda
         ghost: [
-          "bg-transparent text-[--color-foreground]",
-          "hover:bg-[--color-muted] hover:text-[--color-foreground]",
+          "bg-transparent text-[--fg]",
+          "hover:bg-[--surface-alt] hover:text-[--fg]",
         ],
-        // Apenas texto, parece link
         link: [
-          "bg-transparent text-[--color-primary] underline-offset-4",
+          "bg-transparent text-[--brand] underline-offset-4",
           "hover:underline",
           "h-auto px-0 py-0",
         ],
@@ -74,7 +66,6 @@ const buttonVariants = cva(
         md: "h-10 px-4 text-[--text-sm]",
         lg: "h-11 px-5 text-[--text-base]",
         xl: "h-12 px-6 text-[--text-base]",
-        // Ícone apenas — quadrado
         icon: "h-10 w-10 p-0",
         "icon-sm": "h-8 w-8 p-0",
         "icon-lg": "h-12 w-12 p-0",
@@ -91,13 +82,9 @@ export interface ButtonProps
   extends
     React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
-  /** Renderiza como filho (para usar com link, etc.) */
   asChild?: boolean;
-  /** Exibe spinner e desabilita o botão */
   loading?: boolean;
-  /** Ícone à esquerda do texto */
   leftIcon?: React.ReactNode;
-  /** Ícone à direita do texto */
   rightIcon?: React.ReactNode;
 }
 

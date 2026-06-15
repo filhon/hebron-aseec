@@ -19,10 +19,6 @@ function cn(...inputs: ClassValue[]) {
 
 const ToastProvider = ToastPrimitive.Provider;
 
-// ——————————————————————————————————————
-// Viewport (onde os toasts aparecem na tela)
-// ——————————————————————————————————————
-
 const ToastViewport = React.forwardRef<
   React.ElementRef<typeof ToastPrimitive.Viewport>,
   React.ComponentPropsWithoutRef<typeof ToastPrimitive.Viewport>
@@ -42,10 +38,6 @@ const ToastViewport = React.forwardRef<
 ));
 ToastViewport.displayName = ToastPrimitive.Viewport.displayName;
 
-// ——————————————————————————————————————
-// Variantes
-// ——————————————————————————————————————
-
 const toastVariants = cva(
   [
     "group pointer-events-auto relative flex w-full items-start gap-3",
@@ -53,7 +45,6 @@ const toastVariants = cva(
     "border p-4",
     "shadow-[--shadow-lg]",
     "transition-all duration-[--transition-medium]",
-    // Animações de entrada/saída
     "data-[swipe=cancel]:translate-x-0",
     "data-[swipe=end]:translate-x-[var(--radix-toast-swipe-end-x)]",
     "data-[swipe=move]:translate-x-[var(--radix-toast-swipe-move-x)]",
@@ -65,25 +56,22 @@ const toastVariants = cva(
   {
     variants: {
       variant: {
-        default: [
-          "bg-[--color-background] border-[--color-border]",
-          "text-[--color-foreground]",
-        ],
+        default: ["bg-[--bg] border-[--border]", "text-[--fg]"],
         success: [
-          "bg-[--color-support-green-muted] border-[--color-support-green]",
-          "text-[--color-support-green-foreground]",
+          "bg-[--hb-green-muted] border-[--hb-green]",
+          "text-[--hb-green-fg]",
         ],
         destructive: [
           "bg-[--color-destructive-muted] border-[--color-destructive]",
           "text-[--color-destructive]",
         ],
         warning: [
-          "bg-[--color-accent-muted] border-[--color-accent]",
-          "text-[--color-accent]",
+          "bg-[--hb-orange-muted] border-[--accent]",
+          "text-[--accent]",
         ],
         info: [
-          "bg-[--color-support-sky-muted] border-[--color-support-sky]",
-          "text-[--color-support-sky-foreground]",
+          "bg-[--hb-cyan-muted] border-[--hb-cyan]",
+          "text-[--hb-cyan-fg]",
         ],
       },
     },
@@ -93,24 +81,19 @@ const toastVariants = cva(
   },
 );
 
-// Ícones por variante
 const toastIcons: Record<string, React.ReactNode> = {
   success: (
-    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[--color-support-green]" />
+    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[--hb-green]" />
   ),
   destructive: (
     <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-[--color-destructive]" />
   ),
   warning: (
-    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[--color-accent]" />
+    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[--accent]" />
   ),
-  info: <Info className="mt-0.5 h-4 w-4 shrink-0 text-[--color-support-sky]" />,
+  info: <Info className="mt-0.5 h-4 w-4 shrink-0 text-[--hb-cyan]" />,
   default: null,
 };
-
-// ——————————————————————————————————————
-// Toast
-// ——————————————————————————————————————
 
 export interface ToastProps
   extends
@@ -136,10 +119,6 @@ const Toast = React.forwardRef<
 });
 Toast.displayName = ToastPrimitive.Root.displayName;
 
-// ——————————————————————————————————————
-// Partes compostas
-// ——————————————————————————————————————
-
 const ToastAction = React.forwardRef<
   React.ElementRef<typeof ToastPrimitive.Action>,
   React.ComponentPropsWithoutRef<typeof ToastPrimitive.Action>
@@ -148,12 +127,12 @@ const ToastAction = React.forwardRef<
     ref={ref}
     className={cn(
       "inline-flex shrink-0 items-center justify-center",
-      "rounded-[--radius-sm] border border-[--color-border]",
+      "rounded-[--radius-sm] border border-[--border]",
       "bg-transparent px-3 py-1.5",
       "text-[--text-xs] font-medium",
       "transition-colors duration-[--transition-fast]",
-      "hover:bg-[--color-muted]",
-      "focus:outline-none focus:ring-2 focus:ring-[--color-ring] focus:ring-offset-2",
+      "hover:bg-[--surface-alt]",
+      "focus:outline-none focus:ring-2 focus:ring-[--brand] focus:ring-offset-2",
       "disabled:pointer-events-none disabled:opacity-50",
       className,
     )}
@@ -173,10 +152,10 @@ const ToastClose = React.forwardRef<
       "absolute right-2 top-2",
       "flex h-6 w-6 shrink-0 items-center justify-center",
       "rounded-[--radius-sm]",
-      "text-[--color-muted-foreground]",
+      "text-[--fg-muted]",
       "transition-colors duration-[--transition-fast]",
-      "hover:bg-black/10 hover:text-[--color-foreground]",
-      "focus:outline-none focus:ring-2 focus:ring-[--color-ring]",
+      "hover:bg-black/10 hover:text-[--fg]",
+      "focus:outline-none focus:ring-2 focus:ring-[--brand]",
       "opacity-0 group-hover:opacity-100",
       className,
     )}
@@ -217,10 +196,6 @@ const ToastDescription = React.forwardRef<
   />
 ));
 ToastDescription.displayName = ToastPrimitive.Description.displayName;
-
-// ——————————————————————————————————————
-// Tipos utilitários
-// ——————————————————————————————————————
 
 type ToastActionElement = React.ReactElement<typeof ToastAction>;
 

@@ -62,16 +62,52 @@ const CATEGORIES = [
 ];
 
 const ROLES = {
-  anon:        { id: "anon",        label: "Visitante",   shortLabel: "Visitante",   visibilities: ["public"] },
-  submissor:   { id: "submissor",   label: "Submissor",   shortLabel: "Submissor",   visibilities: ["public", "internal"] },
-  diretor:     { id: "diretor",     label: "Diretor",     shortLabel: "Diretor",     visibilities: ["public", "internal", "restricted"] },
-  super_admin: { id: "super_admin", label: "Super admin", shortLabel: "Super admin", visibilities: ["public", "internal", "restricted"], editor: true },
+  anon: {
+    id: "anon",
+    label: "Visitante",
+    shortLabel: "Visitante",
+    visibilities: ["public"],
+  },
+  submissor: {
+    id: "submissor",
+    label: "Submissor",
+    shortLabel: "Submissor",
+    visibilities: ["public", "internal"],
+  },
+  diretor: {
+    id: "diretor",
+    label: "Diretor",
+    shortLabel: "Diretor",
+    visibilities: ["public", "internal", "restricted"],
+  },
+  super_admin: {
+    id: "super_admin",
+    label: "Super admin",
+    shortLabel: "Super admin",
+    visibilities: ["public", "internal", "restricted"],
+    editor: true,
+  },
 };
 
 const VISIBILITY = {
-  public:     { label: "Público",    description: "Visível para qualquer pessoa, sem cadastro.", color: "var(--hb-green)",  ink: "var(--hb-blue)"  },
-  internal:   { label: "Interno",    description: "Requer cadastro aprovado.",                   color: "var(--hb-cyan)",   ink: "var(--hb-blue)"  },
-  restricted: { label: "Restrito",   description: "Apenas papéis autorizados.",                  color: "var(--hb-orange)", ink: "var(--hb-white)" },
+  public: {
+    label: "Público",
+    description: "Visível para qualquer pessoa, sem cadastro.",
+    color: "var(--hb-green)",
+    ink: "var(--hb-blue)",
+  },
+  internal: {
+    label: "Interno",
+    description: "Requer cadastro aprovado.",
+    color: "var(--hb-cyan)",
+    ink: "var(--hb-blue)",
+  },
+  restricted: {
+    label: "Restrito",
+    description: "Apenas papéis autorizados.",
+    color: "var(--hb-orange)",
+    ink: "var(--hb-white)",
+  },
 };
 
 // Mock documents
@@ -80,7 +116,8 @@ const DOCUMENTS = [
     id: "d-01",
     slug: "edital-projetos-anuais-2026",
     title: "Edital de Projetos Anuais 2026",
-    summary: "Diretrizes para submissão de projetos anuais com vigência em janeiro a dezembro de 2026. Inclui janela de submissão, critérios de avaliação e formulário estruturado.",
+    summary:
+      "Diretrizes para submissão de projetos anuais com vigência em janeiro a dezembro de 2026. Inclui janela de submissão, critérios de avaliação e formulário estruturado.",
     category: "editais-anuais",
     visibility: "public",
     type: "edital",
@@ -107,7 +144,8 @@ const DOCUMENTS = [
     id: "d-02",
     slug: "edital-projetos-pontuais-permanente",
     title: "Edital de Projetos Pontuais",
-    summary: "Submissão contínua para projetos pontuais e emergenciais. Avaliação mensal pela diretoria; sem janela fixa.",
+    summary:
+      "Submissão contínua para projetos pontuais e emergenciais. Avaliação mensal pela diretoria; sem janela fixa.",
     category: "editais-pontuais",
     visibility: "public",
     type: "edital",
@@ -134,7 +172,8 @@ const DOCUMENTS = [
     id: "d-03",
     slug: "edital-reserva-flats-2026-s1",
     title: "Edital de Reserva de Flats — 1º semestre 2026",
-    summary: "Critérios de elegibilidade, scoring e janela de submissão para reserva nos flats institucionais da Hebron ASEEC.",
+    summary:
+      "Critérios de elegibilidade, scoring e janela de submissão para reserva nos flats institucionais da Hebron ASEEC.",
     category: "editais-flats",
     visibility: "public",
     type: "edital",
@@ -161,7 +200,8 @@ const DOCUMENTS = [
     id: "d-04",
     slug: "estatuto-social-2024",
     title: "Estatuto Social — Hebron ASEEC",
-    summary: "Documento estatutário aprovado em assembleia geral. Define finalidades, governança e estrutura organizacional.",
+    summary:
+      "Documento estatutário aprovado em assembleia geral. Define finalidades, governança e estrutura organizacional.",
     category: "juridico-estatuto",
     visibility: "public",
     type: "document",
@@ -180,7 +220,8 @@ const DOCUMENTS = [
     id: "d-05",
     slug: "ata-reuniao-mensal-2026-04",
     title: "Ata da reunião mensal — abril/2026",
-    summary: "Decisões da reunião ordinária da diretoria de 02 de abril de 2026. Inclui homologação de projetos pontuais e revisão orçamentária do trimestre.",
+    summary:
+      "Decisões da reunião ordinária da diretoria de 02 de abril de 2026. Inclui homologação de projetos pontuais e revisão orçamentária do trimestre.",
     category: "juridico-estatuto",
     visibility: "internal",
     type: "document",
@@ -200,7 +241,8 @@ const DOCUMENTS = [
     id: "d-06",
     slug: "politica-conflito-interesses",
     title: "Política de conflito de interesses",
-    summary: "Procedimentos para identificação, declaração e tratamento de conflitos de interesse entre diretores, conselheiros e colaboradores.",
+    summary:
+      "Procedimentos para identificação, declaração e tratamento de conflitos de interesse entre diretores, conselheiros e colaboradores.",
     category: "juridico-politicas",
     visibility: "internal",
     type: "document",
@@ -219,7 +261,8 @@ const DOCUMENTS = [
     id: "d-07",
     slug: "politica-protecao-dados-lgpd",
     title: "Política de proteção de dados (LGPD)",
-    summary: "Compromissos da Hebron ASEEC com a Lei Geral de Proteção de Dados, incluindo bases legais, retenção e direitos do titular.",
+    summary:
+      "Compromissos da Hebron ASEEC com a Lei Geral de Proteção de Dados, incluindo bases legais, retenção e direitos do titular.",
     category: "juridico-politicas",
     visibility: "public",
     type: "document",
@@ -239,7 +282,8 @@ const DOCUMENTS = [
     id: "d-08",
     slug: "cnd-receita-federal-2026-04",
     title: "Certidão Negativa de Débitos — Receita Federal",
-    summary: "Certidão de regularidade fiscal junto à Receita Federal do Brasil. Validade de 180 dias a partir da data de emissão.",
+    summary:
+      "Certidão de regularidade fiscal junto à Receita Federal do Brasil. Validade de 180 dias a partir da data de emissão.",
     category: "certidoes-federais",
     visibility: "public",
     type: "document",
@@ -259,7 +303,8 @@ const DOCUMENTS = [
     id: "d-09",
     slug: "cnd-fgts-2026-03",
     title: "Certidão de regularidade do FGTS",
-    summary: "Certidão de regularidade junto ao FGTS, emitida pela Caixa Econômica Federal.",
+    summary:
+      "Certidão de regularidade junto ao FGTS, emitida pela Caixa Econômica Federal.",
     category: "certidoes-federais",
     visibility: "public",
     type: "document",
@@ -279,7 +324,8 @@ const DOCUMENTS = [
     id: "d-10",
     slug: "cargo-diretor-gestor",
     title: "Descrição de cargo — Diretor Gestor",
-    summary: "Atribuições, designações especiais e fluxo de aprovações do diretor gestor. Inclui rotinas mensais e responsabilidades de governança.",
+    summary:
+      "Atribuições, designações especiais e fluxo de aprovações do diretor gestor. Inclui rotinas mensais e responsabilidades de governança.",
     category: "cargos",
     visibility: "internal",
     type: "document",
@@ -299,7 +345,8 @@ const DOCUMENTS = [
     id: "d-11",
     slug: "cargo-colaborador-financeiro",
     title: "Descrição de cargo — Colaborador Financeiro",
-    summary: "Responsabilidades operacionais no módulo Financeiro, incluindo conciliação bancária, registro de despesas e suporte ao diretor gestor.",
+    summary:
+      "Responsabilidades operacionais no módulo Financeiro, incluindo conciliação bancária, registro de despesas e suporte ao diretor gestor.",
     category: "cargos",
     visibility: "internal",
     type: "document",
@@ -318,7 +365,8 @@ const DOCUMENTS = [
     id: "d-12",
     slug: "sop-aprovacao-pagamentos",
     title: "SOP — Aprovação e autorização de pagamentos",
-    summary: "Procedimento operacional padrão para o fluxo de governança dual: aprovação pelo diretor gestor e autorização pelo diretor autorizador no banco.",
+    summary:
+      "Procedimento operacional padrão para o fluxo de governança dual: aprovação pelo diretor gestor e autorização pelo diretor autorizador no banco.",
     category: "sops-financeiro",
     visibility: "internal",
     type: "document",
@@ -338,7 +386,8 @@ const DOCUMENTS = [
     id: "d-13",
     slug: "sop-prestacao-contas-projetos",
     title: "SOP — Prestação de contas de projetos",
-    summary: "Modelo e cadência de prestação de contas para projetos aprovados. Inclui orientações sobre anexos (notas fiscais, recibos, registros fotográficos).",
+    summary:
+      "Modelo e cadência de prestação de contas para projetos aprovados. Inclui orientações sobre anexos (notas fiscais, recibos, registros fotográficos).",
     category: "sops-projetos",
     visibility: "public",
     type: "document",
@@ -357,7 +406,8 @@ const DOCUMENTS = [
     id: "d-14",
     slug: "sop-checkin-flats",
     title: "SOP — Check-in nos flats institucionais",
-    summary: "Orientações para hóspedes aprovados sobre check-in presencial, regras de convivência e contato com o porteiro.",
+    summary:
+      "Orientações para hóspedes aprovados sobre check-in presencial, regras de convivência e contato com o porteiro.",
     category: "sops-flats",
     visibility: "public",
     type: "document",
@@ -376,7 +426,8 @@ const DOCUMENTS = [
     id: "d-15",
     slug: "balanco-patrimonial-2025",
     title: "Balanço patrimonial — exercício 2025",
-    summary: "Demonstrações contábeis do exercício de 2025, com parecer do conselho fiscal e relatório de auditoria independente.",
+    summary:
+      "Demonstrações contábeis do exercício de 2025, com parecer do conselho fiscal e relatório de auditoria independente.",
     category: "fiscal",
     visibility: "public",
     type: "document",
@@ -395,7 +446,8 @@ const DOCUMENTS = [
     id: "d-16",
     slug: "matriz-decisoes-confidenciais-2026",
     title: "Matriz de decisões confidenciais — 2026",
-    summary: "Registro restrito das decisões estratégicas da diretoria que envolvem dados sensíveis de parceiros e instituições beneficiárias.",
+    summary:
+      "Registro restrito das decisões estratégicas da diretoria que envolvem dados sensíveis de parceiros e instituições beneficiárias.",
     category: "governanca",
     visibility: "restricted",
     type: "document",
@@ -420,11 +472,24 @@ const VERSION_HISTORY = {
       version: 3,
       date: "2026-01-12",
       author: "Diretoria Hebron ASEEC",
-      summary: "Atualização do cronograma e inclusão de novo critério de avaliação (impacto regional).",
+      summary:
+        "Atualização do cronograma e inclusão de novo critério de avaliação (impacto regional).",
       changes: [
-        { type: "edit", section: "Cronograma de submissão", note: "Janela ajustada para 01/fev–15/mar." },
-        { type: "add",  section: "Critérios de avaliação", note: "Novo critério: impacto regional (peso 10%)." },
-        { type: "edit", section: "Anexos obrigatórios", note: "Carta de recomendação passou a ser opcional." },
+        {
+          type: "edit",
+          section: "Cronograma de submissão",
+          note: "Janela ajustada para 01/fev–15/mar.",
+        },
+        {
+          type: "add",
+          section: "Critérios de avaliação",
+          note: "Novo critério: impacto regional (peso 10%).",
+        },
+        {
+          type: "edit",
+          section: "Anexos obrigatórios",
+          note: "Carta de recomendação passou a ser opcional.",
+        },
       ],
       current: true,
     },
@@ -432,9 +497,14 @@ const VERSION_HISTORY = {
       version: 2,
       date: "2025-12-08",
       author: "Filipe Honório",
-      summary: "Revisão ortográfica e ajustes de formatação após retorno da diretoria.",
+      summary:
+        "Revisão ortográfica e ajustes de formatação após retorno da diretoria.",
       changes: [
-        { type: "edit", section: "Geral", note: "Correções tipográficas e padronização de capitalização." },
+        {
+          type: "edit",
+          section: "Geral",
+          note: "Correções tipográficas e padronização de capitalização.",
+        },
       ],
     },
     {
@@ -443,7 +513,11 @@ const VERSION_HISTORY = {
       author: "Diretoria Hebron ASEEC",
       summary: "Publicação inicial do edital para o ciclo 2026.",
       changes: [
-        { type: "add", section: "Documento", note: "Versão inicial publicada." },
+        {
+          type: "add",
+          section: "Documento",
+          note: "Versão inicial publicada.",
+        },
       ],
     },
   ],
@@ -451,7 +525,7 @@ const VERSION_HISTORY = {
 
 // Long-form Markdown bodies (rendered as HTML)
 const DOC_CONTENT = {
-  "atas": `
+  atas: `
     <h2>Reunião mensal da diretoria — abril/2026</h2>
     <p class="meta">Data: 02 de abril de 2026 · Local: sede Hebron ASEEC · Presidência: Pres. Josimar Henrique</p>
     <h3>Presentes</h3>
@@ -474,7 +548,7 @@ const DOC_CONTENT = {
       <li>Próxima reunião ordinária: 07 de maio de 2026.</li>
     </ul>
   `,
-  "lgpd": `
+  lgpd: `
     <h2>Política de proteção de dados pessoais</h2>
     <p class="meta">Vigência a partir de 01 de agosto de 2024 · Última revisão: 30 de janeiro de 2026</p>
     <p>A Hebron ASEEC tem o compromisso de tratar dados pessoais com responsabilidade, transparência e fundamento em base legal adequada. Esta política descreve como coletamos, usamos, armazenamos e protegemos os dados que nos são confiados por submissores, beneficiários, colaboradores e parceiros.</p>
@@ -522,7 +596,7 @@ const DOC_CONTENT = {
     <h3>Princípio inviolável</h3>
     <p>O diretor gestor <strong>nunca</strong> autoriza pagamentos no banco — essa responsabilidade é, por desenho, do diretor autorizador. Esta separação é a primeira linha da governança dual da Hebron ASEEC.</p>
   `,
-  "pagamentos": `
+  pagamentos: `
     <h2>Aprovação e autorização de pagamentos</h2>
     <p class="meta">Procedimento operacional padrão · v4 · revisado em 15/mar/2026</p>
     <p>Este SOP descreve o fluxo dual de governança financeira da Hebron ASEEC. A regra é inviolável: a pessoa que <strong>aprova</strong> nunca pode ser a mesma que <strong>autoriza</strong> no banco. Duas pessoas, duas camadas — sempre.</p>
@@ -544,7 +618,7 @@ const DOC_CONTENT = {
     <h3>Exceções</h3>
     <p>Pagamentos urgentes (acima de R$ 50.000 ou com prazo inferior a 48h) seguem o mesmo fluxo, porém com priorização e notificação imediata por SMS interno aos envolvidos.</p>
   `,
-  "matriz": `
+  matriz: `
     <h2>Matriz de decisões confidenciais — 2026</h2>
     <p class="meta">Restrito · Versão 7 · revisado em 22/abr/2026</p>
     <p>Este documento consolida decisões estratégicas que envolvem partes externas, parcerias em negociação ou dados sensíveis. O acesso é restrito a super_admins, diretores e conselheiros mediante registro no audit log.</p>
@@ -560,10 +634,27 @@ const DOC_CONTENT = {
 
 // Bible verses for empty states (BRAIN.md insists)
 const VERSES = {
-  empty: { ref: "Provérbios 25:11", text: "Como maçãs de ouro em salvas de prata, assim é a palavra dita a seu tempo." },
-  search: { ref: "Mateus 7:7", text: "Pedi, e dar-se-vos-á; buscai, e encontrareis." },
-  archive: { ref: "Lucas 12:34", text: "Onde estiver o vosso tesouro, aí estará também o vosso coração." },
+  empty: {
+    ref: "Provérbios 25:11",
+    text: "Como maçãs de ouro em salvas de prata, assim é a palavra dita a seu tempo.",
+  },
+  search: {
+    ref: "Mateus 7:7",
+    text: "Pedi, e dar-se-vos-á; buscai, e encontrareis.",
+  },
+  archive: {
+    ref: "Lucas 12:34",
+    text: "Onde estiver o vosso tesouro, aí estará também o vosso coração.",
+  },
 };
 
 // Expose
-Object.assign(window, { CATEGORIES, ROLES, VISIBILITY, DOCUMENTS, VERSION_HISTORY, DOC_CONTENT, VERSES });
+Object.assign(window, {
+  CATEGORIES,
+  ROLES,
+  VISIBILITY,
+  DOCUMENTS,
+  VERSION_HISTORY,
+  DOC_CONTENT,
+  VERSES,
+});

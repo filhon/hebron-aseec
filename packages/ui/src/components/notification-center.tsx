@@ -10,32 +10,18 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
-// ——————————————————————————————————————
-// Types
-// ——————————————————————————————————————
-
 type FilterTab = "all" | "unread";
 
 export interface NotificationCenterProps {
   notifications: NotificationItem[];
-  /** Total de registros no banco (para paginação) */
   total: number;
-  /** Indica se está carregando mais notificações */
   isLoadingMore: boolean;
-  /** Indica se há mais páginas a carregar */
   hasMore: boolean;
-  /** Callback para carregar mais */
   onLoadMore: () => void;
-  /** Marca uma notificação como lida e navega para o destino */
   onRead: (id: string, href?: string) => void;
-  /** Marca todas as visíveis como lidas */
   onMarkAllRead: () => void;
   className?: string;
 }
-
-// ——————————————————————————————————————
-// Helpers
-// ——————————————————————————————————————
 
 function formatDate(createdAt: string): string {
   const date = new Date(createdAt);
@@ -64,10 +50,6 @@ function getHrefFromPayload(
   return typeof href === "string" ? href : undefined;
 }
 
-// ——————————————————————————————————————
-// NotificationRow
-// ——————————————————————————————————————
-
 interface NotificationRowProps {
   notification: NotificationItem;
   onRead: (id: string, href?: string) => void;
@@ -83,11 +65,11 @@ function NotificationRow({ notification: n, onRead }: NotificationRowProps) {
         onClick={() => onRead(n.id, href)}
         className={cn(
           "relative w-full px-6 py-4 text-left",
-          "border-b border-[--color-border] last:border-b-0",
+          "border-b border-[--border] last:border-b-0",
           "transition-colors duration-[--transition-fast]",
-          "hover:bg-[--color-muted] focus-visible:bg-[--color-muted]",
+          "hover:bg-[--surface-alt] focus-visible:bg-[--surface-alt]",
           "focus-visible:outline-none",
-          isUnread && "bg-[--color-primary]/[0.04]",
+          isUnread && "bg-[--brand]/4",
         )}
         aria-label={
           isUnread
@@ -95,11 +77,10 @@ function NotificationRow({ notification: n, onRead }: NotificationRowProps) {
             : `Notificação: ${n.title}`
         }
       >
-        {/* Unread dot */}
         {isUnread && (
           <span
             aria-hidden="true"
-            className="absolute left-3 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-[--color-primary]"
+            className="absolute left-3 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full bg-[--brand]"
           />
         )}
 
@@ -107,7 +88,7 @@ function NotificationRow({ notification: n, onRead }: NotificationRowProps) {
           <div className="min-w-0 flex-1">
             <p
               className={cn(
-                "text-[--text-sm] text-[--color-foreground]",
+                "text-[--text-sm]",
                 isUnread
                   ? "font-[--font-weight-semibold]"
                   : "font-[--font-weight-normal]",
@@ -116,22 +97,20 @@ function NotificationRow({ notification: n, onRead }: NotificationRowProps) {
               {n.title}
             </p>
             {n.body && (
-              <p className="mt-1 line-clamp-3 text-[--text-sm] text-[--color-muted-foreground]">
-                {n.body}
-              </p>
+              <p className="mt-1 line-clamp-3 text-[--text-sm]">{n.body}</p>
             )}
           </div>
 
           <div className="flex shrink-0 flex-col items-end gap-1">
             <time
               dateTime={n.createdAt}
-              className="whitespace-nowrap text-[--text-xs] text-[--color-muted-foreground]"
+              className="whitespace-nowrap text-[--text-xs]"
             >
               {formatDate(n.createdAt)}
             </time>
             {!isUnread && (
               <Check
-                className="h-3.5 w-3.5 text-[--color-muted-foreground] opacity-50"
+                className="h-3.5 w-3.5 text-[--fg-muted] opacity-50"
                 aria-hidden="true"
               />
             )}
@@ -141,10 +120,6 @@ function NotificationRow({ notification: n, onRead }: NotificationRowProps) {
     </li>
   );
 }
-
-// ——————————————————————————————————————
-// NotificationCenter
-// ——————————————————————————————————————
 
 export function NotificationCenter({
   notifications,
@@ -167,25 +142,19 @@ export function NotificationCenter({
   return (
     <div
       className={cn(
-        "flex flex-col rounded-[--radius-lg] border border-[--color-border]",
-        "bg-[--color-background] shadow-[--shadow-sm]",
+        "flex flex-col rounded-[--radius-lg] border border-[--border]",
+        "bg-[--bg] shadow-[--shadow-sm]",
         className,
       )}
     >
-      {/* ── Header ───────────────────────────────────────────── */}
-      <div className="flex items-center justify-between border-b border-[--color-border] px-6 py-4">
+      <div className="flex items-center justify-between border-b border-[--border] px-6 py-4">
         <div className="flex items-center gap-3">
-          <Bell
-            className="h-5 w-5 text-[--color-muted-foreground]"
-            aria-hidden="true"
-          />
-          <h1 className="text-[--text-base] font-[--font-weight-semibold] text-[--color-foreground]">
+          <Bell className="h-5 w-5 text-[--fg-muted]" aria-hidden="true" />
+          <h1 className="text-[--text-base] font-[--font-weight-semibold]">
             Notificações
           </h1>
           {total > 0 && (
-            <span className="text-[--text-xs] text-[--color-muted-foreground]">
-              {total} no total
-            </span>
+            <span className="text-[--text-xs]">{total} no total</span>
           )}
         </div>
 
@@ -194,10 +163,10 @@ export function NotificationCenter({
             onClick={onMarkAllRead}
             className={cn(
               "flex items-center gap-1.5 rounded-[--radius] px-3 py-1.5",
-              "text-[--text-xs] font-[--font-weight-medium] text-[--color-muted-foreground]",
-              "border border-[--color-border]",
+              "text-[--text-xs] font-[--font-weight-medium]",
+              "border border-[--border]",
               "transition-colors duration-[--transition-fast]",
-              "hover:border-[--color-primary] hover:text-[--color-primary]",
+              "hover:border-[--brand] hover:text-[--brand]",
             )}
           >
             <CheckCheck className="h-3.5 w-3.5" aria-hidden="true" />
@@ -206,9 +175,8 @@ export function NotificationCenter({
         )}
       </div>
 
-      {/* ── Tabs ─────────────────────────────────────────────── */}
       <div
-        className="flex gap-0 border-b border-[--color-border] px-6"
+        className="flex gap-0 border-b border-[--border] px-6"
         role="tablist"
         aria-label="Filtros de notificação"
       >
@@ -221,10 +189,10 @@ export function NotificationCenter({
             className={cn(
               "relative -mb-px flex items-center gap-2 border-b-2 py-3 pr-4 text-[--text-sm]",
               "transition-colors duration-[--transition-fast]",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--color-ring] focus-visible:ring-offset-1",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--brand] focus-visible:ring-offset-1",
               activeTab === tab
-                ? "border-[--color-primary] text-[--color-primary] font-[--font-weight-semibold]"
-                : "border-transparent text-[--color-muted-foreground] hover:text-[--color-foreground]",
+                ? "border-[--brand] text-[--brand] font-[--font-weight-semibold]"
+                : "border-transparent text-[--fg-muted] hover:text-[--fg]",
             )}
           >
             {tab === "all" ? "Todas" : "Não lidas"}
@@ -234,8 +202,8 @@ export function NotificationCenter({
                   "inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1",
                   "text-[10px] font-[--font-weight-semibold] leading-none",
                   activeTab === "unread"
-                    ? "bg-[--color-primary] text-white"
-                    : "bg-[--color-muted] text-[--color-muted-foreground]",
+                    ? "bg-[--brand] text-white"
+                    : "bg-[--surface-alt] text-[--fg-muted]",
                 )}
               >
                 {unreadCount}
@@ -245,7 +213,6 @@ export function NotificationCenter({
         ))}
       </div>
 
-      {/* ── List ─────────────────────────────────────────────── */}
       <div
         role="tabpanel"
         aria-label={
@@ -258,15 +225,15 @@ export function NotificationCenter({
         {displayed.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
             <Bell
-              className="h-10 w-10 text-[--color-muted-foreground] opacity-30"
+              className="h-10 w-10 text-[--fg-muted] opacity-30"
               aria-hidden="true"
             />
-            <p className="text-[--text-base] font-[--font-weight-medium] text-[--color-foreground]">
+            <p className="text-[--text-base] font-[--font-weight-medium]">
               {activeTab === "unread"
                 ? "Tudo em dia"
                 : "Nenhuma notificação ainda"}
             </p>
-            <p className="max-w-xs text-[--text-sm] text-[--color-muted-foreground]">
+            <p className="max-w-xs text-[--text-sm]">
               {activeTab === "unread"
                 ? "Você não tem notificações não lidas."
                 : '"Espera pelo Senhor; tem bom ânimo e ele fortalecerá o teu coração." — Sl 27.14'}
@@ -281,20 +248,19 @@ export function NotificationCenter({
         )}
       </div>
 
-      {/* ── Load more ────────────────────────────────────────── */}
       {hasMore && activeTab === "all" && (
-        <div className="border-t border-[--color-border] px-6 py-4">
+        <div className="border-t border-[--border] px-6 py-4">
           <button
             onClick={onLoadMore}
             disabled={isLoadingMore}
             className={cn(
               "flex w-full items-center justify-center gap-2 rounded-[--radius]",
-              "border border-[--color-border] px-4 py-2",
-              "text-[--text-sm] text-[--color-muted-foreground]",
+              "border border-[--border] px-4 py-2",
+              "text-[--text-sm]",
               "transition-colors duration-[--transition-fast]",
-              "hover:border-[--color-primary] hover:text-[--color-primary]",
+              "hover:border-[--brand] hover:text-[--brand]",
               "disabled:cursor-not-allowed disabled:opacity-50",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--color-ring]",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--brand]",
             )}
           >
             {isLoadingMore ? (

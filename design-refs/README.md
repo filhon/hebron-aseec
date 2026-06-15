@@ -6,10 +6,10 @@
 
 ## O que há aqui
 
-| App | Pasta | Telas incluídas |
-|---|---|---|
-| Admin | `design-refs/admin/` | overview, users, invites, audit-meetings, settings |
-| Documentos | `design-refs/documentos/` | público (home, doc, edital, busca), editorial |
+| App        | Pasta                     | Telas incluídas                                                                             |
+| ---------- | ------------------------- | ------------------------------------------------------------------------------------------- |
+| Admin      | `design-refs/admin/`      | overview, users, invites, audit-meetings, settings                                          |
+| Documentos | `design-refs/documentos/` | público (home, doc, edital, busca), editorial                                               |
 | Financeiro | `design-refs/financeiro/` | dashboard, lançamentos, contas a pagar, conciliação, importação, orçamento, plano de contas |
 
 > As referências dos demais apps (Tarefas, Intranet, Plataforma, Flats, Rádio) serão geradas no Claude Design e adicionadas aqui em pastas com o **mesmo nome do app** (`design-refs/<app>/`). Um prompt de UI só tem referência se a pasta do app existir.

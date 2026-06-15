@@ -7,33 +7,26 @@ function cn(...inputs: ClassValue[]) {
 }
 
 export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
-  /** Estado de erro — aplica borda vermelha */
   hasError?: boolean;
-  /** Ícone ou adorno à esquerda do campo */
   leftAdornment?: React.ReactNode;
-  /** Ícone ou adorno à direita do campo */
   rightAdornment?: React.ReactNode;
 }
 
 const inputBaseClasses = [
   "flex w-full",
-  "rounded-[--radius] border border-[--color-border]",
-  "bg-[--color-input-bg] text-[--color-foreground]",
+  "rounded-[--radius] border border-[--border]",
+  "bg-[--bg-alt] text-[--fg]",
   "px-3 py-2",
-  "text-[--text-sm] font-[--font-ui]",
+  "text-[--text-sm] font-[--font-body]",
   "leading-[--leading-normal]",
-  "placeholder:text-[--color-muted-foreground]",
+  "placeholder:text-[--fg-muted]",
   "transition-colors duration-[--transition-fast]",
-  // Hover
-  "hover:border-[--color-primary]/50",
-  // Focus
+  "hover:border-[--brand]/50",
   "focus-visible:outline-none",
-  "focus-visible:border-[--color-primary]",
-  "focus-visible:ring-2 focus-visible:ring-[--color-ring]/20",
-  // Disabled
-  "disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-[--color-muted]",
-  // File input
-  "file:border-0 file:bg-transparent file:text-[--text-sm] file:font-medium file:text-[--color-foreground]",
+  "focus-visible:border-[--brand]",
+  "focus-visible:ring-2 focus-visible:ring-[--brand]/20",
+  "disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-[--surface-alt]",
+  "file:border-0 file:bg-transparent file:text-[--text-sm] file:font-medium file:text-[--fg]",
 ].join(" ");
 
 const inputErrorClasses = [
@@ -43,11 +36,6 @@ const inputErrorClasses = [
   "focus-visible:ring-[--color-destructive]/20",
 ].join(" ");
 
-/**
- * Campo de entrada de texto básico.
- *
- * Para formulários, use em conjunto com `FormField`.
- */
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
   (
     {
@@ -82,7 +70,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
     return (
       <div className="relative flex items-center">
         {leftAdornment && (
-          <div className="pointer-events-none absolute left-3 flex items-center text-[--color-muted-foreground]">
+          <div className="pointer-events-none absolute left-3 flex items-center text-[--fg-muted]">
             {leftAdornment}
           </div>
         )}
@@ -100,7 +88,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
           {...props}
         />
         {rightAdornment && (
-          <div className="pointer-events-none absolute right-3 flex items-center text-[--color-muted-foreground]">
+          <div className="pointer-events-none absolute right-3 flex items-center text-[--fg-muted]">
             {rightAdornment}
           </div>
         )}

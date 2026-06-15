@@ -10,7 +10,6 @@ function cn(...inputs: ClassValue[]) {
 export interface ErrorStateProps {
   title?: string;
   description?: string;
-  /** Error object or message string for additional context */
   error?: Error | string;
   action?: React.ReactNode;
   className?: string;
@@ -42,13 +41,11 @@ export function ErrorState({
       </div>
 
       <div className="max-w-sm space-y-1">
-        <h3 className="text-[--text-base] font-[--font-weight-semibold] text-[--color-foreground]">
+        <h3 className="text-[--text-base] font-[--font-weight-semibold]">
           {title}
         </h3>
         {displayDescription && (
-          <p className="text-[--text-sm] text-[--color-muted-foreground]">
-            {displayDescription}
-          </p>
+          <p className="text-[--text-sm]">{displayDescription}</p>
         )}
       </div>
 

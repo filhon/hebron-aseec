@@ -18,9 +18,7 @@ export interface EmptyStateProps {
   description?: string;
   icon?: LucideIcon;
   action?: React.ReactNode;
-  /** Citação bíblica específica para este estado vazio */
   quote?: BibleQuote;
-  /** Oculta qualquer citação bíblica */
   hideQuote?: boolean;
   className?: string;
 }
@@ -48,32 +46,23 @@ export function EmptyState({
         className,
       )}
     >
-      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[--color-muted]">
-        <Icon
-          className="h-8 w-8 text-[--color-muted-foreground]"
-          aria-hidden="true"
-        />
+      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[--surface-alt]">
+        <Icon className="h-8 w-8 text-[--fg-muted]" aria-hidden="true" />
       </div>
 
       <div className="max-w-sm space-y-2">
-        <h3 className="text-[--text-lg] font-[--font-weight-semibold] text-[--color-foreground]">
+        <h3 className="text-[--text-lg] font-[--font-weight-semibold]">
           {title}
         </h3>
-        {description && (
-          <p className="text-[--text-sm] text-[--color-muted-foreground]">
-            {description}
-          </p>
-        )}
+        {description && <p className="text-[--text-sm]">{description}</p>}
       </div>
 
       {action && <div>{action}</div>}
 
       {!hideQuote && (
-        <blockquote className="max-w-xs border-l-2 border-[--color-border] pl-4 text-left">
-          <p className="text-[--text-sm] italic text-[--color-muted-foreground]">
-            "{displayQuote.text}"
-          </p>
-          <cite className="mt-1 block text-[--text-xs] font-[--font-weight-medium] text-[--color-muted-foreground] not-italic">
+        <blockquote className="max-w-xs border-l-2 border-[--border] pl-4 text-left">
+          <p className="italic text-[--fg-muted]">"{displayQuote.text}"</p>
+          <cite className="mt-1 block font-[--font-weight-medium] text-[--fg-muted] not-italic">
             — {displayQuote.reference}
           </cite>
         </blockquote>
