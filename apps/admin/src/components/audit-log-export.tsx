@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { Download } from "lucide-react";
+import { Button } from "@hebron/ui";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -51,11 +52,13 @@ export function AuditLogExport({
   }
 
   return (
-    <button
+    <Button
       type="button"
+      variant="outline"
+      size="sm"
       onClick={handleExport}
       disabled={exporting || entries.length === 0}
-      className="hb-btn hb-btn-secondary hb-btn-sm"
+      className="rounded-full border-[--brand] text-[--brand]"
       title={
         entries.length === 0
           ? "Sem dados para exportar"
@@ -64,7 +67,7 @@ export function AuditLogExport({
     >
       <Download size={14} aria-hidden="true" />
       {exporting ? "Exportando…" : "Exportar CSV"}
-    </button>
+    </Button>
   );
 }
 

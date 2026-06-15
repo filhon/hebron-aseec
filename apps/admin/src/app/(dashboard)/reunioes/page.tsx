@@ -2,6 +2,7 @@ import { db } from "@hebron/db/client";
 import { eq, asc, desc, or } from "drizzle-orm";
 import { users, meetingSessions } from "@hebron/db/schema";
 import { Plus, CalendarDays, FileText, Mail, Download } from "lucide-react";
+import { Button } from "@hebron/ui";
 
 // ─── DB ───────────────────────────────────────────────────────────────────────
 
@@ -116,10 +117,10 @@ export default async function ReunioesPage({
           </p>
         </div>
         <div className="hb-page-header-actions">
-          <button className="hb-btn hb-btn-primary hb-btn-sm" type="button">
+          <Button size="sm" type="button" className="rounded-full">
             <Plus size={14} aria-hidden="true" />
             Nova reunião
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -142,14 +143,19 @@ export default async function ReunioesPage({
             </div>
           </div>
           <div className="hb-next-meeting-banner-actions">
-            <button className="hb-btn hb-btn-secondary hb-btn-sm" type="button">
+            <Button
+              variant="outline"
+              size="sm"
+              type="button"
+              className="rounded-full border-[--brand] text-[--brand]"
+            >
               <FileText size={14} aria-hidden="true" />
               Ver pauta
-            </button>
-            <button className="hb-btn hb-btn-primary hb-btn-sm" type="button">
+            </Button>
+            <Button size="sm" type="button" className="rounded-full">
               <Mail size={14} aria-hidden="true" />
               Convocar
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -233,37 +239,40 @@ export default async function ReunioesPage({
                 <div className="hb-meeting-actions">
                   {isUpcoming ? (
                     <>
-                      <button
-                        className="hb-btn hb-btn-primary hb-btn-sm"
-                        type="button"
-                      >
+                      <Button size="sm" type="button" className="rounded-full">
                         <FileText size={13} aria-hidden="true" />
                         Editar pauta
-                      </button>
-                      <button
-                        className="hb-btn hb-btn-ghost hb-btn-sm"
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         type="button"
+                        className="rounded-full"
                       >
                         <Mail size={13} aria-hidden="true" />
                         Reconvocar
-                      </button>
+                      </Button>
                     </>
                   ) : (
                     <>
-                      <button
-                        className="hb-btn hb-btn-secondary hb-btn-sm"
+                      <Button
+                        variant="outline"
+                        size="sm"
                         type="button"
+                        className="rounded-full border-[--brand] text-[--brand]"
                       >
                         <FileText size={13} aria-hidden="true" />
                         Ver ata
-                      </button>
-                      <button
-                        className="hb-btn hb-btn-ghost hb-btn-sm"
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         type="button"
+                        className="rounded-full"
                       >
                         <Download size={13} aria-hidden="true" />
                         Baixar PDF
-                      </button>
+                      </Button>
                     </>
                   )}
                 </div>

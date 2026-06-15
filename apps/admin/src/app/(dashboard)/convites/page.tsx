@@ -6,6 +6,7 @@ import { eq, desc } from "drizzle-orm";
 import { users } from "@hebron/db/schema";
 import { invitations } from "@hebron/db/schema";
 import { Plus, Mail, RotateCcw } from "lucide-react";
+import { Button } from "@hebron/ui";
 import { revokeInvitation, sendInvitation } from "../../../actions/invitations";
 
 // ─── DB ───────────────────────────────────────────────────────────────────────
@@ -195,10 +196,12 @@ export default async function ConvitesPage({
           </p>
         </div>
         <div className="hb-page-header-actions">
-          <a href="/convites/novo" className="hb-btn hb-btn-primary hb-btn-sm">
-            <Plus size={14} aria-hidden="true" />
-            Novo convite
-          </a>
+          <Button asChild size="sm" className="rounded-full">
+            <a href="/convites/novo">
+              <Plus size={14} aria-hidden="true" />
+              Novo convite
+            </a>
+          </Button>
         </div>
       </div>
 
@@ -228,7 +231,7 @@ export default async function ConvitesPage({
             borderRadius: 12,
             padding: "12px 18px",
             fontSize: 13.5,
-            color: "#b8331a",
+            color: "var(--hb-red)",
             marginBottom: 16,
           }}
         >
@@ -271,13 +274,12 @@ export default async function ConvitesPage({
               <cite className="hb-empty-cite">— Marcos 16:15</cite>
             </div>
             <div style={{ marginTop: 18 }}>
-              <a
-                href="/convites/novo"
-                className="hb-btn hb-btn-primary hb-btn-sm"
-              >
-                <Plus size={14} aria-hidden="true" />
-                Novo convite
-              </a>
+              <Button asChild size="sm" className="rounded-full">
+                <a href="/convites/novo">
+                  <Plus size={14} aria-hidden="true" />
+                  Novo convite
+                </a>
+              </Button>
             </div>
           </div>
         ) : (
@@ -303,7 +305,7 @@ export default async function ConvitesPage({
                       <div className="hb-user-cell">
                         <div
                           className="hb-avatar hb-avatar-sm"
-                          style={{ background: "#07b4e7" }}
+                          style={{ background: "var(--hb-cyan)" }}
                           aria-hidden="true"
                         >
                           <Mail size={13} />
@@ -321,13 +323,18 @@ export default async function ConvitesPage({
                           </span>
                         ))}
                         {roles.length === 0 && (
-                          <span style={{ fontSize: 12.5, color: "#b7bdd0" }}>
+                          <span
+                            style={{
+                              fontSize: 12.5,
+                              color: "var(--fg-subtle)",
+                            }}
+                          >
                             —
                           </span>
                         )}
                       </div>
                     </td>
-                    <td style={{ color: "#6b7280", fontSize: 13 }}>
+                    <td style={{ color: "var(--fg-muted)", fontSize: 13 }}>
                       {inv.senderName ?? inv.senderEmail}
                     </td>
                     <td>
@@ -336,13 +343,16 @@ export default async function ConvitesPage({
                         {cfg.label}
                       </span>
                     </td>
-                    <td style={{ color: "#6b7280", fontSize: 12.5 }}>
+                    <td style={{ color: "var(--fg-muted)", fontSize: 12.5 }}>
                       {formatRelative(inv.createdAt)}
                     </td>
                     <td
                       style={{
                         fontSize: 12.5,
-                        color: inv.status === "expired" ? "#b8331a" : "#6b7280",
+                        color:
+                          inv.status === "expired"
+                            ? "var(--hb-red)"
+                            : "var(--fg-muted)",
                       }}
                     >
                       {inv.status === "accepted"
@@ -364,13 +374,15 @@ export default async function ConvitesPage({
                               name="roles"
                               value={roles.join(",")}
                             />
-                            <button
+                            <Button
                               type="submit"
-                              className="hb-btn hb-btn-ghost hb-btn-xs"
+                              variant="ghost"
+                              size="xs"
+                              className="rounded-full"
                             >
                               <RotateCcw size={12} aria-hidden="true" />
                               Reenviar
-                            </button>
+                            </Button>
                           </form>
                           {/* Revoke */}
                           <form action={handleRevoke}>
@@ -379,12 +391,14 @@ export default async function ConvitesPage({
                               name="invitationId"
                               value={inv.id}
                             />
-                            <button
+                            <Button
                               type="submit"
-                              className="hb-btn hb-btn-ghost hb-btn-xs"
+                              variant="ghost"
+                              size="xs"
+                              className="rounded-full"
                             >
                               Revogar
-                            </button>
+                            </Button>
                           </form>
                         </div>
                       )}
@@ -396,22 +410,28 @@ export default async function ConvitesPage({
                             name="roles"
                             value={roles.join(",")}
                           />
-                          <button
+                          <Button
                             type="submit"
-                            className="hb-btn hb-btn-secondary hb-btn-xs"
+                            variant="outline"
+                            size="xs"
+                            className="rounded-full border-[--brand] text-[--brand]"
                           >
                             <Mail size={12} aria-hidden="true" />
                             Renovar
-                          </button>
+                          </Button>
                         </form>
                       )}
                       {inv.status === "accepted" && (
-                        <span style={{ fontSize: 12, color: "#6b7280" }}>
+                        <span
+                          style={{ fontSize: 12, color: "var(--fg-muted)" }}
+                        >
                           Convite aceito
                         </span>
                       )}
                       {inv.status === "revoked" && (
-                        <span style={{ fontSize: 12, color: "#b7bdd0" }}>
+                        <span
+                          style={{ fontSize: 12, color: "var(--fg-subtle)" }}
+                        >
                           Revogado
                         </span>
                       )}

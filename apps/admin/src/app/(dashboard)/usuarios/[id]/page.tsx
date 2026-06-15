@@ -6,6 +6,7 @@ import { eq, or, desc } from "drizzle-orm";
 import { users, roleAssignments } from "@hebron/db/schema";
 import { auditLog } from "@hebron/db/schema";
 import { ChevronLeft, Shield, KeyRound, UserCog } from "lucide-react";
+import { Button } from "@hebron/ui";
 import {
   suspendUser,
   unsuspendUser,
@@ -67,17 +68,17 @@ function getInitials(name: string | null): string {
 
 function getAvatarColor(name: string | null): string {
   const palette = [
-    "#202c85",
-    "#ea5a06",
-    "#07b4e7",
-    "#a1c520",
-    "#6b4ec8",
-    "#0a8a7d",
-    "#b8852a",
+    "var(--hb-blue)",
+    "var(--hb-orange)",
+    "var(--hb-cyan)",
+    "var(--hb-green)",
+    "var(--hb-purple)",
+    "var(--hb-teal)",
+    "var(--hb-gold)",
   ];
-  if (!name) return palette[0] ?? "#202c85";
+  if (!name) return palette[0] ?? "var(--hb-blue)";
   const hash = name.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
-  return palette[hash % palette.length] ?? "#202c85";
+  return palette[hash % palette.length] ?? "var(--hb-blue)";
 }
 
 function formatDateTime(date: Date | null): string {
@@ -221,7 +222,7 @@ export default async function UserDetailPage({ params, searchParams }: Props) {
             borderRadius: 12,
             padding: "12px 18px",
             fontSize: 13.5,
-            color: "#b8331a",
+            color: "var(--hb-red)",
             marginBottom: 16,
           }}
         >
@@ -258,7 +259,7 @@ export default async function UserDetailPage({ params, searchParams }: Props) {
             }}
           >
             <span>
-              <b style={{ color: "#131737" }}>Status:</b>{" "}
+              <b style={{ color: "var(--fg)" }}>Status:</b>{" "}
               <span
                 className={`hb-badge ${statusCfg.cls}`}
                 style={{ marginLeft: 4 }}
@@ -267,8 +268,8 @@ export default async function UserDetailPage({ params, searchParams }: Props) {
                 {statusCfg.label}
               </span>
             </span>
-            <span style={{ color: "#6b7280" }}>
-              <b style={{ color: "#131737" }}>Cadastrado em:</b>{" "}
+            <span style={{ color: "var(--fg-muted)" }}>
+              <b style={{ color: "var(--fg)" }}>Cadastrado em:</b>{" "}
               {formatShortDate(user.createdAt)}
             </span>
           </div>
@@ -277,36 +278,51 @@ export default async function UserDetailPage({ params, searchParams }: Props) {
           {/* Impersonate */}
           <form action={startImpersonationAction}>
             <input type="hidden" name="userId" value={user.id} />
-            <button type="submit" className="hb-btn hb-btn-ghost hb-btn-sm">
+            <Button
+              type="submit"
+              variant="ghost"
+              size="sm"
+              className="rounded-full"
+            >
               <UserCog size={13} aria-hidden="true" />
               Impersonar
-            </button>
+            </Button>
           </form>
 
           {/* Reset password */}
           <form action={handleResetPassword}>
             <input type="hidden" name="userId" value={user.id} />
-            <button type="submit" className="hb-btn hb-btn-secondary hb-btn-sm">
+            <Button
+              type="submit"
+              variant="outline"
+              size="sm"
+              className="rounded-full border-[--brand] text-[--brand]"
+            >
               <KeyRound size={13} aria-hidden="true" />
               Resetar senha
-            </button>
+            </Button>
           </form>
 
           {/* Suspend / Unsuspend */}
           {status === "active" && (
             <form action={handleSuspendUser}>
               <input type="hidden" name="userId" value={user.id} />
-              <button type="submit" className="hb-btn hb-btn-accent hb-btn-sm">
+              <Button
+                type="submit"
+                variant="accent"
+                size="sm"
+                className="rounded-full"
+              >
                 Suspender
-              </button>
+              </Button>
             </form>
           )}
           {status === "suspended" && (
             <form action={handleUnsuspendUser}>
               <input type="hidden" name="userId" value={user.id} />
-              <button type="submit" className="hb-btn hb-btn-primary hb-btn-sm">
+              <Button type="submit" size="sm" className="rounded-full">
                 Reativar conta
-              </button>
+              </Button>
             </form>
           )}
         </div>
@@ -404,26 +420,28 @@ export default async function UserDetailPage({ params, searchParams }: Props) {
               }}
             >
               <div className="hb-card-body">
-                <b style={{ fontSize: 14, color: "#b8331a" }}>
+                <b style={{ fontSize: 14, color: "var(--hb-red)" }}>
                   Conta suspensa globalmente
                 </b>
                 <p
                   style={{
                     margin: "4px 0 12px",
                     fontSize: 13,
-                    color: "#6b7280",
+                    color: "var(--fg-muted)",
                   }}
                 >
                   O usuário não tem acesso a nenhum módulo do ecossistema.
                 </p>
                 <form action={handleUnsuspendUser}>
                   <input type="hidden" name="userId" value={user.id} />
-                  <button
+                  <Button
                     type="submit"
-                    className="hb-btn hb-btn-secondary hb-btn-sm"
+                    variant="outline"
+                    size="sm"
+                    className="rounded-full border-[--brand] text-[--brand]"
                   >
                     Reativar conta
-                  </button>
+                  </Button>
                 </form>
               </div>
             </div>
@@ -434,13 +452,17 @@ export default async function UserDetailPage({ params, searchParams }: Props) {
             <div className="hb-card-header">
               <h3>Papéis ativos</h3>
               <div className="hb-card-header-actions">
-                <Link
-                  href={`/configuracoes?tab=roles&userId=${user.id}`}
-                  className="hb-btn hb-btn-ghost hb-btn-sm"
+                <Button
+                  asChild
+                  variant="ghost"
+                  size="sm"
+                  className="rounded-full"
                 >
-                  <Shield size={13} aria-hidden="true" />
-                  Gerenciar
-                </Link>
+                  <Link href={`/configuracoes?tab=roles&userId=${user.id}`}>
+                    <Shield size={13} aria-hidden="true" />
+                    Gerenciar
+                  </Link>
+                </Button>
               </div>
             </div>
             <div
@@ -448,7 +470,13 @@ export default async function UserDetailPage({ params, searchParams }: Props) {
               style={{ paddingTop: 6, paddingBottom: 6 }}
             >
               {roles.length === 0 ? (
-                <p style={{ fontSize: 13, color: "#6b7280", padding: "8px 0" }}>
+                <p
+                  style={{
+                    fontSize: 13,
+                    color: "var(--fg-muted)",
+                    padding: "8px 0",
+                  }}
+                >
                   Nenhum papel atribuído.
                 </p>
               ) : (

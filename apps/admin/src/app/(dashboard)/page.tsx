@@ -141,14 +141,14 @@ async function DashboardContent() {
   const totalRoles = roleDistRows.reduce((s, r) => s + r.total, 0);
 
   const rolePalette: Record<string, string> = {
-    super_admin: "#202c85",
-    diretor: "#ea5a06",
-    conselheiro: "#07b4e7",
-    colaborador: "#a1c520",
-    submissor: "#6b4ec8",
-    aluno: "#0a8a7d",
-    hospede: "#b8852a",
-    ouvinte: "#b7bdd0",
+    super_admin: "var(--hb-blue)",
+    diretor: "var(--hb-orange)",
+    conselheiro: "var(--hb-cyan)",
+    colaborador: "var(--hb-green)",
+    submissor: "var(--hb-purple)",
+    aluno: "var(--hb-teal)",
+    hospede: "var(--hb-gold)",
+    ouvinte: "var(--hb-gray-200)",
   };
 
   return (
@@ -161,7 +161,7 @@ async function DashboardContent() {
             {pendingInvites > 0 ? (
               <>
                 Há{" "}
-                <span style={{ color: "#07b4e7" }}>
+                <span style={{ color: "var(--hb-cyan)" }}>
                   {pendingInvites} convite{pendingInvites !== 1 ? "s" : ""}
                 </span>{" "}
                 em aberto
@@ -169,7 +169,7 @@ async function DashboardContent() {
                   <>
                     {" "}
                     e{" "}
-                    <span style={{ color: "#ea5a06" }}>
+                    <span style={{ color: "var(--hb-orange)" }}>
                       {suspended} suspenso{suspended !== 1 ? "s" : ""}
                     </span>
                   </>
@@ -179,7 +179,7 @@ async function DashboardContent() {
             ) : suspended > 0 ? (
               <>
                 Há{" "}
-                <span style={{ color: "#ea5a06" }}>
+                <span style={{ color: "var(--hb-orange)" }}>
                   {suspended} conta{suspended !== 1 ? "s" : ""} suspensa
                   {suspended !== 1 ? "s" : ""}
                 </span>{" "}
@@ -194,10 +194,12 @@ async function DashboardContent() {
             Hebron Aseec.
           </p>
           <div className="hb-welcome-actions">
-            <Link href="/convites" className="hb-btn hb-btn-welcome-primary">
-              <Plus size={15} aria-hidden="true" />
-              Novo convite
-            </Link>
+            <Button asChild variant="accent" className="rounded-full">
+              <Link href="/convites">
+                <Plus size={15} aria-hidden="true" />
+                Novo convite
+              </Link>
+            </Button>
             <Link href="/usuarios" className="hb-btn hb-btn-welcome-secondary">
               <Users size={15} aria-hidden="true" />
               Usuários
@@ -223,26 +225,26 @@ async function DashboardContent() {
           label="Usuários ativos"
           value={activeUsers}
           sub={`${userStats.total} no total`}
-          dotColor="#a1c520"
+          dotColor="var(--hb-green)"
         />
         <StatCard
           label="Contas suspensas"
           value={suspended}
           sub={suspended > 0 ? "requer verificação" : "tudo em dia"}
-          dotColor="#ea5a06"
+          dotColor="var(--hb-orange)"
           flag={suspended > 0}
         />
         <StatCard
           label="Convites em aberto"
           value={pendingInvites}
           sub="expiram em até 7 dias"
-          dotColor="#07b4e7"
+          dotColor="var(--hb-cyan)"
         />
         <StatCard
           label="Total de papéis"
           value={totalRoles}
           sub={`${Object.keys(roleCountMap).length} tipos`}
-          dotColor="#202c85"
+          dotColor="var(--hb-blue)"
           up
         />
       </div>
@@ -254,10 +256,17 @@ async function DashboardContent() {
           <div className="hb-card-header">
             <h3>Atividade recente</h3>
             <div className="hb-card-header-actions">
-              <Link href="/auditoria" className="hb-btn hb-btn-ghost hb-btn-sm">
-                <Activity size={14} aria-hidden="true" />
-                Ver trilha
-              </Link>
+              <Button
+                asChild
+                variant="ghost"
+                size="sm"
+                className="rounded-full"
+              >
+                <Link href="/auditoria">
+                  <Activity size={14} aria-hidden="true" />
+                  Ver trilha
+                </Link>
+              </Button>
             </div>
           </div>
           <div
@@ -265,7 +274,13 @@ async function DashboardContent() {
             style={{ paddingTop: 8, paddingBottom: 8 }}
           >
             {recentAuditRows.length === 0 ? (
-              <p style={{ padding: "16px 0", color: "#6b7280", fontSize: 13 }}>
+              <p
+                style={{
+                  padding: "16px 0",
+                  color: "var(--fg-muted)",
+                  fontSize: 13,
+                }}
+              >
                 Nenhuma atividade registrada.
               </p>
             ) : (
@@ -306,7 +321,7 @@ async function DashboardContent() {
             </div>
             <div className="hb-card-body">
               {Object.keys(roleCountMap).length === 0 ? (
-                <p style={{ fontSize: 13, color: "#6b7280" }}>
+                <p style={{ fontSize: 13, color: "var(--fg-muted)" }}>
                   Nenhum papel atribuído.
                 </p>
               ) : (
@@ -317,7 +332,7 @@ async function DashboardContent() {
                       const pct = Math.round(
                         (cnt / Math.max(1, totalRoles)) * 100,
                       );
-                      const color = rolePalette[role] ?? "#b7bdd0";
+                      const color = rolePalette[role] ?? "var(--fg-subtle)";
                       const label = role
                         .split("_")
                         .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
@@ -350,13 +365,17 @@ async function DashboardContent() {
               <div className="hb-card-header">
                 <h3>Próximas reuniões</h3>
                 <div className="hb-card-header-actions">
-                  <Link
-                    href="/reunioes"
-                    className="hb-btn hb-btn-ghost hb-btn-sm"
+                  <Button
+                    asChild
+                    variant="ghost"
+                    size="sm"
+                    className="rounded-full"
                   >
-                    Abrir
-                    <ChevronRight size={13} aria-hidden="true" />
-                  </Link>
+                    <Link href="/reunioes">
+                      Abrir
+                      <ChevronRight size={13} aria-hidden="true" />
+                    </Link>
+                  </Button>
                 </div>
               </div>
               <div
@@ -384,7 +403,7 @@ async function DashboardContent() {
                         style={{
                           width: 52,
                           textAlign: "center",
-                          background: "#f7f8fc",
+                          background: "var(--bg-alt)",
                           borderRadius: 10,
                           padding: "8px 4px",
                           flexShrink: 0,
@@ -396,7 +415,7 @@ async function DashboardContent() {
                               "var(--font-display,'Parkinsans',sans-serif)",
                             fontSize: 20,
                             fontWeight: 700,
-                            color: "#202c85",
+                            color: "var(--hb-blue)",
                             lineHeight: 1,
                           }}
                         >
@@ -405,7 +424,7 @@ async function DashboardContent() {
                         <div
                           style={{
                             fontSize: 10,
-                            color: "#6b7280",
+                            color: "var(--fg-muted)",
                             marginTop: 4,
                           }}
                         >
@@ -417,7 +436,7 @@ async function DashboardContent() {
                           style={{
                             fontWeight: 600,
                             fontSize: 13.5,
-                            color: "#131737",
+                            color: "var(--fg)",
                           }}
                         >
                           Reunião{" "}
@@ -426,7 +445,7 @@ async function DashboardContent() {
                         <div
                           style={{
                             fontSize: 12,
-                            color: "#6b7280",
+                            color: "var(--fg-muted)",
                             marginTop: 2,
                           }}
                         >
@@ -490,7 +509,7 @@ export default async function DashboardPage({
                 style={{
                   height: 80,
                   borderRadius: 16,
-                  background: "#eef0f6",
+                  background: "var(--hb-gray-50)",
                   animation: "pulse 1.5s ease-in-out infinite",
                 }}
               />

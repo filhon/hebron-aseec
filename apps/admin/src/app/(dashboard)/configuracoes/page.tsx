@@ -138,13 +138,16 @@ function DesignacoesPanel({
         <div className="hb-grid hb-grid-2 hb-designation-grid">
           {activeDesignations.map((d) => {
             const isGestor = d.type === "gestor";
-            const color = isGestor ? "#ea5a06" : "#07b4e7";
+            const color = isGestor ? "var(--hb-orange)" : "var(--hb-cyan)";
+            const bgColor = isGestor
+              ? "var(--hb-orange-muted)"
+              : "var(--hb-cyan-muted)";
             const Icon = isGestor ? UserCheck : UserCog;
             return (
               <div
                 key={d.id}
                 className="hb-card hb-designation-card"
-                style={{ borderColor: color, background: `${color}08` }}
+                style={{ borderColor: color, background: bgColor }}
               >
                 <div className="hb-designation-card-header">
                   <div
@@ -189,7 +192,7 @@ function DesignacoesPanel({
       )}
 
       {revokedCount > 0 && (
-        <p style={{ marginTop: 12, fontSize: 12.5, color: "#6b7280" }}>
+        <p style={{ marginTop: 12, fontSize: 12.5, color: "var(--fg-muted)" }}>
           {revokedCount} designaç
           {revokedCount === 1 ? "ão anterior" : "ões anteriores"} no histórico
           (ver trilha de auditoria).
@@ -248,7 +251,13 @@ function FeatureFlagsPanel({
             </form>
           ))}
           {flags.length === 0 && (
-            <p style={{ padding: "24px 20px", fontSize: 13, color: "#6b7280" }}>
+            <p
+              style={{
+                padding: "24px 20px",
+                fontSize: 13,
+                color: "var(--fg-muted)",
+              }}
+            >
               Nenhuma feature flag cadastrada.
             </p>
           )}
@@ -401,7 +410,13 @@ function SistemaPanel({
           </div>
         ))}
         {settings.length === 0 && (
-          <p style={{ padding: "24px 20px", fontSize: 13, color: "#6b7280" }}>
+          <p
+            style={{
+              padding: "24px 20px",
+              fontSize: 13,
+              color: "var(--fg-muted)",
+            }}
+          >
             Nenhuma configuração encontrada.
           </p>
         )}

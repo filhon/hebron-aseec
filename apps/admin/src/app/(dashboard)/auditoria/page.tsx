@@ -186,19 +186,23 @@ async function AuditContent({
           <StatCardSmall
             label="Eventos hoje"
             value={stats.todayCount ?? 0}
-            dot="#202c85"
+            dot="var(--hb-blue)"
           />
           <StatCardSmall
             label="Total de eventos"
             value={stats.total}
-            dot="#07b4e7"
+            dot="var(--hb-cyan)"
           />
           <StatCardSmall
             label="Impersonações"
             value={stats.impersonations ?? 0}
-            dot="#ea5a06"
+            dot="var(--hb-orange)"
           />
-          <StatCardSmall label="Falhas de login" value="—" dot="#a1c520" />
+          <StatCardSmall
+            label="Falhas de login"
+            value="—"
+            dot="var(--hb-green)"
+          />
         </div>
       )}
 
@@ -208,14 +212,14 @@ async function AuditContent({
           style={{
             marginBottom: 14,
             fontSize: 13,
-            color: "#6b7280",
+            color: "var(--fg-muted)",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
           }}
         >
           <span>
-            <b style={{ color: "#131737" }}>{entries.length}</b> registro
+            <b style={{ color: "var(--fg)" }}>{entries.length}</b> registro
             {entries.length !== 1 ? "s" : ""} encontrado
             {entries.length !== 1 ? "s" : ""}
           </span>
@@ -241,11 +245,15 @@ async function AuditContent({
               return (
                 <tr key={entry.id}>
                   <td style={{ whiteSpace: "nowrap" }}>
-                    <div style={{ fontSize: 13, color: "#131737" }}>
+                    <div style={{ fontSize: 13, color: "var(--fg)" }}>
                       {formatDateTime(entry.createdAt)}
                     </div>
                     <div
-                      style={{ fontSize: 11, color: "#6b7280", marginTop: 2 }}
+                      style={{
+                        fontSize: 11,
+                        color: "var(--fg-muted)",
+                        marginTop: 2,
+                      }}
                     >
                       {formatRelative(entry.createdAt)}
                     </div>
@@ -254,7 +262,7 @@ async function AuditContent({
                     style={{
                       fontSize: 13.5,
                       fontWeight: 500,
-                      color: "#131737",
+                      color: "var(--fg)",
                     }}
                   >
                     {entry.actorName ?? "—"}
@@ -264,8 +272,10 @@ async function AuditContent({
                       style={{
                         fontFamily: "ui-monospace,monospace",
                         fontSize: 11.5,
-                        background: imp ? "rgba(234,90,6,0.12)" : "#f7f8fc",
-                        color: imp ? "#c24a03" : "#131737",
+                        background: imp
+                          ? "rgba(234,90,6,0.12)"
+                          : "var(--bg-alt)",
+                        color: imp ? "var(--hb-orange-deep)" : "var(--fg)",
                         padding: "2px 8px",
                         borderRadius: 6,
                         display: "inline-block",
@@ -277,17 +287,19 @@ async function AuditContent({
                   <td
                     style={{
                       fontSize: 13,
-                      color: imp ? "#7a2614" : "#131737",
+                      color: imp ? "var(--hb-red-deep)" : "var(--fg)",
                       maxWidth: 360,
                     }}
                   >
-                    <span style={{ color: "#6b7280" }}>{entry.entity}</span>
+                    <span style={{ color: "var(--fg-muted)" }}>
+                      {entry.entity}
+                    </span>
                     {entry.entityId && (
                       <span
                         style={{
                           fontFamily: "ui-monospace,monospace",
                           fontSize: 11,
-                          color: "#b7bdd0",
+                          color: "var(--fg-subtle)",
                           marginLeft: 6,
                         }}
                       >
@@ -299,7 +311,7 @@ async function AuditContent({
                     style={{
                       fontFamily: "ui-monospace,monospace",
                       fontSize: 11.5,
-                      color: "#6b7280",
+                      color: "var(--fg-muted)",
                     }}
                   >
                     {entry.ip ?? "—"}
@@ -316,7 +328,7 @@ async function AuditContent({
         style={{
           marginTop: 16,
           fontSize: 12,
-          color: "#6b7280",
+          color: "var(--fg-muted)",
           display: "flex",
           alignItems: "center",
           gap: 8,
@@ -362,10 +374,15 @@ export default async function AuditoriaPage({
           </p>
         </div>
         <div className="hb-page-header-actions">
-          <button className="hb-btn hb-btn-ghost hb-btn-sm" type="button">
+          <Button
+            variant="ghost"
+            size="sm"
+            type="button"
+            className="rounded-full"
+          >
             <FileText size={14} aria-hidden="true" />
             JSON
-          </button>
+          </Button>
         </div>
       </div>
 

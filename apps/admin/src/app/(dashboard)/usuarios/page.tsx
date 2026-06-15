@@ -3,6 +3,7 @@ import { db } from "@hebron/db/client";
 import { eq, and, or, ilike, count, sql, inArray, asc } from "drizzle-orm";
 import { users, roleAssignments } from "@hebron/db/schema";
 import { Search, Plus, Filter, Shield } from "lucide-react";
+import { Button } from "@hebron/ui";
 
 // ─── DB ───────────────────────────────────────────────────────────────────────
 
@@ -21,17 +22,17 @@ function getInitials(name: string | null): string {
 
 function getAvatarColor(name: string | null): string {
   const palette = [
-    "#202c85",
-    "#ea5a06",
-    "#07b4e7",
-    "#a1c520",
-    "#6b4ec8",
-    "#0a8a7d",
-    "#b8852a",
+    "var(--hb-blue)",
+    "var(--hb-orange)",
+    "var(--hb-cyan)",
+    "var(--hb-green)",
+    "var(--hb-purple)",
+    "var(--hb-teal)",
+    "var(--hb-gold)",
   ];
-  if (!name) return palette[0] ?? "#202c85";
+  if (!name) return palette[0] ?? "var(--hb-blue)";
   const hash = name.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
-  return palette[hash % palette.length] ?? "#202c85";
+  return palette[hash % palette.length] ?? "var(--hb-blue)";
 }
 
 function getUserStatus(suspendedModules: string[]): "active" | "suspended" {
@@ -199,17 +200,19 @@ export default async function UsuariosPage({
           </p>
         </div>
         <div className="hb-page-header-actions">
-          <Link href="/convites" className="hb-btn hb-btn-primary hb-btn-sm">
-            <Plus size={14} aria-hidden="true" />
-            Convidar usuário
-          </Link>
+          <Button asChild size="sm" className="rounded-full">
+            <Link href="/convites">
+              <Plus size={14} aria-hidden="true" />
+              Convidar usuário
+            </Link>
+          </Button>
         </div>
       </div>
 
       {/* Filters — native GET form for server-side filtering */}
       <form method="GET" action="/usuarios" className="hb-filter-row">
         <div className="hb-field" style={{ flex: "1 1 260px", maxWidth: 380 }}>
-          <Search size={14} color="#6b7280" aria-hidden="true" />
+          <Search size={14} color="var(--fg-muted)" aria-hidden="true" />
           <input
             name="search"
             placeholder="Buscar por nome ou email"
@@ -218,7 +221,7 @@ export default async function UsuariosPage({
           />
         </div>
         <div className="hb-field">
-          <Filter size={13} color="#6b7280" aria-hidden="true" />
+          <Filter size={13} color="var(--fg-muted)" aria-hidden="true" />
           <label htmlFor="role-filter">Papel</label>
           <select id="role-filter" name="role" defaultValue={roleFilter}>
             <option value="all">Todos</option>
@@ -237,12 +240,17 @@ export default async function UsuariosPage({
             <option value="suspended">Suspenso</option>
           </select>
         </div>
-        <button type="submit" className="hb-btn hb-btn-secondary hb-btn-sm">
+        <Button
+          type="submit"
+          variant="outline"
+          size="sm"
+          className="rounded-full border-[--brand] text-[--brand]"
+        >
           <Filter size={13} aria-hidden="true" />
           Filtrar
-        </button>
+        </Button>
         <div style={{ flex: 1 }} />
-        <span style={{ fontSize: 12.5, color: "#6b7280" }}>
+        <span style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>
           {totalUsers} {totalUsers === 1 ? "resultado" : "resultados"}
         </span>
       </form>
@@ -315,7 +323,12 @@ export default async function UsuariosPage({
                             </span>
                           )}
                           {roles.length === 0 && (
-                            <span style={{ fontSize: 12.5, color: "#b7bdd0" }}>
+                            <span
+                              style={{
+                                fontSize: 12.5,
+                                color: "var(--fg-subtle)",
+                              }}
+                            >
                               —
                             </span>
                           )}
@@ -331,19 +344,26 @@ export default async function UsuariosPage({
                       </td>
                       <td>
                         {/* MFA status requires Supabase Auth data — not available in DB */}
-                        <span style={{ fontSize: 12.5, color: "#b7bdd0" }}>
+                        <span
+                          style={{ fontSize: 12.5, color: "var(--fg-subtle)" }}
+                        >
                           <Shield size={13} aria-hidden="true" /> —
                         </span>
                       </td>
                       <td onClick={(e) => e.stopPropagation()}>
-                        <Link
-                          href={`/usuarios/${u.id}`}
-                          className="hb-btn hb-btn-ghost hb-btn-xs"
-                          style={{ borderRadius: 8 }}
-                          aria-label={`Ver perfil de ${u.fullName ?? u.email}`}
+                        <Button
+                          asChild
+                          variant="ghost"
+                          size="xs"
+                          className="rounded-full"
                         >
-                          Ver
-                        </Link>
+                          <Link
+                            href={`/usuarios/${u.id}`}
+                            aria-label={`Ver perfil de ${u.fullName ?? u.email}`}
+                          >
+                            Ver
+                          </Link>
+                        </Button>
                       </td>
                     </tr>
                   );
