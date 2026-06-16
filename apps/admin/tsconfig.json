@@ -1,5 +1,6 @@
 {
   "extends": "@hebron/typescript-config/nextjs",
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules"],
+  "plugins": [{ "name": "next" }]
 }
