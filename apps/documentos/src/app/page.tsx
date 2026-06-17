@@ -10,11 +10,14 @@ import {
   Workflow,
   BarChart2,
   Search,
+  AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
 import { PublicNav } from "../components/public-nav";
 import { DocumentCard } from "../components/document-card";
 import { EditalCard } from "../components/edital-card";
 import { mockDocuments, mockEditais, mockCategories } from "../lib/mock-data";
+import type { Edital } from "@hebron/types/documentos";
 
 export const metadata: Metadata = {
   title: "Documentos — Hebron Aseec",
@@ -48,7 +51,14 @@ function getEditalStatus(edital: {
   return "open";
 }
 
-export default function HomePage() {
+type PageData = {
+  openEditais: Edital[];
+  recentDocs: typeof mockDocuments;
+  totalDocs: number;
+  openCount: number;
+};
+
+function buildPageData(): PageData {
   const publicEditais = mockEditais.filter(
     (e) => e.visibility === "public" || e.visibility === "internal",
   );
@@ -65,8 +75,62 @@ export default function HomePage() {
     )
     .slice(0, 6);
 
-  const totalDocs = mockDocuments.length + mockEditais.length;
-  const openCount = openEditais.length;
+  return {
+    openEditais,
+    recentDocs,
+    totalDocs: mockDocuments.length + mockEditais.length,
+    openCount: openEditais.length,
+  };
+}
+
+export default function HomePage() {
+  let data: PageData | null = null;
+  let hasError = false;
+
+  try {
+    data = buildPageData();
+  } catch {
+    hasError = true;
+  }
+
+  if (hasError || data === null) {
+    return (
+      <>
+        <PublicNav />
+        <main
+          className="docs-page"
+          style={{
+            minHeight: "60vh",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <div className="hb-empty">
+            <div className="hb-empty-icon">
+              <AlertTriangle size={24} aria-hidden="true" />
+            </div>
+            <b>Erro ao carregar o portal</b>
+            <p className="hb-empty-body">
+              Não foi possível carregar os documentos e editais. Verifique sua
+              conexão e tente novamente.
+            </p>
+            <a
+              href="/"
+              className="hb-btn hb-btn-primary"
+              style={{ marginTop: 20 }}
+            >
+              <RefreshCw size={14} aria-hidden="true" />
+              Tentar novamente
+            </a>
+          </div>
+        </main>
+      </>
+    );
+  }
+
+  const { openEditais, recentDocs, totalDocs, openCount } = data;
 
   return (
     <>
@@ -131,19 +195,19 @@ export default function HomePage() {
 
       <main className="docs-page">
         {/* ── Editais em destaque ── */}
-        {openEditais.length > 0 && (
-          <section className="docs-section" aria-labelledby="editais-heading">
-            <div className="docs-section-head">
-              <div className="left">
-                <span className="hb-eyebrow">Editais em destaque</span>
-                <h2 id="editais-heading">Janelas abertas para submissão</h2>
-              </div>
-              <Link href="/editais" className="hb-btn hb-btn-ghost hb-btn-sm">
-                Ver todos
-                <ArrowRight size={13} aria-hidden="true" />
-              </Link>
+        <section className="docs-section" aria-labelledby="editais-heading">
+          <div className="docs-section-head">
+            <div className="left">
+              <span className="hb-eyebrow">Editais em destaque</span>
+              <h2 id="editais-heading">Janelas abertas para submissão</h2>
             </div>
+            <Link href="/editais" className="hb-btn hb-btn-ghost hb-btn-sm">
+              Ver todos
+              <ArrowRight size={13} aria-hidden="true" />
+            </Link>
+          </div>
 
+          {openEditais.length > 0 ? (
             <div
               style={{
                 display: "grid",
@@ -159,8 +223,32 @@ export default function HomePage() {
                 />
               ))}
             </div>
-          </section>
-        )}
+          ) : (
+            <div className="hb-empty" style={{ padding: "40px 20px" }}>
+              <div className="hb-empty-icon">
+                <Scroll size={24} aria-hidden="true" />
+              </div>
+              <b>Nenhum edital aberto no momento</b>
+              <p className="hb-empty-body">
+                Novas chamadas serão publicadas em breve. Confira o histórico de
+                editais para referência.
+              </p>
+              <p className="hb-empty-quote">
+                "Há tempo para tudo debaixo do sol — um tempo para cada
+                propósito."
+                <span className="hb-empty-cite">Eclesiastes 3:1</span>
+              </p>
+              <Link
+                href="/editais"
+                className="hb-btn hb-btn-secondary"
+                style={{ marginTop: 20 }}
+              >
+                Ver histórico de editais
+                <ArrowRight size={13} aria-hidden="true" />
+              </Link>
+            </div>
+          )}
+        </section>
 
         {/* ── Two-col: recentes + categorias ── */}
         <div
@@ -181,42 +269,57 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div
-              className="hb-card hb-card-padded hb-card-overflow"
-              style={{ padding: "4px 0" }}
-            >
-              {recentDocs.map((doc) => (
-                <Link
-                  key={doc.id}
-                  href={`/${doc.slug}`}
-                  className="docs-row"
-                  style={{ padding: "14px 24px" }}
-                >
-                  <div className="docs-row-icon">
-                    <FileText size={16} aria-hidden="true" />
-                  </div>
-                  <div style={{ minWidth: 0 }}>
-                    <div className="docs-row-title">{doc.title}</div>
-                    <div className="docs-row-meta">
-                      <span>{doc.category.name}</span>
-                      <span>·</span>
-                      <span>
-                        {new Intl.DateTimeFormat("pt-BR", {
-                          day: "2-digit",
-                          month: "short",
-                          year: "numeric",
-                        }).format(new Date(doc.updatedAt))}
-                      </span>
+            {recentDocs.length > 0 ? (
+              <div
+                className="hb-card hb-card-padded hb-card-overflow"
+                style={{ padding: "4px 0" }}
+              >
+                {recentDocs.map((doc) => (
+                  <Link
+                    key={doc.id}
+                    href={`/${doc.slug}`}
+                    className="docs-row"
+                    style={{ padding: "14px 24px" }}
+                  >
+                    <div className="docs-row-icon">
+                      <FileText size={16} aria-hidden="true" />
                     </div>
-                  </div>
-                  {doc.visibility === "public" && (
-                    <span className="docs-open-stripe" style={{ fontSize: 11 }}>
-                      Público
-                    </span>
-                  )}
-                </Link>
-              ))}
-            </div>
+                    <div style={{ minWidth: 0 }}>
+                      <div className="docs-row-title">{doc.title}</div>
+                      <div className="docs-row-meta">
+                        <span>{doc.category.name}</span>
+                        <span>·</span>
+                        <span>
+                          {new Intl.DateTimeFormat("pt-BR", {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                          }).format(new Date(doc.updatedAt))}
+                        </span>
+                      </div>
+                    </div>
+                    {doc.visibility === "public" && (
+                      <span
+                        className="docs-open-stripe"
+                        style={{ fontSize: 11 }}
+                      >
+                        Público
+                      </span>
+                    )}
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="hb-empty" style={{ padding: "40px 20px" }}>
+                <div className="hb-empty-icon">
+                  <FileText size={24} aria-hidden="true" />
+                </div>
+                <b>Nenhum documento publicado</b>
+                <p className="hb-empty-body">
+                  Ainda não há documentos disponíveis nesta área.
+                </p>
+              </div>
+            )}
           </section>
 
           {/* Categorias */}
@@ -264,16 +367,46 @@ export default function HomePage() {
             </Link>
           </div>
 
-          <div
-            className="hb-grid"
-            style={{
-              gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-            }}
-          >
-            {recentDocs.slice(0, 3).map((doc) => (
-              <DocumentCard key={doc.id} document={doc} href={`/${doc.slug}`} />
-            ))}
-          </div>
+          {recentDocs.length > 0 ? (
+            <div
+              className="hb-grid"
+              style={{
+                gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+              }}
+            >
+              {recentDocs.slice(0, 3).map((doc) => (
+                <DocumentCard
+                  key={doc.id}
+                  document={doc}
+                  href={`/${doc.slug}`}
+                />
+              ))}
+            </div>
+          ) : (
+            <div className="hb-empty" style={{ padding: "40px 20px" }}>
+              <div className="hb-empty-icon">
+                <Search size={24} aria-hidden="true" />
+              </div>
+              <b>Nenhum documento encontrado</b>
+              <p className="hb-empty-body">
+                Nenhum documento está disponível para exibição no momento. Tente
+                buscar por título, categoria ou tags.
+              </p>
+              <p className="hb-empty-quote">
+                "A tua palavra é lâmpada que ilumina os meus passos e luz que
+                clareia o meu caminho."
+                <span className="hb-empty-cite">Salmos 119:105</span>
+              </p>
+              <Link
+                href="/busca"
+                className="hb-btn hb-btn-secondary"
+                style={{ marginTop: 20 }}
+              >
+                <Search size={14} aria-hidden="true" />
+                Buscar documentos
+              </Link>
+            </div>
+          )}
         </section>
       </main>
 

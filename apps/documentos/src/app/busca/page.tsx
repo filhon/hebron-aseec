@@ -10,8 +10,11 @@ import {
   FileText,
   Scroll,
   Filter,
+  AlertTriangle,
+  RefreshCw,
 } from "lucide-react";
 import { PublicNav } from "../../components/public-nav";
+import { SearchResultsSkeleton } from "../../components/search-results-skeleton";
 import { mockAllDocuments, mockCategories } from "../../lib/mock-data";
 import type { Document, Edital } from "@hebron/types/documentos";
 
@@ -80,6 +83,7 @@ function SearchResults() {
   const [categoryId, setCategoryId] = useState<string | null>(initialCat);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [showFilters, setShowFilters] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
 
   useEffect(() => {
     setQuery(initialQuery);
@@ -95,30 +99,71 @@ function SearchResults() {
   );
 
   const results = useMemo<DocOrEdital[]>(() => {
-    const q = query.toLowerCase().trim();
-    let docs = publicDocs;
+    try {
+      const q = query.toLowerCase().trim();
+      let docs = publicDocs;
 
-    if (categoryId) {
-      docs = docs.filter((d) => d.categoryId === categoryId);
+      if (categoryId) {
+        docs = docs.filter((d) => d.categoryId === categoryId);
+      }
+
+      if (typeFilter !== "all") {
+        docs = docs.filter((d) => d.type === typeFilter);
+      }
+
+      if (!q) return docs.slice(0, 10);
+
+      return docs.filter(
+        (d) =>
+          d.title.toLowerCase().includes(q) ||
+          (d.description ?? "").toLowerCase().includes(q) ||
+          d.tags.some((t) => t.name.toLowerCase().includes(q)) ||
+          d.category.name.toLowerCase().includes(q),
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Erro desconhecido";
+      setSearchError(msg);
+      return [];
     }
-
-    if (typeFilter !== "all") {
-      docs = docs.filter((d) => d.type === typeFilter);
-    }
-
-    if (!q) return docs.slice(0, 10);
-
-    return docs.filter(
-      (d) =>
-        d.title.toLowerCase().includes(q) ||
-        (d.description ?? "").toLowerCase().includes(q) ||
-        d.tags.some((t) => t.name.toLowerCase().includes(q)) ||
-        d.category.name.toLowerCase().includes(q),
-    );
   }, [publicDocs, query, categoryId, typeFilter]);
 
   const editalCount = results.filter((d) => d.type === "edital").length;
   const docCount = results.length - editalCount;
+
+  if (searchError !== null) {
+    return (
+      <main className="docs-page-narrow">
+        <div className="hb-empty" style={{ paddingTop: 80 }}>
+          <div
+            className="hb-empty-icon"
+            style={{ background: "var(--color-destructive-muted)" }}
+          >
+            <AlertTriangle
+              size={24}
+              aria-hidden="true"
+              style={{ color: "var(--color-destructive)" }}
+            />
+          </div>
+          <b>Erro ao realizar a busca</b>
+          <p className="hb-empty-body">
+            Não foi possível processar sua pesquisa. Tente novamente.
+          </p>
+          <button
+            type="button"
+            className="hb-btn hb-btn-primary"
+            style={{ marginTop: 20 }}
+            onClick={() => {
+              setSearchError(null);
+              setQuery("");
+            }}
+          >
+            <RefreshCw size={14} aria-hidden="true" />
+            Tentar novamente
+          </button>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="docs-page-narrow">
@@ -339,6 +384,21 @@ function SearchResults() {
           <p className="hb-empty-body">
             Tente reformular a busca ou navegar pelas categorias.
           </p>
+          {query && (
+            <button
+              type="button"
+              className="hb-btn hb-btn-secondary"
+              style={{ marginTop: 16 }}
+              onClick={() => {
+                setQuery("");
+                setCategoryId(null);
+                setTypeFilter("all");
+              }}
+            >
+              <X size={13} aria-hidden="true" />
+              Limpar filtros
+            </button>
+          )}
           <p className="hb-empty-quote">
             "Pedí, e dar-se-vos-á; buscai, e achareis; batei, e abrir-se-vos-á."
             <span className="hb-empty-cite">Mateus 7:7</span>
@@ -431,12 +491,19 @@ export default function BuscaPage() {
       <Suspense
         fallback={
           <main className="docs-page-narrow">
-            <div className="hb-empty">
-              <div className="hb-empty-icon">
-                <Search size={24} aria-hidden="true" />
-              </div>
-              <b>Carregando…</b>
+            <div style={{ marginBottom: 28 }}>
+              <div className="h-3 w-20 rounded-full animate-pulse bg-[--bg-alt] mb-3" />
+              <div className="h-10 w-3/4 rounded animate-pulse bg-[--bg-alt] mb-2" />
+              <div className="h-3.5 w-48 rounded animate-pulse bg-[--bg-alt]" />
             </div>
+            <div
+              className="hb-field"
+              style={{ marginBottom: 16, pointerEvents: "none" }}
+            >
+              <div className="h-5 w-5 rounded animate-pulse bg-[--bg-alt]" />
+              <div className="flex-1 h-5 rounded animate-pulse bg-[--bg-alt]" />
+            </div>
+            <SearchResultsSkeleton count={5} />
           </main>
         }
       >
