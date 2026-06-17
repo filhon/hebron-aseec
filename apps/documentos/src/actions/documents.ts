@@ -1,0 +1,352 @@
+"use server";
+
+import { z } from "zod";
+import { and, desc, eq, isNull, max, sql } from "drizzle-orm";
+import { createClient } from "@supabase/supabase-js";
+import crypto from "node:crypto";
+import { db } from "@hebron/db/client";
+import {
+  documents,
+  documentTags,
+  documentVersions,
+  views,
+} from "@hebron/db/schema";
+import { editorAction, authenticatedAction } from "../lib/safe-action";
+import { logDocumentAudit } from "../lib/audit";
+
+const visibilityEnum = z.enum(["public", "internal", "restricted"]);
+
+function slugify(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .trim();
+}
+
+function getSupabaseAdmin() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error("Variáveis Supabase não configuradas");
+  return createClient(url, key, { auth: { persistSession: false } });
+}
+
+// ─── getUploadUrl ─────────────────────────────────────────────────────────────
+// Gera URL de upload assinada para que o cliente faça o PUT direto ao Storage.
+
+export const getUploadUrl = editorAction
+  .schema(
+    z.object({
+      fileName: z.string().min(1).max(255),
+      mimeType: z.string().min(1),
+    }),
+  )
+  .action(async ({ parsedInput, ctx }) => {
+    const supabase = getSupabaseAdmin();
+    const ext = parsedInput.fileName.split(".").pop() ?? "pdf";
+    const path = `documents/${ctx.actorId}/${crypto.randomUUID()}.${ext}`;
+
+    const { data, error } = await supabase.storage
+      .from("hebron-docs")
+      .createSignedUploadUrl(path);
+
+    if (error)
+      throw new Error(`Falha ao gerar URL de upload: ${error.message}`);
+
+    return { uploadUrl: data.signedUrl, storagePath: path };
+  });
+
+// ─── createDocument ───────────────────────────────────────────────────────────
+
+export const createDocument = editorAction
+  .schema(
+    z.object({
+      title: z.string().min(3).max(200),
+      contentMd: z.string().optional(),
+      storagePath: z.string().optional(),
+      visibility: visibilityEnum.default("internal"),
+      categoryId: z.string().uuid().optional(),
+      tagIds: z.array(z.string().uuid()).optional(),
+    }),
+  )
+  .action(async ({ parsedInput, ctx }) => {
+    const baseSlug = slugify(parsedInput.title);
+    const slug = `${baseSlug}-${crypto.randomUUID().slice(0, 8)}`;
+
+    const [document] = await db
+      .insert(documents)
+      .values({
+        title: parsedInput.title,
+        slug,
+        contentMd: parsedInput.contentMd ?? null,
+        fileUrl: parsedInput.storagePath ?? null,
+        visibility: parsedInput.visibility,
+        categoryId: parsedInput.categoryId ?? null,
+        authorId: ctx.actorId,
+      })
+      .returning();
+
+    if (!document) throw new Error("Falha ao criar documento");
+
+    await db.insert(documentVersions).values({
+      documentId: document.id,
+      contentMd: parsedInput.contentMd ?? null,
+      fileUrl: parsedInput.storagePath ?? null,
+      versionNumber: 1,
+      createdBy: ctx.actorId,
+    });
+
+    if (parsedInput.tagIds?.length) {
+      await db.insert(documentTags).values(
+        parsedInput.tagIds.map((tagId) => ({
+          documentId: document.id,
+          tagId,
+        })),
+      );
+    }
+
+    await logDocumentAudit({
+      actorId: ctx.actorId,
+      action: "document.created",
+      entity: "document",
+      entityId: document.id,
+      diff: {
+        after: { title: document.title, visibility: document.visibility },
+      },
+    });
+
+    return { document };
+  });
+
+// ─── updateDocument ───────────────────────────────────────────────────────────
+// Cada edição cria uma nova versão automaticamente.
+
+export const updateDocument = editorAction
+  .schema(
+    z.object({
+      id: z.string().uuid(),
+      title: z.string().min(3).max(200).optional(),
+      contentMd: z.string().optional(),
+      storagePath: z.string().optional(),
+      visibility: visibilityEnum.optional(),
+      categoryId: z.string().uuid().nullable().optional(),
+      tagIds: z.array(z.string().uuid()).optional(),
+    }),
+  )
+  .action(async ({ parsedInput, ctx }) => {
+    const { id, tagIds, ...fields } = parsedInput;
+
+    const [before] = await db
+      .select()
+      .from(documents)
+      .where(and(eq(documents.id, id), isNull(documents.deletedAt)))
+      .limit(1);
+
+    if (!before) throw new Error("Documento não encontrado");
+
+    const updateValues: Partial<typeof documents.$inferInsert> = {};
+    if (fields.title !== undefined) updateValues.title = fields.title;
+    if (fields.contentMd !== undefined)
+      updateValues.contentMd = fields.contentMd;
+    if (fields.storagePath !== undefined)
+      updateValues.fileUrl = fields.storagePath;
+    if (fields.visibility !== undefined)
+      updateValues.visibility = fields.visibility;
+    if ("categoryId" in fields)
+      updateValues.categoryId = fields.categoryId ?? null;
+
+    const [updated] = await db
+      .update(documents)
+      .set({ ...updateValues, updatedAt: new Date() })
+      .where(eq(documents.id, id))
+      .returning();
+
+    if (!updated) throw new Error("Falha ao atualizar documento");
+
+    // Determina próximo número de versão
+    const [maxRow] = await db
+      .select({ v: max(documentVersions.versionNumber) })
+      .from(documentVersions)
+      .where(eq(documentVersions.documentId, id));
+
+    const nextVersion = (maxRow?.v ?? 0) + 1;
+
+    await db.insert(documentVersions).values({
+      documentId: id,
+      contentMd: fields.contentMd ?? before.contentMd,
+      fileUrl: fields.storagePath ?? before.fileUrl,
+      versionNumber: nextVersion,
+      createdBy: ctx.actorId,
+    });
+
+    // Atualiza tags se fornecidas
+    if (tagIds !== undefined) {
+      await db.delete(documentTags).where(eq(documentTags.documentId, id));
+      if (tagIds.length > 0) {
+        await db
+          .insert(documentTags)
+          .values(tagIds.map((tagId) => ({ documentId: id, tagId })));
+      }
+    }
+
+    await logDocumentAudit({
+      actorId: ctx.actorId,
+      action: "document.updated",
+      entity: "document",
+      entityId: id,
+      diff: {
+        before: { title: before.title, visibility: before.visibility },
+        after: { title: updated.title, visibility: updated.visibility },
+        version: nextVersion,
+      },
+    });
+
+    return { document: updated, version: nextVersion };
+  });
+
+// ─── publishDocument ──────────────────────────────────────────────────────────
+
+export const publishDocument = editorAction
+  .schema(z.object({ id: z.string().uuid() }))
+  .action(async ({ parsedInput, ctx }) => {
+    const [before] = await db
+      .select({ publishedAt: documents.publishedAt })
+      .from(documents)
+      .where(and(eq(documents.id, parsedInput.id), isNull(documents.deletedAt)))
+      .limit(1);
+
+    if (!before) throw new Error("Documento não encontrado");
+    if (before.publishedAt) throw new Error("Documento já está publicado");
+
+    const now = new Date();
+    const [updated] = await db
+      .update(documents)
+      .set({ publishedAt: now, updatedAt: now })
+      .where(eq(documents.id, parsedInput.id))
+      .returning();
+
+    if (!updated) throw new Error("Falha ao publicar documento");
+
+    await logDocumentAudit({
+      actorId: ctx.actorId,
+      action: "document.published",
+      entity: "document",
+      entityId: parsedInput.id,
+      diff: { publishedAt: { before: null, after: now } },
+    });
+
+    return { document: updated };
+  });
+
+// ─── unpublishDocument ────────────────────────────────────────────────────────
+
+export const unpublishDocument = editorAction
+  .schema(z.object({ id: z.string().uuid() }))
+  .action(async ({ parsedInput, ctx }) => {
+    const [before] = await db
+      .select({ publishedAt: documents.publishedAt })
+      .from(documents)
+      .where(and(eq(documents.id, parsedInput.id), isNull(documents.deletedAt)))
+      .limit(1);
+
+    if (!before) throw new Error("Documento não encontrado");
+    if (!before.publishedAt) throw new Error("Documento não está publicado");
+
+    const [updated] = await db
+      .update(documents)
+      .set({ publishedAt: null, updatedAt: new Date() })
+      .where(eq(documents.id, parsedInput.id))
+      .returning();
+
+    if (!updated) throw new Error("Falha ao despublicar documento");
+
+    await logDocumentAudit({
+      actorId: ctx.actorId,
+      action: "document.unpublished",
+      entity: "document",
+      entityId: parsedInput.id,
+      diff: { publishedAt: { before: before.publishedAt, after: null } },
+    });
+
+    return { document: updated };
+  });
+
+// ─── deleteDocument ───────────────────────────────────────────────────────────
+// Soft delete: define deleted_at, não remove registros.
+
+export const deleteDocument = editorAction
+  .schema(z.object({ id: z.string().uuid() }))
+  .action(async ({ parsedInput, ctx }) => {
+    const [before] = await db
+      .select({ deletedAt: documents.deletedAt, title: documents.title })
+      .from(documents)
+      .where(eq(documents.id, parsedInput.id))
+      .limit(1);
+
+    if (!before) throw new Error("Documento não encontrado");
+    if (before.deletedAt) throw new Error("Documento já foi removido");
+
+    const now = new Date();
+    const [updated] = await db
+      .update(documents)
+      .set({ deletedAt: now, updatedAt: now })
+      .where(eq(documents.id, parsedInput.id))
+      .returning();
+
+    if (!updated) throw new Error("Falha ao remover documento");
+
+    await logDocumentAudit({
+      actorId: ctx.actorId,
+      action: "document.deleted",
+      entity: "document",
+      entityId: parsedInput.id,
+      diff: { deletedAt: { before: null, after: now }, title: before.title },
+    });
+
+    return { document: updated };
+  });
+
+// ─── registerView ─────────────────────────────────────────────────────────────
+
+export const registerView = authenticatedAction
+  .schema(z.object({ documentId: z.string().uuid() }))
+  .action(async ({ parsedInput, ctx }) => {
+    // Verifica se o documento existe e está visível
+    const [doc] = await db
+      .select({ id: documents.id })
+      .from(documents)
+      .where(
+        and(
+          eq(documents.id, parsedInput.documentId),
+          isNull(documents.deletedAt),
+          sql`${documents.publishedAt} IS NOT NULL`,
+        ),
+      )
+      .limit(1);
+
+    if (!doc) throw new Error("Documento não encontrado");
+
+    await db.insert(views).values({
+      documentId: parsedInput.documentId,
+      userId: ctx.actorId,
+    });
+
+    return { recorded: true };
+  });
+
+// ─── listDocumentVersions ─────────────────────────────────────────────────────
+
+export const listDocumentVersions = editorAction
+  .schema(z.object({ documentId: z.string().uuid() }))
+  .action(async ({ parsedInput }) => {
+    const versions = await db
+      .select()
+      .from(documentVersions)
+      .where(eq(documentVersions.documentId, parsedInput.documentId))
+      .orderBy(desc(documentVersions.versionNumber));
+
+    return { versions };
+  });
