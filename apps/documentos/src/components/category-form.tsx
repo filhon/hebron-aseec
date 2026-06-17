@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useId } from "react";
+import { z } from "zod";
 import {
   AlertCircle,
   Check,
@@ -24,20 +25,26 @@ type FormErrors = Partial<Record<keyof CategoryFormValues, string>>;
 
 // ─── Validation ───────────────────────────────────────────────────────────────
 
+const categoryFormSchema = z.object({
+  name: z
+    .string()
+    .min(2, "Nome deve ter pelo menos 2 caracteres")
+    .max(80, "Nome deve ter no máximo 80 caracteres"),
+  description: z
+    .string()
+    .max(300, "Descrição deve ter no máximo 300 caracteres"),
+  slug: z.string(),
+  parentId: z.string().nullable(),
+});
+
 function validate(values: CategoryFormValues): FormErrors {
+  const result = categoryFormSchema.safeParse(values);
+  if (result.success) return {};
   const errors: FormErrors = {};
-
-  const name = values.name.trim();
-  if (name.length < 2) {
-    errors.name = "Nome deve ter pelo menos 2 caracteres";
-  } else if (name.length > 80) {
-    errors.name = "Nome deve ter no máximo 80 caracteres";
+  for (const issue of result.error.issues) {
+    const key = issue.path[0] as keyof FormErrors;
+    if (key && !errors[key]) errors[key] = issue.message;
   }
-
-  if (values.description.length > 300) {
-    errors.description = "Descrição deve ter no máximo 300 caracteres";
-  }
-
   return errors;
 }
 

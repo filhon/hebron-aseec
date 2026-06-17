@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useCallback, useId } from "react";
+import { useState, useRef, useCallback, useId, useEffect } from "react";
+import { z } from "zod";
 import {
   AlertCircle,
   Check,
@@ -44,34 +45,43 @@ export interface DocumentFormValues {
 
 type FormErrors = Partial<Record<keyof DocumentFormValues, string>>;
 
-// ─── Validation (mirrors createDocumentSchema constraints) ────────────────────
+// ─── Validation ───────────────────────────────────────────────────────────────
+
+const documentFormSchema = z
+  .object({
+    title: z
+      .string()
+      .min(3, "Título deve ter pelo menos 3 caracteres")
+      .max(200, "Título deve ter no máximo 200 caracteres"),
+    description: z
+      .string()
+      .max(1000, "Descrição deve ter no máximo 1000 caracteres"),
+    categoryId: z.string().min(1, "Selecione uma categoria válida"),
+    content: z.string(),
+    contentMode: z.enum(["markdown", "pdf"]),
+  })
+  .superRefine((data, ctx) => {
+    if (data.contentMode === "markdown" && !data.content.trim()) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["content"],
+        message: "Insira o conteúdo do documento",
+      });
+    }
+  });
 
 function validate(values: DocumentFormValues): FormErrors {
+  const result = documentFormSchema.safeParse(values);
   const errors: FormErrors = {};
-
-  const title = values.title.trim();
-  if (title.length < 3) {
-    errors.title = "Título deve ter pelo menos 3 caracteres";
-  } else if (title.length > 200) {
-    errors.title = "Título deve ter no máximo 200 caracteres";
+  if (!result.success) {
+    for (const issue of result.error.issues) {
+      const key = issue.path[0] as keyof FormErrors;
+      if (key && !errors[key]) errors[key] = issue.message;
+    }
   }
-
-  if (values.description.length > 1000) {
-    errors.description = "Descrição deve ter no máximo 1000 caracteres";
-  }
-
-  if (!values.categoryId) {
-    errors.categoryId = "Selecione uma categoria válida";
-  }
-
-  if (values.contentMode === "markdown" && !values.content.trim()) {
-    errors.content = "Insira o conteúdo do documento";
-  }
-
   if (values.contentMode === "pdf" && !values.file) {
     errors.file = "Selecione um arquivo PDF";
   }
-
   return errors;
 }
 
@@ -184,7 +194,20 @@ export function DocumentForm({
   const [showCatPicker, setShowCatPicker] = useState(false);
   const [tagInput, setTagInput] = useState("");
   const [showTagSuggestions, setShowTagSuggestions] = useState(false);
+  const [localTags, setLocalTags] = useState<Tag[]>([]);
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const file = values.file;
+    if (!file) {
+      setPdfUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(file);
+    setPdfUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [values.file]);
 
   const set = useCallback(
     <K extends keyof DocumentFormValues>(
@@ -215,14 +238,18 @@ export function DocumentForm({
   }, []);
 
   // Tag helpers
-  const selectedTags = availableTags.filter((t) =>
-    values.tagIds.includes(t.id),
-  );
-  const tagSuggestions = availableTags.filter(
+  const allTags = [...availableTags, ...localTags];
+  const selectedTags = allTags.filter((t) => values.tagIds.includes(t.id));
+  const tagSuggestions = allTags.filter(
     (t) =>
       !values.tagIds.includes(t.id) &&
       t.name.toLowerCase().includes(tagInput.toLowerCase()),
   );
+  const canCreateTag =
+    tagInput.trim().length > 0 &&
+    !allTags.some(
+      (t) => t.name.toLowerCase() === tagInput.trim().toLowerCase(),
+    );
 
   function addTag(tag: Tag) {
     set("tagIds", [...values.tagIds, tag.id]);
@@ -237,18 +264,33 @@ export function DocumentForm({
     );
   }
 
+  function createTag() {
+    const name = tagInput.trim();
+    if (!name) return;
+    const slug = name
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .replace(/\s+/g, "-")
+      .replace(/[^a-z0-9-]/g, "");
+    const newTag: Tag = { id: `local-${Date.now()}`, name, slug, color: null };
+    setLocalTags((prev) => [...prev, newTag]);
+    set("tagIds", [...values.tagIds, newTag.id]);
+    setTagInput("");
+    setShowTagSuggestions(false);
+  }
+
   function handleTagKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Enter" && tagInput.trim()) {
       e.preventDefault();
-      const existing = availableTags.find(
+      const existing = allTags.find(
         (t) => t.name.toLowerCase() === tagInput.trim().toLowerCase(),
       );
       if (existing) {
         addTag(existing);
+      } else {
+        createTag();
       }
-      // In Phase 1 mocks, inline creation is not wired to a backend
-      setTagInput("");
-      setShowTagSuggestions(false);
     }
     if (e.key === "Escape") {
       setShowTagSuggestions(false);
@@ -576,6 +618,44 @@ export function DocumentForm({
               )}
             </div>
             {errors.file && <FieldError message={errors.file} />}
+            {pdfUrl && (
+              <div
+                style={{
+                  marginTop: 12,
+                  borderRadius: "var(--radius-sm)",
+                  overflow: "hidden",
+                  border: "1px solid var(--border)",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "7px 12px",
+                    background: "var(--bg-alt)",
+                    borderBottom: "1px solid var(--border)",
+                    fontSize: 11.5,
+                    color: "var(--fg-muted)",
+                    fontWeight: 600,
+                  }}
+                >
+                  <FileText size={12} aria-hidden="true" />
+                  Preview do PDF
+                </div>
+                <iframe
+                  src={pdfUrl}
+                  title="Preview do PDF"
+                  style={{
+                    width: "100%",
+                    height: 480,
+                    border: "none",
+                    display: "block",
+                    background: "var(--bg-alt)",
+                  }}
+                />
+              </div>
+            )}
             <input
               ref={fileInputRef}
               type="file"
@@ -836,65 +916,110 @@ export function DocumentForm({
               />
             </div>
 
-            {showTagSuggestions && tagSuggestions.length > 0 && (
-              <div
-                style={{
-                  position: "absolute",
-                  top: "100%",
-                  left: 0,
-                  right: 0,
-                  zIndex: 10,
-                  background: "var(--surface)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "var(--radius-sm)",
-                  boxShadow: "var(--shadow-md)",
-                  marginTop: 4,
-                  overflow: "hidden",
-                }}
-              >
-                {tagSuggestions.slice(0, 8).map((tag) => (
-                  <button
-                    key={tag.id}
-                    type="button"
-                    onClick={() => addTag(tag)}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      width: "100%",
-                      padding: "9px 12px",
-                      background: "transparent",
-                      border: "none",
-                      cursor: "pointer",
-                      fontSize: 13,
-                      color: "var(--fg)",
-                      fontFamily: "var(--font-body)",
-                      textAlign: "left",
-                      transition: "background var(--dur-fast)",
-                    }}
-                    onMouseEnter={(e) =>
-                      ((e.currentTarget as HTMLButtonElement).style.background =
-                        "var(--bg-alt)")
-                    }
-                    onMouseLeave={(e) =>
-                      ((e.currentTarget as HTMLButtonElement).style.background =
-                        "transparent")
-                    }
-                  >
-                    <span
+            {showTagSuggestions &&
+              (tagSuggestions.length > 0 || canCreateTag) && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "100%",
+                    left: 0,
+                    right: 0,
+                    zIndex: 10,
+                    background: "var(--surface)",
+                    border: "1px solid var(--border)",
+                    borderRadius: "var(--radius-sm)",
+                    boxShadow: "var(--shadow-md)",
+                    marginTop: 4,
+                    overflow: "hidden",
+                  }}
+                >
+                  {canCreateTag && (
+                    <button
+                      type="button"
+                      onClick={createTag}
                       style={{
-                        width: 10,
-                        height: 10,
-                        borderRadius: "50%",
-                        background: tag.color ?? "var(--fg-muted)",
-                        flexShrink: 0,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        width: "100%",
+                        padding: "9px 12px",
+                        background: "rgba(32,44,133,0.05)",
+                        borderBottom:
+                          tagSuggestions.length > 0
+                            ? "1px solid var(--border)"
+                            : "none",
+                        border: "none",
+                        cursor: "pointer",
+                        fontSize: 13,
+                        color: "var(--brand)",
+                        fontFamily: "var(--font-body)",
+                        fontWeight: 600,
+                        textAlign: "left",
                       }}
-                    />
-                    {tag.name}
-                  </button>
-                ))}
-              </div>
-            )}
+                      onMouseEnter={(e) =>
+                        ((
+                          e.currentTarget as HTMLButtonElement
+                        ).style.background = "rgba(32,44,133,0.1)")
+                      }
+                      onMouseLeave={(e) =>
+                        ((
+                          e.currentTarget as HTMLButtonElement
+                        ).style.background = "rgba(32,44,133,0.05)")
+                      }
+                    >
+                      <Plus
+                        size={12}
+                        style={{ flexShrink: 0 }}
+                        aria-hidden="true"
+                      />
+                      Criar tag &ldquo;{tagInput.trim()}&rdquo;
+                    </button>
+                  )}
+                  {tagSuggestions.slice(0, 8).map((tag) => (
+                    <button
+                      key={tag.id}
+                      type="button"
+                      onClick={() => addTag(tag)}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        width: "100%",
+                        padding: "9px 12px",
+                        background: "transparent",
+                        border: "none",
+                        cursor: "pointer",
+                        fontSize: 13,
+                        color: "var(--fg)",
+                        fontFamily: "var(--font-body)",
+                        textAlign: "left",
+                        transition: "background var(--dur-fast)",
+                      }}
+                      onMouseEnter={(e) =>
+                        ((
+                          e.currentTarget as HTMLButtonElement
+                        ).style.background = "var(--bg-alt)")
+                      }
+                      onMouseLeave={(e) =>
+                        ((
+                          e.currentTarget as HTMLButtonElement
+                        ).style.background = "transparent")
+                      }
+                    >
+                      <span
+                        style={{
+                          width: 10,
+                          height: 10,
+                          borderRadius: "50%",
+                          background: tag.color ?? "var(--fg-muted)",
+                          flexShrink: 0,
+                        }}
+                      />
+                      {tag.name}
+                    </button>
+                  ))}
+                </div>
+              )}
           </div>
         </div>
       </section>

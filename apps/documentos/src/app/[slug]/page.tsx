@@ -106,14 +106,7 @@ export default async function DocumentPage({ params }: PageProps) {
           <span style={{ color: "var(--fg)" }}>{doc.title}</span>
         </nav>
 
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 300px",
-            gap: 28,
-            alignItems: "flex-start",
-          }}
-        >
+        <div className="docs-doc-layout">
           {/* Main column */}
           <div style={{ minWidth: 0 }}>
             {/* Doc header card */}

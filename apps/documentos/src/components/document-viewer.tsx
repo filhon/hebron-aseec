@@ -38,7 +38,6 @@ function parseInlineTokens(text: string): InlineToken[] {
     if (match.index > last) {
       tokens.push({ kind: "text", value: text.slice(last, match.index) });
     }
-    // noUncheckedIndexedAccess: capture groups are string | undefined
     const boldFull = match[1];
     const boldContent = match[2];
     const italicFull = match[3];
@@ -84,7 +83,14 @@ function renderInline(text: string): ReactNode[] {
       return (
         <code
           key={i}
-          className="bg-[--bg-alt] border border-[--border] px-1 py-0.5 rounded text-[12.5px] font-[--font-mono]"
+          style={{
+            background: "var(--bg-alt)",
+            border: "1px solid var(--border)",
+            padding: "1px 5px",
+            borderRadius: 3,
+            fontSize: "12.5px",
+            fontFamily: "var(--font-mono)",
+          }}
         >
           {token.value}
         </code>
@@ -95,7 +101,11 @@ function renderInline(text: string): ReactNode[] {
         <a
           key={i}
           href={token.href}
-          className="text-[--brand] underline underline-offset-2"
+          style={{
+            color: "var(--brand)",
+            textDecoration: "underline",
+            textUnderlineOffset: 2,
+          }}
           target="_blank"
           rel="noopener noreferrer"
         >
@@ -120,7 +130,7 @@ function tokenize(markdown: string): LineToken[] {
 
   while (i < lines.length) {
     const line = lines[i];
-    if (line === undefined) break; // noUncheckedIndexedAccess guard
+    if (line === undefined) break;
 
     if (line.startsWith("```")) {
       const block: string[] = [];
@@ -136,7 +146,6 @@ function tokenize(markdown: string): LineToken[] {
       continue;
     }
 
-    // Optional chaining on regex group — returns string | undefined, then guard
     const h1Content = /^# (.+)/.exec(line)?.[1];
     if (h1Content !== undefined) {
       tokens.push({ type: "h1", content: h1Content, key: i });
@@ -191,7 +200,7 @@ function renderMarkdown(markdown: string): ReactNode[] {
 
   while (j < tokens.length) {
     const token = tokens[j];
-    if (token === undefined) break; // noUncheckedIndexedAccess guard
+    if (token === undefined) break;
 
     if (token.type === "blank") {
       j++;
@@ -199,14 +208,27 @@ function renderMarkdown(markdown: string): ReactNode[] {
     }
 
     if (token.type === "hr") {
-      nodes.push(<hr key={token.key} className="border-[--border] my-5" />);
+      nodes.push(
+        <hr
+          key={token.key}
+          style={{
+            border: "none",
+            borderTop: "1px solid var(--border)",
+            margin: "20px 0",
+          }}
+        />,
+      );
       j++;
       continue;
     }
 
     if (token.type === "h1") {
       nodes.push(
-        <h2 key={token.key} className="hb-h2 mb-4 mt-6">
+        <h2
+          key={token.key}
+          className="hb-h2"
+          style={{ marginBottom: 16, marginTop: 24 }}
+        >
           {renderInline(token.content)}
         </h2>,
       );
@@ -216,7 +238,11 @@ function renderMarkdown(markdown: string): ReactNode[] {
 
     if (token.type === "h2") {
       nodes.push(
-        <h3 key={token.key} className="hb-h3 mb-3 mt-5">
+        <h3
+          key={token.key}
+          className="hb-h3"
+          style={{ marginBottom: 12, marginTop: 20 }}
+        >
           {renderInline(token.content)}
         </h3>,
       );
@@ -226,7 +252,11 @@ function renderMarkdown(markdown: string): ReactNode[] {
 
     if (token.type === "h3") {
       nodes.push(
-        <h4 key={token.key} className="hb-h4 mb-2 mt-4">
+        <h4
+          key={token.key}
+          className="hb-h4"
+          style={{ marginBottom: 8, marginTop: 16 }}
+        >
           {renderInline(token.content)}
         </h4>,
       );
@@ -238,7 +268,17 @@ function renderMarkdown(markdown: string): ReactNode[] {
       nodes.push(
         <pre
           key={token.key}
-          className="bg-[--bg-alt] border border-[--border] rounded-[--radius-sm] p-4 mb-4 overflow-x-auto font-[--font-mono] text-[13px] leading-relaxed"
+          style={{
+            background: "var(--bg-alt)",
+            border: "1px solid var(--border)",
+            borderRadius: "var(--radius-sm)",
+            padding: 16,
+            marginBottom: 16,
+            overflowX: "auto",
+            fontFamily: "var(--font-mono)",
+            fontSize: 13,
+            lineHeight: 1.6,
+          }}
         >
           <code>{token.content}</code>
         </pre>,
@@ -258,7 +298,14 @@ function renderMarkdown(markdown: string): ReactNode[] {
       nodes.push(
         <ul
           key={`ul-${j}`}
-          className="list-disc list-inside space-y-1 mb-4 text-[--fg] text-[14px] leading-relaxed"
+          style={{
+            listStyle: "disc",
+            paddingLeft: 20,
+            marginBottom: 16,
+            color: "var(--fg)",
+            fontSize: 14,
+            lineHeight: 1.6,
+          }}
         >
           {items}
         </ul>,
@@ -270,7 +317,12 @@ function renderMarkdown(markdown: string): ReactNode[] {
       nodes.push(
         <p
           key={token.key}
-          className="text-[--fg] text-[14px] leading-[1.7] mb-3"
+          style={{
+            color: "var(--fg)",
+            fontSize: 14,
+            lineHeight: 1.7,
+            marginBottom: 12,
+          }}
         >
           {renderInline(token.content)}
         </p>,
@@ -341,44 +393,34 @@ export function DocumentViewer({
   const fileSize = document.currentVersion?.fileSizeBytes;
 
   return (
-    <div
-      className={`hb-card hb-card-overflow flex flex-col ${className}`}
-      style={{ minHeight: "480px" }}
-    >
+    <div className={`hb-card hb-card-overflow docs-viewer ${className}`}>
       {/* Toolbar */}
-      <div className="flex items-center gap-2 px-4 py-3 border-b border-[--border] bg-[--bg-alt]">
+      <div className="docs-viewer-toolbar">
         {/* Tabs */}
-        <div className="flex gap-0 border border-[--border] rounded-[--radius-sm] overflow-hidden">
+        <div className="docs-viewer-tab-group" role="tablist">
           <button
             type="button"
+            role="tab"
+            aria-selected={activeTab === "document"}
             onClick={() => setActiveTab("document")}
-            className={[
-              "px-3 py-1.5 text-[12.5px] font-medium inline-flex items-center gap-1.5 transition-colors duration-[--dur-fast]",
-              activeTab === "document"
-                ? "bg-[--brand] text-[--brand-fg]"
-                : "bg-transparent text-[--fg-muted] hover:bg-[--hb-gray-50]",
-            ].join(" ")}
+            className={`docs-viewer-tab${activeTab === "document" ? " active" : ""}`}
           >
             <FileText size={13} aria-hidden="true" />
             Documento
           </button>
           <button
             type="button"
+            role="tab"
+            aria-selected={activeTab === "info"}
             onClick={() => setActiveTab("info")}
-            className={[
-              "px-3 py-1.5 text-[12.5px] font-medium inline-flex items-center gap-1.5 transition-colors duration-[--dur-fast] border-l border-[--border]",
-              activeTab === "info"
-                ? "bg-[--brand] text-[--brand-fg]"
-                : "bg-transparent text-[--fg-muted] hover:bg-[--hb-gray-50]",
-            ].join(" ")}
+            className={`docs-viewer-tab${activeTab === "info" ? " active" : ""}`}
           >
             <Info size={13} aria-hidden="true" />
             Informações
           </button>
         </div>
 
-        {/* Spacer */}
-        <div className="flex-1" />
+        <div className="docs-viewer-spacer" />
 
         {/* Actions */}
         {fileUrl && (
@@ -390,7 +432,7 @@ export function DocumentViewer({
             title="Abrir em nova aba"
           >
             <ExternalLink size={13} aria-hidden="true" />
-            <span className="hidden sm:inline">Nova aba</span>
+            <span>Nova aba</span>
           </a>
         )}
         {onDownload && (
@@ -400,51 +442,59 @@ export function DocumentViewer({
             className="hb-btn hb-btn-secondary hb-btn-xs"
           >
             <Download size={13} aria-hidden="true" />
-            <span className="hidden sm:inline">Baixar</span>
+            <span>Baixar</span>
           </button>
         )}
       </div>
 
       {/* Content */}
       {activeTab === "document" ? (
-        <div className="flex-1 relative">
+        <div className="docs-viewer-content">
           {fileUrl && isPdf ? (
             <iframe
               src={fileUrl}
               title={document.title}
-              className="absolute inset-0 w-full h-full border-0"
-              style={{ minHeight: "420px" }}
+              style={{
+                position: "absolute",
+                inset: 0,
+                width: "100%",
+                height: "100%",
+                border: 0,
+                minHeight: 420,
+              }}
             />
           ) : fileUrl && isMarkdown && markdownContent ? (
-            <div className="p-6 overflow-y-auto prose-like max-w-none">
+            <div className="docs-viewer-markdown">
               {renderMarkdown(markdownContent)}
             </div>
           ) : markdownContent ? (
-            <div className="p-6 overflow-y-auto">
+            <div className="docs-viewer-markdown">
               {renderMarkdown(markdownContent)}
             </div>
           ) : (
-            /* Placeholder when no file URL is available in mock mode */
-            <div
-              className="flex flex-col items-center justify-center h-full py-16 px-6 text-center"
-              style={{ minHeight: "360px" }}
-            >
-              <div className="w-16 h-16 rounded-2xl bg-[--brand] flex items-center justify-center mb-4 shadow-[--shadow-brand]">
+            <div className="docs-viewer-placeholder">
+              <div className="docs-viewer-placeholder-icon">
                 <FileText
                   size={28}
-                  className="text-[--brand-fg]"
+                  style={{ color: "var(--brand-fg)" }}
                   aria-hidden="true"
                 />
               </div>
-              <h4 className="font-[--font-display] font-bold text-[16px] text-[--fg] mb-2">
+              <h4 className="docs-viewer-placeholder-title">
                 {document.title}
               </h4>
-              <p className="text-[--fg-muted] text-[13.5px] leading-relaxed max-w-sm mb-4">
+              <p className="docs-viewer-placeholder-desc">
                 {document.description ??
                   "O arquivo será exibido aqui quando disponível."}
               </p>
               {fileSize !== undefined && (
-                <span className="hb-badge bg-[--bg-alt] text-[--fg-muted]">
+                <span
+                  className="hb-badge"
+                  style={{
+                    background: "var(--bg-alt)",
+                    color: "var(--fg-muted)",
+                  }}
+                >
                   <Hash size={11} aria-hidden="true" />
                   {formatBytes(fileSize)}
                 </span>
@@ -453,36 +503,31 @@ export function DocumentViewer({
           )}
         </div>
       ) : (
-        /* Info tab */
-        <div className="p-5 space-y-4">
-          <h4 className="font-[--font-display] font-bold text-[15px] text-[--fg] mb-1 leading-[1.3]">
-            {document.title}
-          </h4>
+        <div className="docs-viewer-info">
+          <h4 className="docs-viewer-info-title">{document.title}</h4>
           {document.description && (
-            <p className="text-[--fg-muted] text-[13.5px] leading-[1.6]">
-              {document.description}
-            </p>
+            <p className="docs-viewer-info-desc">{document.description}</p>
           )}
 
           <dl className="hb-meta-list">
-            <dt className="flex items-center gap-1.5">
+            <dt style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <Folder size={12} aria-hidden="true" /> Categoria
             </dt>
             <dd>{document.category.name}</dd>
 
-            <dt className="flex items-center gap-1.5">
+            <dt style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <VisIcon size={12} aria-hidden="true" /> Visibilidade
             </dt>
             <dd>{vis.label}</dd>
 
-            <dt className="flex items-center gap-1.5">
+            <dt style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <Calendar size={12} aria-hidden="true" /> Atualizado
             </dt>
             <dd>{formatDate(document.updatedAt)}</dd>
 
             {document.publishedAt && (
               <>
-                <dt className="flex items-center gap-1.5">
+                <dt style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <Calendar size={12} aria-hidden="true" /> Publicado
                 </dt>
                 <dd>{formatDate(document.publishedAt)}</dd>
@@ -491,7 +536,7 @@ export function DocumentViewer({
 
             {fileSize !== undefined && (
               <>
-                <dt className="flex items-center gap-1.5">
+                <dt style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <FileText size={12} aria-hidden="true" /> Tamanho
                 </dt>
                 <dd>{formatBytes(fileSize)}</dd>
@@ -500,7 +545,7 @@ export function DocumentViewer({
 
             {document.currentVersion && (
               <>
-                <dt className="flex items-center gap-1.5">
+                <dt style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <Hash size={12} aria-hidden="true" /> Versão
                 </dt>
                 <dd>v{document.currentVersion.version}</dd>
@@ -510,14 +555,27 @@ export function DocumentViewer({
 
           {document.tags.length > 0 && (
             <div>
-              <p className="hb-section-label flex items-center gap-1.5">
+              <p
+                className="hb-section-label"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 6,
+                  marginBottom: 8,
+                }}
+              >
                 <Tag size={10} aria-hidden="true" /> Tags
               </p>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="docs-viewer-info-tags">
                 {document.tags.map((tag) => (
                   <span
                     key={tag.id}
-                    className="px-2.5 py-1 rounded-full text-[11.5px] font-medium bg-[--bg-alt] text-[--fg-muted] border border-[--border]"
+                    className="hb-badge"
+                    style={{
+                      background: "var(--bg-alt)",
+                      color: "var(--fg-muted)",
+                      border: "1px solid var(--border)",
+                    }}
                   >
                     {tag.name}
                   </span>

@@ -89,96 +89,66 @@ function VersionRow({
   const diffCfg = DIFF_CONFIG[diff];
 
   return (
-    <li className="relative">
-      {/* Timeline dot */}
+    <li className="docs-ver-item">
       <span
-        className={[
-          "absolute left-0 top-4.5 w-3 h-3 rounded-full border-2 border-[--surface] z-10",
-          isCurrent ? "bg-[--brand]" : "bg-[--hb-gray-200]",
-        ].join(" ")}
+        className={`docs-ver-dot${isCurrent ? " current" : ""}`}
         aria-hidden="true"
       />
 
-      <div
-        className={[
-          "ml-6 rounded-[--radius-sm] border transition-all duration-[--dur-fast]",
-          isCurrent
-            ? "border-[--brand] bg-[--brand-muted]"
-            : "border-[--border] bg-[--surface] hover:border-[--hb-gray-200]",
-        ].join(" ")}
-      >
-        {/* Version header */}
+      <div className={`docs-ver-card${isCurrent ? " current" : ""}`}>
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
-          className="w-full flex items-center gap-3 px-4 py-3 text-left"
+          className="docs-ver-trigger"
           aria-expanded={expanded}
         >
-          {/* Version badge */}
-          <span
-            className={[
-              "shrink-0 font-[--font-display] text-[13px] font-bold px-2.5 py-1 rounded-full",
-              isCurrent
-                ? "bg-[--brand] text-[--brand-fg]"
-                : "bg-[--bg-alt] text-[--fg-muted] border border-[--border]",
-            ].join(" ")}
-          >
+          <span className={`docs-ver-badge${isCurrent ? " current" : ""}`}>
             v{version.version}
           </span>
 
-          {/* Notes */}
-          <span className="flex-1 min-w-0">
+          <span className="docs-ver-notes">
             <span
-              className={[
-                "text-[13.5px] font-semibold block truncate",
-                isCurrent ? "text-[--brand]" : "text-[--fg]",
-              ].join(" ")}
+              className={`docs-ver-notes-title${isCurrent ? " current" : ""}`}
             >
               {version.notes ?? `Versão ${version.version}`}
             </span>
-            <span className="text-[12px] text-[--fg-muted] inline-flex items-center gap-1 mt-0.5">
+            <span className="docs-ver-date">
               <Clock size={11} aria-hidden="true" />
               {formatDate(version.publishedAt)}
             </span>
           </span>
 
-          {/* Current badge */}
           {isCurrent && (
-            <span className="shrink-0 inline-flex items-center gap-1 text-[11.5px] font-semibold text-[--brand]">
+            <span className="docs-ver-current-badge">
               <CheckCircle2 size={13} aria-hidden="true" />
               Atual
             </span>
           )}
 
-          {/* Expand icon */}
           <ChevronDown
             size={15}
             aria-hidden="true"
-            className={`shrink-0 text-[--fg-muted] transition-transform duration-[--dur-fast] ${expanded ? "rotate-180" : ""}`}
+            className={`docs-ver-chevron${expanded ? " open" : ""}`}
           />
         </button>
 
-        {/* Expanded details */}
         {expanded && (
-          <div className="px-4 pb-4 border-t border-[--divider] pt-3 flex flex-col gap-3">
-            {/* Diff visual */}
-            <div className="flex flex-col gap-1.5">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-[12px] text-[--fg-muted] font-medium">
-                  {diffCfg.label}
-                </span>
-                <span className="text-[11.5px] text-[--fg-muted] inline-flex items-center gap-1">
+          <div className="docs-ver-details">
+            <div className="docs-ver-diff">
+              <div className="docs-ver-diff-header">
+                <span className="docs-ver-diff-label">{diffCfg.label}</span>
+                <span className="docs-ver-diff-size">
                   <FileText size={11} aria-hidden="true" />
                   {formatBytes(version.fileSizeBytes)}
                 </span>
               </div>
               <div
-                className="h-1.5 rounded-full bg-[--border] overflow-hidden"
+                className="docs-ver-diff-track"
                 role="meter"
                 aria-label={diffCfg.label}
               >
                 <div
-                  className="h-full rounded-full transition-all duration-[--dur-slow]"
+                  className="docs-ver-diff-fill"
                   style={{
                     width: diffCfg.barWidth,
                     backgroundColor: diffCfg.color,
@@ -187,37 +157,31 @@ function VersionRow({
               </div>
             </div>
 
-            {/* Meta */}
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-[12.5px]">
-              <dt className="text-[--fg-muted] inline-flex items-center gap-1">
-                <Hash size={11} aria-hidden="true" />
-                Versão
+            <dl className="docs-ver-meta">
+              <dt>
+                <Hash size={11} aria-hidden="true" /> Versão
               </dt>
-              <dd className="text-[--fg] font-medium">v{version.version}</dd>
+              <dd>v{version.version}</dd>
 
-              <dt className="text-[--fg-muted] inline-flex items-center gap-1">
-                <FileText size={11} aria-hidden="true" />
-                Formato
+              <dt>
+                <FileText size={11} aria-hidden="true" /> Formato
               </dt>
-              <dd className="text-[--fg] font-medium uppercase text-[11px]">
+              <dd style={{ textTransform: "uppercase", fontSize: 11 }}>
                 {version.mimeType.split("/")[1] ?? version.mimeType}
               </dd>
 
-              <dt className="text-[--fg-muted] inline-flex items-center gap-1">
-                <FileText size={11} aria-hidden="true" />
-                Tamanho
+              <dt>
+                <FileText size={11} aria-hidden="true" /> Tamanho
               </dt>
-              <dd className="text-[--fg] font-medium">
-                {formatBytes(version.fileSizeBytes)}
-              </dd>
+              <dd>{formatBytes(version.fileSizeBytes)}</dd>
             </dl>
 
-            {/* Download */}
             {onDownload && (
               <button
                 type="button"
                 onClick={() => onDownload(version)}
-                className="hb-btn hb-btn-secondary hb-btn-sm self-start"
+                className="hb-btn hb-btn-secondary hb-btn-sm"
+                style={{ alignSelf: "flex-start" }}
               >
                 <Download size={13} aria-hidden="true" />
                 Baixar v{version.version}
@@ -260,16 +224,12 @@ export function VersionHistory({
   }
 
   return (
-    <div className={`${className}`}>
-      <p className="hb-section-label mb-3">
+    <div className={className}>
+      <p className="hb-section-label docs-ver-count">
         {sorted.length} {sorted.length === 1 ? "versão" : "versões"}
       </p>
 
-      {/* Timeline */}
-      <ul
-        className="relative pl-3 border-l-2 border-[--border] space-y-3"
-        aria-label="Histórico de versões"
-      >
+      <ul className="docs-ver-list" aria-label="Histórico de versões">
         {sorted.map((version, index) => {
           const prevVersion = sorted[index + 1];
           return (

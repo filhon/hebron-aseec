@@ -251,15 +251,7 @@ export default function HomePage() {
         </section>
 
         {/* ── Two-col: recentes + categorias ── */}
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1.6fr 1fr",
-            gap: 40,
-            marginBottom: 56,
-            alignItems: "flex-start",
-          }}
-        >
+        <div className="docs-two-col">
           {/* Documentos recentes */}
           <section aria-labelledby="recentes-heading">
             <div className="docs-section-head">

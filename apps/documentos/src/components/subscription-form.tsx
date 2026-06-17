@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback, useId } from "react";
+import { z } from "zod";
 import {
   AlertCircle,
   Bell,
@@ -31,13 +32,25 @@ type FormErrors = Partial<Record<"email" | "subscriptions", string>>;
 
 // ─── Validation ───────────────────────────────────────────────────────────────
 
+const subscriptionFormSchema = z.object({
+  email: z.string().email("Informe um e-mail válido"),
+  subscriptions: z.array(
+    z.object({
+      categoryId: z.string(),
+      onNewVersion: z.boolean(),
+      onEditalOpen: z.boolean(),
+    }),
+  ),
+});
+
 function validate(values: SubscriptionFormValues): FormErrors {
+  const result = subscriptionFormSchema.safeParse(values);
+  if (result.success) return {};
   const errors: FormErrors = {};
-
-  if (!values.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email)) {
-    errors.email = "Informe um e-mail válido";
+  for (const issue of result.error.issues) {
+    const key = issue.path[0] as keyof FormErrors;
+    if (key && !errors[key]) errors[key] = issue.message;
   }
-
   return errors;
 }
 
