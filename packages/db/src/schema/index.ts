@@ -58,3 +58,35 @@ export type {
   SystemSetting,
   NewSystemSetting,
 } from "./admin";
+
+// Documentos schema
+export {
+  visibilityEnum,
+  categories,
+  tags,
+  documents,
+  documentTags,
+  documentVersions,
+  editals,
+  subscriptions,
+  views,
+} from "./documentos";
+
+export type {
+  Category,
+  NewCategory,
+  Tag,
+  NewTag,
+  Document,
+  NewDocument,
+  DocumentTag,
+  NewDocumentTag,
+  DocumentVersion,
+  NewDocumentVersion,
+  Edital,
+  NewEdital,
+  Subscription,
+  NewSubscription,
+  View,
+  NewView,
+} from "./documentos";
