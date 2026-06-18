@@ -16,8 +16,32 @@ import {
 import { PublicNav } from "../components/public-nav";
 import { DocumentCard } from "../components/document-card";
 import { EditalCard } from "../components/edital-card";
-import { mockDocuments, mockEditais, mockCategories } from "../lib/mock-data";
-import type { Edital } from "@hebron/types/documentos";
+import { db } from "@hebron/db/client";
+import {
+  documents,
+  editals,
+  categories,
+  documentTags,
+  tags,
+  documentVersions,
+} from "@hebron/db/schema";
+import {
+  and,
+  or,
+  eq,
+  isNull,
+  isNotNull,
+  desc,
+  inArray,
+  sql,
+} from "drizzle-orm";
+import type {
+  Document,
+  Edital,
+  DocumentVersion,
+} from "@hebron/types/documentos";
+
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Documentos — Hebron Aseec",
@@ -30,6 +54,345 @@ export const metadata: Metadata = {
   },
 };
 
+// ─── Type adapters ────────────────────────────────────────────────────────────
+
+type DbDocRow = {
+  id: string;
+  title: string;
+  slug: string;
+  contentMd: string | null;
+  fileUrl: string | null;
+  visibility: "public" | "internal" | "restricted";
+  categoryId: string | null;
+  categoryName: string | null;
+  categorySlug: string | null;
+  authorId: string;
+  publishedAt: Date | null;
+  deletedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+type DbVersionRow = {
+  id: string;
+  documentId: string;
+  versionNumber: number;
+  fileUrl: string | null;
+  contentMd: string | null;
+  createdBy: string;
+  createdAt: Date;
+};
+
+type DocTag = { id: string; name: string; slug: string };
+
+function getMimeType(fileUrl: string | null, contentMd: string | null): string {
+  if (fileUrl?.endsWith(".pdf")) return "application/pdf";
+  if (contentMd) return "text/markdown";
+  return "application/octet-stream";
+}
+
+function adaptVersion(v: DbVersionRow): DocumentVersion {
+  return {
+    id: v.id,
+    documentId: v.documentId,
+    version: v.versionNumber,
+    storageKey: v.fileUrl ?? "",
+    fileSizeBytes: 0,
+    mimeType: getMimeType(v.fileUrl, v.contentMd),
+    notes: null,
+    publishedBy: v.createdBy,
+    publishedAt: v.createdAt,
+  };
+}
+
+function extractDescription(contentMd: string | null): string | null {
+  if (!contentMd) return null;
+  const line = contentMd
+    .split("\n")
+    .find((l) => l.trim() !== "" && !l.startsWith("#") && !l.startsWith("-"));
+  return line?.trim().slice(0, 240) ?? null;
+}
+
+function makeCat(id: string | null, name: string | null, slug: string | null) {
+  return {
+    id: id ?? "",
+    name: name ?? "Sem categoria",
+    slug: slug ?? "",
+    description: null,
+    parentId: null,
+    children: [],
+    documentCount: 0,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+}
+
+function adaptDoc(
+  row: DbDocRow,
+  docTags: DocTag[],
+  latestVersion: DbVersionRow | null,
+): Document {
+  const cv = latestVersion ? adaptVersion(latestVersion) : null;
+  return {
+    id: row.id,
+    title: row.title,
+    slug: row.slug,
+    description: extractDescription(row.contentMd),
+    type: "other",
+    visibility: row.visibility,
+    status: row.publishedAt ? "published" : "draft",
+    categoryId: row.categoryId ?? "",
+    category: makeCat(row.categoryId, row.categoryName, row.categorySlug),
+    tags: docTags.map((t) => ({ ...t, color: null })),
+    currentVersionId: cv?.id ?? null,
+    currentVersion: cv,
+    publishedBy: row.authorId,
+    publishedAt: row.publishedAt,
+    createdBy: row.authorId,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    deletedAt: row.deletedAt,
+  };
+}
+
+type DbEditalRow = DbDocRow & {
+  editalOpensAt: Date | null;
+  editalClosesAt: Date | null;
+  editalProjectType: string | null;
+};
+
+function adaptEdital(
+  row: DbEditalRow,
+  docTags: DocTag[],
+  latestVersion: DbVersionRow | null,
+): Edital {
+  const cv = latestVersion ? adaptVersion(latestVersion) : null;
+  const cycleType =
+    !row.editalOpensAt && !row.editalClosesAt
+      ? ("pontual" as const)
+      : ("anual" as const);
+  return {
+    id: row.id,
+    title: row.title,
+    slug: row.slug,
+    description: extractDescription(row.contentMd),
+    type: "edital",
+    visibility: row.visibility,
+    status: row.publishedAt ? "published" : "draft",
+    categoryId: row.categoryId ?? "",
+    category: makeCat(row.categoryId, row.categoryName, row.categorySlug),
+    tags: docTags.map((t) => ({ ...t, color: null })),
+    currentVersionId: cv?.id ?? null,
+    currentVersion: cv,
+    publishedBy: row.authorId,
+    publishedAt: row.publishedAt,
+    createdBy: row.authorId,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    deletedAt: row.deletedAt,
+    cycleType,
+    opensAt: row.editalOpensAt,
+    closesAt: row.editalClosesAt,
+    projectType: row.editalProjectType,
+    projectCategory: null,
+  };
+}
+
+// ─── DB queries ───────────────────────────────────────────────────────────────
+
+async function buildPageData() {
+  const [editaisRows, recentDocRows, catRows, [totalRow]] = await Promise.all([
+    // All published public/internal editals
+    db
+      .select({
+        id: documents.id,
+        title: documents.title,
+        slug: documents.slug,
+        contentMd: documents.contentMd,
+        fileUrl: documents.fileUrl,
+        visibility: documents.visibility,
+        categoryId: documents.categoryId,
+        categoryName: categories.name,
+        categorySlug: categories.slug,
+        authorId: documents.authorId,
+        publishedAt: documents.publishedAt,
+        deletedAt: documents.deletedAt,
+        createdAt: documents.createdAt,
+        updatedAt: documents.updatedAt,
+        editalOpensAt: editals.opensAt,
+        editalClosesAt: editals.closesAt,
+        editalProjectType: editals.projectType,
+      })
+      .from(editals)
+      .innerJoin(documents, eq(editals.id, documents.id))
+      .leftJoin(categories, eq(categories.id, documents.categoryId))
+      .where(
+        and(
+          isNull(documents.deletedAt),
+          isNotNull(documents.publishedAt),
+          or(
+            eq(documents.visibility, "public"),
+            eq(documents.visibility, "internal"),
+          ),
+        ),
+      )
+      .orderBy(desc(documents.publishedAt)),
+
+    // Recent non-edital published documents
+    db
+      .select({
+        id: documents.id,
+        title: documents.title,
+        slug: documents.slug,
+        contentMd: documents.contentMd,
+        fileUrl: documents.fileUrl,
+        visibility: documents.visibility,
+        categoryId: documents.categoryId,
+        categoryName: categories.name,
+        categorySlug: categories.slug,
+        authorId: documents.authorId,
+        publishedAt: documents.publishedAt,
+        deletedAt: documents.deletedAt,
+        createdAt: documents.createdAt,
+        updatedAt: documents.updatedAt,
+        editalId: editals.id,
+      })
+      .from(documents)
+      .leftJoin(categories, eq(categories.id, documents.categoryId))
+      .leftJoin(editals, eq(editals.id, documents.id))
+      .where(
+        and(
+          isNull(documents.deletedAt),
+          isNotNull(documents.publishedAt),
+          isNull(editals.id),
+          or(
+            eq(documents.visibility, "public"),
+            eq(documents.visibility, "internal"),
+          ),
+        ),
+      )
+      .orderBy(desc(documents.updatedAt))
+      .limit(6),
+
+    // All categories for count
+    db
+      .select({
+        id: categories.id,
+        name: categories.name,
+        slug: categories.slug,
+      })
+      .from(categories),
+
+    // Total published documents
+    db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(documents)
+      .where(
+        and(isNull(documents.deletedAt), isNotNull(documents.publishedAt)),
+      ),
+  ]);
+
+  // Fetch tags for recent docs
+  const recentDocIds = recentDocRows.map((r) => r.id);
+  const tagRows =
+    recentDocIds.length > 0
+      ? await db
+          .select({
+            documentId: documentTags.documentId,
+            tagId: tags.id,
+            tagName: tags.name,
+            tagSlug: tags.slug,
+          })
+          .from(documentTags)
+          .innerJoin(tags, eq(tags.id, documentTags.tagId))
+          .where(inArray(documentTags.documentId, recentDocIds))
+      : [];
+
+  const tagMap = new Map<string, DocTag[]>();
+  for (const t of tagRows) {
+    const arr = tagMap.get(t.documentId) ?? [];
+    arr.push({ id: t.tagId, name: t.tagName, slug: t.tagSlug });
+    tagMap.set(t.documentId, arr);
+  }
+
+  // Fetch tags for editals
+  const editalIds = editaisRows.map((r) => r.id);
+  const editalTagRows =
+    editalIds.length > 0
+      ? await db
+          .select({
+            documentId: documentTags.documentId,
+            tagId: tags.id,
+            tagName: tags.name,
+            tagSlug: tags.slug,
+          })
+          .from(documentTags)
+          .innerJoin(tags, eq(tags.id, documentTags.tagId))
+          .where(inArray(documentTags.documentId, editalIds))
+      : [];
+
+  const editalTagMap = new Map<string, DocTag[]>();
+  for (const t of editalTagRows) {
+    const arr = editalTagMap.get(t.documentId) ?? [];
+    arr.push({ id: t.tagId, name: t.tagName, slug: t.tagSlug });
+    editalTagMap.set(t.documentId, arr);
+  }
+
+  // Fetch latest versions for recent docs
+  const versionRows =
+    recentDocIds.length > 0
+      ? await db
+          .select()
+          .from(documentVersions)
+          .where(inArray(documentVersions.documentId, recentDocIds))
+          .orderBy(desc(documentVersions.versionNumber))
+      : [];
+
+  const latestVersionMap = new Map<string, DbVersionRow>();
+  for (const v of versionRows) {
+    if (!latestVersionMap.has(v.documentId)) {
+      latestVersionMap.set(v.documentId, v);
+    }
+  }
+
+  const recentDocs: Document[] = recentDocRows.map((row) =>
+    adaptDoc(
+      row,
+      tagMap.get(row.id) ?? [],
+      latestVersionMap.get(row.id) ?? null,
+    ),
+  );
+
+  const allEditais: Edital[] = editaisRows.map((row) =>
+    adaptEdital(row, editalTagMap.get(row.id) ?? [], null),
+  );
+
+  function getEditalStatus(
+    e: Edital,
+  ): "open" | "closed" | "permanent" | "upcoming" {
+    if (e.cycleType === "pontual") return "permanent";
+    const now = new Date();
+    if (e.opensAt && now < new Date(e.opensAt)) return "upcoming";
+    if (e.closesAt && now > new Date(e.closesAt)) return "closed";
+    return "open";
+  }
+
+  const openEditais = allEditais.filter((e) => {
+    const s = getEditalStatus(e);
+    return s === "open" || s === "permanent";
+  });
+
+  return {
+    openEditais,
+    recentDocs,
+    allCategories: catRows,
+    totalDocs: totalRow?.n ?? 0,
+    openCount: openEditais.length,
+  };
+}
+
+// ─── Category icons ───────────────────────────────────────────────────────────
+
 const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   "juridico-legal": <Scale size={20} aria-hidden="true" />,
   "fiscal-contabil": <Banknote size={20} aria-hidden="true" />,
@@ -39,56 +402,14 @@ const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   "comunicacoes-relatorios": <BarChart2 size={20} aria-hidden="true" />,
 };
 
-function getEditalStatus(edital: {
-  cycleType: string;
-  opensAt: Date | null;
-  closesAt: Date | null;
-}): "open" | "closed" | "permanent" | "upcoming" {
-  if (edital.cycleType === "pontual") return "permanent";
-  const now = new Date();
-  if (edital.opensAt && now < new Date(edital.opensAt)) return "upcoming";
-  if (edital.closesAt && now > new Date(edital.closesAt)) return "closed";
-  return "open";
-}
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
-type PageData = {
-  openEditais: Edital[];
-  recentDocs: typeof mockDocuments;
-  totalDocs: number;
-  openCount: number;
-};
-
-function buildPageData(): PageData {
-  const publicEditais = mockEditais.filter(
-    (e) => e.visibility === "public" || e.visibility === "internal",
-  );
-  const openEditais = publicEditais.filter((e) => {
-    const s = getEditalStatus(e);
-    return s === "open" || s === "permanent";
-  });
-
-  const recentDocs = [...mockDocuments]
-    .filter((d) => d.visibility === "public" || d.visibility === "internal")
-    .sort(
-      (a, b) =>
-        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-    )
-    .slice(0, 6);
-
-  return {
-    openEditais,
-    recentDocs,
-    totalDocs: mockDocuments.length + mockEditais.length,
-    openCount: openEditais.length,
-  };
-}
-
-export default function HomePage() {
-  let data: PageData | null = null;
+export default async function HomePage() {
+  let data: Awaited<ReturnType<typeof buildPageData>> | null = null;
   let hasError = false;
 
   try {
-    data = buildPageData();
+    data = await buildPageData();
   } catch {
     hasError = true;
   }
@@ -130,7 +451,7 @@ export default function HomePage() {
     );
   }
 
-  const { openEditais, recentDocs, totalDocs, openCount } = data;
+  const { openEditais, recentDocs, allCategories, totalDocs, openCount } = data;
 
   return (
     <>
@@ -178,17 +499,16 @@ export default function HomePage() {
               <div className="label">Editais disponíveis</div>
             </div>
             <div className="docs-hero-stat">
-              <div className="big">{mockCategories.length}</div>
+              <div className="big">{allCategories.length}</div>
               <div className="label">Categorias</div>
             </div>
             <div className="docs-hero-stat">
-              <div className="big">7</div>
-              <div className="label">Atualizações em 30 dias</div>
+              <div className="big">{recentDocs.length}</div>
+              <div className="label">Publicações recentes</div>
             </div>
           </div>
         </div>
 
-        {/* Decorative blobs */}
         <div className="docs-hero-deco-cyan" aria-hidden="true" />
         <div className="docs-hero-deco-green" aria-hidden="true" />
       </section>
@@ -324,7 +644,7 @@ export default function HomePage() {
             </div>
 
             <div className="docs-cat-grid">
-              {mockCategories.map((cat) => (
+              {allCategories.map((cat) => (
                 <Link
                   key={cat.id}
                   href={`/busca?categoria=${cat.id}`}
@@ -336,10 +656,6 @@ export default function HomePage() {
                     )}
                   </div>
                   <div className="docs-cat-name">{cat.name}</div>
-                  <div className="docs-cat-count">
-                    {cat.documentCount} documento
-                    {cat.documentCount === 1 ? "" : "s"}
-                  </div>
                 </Link>
               ))}
             </div>
@@ -381,8 +697,7 @@ export default function HomePage() {
               </div>
               <b>Nenhum documento encontrado</b>
               <p className="hb-empty-body">
-                Nenhum documento está disponível para exibição no momento. Tente
-                buscar por título, categoria ou tags.
+                Nenhum documento está disponível para exibição no momento.
               </p>
               <p className="hb-empty-quote">
                 "A tua palavra é lâmpada que ilumina os meus passos e luz que

@@ -47,7 +47,7 @@ export const createEdital = adminDocAction
         projectType: z.string().max(100).nullable().optional(),
         projectCategoryId: z.string().uuid().nullable().optional(),
       })
-      .superRefine((data, ctx) => {
+      .superRefine(async (data, ctx) => {
         if (data.cycleType === "anual") {
           if (!data.opensAt) {
             ctx.addIssue({

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ChevronRight,
@@ -10,15 +11,29 @@ import {
   Plus,
   Trash2,
   Upload,
+  Loader2,
+  AlertTriangle,
 } from "lucide-react";
-import { mockCategories } from "../../../lib/mock-data";
+import {
+  createDocument,
+  publishDocument,
+  getUploadUrl,
+} from "../../../actions/documents";
+import { createEdital } from "../../../actions/editals";
+import { listCategories } from "../../../actions/categories";
 
 type TabId = "conteudo" | "metadados" | "submissao" | "faq";
 type Visibility = "public" | "internal" | "restricted";
+type DocType = "documento" | "edital";
 
 interface FaqEntry {
   q: string;
   a: string;
+}
+
+interface CategoryOption {
+  id: string;
+  name: string;
 }
 
 const INITIAL_CONTENT = `# Edital de Projetos 2026
@@ -47,15 +62,44 @@ A submissão é realizada pelo módulo Projetos em \`projetos.hebronaseec.com.br
 ## 5. Disposições finais
 Casos omissos serão decididos pela diretoria.`;
 
+function previewMarkdown(md: string): string {
+  return md
+    .split("\n")
+    .map((line) => {
+      if (/^# /.test(line))
+        return `<h2 style="font-family:var(--font-display);font-size:18px;font-weight:700;letter-spacing:-0.01em;color:var(--hb-blue);margin:0 0 6px">${line.replace(/^# /, "")}</h2>`;
+      if (/^## /.test(line))
+        return `<h3 style="font-family:var(--font-display);font-size:14px;font-weight:700;color:var(--fg);margin:14px 0 4px">${line.replace(/^## /, "")}</h3>`;
+      if (/^- /.test(line))
+        return `<li style="font-size:13px;line-height:1.5">${line.replace(/^- /, "").replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")}</li>`;
+      if (line.trim() === "") return "";
+      return `<p style="font-size:13px;line-height:1.55;color:var(--fg);margin:0 0 8px">${line.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/`(.+?)`/g, '<code style="background:var(--bg-alt);padding:1px 5px;border-radius:3px;font-size:11px">$1</code>')}</p>`;
+    })
+    .join("")
+    .replace(
+      /(<li.*?<\/li>\s*)+/g,
+      (m) =>
+        `<ul style="margin:0 0 10px;padding-left:18px;list-style:disc">${m}</ul>`,
+    );
+}
+
 export default function NovoDocumentoPage() {
+  const router = useRouter();
+
   const [activeTab, setActiveTab] = useState<TabId>("conteudo");
+  const [docType, setDocType] = useState<DocType>("edital");
   const [title, setTitle] = useState("");
   const [summary, setSummary] = useState("");
   const [content, setContent] = useState(INITIAL_CONTENT);
   const [visibility, setVisibility] = useState<Visibility>("public");
-  const [categoryId, setCategoryId] = useState(mockCategories[3]?.id ?? "");
+  const [categoryId, setCategoryId] = useState("");
   const [opensAt, setOpensAt] = useState("");
   const [closesAt, setClosesAt] = useState("");
+  const [storagePath, setStoragePath] = useState<string | null>(null);
+  const [uploadingFile, setUploadingFile] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const [dbCategories, setDbCategories] = useState<CategoryOption[]>([]);
   const [faqItems, setFaqItems] = useState<FaqEntry[]>([
     {
       q: "Quem pode submeter?",
@@ -71,10 +115,28 @@ export default function NovoDocumentoPage() {
     },
   ]);
 
+  // Load categories from DB via server action
+  useEffect(() => {
+    void listCategories({}).then((result) => {
+      const cats = (result?.data?.categories ?? []) as Array<{
+        id: string;
+        name: string;
+      }>;
+      setDbCategories(cats.map((c) => ({ id: c.id, name: c.name })));
+      if (cats[3]) setCategoryId(cats[3].id);
+      else if (cats[0]) setCategoryId(cats[0].id);
+    });
+  }, []);
+
   const checklist: { done: boolean; label: string }[] = [
     { done: !!title, label: "Título preenchido" },
     { done: summary.length > 40, label: "Resumo com 40+ caracteres" },
-    { done: !!opensAt && !!closesAt, label: "Cronograma definido" },
+    {
+      done:
+        docType === "documento" ||
+        (docType === "edital" && !!opensAt && !!closesAt),
+      label: docType === "edital" ? "Cronograma definido" : "Tipo selecionado",
+    },
     { done: content.length > 400, label: "Conteúdo com base completa" },
     { done: faqItems.length >= 2, label: "Pelo menos 2 FAQs" },
     { done: false, label: "Aprovação da diretoria registrada" },
@@ -124,25 +186,85 @@ export default function NovoDocumentoPage() {
     setFaqItems((prev) => [...prev, { q: "", a: "" }]);
   }
 
-  function previewMarkdown(md: string) {
-    return md
-      .split("\n")
-      .map((line) => {
-        if (/^# /.test(line))
-          return `<h2 style="font-family:var(--font-display);font-size:18px;font-weight:700;letter-spacing:-0.01em;color:var(--hb-blue);margin:0 0 6px">${line.replace(/^# /, "")}</h2>`;
-        if (/^## /.test(line))
-          return `<h3 style="font-family:var(--font-display);font-size:14px;font-weight:700;color:var(--fg);margin:14px 0 4px">${line.replace(/^## /, "")}</h3>`;
-        if (/^- /.test(line))
-          return `<li style="font-size:13px;line-height:1.5">${line.replace(/^- /, "").replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")}</li>`;
-        if (line.trim() === "") return "";
-        return `<p style="font-size:13px;line-height:1.55;color:var(--fg);margin:0 0 8px">${line.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/`(.+?)`/g, '<code style="background:var(--bg-alt);padding:1px 5px;border-radius:3px;font-size:11px">$1</code>')}</p>`;
-      })
-      .join("")
-      .replace(
-        /(<li.*?<\/li>\s*)+/g,
-        (m) =>
-          `<ul style="margin:0 0 10px;padding-left:18px;list-style:disc">${m}</ul>`,
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.name.endsWith(".pdf")) {
+      setPublishError("Apenas arquivos PDF são aceitos.");
+      return;
+    }
+    setUploadingFile(true);
+    setPublishError(null);
+    try {
+      const urlResult = await getUploadUrl({
+        fileName: file.name,
+        mimeType: "application/pdf",
+      });
+      const uploadData = urlResult?.data;
+      if (!uploadData) throw new Error("Não foi possível obter URL de upload.");
+      const res = await fetch(uploadData.uploadUrl, {
+        method: "PUT",
+        body: file,
+        headers: { "Content-Type": "application/pdf" },
+      });
+      if (!res.ok) throw new Error("Falha ao enviar arquivo para o storage.");
+      setStoragePath(uploadData.storagePath);
+    } catch (err) {
+      setPublishError(
+        err instanceof Error ? err.message : "Erro ao enviar arquivo.",
       );
+    } finally {
+      setUploadingFile(false);
+    }
+  }
+
+  async function handlePublish() {
+    if (!title.trim()) {
+      setPublishError("Título é obrigatório.");
+      return;
+    }
+    setPublishing(true);
+    setPublishError(null);
+    try {
+      let docId: string | null = null;
+
+      const contentMd = content.trim() || undefined;
+      const visibility_ = visibility;
+
+      if (docType === "edital") {
+        const cycleType =
+          opensAt && closesAt ? ("anual" as const) : ("pontual" as const);
+        const result = await createEdital({
+          title: title.trim(),
+          contentMd,
+          storagePath: storagePath ?? undefined,
+          visibility: visibility_,
+          categoryId: categoryId || undefined,
+          cycleType,
+          opensAt: opensAt ? new Date(opensAt).toISOString() : null,
+          closesAt: closesAt ? new Date(closesAt).toISOString() : null,
+        });
+        docId = result?.data?.document?.id ?? null;
+      } else {
+        const result = await createDocument({
+          title: title.trim(),
+          contentMd,
+          storagePath: storagePath ?? undefined,
+          visibility: visibility_,
+          categoryId: categoryId || undefined,
+        });
+        docId = result?.data?.document?.id ?? null;
+      }
+
+      if (!docId) throw new Error("Falha ao criar documento.");
+
+      await publishDocument({ id: docId });
+      router.push("/editorial");
+    } catch (err) {
+      setPublishError(err instanceof Error ? err.message : "Erro ao publicar.");
+    } finally {
+      setPublishing(false);
+    }
   }
 
   return (
@@ -196,18 +318,60 @@ export default function NovoDocumentoPage() {
             flexShrink: 0,
           }}
         >
-          <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>
-            Rascunho salvo às 14:32
-          </span>
+          {publishError && (
+            <span
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 5,
+                fontSize: 13,
+                color: "var(--hb-red, #dc2626)",
+              }}
+            >
+              <AlertTriangle size={13} aria-hidden="true" />
+              {publishError}
+            </span>
+          )}
           <button type="button" className="hb-btn hb-btn-ghost hb-btn-sm">
             <Eye size={14} aria-hidden="true" />
             Pré-visualizar
           </button>
-          <button type="button" className="hb-btn hb-btn-primary">
-            <Send size={14} aria-hidden="true" />
-            Publicar
+          <button
+            type="button"
+            className="hb-btn hb-btn-primary"
+            onClick={() => void handlePublish()}
+            disabled={publishing || uploadingFile}
+          >
+            {publishing ? (
+              <Loader2 size={14} aria-hidden="true" className="animate-spin" />
+            ) : (
+              <Send size={14} aria-hidden="true" />
+            )}
+            {publishing ? "Publicando…" : "Publicar"}
           </button>
         </div>
+      </div>
+
+      {/* Doc type toggle */}
+      <div
+        style={{ display: "flex", gap: 8, marginBottom: 20 }}
+        role="group"
+        aria-label="Tipo de publicação"
+      >
+        <button
+          type="button"
+          className={`hb-chip ${docType === "edital" ? "active" : ""}`}
+          onClick={() => setDocType("edital")}
+        >
+          Edital
+        </button>
+        <button
+          type="button"
+          className={`hb-chip ${docType === "documento" ? "active" : ""}`}
+          onClick={() => setDocType("documento")}
+        >
+          Documento
+        </button>
       </div>
 
       {/* Editor shell */}
@@ -381,8 +545,12 @@ export default function NovoDocumentoPage() {
                       value={categoryId}
                       onChange={(e) => setCategoryId(e.target.value)}
                       className="hb-form-select"
+                      disabled={dbCategories.length === 0}
                     >
-                      {mockCategories.map((cat) => (
+                      {dbCategories.length === 0 && (
+                        <option value="">Carregando…</option>
+                      )}
+                      {dbCategories.map((cat) => (
                         <option key={cat.id} value={cat.id}>
                           {cat.name}
                         </option>
@@ -416,25 +584,57 @@ export default function NovoDocumentoPage() {
                     Se um arquivo for enviado, ele substituirá o conteúdo
                     Markdown no visualizador.
                   </div>
-                  <div
+                  <label
                     style={{
-                      border: "2px dashed var(--border)",
+                      border: `2px dashed ${storagePath ? "var(--hb-green)" : "var(--border)"}`,
                       borderRadius: "var(--radius-sm)",
                       padding: "28px 20px",
                       textAlign: "center",
                       cursor: "pointer",
+                      display: "block",
                       transition: "border-color var(--dur-fast)",
+                      opacity: uploadingFile ? 0.7 : 1,
                     }}
                   >
-                    <Upload
-                      size={24}
-                      style={{
-                        color: "var(--fg-muted)",
-                        margin: "0 auto 10px",
-                        display: "block",
-                      }}
-                      aria-hidden="true"
+                    <input
+                      type="file"
+                      accept=".pdf,application/pdf"
+                      style={{ display: "none" }}
+                      onChange={(e) => void handleFileChange(e)}
+                      disabled={uploadingFile}
                     />
+                    {uploadingFile ? (
+                      <Loader2
+                        size={24}
+                        style={{
+                          color: "var(--brand)",
+                          margin: "0 auto 10px",
+                          display: "block",
+                        }}
+                        className="animate-spin"
+                        aria-hidden="true"
+                      />
+                    ) : storagePath ? (
+                      <Check
+                        size={24}
+                        style={{
+                          color: "var(--hb-green)",
+                          margin: "0 auto 10px",
+                          display: "block",
+                        }}
+                        aria-hidden="true"
+                      />
+                    ) : (
+                      <Upload
+                        size={24}
+                        style={{
+                          color: "var(--fg-muted)",
+                          margin: "0 auto 10px",
+                          display: "block",
+                        }}
+                        aria-hidden="true"
+                      />
+                    )}
                     <div
                       style={{
                         fontFamily: "var(--font-display)",
@@ -443,12 +643,18 @@ export default function NovoDocumentoPage() {
                         marginBottom: 4,
                       }}
                     >
-                      Arraste um PDF ou clique para escolher
+                      {storagePath
+                        ? "PDF carregado com sucesso"
+                        : uploadingFile
+                          ? "Enviando…"
+                          : "Arraste um PDF ou clique para escolher"}
                     </div>
-                    <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>
-                      Máximo 50 MB · PDF apenas
-                    </div>
-                  </div>
+                    {!storagePath && (
+                      <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>
+                        Máximo 50 MB · PDF apenas
+                      </div>
+                    )}
+                  </label>
                 </div>
               </div>
             )}
@@ -551,8 +757,8 @@ export default function NovoDocumentoPage() {
                     Perguntas frequentes
                   </label>
                   <div className="hb-form-hint">
-                    As perguntas aparecem na lateral da página do edital. Ordene
-                    como preferir.
+                    As perguntas aparecem na página do edital. Ordene como
+                    preferir.
                   </div>
                 </div>
 
@@ -739,53 +945,35 @@ export default function NovoDocumentoPage() {
             )}
           </div>
 
-          {/* Revision history (mock) */}
-          <div className="docs-editor-aside-card">
-            <div className="docs-editor-aside-title">Histórico recente</div>
-            {[
-              {
-                v: 1,
-                who: "Filipe",
-                when: "hoje, 14:32",
-                what: "Rascunho criado",
-              },
-            ].map((h, i) => (
+          {/* Storage upload status */}
+          {storagePath && (
+            <div className="docs-editor-aside-card">
+              <div className="docs-editor-aside-title">Arquivo PDF</div>
               <div
-                key={i}
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: "auto 1fr",
-                  gap: 8,
-                  padding: "8px 0",
+                  display: "flex",
                   alignItems: "center",
+                  gap: 8,
+                  fontSize: 13,
                 }}
               >
-                <div
+                <Check
+                  size={14}
+                  style={{ color: "var(--hb-green)" }}
+                  aria-hidden="true"
+                />
+                <span
                   style={{
-                    width: 26,
-                    height: 26,
-                    borderRadius: 6,
-                    background: "var(--bg-alt)",
-                    color: "var(--brand)",
-                    fontWeight: 700,
-                    fontFamily: "var(--font-display)",
-                    fontSize: 11,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
+                    color: "var(--fg-muted)",
+                    fontSize: 12,
+                    wordBreak: "break-all",
                   }}
                 >
-                  v{h.v}
-                </div>
-                <div style={{ fontSize: 12.5 }}>
-                  <div style={{ fontWeight: 600 }}>{h.what}</div>
-                  <div style={{ color: "var(--fg-muted)" }}>
-                    {h.who} · {h.when}
-                  </div>
-                </div>
+                  {storagePath.split("/").pop()}
+                </span>
               </div>
-            ))}
-          </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

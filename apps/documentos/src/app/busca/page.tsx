@@ -1,7 +1,4 @@
-"use client";
-
-import { useState, useMemo, useEffect, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import type { Metadata } from "next";
 import Link from "next/link";
 import {
   Search,
@@ -10,41 +7,49 @@ import {
   FileText,
   Scroll,
   Filter,
-  AlertTriangle,
-  RefreshCw,
 } from "lucide-react";
 import { PublicNav } from "../../components/public-nav";
-import { SearchResultsSkeleton } from "../../components/search-results-skeleton";
-import { mockAllDocuments, mockCategories } from "../../lib/mock-data";
-import type { Document, Edital } from "@hebron/types/documentos";
+import { db } from "@hebron/db/client";
+import {
+  documents,
+  editals,
+  categories,
+  documentTags,
+  tags,
+  documentVersions,
+} from "@hebron/db/schema";
+import {
+  and,
+  or,
+  eq,
+  isNull,
+  isNotNull,
+  desc,
+  sql,
+  inArray,
+} from "drizzle-orm";
 
-type DocOrEdital = Document | Edital;
+export const dynamic = "force-dynamic";
 
-type TypeFilter =
-  | "all"
-  | "edital"
-  | "legal"
-  | "fiscal"
-  | "sop"
-  | "report"
-  | "policy"
-  | "other";
+export const metadata: Metadata = {
+  title: "Busca — Documentos Hebron Aseec",
+  description: "Busque documentos, editais e políticas da Hebron Aseec.",
+};
 
-const SUGGESTIONS = [
-  "edital projetos",
-  "LGPD",
-  "certidão",
-  "aprovação despesas",
-  "missionário",
-  "manual colaborador",
-];
+interface PageProps {
+  searchParams: Promise<{
+    q?: string;
+    categoria?: string;
+    tipo?: string;
+  }>;
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function highlight(text: string, query: string): React.ReactNode {
   if (!query.trim()) return text;
-  const re = new RegExp(
-    `(${query.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`,
-    "gi",
-  );
+  const escaped = query.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const re = new RegExp(`(${escaped})`, "gi");
   const parts = text.split(re);
   return parts.map((part, i) =>
     re.test(part) ? (
@@ -74,441 +79,519 @@ function formatDate(date: Date): string {
   }).format(new Date(date));
 }
 
-function SearchResults() {
-  const searchParams = useSearchParams();
-  const initialQuery = searchParams.get("q") ?? "";
-  const initialCat = searchParams.get("categoria") ?? null;
+function extractDescription(contentMd: string | null): string | null {
+  if (!contentMd) return null;
+  const line = contentMd
+    .split("\n")
+    .find((l) => l.trim() !== "" && !l.startsWith("#") && !l.startsWith("-"));
+  return line?.trim().slice(0, 240) ?? null;
+}
 
-  const [query, setQuery] = useState(initialQuery);
-  const [categoryId, setCategoryId] = useState<string | null>(initialCat);
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
-  const [showFilters, setShowFilters] = useState(false);
-  const [searchError, setSearchError] = useState<string | null>(null);
+type ResultRow = {
+  id: string;
+  title: string;
+  slug: string;
+  contentMd: string | null;
+  visibility: "public" | "internal" | "restricted";
+  categoryId: string | null;
+  categoryName: string | null;
+  publishedAt: Date | null;
+  updatedAt: Date;
+  isEdital: boolean;
+};
 
-  useEffect(() => {
-    setQuery(initialQuery);
-    setCategoryId(initialCat);
-  }, [initialQuery, initialCat]);
+const SUGGESTIONS = [
+  "edital projetos",
+  "LGPD",
+  "certidão",
+  "aprovação despesas",
+  "missionário",
+  "manual colaborador",
+];
 
-  const publicDocs = useMemo(
-    () =>
-      mockAllDocuments.filter(
-        (d) => d.visibility === "public" || d.visibility === "internal",
-      ),
-    [],
+type TipoFilter = "all" | "edital" | "doc";
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
+export default async function BuscaPage({ searchParams }: PageProps) {
+  const sp = await searchParams;
+  const q = sp.q?.trim() ?? "";
+  const catId = sp.categoria ?? null;
+  const tipo = (
+    ["all", "edital", "doc"].includes(sp.tipo ?? "all")
+      ? (sp.tipo ?? "all")
+      : "all"
+  ) as TipoFilter;
+
+  const pattern = `%${q}%`;
+
+  // Load categories in parallel with results
+  const [catRows, editalRows, docRows] = await Promise.all([
+    db
+      .select({
+        id: categories.id,
+        name: categories.name,
+        slug: categories.slug,
+      })
+      .from(categories)
+      .orderBy(categories.name),
+
+    // Edital results
+    tipo === "doc"
+      ? Promise.resolve([] as ResultRow[])
+      : db
+          .select({
+            id: documents.id,
+            title: documents.title,
+            slug: documents.slug,
+            contentMd: documents.contentMd,
+            visibility: documents.visibility,
+            categoryId: documents.categoryId,
+            categoryName: categories.name,
+            publishedAt: documents.publishedAt,
+            updatedAt: documents.updatedAt,
+          })
+          .from(editals)
+          .innerJoin(documents, eq(editals.id, documents.id))
+          .leftJoin(categories, eq(categories.id, documents.categoryId))
+          .where(
+            and(
+              isNull(documents.deletedAt),
+              isNotNull(documents.publishedAt),
+              or(
+                eq(documents.visibility, "public"),
+                eq(documents.visibility, "internal"),
+              ),
+              q
+                ? or(
+                    sql`${documents.title} ILIKE ${pattern}`,
+                    sql`${documents.contentMd} ILIKE ${pattern}`,
+                  )
+                : undefined,
+              catId ? eq(documents.categoryId, catId) : undefined,
+            ),
+          )
+          .orderBy(desc(documents.publishedAt))
+          .limit(tipo === "edital" ? 20 : 10)
+          .then((rows) => rows.map((r) => ({ ...r, isEdital: true as const }))),
+
+    // Document results (non-editals)
+    tipo === "edital"
+      ? Promise.resolve([] as ResultRow[])
+      : db
+          .select({
+            id: documents.id,
+            title: documents.title,
+            slug: documents.slug,
+            contentMd: documents.contentMd,
+            visibility: documents.visibility,
+            categoryId: documents.categoryId,
+            categoryName: categories.name,
+            publishedAt: documents.publishedAt,
+            updatedAt: documents.updatedAt,
+            editalId: editals.id,
+          })
+          .from(documents)
+          .leftJoin(categories, eq(categories.id, documents.categoryId))
+          .leftJoin(editals, eq(editals.id, documents.id))
+          .where(
+            and(
+              isNull(documents.deletedAt),
+              isNotNull(documents.publishedAt),
+              isNull(editals.id),
+              or(
+                eq(documents.visibility, "public"),
+                eq(documents.visibility, "internal"),
+              ),
+              q
+                ? or(
+                    sql`${documents.title} ILIKE ${pattern}`,
+                    sql`${documents.contentMd} ILIKE ${pattern}`,
+                  )
+                : undefined,
+              catId ? eq(documents.categoryId, catId) : undefined,
+            ),
+          )
+          .orderBy(desc(documents.updatedAt))
+          .limit(tipo === "doc" ? 20 : 10)
+          .then((rows) =>
+            rows.map((r) => ({ ...r, isEdital: false as const })),
+          ),
+  ]);
+
+  // Merge and sort all results
+  const allResults: ResultRow[] = [...editalRows, ...docRows].sort(
+    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
   );
 
-  const results = useMemo<DocOrEdital[]>(() => {
-    try {
-      const q = query.toLowerCase().trim();
-      let docs = publicDocs;
+  // Fetch tags for results (N+2 pattern)
+  const resultIds = allResults.map((r) => r.id);
+  const tagRows =
+    resultIds.length > 0
+      ? await db
+          .select({
+            documentId: documentTags.documentId,
+            tagId: tags.id,
+            tagName: tags.name,
+          })
+          .from(documentTags)
+          .innerJoin(tags, eq(tags.id, documentTags.tagId))
+          .where(inArray(documentTags.documentId, resultIds))
+      : [];
 
-      if (categoryId) {
-        docs = docs.filter((d) => d.categoryId === categoryId);
-      }
+  const tagMap = new Map<string, Array<{ id: string; name: string }>>();
+  for (const t of tagRows) {
+    const arr = tagMap.get(t.documentId) ?? [];
+    arr.push({ id: t.tagId, name: t.tagName });
+    tagMap.set(t.documentId, arr);
+  }
 
-      if (typeFilter !== "all") {
-        docs = docs.filter((d) => d.type === typeFilter);
-      }
+  // Fetch latest version numbers
+  const versionRows =
+    resultIds.length > 0
+      ? await db
+          .select({
+            documentId: documentVersions.documentId,
+            versionNumber: documentVersions.versionNumber,
+          })
+          .from(documentVersions)
+          .where(inArray(documentVersions.documentId, resultIds))
+          .orderBy(desc(documentVersions.versionNumber))
+      : [];
 
-      if (!q) return docs.slice(0, 10);
-
-      return docs.filter(
-        (d) =>
-          d.title.toLowerCase().includes(q) ||
-          (d.description ?? "").toLowerCase().includes(q) ||
-          d.tags.some((t) => t.name.toLowerCase().includes(q)) ||
-          d.category.name.toLowerCase().includes(q),
-      );
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Erro desconhecido";
-      setSearchError(msg);
-      return [];
+  const versionMap = new Map<string, number>();
+  for (const v of versionRows) {
+    if (!versionMap.has(v.documentId)) {
+      versionMap.set(v.documentId, v.versionNumber);
     }
-  }, [publicDocs, query, categoryId, typeFilter]);
+  }
 
-  const editalCount = results.filter((d) => d.type === "edital").length;
-  const docCount = results.length - editalCount;
+  const editalCount = allResults.filter((r) => r.isEdital).length;
+  const docCount = allResults.length - editalCount;
 
-  if (searchError !== null) {
-    return (
-      <main className="docs-page-narrow">
-        <div className="hb-empty" style={{ paddingTop: 80 }}>
-          <div
-            className="hb-empty-icon"
-            style={{ background: "var(--color-destructive-muted)" }}
-          >
-            <AlertTriangle
-              size={24}
-              aria-hidden="true"
-              style={{ color: "var(--color-destructive)" }}
-            />
-          </div>
-          <b>Erro ao realizar a busca</b>
-          <p className="hb-empty-body">
-            Não foi possível processar sua pesquisa. Tente novamente.
-          </p>
-          <button
-            type="button"
-            className="hb-btn hb-btn-primary"
-            style={{ marginTop: 20 }}
-            onClick={() => {
-              setSearchError(null);
-              setQuery("");
-            }}
-          >
-            <RefreshCw size={14} aria-hidden="true" />
-            Tentar novamente
-          </button>
-        </div>
-      </main>
-    );
+  // Build clear URL (remove q but keep other params)
+  function buildUrl(overrides: Record<string, string | null>) {
+    const p = new URLSearchParams();
+    if (q && overrides.q !== null) p.set("q", overrides.q ?? q);
+    if (catId && overrides.categoria !== null)
+      p.set("categoria", overrides.categoria ?? catId);
+    if (tipo !== "all" && overrides.tipo !== null)
+      p.set("tipo", overrides.tipo ?? tipo);
+    for (const [k, v] of Object.entries(overrides)) {
+      if (v !== null && !p.has(k)) p.set(k, v);
+    }
+    const str = p.toString();
+    return `/busca${str ? `?${str}` : ""}`;
   }
 
   return (
-    <main className="docs-page-narrow">
-      {/* Breadcrumbs */}
-      <nav className="docs-breadcrumbs" aria-label="Navegação estrutural">
-        <Link href="/">Início</Link>
-        <ChevronRight
-          size={12}
-          className="docs-breadcrumbs-sep"
-          aria-hidden="true"
-        />
-        <span style={{ color: "var(--fg)" }}>Busca</span>
-      </nav>
+    <>
+      <PublicNav />
 
-      {/* Page header */}
-      <div style={{ marginBottom: 28 }}>
-        <span className="hb-eyebrow">Busca global</span>
-        <h1
-          style={{
-            fontFamily: "var(--font-display)",
-            fontSize: "clamp(26px, 4vw, 40px)",
-            fontWeight: 700,
-            letterSpacing: "-0.02em",
-            lineHeight: 1.1,
-            margin: "8px 0 10px",
-          }}
-        >
-          {query ? (
-            <>
-              Resultados para{" "}
-              <span style={{ color: "var(--hb-orange)" }}>"{query}"</span>
-            </>
-          ) : (
-            "O que você está procurando?"
-          )}
-        </h1>
-        <p style={{ fontSize: 14, color: "var(--fg-muted)", margin: 0 }}>
-          {query
-            ? `${results.length} documento${results.length === 1 ? "" : "s"} encontrado${results.length === 1 ? "" : "s"}.`
-            : "Busque por título, categoria, tags ou conteúdo."}
-        </p>
-      </div>
-
-      {/* Search input */}
-      <div style={{ position: "relative", marginBottom: 16 }}>
-        <div className="hb-field" style={{ fontSize: 15 }}>
-          <Search
-            size={18}
-            style={{ color: "var(--fg-muted)", flexShrink: 0 }}
+      <main className="docs-page-narrow">
+        {/* Breadcrumbs */}
+        <nav className="docs-breadcrumbs" aria-label="Navegação estrutural">
+          <Link href="/">Início</Link>
+          <ChevronRight
+            size={12}
+            className="docs-breadcrumbs-sep"
             aria-hidden="true"
           />
-          <input
-            type="search"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Buscar documentos, editais, políticas…"
-            autoFocus
-            style={{
-              flex: 1,
-              background: "transparent",
-              border: "none",
-              outline: "none",
-              fontSize: 15,
-              color: "var(--fg)",
-            }}
-            aria-label="Campo de busca"
-          />
-          {query && (
-            <button
-              type="button"
-              onClick={() => setQuery("")}
-              style={{
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                color: "var(--fg-muted)",
-                padding: 0,
-                display: "flex",
-              }}
-              aria-label="Limpar busca"
-            >
-              <X size={16} aria-hidden="true" />
-            </button>
-          )}
-        </div>
-      </div>
+          <span style={{ color: "var(--fg)" }}>Busca</span>
+        </nav>
 
-      {/* Suggestions (empty state) */}
-      {!query && (
+        {/* Page header */}
+        <div style={{ marginBottom: 28 }}>
+          <span className="hb-eyebrow">Busca global</span>
+          <h1
+            style={{
+              fontFamily: "var(--font-display)",
+              fontSize: "clamp(26px, 4vw, 40px)",
+              fontWeight: 700,
+              letterSpacing: "-0.02em",
+              lineHeight: 1.1,
+              margin: "8px 0 10px",
+            }}
+          >
+            {q ? (
+              <>
+                Resultados para{" "}
+                <span style={{ color: "var(--hb-orange)" }}>"{q}"</span>
+              </>
+            ) : (
+              "O que você está procurando?"
+            )}
+          </h1>
+          <p style={{ fontSize: 14, color: "var(--fg-muted)", margin: 0 }}>
+            {q
+              ? `${allResults.length} documento${allResults.length === 1 ? "" : "s"} encontrado${allResults.length === 1 ? "" : "s"}.`
+              : "Busque por título, categoria, tags ou conteúdo."}
+          </p>
+        </div>
+
+        {/* Search form — GET method triggers page navigation */}
+        <form
+          action="/busca"
+          method="get"
+          role="search"
+          style={{ marginBottom: 16 }}
+        >
+          {catId && <input type="hidden" name="categoria" value={catId} />}
+          {tipo !== "all" && <input type="hidden" name="tipo" value={tipo} />}
+          <div className="hb-field" style={{ fontSize: 15 }}>
+            <Search
+              size={18}
+              style={{ color: "var(--fg-muted)", flexShrink: 0 }}
+              aria-hidden="true"
+            />
+            <input
+              type="search"
+              name="q"
+              defaultValue={q}
+              placeholder="Buscar documentos, editais, políticas…"
+              autoFocus
+              autoComplete="off"
+              style={{
+                flex: 1,
+                background: "transparent",
+                border: "none",
+                outline: "none",
+                fontSize: 15,
+                color: "var(--fg)",
+              }}
+              aria-label="Campo de busca"
+            />
+            {q && (
+              <Link
+                href={buildUrl({ q: null })}
+                style={{
+                  color: "var(--fg-muted)",
+                  display: "flex",
+                  alignItems: "center",
+                }}
+                aria-label="Limpar busca"
+              >
+                <X size={16} aria-hidden="true" />
+              </Link>
+            )}
+            <button
+              type="submit"
+              className="hb-btn hb-btn-primary hb-btn-sm"
+              style={{ flexShrink: 0 }}
+            >
+              Buscar
+            </button>
+          </div>
+        </form>
+
+        {/* Suggestions when no query */}
+        {!q && (
+          <div
+            style={{
+              display: "flex",
+              gap: 8,
+              flexWrap: "wrap",
+              marginBottom: 28,
+            }}
+          >
+            {SUGGESTIONS.map((s) => (
+              <Link
+                key={s}
+                href={`/busca?q=${encodeURIComponent(s)}`}
+                className="hb-chip"
+              >
+                <Search size={12} aria-hidden="true" />
+                {s}
+              </Link>
+            ))}
+          </div>
+        )}
+
+        {/* Type filter chips */}
         <div
           style={{
             display: "flex",
+            alignItems: "center",
             gap: 8,
+            marginBottom: 20,
             flexWrap: "wrap",
-            marginBottom: 28,
           }}
         >
-          {SUGGESTIONS.map((s) => (
-            <button
-              key={s}
-              type="button"
-              className="hb-chip"
-              onClick={() => setQuery(s)}
+          <div className="hb-chip-row" style={{ flex: 1, marginBottom: 0 }}>
+            <Link
+              href={buildUrl({ tipo: null })}
+              className={`hb-chip ${tipo === "all" ? "active" : ""}`}
+              aria-pressed={tipo === "all"}
             >
-              <Search size={12} aria-hidden="true" />
-              {s}
-            </button>
-          ))}
-        </div>
-      )}
-
-      {/* Filter row */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          marginBottom: 20,
-          flexWrap: "wrap",
-        }}
-      >
-        <div className="hb-chip-row" style={{ flex: 1, marginBottom: 0 }}>
-          <button
-            type="button"
-            className={`hb-chip ${typeFilter === "all" ? "active" : ""}`}
-            onClick={() => setTypeFilter("all")}
-          >
-            Todos
-            <span className="hb-chip-count">{results.length}</span>
-          </button>
-          <button
-            type="button"
-            className={`hb-chip ${typeFilter === "edital" ? "active" : ""}`}
-            onClick={() => setTypeFilter("edital")}
-          >
-            <Scroll size={12} aria-hidden="true" />
-            Editais
-            <span className="hb-chip-count">{editalCount}</span>
-          </button>
-          <button
-            type="button"
-            className={`hb-chip ${typeFilter !== "all" && typeFilter !== "edital" ? "active" : ""}`}
-            onClick={() => setTypeFilter(typeFilter === "sop" ? "all" : "sop")}
-          >
-            <FileText size={12} aria-hidden="true" />
-            Documentos
-            <span className="hb-chip-count">{docCount}</span>
-          </button>
+              Todos
+              <span className="hb-chip-count">{allResults.length}</span>
+            </Link>
+            <Link
+              href={buildUrl({ tipo: "edital" })}
+              className={`hb-chip ${tipo === "edital" ? "active" : ""}`}
+              aria-pressed={tipo === "edital"}
+            >
+              <Scroll size={12} aria-hidden="true" />
+              Editais
+              <span className="hb-chip-count">{editalCount}</span>
+            </Link>
+            <Link
+              href={buildUrl({ tipo: "doc" })}
+              className={`hb-chip ${tipo === "doc" ? "active" : ""}`}
+              aria-pressed={tipo === "doc"}
+            >
+              <FileText size={12} aria-hidden="true" />
+              Documentos
+              <span className="hb-chip-count">{docCount}</span>
+            </Link>
+          </div>
         </div>
 
-        <button
-          type="button"
-          className={`hb-btn hb-btn-sm ${showFilters ? "hb-btn-primary" : "hb-btn-secondary"}`}
-          onClick={() => setShowFilters((v) => !v)}
-          aria-expanded={showFilters}
-        >
-          <Filter size={13} aria-hidden="true" />
-          Filtros
-          {categoryId && (
-            <span
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: 16,
-                height: 16,
-                borderRadius: "50%",
-                background: "rgba(255,255,255,0.2)",
-                fontSize: 10,
-                fontWeight: 700,
-              }}
-            >
-              1
-            </span>
-          )}
-        </button>
-      </div>
-
-      {/* Expandable category filter */}
-      {showFilters && (
+        {/* Category filter */}
         <div
           className="hb-card"
           style={{ padding: "18px 22px", marginBottom: 20 }}
         >
-          <p className="hb-section-label">Categoria</p>
+          <p className="hb-section-label" style={{ marginBottom: 10 }}>
+            <Filter
+              size={11}
+              aria-hidden="true"
+              style={{ display: "inline", marginRight: 4 }}
+            />
+            Categoria
+          </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            <button
-              type="button"
-              className={`hb-chip ${!categoryId ? "active" : ""}`}
-              onClick={() => setCategoryId(null)}
+            <Link
+              href={buildUrl({ categoria: null })}
+              className={`hb-chip ${!catId ? "active" : ""}`}
+              aria-pressed={!catId}
             >
               Todas
-            </button>
-            {mockCategories.map((cat) => (
-              <button
+            </Link>
+            {catRows.map((cat) => (
+              <Link
                 key={cat.id}
-                type="button"
-                className={`hb-chip ${categoryId === cat.id ? "active" : ""}`}
-                onClick={() =>
-                  setCategoryId(categoryId === cat.id ? null : cat.id)
+                href={
+                  catId === cat.id
+                    ? buildUrl({ categoria: null })
+                    : buildUrl({ categoria: cat.id })
                 }
+                className={`hb-chip ${catId === cat.id ? "active" : ""}`}
+                aria-pressed={catId === cat.id}
               >
                 {cat.name}
-                <span className="hb-chip-count">{cat.documentCount}</span>
-              </button>
+              </Link>
             ))}
           </div>
         </div>
-      )}
 
-      {/* Results */}
-      {results.length === 0 ? (
-        <div className="hb-empty">
-          <div className="hb-empty-icon">
-            <Search size={24} aria-hidden="true" />
+        {/* Results */}
+        {allResults.length === 0 ? (
+          <div className="hb-empty">
+            <div className="hb-empty-icon">
+              <Search size={24} aria-hidden="true" />
+            </div>
+            <b>Nenhum resultado encontrado</b>
+            <p className="hb-empty-body">
+              Tente reformular a busca ou navegar pelas categorias.
+            </p>
+            {(q || catId) && (
+              <Link
+                href="/busca"
+                className="hb-btn hb-btn-secondary"
+                style={{ marginTop: 16 }}
+              >
+                <X size={13} aria-hidden="true" />
+                Limpar filtros
+              </Link>
+            )}
+            <p className="hb-empty-quote">
+              "Pedí, e dar-se-vos-á; buscai, e achareis; batei, e
+              abrir-se-vos-á."
+              <span className="hb-empty-cite">Mateus 7:7</span>
+            </p>
           </div>
-          <b>Nenhum resultado encontrado</b>
-          <p className="hb-empty-body">
-            Tente reformular a busca ou navegar pelas categorias.
-          </p>
-          {query && (
-            <button
-              type="button"
-              className="hb-btn hb-btn-secondary"
-              style={{ marginTop: 16 }}
-              onClick={() => {
-                setQuery("");
-                setCategoryId(null);
-                setTypeFilter("all");
-              }}
-            >
-              <X size={13} aria-hidden="true" />
-              Limpar filtros
-            </button>
-          )}
-          <p className="hb-empty-quote">
-            "Pedí, e dar-se-vos-á; buscai, e achareis; batei, e abrir-se-vos-á."
-            <span className="hb-empty-cite">Mateus 7:7</span>
-          </p>
-        </div>
-      ) : (
-        <div className="hb-card hb-card-overflow" style={{ padding: "0 24px" }}>
-          {results.map((doc) => {
-            const isEdital = doc.type === "edital";
-            const href = isEdital ? `/editais/${doc.slug}` : `/${doc.slug}`;
+        ) : (
+          <div
+            className="hb-card hb-card-overflow"
+            style={{ padding: "0 24px" }}
+          >
+            {allResults.map((result) => {
+              const href = result.isEdital
+                ? `/editais/${result.slug}`
+                : `/${result.slug}`;
+              const description = extractDescription(result.contentMd);
+              const docTags = tagMap.get(result.id) ?? [];
+              const version = versionMap.get(result.id) ?? 1;
 
-            return (
-              <Link key={doc.id} href={href} className="docs-search-result">
-                <div className="docs-search-fmt">
-                  {isEdital ? (
-                    <>
+              return (
+                <Link
+                  key={result.id}
+                  href={href}
+                  className="docs-search-result"
+                >
+                  <div className="docs-search-fmt">
+                    {result.isEdital ? (
                       <Scroll size={18} aria-hidden="true" />
-                    </>
-                  ) : (
-                    <>
+                    ) : (
                       <span>PDF</span>
-                    </>
-                  )}
-                </div>
+                    )}
+                  </div>
 
-                <div style={{ minWidth: 0 }}>
-                  <div className="docs-search-breadcrumb">
-                    {doc.category.name} ·{" "}
-                    <span style={{ textTransform: "capitalize" }}>
-                      {doc.type.replace("_", " ")}
-                    </span>{" "}
-                    · v{doc.currentVersion?.version ?? 1}
-                  </div>
-                  <div className="docs-search-title">
-                    {highlight(doc.title, query)}
-                  </div>
-                  {doc.description && (
-                    <p className="docs-search-excerpt">
-                      {highlight(
-                        doc.description.slice(0, 140) +
-                          (doc.description.length > 140 ? "…" : ""),
-                        query,
-                      )}
-                    </p>
-                  )}
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 10,
-                      flexWrap: "wrap",
-                      fontSize: 12,
-                      color: "var(--fg-muted)",
-                    }}
-                  >
-                    <span
-                      className="hb-badge"
+                  <div style={{ minWidth: 0 }}>
+                    <div className="docs-search-breadcrumb">
+                      {result.categoryName ?? "Sem categoria"} ·{" "}
+                      {result.isEdital ? "Edital" : "Documento"} · v{version}
+                    </div>
+                    <div className="docs-search-title">
+                      {highlight(result.title, q)}
+                    </div>
+                    {description && (
+                      <p className="docs-search-excerpt">
+                        {highlight(
+                          description.slice(0, 140) +
+                            (description.length > 140 ? "…" : ""),
+                          q,
+                        )}
+                      </p>
+                    )}
+                    <div
                       style={{
-                        background: "var(--bg-alt)",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 10,
+                        flexWrap: "wrap",
+                        fontSize: 12,
                         color: "var(--fg-muted)",
-                        fontSize: 11,
-                        padding: "2px 8px",
                       }}
                     >
-                      {doc.visibility === "public"
-                        ? "Público"
-                        : doc.visibility === "internal"
-                          ? "Interno"
-                          : "Restrito"}
-                    </span>
-                    <span>{formatDate(doc.updatedAt)}</span>
-                    {doc.tags.slice(0, 2).map((t) => (
-                      <span key={t.id}>#{t.name}</span>
-                    ))}
+                      <span
+                        className="hb-badge"
+                        style={{
+                          background: "var(--bg-alt)",
+                          color: "var(--fg-muted)",
+                          fontSize: 11,
+                          padding: "2px 8px",
+                        }}
+                      >
+                        {result.visibility === "public"
+                          ? "Público"
+                          : result.visibility === "internal"
+                            ? "Interno"
+                            : "Restrito"}
+                      </span>
+                      <span>{formatDate(result.updatedAt)}</span>
+                      {docTags.slice(0, 2).map((t) => (
+                        <span key={t.id}>#{t.name}</span>
+                      ))}
+                    </div>
                   </div>
-                </div>
-              </Link>
-            );
-          })}
-        </div>
-      )}
-    </main>
-  );
-}
-
-export default function BuscaPage() {
-  return (
-    <>
-      <PublicNav />
-      <Suspense
-        fallback={
-          <main className="docs-page-narrow">
-            <div style={{ marginBottom: 28 }}>
-              <div className="h-3 w-20 rounded-full animate-pulse bg-[--bg-alt] mb-3" />
-              <div className="h-10 w-3/4 rounded animate-pulse bg-[--bg-alt] mb-2" />
-              <div className="h-3.5 w-48 rounded animate-pulse bg-[--bg-alt]" />
-            </div>
-            <div
-              className="hb-field"
-              style={{ marginBottom: 16, pointerEvents: "none" }}
-            >
-              <div className="h-5 w-5 rounded animate-pulse bg-[--bg-alt]" />
-              <div className="flex-1 h-5 rounded animate-pulse bg-[--bg-alt]" />
-            </div>
-            <SearchResultsSkeleton count={5} />
-          </main>
-        }
-      >
-        <SearchResults />
-      </Suspense>
+                </Link>
+              );
+            })}
+          </div>
+        )}
+      </main>
     </>
   );
 }

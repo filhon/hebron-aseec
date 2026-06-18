@@ -1,14 +1,33 @@
-"use client";
-
-import { useState } from "react";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { PublicNav } from "../../components/public-nav";
 import { EditalCard } from "../../components/edital-card";
-import { mockEditais } from "../../lib/mock-data";
+import { db } from "@hebron/db/client";
+import {
+  documents,
+  editals,
+  categories,
+  documentTags,
+  tags,
+} from "@hebron/db/schema";
+import { and, or, eq, isNull, isNotNull, desc, inArray } from "drizzle-orm";
 import type { Edital } from "@hebron/types/documentos";
 
-type StatusFilter = "all" | "open" | "permanent" | "closed";
+export const dynamic = "force-dynamic";
+
+interface PageProps {
+  searchParams: Promise<{ status?: string }>;
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function extractDescription(contentMd: string | null): string | null {
+  if (!contentMd) return null;
+  const line = contentMd
+    .split("\n")
+    .find((l) => l.trim() !== "" && !l.startsWith("#") && !l.startsWith("-"));
+  return line?.trim().slice(0, 240) ?? null;
+}
 
 function getEditalStatus(
   e: Edital,
@@ -20,35 +39,156 @@ function getEditalStatus(
   return "open";
 }
 
-export default function EditaisPage() {
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+type StatusFilter = "all" | "open" | "permanent" | "closed";
 
-  const publicEditais = mockEditais.filter(
-    (e) => e.visibility === "public" || e.visibility === "internal",
-  );
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
-  const counts = {
-    all: publicEditais.length,
-    open: publicEditais.filter((e) => {
+export default async function EditaisPage({ searchParams }: PageProps) {
+  const { status = "all" } = await searchParams;
+  const activeFilter = (
+    ["all", "open", "permanent", "closed"].includes(status) ? status : "all"
+  ) as StatusFilter;
+
+  // Fetch all published public/internal editals
+  const rows = await db
+    .select({
+      id: documents.id,
+      title: documents.title,
+      slug: documents.slug,
+      contentMd: documents.contentMd,
+      fileUrl: documents.fileUrl,
+      visibility: documents.visibility,
+      categoryId: documents.categoryId,
+      categoryName: categories.name,
+      categorySlug: categories.slug,
+      authorId: documents.authorId,
+      publishedAt: documents.publishedAt,
+      deletedAt: documents.deletedAt,
+      createdAt: documents.createdAt,
+      updatedAt: documents.updatedAt,
+      editalOpensAt: editals.opensAt,
+      editalClosesAt: editals.closesAt,
+      editalProjectType: editals.projectType,
+    })
+    .from(editals)
+    .innerJoin(documents, eq(editals.id, documents.id))
+    .leftJoin(categories, eq(categories.id, documents.categoryId))
+    .where(
+      and(
+        isNull(documents.deletedAt),
+        isNotNull(documents.publishedAt),
+        or(
+          eq(documents.visibility, "public"),
+          eq(documents.visibility, "internal"),
+        ),
+      ),
+    )
+    .orderBy(desc(documents.publishedAt));
+
+  // Fetch tags for all editals
+  const editalIds = rows.map((r) => r.id);
+  const tagRows =
+    editalIds.length > 0
+      ? await db
+          .select({
+            documentId: documentTags.documentId,
+            tagId: tags.id,
+            tagName: tags.name,
+            tagSlug: tags.slug,
+          })
+          .from(documentTags)
+          .innerJoin(tags, eq(tags.id, documentTags.tagId))
+          .where(inArray(documentTags.documentId, editalIds))
+      : [];
+
+  const tagMap = new Map<
+    string,
+    Array<{ id: string; name: string; slug: string }>
+  >();
+  for (const t of tagRows) {
+    const arr = tagMap.get(t.documentId) ?? [];
+    arr.push({ id: t.tagId, name: t.tagName, slug: t.tagSlug });
+    tagMap.set(t.documentId, arr);
+  }
+
+  // Build Edital objects
+  const allEditais: Edital[] = rows.map((row) => {
+    const cycleType =
+      !row.editalOpensAt && !row.editalClosesAt
+        ? ("pontual" as const)
+        : ("anual" as const);
+    const docTags = (tagMap.get(row.id) ?? []).map((t) => ({
+      ...t,
+      color: null,
+    }));
+    return {
+      id: row.id,
+      title: row.title,
+      slug: row.slug,
+      description: extractDescription(row.contentMd),
+      type: "edital" as const,
+      visibility: row.visibility,
+      status: row.publishedAt ? ("published" as const) : ("draft" as const),
+      categoryId: row.categoryId ?? "",
+      category: {
+        id: row.categoryId ?? "",
+        name: row.categoryName ?? "Sem categoria",
+        slug: row.categorySlug ?? "",
+        description: null,
+        parentId: null,
+        children: [],
+        documentCount: 0,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      tags: docTags,
+      currentVersionId: null,
+      currentVersion: null,
+      publishedBy: row.authorId,
+      publishedAt: row.publishedAt,
+      createdBy: row.authorId,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      deletedAt: row.deletedAt,
+      cycleType,
+      opensAt: row.editalOpensAt,
+      closesAt: row.editalClosesAt,
+      projectType: row.editalProjectType,
+      projectCategory: null,
+    };
+  });
+
+  // Count by status
+  const counts: Record<StatusFilter, number> = {
+    all: allEditais.length,
+    open: allEditais.filter((e) => {
       const s = getEditalStatus(e);
       return s === "open" || s === "upcoming";
     }).length,
-    permanent: publicEditais.filter((e) => getEditalStatus(e) === "permanent")
+    permanent: allEditais.filter((e) => getEditalStatus(e) === "permanent")
       .length,
-    closed: publicEditais.filter((e) => getEditalStatus(e) === "closed").length,
+    closed: allEditais.filter((e) => getEditalStatus(e) === "closed").length,
   };
 
+  // Apply filter
   const filtered =
-    statusFilter === "all"
-      ? publicEditais
-      : statusFilter === "open"
-        ? publicEditais.filter((e) => {
+    activeFilter === "all"
+      ? allEditais
+      : activeFilter === "open"
+        ? allEditais.filter((e) => {
             const s = getEditalStatus(e);
             return s === "open" || s === "upcoming";
           })
-        : statusFilter === "permanent"
-          ? publicEditais.filter((e) => getEditalStatus(e) === "permanent")
-          : publicEditais.filter((e) => getEditalStatus(e) === "closed");
+        : activeFilter === "permanent"
+          ? allEditais.filter((e) => getEditalStatus(e) === "permanent")
+          : allEditais.filter((e) => getEditalStatus(e) === "closed");
+
+  const FILTERS = [
+    { key: "all" as const, label: "Todos" },
+    { key: "open" as const, label: "Abertos / Em breve" },
+    { key: "permanent" as const, label: "Permanentes" },
+    { key: "closed" as const, label: "Encerrados" },
+  ];
 
   return (
     <>
@@ -98,30 +238,22 @@ export default function EditaisPage() {
           </p>
         </div>
 
-        {/* Filter chips */}
+        {/* Filter chips — URL-based for SSR */}
         <div
           className="hb-chip-row"
           role="group"
           aria-label="Filtrar editais por status"
         >
-          {(
-            [
-              { key: "all", label: "Todos" },
-              { key: "open", label: "Abertos / Em breve" },
-              { key: "permanent", label: "Permanentes" },
-              { key: "closed", label: "Encerrados" },
-            ] satisfies { key: StatusFilter; label: string }[]
-          ).map(({ key, label }) => (
-            <button
+          {FILTERS.map(({ key, label }) => (
+            <Link
               key={key}
-              type="button"
-              onClick={() => setStatusFilter(key)}
-              className={`hb-chip ${statusFilter === key ? "active" : ""}`}
-              aria-pressed={statusFilter === key}
+              href={key === "all" ? "/editais" : `/editais?status=${key}`}
+              className={`hb-chip ${activeFilter === key ? "active" : ""}`}
+              aria-pressed={activeFilter === key}
             >
               {label}
               <span className="hb-chip-count">{counts[key]}</span>
-            </button>
+            </Link>
           ))}
         </div>
 

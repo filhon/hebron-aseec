@@ -12,14 +12,29 @@ import {
   Tag,
   Clock,
 } from "lucide-react";
+import { createClient } from "@supabase/supabase-js";
 import { PublicNav } from "../../components/public-nav";
 import { DocumentViewer } from "../../components/document-viewer";
 import { VersionHistory } from "../../components/version-history";
-import { mockAllDocuments } from "../../lib/mock-data";
+import { db } from "@hebron/db/client";
+import {
+  documents,
+  editals,
+  categories,
+  documentTags,
+  tags,
+  documentVersions,
+} from "@hebron/db/schema";
+import { and, eq, isNull, isNotNull, desc } from "drizzle-orm";
+import type { Document, DocumentVersion } from "@hebron/types/documentos";
+
+export const dynamic = "force-dynamic";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
 }
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function formatDate(date: Date): string {
   return new Intl.DateTimeFormat("pt-BR", {
@@ -29,38 +44,197 @@ function formatDate(date: Date): string {
   }).format(new Date(date));
 }
 
-function formatBytes(bytes: number): string {
-  if (bytes < 1_000_000) return `${Math.round(bytes / 1_000)} KB`;
-  return `${(bytes / 1_000_000).toFixed(1)} MB`;
+function getMimeType(fileUrl: string | null, contentMd: string | null): string {
+  if (fileUrl?.endsWith(".pdf")) return "application/pdf";
+  if (contentMd) return "text/markdown";
+  return "application/octet-stream";
 }
+
+function extractDescription(contentMd: string | null): string | null {
+  if (!contentMd) return null;
+  const line = contentMd
+    .split("\n")
+    .find((l) => l.trim() !== "" && !l.startsWith("#") && !l.startsWith("-"));
+  return line?.trim().slice(0, 240) ?? null;
+}
+
+function adaptDocVersion(v: {
+  id: string;
+  documentId: string;
+  versionNumber: number;
+  fileUrl: string | null;
+  contentMd: string | null;
+  createdBy: string;
+  createdAt: Date;
+}): DocumentVersion {
+  return {
+    id: v.id,
+    documentId: v.documentId,
+    version: v.versionNumber,
+    storageKey: v.fileUrl ?? "",
+    fileSizeBytes: 0,
+    mimeType: getMimeType(v.fileUrl, v.contentMd),
+    notes: null,
+    publishedBy: v.createdBy,
+    publishedAt: v.createdAt,
+  };
+}
+
+async function getSignedUrl(
+  storagePath: string | null,
+): Promise<string | null> {
+  if (!storagePath) return null;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) return null;
+  const supabase = createClient(url, key, { auth: { persistSession: false } });
+  const { data } = await supabase.storage
+    .from("hebron-docs")
+    .createSignedUrl(storagePath, 3600);
+  return data?.signedUrl ?? null;
+}
+
+// ─── Metadata ─────────────────────────────────────────────────────────────────
 
 export async function generateMetadata({
   params,
 }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const doc = mockAllDocuments.find(
-    (d) => d.slug === slug && d.type !== "edital",
-  );
-  if (!doc) return {};
+  const rows = await db
+    .select({
+      title: documents.title,
+      contentMd: documents.contentMd,
+      editalId: editals.id,
+    })
+    .from(documents)
+    .leftJoin(editals, eq(editals.id, documents.id))
+    .where(
+      and(
+        eq(documents.slug, slug),
+        isNull(documents.deletedAt),
+        isNull(editals.id),
+      ),
+    )
+    .limit(1);
 
+  const row = rows[0];
+  if (!row) return {};
+
+  const description = extractDescription(row.contentMd);
   return {
-    title: doc.title,
-    description: doc.description ?? undefined,
+    title: row.title,
+    description: description ?? undefined,
     openGraph: {
-      title: doc.title,
-      description: doc.description ?? undefined,
+      title: row.title,
+      description: description ?? undefined,
       type: "article",
     },
   };
 }
 
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export default async function DocumentPage({ params }: PageProps) {
   const { slug } = await params;
-  const doc = mockAllDocuments.find(
-    (d) => d.slug === slug && d.type !== "edital",
-  );
 
-  if (!doc) notFound();
+  // Fetch document (exclude editals)
+  const docRows = await db
+    .select({
+      id: documents.id,
+      title: documents.title,
+      slug: documents.slug,
+      contentMd: documents.contentMd,
+      fileUrl: documents.fileUrl,
+      visibility: documents.visibility,
+      categoryId: documents.categoryId,
+      categoryName: categories.name,
+      categorySlug: categories.slug,
+      authorId: documents.authorId,
+      publishedAt: documents.publishedAt,
+      deletedAt: documents.deletedAt,
+      createdAt: documents.createdAt,
+      updatedAt: documents.updatedAt,
+      editalId: editals.id,
+    })
+    .from(documents)
+    .leftJoin(categories, eq(categories.id, documents.categoryId))
+    .leftJoin(editals, eq(editals.id, documents.id))
+    .where(
+      and(
+        eq(documents.slug, slug),
+        isNull(documents.deletedAt),
+        isNotNull(documents.publishedAt),
+        isNull(editals.id),
+      ),
+    )
+    .limit(1);
+
+  const docRow = docRows[0];
+  if (!docRow) notFound();
+
+  // Fetch tags
+  const tagRows = await db
+    .select({
+      tagId: tags.id,
+      tagName: tags.name,
+      tagSlug: tags.slug,
+    })
+    .from(documentTags)
+    .innerJoin(tags, eq(tags.id, documentTags.tagId))
+    .where(eq(documentTags.documentId, docRow.id));
+
+  // Fetch all versions
+  const versionRows = await db
+    .select()
+    .from(documentVersions)
+    .where(eq(documentVersions.documentId, docRow.id))
+    .orderBy(desc(documentVersions.versionNumber));
+
+  const versions = versionRows.map(adaptDocVersion);
+  const latestVersion = versions[0] ?? null;
+
+  // Generate signed URL for PDF
+  const storagePath = docRow.fileUrl ?? versionRows[0]?.fileUrl ?? null;
+  const signedUrl = await getSignedUrl(storagePath);
+
+  // Build Document object
+  const docTags = tagRows.map((t) => ({
+    id: t.tagId,
+    name: t.tagName,
+    slug: t.tagSlug,
+    color: null,
+  }));
+
+  const doc: Document = {
+    id: docRow.id,
+    title: docRow.title,
+    slug: docRow.slug,
+    description: extractDescription(docRow.contentMd),
+    type: "other",
+    visibility: docRow.visibility,
+    status: docRow.publishedAt ? "published" : "draft",
+    categoryId: docRow.categoryId ?? "",
+    category: {
+      id: docRow.categoryId ?? "",
+      name: docRow.categoryName ?? "Sem categoria",
+      slug: docRow.categorySlug ?? "",
+      description: null,
+      parentId: null,
+      children: [],
+      documentCount: 0,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    },
+    tags: docTags,
+    currentVersionId: latestVersion?.id ?? null,
+    currentVersion: latestVersion,
+    publishedBy: docRow.authorId,
+    publishedAt: docRow.publishedAt,
+    createdBy: docRow.authorId,
+    createdAt: docRow.createdAt,
+    updatedAt: docRow.updatedAt,
+    deletedAt: docRow.deletedAt,
+  };
 
   const VISIBILITY_MAP = {
     public: {
@@ -82,7 +256,6 @@ export default async function DocumentPage({ params }: PageProps) {
 
   const vis = VISIBILITY_MAP[doc.visibility];
   const VisIcon = vis.Icon;
-  const mockVersions = doc.currentVersion ? [doc.currentVersion] : [];
 
   return (
     <>
@@ -198,18 +371,26 @@ export default async function DocumentPage({ params }: PageProps) {
 
               {/* Actions */}
               <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <button type="button" className="hb-btn hb-btn-secondary">
-                  <Download size={14} aria-hidden="true" />
-                  Baixar documento
-                  {doc.currentVersion &&
-                    ` (${formatBytes(doc.currentVersion.fileSizeBytes)})`}
-                </button>
+                {signedUrl && (
+                  <a
+                    href={signedUrl}
+                    download
+                    className="hb-btn hb-btn-secondary"
+                  >
+                    <Download size={14} aria-hidden="true" />
+                    Baixar documento
+                  </a>
+                )}
               </div>
             </div>
 
             {/* Document viewer */}
             <div style={{ minHeight: 520 }}>
-              <DocumentViewer document={doc} />
+              <DocumentViewer
+                document={doc}
+                fileUrl={signedUrl ?? undefined}
+                markdownContent={docRow.contentMd ?? undefined}
+              />
             </div>
           </div>
 
@@ -245,9 +426,6 @@ export default async function DocumentPage({ params }: PageProps) {
 
                 {doc.currentVersion && (
                   <>
-                    <dt>Tamanho</dt>
-                    <dd>{formatBytes(doc.currentVersion.fileSizeBytes)}</dd>
-
                     <dt>Versão</dt>
                     <dd>v{doc.currentVersion.version}</dd>
                   </>
@@ -283,7 +461,7 @@ export default async function DocumentPage({ params }: PageProps) {
                 Histórico de versões
               </p>
               <VersionHistory
-                versions={mockVersions}
+                versions={versions}
                 currentVersionId={doc.currentVersionId}
               />
             </div>

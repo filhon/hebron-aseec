@@ -8,7 +8,17 @@ import {
   Edit,
   Clock,
 } from "lucide-react";
-import { mockDocuments, mockEditais } from "../../lib/mock-data";
+import { db } from "@hebron/db/client";
+import {
+  documents,
+  editals,
+  categories,
+  views,
+  subscriptions,
+} from "@hebron/db/schema";
+import { and, eq, isNull, isNotNull, desc, sql, gt } from "drizzle-orm";
+
+export const dynamic = "force-dynamic";
 
 function formatDate(date: Date): string {
   return new Intl.DateTimeFormat("pt-BR", {
@@ -19,42 +29,171 @@ function formatDate(date: Date): string {
 }
 
 function getEditalStatus(e: {
-  cycleType: string;
-  opensAt: Date | null;
-  closesAt: Date | null;
+  editalOpensAt: Date | null;
+  editalClosesAt: Date | null;
 }): "open" | "closed" | "permanent" | "upcoming" {
-  if (e.cycleType === "pontual") return "permanent";
+  if (!e.editalOpensAt && !e.editalClosesAt) return "permanent";
   const now = new Date();
-  if (e.opensAt && now < new Date(e.opensAt)) return "upcoming";
-  if (e.closesAt && now > new Date(e.closesAt)) return "closed";
+  if (e.editalOpensAt && now < new Date(e.editalOpensAt)) return "upcoming";
+  if (e.editalClosesAt && now > new Date(e.editalClosesAt)) return "closed";
   return "open";
 }
 
-export default function EditorialDashboardPage() {
-  const total = mockDocuments.length + mockEditais.length;
-  const openEditais = mockEditais.filter((e) => {
-    const s = getEditalStatus(e);
-    return s === "open" || s === "permanent";
-  }).length;
+const VISIBILITY_LABEL: Record<string, string> = {
+  public: "Público",
+  internal: "Interno",
+  restricted: "Restrito",
+};
 
-  const recentlyUpdated = [...mockDocuments, ...mockEditais]
-    .sort(
-      (a, b) =>
-        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-    )
-    .slice(0, 8);
+const VISIBILITY_CLS: Record<string, string> = {
+  public: "bg-[--hb-green-muted] text-[--hb-green-fg]",
+  internal: "bg-[--hb-cyan-muted] text-[--hb-cyan-fg]",
+  restricted: "bg-[--color-destructive-muted] text-[--hb-red]",
+};
 
-  const VISIBILITY_LABEL: Record<string, string> = {
-    public: "Público",
-    internal: "Interno",
-    restricted: "Restrito",
-  };
+const STATUS_COLOR: Record<string, string> = {
+  open: "var(--hb-green)",
+  closed: "var(--hb-red)",
+  permanent: "var(--hb-cyan)",
+  upcoming: "var(--hb-orange)",
+};
 
-  const VISIBILITY_CLS: Record<string, string> = {
-    public: "bg-[--hb-green-muted] text-[--hb-green-fg]",
-    internal: "bg-[--hb-cyan-muted] text-[--hb-cyan-fg]",
-    restricted: "bg-[--color-destructive-muted] text-[--hb-red]",
-  };
+const STATUS_LABEL: Record<string, string> = {
+  open: "Aberto",
+  closed: "Encerrado",
+  permanent: "Permanente",
+  upcoming: "Em breve",
+};
+
+export default async function EditorialDashboardPage() {
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  const [
+    [totalRow],
+    [openEditaisRow],
+    [viewsRow],
+    [subscriptionsRow],
+    recentlyUpdated,
+    activeEditais,
+    draftQueue,
+  ] = await Promise.all([
+    // Total published documents
+    db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(documents)
+      .where(
+        and(isNull(documents.deletedAt), isNotNull(documents.publishedAt)),
+      ),
+
+    // Open editals count
+    db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(editals)
+      .innerJoin(documents, eq(editals.id, documents.id))
+      .where(
+        and(isNull(documents.deletedAt), isNotNull(documents.publishedAt)),
+      ),
+
+    // Views in last 30 days
+    db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(views)
+      .where(gt(views.viewedAt, thirtyDaysAgo)),
+
+    // Active subscriptions
+    db.select({ n: sql<number>`count(*)::int` }).from(subscriptions),
+
+    // Recently updated documents (incl. editals)
+    db
+      .select({
+        id: documents.id,
+        title: documents.title,
+        slug: documents.slug,
+        visibility: documents.visibility,
+        categoryName: categories.name,
+        updatedAt: documents.updatedAt,
+        publishedAt: documents.publishedAt,
+        isEdital: sql<boolean>`${editals.id} IS NOT NULL`,
+        editalOpensAt: editals.opensAt,
+        editalClosesAt: editals.closesAt,
+      })
+      .from(documents)
+      .leftJoin(categories, eq(categories.id, documents.categoryId))
+      .leftJoin(editals, eq(editals.id, documents.id))
+      .where(isNull(documents.deletedAt))
+      .orderBy(desc(documents.updatedAt))
+      .limit(8),
+
+    // Active editais for pipeline
+    db
+      .select({
+        id: documents.id,
+        title: documents.title,
+        editalOpensAt: editals.opensAt,
+        editalClosesAt: editals.closesAt,
+      })
+      .from(editals)
+      .innerJoin(documents, eq(editals.id, documents.id))
+      .where(and(isNull(documents.deletedAt), isNotNull(documents.publishedAt)))
+      .orderBy(desc(documents.updatedAt))
+      .limit(5),
+
+    // Draft queue (unpublished, non-deleted)
+    db
+      .select({
+        id: documents.id,
+        title: documents.title,
+        categoryName: categories.name,
+        authorId: documents.authorId,
+        createdAt: documents.createdAt,
+        isEdital: sql<boolean>`${editals.id} IS NOT NULL`,
+      })
+      .from(documents)
+      .leftJoin(categories, eq(categories.id, documents.categoryId))
+      .leftJoin(editals, eq(editals.id, documents.id))
+      .where(and(isNull(documents.deletedAt), isNull(documents.publishedAt)))
+      .orderBy(desc(documents.createdAt))
+      .limit(5),
+  ]);
+
+  const totalDocs = totalRow?.n ?? 0;
+  const openEditaisCount = openEditaisRow?.n ?? 0;
+  const viewCount = viewsRow?.n ?? 0;
+  const subscriptionCount = subscriptionsRow?.n ?? 0;
+
+  const kpis = [
+    {
+      label: "Total publicado",
+      value: totalDocs,
+      delta: `${activeEditais.length} editais ativos`,
+      up: true,
+      color: "var(--hb-blue)",
+    },
+    {
+      label: "Editais abertos",
+      value: openEditaisCount,
+      delta: `${activeEditais.length} total no sistema`,
+      up: false,
+      color: "var(--hb-orange)",
+    },
+    {
+      label: "Visualizações (30 dias)",
+      value:
+        viewCount >= 1000
+          ? `${(viewCount / 1000).toFixed(1)}k`
+          : String(viewCount),
+      delta: "Analytics do período",
+      up: true,
+      color: "var(--hb-cyan)",
+    },
+    {
+      label: "Assinaturas ativas",
+      value: subscriptionCount,
+      delta: `${draftQueue.length} rascunhos pendentes`,
+      up: true,
+      color: "var(--hb-green)",
+    },
+  ];
 
   return (
     <div>
@@ -103,36 +242,7 @@ export default function EditorialDashboardPage() {
 
       {/* KPI grid */}
       <div className="docs-kpi-grid">
-        {[
-          {
-            label: "Total publicado",
-            value: total,
-            delta: "+3 nos últimos 30 dias",
-            up: true,
-            color: "var(--hb-blue)",
-          },
-          {
-            label: "Editais abertos",
-            value: openEditais,
-            delta: `${mockEditais.length} total`,
-            up: false,
-            color: "var(--hb-orange)",
-          },
-          {
-            label: "Visualizações (30 dias)",
-            value: "12.4k",
-            delta: "+18% vs período anterior",
-            up: true,
-            color: "var(--hb-cyan)",
-          },
-          {
-            label: "Assinaturas ativas",
-            value: 128,
-            delta: "+12 esta semana",
-            up: true,
-            color: "var(--hb-green)",
-          },
-        ].map((kpi) => (
+        {kpis.map((kpi) => (
           <div key={kpi.label} className="hb-stat">
             <div
               className="hb-stat-dot"
@@ -168,84 +278,112 @@ export default function EditorialDashboardPage() {
                 aria-hidden="true"
               />
               <h3>Últimas atualizações</h3>
-              <div className="hb-card-header-actions">
-                <button type="button" className="hb-btn hb-btn-ghost hb-btn-xs">
-                  Todos
-                </button>
-                <button type="button" className="hb-btn hb-btn-ghost hb-btn-xs">
-                  Editais
-                </button>
-              </div>
             </div>
 
-            <table className="hb-tbl">
-              <thead>
-                <tr>
-                  <th>Documento</th>
-                  <th>Visibilidade</th>
-                  <th>Versão</th>
-                  <th>Atualizado</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {recentlyUpdated.map((doc) => (
-                  <tr key={doc.id}>
-                    <td>
-                      <div
-                        style={{
-                          fontFamily: "var(--font-display)",
-                          fontWeight: 600,
-                          fontSize: 13.5,
-                          color: "var(--brand)",
-                        }}
-                      >
-                        {doc.title}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 12,
-                          color: "var(--fg-muted)",
-                          marginTop: 2,
-                        }}
-                      >
-                        {doc.category.name}
-                      </div>
-                    </td>
-                    <td>
-                      <span
-                        className={`hb-badge ${VISIBILITY_CLS[doc.visibility] ?? ""}`}
-                      >
-                        {VISIBILITY_LABEL[doc.visibility] ?? doc.visibility}
-                      </span>
-                    </td>
-                    <td
-                      style={{
-                        fontFamily: "var(--font-display)",
-                        fontWeight: 700,
-                        fontSize: 13,
-                      }}
-                    >
-                      v{doc.currentVersion?.version ?? 1}
-                    </td>
-                    <td style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>
-                      {formatDate(doc.updatedAt)}
-                    </td>
-                    <td>
-                      <div style={{ display: "flex", gap: 4 }}>
-                        <Link
-                          href="/editorial/novo"
-                          className="hb-btn hb-btn-ghost hb-btn-xs"
-                          title="Editar"
-                        >
-                          <Edit size={13} aria-hidden="true" />
-                        </Link>
-                      </div>
-                    </td>
+            {recentlyUpdated.length === 0 ? (
+              <div className="hb-empty" style={{ padding: "32px 20px" }}>
+                <b>Nenhum documento ainda</b>
+                <p className="hb-empty-body">
+                  Crie o primeiro documento da área editorial.
+                </p>
+                <Link
+                  href="/editorial/novo"
+                  className="hb-btn hb-btn-primary"
+                  style={{ marginTop: 12 }}
+                >
+                  <Plus size={13} aria-hidden="true" />
+                  Criar documento
+                </Link>
+              </div>
+            ) : (
+              <table className="hb-tbl">
+                <thead>
+                  <tr>
+                    <th>Documento</th>
+                    <th>Visibilidade</th>
+                    <th>Status</th>
+                    <th>Atualizado</th>
+                    <th></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {recentlyUpdated.map((doc) => (
+                    <tr key={doc.id}>
+                      <td>
+                        <div
+                          style={{
+                            fontFamily: "var(--font-display)",
+                            fontWeight: 600,
+                            fontSize: 13.5,
+                            color: "var(--brand)",
+                          }}
+                        >
+                          {doc.title}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 12,
+                            color: "var(--fg-muted)",
+                            marginTop: 2,
+                          }}
+                        >
+                          {doc.categoryName ?? "—"}{" "}
+                          {doc.isEdital && (
+                            <span
+                              style={{
+                                fontSize: 10,
+                                background: "var(--bg-alt)",
+                                padding: "0 5px",
+                                borderRadius: 3,
+                              }}
+                            >
+                              edital
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td>
+                        <span
+                          className={`hb-badge ${VISIBILITY_CLS[doc.visibility] ?? ""}`}
+                        >
+                          {VISIBILITY_LABEL[doc.visibility] ?? doc.visibility}
+                        </span>
+                      </td>
+                      <td>
+                        <span
+                          className="hb-badge"
+                          style={{
+                            background: doc.publishedAt
+                              ? "var(--hb-green-muted)"
+                              : "var(--bg-alt)",
+                            color: doc.publishedAt
+                              ? "var(--hb-green-fg)"
+                              : "var(--fg-muted)",
+                            fontSize: 11,
+                          }}
+                        >
+                          {doc.publishedAt ? "Publicado" : "Rascunho"}
+                        </span>
+                      </td>
+                      <td style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>
+                        {formatDate(doc.updatedAt)}
+                      </td>
+                      <td>
+                        <div style={{ display: "flex", gap: 4 }}>
+                          <Link
+                            href="/editorial/novo"
+                            className="hb-btn hb-btn-ghost hb-btn-xs"
+                            title="Editar"
+                          >
+                            <Edit size={13} aria-hidden="true" />
+                          </Link>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </div>
         </section>
 
@@ -265,81 +403,67 @@ export default function EditorialDashboardPage() {
               Estado da pipeline
             </h3>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {mockEditais.map((e) => {
-                const s = getEditalStatus(e);
-                const STATUS_COLOR: Record<string, string> = {
-                  open: "var(--hb-green)",
-                  closed: "var(--hb-red)",
-                  permanent: "var(--hb-cyan)",
-                  upcoming: "var(--hb-orange)",
-                };
-                const STATUS_LABEL: Record<string, string> = {
-                  open: "Aberto",
-                  closed: "Encerrado",
-                  permanent: "Permanente",
-                  upcoming: "Em breve",
-                };
-
-                return (
-                  <div
-                    key={e.id}
-                    style={{
-                      padding: "12px 14px",
-                      border: "1px solid var(--border)",
-                      borderRadius: "var(--radius-sm)",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 6,
-                    }}
-                  >
+            {activeEditais.length === 0 ? (
+              <p style={{ fontSize: 13, color: "var(--fg-muted)", margin: 0 }}>
+                Nenhum edital publicado.
+              </p>
+            ) : (
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: 10 }}
+              >
+                {activeEditais.map((e) => {
+                  const s = getEditalStatus(e);
+                  return (
                     <div
+                      key={e.id}
                       style={{
+                        padding: "12px 14px",
+                        border: "1px solid var(--border)",
+                        borderRadius: "var(--radius-sm)",
                         display: "flex",
-                        alignItems: "center",
-                        justifyContent: "space-between",
-                        gap: 8,
+                        flexDirection: "column",
+                        gap: 6,
                       }}
                     >
-                      <span
-                        className="hb-badge"
+                      <div
                         style={{
-                          background: `color-mix(in srgb, ${STATUS_COLOR[s]} 14%, transparent)`,
-                          color: STATUS_COLOR[s],
-                          fontSize: 11,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                          gap: 8,
                         }}
                       >
                         <span
-                          className="hb-badge-dot"
-                          style={{ backgroundColor: STATUS_COLOR[s] }}
-                        />
-                        {STATUS_LABEL[s]}
-                      </span>
-                      <span
+                          className="hb-badge"
+                          style={{
+                            background: `color-mix(in srgb, ${STATUS_COLOR[s]} 14%, transparent)`,
+                            color: STATUS_COLOR[s],
+                            fontSize: 11,
+                          }}
+                        >
+                          <span
+                            className="hb-badge-dot"
+                            style={{ backgroundColor: STATUS_COLOR[s] }}
+                          />
+                          {STATUS_LABEL[s]}
+                        </span>
+                      </div>
+                      <div
                         style={{
-                          fontSize: 11.5,
-                          color: "var(--fg-muted)",
-                          fontWeight: 600,
+                          fontFamily: "var(--font-display)",
+                          fontSize: 14,
+                          fontWeight: 700,
+                          letterSpacing: "-0.01em",
+                          lineHeight: 1.25,
                         }}
                       >
-                        v{e.currentVersion?.version ?? 1}
-                      </span>
+                        {e.title}
+                      </div>
                     </div>
-                    <div
-                      style={{
-                        fontFamily: "var(--font-display)",
-                        fontSize: 14,
-                        fontWeight: 700,
-                        letterSpacing: "-0.01em",
-                        lineHeight: 1.25,
-                      }}
-                    >
-                      {e.title}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           {/* Review queue */}
@@ -356,75 +480,67 @@ export default function EditorialDashboardPage() {
               Aguardando publicação
             </h3>
 
-            {[
-              {
-                title: "SOP — Conciliação bancária",
-                sub: "Em revisão · Letícia Pires",
-                color: "var(--hb-cyan)",
-                bg: "rgba(7,180,231,0.12)",
-              },
-              {
-                title: "Edital de projetos pontuais — v6",
-                sub: "Aguarda diretoria · Filipe Honório",
-                color: "var(--hb-orange)",
-                bg: "rgba(234,90,6,0.12)",
-              },
-              {
-                title: "Descrição de cargo — Diretor Autorizador",
-                sub: "Rascunho · Marcos Andrade",
-                color: "var(--hb-green)",
-                bg: "rgba(161,197,32,0.14)",
-              },
-            ].map((item) => (
-              <div
-                key={item.title}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "auto 1fr auto",
-                  gap: 10,
-                  alignItems: "center",
-                  padding: "10px 0",
-                  borderBottom: "1px solid var(--divider)",
-                }}
-              >
+            {draftQueue.length === 0 ? (
+              <p style={{ fontSize: 13, color: "var(--fg-muted)", margin: 0 }}>
+                Nenhum rascunho na fila. Tudo em dia.
+              </p>
+            ) : (
+              draftQueue.map((item) => (
                 <div
+                  key={item.id}
                   style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 6,
-                    background: item.bg,
-                    color: item.color,
-                    display: "flex",
+                    display: "grid",
+                    gridTemplateColumns: "auto 1fr auto",
+                    gap: 10,
                     alignItems: "center",
-                    justifyContent: "center",
-                    flexShrink: 0,
+                    padding: "10px 0",
+                    borderBottom: "1px solid var(--divider)",
                   }}
                 >
-                  <Clock size={15} aria-hidden="true" />
-                </div>
-                <div>
                   <div
                     style={{
-                      fontWeight: 600,
-                      fontSize: 13.5,
-                      color: "var(--fg)",
+                      width: 32,
+                      height: 32,
+                      borderRadius: 6,
+                      background: item.isEdital
+                        ? "rgba(234,90,6,0.12)"
+                        : "rgba(7,180,231,0.12)",
+                      color: item.isEdital
+                        ? "var(--hb-orange)"
+                        : "var(--hb-cyan)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0,
                     }}
                   >
-                    {item.title}
+                    <Clock size={15} aria-hidden="true" />
                   </div>
-                  <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>
-                    {item.sub}
+                  <div>
+                    <div
+                      style={{
+                        fontWeight: 600,
+                        fontSize: 13.5,
+                        color: "var(--fg)",
+                        lineHeight: 1.3,
+                      }}
+                    >
+                      {item.title}
+                    </div>
+                    <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>
+                      Rascunho · {item.categoryName ?? "sem categoria"}
+                    </div>
                   </div>
+                  <Link
+                    href="/editorial/novo"
+                    className="hb-btn hb-btn-ghost hb-btn-xs"
+                  >
+                    <Scroll size={12} aria-hidden="true" />
+                    Abrir
+                  </Link>
                 </div>
-                <Link
-                  href="/editorial/novo"
-                  className="hb-btn hb-btn-ghost hb-btn-xs"
-                >
-                  <Scroll size={12} aria-hidden="true" />
-                  Abrir
-                </Link>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </aside>
       </div>
