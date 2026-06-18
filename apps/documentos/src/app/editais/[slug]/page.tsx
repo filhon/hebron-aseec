@@ -4,7 +4,6 @@ import { notFound } from "next/navigation";
 import {
   ChevronRight,
   Download,
-  ExternalLink,
   Folder,
   Globe,
   Users,
@@ -17,6 +16,7 @@ import {
 } from "lucide-react";
 import { createClient } from "@supabase/supabase-js";
 import { PublicNav } from "../../../components/public-nav";
+import { EditalSubmitButton } from "../../../components/edital-submit-button";
 import { DocumentViewer } from "../../../components/document-viewer";
 import { VersionHistory } from "../../../components/version-history";
 import { db } from "@hebron/db/client";
@@ -202,6 +202,7 @@ export default async function EditalDetailPage({ params }: PageProps) {
       editalOpensAt: editals.opensAt,
       editalClosesAt: editals.closesAt,
       editalProjectType: editals.projectType,
+      editalProjectCategoryId: editals.projectCategoryId,
     })
     .from(editals)
     .innerJoin(documents, eq(editals.id, documents.id))
@@ -288,7 +289,7 @@ export default async function EditalDetailPage({ params }: PageProps) {
     opensAt: row.editalOpensAt,
     closesAt: row.editalClosesAt,
     projectType: row.editalProjectType,
-    projectCategory: null,
+    projectCategory: row.editalProjectCategoryId ?? null,
   };
 
   const status = getEditalStatus(edital);
@@ -339,13 +340,6 @@ export default async function EditalDetailPage({ params }: PageProps) {
   const vis = VISIBILITY_MAP[edital.visibility];
   const VisIcon = vis.Icon;
   const statusCfg = STATUS_MAP[status];
-
-  const submitUrl = (() => {
-    const p = new URLSearchParams();
-    p.set("edital", edital.id);
-    if (edital.projectType) p.set("tipo", edital.projectType);
-    return `https://projetos.hebronaseec.com.br/novo?${p.toString()}`;
-  })();
 
   return (
     <>
@@ -634,16 +628,12 @@ export default async function EditalDetailPage({ params }: PageProps) {
                     flexWrap: "wrap",
                   }}
                 >
-                  <a
-                    href={submitUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hb-btn hb-btn-accent"
-                    style={{ fontSize: 14, padding: "10px 20px" }}
-                  >
-                    <ExternalLink size={15} aria-hidden="true" />
-                    Submeter projeto neste edital
-                  </a>
+                  <EditalSubmitButton
+                    editalId={edital.id}
+                    projectType={edital.projectType}
+                    projectCategory={edital.projectCategory}
+                    status={status}
+                  />
                   {signedUrl && (
                     <a
                       href={signedUrl}
