@@ -1,0 +1,854 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+@font-face { font-family:'Parkinsans'; src:url('fonts/Parkinsans-VariableFont_wght.ttf') format('truetype-variations'), url('fonts/Parkinsans-VariableFont_wght.ttf') format('truetype'); font-weight:300 800; font-style:normal; font-display:swap; }
+@font-face { font-family:'Titillium Web'; src:url('fonts/TitilliumWeb-ExtraLight.ttf') format('truetype'); font-weight:200; font-display:swap; }
+@font-face { font-family:'Titillium Web'; src:url('fonts/TitilliumWeb-Light.ttf') format('truetype'); font-weight:300; font-display:swap; }
+@font-face { font-family:'Titillium Web'; src:url('fonts/TitilliumWeb-Regular.ttf') format('truetype'); font-weight:400; font-display:swap; }
+@font-face { font-family:'Titillium Web'; src:url('fonts/TitilliumWeb-SemiBold.ttf') format('truetype'); font-weight:600; font-display:swap; }
+@font-face { font-family:'Titillium Web'; src:url('fonts/TitilliumWeb-Bold.ttf') format('truetype'); font-weight:700; font-display:swap; }
+:root{
+--hb-blue:#202C85;--hb-blue-deep:#19236A;--hb-blue-soft:#2A38A0;--hb-orange:#EA5A06;--hb-orange-deep:#C24A03;--hb-green:#A1C520;--hb-green-deep:#82A317;--hb-cyan:#07B4E7;--hb-cyan-deep:#0593BE;
+--hb-white:#FFFFFF;--hb-cream:#F7F8FC;--hb-gray-50:#EEF0F6;--hb-gray-100:#DCDFEA;--hb-gray-200:#B7BDD0;--hb-gray-400:#6C7390;--hb-gray-600:#3F4566;--hb-ink:#131737;
+--bg:#FFFFFF;--bg-alt:#F7F8FC;--surface:#FFFFFF;--surface-alt:#EEF0F6;--fg:#131737;--fg-muted:#6C7390;--fg-subtle:#B7BDD0;--fg-invert:#FFFFFF;--brand:#202C85;--accent:#EA5A06;--border:#DCDFEA;--divider:rgba(19,23,55,.08);
+--font-display:'Parkinsans','Titillium Web',system-ui,sans-serif;--font-body:'Titillium Web',system-ui,sans-serif;
+--radius-sm:10px;--radius-md:16px;--radius-lg:24px;--radius-pill:999px;
+--shadow-sm:0 1px 2px rgba(19,23,55,.06),0 1px 1px rgba(19,23,55,.04);--shadow-md:0 6px 18px rgba(19,23,55,.08),0 2px 4px rgba(19,23,55,.04);--shadow-lg:0 18px 40px rgba(19,23,55,.12);
+}
+*{box-sizing:border-box;}
+@keyframes hbfade{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
+::-webkit-scrollbar{width:10px;height:10px;}::-webkit-scrollbar-thumb{background:#cdd3e4;border-radius:99px;border:2px solid var(--bg-alt);}
+</style>
+</helmet>
+
+<div style="display:flex; height:100vh; width:100%; overflow:hidden; font-family:var(--font-body); font-size:15px; color:var(--fg); background:var(--bg-alt);">
+
+  <!-- ===== SIDEBAR ===== -->
+  <aside style="width:264px; flex:none; background:var(--hb-blue); color:var(--fg-invert); display:flex; flex-direction:column; padding:22px 16px;">
+    <div style="display:flex; align-items:center; gap:10px; padding:4px 8px 22px;">
+      <img src="assets/logo-horizontal.png" alt="Hebron ASEEC" style="height:30px; filter:brightness(0) invert(1);"/>
+    </div>
+
+    <div style="background:rgba(255,255,255,.08); border-radius:var(--radius-pill); padding:4px; display:flex; gap:4px; margin:0 8px 22px;">
+      <button onClick="{{ goSub }}" style="{{ subBtnStyle }}">Submissor</button>
+      <button onClick="{{ goDir }}" style="{{ dirBtnStyle }}">Diretoria</button>
+    </div>
+
+    <div style="font-size:11px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:rgba(255,255,255,.5); padding:0 12px 10px;">{{ navLabel }}</div>
+    <nav style="display:flex; flex-direction:column; gap:3px;">
+      <sc-for list="{{ nav }}" as="item" hint-placeholder-count="3">
+        <a onClick="{{ item.onClick }}" style="{{ item.style }}">
+          <sc-if value="{{ item.active }}" hint-placeholder-val="{{ false }}"><span style="position:absolute; left:0; top:0; right:0; bottom:0; border-radius:12px; background-color:rgba(255,255,255,.14); z-index:0;"></span></sc-if>
+          <span style="{{ item.dotStyle }}"></span>
+          <span style="position:relative; z-index:1;">{{ item.label }}</span>
+        </a>
+      </sc-for>
+    </nav>
+
+    <div style="margin-top:auto; padding:14px 12px 4px; border-top:1px solid rgba(255,255,255,.12); display:flex; align-items:center; gap:10px;">
+      <div style="width:36px; height:36px; border-radius:99px; background:var(--hb-cyan); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-family:var(--font-display); flex:none;">{{ userInitials }}</div>
+      <div style="min-width:0;">
+        <div style="font-size:13px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ userName }}</div>
+        <div style="font-size:11px; color:rgba(255,255,255,.6); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ userRole }}</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ===== MAIN ===== -->
+  <div style="flex:1; min-width:0; display:flex; flex-direction:column; overflow:hidden;">
+    <header style="height:64px; flex:none; background:var(--surface); border-bottom:1px solid var(--border); display:flex; align-items:center; gap:20px; padding:0 28px;">
+      <div style="min-width:0;">
+        <div style="font-family:var(--font-display); font-weight:700; font-size:18px; line-height:1.1;">{{ pageTitle }}</div>
+        <div style="font-size:12px; color:var(--fg-muted);">{{ pageSub }}</div>
+      </div>
+      <div style="margin-left:auto; display:flex; align-items:center; gap:12px;">
+        <div style="display:flex; align-items:center; gap:8px; background:var(--bg-alt); border:1px solid var(--border); border-radius:var(--radius-pill); padding:8px 14px; width:240px; color:var(--fg-muted);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <span style="font-size:13px;">Buscar projeto…</span>
+        </div>
+        <button style="position:relative; width:40px; height:40px; border-radius:99px; border:1px solid var(--border); background:var(--surface); color:var(--hb-blue); display:flex; align-items:center; justify-content:center; cursor:pointer;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <span style="position:absolute; top:6px; right:7px; width:8px; height:8px; border-radius:99px; background:var(--hb-orange); border:2px solid var(--surface);"></span>
+        </button>
+      </div>
+    </header>
+
+    <main style="flex:1; overflow-y:auto; padding:28px 28px 56px;">
+      <div style="max-width:1180px; margin:0 auto;">
+
+        <sc-if value="{{ dashOn }}" hint-placeholder-val="{{ true }}">
+          <div data-screen-label="Submissor · Início" style=""><div style="display:flex; align-items:flex-end; justify-content:space-between; gap:24px; flex-wrap:wrap; margin-bottom:24px;">
+            <div>
+              <div style="font-size:13px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--hb-blue); margin-bottom:8px;">Missão Sertão Vivo</div>
+              <h1 style="font-family:var(--font-display); font-weight:700; font-size:30px; line-height:1.1; margin:0; letter-spacing:-.01em;">Paz do Senhor, Pr. Josafá.</h1>
+              <p style="color:var(--fg-muted); margin:8px 0 0; font-size:15px;">Você tem <strong style="color:var(--fg);">1 relatório</strong> a vencer e <strong style="color:var(--fg);">1 projeto</strong> em votação nesta semana.</p>
+            </div>
+            <button onClick="{{ goNovo }}" style="display:inline-flex; align-items:center; gap:9px; background:var(--hb-orange); color:#fff; border:none; cursor:pointer; font-family:var(--font-display); font-weight:600; font-size:15px; padding:13px 22px; border-radius:99px; box-shadow:var(--shadow-sm); white-space:nowrap;" style-hover="background:var(--hb-orange-deep);">
+              Submeter novo projeto
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+            </button>
+          </div>
+
+          <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:24px;">
+            <div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:20px;">
+              <div style="display:flex; align-items:center; gap:8px; color:var(--fg-muted); font-size:13px; font-weight:600;"><span style="width:9px;height:9px;border-radius:99px;background:var(--hb-blue);"></span>Projetos ativos</div>
+              <div style="font-family:var(--font-display); font-weight:800; font-size:38px; line-height:1; margin-top:12px;">2</div>
+              <div style="font-size:12px; color:var(--fg-muted); margin-top:6px;">1 em execução · 1 aprovado</div>
+            </div>
+            <div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:20px;">
+              <div style="display:flex; align-items:center; gap:8px; color:var(--fg-muted); font-size:13px; font-weight:600;"><span style="width:9px;height:9px;border-radius:99px;background:var(--hb-cyan);"></span>Em avaliação</div>
+              <div style="font-family:var(--font-display); font-weight:800; font-size:38px; line-height:1; margin-top:12px;">1</div>
+              <div style="font-size:12px; color:var(--fg-muted); margin-top:6px;">Votação aberta · ciclo 2025</div>
+            </div>
+            <div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:20px;">
+              <div style="display:flex; align-items:center; gap:8px; color:var(--fg-muted); font-size:13px; font-weight:600;"><span style="width:9px;height:9px;border-radius:99px;background:var(--hb-orange);"></span>Relatórios pendentes</div>
+              <div style="font-family:var(--font-display); font-weight:800; font-size:38px; line-height:1; margin-top:12px; color:var(--hb-orange-deep);">1</div>
+              <div style="font-size:12px; color:var(--fg-muted); margin-top:6px;">Vence em 5 dias</div>
+            </div>
+            <div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:20px;">
+              <div style="display:flex; align-items:center; gap:8px; color:var(--fg-muted); font-size:13px; font-weight:600;"><span style="width:9px;height:9px;border-radius:99px;background:var(--hb-green);"></span>Orçamento disponível</div>
+              <div style="font-family:var(--font-display); font-weight:800; font-size:30px; line-height:1; margin-top:14px; white-space:nowrap;">R$ 13 mil</div>
+              <div style="font-size:12px; color:var(--fg-muted); margin-top:6px;">de R$ 150 mil no ano</div>
+            </div>
+          </div>
+
+          <div style="display:grid; grid-template-columns:1.6fr 1fr; gap:20px; align-items:start;">
+            <section style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:8px 8px 12px;">
+              <div style="display:flex; align-items:center; justify-content:space-between; padding:16px 16px 12px;">
+                <h2 style="font-family:var(--font-display); font-weight:700; font-size:18px; margin:0;">Meus projetos</h2>
+                <button onClick="{{ goDet }}" style="background:none; border:none; color:var(--hb-blue); font-weight:600; font-size:13px; cursor:pointer; font-family:var(--font-body);">Ver todos</button>
+              </div>
+
+              <button onClick="{{ goAna }}" style="width:100%; text-align:left; display:flex; gap:16px; align-items:center; padding:16px; border:none; border-radius:16px; background:transparent; cursor:pointer;" style-hover="background:var(--bg-alt);">
+                <div style="flex:1; min-width:0;">
+                  <div style="display:flex; align-items:center; gap:10px;"><span style="font-family:var(--font-display); font-weight:600; font-size:16px;">Veículo para missões rurais</span><span style="font-size:11px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; padding:3px 9px; border-radius:99px; background:rgba(32,44,133,.10); color:var(--hb-blue);">Em votação</span></div>
+                  <div style="font-size:13px; color:var(--fg-muted); margin-top:4px;">Projeto anual · Bahia · 12 parcelas</div>
+                </div>
+                <div style="text-align:right; flex:none;"><div style="font-family:var(--font-display); font-weight:700; font-size:16px;">R$ 89.000</div><div style="font-size:12px; color:var(--fg-muted);">valor solicitado</div></div>
+              </button>
+              <div style="height:1px; background:var(--divider); margin:0 16px;"></div>
+
+              <div style="display:flex; gap:16px; align-items:center; padding:16px;">
+                <div style="flex:1; min-width:0;">
+                  <div style="display:flex; align-items:center; gap:10px;"><span style="font-family:var(--font-display); font-weight:600; font-size:16px;">Poço artesiano comunitário</span><span style="font-size:11px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; padding:3px 9px; border-radius:99px; background:rgba(42,56,160,.12); color:var(--hb-blue-soft);">Em execução</span></div>
+                  <div style="font-size:13px; color:var(--fg-muted); margin-top:4px;">Projeto anual · Bahia · parcela 3 de 12</div>
+                  <div style="height:6px; background:var(--surface-alt); border-radius:99px; margin-top:10px; overflow:hidden;"><div style="width:25%; height:100%; background:var(--hb-green); border-radius:99px;"></div></div>
+                </div>
+                <div style="text-align:right; flex:none;"><div style="font-family:var(--font-display); font-weight:700; font-size:16px;">R$ 48.000</div><div style="font-size:12px; color:var(--fg-muted);">25% executado</div></div>
+              </div>
+              <div style="height:1px; background:var(--divider); margin:0 16px;"></div>
+
+              <div style="display:flex; gap:16px; align-items:center; padding:16px;">
+                <div style="flex:1; min-width:0;">
+                  <div style="display:flex; align-items:center; gap:10px;"><span style="font-family:var(--font-display); font-weight:600; font-size:16px;">Evangelismo nas feiras livres</span><span style="font-size:11px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; padding:3px 9px; border-radius:99px; background:rgba(130,163,23,.20); color:#5f7510;">Concluído</span></div>
+                  <div style="font-size:13px; color:var(--fg-muted); margin-top:4px;">Projeto pontual · Bahia · prestação de contas aprovada</div>
+                </div>
+                <div style="text-align:right; flex:none;"><div style="font-family:var(--font-display); font-weight:700; font-size:16px;">R$ 9.500</div><div style="font-size:12px; color:var(--fg-muted);">encerrado em jun/2025</div></div>
+              </div>
+            </section>
+
+            <div style="display:flex; flex-direction:column; gap:20px;">
+              <section style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:20px;">
+                <h2 style="font-family:var(--font-display); font-weight:700; font-size:16px; margin:0 0 14px;">Próximos pagamentos</h2>
+                <div style="display:flex; flex-direction:column; gap:14px;">
+                  <div style="display:flex; align-items:center; gap:12px;"><div style="width:42px; flex:none; text-align:center;"><div style="font-family:var(--font-display); font-weight:700; font-size:15px; line-height:1;">30</div><div style="font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--fg-muted);">set</div></div><div style="flex:1; min-width:0;"><div style="font-size:14px; font-weight:600;">Parcela 3/12 · Veículo</div><div style="font-size:12px; color:var(--fg-muted);">último dia útil</div></div><div style="font-family:var(--font-display); font-weight:700; font-size:14px;">R$ 7.416</div></div>
+                  <div style="display:flex; align-items:center; gap:12px; opacity:.62;"><div style="width:42px; flex:none; text-align:center;"><div style="font-family:var(--font-display); font-weight:700; font-size:15px; line-height:1;">31</div><div style="font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:var(--fg-muted);">out</div></div><div style="flex:1; min-width:0;"><div style="font-size:14px; font-weight:600;">Parcela 4/12 · Veículo</div><div style="font-size:12px; color:var(--fg-muted);">aguardando aprovação</div></div><div style="font-family:var(--font-display); font-weight:700; font-size:14px;">R$ 7.416</div></div>
+                </div>
+              </section>
+
+              <section style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:20px;">
+                <h2 style="font-family:var(--font-display); font-weight:700; font-size:16px; margin:0 0 6px;">Orçamento da instituição</h2>
+                <div style="font-size:12px; color:var(--fg-muted); margin-bottom:14px;">Ano-calendário 2025</div>
+                <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:8px;"><span style="font-family:var(--font-display); font-weight:800; font-size:26px;">R$ 137 mil</span><span style="font-size:12px; color:var(--fg-muted);">de R$ 150 mil</span></div>
+                <div style="height:10px; background:var(--surface-alt); border-radius:99px; overflow:hidden;"><div style="width:91%; height:100%; background:linear-gradient(90deg,var(--hb-blue),var(--hb-cyan)); border-radius:99px;"></div></div>
+                <div style="font-size:12px; color:var(--fg-muted); margin-top:10px;">91% comprometido. Acima do teto, a submissão é bloqueada — contate o administrador.</div>
+              </section>
+
+              <section style="background:rgba(234,90,6,.06); border:1px solid rgba(234,90,6,.25); border-radius:var(--radius-lg); padding:20px;">
+                <div style="display:flex; align-items:center; gap:8px; color:var(--hb-orange-deep); font-weight:700; font-size:13px; margin-bottom:6px;">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                  Relatório pendente
+                </div>
+                <div style="font-size:14px; font-weight:600;">Relatório trimestral — Poço artesiano</div>
+                <div style="font-size:12px; color:var(--fg-muted); margin:4px 0 14px;">Vence em 5 dias · 30 de setembro</div>
+                <button onClick="{{ goDet }}" style="width:100%; background:var(--hb-blue); color:#fff; border:none; cursor:pointer; font-family:var(--font-display); font-weight:600; font-size:14px; padding:11px; border-radius:99px;" style-hover="background:var(--hb-blue-soft);">Enviar relatório</button>
+              </section>
+            </div>
+          </div></div>
+        </sc-if>
+
+        <sc-if value="{{ novoOn }}" hint-placeholder-val="{{ true }}">
+          <div data-screen-label="Submissor · Novo projeto" style=""><div style="max-width:860px; margin:0 auto;">
+            <!-- stepper -->
+            <div style="display:flex; gap:6px; margin-bottom:24px;">
+              <sc-for list="{{ wizSteps }}" as="st" hint-placeholder-count="6">
+                <button onClick="{{ st.onClick }}" style="flex:1; display:flex; flex-direction:column; align-items:center; gap:8px; background:none; border:none; cursor:pointer; padding:0;">
+                  <div style="display:flex; align-items:center; width:100%; gap:8px;">
+                    <div style="flex:1; height:3px; border-radius:99px; background:transparent;"></div>
+                    <div style="{{ st.numStyle }}">{{ st.n }}</div>
+                    <div style="flex:1; height:3px; border-radius:99px; background:transparent;"></div>
+                  </div>
+                  <span style="{{ st.labelStyle }}">{{ st.label }}</span>
+                </button>
+              </sc-for>
+            </div>
+
+            <div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:32px;">
+
+              <sc-if value="{{ w0 }}" hint-placeholder-val="{{ true }}">
+                <div>
+                  <h2 style="font-family:var(--font-display); font-weight:700; font-size:22px; margin:0 0 4px;">Instituição responsável</h2>
+                  <p style="color:var(--fg-muted); margin:0 0 24px; font-size:14px;">Selecione a instituição que conduzirá o projeto. Você pode estar vinculado a mais de uma.</p>
+                  <label style="display:block; font-size:13px; font-weight:600; margin-bottom:7px;">Instituição</label>
+                  <div style="display:flex; align-items:center; gap:14px; border:2px solid var(--hb-blue); border-radius:14px; padding:16px; background:rgba(32,44,133,.03);">
+                    <div style="width:44px; height:44px; flex:none; border-radius:12px; background:var(--hb-blue); color:#fff; display:flex; align-items:center; justify-content:center; font-family:var(--font-display); font-weight:700;">SV</div>
+                    <div style="flex:1;"><div style="font-weight:600; font-family:var(--font-display);">Missão Sertão Vivo</div><div style="font-size:13px; color:var(--fg-muted);">CNPJ 12.345.678/0001-90 · Juazeiro, BA</div></div>
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--hb-green-deep)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  </div>
+                  <button style="margin-top:14px; display:inline-flex; align-items:center; gap:8px; background:none; border:1px dashed var(--border-strong,#B7BDD0); color:var(--hb-blue); border-radius:12px; padding:12px 16px; font-size:14px; font-weight:600; cursor:pointer; font-family:var(--font-body);" style-hover="background:var(--bg-alt);">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                    Cadastrar nova instituição
+                  </button>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ w1 }}" hint-placeholder-val="{{ true }}">
+                <div>
+                  <h2 style="font-family:var(--font-display); font-weight:700; font-size:22px; margin:0 0 4px;">Proposta do projeto</h2>
+                  <p style="color:var(--fg-muted); margin:0 0 24px; font-size:14px;">Descreva o projeto que você deseja submeter para apoio.</p>
+                  <div style="display:flex; gap:8px; margin-bottom:20px;">
+                    <div style="flex:1; border:2px solid var(--hb-blue); border-radius:12px; padding:14px; cursor:pointer; background:rgba(32,44,133,.03);"><div style="font-weight:700; font-family:var(--font-display); color:var(--hb-blue);">Projeto anual</div><div style="font-size:12.5px; color:var(--fg-muted); margin-top:2px;">Janela definida · avaliação por votação</div></div>
+                    <div style="flex:1; border:1px solid var(--border); border-radius:12px; padding:14px; cursor:pointer;"><div style="font-weight:700; font-family:var(--font-display);">Projeto pontual</div><div style="font-size:12.5px; color:var(--fg-muted); margin-top:2px;">Emergencial · decisão em reunião</div></div>
+                  </div>
+                  <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+                    <div><label style="display:block; font-size:13px; font-weight:600; margin-bottom:7px;">Nome do projeto</label><input value="Poço artesiano comunitário" style="width:100%; font-family:var(--font-body); font-size:15px; padding:11px 14px; border:1px solid var(--border); border-radius:10px; outline:none; background:var(--surface);" style-focus="border-color:var(--hb-cyan); box-shadow:0 0 0 3px rgba(7,180,231,.15);"/></div>
+                    <div><label style="display:block; font-size:13px; font-weight:600; margin-bottom:7px;">Responsável</label><input value="Pr. Josafá Amorim" style="width:100%; font-family:var(--font-body); font-size:15px; padding:11px 14px; border:1px solid var(--border); border-radius:10px; outline:none; background:var(--surface);" style-focus="border-color:var(--hb-cyan); box-shadow:0 0 0 3px rgba(7,180,231,.15);"/></div>
+                    <div><label style="display:block; font-size:13px; font-weight:600; margin-bottom:7px;">Categoria</label><div style="position:relative;"><div style="width:100%; font-size:15px; padding:11px 14px; border:1px solid var(--border); border-radius:10px; color:var(--fg);">Infraestrutura comunitária</div><svg style="position:absolute; right:14px; top:14px;" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--fg-muted)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></div></div>
+                    <div><label style="display:block; font-size:13px; font-weight:600; margin-bottom:7px;">Local <span style="font-weight:400; color:var(--fg-muted);">(busca no mapa)</span></label><input value="Curaçá, Bahia" style="width:100%; font-family:var(--font-body); font-size:15px; padding:11px 14px; border:1px solid var(--border); border-radius:10px; outline:none; background:var(--surface);" style-focus="border-color:var(--hb-cyan); box-shadow:0 0 0 3px rgba(7,180,231,.15);"/></div>
+                  </div>
+                  <div style="margin-top:16px;"><label style="display:block; font-size:13px; font-weight:600; margin-bottom:7px;">Descrição da proposta</label><textarea rows="4" style="width:100%; font-family:var(--font-body); font-size:15px; padding:11px 14px; border:1px solid var(--border); border-radius:10px; outline:none; resize:vertical; background:var(--surface);" style-focus="border-color:var(--hb-cyan); box-shadow:0 0 0 3px rgba(7,180,231,.15);">Perfuração de poço artesiano para abastecer 60 famílias da zona rural de Curaçá, hoje dependentes de carro-pipa. Inclui bomba, reservatório e rede de distribuição comunitária.</textarea></div>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ w2 }}" hint-placeholder-val="{{ true }}">
+                <div>
+                  <h2 style="font-family:var(--font-display); font-weight:700; font-size:22px; margin:0 0 4px;">Orçamento e parcelas</h2>
+                  <p style="color:var(--fg-muted); margin:0 0 24px; font-size:14px;">Defina o valor total e em quais meses deseja receber. Máximo de 12 parcelas.</p>
+                  <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px;">
+                    <div><label style="display:block; font-size:13px; font-weight:600; margin-bottom:7px;">Valor total solicitado</label><input value="R$ 48.000,00" style="width:100%; font-family:var(--font-display); font-weight:700; font-size:17px; padding:11px 14px; border:1px solid var(--border); border-radius:10px; outline:none; background:var(--surface);" style-focus="border-color:var(--hb-cyan); box-shadow:0 0 0 3px rgba(7,180,231,.15);"/></div>
+                    <div><label style="display:block; font-size:13px; font-weight:600; margin-bottom:7px;">Número de parcelas</label><input value="6" style="width:100%; font-family:var(--font-display); font-weight:700; font-size:17px; padding:11px 14px; border:1px solid var(--border); border-radius:10px; outline:none; background:var(--surface);" style-focus="border-color:var(--hb-cyan); box-shadow:0 0 0 3px rgba(7,180,231,.15);"/></div>
+                  </div>
+                  <label style="display:block; font-size:13px; font-weight:600; margin-bottom:10px;">Meses de pagamento <span style="font-weight:400; color:var(--fg-muted);">— 6 selecionados, R$ 8.000 cada</span></label>
+                  <div style="display:grid; grid-template-columns:repeat(6,1fr); gap:8px;">
+                    <div style="text-align:center; padding:11px 0; border-radius:10px; font-size:13px; font-weight:600; background:var(--hb-blue); color:#fff;">Jul</div>
+                    <div style="text-align:center; padding:11px 0; border-radius:10px; font-size:13px; font-weight:600; background:var(--hb-blue); color:#fff;">Ago</div>
+                    <div style="text-align:center; padding:11px 0; border-radius:10px; font-size:13px; font-weight:600; background:var(--hb-blue); color:#fff;">Set</div>
+                    <div style="text-align:center; padding:11px 0; border-radius:10px; font-size:13px; font-weight:600; background:var(--hb-blue); color:#fff;">Out</div>
+                    <div style="text-align:center; padding:11px 0; border-radius:10px; font-size:13px; font-weight:600; background:var(--hb-blue); color:#fff;">Nov</div>
+                    <div style="text-align:center; padding:11px 0; border-radius:10px; font-size:13px; font-weight:600; background:var(--hb-blue); color:#fff;">Dez</div>
+                    <div style="text-align:center; padding:11px 0; border-radius:10px; font-size:13px; font-weight:600; background:var(--surface-alt); color:var(--fg-muted);">Jan</div>
+                    <div style="text-align:center; padding:11px 0; border-radius:10px; font-size:13px; font-weight:600; background:var(--surface-alt); color:var(--fg-muted);">Fev</div>
+                    <div style="text-align:center; padding:11px 0; border-radius:10px; font-size:13px; font-weight:600; background:var(--surface-alt); color:var(--fg-muted);">Mar</div>
+                    <div style="text-align:center; padding:11px 0; border-radius:10px; font-size:13px; font-weight:600; background:var(--surface-alt); color:var(--fg-muted);">Abr</div>
+                    <div style="text-align:center; padding:11px 0; border-radius:10px; font-size:13px; font-weight:600; background:var(--surface-alt); color:var(--fg-muted);">Mai</div>
+                    <div style="text-align:center; padding:11px 0; border-radius:10px; font-size:13px; font-weight:600; background:var(--surface-alt); color:var(--fg-muted);">Jun</div>
+                  </div>
+                  <div style="margin-top:20px; display:flex; align-items:flex-start; gap:10px; background:rgba(7,180,231,.07); border-radius:12px; padding:14px 16px;">
+                    <svg width="18" height="18" style="flex:none; margin-top:1px;" viewBox="0 0 24 24" fill="none" stroke="var(--hb-cyan-deep)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                    <div style="font-size:13px; color:var(--fg);">O pagamento padrão ocorre no <strong>último dia útil</strong> de cada mês. Há R$ 13.000 disponíveis no orçamento da instituição neste ano.</div>
+                  </div>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ w3 }}" hint-placeholder-val="{{ true }}">
+                <div>
+                  <h2 style="font-family:var(--font-display); font-weight:700; font-size:22px; margin:0 0 4px;">Cronograma e prestação de contas</h2>
+                  <p style="color:var(--fg-muted); margin:0 0 24px; font-size:14px;">A duração é inferida pelos meses de pagamento. Defina a periodicidade dos relatórios.</p>
+                  <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px;">
+                    <div><label style="display:block; font-size:13px; font-weight:600; margin-bottom:7px;">Início previsto</label><input value="Julho de 2025" style="width:100%; font-size:15px; padding:11px 14px; border:1px solid var(--border); border-radius:10px; outline:none; background:var(--surface);" style-focus="border-color:var(--hb-cyan); box-shadow:0 0 0 3px rgba(7,180,231,.15);"/></div>
+                    <div><label style="display:block; font-size:13px; font-weight:600; margin-bottom:7px;">Conclusão prevista</label><input value="Dezembro de 2025" style="width:100%; font-size:15px; padding:11px 14px; border:1px solid var(--border); border-radius:10px; outline:none; background:var(--surface);" style-focus="border-color:var(--hb-cyan); box-shadow:0 0 0 3px rgba(7,180,231,.15);"/></div>
+                  </div>
+                  <label style="display:block; font-size:13px; font-weight:600; margin-bottom:10px;">Periodicidade do relatório</label>
+                  <div style="display:flex; gap:8px; margin-bottom:24px;">
+                    <div style="padding:10px 18px; border-radius:99px; font-size:14px; font-weight:600; background:var(--hb-blue); color:#fff;">Trimestral</div>
+                    <div style="padding:10px 18px; border-radius:99px; font-size:14px; font-weight:600; background:var(--surface-alt); color:var(--fg-muted);">Semestral</div>
+                    <div style="padding:10px 18px; border-radius:99px; font-size:14px; font-weight:600; background:var(--surface-alt); color:var(--fg-muted);">Ao final</div>
+                  </div>
+                  <label style="display:block; font-size:13px; font-weight:600; margin-bottom:10px;">Marcos do projeto</label>
+                  <div style="display:flex; flex-direction:column; gap:10px;">
+                    <div style="display:flex; align-items:center; gap:12px; border:1px solid var(--border); border-radius:12px; padding:12px 14px;"><span style="width:8px; height:8px; border-radius:99px; background:var(--hb-cyan); flex:none;"></span><span style="flex:1; font-size:14px;">Contratação da perfuração e licenças</span><span style="font-size:13px; color:var(--fg-muted);">Ago/2025</span></div>
+                    <div style="display:flex; align-items:center; gap:12px; border:1px solid var(--border); border-radius:12px; padding:12px 14px;"><span style="width:8px; height:8px; border-radius:99px; background:var(--hb-orange); flex:none;"></span><span style="flex:1; font-size:14px;">Instalação de bomba e reservatório</span><span style="font-size:13px; color:var(--fg-muted);">Out/2025</span></div>
+                    <div style="display:flex; align-items:center; gap:12px; border:1px solid var(--border); border-radius:12px; padding:12px 14px;"><span style="width:8px; height:8px; border-radius:99px; background:var(--hb-green); flex:none;"></span><span style="flex:1; font-size:14px;">Rede de distribuição às famílias</span><span style="font-size:13px; color:var(--fg-muted);">Dez/2025</span></div>
+                  </div>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ w4 }}" hint-placeholder-val="{{ true }}">
+                <div>
+                  <h2 style="font-family:var(--font-display); font-weight:700; font-size:22px; margin:0 0 4px;">Anexos</h2>
+                  <p style="color:var(--fg-muted); margin:0 0 24px; font-size:14px;">Apresente seu projeto. O vídeo aproxima o conselho da realidade que você vive.</p>
+                  <div style="display:flex; flex-direction:column; gap:12px;">
+                    <div style="display:flex; align-items:center; gap:14px; border:1px solid var(--border); border-radius:14px; padding:16px;">
+                      <div style="width:46px; height:46px; flex:none; border-radius:12px; background:rgba(130,163,23,.18); color:var(--hb-green-deep); display:flex; align-items:center; justify-content:center;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg></div>
+                      <div style="flex:1;"><div style="font-weight:600;">Vídeo de apresentação <span style="font-weight:400; color:var(--fg-muted); font-size:13px;">(até 3 min)</span></div><div style="font-size:13px; color:var(--hb-green-deep);">apresentacao-poco.mp4 · 2:41 enviado</div></div>
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--hb-green-deep)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:14px; border:1px solid var(--border); border-radius:14px; padding:16px;">
+                      <div style="width:46px; height:46px; flex:none; border-radius:12px; background:rgba(32,44,133,.10); color:var(--hb-blue); display:flex; align-items:center; justify-content:center;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+                      <div style="flex:1;"><div style="font-weight:600;">Planilha de orçamento</div><div style="font-size:13px; color:var(--hb-blue);">orcamento-detalhado.xlsx · enviado</div></div>
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--hb-green-deep)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:14px; border:1px dashed var(--border-strong,#B7BDD0); border-radius:14px; padding:16px; color:var(--fg-muted);">
+                      <div style="width:46px; height:46px; flex:none; border-radius:12px; background:var(--surface-alt); display:flex; align-items:center; justify-content:center;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg></div>
+                      <div style="flex:1;"><div style="font-weight:600; color:var(--fg);">Carta de recomendação <span style="font-weight:400; font-size:13px;">(opcional)</span></div><div style="font-size:13px;">Arraste o arquivo ou clique para enviar</div></div>
+                    </div>
+                  </div>
+                </div>
+              </sc-if>
+
+              <sc-if value="{{ w5 }}" hint-placeholder-val="{{ true }}">
+                <div>
+                  <h2 style="font-family:var(--font-display); font-weight:700; font-size:22px; margin:0 0 4px;">Revisão e envio</h2>
+                  <p style="color:var(--fg-muted); margin:0 0 24px; font-size:14px;">Confira as informações antes de enviar à validação.</p>
+                  <div style="border:1px solid var(--border); border-radius:16px; overflow:hidden; margin-bottom:20px;">
+                    <div style="display:flex; padding:14px 18px; border-bottom:1px solid var(--divider);"><span style="width:170px; color:var(--fg-muted); font-size:14px;">Projeto</span><span style="font-weight:600;">Poço artesiano comunitário · anual</span></div>
+                    <div style="display:flex; padding:14px 18px; border-bottom:1px solid var(--divider);"><span style="width:170px; color:var(--fg-muted); font-size:14px;">Instituição</span><span style="font-weight:600;">Missão Sertão Vivo · Curaçá, BA</span></div>
+                    <div style="display:flex; padding:14px 18px; border-bottom:1px solid var(--divider);"><span style="width:170px; color:var(--fg-muted); font-size:14px;">Valor</span><span style="font-weight:600;">R$ 48.000 · 6 parcelas (jul–dez)</span></div>
+                    <div style="display:flex; padding:14px 18px;"><span style="width:170px; color:var(--fg-muted); font-size:14px;">Anexos</span><span style="font-weight:600;">Vídeo 2:41 · planilha de orçamento</span></div>
+                  </div>
+                  <div style="display:flex; gap:12px; align-items:flex-start; background:rgba(32,44,133,.05); border-radius:16px; padding:18px;">
+                    <div style="width:40px; height:40px; flex:none; border-radius:12px; background:var(--hb-blue); color:#fff; display:flex; align-items:center; justify-content:center;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/></svg></div>
+                    <div><div style="font-weight:700; font-family:var(--font-display); margin-bottom:4px;">Resumo gerado por IA</div><div style="font-size:14px; color:var(--fg); line-height:1.55;">Ao enviar, geramos uma versão compacta da proposta para apoiar a leitura do conselho. Seu projeto será encaminhado à <strong>validação</strong> e você acompanhará cada etapa pelo painel.</div></div>
+                  </div>
+                </div>
+              </sc-if>
+
+              <!-- footer nav -->
+              <div style="display:flex; align-items:center; justify-content:space-between; margin-top:30px; padding-top:22px; border-top:1px solid var(--divider);">
+                <button onClick="{{ prevStep }}" style="display:inline-flex; align-items:center; gap:8px; background:none; border:1px solid var(--border); color:var(--fg); padding:11px 20px; border-radius:99px; font-family:var(--font-body); font-weight:600; font-size:14px; cursor:pointer;" style-hover="background:var(--bg-alt);">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+                  Voltar
+                </button>
+                <sc-if value="{{ isLastStep }}" hint-placeholder-val="{{ false }}">
+                  <button style="display:inline-flex; align-items:center; gap:9px; background:var(--hb-orange); color:#fff; border:none; padding:13px 26px; border-radius:99px; font-family:var(--font-display); font-weight:600; font-size:15px; cursor:pointer;" style-hover="background:var(--hb-orange-deep);">
+                    Enviar à validação
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+                  </button>
+                </sc-if>
+                <sc-if value="{{ notLast }}" hint-placeholder-val="{{ true }}">
+                  <button onClick="{{ nextStep }}" style="display:inline-flex; align-items:center; gap:8px; background:var(--hb-blue); color:#fff; border:none; padding:13px 24px; border-radius:99px; font-family:var(--font-display); font-weight:600; font-size:15px; cursor:pointer;" style-hover="background:var(--hb-blue-soft);">
+                    Próxima etapa
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                  </button>
+                </sc-if>
+              </div>
+            </div>
+          </div></div>
+        </sc-if>
+
+        <sc-if value="{{ detOn }}" hint-placeholder-val="{{ true }}">
+          <div data-screen-label="Submissor · Detalhe do projeto" style=""><button onClick="{{ goDet }}" style="display:none;"></button>
+          <div style="display:flex; align-items:center; gap:10px; margin-bottom:18px; color:var(--fg-muted); font-size:13px;">
+            <span style="cursor:pointer;">Meus projetos</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            <span style="color:var(--fg); font-weight:600;">Poço artesiano comunitário</span>
+          </div>
+
+          <div style="background:var(--hb-blue); color:#fff; border-radius:var(--radius-lg); padding:28px 30px; margin-bottom:20px; position:relative; overflow:hidden;">
+            <div style="position:absolute; right:-30px; top:-30px; width:140px; height:140px; border-radius:99px; background:rgba(255,255,255,.05);"></div>
+            <div style="position:absolute; right:60px; bottom:-40px; width:90px; height:90px; border-radius:99px; background:rgba(7,180,231,.18);"></div>
+            <div style="position:relative;">
+              <div style="display:flex; gap:8px; margin-bottom:14px;">
+                <span style="font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; padding:4px 11px; border-radius:99px; background:rgba(255,255,255,.16);">Projeto anual</span>
+                <span style="font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; padding:4px 11px; border-radius:99px; background:var(--hb-cyan); color:#fff;">Em execução</span>
+              </div>
+              <h1 style="font-family:var(--font-display); font-weight:700; font-size:30px; margin:0 0 6px; letter-spacing:-.01em;">Poço artesiano comunitário</h1>
+              <p style="margin:0; color:rgba(255,255,255,.78); font-size:15px;">Missão Sertão Vivo · Curaçá, Bahia · Infraestrutura comunitária</p>
+              <div style="display:flex; gap:40px; margin-top:24px; flex-wrap:wrap;">
+                <div><div style="font-size:12px; color:rgba(255,255,255,.6); text-transform:uppercase; letter-spacing:.08em;">Valor aprovado</div><div style="font-family:var(--font-display); font-weight:800; font-size:26px; margin-top:4px;">R$ 48.000</div></div>
+                <div><div style="font-size:12px; color:rgba(255,255,255,.6); text-transform:uppercase; letter-spacing:.08em;">Parcelas</div><div style="font-family:var(--font-display); font-weight:800; font-size:26px; margin-top:4px;">3 <span style="font-size:16px; font-weight:600; color:rgba(255,255,255,.6);">de 6</span></div></div>
+                <div><div style="font-size:12px; color:rgba(255,255,255,.6); text-transform:uppercase; letter-spacing:.08em;">Famílias atendidas</div><div style="font-family:var(--font-display); font-weight:800; font-size:26px; margin-top:4px;">60</div></div>
+              </div>
+            </div>
+          </div>
+
+          <div style="display:grid; grid-template-columns:1.55fr 1fr; gap:20px; align-items:start;">
+            <div style="display:flex; flex-direction:column; gap:20px;">
+
+              <section style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:24px;">
+                <h2 style="font-family:var(--font-display); font-weight:700; font-size:18px; margin:0 0 20px;">Andamento do projeto</h2>
+                <div>
+                  <div style="display:flex; gap:16px;"><div style="display:flex; flex-direction:column; align-items:center;"><div style="width:16px; height:16px; border-radius:99px; background:var(--hb-green); flex:none;"></div><div style="width:2px; flex:1; min-height:30px; background:var(--hb-green);"></div></div><div style="padding-bottom:22px;"><div style="font-weight:600;">Rascunho criado</div><div style="font-size:13px; color:var(--fg-muted);">12 de maio de 2025</div></div></div>
+                  <div style="display:flex; gap:16px;"><div style="display:flex; flex-direction:column; align-items:center;"><div style="width:16px; height:16px; border-radius:99px; background:var(--hb-green); flex:none;"></div><div style="width:2px; flex:1; min-height:30px; background:var(--hb-green);"></div></div><div style="padding-bottom:22px;"><div style="font-weight:600;">Validação concluída</div><div style="font-size:13px; color:var(--fg-muted);">18 de maio · triagem e aderência aprovadas</div></div></div>
+                  <div style="display:flex; gap:16px;"><div style="display:flex; flex-direction:column; align-items:center;"><div style="width:16px; height:16px; border-radius:99px; background:var(--hb-green); flex:none;"></div><div style="width:2px; flex:1; min-height:30px; background:var(--hb-green);"></div></div><div style="padding-bottom:22px;"><div style="font-weight:600;">Votação do conselho</div><div style="font-size:13px; color:var(--fg-muted);">29 de maio · aprovado com quórum</div></div></div>
+                  <div style="display:flex; gap:16px;"><div style="display:flex; flex-direction:column; align-items:center;"><div style="width:16px; height:16px; border-radius:99px; background:var(--hb-green); flex:none;"></div><div style="width:2px; flex:1; min-height:30px; background:var(--hb-green);"></div></div><div style="padding-bottom:22px;"><div style="font-weight:600;">Homologação</div><div style="font-size:13px; color:var(--fg-muted);">5 de junho · 7 dias sem contestação</div></div></div>
+                  <div style="display:flex; gap:16px;"><div style="display:flex; flex-direction:column; align-items:center;"><div style="width:16px; height:16px; border-radius:99px; background:#fff; border:4px solid var(--hb-orange); flex:none; box-shadow:0 0 0 4px rgba(234,90,6,.15);"></div><div style="width:2px; flex:1; min-height:30px; background:var(--border);"></div></div><div style="padding-bottom:22px;"><div style="font-weight:700; color:var(--hb-orange-deep);">Em execução</div><div style="font-size:13px; color:var(--fg-muted);">desde 12 de junho · 25% concluído</div></div></div>
+                  <div style="display:flex; gap:16px;"><div style="display:flex; flex-direction:column; align-items:center;"><div style="width:16px; height:16px; border-radius:99px; background:var(--surface-alt); border:2px solid var(--border); flex:none;"></div></div><div><div style="font-weight:600; color:var(--fg-muted);">Conclusão prevista</div><div style="font-size:13px; color:var(--fg-muted);">dezembro de 2025</div></div></div>
+                </div>
+              </section>
+
+              <section style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:24px;">
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:16px;">
+                  <h2 style="font-family:var(--font-display); font-weight:700; font-size:18px; margin:0;">Relatórios</h2>
+                  <span style="font-size:12px; color:var(--fg-muted);">Periodicidade trimestral</span>
+                </div>
+                <div style="display:flex; align-items:center; gap:14px; padding:14px; border:1px solid var(--border); border-radius:14px; margin-bottom:10px;">
+                  <div style="width:38px; height:38px; flex:none; border-radius:10px; background:rgba(130,163,23,.18); color:var(--hb-green-deep); display:flex; align-items:center; justify-content:center;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+                  <div style="flex:1;"><div style="font-weight:600;">1º trimestre · jun 2025</div><div style="font-size:13px; color:var(--fg-muted);">Enviado e aprovado</div></div>
+                  <button style="background:none; border:none; color:var(--hb-blue); font-weight:600; font-size:13px; cursor:pointer; font-family:var(--font-body);">Ver</button>
+                </div>
+                <div style="display:flex; align-items:center; gap:14px; padding:14px; border:1px solid rgba(234,90,6,.3); background:rgba(234,90,6,.05); border-radius:14px;">
+                  <div style="width:38px; height:38px; flex:none; border-radius:10px; background:rgba(234,90,6,.14); color:var(--hb-orange-deep); display:flex; align-items:center; justify-content:center;"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></div>
+                  <div style="flex:1;"><div style="font-weight:600;">2º trimestre · set 2025</div><div style="font-size:13px; color:var(--hb-orange-deep);">Vence em 5 dias</div></div>
+                  <button style="background:var(--hb-blue); color:#fff; border:none; padding:9px 16px; border-radius:99px; font-weight:600; font-size:13px; cursor:pointer; font-family:var(--font-body);" style-hover="background:var(--hb-blue-soft);">Enviar agora</button>
+                </div>
+              </section>
+
+              <section style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:24px;">
+                <h2 style="font-family:var(--font-display); font-weight:700; font-size:18px; margin:0 0 4px;">Prestação de contas</h2>
+                <p style="font-size:13px; color:var(--fg-muted); margin:0 0 16px;">Registros voluntários do projeto — fotos, recibos e notas fiscais.</p>
+                <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:10px;">
+                  <div style="aspect-ratio:1; border-radius:12px; background:linear-gradient(135deg,#dfe6c2,#c3d98a);"></div>
+                  <div style="aspect-ratio:1; border-radius:12px; background:linear-gradient(135deg,#bfe0ef,#8fc9e6);"></div>
+                  <div style="aspect-ratio:1; border-radius:12px; background:linear-gradient(135deg,#f4cdb0,#e7a878);"></div>
+                  <div style="aspect-ratio:1; border-radius:12px; background:var(--surface-alt); display:flex; flex-direction:column; align-items:center; justify-content:center; color:var(--fg-muted); gap:4px;"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span style="font-size:11px;">Adicionar</span></div>
+                </div>
+              </section>
+
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:20px;">
+              <section style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:22px;">
+                <h2 style="font-family:var(--font-display); font-weight:700; font-size:16px; margin:0 0 16px;">Execução financeira</h2>
+                <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:8px;"><span style="font-family:var(--font-display); font-weight:800; font-size:24px;">R$ 12.000</span><span style="font-size:12px; color:var(--fg-muted);">de R$ 48.000</span></div>
+                <div style="height:10px; background:var(--surface-alt); border-radius:99px; overflow:hidden;"><div style="width:25%; height:100%; background:var(--hb-green); border-radius:99px;"></div></div>
+                <div style="font-size:12px; color:var(--fg-muted); margin-top:8px;">25% executado · 3 de 6 parcelas pagas</div>
+                <div style="height:1px; background:var(--divider); margin:18px 0;"></div>
+                <div style="font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--fg-muted); margin-bottom:6px;">Próximo pagamento</div>
+                <div style="display:flex; align-items:center; justify-content:space-between;"><div><div style="font-weight:600;">Parcela 4 de 6</div><div style="font-size:13px; color:var(--fg-muted);">30 de setembro</div></div><div style="font-family:var(--font-display); font-weight:700; font-size:18px;">R$ 8.000</div></div>
+              </section>
+
+              <section style="background:rgba(32,44,133,.04); border:1px solid var(--border); border-radius:var(--radius-lg); padding:22px;">
+                <div style="display:flex; align-items:center; gap:9px; margin-bottom:12px;"><div style="width:30px; height:30px; border-radius:9px; background:var(--hb-blue); color:#fff; display:flex; align-items:center; justify-content:center; flex:none;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/></svg></div><span style="font-family:var(--font-display); font-weight:700; font-size:15px;">Resumo do projeto</span></div>
+                <p style="font-size:13.5px; line-height:1.6; color:var(--fg); margin:0;">Perfuração de poço artesiano em Curaçá (BA) para 60 famílias antes dependentes de carro-pipa. Inclui bomba, reservatório e rede comunitária, com previsão de entrega em dezembro de 2025.</p>
+              </section>
+
+              <button style="display:flex; align-items:center; justify-content:center; gap:9px; background:var(--hb-orange); color:#fff; border:none; padding:14px; border-radius:99px; font-family:var(--font-display); font-weight:600; font-size:15px; cursor:pointer;" style-hover="background:var(--hb-orange-deep);">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+                Enviar relatório trimestral
+              </button>
+            </div>
+          </div></div>
+        </sc-if>
+
+        <sc-if value="{{ pipeOn }}" hint-placeholder-val="{{ true }}">
+          <div data-screen-label="Diretoria · Pipeline" style=""><div style="display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:22px;">
+            <div style="display:flex; gap:8px;">
+              <span style="padding:8px 16px; border-radius:99px; font-size:13px; font-weight:600; background:var(--hb-blue); color:#fff;">Todos · 7</span>
+              <span style="padding:8px 16px; border-radius:99px; font-size:13px; font-weight:600; background:var(--surface); border:1px solid var(--border); color:var(--fg-muted);">Anuais · 4</span>
+              <span style="padding:8px 16px; border-radius:99px; font-size:13px; font-weight:600; background:var(--surface); border:1px solid var(--border); color:var(--fg-muted);">Pontuais · 3</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px; font-size:13px; color:var(--fg-muted);">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/></svg>
+              Score de IA visível apenas ao conselho
+            </div>
+          </div>
+
+          <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:14px; align-items:start;">
+
+            <!-- col Validação -->
+            <div>
+              <div style="display:flex; align-items:center; gap:8px; padding:0 4px 12px;"><span style="width:9px; height:9px; border-radius:99px; background:var(--hb-cyan);"></span><span style="font-family:var(--font-display); font-weight:700; font-size:14px;">Validação</span><span style="margin-left:auto; font-size:12px; font-weight:700; color:var(--fg-muted); background:var(--surface-alt); padding:2px 9px; border-radius:99px;">2</span></div>
+              <div style="display:flex; flex-direction:column; gap:10px;">
+                <div style="background:var(--surface); border:1px solid var(--border); border-radius:16px; box-shadow:var(--shadow-sm); padding:15px; cursor:pointer;" style-hover="box-shadow:var(--shadow-md);">
+                  <div style="display:flex; justify-content:space-between; gap:8px; margin-bottom:8px;"><span style="font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--fg-muted);">Pontual</span><span style="font-size:11px; font-weight:700; padding:2px 8px; border-radius:99px; background:rgba(7,180,231,.14); color:var(--hb-cyan-deep);">IA 72</span></div>
+                  <div style="font-family:var(--font-display); font-weight:600; font-size:15px; line-height:1.25; margin-bottom:8px;">Reforma do telhado do templo</div>
+                  <div style="font-size:12.5px; color:var(--fg-muted);">Igreja Renascer · Recife, PE</div>
+                  <div style="font-family:var(--font-display); font-weight:700; font-size:15px; margin-top:10px;">R$ 22.500</div>
+                </div>
+                <div style="background:var(--surface); border:1px solid var(--border); border-radius:16px; box-shadow:var(--shadow-sm); padding:15px; cursor:pointer;" style-hover="box-shadow:var(--shadow-md);">
+                  <div style="display:flex; justify-content:space-between; gap:8px; margin-bottom:8px;"><span style="font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--fg-muted);">Anual</span><span style="font-size:11px; font-weight:700; padding:2px 8px; border-radius:99px; background:var(--surface-alt); color:var(--fg-muted);">triagem</span></div>
+                  <div style="font-family:var(--font-display); font-weight:600; font-size:15px; line-height:1.25; margin-bottom:8px;">Tradução bíblica — etnia Tikuna</div>
+                  <div style="font-size:12.5px; color:var(--fg-muted);">ALEM · Alto Solimões, AM</div>
+                  <div style="font-family:var(--font-display); font-weight:700; font-size:15px; margin-top:10px;">R$ 120.000</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- col Votação -->
+            <div>
+              <div style="display:flex; align-items:center; gap:8px; padding:0 4px 12px;"><span style="width:9px; height:9px; border-radius:99px; background:var(--hb-blue);"></span><span style="font-family:var(--font-display); font-weight:700; font-size:14px;">Votação</span><span style="margin-left:auto; font-size:12px; font-weight:700; color:var(--fg-muted); background:var(--surface-alt); padding:2px 9px; border-radius:99px;">2</span></div>
+              <div style="display:flex; flex-direction:column; gap:10px;">
+                <div onClick="{{ goAna }}" style="background:var(--surface); border:2px solid var(--hb-blue); border-radius:16px; box-shadow:var(--shadow-md); padding:15px; cursor:pointer;">
+                  <div style="display:flex; justify-content:space-between; gap:8px; margin-bottom:8px;"><span style="font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--fg-muted);">Anual</span><span style="font-size:11px; font-weight:700; padding:2px 8px; border-radius:99px; background:rgba(234,90,6,.14); color:var(--hb-orange-deep);">IA 68</span></div>
+                  <div style="font-family:var(--font-display); font-weight:600; font-size:15px; line-height:1.25; margin-bottom:8px;">Veículo para missões rurais</div>
+                  <div style="font-size:12.5px; color:var(--fg-muted);">Missão Sertão Vivo · Juazeiro, BA</div>
+                  <div style="display:flex; align-items:center; justify-content:space-between; margin-top:10px;"><span style="font-family:var(--font-display); font-weight:700; font-size:15px;">R$ 89.000</span><span style="font-size:11px; font-weight:700; color:var(--hb-blue);">5 de 9 votos</span></div>
+                </div>
+                <div style="background:var(--surface); border:1px solid var(--border); border-radius:16px; box-shadow:var(--shadow-sm); padding:15px; cursor:pointer;" style-hover="box-shadow:var(--shadow-md);">
+                  <div style="display:flex; justify-content:space-between; gap:8px; margin-bottom:8px;"><span style="font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--fg-muted);">Anual</span><span style="font-size:11px; font-weight:700; padding:2px 8px; border-radius:99px; background:rgba(130,163,23,.2); color:#5f7510;">IA 86</span></div>
+                  <div style="font-family:var(--font-display); font-weight:600; font-size:15px; line-height:1.25; margin-bottom:8px;">Poço artesiano comunitário</div>
+                  <div style="font-size:12.5px; color:var(--fg-muted);">Assoc. Luz para os Povos · RR</div>
+                  <div style="display:flex; align-items:center; justify-content:space-between; margin-top:10px;"><span style="font-family:var(--font-display); font-weight:700; font-size:15px;">R$ 48.000</span><span style="font-size:11px; font-weight:700; color:var(--fg-muted);">8 de 9 votos</span></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- col Homologação -->
+            <div>
+              <div style="display:flex; align-items:center; gap:8px; padding:0 4px 12px;"><span style="width:9px; height:9px; border-radius:99px; background:var(--hb-orange);"></span><span style="font-family:var(--font-display); font-weight:700; font-size:14px;">Homologação</span><span style="margin-left:auto; font-size:12px; font-weight:700; color:var(--fg-muted); background:var(--surface-alt); padding:2px 9px; border-radius:99px;">1</span></div>
+              <div style="display:flex; flex-direction:column; gap:10px;">
+                <div style="background:var(--surface); border:1px solid var(--border); border-radius:16px; box-shadow:var(--shadow-sm); padding:15px; cursor:pointer;" style-hover="box-shadow:var(--shadow-md);">
+                  <div style="display:flex; justify-content:space-between; gap:8px; margin-bottom:8px;"><span style="font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--fg-muted);">Anual</span><span style="font-size:11px; font-weight:700; padding:2px 8px; border-radius:99px; background:rgba(7,180,231,.14); color:var(--hb-cyan-deep);">IA 79</span></div>
+                  <div style="font-family:var(--font-display); font-weight:600; font-size:15px; line-height:1.25; margin-bottom:8px;">Capacitação de líderes</div>
+                  <div style="font-size:12.5px; color:var(--fg-muted);">Instituto Caminho · Belém, PA</div>
+                  <div style="font-family:var(--font-display); font-weight:700; font-size:15px; margin-top:10px;">R$ 63.200</div>
+                  <div style="margin-top:10px; font-size:11.5px; font-weight:600; color:var(--hb-orange-deep); display:flex; align-items:center; gap:5px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>3 dias para contestação</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- col Em execução -->
+            <div>
+              <div style="display:flex; align-items:center; gap:8px; padding:0 4px 12px;"><span style="width:9px; height:9px; border-radius:99px; background:var(--hb-green);"></span><span style="font-family:var(--font-display); font-weight:700; font-size:14px;">Em execução</span><span style="margin-left:auto; font-size:12px; font-weight:700; color:var(--fg-muted); background:var(--surface-alt); padding:2px 9px; border-radius:99px;">2</span></div>
+              <div style="display:flex; flex-direction:column; gap:10px;">
+                <div style="background:var(--surface); border:1px solid var(--border); border-radius:16px; box-shadow:var(--shadow-sm); padding:15px; cursor:pointer;" style-hover="box-shadow:var(--shadow-md);">
+                  <div style="display:flex; justify-content:space-between; gap:8px; margin-bottom:8px;"><span style="font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--fg-muted);">Pontual</span></div>
+                  <div style="font-family:var(--font-display); font-weight:600; font-size:15px; line-height:1.25; margin-bottom:8px;">Cestas básicas — inverno</div>
+                  <div style="font-size:12.5px; color:var(--fg-muted);">Missão Vida Plena · RS</div>
+                  <div style="height:6px; background:var(--surface-alt); border-radius:99px; margin-top:12px; overflow:hidden;"><div style="width:40%; height:100%; background:var(--hb-green); border-radius:99px;"></div></div>
+                  <div style="display:flex; justify-content:space-between; margin-top:8px; font-size:12px; color:var(--fg-muted);"><span>R$ 15.000</span><span>40%</span></div>
+                </div>
+                <div style="background:var(--surface); border:1px solid var(--border); border-radius:16px; box-shadow:var(--shadow-sm); padding:15px; cursor:pointer;" style-hover="box-shadow:var(--shadow-md);">
+                  <div style="display:flex; justify-content:space-between; gap:8px; margin-bottom:8px;"><span style="font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--fg-muted);">Pontual</span></div>
+                  <div style="font-family:var(--font-display); font-weight:600; font-size:15px; line-height:1.25; margin-bottom:8px;">Alimento para creche</div>
+                  <div style="font-size:12.5px; color:var(--fg-muted);">Lar Esperança · Manaus, AM</div>
+                  <div style="height:6px; background:var(--surface-alt); border-radius:99px; margin-top:12px; overflow:hidden;"><div style="width:60%; height:100%; background:var(--hb-green); border-radius:99px;"></div></div>
+                  <div style="display:flex; justify-content:space-between; margin-top:8px; font-size:12px; color:var(--fg-muted);"><span>R$ 12.800</span><span>60%</span></div>
+                </div>
+              </div>
+            </div>
+
+          </div></div>
+        </sc-if>
+
+        <sc-if value="{{ anaOn }}" hint-placeholder-val="{{ true }}">
+          <div data-screen-label="Diretoria · Análise e votação" style=""><div style="display:flex; align-items:center; gap:10px; margin-bottom:18px; color:var(--fg-muted); font-size:13px;">
+            <span style="cursor:pointer;">Pipeline</span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+            <span style="color:var(--fg); font-weight:600;">Veículo para missões rurais</span>
+          </div>
+
+          <div style="display:grid; grid-template-columns:1.6fr 1fr; gap:20px; align-items:start;">
+            <div style="display:flex; flex-direction:column; gap:20px;">
+
+              <section style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:26px;">
+                <div style="display:flex; gap:8px; margin-bottom:12px;">
+                  <span style="font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; padding:4px 11px; border-radius:99px; background:rgba(32,44,133,.1); color:var(--hb-blue);">Projeto anual</span>
+                  <span style="font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; padding:4px 11px; border-radius:99px; background:rgba(32,44,133,.1); color:var(--hb-blue);">Em votação</span>
+                </div>
+                <h1 style="font-family:var(--font-display); font-weight:700; font-size:26px; margin:0 0 6px;">Veículo para missões rurais</h1>
+                <p style="margin:0 0 20px; color:var(--fg-muted); font-size:14.5px;">Missão Sertão Vivo · Juazeiro, BA · Transporte e logística missionária</p>
+                <div style="display:flex; gap:36px; flex-wrap:wrap;">
+                  <div><div style="font-size:12px; color:var(--fg-muted); text-transform:uppercase; letter-spacing:.07em;">Valor solicitado</div><div style="font-family:var(--font-display); font-weight:800; font-size:24px; margin-top:3px;">R$ 89.000</div></div>
+                  <div><div style="font-size:12px; color:var(--fg-muted); text-transform:uppercase; letter-spacing:.07em;">Parcelas</div><div style="font-family:var(--font-display); font-weight:800; font-size:24px; margin-top:3px;">12</div></div>
+                  <div><div style="font-size:12px; color:var(--fg-muted); text-transform:uppercase; letter-spacing:.07em;">Responsável</div><div style="font-family:var(--font-display); font-weight:800; font-size:24px; margin-top:3px;">Pr. Josafá</div></div>
+                </div>
+              </section>
+
+              <section style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:26px;">
+                <div style="display:flex; align-items:center; gap:9px; margin-bottom:20px;">
+                  <div style="width:30px; height:30px; border-radius:9px; background:var(--hb-blue); color:#fff; display:flex; align-items:center; justify-content:center; flex:none;"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/></svg></div>
+                  <h2 style="font-family:var(--font-display); font-weight:700; font-size:18px; margin:0;">Análise de IA</h2>
+                  <span style="margin-left:auto; font-size:11px; color:var(--fg-muted);">Confidencial · conselho</span>
+                </div>
+
+                <div style="display:flex; align-items:center; gap:20px; background:var(--bg-alt); border-radius:16px; padding:18px 20px; margin-bottom:20px;">
+                  <div style="flex:none; text-align:center;"><div style="font-family:var(--font-display); font-weight:800; font-size:42px; line-height:1; color:var(--hb-orange-deep);">68</div><div style="font-size:11px; color:var(--fg-muted);">de 100</div></div>
+                  <div style="flex:1;">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:6px;"><span style="font-weight:700; font-family:var(--font-display);">Aderência moderada</span><span style="font-size:12px; color:var(--fg-muted);">média da categoria: 74</span></div>
+                    <div style="height:10px; background:#e3e7f2; border-radius:99px; overflow:hidden;"><div style="width:68%; height:100%; background:var(--hb-orange); border-radius:99px;"></div></div>
+                    <div style="font-size:12.5px; color:var(--fg-muted); margin-top:8px;">Projeto coerente com a missão, mas com pontos de atenção no orçamento.</div>
+                  </div>
+                </div>
+
+                <div style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--fg-muted); margin-bottom:10px;">Resumo executivo</div>
+                <p style="margin:0 0 20px; font-size:14.5px; line-height:1.6;">Aquisição de veículo utilitário para deslocamento da equipe missionária às comunidades rurais do semiárido baiano, hoje atendidas com transporte alugado. A missão tem histórico de execução regular e prestação de contas em dia.</p>
+
+                <div style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--fg-muted); margin-bottom:10px;">Pontos de atenção</div>
+                <div style="display:flex; flex-direction:column; gap:9px; margin-bottom:20px;">
+                  <div style="display:flex; gap:11px; align-items:flex-start;"><span style="width:7px; height:7px; border-radius:99px; background:var(--hb-orange); flex:none; margin-top:6px;"></span><span style="font-size:14px;">Valor 18% acima da média da categoria para transporte.</span></div>
+                  <div style="display:flex; gap:11px; align-items:flex-start;"><span style="width:7px; height:7px; border-radius:99px; background:var(--hb-orange); flex:none; margin-top:6px;"></span><span style="font-size:14px;">Instituição sem orçamento anual definido — sem teto de gasto.</span></div>
+                  <div style="display:flex; gap:11px; align-items:flex-start;"><span style="width:7px; height:7px; border-radius:99px; background:var(--hb-cyan); flex:none; margin-top:6px;"></span><span style="font-size:14px;">Carta de recomendação não anexada (opcional).</span></div>
+                </div>
+
+                <div style="display:flex; align-items:center; gap:10px; background:rgba(130,163,23,.1); border-radius:12px; padding:13px 16px;">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--hb-green-deep)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                  <span style="font-size:13.5px; color:var(--fg);">Nenhum projeto duplicado ou renovação identificada.</span>
+                </div>
+              </section>
+
+              <section style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:26px;">
+                <h2 style="font-family:var(--font-display); font-weight:700; font-size:18px; margin:0 0 4px;">Pareceres dos avaliadores</h2>
+                <p style="font-size:13px; color:var(--fg-muted); margin:0 0 18px;">A opinião é visível ao conselho. O voto permanece secreto.</p>
+                <div style="display:flex; flex-direction:column; gap:14px;">
+                  <div style="display:flex; gap:13px;">
+                    <div style="width:40px; height:40px; flex:none; border-radius:99px; background:var(--hb-blue); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-family:var(--font-display);">DB</div>
+                    <div style="flex:1;"><div style="display:flex; align-items:center; gap:8px;"><span style="font-weight:600;">Pr. Daniel Brito</span><span style="font-size:11px; font-weight:700; padding:2px 9px; border-radius:99px; background:rgba(130,163,23,.2); color:#5f7510;">Favorável</span></div><p style="margin:5px 0 0; font-size:14px; color:var(--fg); line-height:1.5;">Conheço o trabalho da missão no sertão. O veículo é essencial para alcançar as comunidades mais distantes.</p></div>
+                  </div>
+                  <div style="display:flex; gap:13px;">
+                    <div style="width:40px; height:40px; flex:none; border-radius:99px; background:var(--hb-cyan); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-family:var(--font-display);">MN</div>
+                    <div style="flex:1;"><div style="display:flex; align-items:center; gap:8px;"><span style="font-weight:600;">Diac. Marta Nogueira</span><span style="font-size:11px; font-weight:700; padding:2px 9px; border-radius:99px; background:var(--surface-alt); color:var(--fg-muted);">Parecer pendente</span></div><p style="margin:5px 0 0; font-size:14px; color:var(--fg-muted); line-height:1.5; font-style:italic;">Registre sua opinião antes da reunião.</p></div>
+                  </div>
+                </div>
+              </section>
+
+            </div>
+
+            <!-- VOTE PANEL -->
+            <div style="display:flex; flex-direction:column; gap:20px; position:sticky; top:0;">
+              <section style="background:var(--hb-blue); color:#fff; border-radius:var(--radius-lg); box-shadow:var(--shadow-brand); padding:26px; position:relative; overflow:hidden;">
+                <div style="position:absolute; right:-24px; top:-24px; width:110px; height:110px; border-radius:99px; background:rgba(7,180,231,.18);"></div>
+                <div style="position:relative;">
+                  <div style="font-size:12px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:rgba(255,255,255,.6); margin-bottom:12px;">Votação do conselho</div>
+                  <h2 style="font-family:var(--font-display); font-weight:700; font-size:22px; line-height:1.2; margin:0 0 8px;">Você sente paz em investir neste projeto?</h2>
+                  <p style="margin:0 0 22px; font-size:13px; color:rgba(255,255,255,.7); display:flex; align-items:center; gap:7px;">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                    Seu voto é secreto. Ninguém vê em quem você votou.
+                  </p>
+
+                  <sc-if value="{{ notVoted }}" hint-placeholder-val="{{ true }}">
+                    <div style="display:flex; flex-direction:column; gap:10px;">
+                      <button onClick="{{ voteSim }}" style="display:flex; align-items:center; justify-content:center; gap:9px; background:var(--hb-green); color:var(--hb-blue); border:none; padding:15px; border-radius:14px; font-family:var(--font-display); font-weight:700; font-size:16px; cursor:pointer;" style-hover="background:var(--hb-green-deep);">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                        Sim, tenho paz
+                      </button>
+                      <button onClick="{{ voteNao }}" style="display:flex; align-items:center; justify-content:center; gap:9px; background:rgba(255,255,255,.1); color:#fff; border:1px solid rgba(255,255,255,.25); padding:15px; border-radius:14px; font-family:var(--font-display); font-weight:700; font-size:16px; cursor:pointer;" style-hover="background:rgba(255,255,255,.18);">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        Não tenho paz
+                      </button>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ voted }}" hint-placeholder-val="{{ false }}">
+                    <div style="background:rgba(255,255,255,.1); border-radius:14px; padding:18px; text-align:center;">
+                      <div style="width:44px; height:44px; margin:0 auto 10px; border-radius:99px; background:var(--hb-green); color:var(--hb-blue); display:flex; align-items:center; justify-content:center;"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+                      <div style="font-family:var(--font-display); font-weight:700; font-size:16px; margin-bottom:4px;">Voto registrado</div>
+                      <div style="font-size:13px; color:rgba(255,255,255,.75);">{{ voteMsg }}</div>
+                      <button onClick="{{ resetVote }}" style="margin-top:12px; background:none; border:none; color:rgba(255,255,255,.7); font-size:12px; text-decoration:underline; cursor:pointer; font-family:var(--font-body);">Desfazer</button>
+                    </div>
+                  </sc-if>
+
+                  <div style="margin-top:22px; padding-top:18px; border-top:1px solid rgba(255,255,255,.15);">
+                    <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:8px;"><span style="color:rgba(255,255,255,.75);">Quórum</span><span style="font-weight:700;">5 de 9 votos</span></div>
+                    <div style="height:8px; background:rgba(255,255,255,.15); border-radius:99px; overflow:hidden;"><div style="width:56%; height:100%; background:var(--hb-cyan); border-radius:99px;"></div></div>
+                    <div style="font-size:12px; color:var(--hb-green); margin-top:8px; display:flex; align-items:center; gap:6px;"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Quórum mínimo atingido (≥ 5)</div>
+                  </div>
+                </div>
+              </section>
+
+              <section style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:20px;">
+                <div style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--fg-muted); margin-bottom:12px;">Documentos</div>
+                <div style="display:flex; align-items:center; gap:11px; padding:8px 0;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--hb-green-deep)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg><span style="font-size:14px;">Vídeo de apresentação · 2:50</span></div>
+                <div style="display:flex; align-items:center; gap:11px; padding:8px 0;"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--hb-blue)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg><span style="font-size:14px;">Planilha de orçamento</span></div>
+              </section>
+            </div>
+          </div></div>
+        </sc-if>
+
+        <sc-if value="{{ reuOn }}" hint-placeholder-val="{{ true }}">
+          <div data-screen-label="Diretoria · Pauta da reunião" style=""><div style="display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:22px;">
+            <div style="background:var(--hb-blue); color:#fff; border-radius:var(--radius-lg); padding:20px; position:relative; overflow:hidden;">
+              <div style="position:absolute; right:-20px; bottom:-20px; width:80px; height:80px; border-radius:99px; background:rgba(7,180,231,.2);"></div>
+              <div style="position:relative;"><div style="font-size:13px; color:rgba(255,255,255,.7); font-weight:600;">Saldo disponível</div><div style="font-family:var(--font-display); font-weight:800; font-size:32px; line-height:1; margin-top:12px; white-space:nowrap;">R$ 214 mil</div><div style="font-size:12px; color:rgba(255,255,255,.6); margin-top:6px;">para o restante de 2025</div></div>
+            </div>
+            <div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:20px;">
+              <div style="font-size:13px; color:var(--fg-muted); font-weight:600;">Orçamento comprometido</div>
+              <div style="font-family:var(--font-display); font-weight:800; font-size:32px; line-height:1; margin-top:12px;">69%</div>
+              <div style="height:6px; background:var(--surface-alt); border-radius:99px; margin-top:10px; overflow:hidden;"><div style="width:69%; height:100%; background:var(--hb-orange); border-radius:99px;"></div></div>
+            </div>
+            <div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:20px;">
+              <div style="font-size:13px; color:var(--fg-muted); font-weight:600;">Meses restantes</div>
+              <div style="font-family:var(--font-display); font-weight:800; font-size:32px; line-height:1; margin-top:12px;">4</div>
+              <div style="font-size:12px; color:var(--fg-muted); margin-top:6px;">set · out · nov · dez</div>
+            </div>
+            <div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:20px;">
+              <div style="font-size:13px; color:var(--fg-muted); font-weight:600;">Pontuais na pauta</div>
+              <div style="font-family:var(--font-display); font-weight:800; font-size:32px; line-height:1; margin-top:12px;">3</div>
+              <div style="font-size:12px; color:var(--fg-muted); margin-top:6px;">somam R$ 48.700</div>
+            </div>
+          </div>
+
+          <div style="display:grid; grid-template-columns:1.6fr 1fr; gap:20px; align-items:start;">
+            <section style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:8px 8px 14px;">
+              <div style="padding:16px 16px 14px;"><h2 style="font-family:var(--font-display); font-weight:700; font-size:18px; margin:0 0 2px;">Projetos pontuais para decisão</h2><p style="font-size:13px; color:var(--fg-muted); margin:0;">Decisão por consenso presencial · registrada pelo diretor gestor.</p></div>
+
+              <div style="padding:18px 16px; border-top:1px solid var(--divider);">
+                <div style="display:flex; gap:12px; justify-content:space-between; align-items:flex-start;">
+                  <div style="flex:1;">
+                    <div style="display:flex; align-items:center; gap:9px; margin-bottom:5px;"><span style="font-family:var(--font-display); font-weight:600; font-size:16px;">Cestas básicas emergenciais</span><span style="font-size:11px; font-weight:700; padding:2px 8px; border-radius:99px; background:rgba(130,163,23,.2); color:#5f7510;">IA 81</span></div>
+                    <div style="font-size:13px; color:var(--fg-muted); margin-bottom:8px;">Lar Betânia · Fortaleza, CE</div>
+                    <p style="margin:0; font-size:14px; line-height:1.5;">Enchentes deixaram 30 famílias desabrigadas. Apoio emergencial para alimento por 30 dias.</p>
+                  </div>
+                  <div style="text-align:right; flex:none;"><div style="font-family:var(--font-display); font-weight:800; font-size:20px;">R$ 8.400</div></div>
+                </div>
+                <div style="display:flex; gap:8px; margin-top:14px;">
+                  <button style="display:inline-flex; align-items:center; gap:7px; background:var(--hb-green); color:var(--hb-blue); border:none; padding:9px 18px; border-radius:99px; font-family:var(--font-display); font-weight:700; font-size:13px; cursor:pointer;" style-hover="background:var(--hb-green-deep);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Aprovar</button>
+                  <button style="background:none; border:1px solid var(--border); color:var(--fg-muted); padding:9px 18px; border-radius:99px; font-weight:600; font-size:13px; cursor:pointer; font-family:var(--font-body);" style-hover="background:var(--bg-alt);">Adiar</button>
+                  <button style="background:none; border:1px solid rgba(192,54,44,.4); color:#b0392e; padding:9px 18px; border-radius:99px; font-weight:600; font-size:13px; cursor:pointer; font-family:var(--font-body);" style-hover="background:rgba(192,54,44,.06);">Reprovar</button>
+                </div>
+              </div>
+
+              <div style="padding:18px 16px; border-top:1px solid var(--divider);">
+                <div style="display:flex; gap:12px; justify-content:space-between; align-items:flex-start;">
+                  <div style="flex:1;">
+                    <div style="display:flex; align-items:center; gap:9px; margin-bottom:5px;"><span style="font-family:var(--font-display); font-weight:600; font-size:16px;">Conserto de embarcação ribeirinha</span><span style="font-size:11px; font-weight:700; padding:2px 8px; border-radius:99px; background:rgba(7,180,231,.14); color:var(--hb-cyan-deep);">IA 77</span></div>
+                    <div style="font-size:13px; color:var(--fg-muted); margin-bottom:8px;">Missão Águas Vivas · Manaus, AM</div>
+                    <p style="margin:0; font-size:14px; line-height:1.5;">Único transporte da equipe a 6 comunidades ribeirinhas. Motor avariado há duas semanas.</p>
+                  </div>
+                  <div style="text-align:right; flex:none;"><div style="font-family:var(--font-display); font-weight:800; font-size:20px;">R$ 17.900</div></div>
+                </div>
+                <div style="display:flex; gap:8px; margin-top:14px;">
+                  <button style="display:inline-flex; align-items:center; gap:7px; background:var(--hb-green); color:var(--hb-blue); border:none; padding:9px 18px; border-radius:99px; font-family:var(--font-display); font-weight:700; font-size:13px; cursor:pointer;" style-hover="background:var(--hb-green-deep);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Aprovar</button>
+                  <button style="background:none; border:1px solid var(--border); color:var(--fg-muted); padding:9px 18px; border-radius:99px; font-weight:600; font-size:13px; cursor:pointer; font-family:var(--font-body);" style-hover="background:var(--bg-alt);">Adiar</button>
+                  <button style="background:none; border:1px solid rgba(192,54,44,.4); color:#b0392e; padding:9px 18px; border-radius:99px; font-weight:600; font-size:13px; cursor:pointer; font-family:var(--font-body);" style-hover="background:rgba(192,54,44,.06);">Reprovar</button>
+                </div>
+              </div>
+
+              <div style="padding:18px 16px; border-top:1px solid var(--divider);">
+                <div style="display:flex; gap:12px; justify-content:space-between; align-items:flex-start;">
+                  <div style="flex:1;">
+                    <div style="display:flex; align-items:center; gap:9px; margin-bottom:5px;"><span style="font-family:var(--font-display); font-weight:600; font-size:16px;">Reforma do telhado do templo</span><span style="font-size:11px; font-weight:700; padding:2px 8px; border-radius:99px; background:rgba(7,180,231,.14); color:var(--hb-cyan-deep);">IA 72</span></div>
+                    <div style="font-size:13px; color:var(--fg-muted); margin-bottom:8px;">Igreja Renascer · Recife, PE</div>
+                    <p style="margin:0; font-size:14px; line-height:1.5;">Chuvas comprometeram a estrutura; há risco de interromper os cultos da comunidade.</p>
+                  </div>
+                  <div style="text-align:right; flex:none;"><div style="font-family:var(--font-display); font-weight:800; font-size:20px;">R$ 22.500</div></div>
+                </div>
+                <div style="display:flex; gap:8px; margin-top:14px;">
+                  <button style="display:inline-flex; align-items:center; gap:7px; background:var(--hb-green); color:var(--hb-blue); border:none; padding:9px 18px; border-radius:99px; font-family:var(--font-display); font-weight:700; font-size:13px; cursor:pointer;" style-hover="background:var(--hb-green-deep);"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Aprovar</button>
+                  <button style="background:none; border:1px solid var(--border); color:var(--fg-muted); padding:9px 18px; border-radius:99px; font-weight:600; font-size:13px; cursor:pointer; font-family:var(--font-body);" style-hover="background:var(--bg-alt);">Adiar</button>
+                  <button style="background:none; border:1px solid rgba(192,54,44,.4); color:#b0392e; padding:9px 18px; border-radius:99px; font-weight:600; font-size:13px; cursor:pointer; font-family:var(--font-body);" style-hover="background:rgba(192,54,44,.06);">Reprovar</button>
+                </div>
+              </div>
+            </section>
+
+            <div style="display:flex; flex-direction:column; gap:20px;">
+              <section style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:22px;">
+                <div style="font-size:13px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--hb-blue); margin-bottom:12px;">Reunião de ciclo</div>
+                <div style="font-family:var(--font-display); font-weight:700; font-size:18px; line-height:1.25;">Quarta-feira, 3 de setembro</div>
+                <div style="font-size:13px; color:var(--fg-muted); margin-bottom:18px;">19h30 · Sede Hebron, Curitiba</div>
+                <div style="display:flex; flex-direction:column; gap:12px;">
+                  <div style="display:flex; align-items:center; gap:11px;"><div style="width:34px; height:34px; flex:none; border-radius:99px; background:var(--hb-blue); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:13px; font-family:var(--font-display);">JH</div><div><div style="font-size:14px; font-weight:600;">Pr. Josimar Henrique</div><div style="font-size:12px; color:var(--fg-muted);">Preside · diretor gestor</div></div></div>
+                  <div style="height:1px; background:var(--divider);"></div>
+                  <div style="display:flex; justify-content:space-between; font-size:14px;"><span style="color:var(--fg-muted);">Participantes</span><span style="font-weight:600;">7 diretores · 2 conselheiros</span></div>
+                  <div style="display:flex; justify-content:space-between; font-size:14px;"><span style="color:var(--fg-muted);">Quórum presente</span><span style="font-weight:600; color:var(--hb-green-deep);">8 de 9</span></div>
+                </div>
+              </section>
+
+              <section style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); box-shadow:var(--shadow-sm); padding:22px;">
+                <h2 style="font-family:var(--font-display); font-weight:700; font-size:16px; margin:0 0 14px;">Votações anuais abertas</h2>
+                <div style="display:flex; align-items:center; justify-content:space-between; padding:9px 0;"><div><div style="font-size:14px; font-weight:600;">Veículo para missões rurais</div><div style="font-size:12px; color:var(--fg-muted);">Missão Sertão Vivo</div></div><span style="font-size:12px; font-weight:700; color:var(--hb-blue);">5/9</span></div>
+                <div style="height:1px; background:var(--divider);"></div>
+                <div style="display:flex; align-items:center; justify-content:space-between; padding:9px 0;"><div><div style="font-size:14px; font-weight:600;">Poço artesiano comunitário</div><div style="font-size:12px; color:var(--fg-muted);">Assoc. Luz para os Povos</div></div><span style="font-size:12px; font-weight:700; color:var(--hb-green-deep);">8/9</span></div>
+                <button onClick="{{ goAna }}" style="width:100%; margin-top:14px; background:var(--bg-alt); border:1px solid var(--border); color:var(--hb-blue); padding:11px; border-radius:99px; font-weight:600; font-size:14px; cursor:pointer; font-family:var(--font-body);" style-hover="background:var(--surface-alt);">Abrir votação</button>
+              </section>
+            </div>
+          </div></div>
+        </sc-if>
+
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:&quot;100%&quot;,&quot;height&quot;:&quot;100%&quot;}}">
+class Component extends DCLogic {
+  state = { persona:'submissor', screen:'dash', wizardStep:0, vote:null, voted:false };
+
+  go(screen){ this.setState({ screen }); document.querySelector('main')?.scrollTo(0,0); }
+  setPersona(p){ this.setState({ persona:p, screen: p==='submissor'?'dash':'pipe', wizardStep:0 }); }
+
+  navItem(id, label, dot){
+    const active = this.state.screen === id;
+    const style = "position:relative; display:flex; align-items:center; gap:11px; padding:10px 12px; border-radius:12px; cursor:pointer; font-size:14px; text-decoration:none; font-weight:"+(active?"600":"500")+"; color:"+(active?"#fff":"rgba(255,255,255,.72)")+";";
+    const dotStyle = "position:relative; z-index:1; width:8px; height:8px; border-radius:99px; flex:none; background-color:"+dot+";";
+    return { id, label, dot, active, style, dotStyle, onClick:()=>this.go(id) };
+  }
+
+  renderVals(){
+    const s = this.state;
+    const sub = s.persona==='submissor';
+    const nav = sub ? [
+      this.navItem('dash','Início','var(--hb-cyan)'),
+      this.navItem('novo','Submeter projeto','var(--hb-orange)'),
+      this.navItem('det','Meus projetos','var(--hb-green)'),
+    ] : [
+      this.navItem('pipe','Pipeline','var(--hb-cyan)'),
+      this.navItem('ana','Avaliação e votação','var(--hb-orange)'),
+      this.navItem('reu','Pauta da reunião','var(--hb-green)'),
+    ];
+
+    const titles = {
+      dash:['Início','Visão geral dos seus projetos e pendências'],
+      novo:['Submeter novo projeto','Preencha as etapas para enviar à validação'],
+      det:['Poço artesiano comunitário','Missão Sertão Vivo · Projeto anual'],
+      pipe:['Pipeline de projetos','Conselho diretor · ciclo 2025'],
+      ana:['Análise do projeto','Veículo para missões rurais · em votação'],
+      reu:['Pauta da reunião mensal','Quarta-feira, 3 de setembro de 2025'],
+    };
+    const [pageTitle, pageSub] = titles[s.screen] || ['',''];
+
+    const personaBtn = (on) => "flex:1; border:none; cursor:pointer; padding:8px 12px; border-radius:99px; font-family:var(--font-body); font-size:13px; font-weight:600; transition:all 140ms ease; "
+      + (on ? "background-color:#fff; color:var(--hb-blue);" : "background-color:transparent; color:rgba(255,255,255,.78);");
+
+    return {
+      nav,
+      navLabel: sub ? 'Área do submissor' : 'Área da diretoria',
+      goSub:()=>this.setPersona('submissor'),
+      goDir:()=>this.setPersona('diretoria'),
+      subBtnStyle: personaBtn(sub),
+      dirBtnStyle: personaBtn(!sub),
+      userName: sub ? 'Pr. Josafá Amorim' : 'Diac. Marta Nogueira',
+      userRole: sub ? 'Missão Sertão Vivo' : 'Diretora avaliadora',
+      userInitials: sub ? 'JA' : 'MN',
+      pageTitle, pageSub,
+      dashOn: s.screen==='dash', novoOn: s.screen==='novo', detOn: s.screen==='det',
+      pipeOn: s.screen==='pipe', anaOn: s.screen==='ana', reuOn: s.screen==='reu',
+
+      // wizard
+      wizardStep: s.wizardStep,
+      nextStep:()=>this.setState(st=>({wizardStep:Math.min(5, st.wizardStep+1)})),
+      prevStep:()=>this.setState(st=>({wizardStep:Math.max(0, st.wizardStep-1)})),
+      gotoStep:(i)=>this.setState({wizardStep:i}),
+      w0:s.wizardStep===0, w1:s.wizardStep===1, w2:s.wizardStep===2, w3:s.wizardStep===3, w4:s.wizardStep===4, w5:s.wizardStep===5,
+      isFirstStep:s.wizardStep===0, isLastStep:s.wizardStep===5, notLast:s.wizardStep!==5,
+      wizSteps: ['Instituição','Proposta','Orçamento','Cronograma','Anexos','Revisão'].map((label,i)=>{
+        const ws=s.wizardStep; const active=i===ws; const done=i<ws;
+        const numStyle="width:34px; height:34px; flex:none; border-radius:99px; display:flex; align-items:center; justify-content:center; font-family:var(--font-display); font-weight:700; font-size:14px; transition:all 140ms ease; "
+          + (done? "background:var(--hb-green); color:var(--hb-blue);" : active? "background:var(--hb-blue); color:#fff;" : "background:var(--surface-alt); color:var(--fg-subtle);");
+        const labelStyle="font-size:12.5px; font-weight:"+(active?"700":"500")+"; color:"+(active?"var(--hb-blue)":done?"var(--fg)":"var(--fg-muted)")+"; white-space:nowrap;";
+        return { n:i+1, label, done, active, numStyle, labelStyle, onClick:()=>this.setState({wizardStep:i}) };
+      }),
+
+      // voting
+      vote: s.vote, voted: s.voted, notVoted: !s.voted,
+      voteSim:()=>this.setState({vote:'sim', voted:true}),
+      voteNao:()=>this.setState({vote:'nao', voted:true}),
+      resetVote:()=>this.setState({vote:null, voted:false}),
+      voteMsg: s.vote==='sim' ? 'Você registrou paz em investir neste projeto.' : 'Você registrou que não tem paz neste momento.',
+      goNovo:()=>this.go('novo'),
+      goDet:()=>this.go('det'),
+      goAna:()=>this.go('ana'),
+    };
+  }
+}
+</script>
+</body>
+</html>
