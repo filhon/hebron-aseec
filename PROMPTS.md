@@ -1413,16 +1413,16 @@ Criar todas as páginas. Área do submissor: dashboard (meus projetos + status +
 - `apps/projetos/src/app/(diretoria)/reuniao/page.tsx`
 
 **Critérios de aceite:**
-- [ ] Dashboard submissor: meus projetos, projeção de pagamentos, relatórios pendentes, orçamento disponível
-- [ ] Wizard multi-step: instituição → proposta → orçamento → cronograma → anexos → revisão
-- [ ] Detalhe do projeto com timeline de stages
-- [ ] Pipeline kanban (diretoria) com todos os stages
-- [ ] Detalhe analítico (diretoria): painel IA com score + resumo + riscos
-- [ ] Pauta da reunião: projetos pontuais + saldo + meses restantes (data-driven)
-- [ ] Navegação sidebar separada por área (submissor vs diretoria)
-- [ ] Responsivo
-- [ ] Lint passa
-- [ ] Types passam
+- [x] Dashboard submissor: meus projetos, projeção de pagamentos, relatórios pendentes, orçamento disponível
+- [x] Wizard multi-step: instituição → proposta → orçamento → cronograma → anexos → revisão
+- [x] Detalhe do projeto com timeline de stages
+- [x] Pipeline kanban (diretoria) com todos os stages
+- [x] Detalhe analítico (diretoria): painel IA com score + resumo + riscos
+- [x] Pauta da reunião: projetos pontuais + saldo + meses restantes (data-driven)
+- [x] Navegação sidebar separada por área (submissor vs diretoria)
+- [x] Responsivo
+- [x] Lint passa
+- [x] Types passam
 
 **Notas:**
 Ref: BRAIN.md seção 6.2. Dashboard do submissor: simplicidade e clareza (público em transição tecnológica).

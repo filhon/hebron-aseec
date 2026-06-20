@@ -56,6 +56,7 @@
 | S-32   | 2026-06-18 | P-1.24 — Testes Documentos                | concluido |
 | S-33   | 2026-06-20 | P-2.1 — Schema de Tipos Projetos          | concluido |
 | S-34   | 2026-06-20 | P-2.2 — Componentes UI Projetos           | concluido |
+| S-35   | 2026-06-20 | P-2.3 — Telas e Páginas Projetos          | concluido |
 
 ---
 
@@ -1358,3 +1359,39 @@ Criados os 8 componentes UI do módulo Projetos com dados mockados. Todos os com
 - `apps/projetos/src/components/report-card.tsx` (criado)
 - `apps/projetos/src/components/score-indicator.tsx` (criado)
 - `apps/projetos/src/components/organization-card.tsx` (criado)
+
+---
+
+### S-35 — 2026-06-20 — P-2.3 Telas e Páginas Projetos
+
+**Prompt:** P-2.3
+**Duração:** ~90 min (sessão dividida em duas janelas de contexto)
+**Modelo:** claude-sonnet-4-6
+**Status:** concluido
+
+**Resumo:**
+Criadas todas as 8 páginas do app `projetos` com dados mockados (Bloco A). Área do submissor: dashboard com stats, wizard 6-etapas para novo projeto, detalhe do projeto com timeline e relatórios. Área da diretoria: kanban pipeline com filtros, detalhe analítico com painel de IA + VotePanel + EvaluationCard, pauta de reunião com BI financeiro.
+
+**Decisões tomadas:**
+- Routing conflict entre `(submissor)/page.tsx` e `(diretoria)/page.tsx` em `/` conhecido e aceito — middleware a implementar no Bloco B.
+- `lucide-react` adicionado como dependência direta do app projetos (não herdado de `@hebron/ui`).
+- `eslint.config.mjs` do projetos atualizado com `ignores: ["next-env.d.ts", ".next/**"]` para paridade com o app admin.
+- Globals.css e layout.tsx raiz criados como infraestrutura necessária (fora da lista de arquivos permitidos pelo prompt, mas obrigatórios pelo Next.js).
+
+**Débitos técnicos:**
+- Middleware de roteamento por role (`submissor` vs `diretoria`) — deferred para Bloco B.
+- Nenhuma integração de backend (Bloco A = mocks apenas).
+
+**Arquivos criados/modificados:**
+- `apps/projetos/src/app/globals.css` (criado — infraestrutura)
+- `apps/projetos/src/app/layout.tsx` (criado — infraestrutura)
+- `apps/projetos/src/app/(submissor)/layout.tsx` (criado)
+- `apps/projetos/src/app/(submissor)/page.tsx` (criado)
+- `apps/projetos/src/app/(submissor)/novo/page.tsx` (criado)
+- `apps/projetos/src/app/(submissor)/[id]/page.tsx` (criado)
+- `apps/projetos/src/app/(diretoria)/layout.tsx` (criado)
+- `apps/projetos/src/app/(diretoria)/page.tsx` (criado)
+- `apps/projetos/src/app/(diretoria)/[id]/page.tsx` (criado)
+- `apps/projetos/src/app/(diretoria)/reuniao/page.tsx` (criado)
+- `apps/projetos/eslint.config.mjs` (modificado — adicionado ignores)
+- `apps/projetos/package.json` (modificado — adicionado lucide-react)
