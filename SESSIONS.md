@@ -57,6 +57,7 @@
 | S-33   | 2026-06-20 | P-2.1 — Schema de Tipos Projetos          | concluido |
 | S-34   | 2026-06-20 | P-2.2 — Componentes UI Projetos           | concluido |
 | S-35   | 2026-06-20 | P-2.3 — Telas e Páginas Projetos          | concluido |
+| S-36   | 2026-06-20 | P-2.4 — Formulários Projetos              | concluido |
 
 ---
 
@@ -1395,3 +1396,36 @@ Criadas todas as 8 páginas do app `projetos` com dados mockados (Bloco A). Áre
 - `apps/projetos/src/app/(diretoria)/reuniao/page.tsx` (criado)
 - `apps/projetos/eslint.config.mjs` (modificado — adicionado ignores)
 - `apps/projetos/package.json` (modificado — adicionado lucide-react)
+
+---
+
+## S-36 — P-2.4 — Formulários Projetos
+
+**Data:** 2026-06-20
+**Branch:** feat/P-2.4-projetos-forms
+**Status:** concluido
+
+### Decisões e observações
+
+- Wizard anual implementado com 5 etapas (Instituição, Proposta, Orçamento, Anexos, Revisão) em componentes modulares separados
+- Validação Zod por etapa implementada manualmente (sem `.pick()`) pois `createAnnualProjectSchema` usa `.superRefine()` que resulta em `ZodEffects` sem suporte a `.pick()`
+- `ProjectWizard` gerencia estado global; step files são stateless e recebem `data`, `errors`, `onChange` como props
+- Step files importam tipos de `project-wizard.tsx` via `import type` (sem circular dependency em runtime)
+- Google Places: autocomplete com fallback manual implementado com lista hardcoded de 18 locais (UI mock — sem API key)
+- Video upload: verificação de duração ≤3min via `HTMLVideoElement.onloadedmetadata` na client side
+- `no-dynamic-delete` resolvido com `Object.fromEntries + filter` em vez de `delete` dinâmico
+- `PunctualProjectForm`: usa `createPunctualProjectSchema.safeParse()` (ZodObject, sem superRefine)
+- `ReportForm`: usa `createReportSchema.safeParse()` com conversão de datas para ISO string
+- Query params recebidos como props (`editalId`, `categoriaInicial`) e pré-preenchidos no estado inicial
+- Meses de pagamento: botões toggle desabilitam quando count == numeroParcelas (impede seleção a mais)
+
+### Arquivos criados
+
+- `apps/projetos/src/components/project-wizard.tsx`
+- `apps/projetos/src/components/project-wizard-steps/step-institution.tsx`
+- `apps/projetos/src/components/project-wizard-steps/step-proposal.tsx`
+- `apps/projetos/src/components/project-wizard-steps/step-budget.tsx`
+- `apps/projetos/src/components/project-wizard-steps/step-attachments.tsx`
+- `apps/projetos/src/components/project-wizard-steps/step-review.tsx`
+- `apps/projetos/src/components/punctual-project-form.tsx`
+- `apps/projetos/src/components/report-form.tsx`

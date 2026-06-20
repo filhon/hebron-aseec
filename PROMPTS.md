@@ -1453,15 +1453,15 @@ Implementar formulários do módulo. Wizard de projeto anual (multi-step com val
 - `apps/projetos/src/components/report-form.tsx`
 
 **Critérios de aceite:**
-- [ ] Wizard anual: 5 steps com validação Zod por step, navegação prev/next
-- [ ] Local com autocomplete (Google Places) + fallback texto livre
-- [ ] Meses de pagamento: seleção múltipla (checkboxes dos 12 meses)
-- [ ] Upload de vídeo (max 3min), planilha e carta (com preview)
-- [ ] Formulário pontual: 6 campos obrigatórios, anexos opcionais
-- [ ] Formulário de relatório: texto estruturado + upload de anexos
-- [ ] Recepção de query params (edital_id, tipo, categoria) para pré-preenchimento
-- [ ] Lint passa
-- [ ] Types passam
+- [x] Wizard anual: 5 steps com validação Zod por step, navegação prev/next
+- [x] Local com autocomplete (Google Places) + fallback texto livre
+- [x] Meses de pagamento: seleção múltipla (checkboxes dos 12 meses)
+- [x] Upload de vídeo (max 3min), planilha e carta (com preview)
+- [x] Formulário pontual: 6 campos obrigatórios, anexos opcionais
+- [x] Formulário de relatório: texto estruturado + upload de anexos
+- [x] Recepção de query params (edital_id, tipo, categoria) para pré-preenchimento
+- [x] Lint passa
+- [x] Types passam
 
 **Notas:**
 Ref: BRAIN.md seção 6.2 (formulários anual e pontual confirmados). Duração inferida dos meses de pagamento. Máximo 12 meses.
