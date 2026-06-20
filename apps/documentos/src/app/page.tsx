@@ -12,9 +12,11 @@ import {
   Search,
   AlertTriangle,
   RefreshCw,
+  Shield,
+  Download,
+  Rss,
 } from "lucide-react";
 import { PublicNav } from "../components/public-nav";
-import { DocumentCard } from "../components/document-card";
 import { EditalCard } from "../components/edital-card";
 import { db } from "@hebron/db/client";
 import {
@@ -34,6 +36,7 @@ import {
   desc,
   inArray,
   sql,
+  asc,
 } from "drizzle-orm";
 import type {
   Document,
@@ -201,96 +204,123 @@ function adaptEdital(
 // ─── DB queries ───────────────────────────────────────────────────────────────
 
 async function buildPageData() {
-  const [editaisRows, recentDocRows, catRows, [totalRow]] = await Promise.all([
-    // All published public/internal editals
-    db
-      .select({
-        id: documents.id,
-        title: documents.title,
-        slug: documents.slug,
-        contentMd: documents.contentMd,
-        fileUrl: documents.fileUrl,
-        visibility: documents.visibility,
-        categoryId: documents.categoryId,
-        categoryName: categories.name,
-        categorySlug: categories.slug,
-        authorId: documents.authorId,
-        publishedAt: documents.publishedAt,
-        deletedAt: documents.deletedAt,
-        createdAt: documents.createdAt,
-        updatedAt: documents.updatedAt,
-        editalOpensAt: editals.opensAt,
-        editalClosesAt: editals.closesAt,
-        editalProjectType: editals.projectType,
-      })
-      .from(editals)
-      .innerJoin(documents, eq(editals.id, documents.id))
-      .leftJoin(categories, eq(categories.id, documents.categoryId))
-      .where(
-        and(
-          isNull(documents.deletedAt),
-          isNotNull(documents.publishedAt),
-          or(
-            eq(documents.visibility, "public"),
-            eq(documents.visibility, "internal"),
+  const [editaisRows, recentDocRows, catRows, certidoesRows, [totalRow]] =
+    await Promise.all([
+      // All published public/internal editals
+      db
+        .select({
+          id: documents.id,
+          title: documents.title,
+          slug: documents.slug,
+          contentMd: documents.contentMd,
+          fileUrl: documents.fileUrl,
+          visibility: documents.visibility,
+          categoryId: documents.categoryId,
+          categoryName: categories.name,
+          categorySlug: categories.slug,
+          authorId: documents.authorId,
+          publishedAt: documents.publishedAt,
+          deletedAt: documents.deletedAt,
+          createdAt: documents.createdAt,
+          updatedAt: documents.updatedAt,
+          editalOpensAt: editals.opensAt,
+          editalClosesAt: editals.closesAt,
+          editalProjectType: editals.projectType,
+        })
+        .from(editals)
+        .innerJoin(documents, eq(editals.id, documents.id))
+        .leftJoin(categories, eq(categories.id, documents.categoryId))
+        .where(
+          and(
+            isNull(documents.deletedAt),
+            isNotNull(documents.publishedAt),
+            or(
+              eq(documents.visibility, "public"),
+              eq(documents.visibility, "internal"),
+            ),
           ),
-        ),
-      )
-      .orderBy(desc(documents.publishedAt)),
+        )
+        .orderBy(desc(documents.publishedAt)),
 
-    // Recent non-edital published documents
-    db
-      .select({
-        id: documents.id,
-        title: documents.title,
-        slug: documents.slug,
-        contentMd: documents.contentMd,
-        fileUrl: documents.fileUrl,
-        visibility: documents.visibility,
-        categoryId: documents.categoryId,
-        categoryName: categories.name,
-        categorySlug: categories.slug,
-        authorId: documents.authorId,
-        publishedAt: documents.publishedAt,
-        deletedAt: documents.deletedAt,
-        createdAt: documents.createdAt,
-        updatedAt: documents.updatedAt,
-        editalId: editals.id,
-      })
-      .from(documents)
-      .leftJoin(categories, eq(categories.id, documents.categoryId))
-      .leftJoin(editals, eq(editals.id, documents.id))
-      .where(
-        and(
-          isNull(documents.deletedAt),
-          isNotNull(documents.publishedAt),
-          isNull(editals.id),
-          or(
-            eq(documents.visibility, "public"),
-            eq(documents.visibility, "internal"),
+      // Recent non-edital published documents
+      db
+        .select({
+          id: documents.id,
+          title: documents.title,
+          slug: documents.slug,
+          contentMd: documents.contentMd,
+          fileUrl: documents.fileUrl,
+          visibility: documents.visibility,
+          categoryId: documents.categoryId,
+          categoryName: categories.name,
+          categorySlug: categories.slug,
+          authorId: documents.authorId,
+          publishedAt: documents.publishedAt,
+          deletedAt: documents.deletedAt,
+          createdAt: documents.createdAt,
+          updatedAt: documents.updatedAt,
+          editalId: editals.id,
+        })
+        .from(documents)
+        .leftJoin(categories, eq(categories.id, documents.categoryId))
+        .leftJoin(editals, eq(editals.id, documents.id))
+        .where(
+          and(
+            isNull(documents.deletedAt),
+            isNotNull(documents.publishedAt),
+            isNull(editals.id),
+            or(
+              eq(documents.visibility, "public"),
+              eq(documents.visibility, "internal"),
+            ),
           ),
+        )
+        .orderBy(desc(documents.updatedAt))
+        .limit(6),
+
+      // All categories for count
+      db
+        .select({
+          id: categories.id,
+          name: categories.name,
+          slug: categories.slug,
+        })
+        .from(categories),
+
+      // Certidões vigentes (documents in certidoes categories)
+      db
+        .select({
+          id: documents.id,
+          title: documents.title,
+          slug: documents.slug,
+          categoryName: categories.name,
+          fileUrl: documents.fileUrl,
+          updatedAt: documents.updatedAt,
+        })
+        .from(documents)
+        .innerJoin(categories, eq(categories.id, documents.categoryId))
+        .where(
+          and(
+            isNull(documents.deletedAt),
+            isNotNull(documents.publishedAt),
+            or(
+              eq(documents.visibility, "public"),
+              eq(documents.visibility, "internal"),
+            ),
+            sql`${categories.slug} LIKE 'certidoes%'`,
+          ),
+        )
+        .orderBy(asc(documents.title))
+        .limit(6),
+
+      // Total published documents
+      db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(documents)
+        .where(
+          and(isNull(documents.deletedAt), isNotNull(documents.publishedAt)),
         ),
-      )
-      .orderBy(desc(documents.updatedAt))
-      .limit(6),
-
-    // All categories for count
-    db
-      .select({
-        id: categories.id,
-        name: categories.name,
-        slug: categories.slug,
-      })
-      .from(categories),
-
-    // Total published documents
-    db
-      .select({ n: sql<number>`count(*)::int` })
-      .from(documents)
-      .where(
-        and(isNull(documents.deletedAt), isNotNull(documents.publishedAt)),
-      ),
-  ]);
+    ]);
 
   // Fetch tags for recent docs
   const recentDocIds = recentDocRows.map((r) => r.id);
@@ -385,6 +415,7 @@ async function buildPageData() {
   return {
     openEditais,
     recentDocs,
+    certidoes: certidoesRows,
     allCategories: catRows,
     totalDocs: totalRow?.n ?? 0,
     openCount: openEditais.length,
@@ -451,7 +482,14 @@ export default async function HomePage() {
     );
   }
 
-  const { openEditais, recentDocs, allCategories, totalDocs, openCount } = data;
+  const {
+    openEditais,
+    recentDocs,
+    certidoes,
+    allCategories,
+    totalDocs,
+    openCount,
+  } = data;
 
   return (
     <>
@@ -570,7 +608,7 @@ export default async function HomePage() {
           )}
         </section>
 
-        {/* ── Two-col: recentes + categorias ── */}
+        {/* ── Two-col: recentes + certidões vigentes ── */}
         <div className="docs-two-col">
           {/* Documentos recentes */}
           <section aria-labelledby="recentes-heading">
@@ -579,6 +617,9 @@ export default async function HomePage() {
                 <span className="hb-eyebrow">Atualizados recentemente</span>
                 <h2 id="recentes-heading">Últimas publicações</h2>
               </div>
+              <Link href="/busca" className="hb-btn hb-btn-ghost hb-btn-sm">
+                Navegar por categoria
+              </Link>
             </div>
 
             {recentDocs.length > 0 ? (
@@ -634,86 +675,199 @@ export default async function HomePage() {
             )}
           </section>
 
-          {/* Categorias */}
-          <section aria-labelledby="categorias-heading">
-            <div className="docs-section-head">
-              <div className="left">
-                <span className="hb-eyebrow">Navegação</span>
-                <h2 id="categorias-heading">Explorar por área</h2>
+          {/* Certidões vigentes + subscription CTA */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            <section aria-labelledby="certidoes-heading">
+              <div className="docs-section-head">
+                <div className="left">
+                  <span className="hb-eyebrow">Documentação institucional</span>
+                  <h2 id="certidoes-heading">Certidões vigentes</h2>
+                </div>
               </div>
-            </div>
 
-            <div className="docs-cat-grid">
-              {allCategories.map((cat) => (
-                <Link
-                  key={cat.id}
-                  href={`/busca?categoria=${cat.id}`}
-                  className="docs-cat-card"
-                >
-                  <div className="docs-cat-icon">
-                    {CATEGORY_ICONS[cat.slug] ?? (
-                      <FileText size={20} aria-hidden="true" />
-                    )}
+              {certidoes.length > 0 ? (
+                <div className="hb-card" style={{ padding: "20px 22px" }}>
+                  <ul
+                    style={{
+                      listStyle: "none",
+                      padding: 0,
+                      margin: 0,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 0,
+                    }}
+                  >
+                    {certidoes.map((cert) => (
+                      <li
+                        key={cert.id}
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "auto 1fr auto",
+                          gap: 12,
+                          alignItems: "center",
+                          padding: "10px 0",
+                          borderBottom: "1px solid var(--divider)",
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: 36,
+                            height: 36,
+                            borderRadius: 8,
+                            background: "rgba(161,197,32,0.14)",
+                            color: "var(--hb-green-deep)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            flexShrink: 0,
+                          }}
+                        >
+                          <Shield size={16} aria-hidden="true" />
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                          <Link
+                            href={`/${cert.slug}`}
+                            style={{
+                              display: "block",
+                              fontFamily: "var(--font-display)",
+                              fontWeight: 600,
+                              fontSize: 13.5,
+                              color: "var(--fg)",
+                              overflow: "hidden",
+                              textOverflow: "ellipsis",
+                              whiteSpace: "nowrap",
+                              textDecoration: "none",
+                            }}
+                          >
+                            {cert.title}
+                          </Link>
+                          <div
+                            style={{ fontSize: 12, color: "var(--fg-muted)" }}
+                          >
+                            {cert.categoryName}
+                          </div>
+                        </div>
+                        {cert.fileUrl && (
+                          <Link
+                            href={`/${cert.slug}`}
+                            aria-label={`Baixar ${cert.title}`}
+                            style={{
+                              width: 32,
+                              height: 32,
+                              borderRadius: 6,
+                              border: "1px solid var(--border)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              color: "var(--fg-muted)",
+                              flexShrink: 0,
+                              transition: "all var(--dur-fast)",
+                            }}
+                          >
+                            <Download size={14} aria-hidden="true" />
+                          </Link>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <div className="hb-empty" style={{ padding: "32px 20px" }}>
+                  <div className="hb-empty-icon">
+                    <Shield size={20} aria-hidden="true" />
                   </div>
-                  <div className="docs-cat-name">{cat.name}</div>
-                </Link>
-              ))}
-            </div>
-          </section>
-        </div>
+                  <b>Nenhuma certidão disponível</b>
+                  <p className="hb-empty-body" style={{ fontSize: 12 }}>
+                    As certidões institucionais serão listadas aqui.
+                  </p>
+                </div>
+              )}
+            </section>
 
-        {/* ── Grid de documentos recentes ── */}
-        <section className="docs-section" aria-labelledby="grid-heading">
-          <div className="docs-section-head">
-            <div className="left">
-              <span className="hb-eyebrow">Documentos</span>
-              <h2 id="grid-heading">Publicações em destaque</h2>
-            </div>
-            <Link href="/busca" className="hb-btn hb-btn-ghost hb-btn-sm">
-              Ver todos
-              <ArrowRight size={13} aria-hidden="true" />
-            </Link>
-          </div>
-
-          {recentDocs.length > 0 ? (
+            {/* Subscription CTA */}
             <div
-              className="hb-grid"
               style={{
-                gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+                padding: "24px",
+                borderRadius: "var(--radius-md)",
+                background: "var(--hb-orange)",
+                color: "var(--hb-white)",
+                display: "flex",
+                flexDirection: "column",
+                gap: 12,
               }}
             >
-              {recentDocs.slice(0, 3).map((doc) => (
-                <DocumentCard
-                  key={doc.id}
-                  document={doc}
-                  href={`/${doc.slug}`}
-                />
-              ))}
-            </div>
-          ) : (
-            <div className="hb-empty" style={{ padding: "40px 20px" }}>
-              <div className="hb-empty-icon">
-                <Search size={24} aria-hidden="true" />
-              </div>
-              <b>Nenhum documento encontrado</b>
-              <p className="hb-empty-body">
-                Nenhum documento está disponível para exibição no momento.
-              </p>
-              <p className="hb-empty-quote">
-                "A tua palavra é lâmpada que ilumina os meus passos e luz que
-                clareia o meu caminho."
-                <span className="hb-empty-cite">Salmos 119:105</span>
+              <span
+                className="hb-eyebrow"
+                style={{ color: "rgba(255,255,255,0.7)" }}
+              >
+                Para parceiros e missionários
+              </span>
+              <h3
+                style={{
+                  fontFamily: "var(--font-display)",
+                  fontSize: 18,
+                  fontWeight: 700,
+                  margin: 0,
+                  lineHeight: 1.2,
+                  letterSpacing: "-0.01em",
+                }}
+              >
+                Receba alertas quando um edital abrir.
+              </h3>
+              <p
+                style={{
+                  fontSize: 13.5,
+                  lineHeight: 1.55,
+                  margin: 0,
+                  color: "rgba(255,255,255,0.85)",
+                }}
+              >
+                Cadastre-se para ser notificado por email sobre novas
+                publicações nas categorias que importam para você.
               </p>
               <Link
-                href="/busca"
-                className="hb-btn hb-btn-secondary"
-                style={{ marginTop: 20 }}
+                href="/assinaturas"
+                className="hb-btn hb-btn-sm"
+                style={{
+                  background: "var(--hb-white)",
+                  color: "var(--hb-orange)",
+                  borderColor: "var(--hb-white)",
+                  alignSelf: "flex-start",
+                  marginTop: 4,
+                }}
               >
-                <Search size={14} aria-hidden="true" />
-                Buscar documentos
+                <Rss size={13} aria-hidden="true" />
+                Configurar assinaturas
               </Link>
             </div>
-          )}
+          </div>
+        </div>
+
+        {/* ── Categories — full-width ── */}
+        <section className="docs-section" aria-labelledby="categorias-heading">
+          <div className="docs-section-head">
+            <div className="left">
+              <span className="hb-eyebrow">Navegação por categoria</span>
+              <h2 id="categorias-heading">Explore por área</h2>
+            </div>
+          </div>
+
+          <div className="docs-cat-grid">
+            {allCategories.map((cat) => (
+              <Link
+                key={cat.id}
+                href={`/busca?categoria=${cat.id}`}
+                className="docs-cat-card"
+              >
+                <div className="docs-cat-icon">
+                  {CATEGORY_ICONS[cat.slug] ?? (
+                    <FileText size={20} aria-hidden="true" />
+                  )}
+                </div>
+                <div className="docs-cat-name">{cat.name}</div>
+              </Link>
+            ))}
+          </div>
         </section>
       </main>
 

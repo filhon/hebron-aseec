@@ -1,15 +1,13 @@
 import Link from "next/link";
 import { FileText, Search, Scroll, LayoutGrid } from "lucide-react";
-import { BrandMark } from "@hebron/ui";
+import { DocumentosLogo } from "./documentos-logo";
 
 export function PublicNav() {
   return (
     <nav className="docs-nav" aria-label="Navegação principal">
       <div className="docs-nav-inner">
         <Link href="/" className="docs-nav-brand">
-          <BrandMark style={{ height: 28 }} />
-          <span className="docs-nav-brand-sep" aria-hidden="true" />
-          <span className="docs-nav-brand-name">Documentos</span>
+          <DocumentosLogo variant="horizontal" />
         </Link>
 
         <div className="docs-nav-links">

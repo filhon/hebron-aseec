@@ -57,9 +57,7 @@ export function EditalOpenEmail({
     });
 
   return (
-    <EmailLayout
-      preview={`Edital aberto para submissões: ${editalTitle}`}
-    >
+    <EmailLayout preview={`Edital aberto para submissões: ${editalTitle}`}>
       <Text
         style={{
           ...text,

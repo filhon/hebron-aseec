@@ -15,6 +15,7 @@ import {
   categories,
   views,
   subscriptions,
+  documentVersions,
 } from "@hebron/db/schema";
 import { and, eq, isNull, isNotNull, desc, sql, gt } from "drizzle-orm";
 
@@ -116,6 +117,11 @@ export default async function EditorialDashboardPage() {
         isEdital: sql<boolean>`${editals.id} IS NOT NULL`,
         editalOpensAt: editals.opensAt,
         editalClosesAt: editals.closesAt,
+        versionNumber: sql<number | null>`(
+          SELECT MAX(${documentVersions.versionNumber})
+          FROM ${documentVersions}
+          WHERE ${documentVersions.documentId} = ${documents.id}
+        )`,
       })
       .from(documents)
       .leftJoin(categories, eq(categories.id, documents.categoryId))
@@ -300,8 +306,9 @@ export default async function EditorialDashboardPage() {
                 <thead>
                   <tr>
                     <th>Documento</th>
+                    <th>Categoria</th>
                     <th>Visibilidade</th>
-                    <th>Status</th>
+                    <th>Versão</th>
                     <th>Atualizado</th>
                     <th></th>
                   </tr>
@@ -320,27 +327,26 @@ export default async function EditorialDashboardPage() {
                         >
                           {doc.title}
                         </div>
-                        <div
-                          style={{
-                            fontSize: 12,
-                            color: "var(--fg-muted)",
-                            marginTop: 2,
-                          }}
-                        >
-                          {doc.categoryName ?? "—"}{" "}
-                          {doc.isEdital && (
-                            <span
-                              style={{
-                                fontSize: 10,
-                                background: "var(--bg-alt)",
-                                padding: "0 5px",
-                                borderRadius: 3,
-                              }}
-                            >
-                              edital
-                            </span>
-                          )}
-                        </div>
+                        {doc.isEdital && (
+                          <span
+                            style={{
+                              fontSize: 10,
+                              background: "rgba(234,90,6,0.12)",
+                              color: "var(--hb-orange)",
+                              padding: "1px 5px",
+                              borderRadius: 3,
+                              display: "inline-block",
+                              marginTop: 2,
+                            }}
+                          >
+                            edital
+                          </span>
+                        )}
+                      </td>
+                      <td
+                        style={{ fontSize: 12.5, color: "var(--fg-muted)" }}
+                      >
+                        {doc.categoryName ?? "—"}
                       </td>
                       <td>
                         <span
@@ -351,18 +357,14 @@ export default async function EditorialDashboardPage() {
                       </td>
                       <td>
                         <span
-                          className="hb-badge"
                           style={{
-                            background: doc.publishedAt
-                              ? "var(--hb-green-muted)"
-                              : "var(--bg-alt)",
-                            color: doc.publishedAt
-                              ? "var(--hb-green-fg)"
-                              : "var(--fg-muted)",
-                            fontSize: 11,
+                            fontFamily: "var(--font-display)",
+                            fontSize: 12,
+                            fontWeight: 700,
+                            color: "var(--fg-muted)",
                           }}
                         >
-                          {doc.publishedAt ? "Publicado" : "Rascunho"}
+                          v{doc.versionNumber ?? 1}
                         </span>
                       </td>
                       <td style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>
@@ -371,7 +373,7 @@ export default async function EditorialDashboardPage() {
                       <td>
                         <div style={{ display: "flex", gap: 4 }}>
                           <Link
-                            href="/editorial/novo"
+                            href={`/editorial/${doc.id}/editar`}
                             className="hb-btn hb-btn-ghost hb-btn-xs"
                             title="Editar"
                           >
@@ -532,7 +534,7 @@ export default async function EditorialDashboardPage() {
                     </div>
                   </div>
                   <Link
-                    href="/editorial/novo"
+                    href={`/editorial/${item.id}/editar`}
                     className="hb-btn hb-btn-ghost hb-btn-xs"
                   >
                     <Scroll size={12} aria-hidden="true" />

@@ -6,8 +6,10 @@ import {
   FolderOpen,
   Globe,
   ArrowLeft,
+  Bell,
+  ClipboardList,
 } from "lucide-react";
-import { BrandMark } from "@hebron/ui";
+import { DocumentosLogo } from "../../components/documentos-logo";
 
 export default function EditorialLayout({
   children,
@@ -23,10 +25,7 @@ export default function EditorialLayout({
       >
         <div className="docs-editorial-sidebar-header">
           <Link href="/editorial" className="docs-editorial-sidebar-brand">
-            <BrandMark
-              style={{ height: 24, filter: "brightness(0) invert(1)" }}
-            />
-            <span style={{ marginLeft: 8 }}>Documentos</span>
+            <DocumentosLogo variant="horizontal" dark={true} />
           </Link>
           <div className="docs-editorial-sidebar-sub">Área editorial</div>
         </div>
@@ -48,14 +47,42 @@ export default function EditorialLayout({
             Conteúdo
           </div>
 
-          <Link href="/editorial" className="docs-editorial-nav-item">
+          <Link href="/editorial/documentos" className="docs-editorial-nav-item">
+            <FileText size={15} aria-hidden="true" />
+            Documentos
+          </Link>
+
+          <Link href="/editorial/editais" className="docs-editorial-nav-item">
             <Scroll size={15} aria-hidden="true" />
             Editais
           </Link>
 
-          <Link href="/editorial" className="docs-editorial-nav-item">
+          <Link
+            href="/editorial/categorias"
+            className="docs-editorial-nav-item"
+          >
             <FolderOpen size={15} aria-hidden="true" />
             Categorias
+          </Link>
+
+          <div className="docs-editorial-nav-label" style={{ marginTop: 16 }}>
+            Sistema
+          </div>
+
+          <Link
+            href="/editorial/assinaturas"
+            className="docs-editorial-nav-item"
+          >
+            <Bell size={15} aria-hidden="true" />
+            Assinaturas
+          </Link>
+
+          <Link
+            href="/editorial/auditoria"
+            className="docs-editorial-nav-item"
+          >
+            <ClipboardList size={15} aria-hidden="true" />
+            Auditoria
           </Link>
 
           <div className="docs-editorial-nav-label" style={{ marginTop: 16 }}>

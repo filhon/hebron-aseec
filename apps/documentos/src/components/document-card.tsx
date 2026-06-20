@@ -64,13 +64,13 @@ export function DocumentCard({
     <Link href={href} className={`group block no-underline ${className}`}>
       <article className="hb-card hb-card-overflow h-full flex flex-col transition-all duration-[--dur-fast] group-hover:border-[--brand] group-hover:shadow-[--shadow-md]">
         {/* Accent stripe */}
-        <div className="h-0.75 bg-[--border] group-hover:bg-[--brand] transition-colors duration-[--dur-fast]" />
+        <div className="h-1 bg-[--border] group-hover:bg-[--brand] transition-colors duration-[--dur-fast]" />
 
-        <div className="p-5 flex flex-col gap-3 flex-1">
+        <div className="p-5 flex flex-col gap-4 flex-1">
           {/* Category + Visibility row */}
           <div className="flex items-center justify-between gap-2">
-            <span className="inline-flex items-center gap-1.5 text-[--fg-muted] text-[11.5px] font-medium min-w-0">
-              <Folder size={12} aria-hidden="true" className="shrink-0" />
+            <span className="inline-flex items-center gap-1.5 text-[--fg-subtle] text-[11px] font-semibold uppercase tracking-[0.06em] min-w-0">
+              <Folder size={13} aria-hidden="true" className="shrink-0" />
               <span className="truncate">{document.category.name}</span>
             </span>
 
@@ -85,13 +85,13 @@ export function DocumentCard({
           </div>
 
           {/* Title */}
-          <h3 className="font-[--font-display] text-[15px] font-bold leading-tight tracking-[-0.01em] text-[--fg] line-clamp-2 group-hover:text-[--brand] transition-colors duration-[--dur-fast]">
+          <h3 className="font-[--font-display] text-[16px] font-bold leading-snug tracking-[-0.015em] text-[--fg] line-clamp-2 group-hover:text-[--brand] transition-colors duration-[--dur-fast]">
             {document.title}
           </h3>
 
           {/* Description */}
           {document.description && (
-            <p className="text-[--fg-muted] text-[13px] leading-[1.55] line-clamp-2 flex-1">
+            <p className="text-[--fg-muted] text-[13px] leading-relaxed line-clamp-2 flex-1">
               {document.description}
             </p>
           )}
@@ -116,12 +116,12 @@ export function DocumentCard({
           )}
 
           {/* Footer */}
-          <div className="flex items-center justify-between gap-2 pt-3 mt-auto border-t border-[--divider]">
+          <div className="flex items-center justify-between gap-2 pt-4 mt-auto border-t border-[--divider]">
             <span className="inline-flex items-center gap-1.5 text-[--fg-muted] text-[12px]">
               <Calendar size={12} aria-hidden="true" />
               {formatDate(document.updatedAt)}
             </span>
-            {fileSize !== undefined && (
+            {fileSize !== undefined && fileSize > 0 && (
               <span className="inline-flex items-center gap-1.5 text-[--fg-muted] text-[12px]">
                 <FileText size={12} aria-hidden="true" />
                 {formatBytes(fileSize)}

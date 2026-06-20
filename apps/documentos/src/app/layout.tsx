@@ -18,13 +18,13 @@ const titillium = Titillium_Web({
 
 export const metadata: Metadata = {
   title: {
-    default: "Documentos — Hebron Aseec",
-    template: "%s — Hebron Aseec",
+    default: "hebron documentos",
+    template: "%s · hebron documentos",
   },
   description:
     "Portal de documentos, editais e chamadas da Hebron Aseec. Documentação institucional, políticas e oportunidades de submissão.",
   openGraph: {
-    siteName: "Hebron Aseec",
+    siteName: "hebron documentos",
     locale: "pt_BR",
     type: "website",
   },

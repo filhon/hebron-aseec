@@ -31,6 +31,16 @@ export const auditActionEnum = adminSchema.enum("audit_action", [
   "meeting.updated",
   "designation.assigned",
   "designation.revoked",
+  "document.created",
+  "document.updated",
+  "document.published",
+  "document.unpublished",
+  "document.deleted",
+  "category.created",
+  "category.updated",
+  "category.deleted",
+  "edital.created",
+  "edital.updated",
 ]);
 
 export const meetingTypeEnum = adminSchema.enum("meeting_type", [
