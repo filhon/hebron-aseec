@@ -52,9 +52,4 @@ drizzle/
 
 # Documentos
 .docs/
-PATCHES/
-BRAIN.md
-CLAUDE.md
-PROMPTS.md
-SESSIONS.md
 .claude/
