@@ -373,10 +373,12 @@ ALTER TABLE "projetos"."report_attachments"  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "projetos"."payment_schedules"   ENABLE ROW LEVEL SECURITY;
 
 -- ── projetos.categories ───────────────────────────────────────────────────
+DROP POLICY IF EXISTS "proj_categories_select_authenticated" ON "projetos"."categories";
 CREATE POLICY "proj_categories_select_authenticated"
   ON "projetos"."categories" FOR SELECT
   USING (auth.uid() IS NOT NULL);
 
+DROP POLICY IF EXISTS "proj_categories_write_admin" ON "projetos"."categories";
 CREATE POLICY "proj_categories_write_admin"
   ON "projetos"."categories" FOR ALL
   USING    (public.has_role('super_admin', 'diretor'))
@@ -384,6 +386,7 @@ CREATE POLICY "proj_categories_write_admin"
 
 -- ── projetos.organizations ────────────────────────────────────────────────
 -- Admin vê todas; submissor vê organizações das quais é membro ou criador.
+DROP POLICY IF EXISTS "organizations_select_member_or_admin" ON "projetos"."organizations";
 CREATE POLICY "organizations_select_member_or_admin"
   ON "projetos"."organizations" FOR SELECT
   USING (
@@ -396,6 +399,7 @@ CREATE POLICY "organizations_select_member_or_admin"
     )
   );
 
+DROP POLICY IF EXISTS "organizations_insert_submissor" ON "projetos"."organizations";
 CREATE POLICY "organizations_insert_submissor"
   ON "projetos"."organizations" FOR INSERT
   WITH CHECK (
@@ -403,12 +407,14 @@ CREATE POLICY "organizations_insert_submissor"
     AND "created_by" = auth.uid()
   );
 
+DROP POLICY IF EXISTS "organizations_update_owner_or_admin" ON "projetos"."organizations";
 CREATE POLICY "organizations_update_owner_or_admin"
   ON "projetos"."organizations" FOR UPDATE
   USING    ("created_by" = auth.uid() OR public.has_role('super_admin', 'diretor'))
   WITH CHECK ("created_by" = auth.uid() OR public.has_role('super_admin', 'diretor'));
 
 -- ── projetos.organization_members ─────────────────────────────────────────
+DROP POLICY IF EXISTS "org_members_select_member_or_admin" ON "projetos"."organization_members";
 CREATE POLICY "org_members_select_member_or_admin"
   ON "projetos"."organization_members" FOR SELECT
   USING (
@@ -421,6 +427,7 @@ CREATE POLICY "org_members_select_member_or_admin"
     )
   );
 
+DROP POLICY IF EXISTS "org_members_write_admin" ON "projetos"."organization_members";
 CREATE POLICY "org_members_write_admin"
   ON "projetos"."organization_members" FOR ALL
   USING    (public.has_role('super_admin', 'diretor'))
@@ -430,6 +437,7 @@ CREATE POLICY "org_members_write_admin"
 -- Submissor: lê/edita os próprios (soft-delete filtra automaticamente).
 -- Avaliador (conselheiro/diretor): lê projetos em votacao/homologacao.
 -- Admin: lê e escreve tudo.
+DROP POLICY IF EXISTS "projects_select_own" ON "projetos"."projects";
 CREATE POLICY "projects_select_own"
   ON "projetos"."projects" FOR SELECT
   USING (
@@ -437,6 +445,7 @@ CREATE POLICY "projects_select_own"
     AND "submitter_id" = auth.uid()
   );
 
+DROP POLICY IF EXISTS "projects_select_reviewer" ON "projetos"."projects";
 CREATE POLICY "projects_select_reviewer"
   ON "projetos"."projects" FOR SELECT
   USING (
@@ -445,6 +454,7 @@ CREATE POLICY "projects_select_reviewer"
     AND public.has_role('super_admin', 'diretor', 'conselheiro')
   );
 
+DROP POLICY IF EXISTS "projects_insert_submissor" ON "projetos"."projects";
 CREATE POLICY "projects_insert_submissor"
   ON "projetos"."projects" FOR INSERT
   WITH CHECK (
@@ -453,6 +463,7 @@ CREATE POLICY "projects_insert_submissor"
   );
 
 -- Submissor pode editar apenas projetos em rascunho; admin pode editar em qualquer stage.
+DROP POLICY IF EXISTS "projects_update_rascunho_owner" ON "projetos"."projects";
 CREATE POLICY "projects_update_rascunho_owner"
   ON "projetos"."projects" FOR UPDATE
   USING (
@@ -465,6 +476,7 @@ CREATE POLICY "projects_update_rascunho_owner"
     AND "stage" = 'rascunho'
   );
 
+DROP POLICY IF EXISTS "projects_update_admin" ON "projetos"."projects";
 CREATE POLICY "projects_update_admin"
   ON "projetos"."projects" FOR UPDATE
   USING    ("deleted_at" IS NULL AND public.has_role('super_admin', 'diretor'))
@@ -474,6 +486,7 @@ CREATE POLICY "projects_update_admin"
 
 -- ── projetos.project_versions ─────────────────────────────────────────────
 -- Versões são imutáveis: sem UPDATE, sem DELETE.
+DROP POLICY IF EXISTS "project_versions_select" ON "projetos"."project_versions";
 CREATE POLICY "project_versions_select"
   ON "projetos"."project_versions" FOR SELECT
   USING (
@@ -486,22 +499,26 @@ CREATE POLICY "project_versions_select"
     )
   );
 
+DROP POLICY IF EXISTS "project_versions_insert_system" ON "projetos"."project_versions";
 CREATE POLICY "project_versions_insert_system"
   ON "projetos"."project_versions" FOR INSERT
   WITH CHECK (public.has_role('super_admin', 'diretor', 'conselheiro', 'colaborador', 'submissor'));
 
 -- ── projetos.compact_versions ─────────────────────────────────────────────
 -- Versões compactas geradas por IA — leitura por avaliadores e admin.
+DROP POLICY IF EXISTS "compact_versions_select" ON "projetos"."compact_versions";
 CREATE POLICY "compact_versions_select"
   ON "projetos"."compact_versions" FOR SELECT
   USING (public.has_role('super_admin', 'diretor', 'conselheiro'));
 
+DROP POLICY IF EXISTS "compact_versions_insert_system" ON "projetos"."compact_versions";
 CREATE POLICY "compact_versions_insert_system"
   ON "projetos"."compact_versions" FOR INSERT
   WITH CHECK (public.has_role('super_admin', 'diretor'));
 
 -- ── projetos.evaluations ──────────────────────────────────────────────────
 -- Avaliador vê/edita a própria; admin vê todas.
+DROP POLICY IF EXISTS "evaluations_select_own_or_admin" ON "projetos"."evaluations";
 CREATE POLICY "evaluations_select_own_or_admin"
   ON "projetos"."evaluations" FOR SELECT
   USING (
@@ -509,6 +526,7 @@ CREATE POLICY "evaluations_select_own_or_admin"
     OR public.has_role('super_admin', 'diretor')
   );
 
+DROP POLICY IF EXISTS "evaluations_insert_evaluator" ON "projetos"."evaluations";
 CREATE POLICY "evaluations_insert_evaluator"
   ON "projetos"."evaluations" FOR INSERT
   WITH CHECK (
@@ -516,6 +534,7 @@ CREATE POLICY "evaluations_insert_evaluator"
     AND "evaluator_id" = auth.uid()
   );
 
+DROP POLICY IF EXISTS "evaluations_update_own_or_admin" ON "projetos"."evaluations";
 CREATE POLICY "evaluations_update_own_or_admin"
   ON "projetos"."evaluations" FOR UPDATE
   USING    ("evaluator_id" = auth.uid() AND "submitted_at" IS NULL
@@ -526,6 +545,7 @@ CREATE POLICY "evaluations_update_own_or_admin"
 -- ── projetos.votes — SIGILO TOTAL ─────────────────────────────────────────
 -- INSERT: conselheiro/diretor registra o próprio voto.
 -- SELECT: apenas super_admin/diretor vê votos individuais (sigilo de escrutínio).
+DROP POLICY IF EXISTS "votes_insert_own" ON "projetos"."votes";
 CREATE POLICY "votes_insert_own"
   ON "projetos"."votes" FOR INSERT
   WITH CHECK (
@@ -533,12 +553,14 @@ CREATE POLICY "votes_insert_own"
     AND "user_id" = auth.uid()
   );
 
+DROP POLICY IF EXISTS "votes_select_admin_only" ON "projetos"."votes";
 CREATE POLICY "votes_select_admin_only"
   ON "projetos"."votes" FOR SELECT
   USING (public.has_role('super_admin', 'diretor'));
 
 -- ── projetos.contestations ────────────────────────────────────────────────
 -- Submissor vê e cria as próprias; diretor/admin vê e decide todas.
+DROP POLICY IF EXISTS "contestations_select_own_or_admin" ON "projetos"."contestations";
 CREATE POLICY "contestations_select_own_or_admin"
   ON "projetos"."contestations" FOR SELECT
   USING (
@@ -546,6 +568,7 @@ CREATE POLICY "contestations_select_own_or_admin"
     OR public.has_role('super_admin', 'diretor', 'conselheiro')
   );
 
+DROP POLICY IF EXISTS "contestations_insert_own" ON "projetos"."contestations";
 CREATE POLICY "contestations_insert_own"
   ON "projetos"."contestations" FOR INSERT
   WITH CHECK (
@@ -553,6 +576,7 @@ CREATE POLICY "contestations_insert_own"
     AND "user_id" = auth.uid()
   );
 
+DROP POLICY IF EXISTS "contestations_update_admin" ON "projetos"."contestations";
 CREATE POLICY "contestations_update_admin"
   ON "projetos"."contestations" FOR UPDATE
   USING    (public.has_role('super_admin', 'diretor'))
@@ -560,6 +584,7 @@ CREATE POLICY "contestations_update_admin"
 
 -- ── projetos.reports ──────────────────────────────────────────────────────
 -- Submissor vê/edita relatórios dos próprios projetos; admin vê todos.
+DROP POLICY IF EXISTS "reports_select_own_or_admin" ON "projetos"."reports";
 CREATE POLICY "reports_select_own_or_admin"
   ON "projetos"."reports" FOR SELECT
   USING (
@@ -572,6 +597,7 @@ CREATE POLICY "reports_select_own_or_admin"
     )
   );
 
+DROP POLICY IF EXISTS "reports_insert_own_project" ON "projetos"."reports";
 CREATE POLICY "reports_insert_own_project"
   ON "projetos"."reports" FOR INSERT
   WITH CHECK (
@@ -584,6 +610,7 @@ CREATE POLICY "reports_insert_own_project"
     OR public.has_role('super_admin', 'diretor')
   );
 
+DROP POLICY IF EXISTS "reports_update_own_or_admin" ON "projetos"."reports";
 CREATE POLICY "reports_update_own_or_admin"
   ON "projetos"."reports" FOR UPDATE
   USING (
@@ -604,6 +631,7 @@ CREATE POLICY "reports_update_own_or_admin"
   );
 
 -- ── projetos.report_attachments ───────────────────────────────────────────
+DROP POLICY IF EXISTS "report_attachments_select" ON "projetos"."report_attachments";
 CREATE POLICY "report_attachments_select"
   ON "projetos"."report_attachments" FOR SELECT
   USING (
@@ -617,6 +645,7 @@ CREATE POLICY "report_attachments_select"
     )
   );
 
+DROP POLICY IF EXISTS "report_attachments_insert" ON "projetos"."report_attachments";
 CREATE POLICY "report_attachments_insert"
   ON "projetos"."report_attachments" FOR INSERT
   WITH CHECK (
@@ -635,6 +664,7 @@ CREATE POLICY "report_attachments_insert"
 
 -- ── projetos.payment_schedules ────────────────────────────────────────────
 -- Submissor vê as parcelas dos próprios projetos; admin/financeiro gerencia.
+DROP POLICY IF EXISTS "payment_schedules_select_own_or_admin" ON "projetos"."payment_schedules";
 CREATE POLICY "payment_schedules_select_own_or_admin"
   ON "projetos"."payment_schedules" FOR SELECT
   USING (
@@ -647,6 +677,7 @@ CREATE POLICY "payment_schedules_select_own_or_admin"
     )
   );
 
+DROP POLICY IF EXISTS "payment_schedules_write_admin" ON "projetos"."payment_schedules";
 CREATE POLICY "payment_schedules_write_admin"
   ON "projetos"."payment_schedules" FOR ALL
   USING    (public.has_role('super_admin', 'diretor'))

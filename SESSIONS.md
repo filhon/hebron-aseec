@@ -59,6 +59,8 @@
 | S-35   | 2026-06-20 | P-2.3 — Telas e Páginas Projetos          | concluido |
 | S-36   | 2026-06-20 | P-2.4 — Formulários Projetos              | concluido |
 | S-37   | 2026-06-22 | P-2.5 — Estados Projetos                  | concluido |
+| S-38   | 2026-06-22 | P-2.6 — Schema do Banco Projetos          | concluido |
+| S-39   | 2026-06-22 | P-2.7 — RLS Policies Projetos             | concluido |
 
 ---
 
@@ -1465,3 +1467,48 @@ Criadas todas as 8 páginas do app `projetos` com dados mockados (Bloco A). Áre
 
 - `apps/projetos/src/app/(diretoria)/page.tsx` — removido; `(diretoria)` e `(submissor)` não podem ter page.tsx no mesmo nível (conflito de rota `/`)
 - `apps/projetos/src/app/(diretoria)/[id]/page.tsx` — movido para `pipeline/[id]/page.tsx`
+
+---
+
+## S-38 — P-2.6 — Schema do Banco Projetos
+
+**Data:** 2026-06-22
+**Branch:** feat/P-2.6-projetos-schema
+**Status:** concluido
+
+### Decisões e observações
+
+- Migration numerada `0007_projetos.sql` (e não `0006_` como indicado no prompt) porque entre os dois blocos surgiram `0005_documentos_rls.sql` e `0006_documentos_audit_actions.sql`, deslocando a numeração
+- RLS foi habilitado e policies iniciais incluídas direto em `0007_projetos.sql` (apesar de o prompt permitir só o schema) para manter atomicidade da migration — as policies seriam refinadas em P-2.7
+- `VALID_STAGE_TRANSITIONS` exportado como constante TypeScript em `projetos.ts`; state machine não está no banco (sem CHECK constraint de transição) — enforcement fica nas Server Actions
+- `contestation_limit` trigger garante máx 2 contestações por projeto; UNIQUE(`project_id`, `user_id`) garante 1 por pessoa
+- Soft-delete via `deleted_at IS NULL` em todos os índices parciais e policies SELECT
+- `score_ai` e `score_ai_breakdown` são colunas na tabela `projects`; mascaramento por role implementado a nível de aplicação (RLS não suporta segurança por coluna)
+
+### Arquivos criados
+
+- `packages/db/src/schema/projetos.ts`
+- `packages/db/src/migrations/0007_projetos.sql`
+
+---
+
+## S-39 — P-2.7 — RLS Policies Projetos
+
+**Data:** 2026-06-22
+**Branch:** feat/P-2.7-projetos-rls
+**Status:** concluido
+
+### Decisões e observações
+
+- Migration `0007_projetos_rls.sql` dropa e recria apenas as policies que precisavam de ajuste; o restante das policies de `0007_projetos.sql` permanece inalterado
+- `projects_select_admin` (super_admin): sem filtro de stage ou `deleted_at` — acesso total inclusive a rascunhos e projetos deletados (soft-delete)
+- `projects_select_reviewer` (diretor/conselheiro): limitado explicitamente a stages `votacao` até `concluido`, excluindo `rascunho` e `validacao`
+- `projects_select_own_or_org` (submissor/colaborador): estende a visibilidade a todos os projetos da organização do usuário via `organization_members` (não só submissões próprias)
+- `contestations_insert_reviewer`: submissor e colaborador removidos do INSERT — apenas diretor/conselheiro/super_admin podem contestar
+- Reports SELECT: `conselheiro` removido; apenas `super_admin`/`diretor` leem reports alheios; submissor lê apenas dos próprios projetos
+- `score_ai` / `score_ai_breakdown`: mascaramento impossível via RLS (row-level only); documentado no migration e enforçado obrigatoriamente nas Server Actions (campos nunca retornados para submissores)
+- Constraints de unicidade (1 contestação/pessoa/projeto) e limite (2/projeto) já existiam em `0007_projetos.sql` — não duplicados
+
+### Arquivos criados
+
+- `packages/db/src/migrations/0007_projetos_rls.sql`

@@ -1554,14 +1554,14 @@ RLS para schema projetos. Submissor: vê apenas projetos da própria instituiç�
 - `packages/db/src/migrations/0007_projetos_rls.sql`
 
 **Critérios de aceite:**
-- [ ] Submissor: CRUD apenas em projetos de suas instituições
-- [ ] Diretor/conselheiro: SELECT em projetos stage >= votacao
-- [ ] Super_admin: full access
-- [ ] Votes: INSERT por diretores/conselheiros; SELECT apenas super_admin
-- [ ] Score IA: visível apenas para super_admin, diretores, conselheiros (nunca submissor)
-- [ ] Contestations: max 1 por pessoa por projeto (constraint + RLS)
-- [ ] Reports: submissor insere; super_admin/diretores leem
-- [ ] Types passam
+- [x] Submissor: CRUD apenas em projetos de suas instituições
+- [x] Diretor/conselheiro: SELECT em projetos stage >= votacao
+- [x] Super_admin: full access
+- [x] Votes: INSERT por diretores/conselheiros; SELECT apenas super_admin
+- [x] Score IA: visível apenas para super_admin, diretores, conselheiros (nunca submissor)
+- [x] Contestations: max 1 por pessoa por projeto (constraint + RLS)
+- [x] Reports: submissor insere; super_admin/diretores leem
+- [x] Types passam
 
 **Notas:**
 Ref: BRAIN.md seção 6.2 (voto secreto, score invisível para submissor).
