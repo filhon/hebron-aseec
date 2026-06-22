@@ -1489,10 +1489,10 @@ Loading, empty e error states para todas as telas de Projetos. Skeletons para da
 - `apps/projetos/src/app/(diretoria)/page.tsx` (adicionar estados)
 
 **Critérios de aceite:**
-- [ ] Skeleton por tela (dashboard, kanban, detalhe)
-- [ ] Estado vazio submissor: "Você ainda não submeteu nenhum projeto" + CTA
-- [ ] Estado vazio diretoria: mensagem por coluna do kanban
-- [ ] Wizard: indicador de progresso (step atual / total)
+- [x] Skeleton por tela (dashboard, kanban, detalhe)
+- [x] Estado vazio submissor: "Você ainda não submeteu nenhum projeto" + CTA
+- [x] Estado vazio diretoria: mensagem por coluna do kanban
+- [x] Wizard: indicador de progresso (step atual / total)
 - [x] Lint passa
 - [x] Types passam
 
