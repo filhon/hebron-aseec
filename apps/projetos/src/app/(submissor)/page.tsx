@@ -1,14 +1,9 @@
 import Link from "next/link";
-import {
-  Clock,
-  FileWarning,
-  Wallet,
-  TrendingUp,
-  ChevronRight,
-  Plus,
-} from "lucide-react";
+import { AlertCircle, ArrowRight, ChevronRight } from "lucide-react";
 import { mockProjects, mockReports } from "../../lib/mock-data";
-import type { AnnualProject, Project } from "@hebron/types";
+import type { AnnualProject } from "@hebron/types";
+
+// ─── Formatters ───────────────────────────────────────────────────────────────
 
 const BRL = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -17,12 +12,19 @@ const BRL = new Intl.NumberFormat("pt-BR", {
   maximumFractionDigits: 0,
 });
 
-// Mock: filter by current user's submitted projects
+function fmtMil(n: number) {
+  if (n >= 1000) return `R$ ${Math.round(n / 1000)} mil`;
+  return BRL.format(n);
+}
+
+// ─── Mock user data ───────────────────────────────────────────────────────────
+
 const MY_USER_ID = "user-sub-001";
+const MOCK_USER_NAME = "Pr. André Costa";
+// Budget limit set by admin per institution/year
+const ORCAMENTO_ANUAL_LIMITE = 150_000;
+
 const myProjects = mockProjects.filter((p) => p.submittedBy === MY_USER_ID);
-const myReports = mockReports.filter((r) =>
-  myProjects.some((p) => p.id === r.projectId),
-);
 
 const activeProjects = myProjects.filter((p) =>
   ["em_execucao", "aprovado", "homologacao", "votacao", "validacao"].includes(
@@ -30,43 +32,98 @@ const activeProjects = myProjects.filter((p) =>
   ),
 );
 
-const pendingReports = myReports.filter(
-  (r) => r.status === "pendente" || r.status === "em_atraso",
+const emAvaliacao = myProjects.filter((p) =>
+  ["validacao", "votacao", "homologacao"].includes(p.stage),
 );
 
-const totalAllocated = myProjects
+const emVotacaoCount = myProjects.filter((p) => p.stage === "votacao").length;
+
+const pendingReports = mockReports.filter(
+  (r) =>
+    myProjects.some((p) => p.id === r.projectId) &&
+    (r.status === "pendente" || r.status === "em_atraso"),
+);
+
+const orcamentoComprometido = myProjects
   .filter((p) => !["cancelado", "reprovado", "rascunho"].includes(p.stage))
-  .reduce((sum, p) => sum + p.valorTotal, 0);
+  .reduce((s, p) => s + p.valorTotal, 0);
 
-// Upcoming payments (simplified: next 3 months from active annual projects)
-const upcomingPayments: { month: string; amount: number }[] = (() => {
+const orcamentoDisponivel = Math.max(
+  0,
+  ORCAMENTO_ANUAL_LIMITE - orcamentoComprometido,
+);
+
+const pctComprometido = Math.min(
+  100,
+  Math.round((orcamentoComprometido / ORCAMENTO_ANUAL_LIMITE) * 100),
+);
+
+// First active project org name as header eyebrow
+const institutionName =
+  activeProjects[0]?.organizacao.name ?? myProjects[0]?.organizacao.name;
+
+// ─── Upcoming payments ────────────────────────────────────────────────────────
+
+type UpcomingPayment = {
+  day: number;
+  monthAbbr: string;
+  label: string;
+  sublabel: string;
+  amount: number;
+  dim: boolean;
+};
+
+const upcomingPayments: UpcomingPayment[] = (() => {
   const now = new Date();
-  const months: { month: string; amount: number }[] = [];
+  const items: UpcomingPayment[] = [];
 
-  for (let i = 0; i < 3; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+  for (let offset = 0; offset <= 2 && items.length < 4; offset++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
     const monthNum = d.getMonth() + 1;
-    const label = d.toLocaleString("pt-BR", { month: "long", year: "numeric" });
+    const monthAbbr = d
+      .toLocaleString("pt-BR", { month: "short" })
+      .replace(".", "");
+    const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
 
-    let amount = 0;
     for (const p of myProjects) {
       if (p.type !== "anual") continue;
       const ap = p as AnnualProject;
       if (!ap.mesesPagamento.includes(monthNum)) continue;
       if (["cancelado", "reprovado"].includes(p.stage)) continue;
-      amount += Math.round(ap.valorTotal / ap.numeroParcelas);
-    }
 
-    if (amount > 0) months.push({ month: label, amount });
+      const paidBefore = ap.mesesPagamento
+        .slice()
+        .sort((a, b) => a - b)
+        .indexOf(monthNum);
+      const parcelaNum = paidBefore + 1;
+      const parcelaValor = Math.round(ap.valorTotal / ap.numeroParcelas);
+      const shortTitle = ap.titulo.split(" ").slice(0, 3).join(" ");
+
+      items.push({
+        day: lastDay,
+        monthAbbr,
+        label: `Parcela ${parcelaNum}/${ap.numeroParcelas} · ${shortTitle}`,
+        sublabel:
+          offset === 0
+            ? "último dia útil do mês"
+            : offset === 1
+              ? "aguardando aprovação"
+              : "previsto",
+        amount: parcelaValor,
+        dim: offset > 0,
+      });
+    }
   }
 
-  return months;
+  return items.slice(0, 3);
 })();
+
+// ─── Stage display ────────────────────────────────────────────────────────────
 
 const STAGE_LABELS: Record<string, string> = {
   rascunho: "Rascunho",
-  validacao: "Validação",
-  votacao: "Votação",
+  validacao: "Em Validação",
+  votacao: "Em Votação",
   homologacao: "Homologação",
   aprovado: "Aprovado",
   reprovado: "Reprovado",
@@ -75,422 +132,784 @@ const STAGE_LABELS: Record<string, string> = {
   cancelado: "Cancelado",
 };
 
-const STAGE_COLORS: Record<string, { bg: string; text: string }> = {
-  rascunho: { bg: "var(--hb-gray-50)", text: "var(--hb-gray-400)" },
-  validacao: { bg: "var(--hb-cyan-muted)", text: "var(--hb-cyan-darker)" },
-  votacao: { bg: "var(--brand-muted)", text: "var(--hb-blue)" },
-  homologacao: { bg: "var(--hb-orange-muted)", text: "var(--hb-orange-deep)" },
-  aprovado: { bg: "var(--hb-green-muted)", text: "var(--hb-green-fg)" },
-  reprovado: {
-    bg: "var(--color-destructive-muted)",
-    text: "var(--color-destructive)",
-  },
-  em_execucao: { bg: "var(--hb-cyan-muted)", text: "var(--hb-cyan-fg)" },
-  concluido: { bg: "var(--hb-green-muted)", text: "var(--hb-green-fg)" },
-  cancelado: {
-    bg: "var(--color-destructive-muted)",
-    text: "var(--hb-red-deep)",
-  },
-};
+type BadgeStyle = { bg: string; color: string };
 
-function ProjectRow({ project }: { project: Project }) {
-  const stage = STAGE_COLORS[project.stage] ?? {
-    bg: "var(--hb-gray-50)",
-    text: "var(--hb-gray-400)",
-  };
-  const pendingCount = project.reports.filter(
-    (r) => r.status === "pendente" || r.status === "em_atraso",
-  ).length;
-
-  return (
-    <Link
-      href={`/${project.id}`}
-      className="group flex items-center gap-4 rounded-[--radius-md] border border-[--border] bg-[--surface] px-5 py-4 shadow-[--shadow-xs] transition-all duration-[--dur-fast] hover:shadow-[--shadow-sm] hover:border-[--hb-blue]"
-    >
-      {/* Type indicator */}
-      <div
-        className="w-1 self-stretch rounded-full shrink-0"
-        style={{
-          backgroundColor:
-            project.type === "anual" ? "var(--hb-blue)" : "var(--hb-purple)",
-        }}
-        aria-hidden
-      />
-
-      <div className="flex-1 min-w-0">
-        <div className="flex items-start justify-between gap-3 mb-1">
-          <p
-            className="text-sm font-semibold text-[--fg] line-clamp-1"
-            style={{ fontFamily: "var(--font-display)" }}
-          >
-            {project.titulo}
-          </p>
-          <span
-            className="shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold"
-            style={{ backgroundColor: stage.bg, color: stage.text }}
-          >
-            {STAGE_LABELS[project.stage]}
-          </span>
-        </div>
-        <div className="flex items-center gap-4 text-xs text-[--fg-muted]">
-          <span>{project.organizacao.name}</span>
-          <span className="font-semibold text-[--fg]">
-            {BRL.format(project.valorTotal)}
-          </span>
-          {pendingCount > 0 && (
-            <span className="flex items-center gap-1 text-[--color-destructive] font-medium">
-              <FileWarning className="w-3 h-3" aria-hidden />
-              {pendingCount} relatório{pendingCount > 1 ? "s" : ""} pendente
-              {pendingCount > 1 ? "s" : ""}
-            </span>
-          )}
-        </div>
-      </div>
-
-      <ChevronRight
-        className="w-4 h-4 text-[--fg-subtle] group-hover:text-[--hb-blue] transition-colors shrink-0"
-        aria-hidden
-      />
-    </Link>
-  );
+function stageBadge(stage: string): BadgeStyle {
+  switch (stage) {
+    case "em_execucao":
+      return {
+        bg: "rgba(42, 56, 160, 0.12)",
+        color: "var(--hb-blue-soft)",
+      };
+    case "votacao":
+      return { bg: "rgba(32, 44, 133, 0.10)", color: "var(--hb-blue)" };
+    case "validacao":
+      return { bg: "rgba(7, 180, 231, 0.12)", color: "var(--hb-cyan-deeper)" };
+    case "homologacao":
+      return {
+        bg: "rgba(234, 90, 6, 0.10)",
+        color: "var(--hb-orange-deep)",
+      };
+    case "aprovado":
+      return { bg: "rgba(130, 163, 23, 0.20)", color: "#5f7510" };
+    case "concluido":
+      return { bg: "rgba(130, 163, 23, 0.20)", color: "#5f7510" };
+    case "reprovado":
+    case "cancelado":
+      return {
+        bg: "var(--color-destructive-muted)",
+        color: "var(--color-destructive)",
+      };
+    default:
+      return { bg: "var(--hb-gray-50)", color: "var(--hb-gray-400)" };
+  }
 }
 
-function EmptySubmissor() {
+// Execution progress (% of installments paid, estimated by current month position)
+function executionProgress(p: AnnualProject): number | null {
+  if (p.stage !== "em_execucao") return null;
+  const sorted = [...p.mesesPagamento].sort((a, b) => a - b);
+  const currentMonth = new Date().getMonth() + 1;
+  const paid = sorted.filter((m) => m < currentMonth).length;
+  if (p.numeroParcelas === 0) return null;
+  return Math.round((paid / p.numeroParcelas) * 100);
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export default function SubmissorDashboard() {
+  // Keep "Pr." / "Ev." / "Dir." honorific + first given name: "Pr. André Costa" → "Pr. André"
+  const parts = MOCK_USER_NAME.split(" ");
+  const firstName =
+    parts.length >= 2 &&
+    /^(Pr\.|Ev\.|Dir\.|Pastor|Diac\.)$/.test(parts[0] ?? "")
+      ? `${parts[0]} ${parts[1]}`
+      : (parts[0] ?? MOCK_USER_NAME);
+
+  // Summary sentence
+  const relPart =
+    pendingReports.length > 0
+      ? `${pendingReports.length} relatório${pendingReports.length > 1 ? "s" : ""} a vencer`
+      : null;
+  const votPart =
+    emVotacaoCount > 0
+      ? `${emVotacaoCount} projeto${emVotacaoCount > 1 ? "s" : ""} em votação`
+      : null;
+
   return (
-    <div
-      className="rounded-[--radius-lg] border border-dashed px-8 py-14 flex flex-col items-center text-center gap-5"
-      style={{
-        borderColor: "var(--hb-gray-200)",
-        backgroundColor: "var(--bg-alt)",
-      }}
-    >
-      {/* Illustration */}
-      <div className="relative w-16 h-16 shrink-0">
-        <div
-          className="absolute inset-0 rounded-2xl rotate-6"
-          style={{ backgroundColor: "var(--brand-muted)" }}
-          aria-hidden
-        />
-        <div
-          className="absolute inset-0 rounded-2xl flex items-center justify-center"
-          style={{ backgroundColor: "var(--hb-blue)" }}
-          aria-hidden
-        >
-          <svg
-            width="28"
-            height="28"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="#fff"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden
+    <div className="hb-page">
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-end",
+          justifyContent: "space-between",
+          gap: 24,
+          flexWrap: "wrap",
+          marginBottom: 28,
+        }}
+      >
+        <div>
+          {institutionName && (
+            <p
+              className="hb-eyebrow"
+              style={{ marginBottom: 8, color: "var(--hb-blue)" }}
+            >
+              {institutionName}
+            </p>
+          )}
+          <h1
+            style={{
+              fontFamily: "var(--font-display)",
+              fontWeight: 700,
+              fontSize: "clamp(24px, 3vw, 30px)",
+              lineHeight: 1.1,
+              margin: 0,
+              letterSpacing: "-0.01em",
+              color: "var(--fg)",
+            }}
           >
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-            <polyline points="14 2 14 8 20 8" />
-            <line x1="12" y1="18" x2="12" y2="12" />
-            <line x1="9" y1="15" x2="15" y2="15" />
-          </svg>
+            Paz do Senhor, {firstName}.
+          </h1>
+
+          {(relPart ?? votPart) ? (
+            <p style={{ color: "var(--fg-muted)", marginTop: 8, fontSize: 15 }}>
+              Você tem{" "}
+              {relPart && (
+                <strong style={{ color: "var(--fg)" }}>{relPart}</strong>
+              )}
+              {relPart && votPart && " e "}
+              {votPart && (
+                <strong style={{ color: "var(--fg)" }}>{votPart}</strong>
+              )}{" "}
+              nesta semana.
+            </p>
+          ) : (
+            <p style={{ color: "var(--fg-muted)", marginTop: 8, fontSize: 15 }}>
+              Acompanhe seus projetos e relatórios.
+            </p>
+          )}
+        </div>
+
+        <Link
+          href="/novo"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 9,
+            background: "var(--hb-orange)",
+            color: "#fff",
+            textDecoration: "none",
+            fontFamily: "var(--font-display)",
+            fontWeight: 600,
+            fontSize: 15,
+            padding: "13px 22px",
+            borderRadius: 99,
+            boxShadow: "var(--shadow-sm)",
+            whiteSpace: "nowrap",
+            flexShrink: 0,
+          }}
+        >
+          Submeter novo projeto
+          <ArrowRight width={18} height={18} aria-hidden />
+        </Link>
+      </div>
+
+      {/* ── 4 Stats cards ─────────────────────────────────────────────────── */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(4, 1fr)",
+          gap: 16,
+          marginBottom: 24,
+        }}
+      >
+        {/* 1 · Projetos ativos */}
+        <StatCard
+          dot="var(--hb-blue)"
+          label="Projetos ativos"
+          value={activeProjects.length}
+          sub={`${activeProjects.filter((p) => p.stage === "em_execucao").length} em execução · ${activeProjects.filter((p) => p.stage === "aprovado").length} aprovado`}
+        />
+
+        {/* 2 · Em avaliação */}
+        <StatCard
+          dot="var(--hb-cyan)"
+          label="Em avaliação"
+          value={emAvaliacao.length}
+          sub={
+            emAvaliacao.length > 0
+              ? "Votação ou validação aberta"
+              : "Nenhum em processo"
+          }
+        />
+
+        {/* 3 · Relatórios pendentes */}
+        <StatCard
+          dot="var(--hb-orange)"
+          label="Relatórios pendentes"
+          value={pendingReports.length}
+          valueColor={
+            pendingReports.length > 0 ? "var(--hb-orange-deep)" : undefined
+          }
+          sub={
+            pendingReports.length === 0
+              ? "Todos em dia"
+              : `${pendingReports.length > 1 ? "Vencem" : "Vence"} em breve`
+          }
+        />
+
+        {/* 4 · Orçamento disponível */}
+        <StatCard
+          dot="var(--hb-green)"
+          label="Orçamento disponível"
+          valueFmt={fmtMil(orcamentoDisponivel)}
+          sub={`de ${fmtMil(ORCAMENTO_ANUAL_LIMITE)} no ano`}
+          compact
+        />
+      </div>
+
+      {/* ── Main 2-col layout ─────────────────────────────────────────────── */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1.6fr 1fr",
+          gap: 20,
+          alignItems: "start",
+        }}
+      >
+        {/* ── Left: Meus projetos ─────────────────────────────────────────── */}
+        <section
+          style={{
+            background: "var(--surface)",
+            border: "1px solid var(--border)",
+            borderRadius: "var(--radius-lg)",
+            boxShadow: "var(--shadow-sm)",
+            padding: "8px 8px 12px",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "16px 16px 12px",
+            }}
+          >
+            <h2
+              style={{
+                fontFamily: "var(--font-display)",
+                fontWeight: 700,
+                fontSize: 18,
+                margin: 0,
+                color: "var(--fg)",
+              }}
+            >
+              Meus projetos
+            </h2>
+            <Link
+              href="/"
+              style={{
+                color: "var(--hb-blue)",
+                fontWeight: 600,
+                fontSize: 13,
+                textDecoration: "none",
+              }}
+            >
+              Ver todos
+            </Link>
+          </div>
+
+          {myProjects.length === 0 ? (
+            <EmptyProjects />
+          ) : (
+            myProjects.map((p, i) => {
+              const badge = stageBadge(p.stage);
+              const isAnual = p.type === "anual";
+              const ap = isAnual ? (p as AnnualProject) : null;
+              const progress = ap ? executionProgress(ap) : null;
+              const paidStr =
+                ap && p.stage === "em_execucao"
+                  ? `parcela ${Math.floor((progress ?? 0) / (100 / ap.numeroParcelas))} de ${ap.numeroParcelas}`
+                  : null;
+
+              const metaParts = [
+                isAnual ? "Projeto anual" : "Projeto pontual",
+                p.organizacao.city
+                  ? `${p.organizacao.city}, ${p.organizacao.state ?? p.organizacao.country}`
+                  : p.organizacao.country,
+                paidStr,
+              ].filter(Boolean);
+
+              return (
+                <div key={p.id}>
+                  {i > 0 && (
+                    <div
+                      style={{
+                        height: 1,
+                        background: "var(--divider)",
+                        margin: "0 16px",
+                      }}
+                    />
+                  )}
+                  <Link
+                    href={`/${p.id}`}
+                    className="hover:bg-[--bg-alt]"
+                    style={{
+                      display: "flex",
+                      gap: 16,
+                      alignItems: "center",
+                      padding: 16,
+                      borderRadius: 16,
+                      textDecoration: "none",
+                      transition: "background-color 120ms",
+                    }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 10,
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontFamily: "var(--font-display)",
+                            fontWeight: 600,
+                            fontSize: 16,
+                            color: "var(--fg)",
+                          }}
+                        >
+                          {p.titulo}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 700,
+                            letterSpacing: "0.04em",
+                            textTransform: "uppercase",
+                            padding: "3px 9px",
+                            borderRadius: 99,
+                            background: badge.bg,
+                            color: badge.color,
+                            flexShrink: 0,
+                          }}
+                        >
+                          {STAGE_LABELS[p.stage]}
+                        </span>
+                      </div>
+
+                      <p
+                        style={{
+                          fontSize: 13,
+                          color: "var(--fg-muted)",
+                          marginTop: 4,
+                          marginBottom: 0,
+                        }}
+                      >
+                        {metaParts.join(" · ")}
+                      </p>
+
+                      {progress !== null && (
+                        <div
+                          style={{
+                            height: 6,
+                            background: "var(--surface-alt)",
+                            borderRadius: 99,
+                            marginTop: 10,
+                            overflow: "hidden",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: `${progress}%`,
+                              height: "100%",
+                              background: "var(--hb-green)",
+                              borderRadius: 99,
+                            }}
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={{ textAlign: "right", flexShrink: 0 }}>
+                      <div
+                        style={{
+                          fontFamily: "var(--font-display)",
+                          fontWeight: 700,
+                          fontSize: 16,
+                          color: "var(--fg)",
+                        }}
+                      >
+                        {BRL.format(p.valorTotal)}
+                      </div>
+                      <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>
+                        {progress !== null
+                          ? `${progress}% executado`
+                          : "valor solicitado"}
+                      </div>
+                    </div>
+                  </Link>
+                </div>
+              );
+            })
+          )}
+        </section>
+
+        {/* ── Right: pagamentos + orçamento + alerta ─────────────────────── */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          {/* Próximos pagamentos */}
+          <section
+            style={{
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              borderRadius: "var(--radius-lg)",
+              boxShadow: "var(--shadow-sm)",
+              padding: 20,
+            }}
+          >
+            <h2
+              style={{
+                fontFamily: "var(--font-display)",
+                fontWeight: 700,
+                fontSize: 16,
+                margin: "0 0 14px",
+                color: "var(--fg)",
+              }}
+            >
+              Próximos pagamentos
+            </h2>
+
+            {upcomingPayments.length === 0 ? (
+              <p style={{ fontSize: 13, color: "var(--fg-muted)" }}>
+                Nenhum pagamento previsto nos próximos meses.
+              </p>
+            ) : (
+              <div
+                style={{ display: "flex", flexDirection: "column", gap: 14 }}
+              >
+                {upcomingPayments.map((pay, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 12,
+                      opacity: pay.dim ? 0.62 : 1,
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: 42,
+                        flexShrink: 0,
+                        textAlign: "center",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontFamily: "var(--font-display)",
+                          fontWeight: 700,
+                          fontSize: 15,
+                          lineHeight: 1,
+                          color: "var(--fg)",
+                        }}
+                      >
+                        {pay.day}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: 10,
+                          textTransform: "uppercase",
+                          letterSpacing: "0.08em",
+                          color: "var(--fg-muted)",
+                        }}
+                      >
+                        {pay.monthAbbr}
+                      </div>
+                    </div>
+
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div
+                        style={{
+                          fontSize: 14,
+                          fontWeight: 600,
+                          color: "var(--fg)",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {pay.label}
+                      </div>
+                      <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>
+                        {pay.sublabel}
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        fontFamily: "var(--font-display)",
+                        fontWeight: 700,
+                        fontSize: 14,
+                        color: "var(--fg)",
+                        flexShrink: 0,
+                      }}
+                    >
+                      {BRL.format(pay.amount)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* Orçamento da instituição */}
+          <section
+            style={{
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              borderRadius: "var(--radius-lg)",
+              boxShadow: "var(--shadow-sm)",
+              padding: 20,
+            }}
+          >
+            <h2
+              style={{
+                fontFamily: "var(--font-display)",
+                fontWeight: 700,
+                fontSize: 16,
+                margin: "0 0 6px",
+                color: "var(--fg)",
+              }}
+            >
+              Orçamento da instituição
+            </h2>
+            <p
+              style={{
+                fontSize: 12,
+                color: "var(--fg-muted)",
+                marginBottom: 14,
+              }}
+            >
+              Ano-calendário 2025
+            </p>
+
+            <div
+              style={{
+                display: "flex",
+                alignItems: "baseline",
+                justifyContent: "space-between",
+                marginBottom: 8,
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "var(--font-display)",
+                  fontWeight: 800,
+                  fontSize: 26,
+                  color: "var(--fg)",
+                }}
+              >
+                {fmtMil(orcamentoComprometido)}
+              </span>
+              <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>
+                de {fmtMil(ORCAMENTO_ANUAL_LIMITE)}
+              </span>
+            </div>
+
+            <div
+              style={{
+                height: 10,
+                background: "var(--surface-alt)",
+                borderRadius: 99,
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  width: `${pctComprometido}%`,
+                  height: "100%",
+                  background: `linear-gradient(90deg, var(--hb-blue), var(--hb-cyan))`,
+                  borderRadius: 99,
+                }}
+              />
+            </div>
+
+            <p
+              style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 10 }}
+            >
+              {pctComprometido}% comprometido.
+              {pctComprometido >= 90 &&
+                " Acima do teto, a submissão é bloqueada — contate o administrador."}
+            </p>
+          </section>
+
+          {/* Relatório pendente alert */}
+          {pendingReports.length > 0 &&
+            (() => {
+              const r = pendingReports[0];
+              if (!r) return null;
+              const proj = myProjects.find((p) => p.id === r.projectId);
+              const isOverdue = r.status === "em_atraso";
+              const dueStr = r.dueAt.toLocaleDateString("pt-BR", {
+                day: "2-digit",
+                month: "long",
+              });
+              return (
+                <section
+                  style={{
+                    background: "rgba(234, 90, 6, 0.06)",
+                    border: "1px solid rgba(234, 90, 6, 0.25)",
+                    borderRadius: "var(--radius-lg)",
+                    padding: 20,
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      color: "var(--hb-orange-deep)",
+                      fontWeight: 700,
+                      fontSize: 13,
+                      marginBottom: 6,
+                    }}
+                  >
+                    <AlertCircle width={16} height={16} aria-hidden />
+                    {isOverdue ? "Relatório em atraso" : "Relatório pendente"}
+                  </div>
+                  <p
+                    style={{
+                      fontSize: 14,
+                      fontWeight: 600,
+                      color: "var(--fg)",
+                      margin: 0,
+                    }}
+                  >
+                    {proj?.titulo ?? r.projectId} — {r.period}
+                  </p>
+                  <p
+                    style={{
+                      fontSize: 12,
+                      color: "var(--fg-muted)",
+                      margin: "4px 0 14px",
+                    }}
+                  >
+                    {isOverdue ? "Em atraso" : "Vence em breve"} · {dueStr}
+                  </p>
+                  <Link
+                    href={`/${r.projectId}`}
+                    style={{
+                      display: "block",
+                      width: "100%",
+                      textAlign: "center",
+                      background: "var(--hb-blue)",
+                      color: "#fff",
+                      textDecoration: "none",
+                      fontFamily: "var(--font-display)",
+                      fontWeight: 600,
+                      fontSize: 14,
+                      padding: 11,
+                      borderRadius: 99,
+                    }}
+                  >
+                    Enviar relatório
+                  </Link>
+                </section>
+              );
+            })()}
         </div>
       </div>
-
-      <div>
-        <h3
-          className="text-lg font-bold mb-1.5"
-          style={{ fontFamily: "var(--font-display)", color: "var(--fg)" }}
-        >
-          Você ainda não submeteu nenhum projeto
-        </h3>
-        <p
-          className="text-sm leading-relaxed"
-          style={{ color: "var(--fg-muted)" }}
-        >
-          Projetos submetidos aparecem aqui para acompanhamento de status,
-          <br className="hidden sm:block" />
-          relatórios e histórico de aprovações.
-        </p>
-        <p
-          className="text-xs mt-4 italic leading-relaxed"
-          style={{ color: "var(--fg-subtle)" }}
-        >
-          "Comprometei ao Senhor o vosso caminho; confia nele, e ele agirá."
-          <br />— Salmos 37:5
-        </p>
-      </div>
-
-      <Link
-        href="/novo"
-        className="inline-flex items-center gap-2 rounded-[--radius-md] px-5 py-2.5 text-sm font-semibold shadow-[--shadow-sm] transition-colors hover:opacity-90"
-        style={{ backgroundColor: "var(--hb-blue)", color: "#fff" }}
-      >
-        <Plus className="w-4 h-4" aria-hidden />
-        Submeter meu primeiro projeto
-      </Link>
     </div>
   );
 }
 
-export default function SubmissorDashboard() {
-  const greeting = (() => {
-    const h = new Date().getHours();
-    if (h < 12) return "Bom dia";
-    if (h < 18) return "Boa tarde";
-    return "Boa noite";
-  })();
+// ─── Sub-components ───────────────────────────────────────────────────────────
 
+function StatCard({
+  dot,
+  label,
+  value,
+  valueFmt,
+  valueColor,
+  sub,
+  compact = false,
+}: {
+  dot: string;
+  label: string;
+  value?: number;
+  valueFmt?: string;
+  valueColor?: string;
+  sub: string;
+  compact?: boolean;
+}) {
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-8">
-      {/* Welcome */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="hb-eyebrow mb-1">Área do Submissor</p>
-          <h1
-            className="text-3xl font-bold text-[--fg] leading-snug"
-            style={{ fontFamily: "var(--font-display)" }}
-          >
-            {greeting}, Pr. André
-          </h1>
-          <p className="text-sm text-[--fg-muted] mt-1">
-            Acompanhe o andamento dos seus projetos e relatórios pendentes.
-          </p>
-        </div>
-        <Link
-          href="/novo"
-          className="flex items-center gap-2 rounded-[--radius-md] bg-[--brand] text-[--brand-fg] px-4 py-2.5 text-sm font-semibold shadow-[--shadow-sm] hover:bg-[--hb-blue-soft] transition-colors shrink-0"
-        >
-          <Plus className="w-4 h-4" aria-hidden />
-          Novo Projeto
-        </Link>
+    <div
+      style={{
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
+        borderRadius: "var(--radius-lg)",
+        boxShadow: "var(--shadow-sm)",
+        padding: 20,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          color: "var(--fg-muted)",
+          fontSize: 13,
+          fontWeight: 600,
+        }}
+      >
+        <span
+          style={{
+            width: 9,
+            height: 9,
+            borderRadius: 99,
+            background: dot,
+            flexShrink: 0,
+          }}
+        />
+        {label}
       </div>
 
-      {/* Stats row */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="rounded-[--radius-md] border border-[--border] bg-[--surface] px-5 py-4 shadow-[--shadow-xs]">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 rounded-[--radius] flex items-center justify-center bg-[--brand-muted]">
-              <TrendingUp className="w-4 h-4 text-[--brand]" aria-hidden />
-            </div>
-            <p className="text-xs font-semibold text-[--fg-muted] uppercase tracking-wider">
-              Projetos Ativos
-            </p>
-          </div>
-          <p
-            className="text-3xl font-bold text-[--fg]"
-            style={{ fontFamily: "var(--font-display)" }}
-          >
-            {activeProjects.length}
-          </p>
-          <p className="text-xs text-[--fg-muted] mt-0.5">
-            de {myProjects.length} total
-          </p>
-        </div>
-
-        <div className="rounded-[--radius-md] border border-[--border] bg-[--surface] px-5 py-4 shadow-[--shadow-xs]">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 rounded-[--radius] flex items-center justify-center bg-[--color-destructive-muted]">
-              <FileWarning
-                className="w-4 h-4 text-[--color-destructive]"
-                aria-hidden
-              />
-            </div>
-            <p className="text-xs font-semibold text-[--fg-muted] uppercase tracking-wider">
-              Relatórios Pendentes
-            </p>
-          </div>
-          <p
-            className="text-3xl font-bold"
-            style={{
-              fontFamily: "var(--font-display)",
-              color:
-                pendingReports.length > 0
-                  ? "var(--color-destructive)"
-                  : "var(--fg)",
-            }}
-          >
-            {pendingReports.length}
-          </p>
-          <p className="text-xs text-[--fg-muted] mt-0.5">
-            {pendingReports.length === 0 ? "Tudo em dia" : "Atenção necessária"}
-          </p>
-        </div>
-
-        <div className="rounded-[--radius-md] border border-[--border] bg-[--surface] px-5 py-4 shadow-[--shadow-xs]">
-          <div className="flex items-center gap-2 mb-3">
-            <div className="w-8 h-8 rounded-[--radius] flex items-center justify-center bg-[--hb-green-muted]">
-              <Wallet className="w-4 h-4 text-[--hb-green-fg]" aria-hidden />
-            </div>
-            <p className="text-xs font-semibold text-[--fg-muted] uppercase tracking-wider">
-              Total Alocado
-            </p>
-          </div>
-          <p
-            className="text-2xl font-bold text-[--fg] tabular-nums"
-            style={{ fontFamily: "var(--font-display)" }}
-          >
-            {BRL.format(totalAllocated)}
-          </p>
-          <p className="text-xs text-[--fg-muted] mt-0.5">
-            em projetos vigentes
-          </p>
-        </div>
+      <div
+        style={{
+          fontFamily: "var(--font-display)",
+          fontWeight: 800,
+          fontSize: compact ? 30 : 38,
+          lineHeight: 1,
+          marginTop: compact ? 14 : 12,
+          color: valueColor ?? "var(--fg)",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {valueFmt ?? value}
       </div>
 
-      {/* My projects */}
-      <section>
-        <div className="flex items-center justify-between mb-4">
-          <h2
-            className="text-lg font-semibold text-[--fg]"
-            style={{ fontFamily: "var(--font-display)" }}
-          >
-            Meus Projetos
-          </h2>
-          <p className="text-xs text-[--fg-muted]">
-            {myProjects.length} projeto{myProjects.length !== 1 ? "s" : ""}
-          </p>
-        </div>
-
-        <div className="flex flex-col gap-3">
-          {myProjects.length === 0 ? (
-            <EmptySubmissor />
-          ) : (
-            myProjects.map((p) => <ProjectRow key={p.id} project={p} />)
-          )}
-        </div>
-      </section>
-
-      {/* Bottom row: pending reports + payment projection */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Pending reports */}
-        <section>
-          <h2
-            className="text-lg font-semibold text-[--fg] mb-4"
-            style={{ fontFamily: "var(--font-display)" }}
-          >
-            Relatórios Pendentes
-          </h2>
-
-          {pendingReports.length === 0 ? (
-            <div className="rounded-[--radius-md] border border-[--border] bg-[--hb-green-muted] px-5 py-4 text-center">
-              <p className="text-sm font-medium text-[--hb-green-fg]">
-                Todos os relatórios estão em dia.
-              </p>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {pendingReports.map((r) => {
-                const proj = myProjects.find((p) => p.id === r.projectId);
-                const isOverdue = r.status === "em_atraso";
-                return (
-                  <div
-                    key={r.id}
-                    className="rounded-[--radius-md] border px-4 py-3 flex items-start gap-3"
-                    style={{
-                      borderColor: isOverdue
-                        ? "var(--color-destructive)"
-                        : "var(--border)",
-                      backgroundColor: isOverdue
-                        ? "var(--color-destructive-muted)"
-                        : "var(--surface)",
-                    }}
-                  >
-                    <Clock
-                      className="w-4 h-4 mt-0.5 shrink-0"
-                      style={{
-                        color: isOverdue
-                          ? "var(--color-destructive)"
-                          : "var(--fg-muted)",
-                      }}
-                      aria-hidden
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p
-                        className="text-sm font-semibold"
-                        style={{
-                          color: isOverdue
-                            ? "var(--color-destructive)"
-                            : "var(--fg)",
-                        }}
-                      >
-                        {proj?.titulo ?? r.projectId} — {r.period}
-                      </p>
-                      <p className="text-xs text-[--fg-muted]">
-                        {isOverdue ? "Em atraso" : "Aguardando entrega"} · vence{" "}
-                        {r.dueAt.toLocaleDateString("pt-BR", {
-                          day: "2-digit",
-                          month: "short",
-                        })}
-                      </p>
-                    </div>
-                    <Link
-                      href={`/${r.projectId}`}
-                      className="shrink-0 text-xs font-semibold text-[--brand] hover:underline"
-                    >
-                      Entregar
-                    </Link>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
-
-        {/* Payment projection */}
-        <section>
-          <h2
-            className="text-lg font-semibold text-[--fg] mb-4"
-            style={{ fontFamily: "var(--font-display)" }}
-          >
-            Próximos Pagamentos
-          </h2>
-
-          {upcomingPayments.length === 0 ? (
-            <div className="rounded-[--radius-md] border border-[--border] bg-[--surface-alt] px-5 py-4 text-center">
-              <p className="text-sm text-[--fg-muted]">
-                Nenhum pagamento previsto nos próximos 3 meses.
-              </p>
-            </div>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {upcomingPayments.map((p, i) => (
-                <div
-                  key={p.month}
-                  className="rounded-[--radius-md] border border-[--border] bg-[--surface] px-4 py-3 flex items-center justify-between gap-4"
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-[--brand-fg] shrink-0"
-                      style={{
-                        backgroundColor:
-                          i === 0 ? "var(--hb-blue)" : "var(--hb-gray-100)",
-                        color: i === 0 ? "#fff" : "var(--hb-gray-400)",
-                      }}
-                    >
-                      {i + 1}
-                    </div>
-                    <p className="text-sm font-medium text-[--fg] capitalize">
-                      {p.month}
-                    </p>
-                  </div>
-                  <p
-                    className="text-sm font-bold tabular-nums"
-                    style={{
-                      color: i === 0 ? "var(--hb-blue)" : "var(--fg)",
-                      fontFamily: "var(--font-display)",
-                    }}
-                  >
-                    {BRL.format(p.amount)}
-                  </p>
-                </div>
-              ))}
-
-              <p className="text-xs text-[--fg-muted] px-1 mt-1">
-                Valores estimados com base nas parcelas aprovadas.
-              </p>
-            </div>
-          )}
-        </section>
+      <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 6 }}>
+        {sub}
       </div>
+    </div>
+  );
+}
+
+function EmptyProjects() {
+  return (
+    <div
+      style={{
+        padding: "48px 24px",
+        textAlign: "center",
+        color: "var(--fg-muted)",
+      }}
+    >
+      <p
+        style={{
+          fontSize: 15,
+          fontWeight: 600,
+          marginBottom: 6,
+          color: "var(--fg)",
+        }}
+      >
+        Você ainda não submeteu nenhum projeto
+      </p>
+      <p style={{ fontSize: 13, marginBottom: 16 }}>
+        Projetos submetidos aparecem aqui para acompanhamento.
+      </p>
+      <p
+        style={{
+          fontSize: 12,
+          fontStyle: "italic",
+          color: "var(--fg-subtle)",
+          marginBottom: 20,
+        }}
+      >
+        "Comprometei ao Senhor o vosso caminho; confia nele, e ele agirá." — Sl
+        37:5
+      </p>
+      <Link
+        href="/novo"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 8,
+          background: "var(--hb-blue)",
+          color: "#fff",
+          textDecoration: "none",
+          fontFamily: "var(--font-display)",
+          fontWeight: 600,
+          fontSize: 14,
+          padding: "10px 20px",
+          borderRadius: 99,
+        }}
+      >
+        Submeter meu primeiro projeto
+        <ChevronRight width={16} height={16} aria-hidden />
+      </Link>
     </div>
   );
 }

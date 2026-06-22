@@ -128,7 +128,7 @@ export function ProjectCard({
     >
       {/* Stage color accent */}
       <div
-        className="w-[3px] shrink-0"
+        className="w-0.75 shrink-0"
         style={{ backgroundColor: meta.bar }}
         aria-hidden
       />

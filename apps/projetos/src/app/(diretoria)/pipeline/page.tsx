@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Filter, LayoutGrid, X } from "lucide-react";
-import { mockCompactProjects } from "../../lib/mock-data";
-import { ProjectKanban } from "../../components/project-kanban";
+import { mockCompactProjects } from "../../../lib/mock-data";
+import { ProjectKanban } from "../../../components/project-kanban";
 import type { ProjectStage } from "@hebron/types";
 
 const BRL = new Intl.NumberFormat("pt-BR", {
@@ -172,7 +172,7 @@ export default function DiretoriaPipelinePage() {
   }
 
   function handleCardClick(projectId: string) {
-    router.push(`/${projectId}`);
+    router.push(`/pipeline/${projectId}`);
   }
 
   return (

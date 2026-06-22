@@ -58,6 +58,7 @@
 | S-34   | 2026-06-20 | P-2.2 — Componentes UI Projetos           | concluido |
 | S-35   | 2026-06-20 | P-2.3 — Telas e Páginas Projetos          | concluido |
 | S-36   | 2026-06-20 | P-2.4 — Formulários Projetos              | concluido |
+| S-37   | 2026-06-22 | P-2.5 — Estados Projetos                  | concluido |
 
 ---
 
@@ -1429,3 +1430,38 @@ Criadas todas as 8 páginas do app `projetos` com dados mockados (Bloco A). Áre
 - `apps/projetos/src/components/project-wizard-steps/step-review.tsx`
 - `apps/projetos/src/components/punctual-project-form.tsx`
 - `apps/projetos/src/components/report-form.tsx`
+
+---
+
+## S-37 — P-2.5 — Estados Projetos + Correção de Rotas
+
+**Data:** 2026-06-22
+**Branch:** feat/P-2.5-projetos-states
+**Status:** concluido
+
+### Decisões e observações
+
+- Skeletons implementados: `dashboard-skeleton.tsx`, `kanban-skeleton.tsx`, `project-detail-skeleton.tsx`
+- Estados vazios embutidos diretamente nas páginas (EmptyProjects no submissor, EmptyPipelineNoFilters/EmptyPipelineFiltered no kanban)
+- **Divergência de rota (registrado como débito):** durante esta sessão, `(diretoria)/page.tsx` e `(diretoria)/[id]/page.tsx` foram substituídos por `(diretoria)/pipeline/page.tsx` e `(diretoria)/pipeline/[id]/page.tsx`. O prompt P-2.3 especificava as rotas no nível raiz do grupo; a implementação adotou um subdiretório `/pipeline/` para melhor semântica de URL. **Impacto em P-2.9:** as referências de `(diretoria)/page.tsx` e `(diretoria)/[id]/page.tsx` devem ser lidas como `(diretoria)/pipeline/page.tsx` e `(diretoria)/pipeline/[id]/page.tsx`.
+- `vote-panel-wrapper.tsx` criado fora da lista de arquivos permitidos do prompt (necessário para separar `"use client"` do RSC `pipeline/[id]/page.tsx`)
+
+### Correções aplicadas (2026-06-22)
+
+- **Link "Ver todos" corrigido** em `(submissor)/page.tsx`: `href="/projetos"` → `href="/"` (rota `/projetos` não existe)
+- **`(diretoria)/page.tsx` NÃO pode existir** — `(diretoria)/page.tsx` e `(submissor)/page.tsx` resolvem ambos para `/`, causando build error no Next.js 15. A ausência de `(diretoria)/page.tsx` é intencional. O roteamento de diretores para `/pipeline` será feito pelo middleware de autenticação no Bloco B (P-2.9).
+
+### Arquivos criados
+
+- `apps/projetos/src/components/dashboard-skeleton.tsx`
+- `apps/projetos/src/components/kanban-skeleton.tsx`
+- `apps/projetos/src/components/project-detail-skeleton.tsx`
+- `apps/projetos/src/components/vote-panel-wrapper.tsx`
+- `apps/projetos/src/app/(diretoria)/pipeline/page.tsx`
+- `apps/projetos/src/app/(diretoria)/pipeline/[id]/page.tsx`
+- `apps/projetos/src/app/(diretoria)/reuniao/page.tsx`
+
+### Arquivos deletados (substituídos)
+
+- `apps/projetos/src/app/(diretoria)/page.tsx` — removido; `(diretoria)` e `(submissor)` não podem ter page.tsx no mesmo nível (conflito de rota `/`)
+- `apps/projetos/src/app/(diretoria)/[id]/page.tsx` — movido para `pipeline/[id]/page.tsx`

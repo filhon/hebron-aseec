@@ -10,11 +10,11 @@ import {
   CheckCircle2,
   XCircle,
 } from "lucide-react";
-import { mockProjects } from "../../../lib/mock-data";
-import { ScoreIndicator } from "../../../components/score-indicator";
-import { EvaluationCard } from "../../../components/evaluation-card";
-import { VotePanel } from "../../../components/vote-panel";
-import { ProjectTimeline } from "../../../components/project-timeline";
+import { mockProjects } from "../../../../lib/mock-data";
+import { ScoreIndicator } from "../../../../components/score-indicator";
+import { EvaluationCard } from "../../../../components/evaluation-card";
+import { VotePanelWrapper } from "../../../../components/vote-panel-wrapper";
+import { ProjectTimeline } from "../../../../components/project-timeline";
 import type { AnnualProject, PontualProject } from "@hebron/types";
 
 const BRL = new Intl.NumberFormat("pt-BR", {
@@ -67,7 +67,6 @@ const CATEGORY_LABELS: Record<string, string> = {
   outros: "Outros",
 };
 
-// Simulated AI risk extraction from summary
 function parseRisks(project: AnnualProject): string[] {
   const riscos: string[] = [];
   if (project.riscos) riscos.push(project.riscos);
@@ -106,7 +105,7 @@ export default async function DirectorProjectDetailPage({
       <div className="max-w-2xl mx-auto px-6 py-16 text-center">
         <p className="text-[--fg-muted]">Projeto não encontrado.</p>
         <Link
-          href="/"
+          href="/pipeline"
           className="text-[--brand] text-sm hover:underline mt-2 block"
         >
           Voltar ao pipeline
@@ -134,7 +133,7 @@ export default async function DirectorProjectDetailPage({
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-8">
       {/* Breadcrumb */}
       <Link
-        href="/"
+        href="/pipeline"
         className="inline-flex items-center gap-1.5 text-sm text-[--fg-muted] hover:text-[--fg] transition-colors"
       >
         <ChevronLeft className="w-4 h-4" aria-hidden />
@@ -483,13 +482,10 @@ export default async function DirectorProjectDetailPage({
         <div className="flex flex-col gap-4">
           {/* Vote panel (only for votacao stage) */}
           {project.stage === "votacao" && project.voteSummary && (
-            <VotePanel
+            <VotePanelWrapper
               projectTitle={project.titulo}
               voteSummary={project.voteSummary}
               hasVoted={false}
-              onVote={(inFavor) =>
-                console.log("Vote:", inFavor ? "Sim" : "Não")
-              }
             />
           )}
 

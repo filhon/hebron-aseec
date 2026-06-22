@@ -229,7 +229,7 @@ function KanbanColumn({
   return (
     <div
       className={cn(
-        "flex flex-col min-w-[220px] max-w-[260px] rounded-[--radius-md] border-2 transition-all duration-[--dur-fast]",
+        "flex flex-col min-w-55 max-w-65 rounded-[--radius-md] border-2 transition-all duration-[--dur-fast]",
         isDragTarget ? "border-dashed" : "border-transparent",
       )}
       style={{
@@ -273,7 +273,7 @@ function KanbanColumn({
       </div>
 
       {/* Cards */}
-      <div className="flex flex-col gap-2 p-2 flex-1 min-h-[80px] overflow-y-auto max-h-[600px]">
+      <div className="flex flex-col gap-2 p-2 flex-1 min-h-20 overflow-y-auto max-h-150">
         {projects.length === 0 && (
           <div className="flex-1 flex items-center justify-center py-6">
             <p className="text-xs text-[--fg-subtle] text-center">

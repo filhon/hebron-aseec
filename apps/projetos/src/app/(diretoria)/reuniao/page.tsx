@@ -425,7 +425,7 @@ export default function ReuniaoPage() {
                 return (
                   <div key={p.id}>
                     <div className="flex justify-between text-xs mb-1">
-                      <span className="text-[--fg] font-medium truncate max-w-[160px]">
+                      <span className="text-[--fg] font-medium truncate max-w-40">
                         {p.titulo.split("—")[0]?.trim() ?? p.titulo}
                       </span>
                       <span className="text-[--fg-muted] shrink-0">

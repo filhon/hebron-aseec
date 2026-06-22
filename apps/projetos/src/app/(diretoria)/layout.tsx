@@ -14,7 +14,7 @@ const SECTIONS: NavSection[] = [
     items: [
       {
         label: "Pipeline",
-        href: "/",
+        href: "/pipeline",
         icon: LayoutDashboard,
         exact: true,
       },
