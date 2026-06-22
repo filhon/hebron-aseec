@@ -155,6 +155,82 @@ function ProjectRow({ project }: { project: Project }) {
   );
 }
 
+function EmptySubmissor() {
+  return (
+    <div
+      className="rounded-[--radius-lg] border border-dashed px-8 py-14 flex flex-col items-center text-center gap-5"
+      style={{
+        borderColor: "var(--hb-gray-200)",
+        backgroundColor: "var(--bg-alt)",
+      }}
+    >
+      {/* Illustration */}
+      <div className="relative w-16 h-16 shrink-0">
+        <div
+          className="absolute inset-0 rounded-2xl rotate-6"
+          style={{ backgroundColor: "var(--brand-muted)" }}
+          aria-hidden
+        />
+        <div
+          className="absolute inset-0 rounded-2xl flex items-center justify-center"
+          style={{ backgroundColor: "var(--hb-blue)" }}
+          aria-hidden
+        >
+          <svg
+            width="28"
+            height="28"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#fff"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
+          >
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="12" y1="18" x2="12" y2="12" />
+            <line x1="9" y1="15" x2="15" y2="15" />
+          </svg>
+        </div>
+      </div>
+
+      <div>
+        <h3
+          className="text-lg font-bold mb-1.5"
+          style={{ fontFamily: "var(--font-display)", color: "var(--fg)" }}
+        >
+          Você ainda não submeteu nenhum projeto
+        </h3>
+        <p
+          className="text-sm leading-relaxed"
+          style={{ color: "var(--fg-muted)" }}
+        >
+          Projetos submetidos aparecem aqui para acompanhamento de status,
+          <br className="hidden sm:block" />
+          relatórios e histórico de aprovações.
+        </p>
+        <p
+          className="text-xs mt-4 italic leading-relaxed"
+          style={{ color: "var(--fg-subtle)" }}
+        >
+          "Comprometei ao Senhor o vosso caminho; confia nele, e ele agirá."
+          <br />— Salmos 37:5
+        </p>
+      </div>
+
+      <Link
+        href="/novo"
+        className="inline-flex items-center gap-2 rounded-[--radius-md] px-5 py-2.5 text-sm font-semibold shadow-[--shadow-sm] transition-colors hover:opacity-90"
+        style={{ backgroundColor: "var(--hb-blue)", color: "#fff" }}
+      >
+        <Plus className="w-4 h-4" aria-hidden />
+        Submeter meu primeiro projeto
+      </Link>
+    </div>
+  );
+}
+
 export default function SubmissorDashboard() {
   const greeting = (() => {
     const h = new Date().getHours();
@@ -276,24 +352,7 @@ export default function SubmissorDashboard() {
 
         <div className="flex flex-col gap-3">
           {myProjects.length === 0 ? (
-            <div className="rounded-[--radius-md] border border-dashed border-[--border] bg-[--surface-alt] px-8 py-12 text-center">
-              <p
-                className="text-base font-semibold text-[--fg] mb-1"
-                style={{ fontFamily: "var(--font-display)" }}
-              >
-                Nenhum projeto ainda
-              </p>
-              <p className="text-sm text-[--fg-muted] mb-4">
-                "Comprometei ao Senhor o vosso caminho" — Sl 37:5
-              </p>
-              <Link
-                href="/novo"
-                className="inline-flex items-center gap-2 rounded-[--radius] bg-[--brand] text-[--brand-fg] px-4 py-2 text-sm font-semibold"
-              >
-                <Plus className="w-4 h-4" aria-hidden />
-                Submeter primeiro projeto
-              </Link>
-            </div>
+            <EmptySubmissor />
           ) : (
             myProjects.map((p) => <ProjectRow key={p.id} project={p} />)
           )}
