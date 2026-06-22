@@ -4,7 +4,8 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
-    "./scoring": "./src/scoring.ts"
+    "./projects/scoring": "./src/projects/scoring.ts",
+    "./projects/compact-version": "./src/projects/compact-version.ts"
   },
   "scripts": {
     "lint": "eslint .",

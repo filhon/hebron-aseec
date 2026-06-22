@@ -1591,18 +1591,18 @@ Server Actions para Projetos. CRUD de projetos (criar rascunho, submeter, editar
 - `packages/ai/src/projects/compact-version.ts`
 
 **Critérios de aceite:**
-- [ ] State machine: transições válidas (rascunho→validacao→votacao→homologacao→aprovado/reprovado→em_execucao→concluido)
-- [ ] Bloqueio de submissão se orçamento da instituição excedido
-- [ ] Votação: registra voto secreto; calcula quórum (>=50% diretores+conselheiros); maioria simples
-- [ ] Botão de pânico: super_admin encerra votação com maioria+1 dos existentes
-- [ ] Contestação: max 2 por projeto, 1 por pessoa, retorna para votação
-- [ ] Homologação: 7 dias sem contestação → notificar submissor
-- [ ] Score IA: GPT-4.1 com critérios do Admin
-- [ ] Versão compacta: GPT-4.1 com template do Admin
-- [ ] Soft-delete com justificativa obrigatória
-- [ ] Audit log em toda mutação
-- [ ] Lint passa
-- [ ] Types passam
+- [x] State machine: transições válidas (rascunho→validacao→votacao→homologacao→aprovado/reprovado→em_execucao→concluido)
+- [x] Bloqueio de submissão se orçamento da instituição excedido
+- [x] Votação: registra voto secreto; calcula quórum (>=50% diretores+conselheiros); maioria simples
+- [x] Botão de pânico: super_admin encerra votação com maioria+1 dos existentes
+- [x] Contestação: max 2 por projeto, 1 por pessoa, retorna para votação
+- [x] Homologação: 7 dias sem contestação → notificar submissor
+- [x] Score IA: GPT-4.1 com critérios do Admin
+- [x] Versão compacta: GPT-4.1 com template do Admin
+- [x] Soft-delete com justificativa obrigatória
+- [x] Audit log em toda mutação
+- [x] Lint passa
+- [x] Types passam
 
 ---
 

@@ -41,6 +41,21 @@ export const auditActionEnum = adminSchema.enum("audit_action", [
   "category.deleted",
   "edital.created",
   "edital.updated",
+  // Projetos module — added via ALTER TYPE in P-2.8 migration
+  "project.created",
+  "project.updated",
+  "project.submitted",
+  "project.stage_transition",
+  "project.deleted",
+  "vote.cast",
+  "vote.panic",
+  "evaluation.assigned",
+  "evaluation.submitted",
+  "contestation.created",
+  "report.created",
+  "report.submitted",
+  "organization.created",
+  "organization.updated",
 ]);
 
 export const meetingTypeEnum = adminSchema.enum("meeting_type", [

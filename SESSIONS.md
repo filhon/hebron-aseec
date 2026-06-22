@@ -61,6 +61,7 @@
 | S-37   | 2026-06-22 | P-2.5 — Estados Projetos                  | concluido |
 | S-38   | 2026-06-22 | P-2.6 — Schema do Banco Projetos          | concluido |
 | S-39   | 2026-06-22 | P-2.7 — RLS Policies Projetos             | concluido |
+| S-40   | 2026-06-22 | P-2.8 — Server Actions Projetos           | concluido |
 
 ---
 
@@ -1512,3 +1513,43 @@ Criadas todas as 8 páginas do app `projetos` com dados mockados (Bloco A). Áre
 ### Arquivos criados
 
 - `packages/db/src/migrations/0007_projetos_rls.sql`
+
+---
+
+## S-40 — P-2.8 — Server Actions Projetos
+
+**Data:** 2026-06-22
+**Branch:** feat/P-2.8-projetos-actions
+**Status:** concluido
+
+### Decisões e observações
+
+- `audit_action` enum do DB estendido via `ALTER TYPE ADD VALUE IF NOT EXISTS` com 14 novos valores de projetos (project.*, vote.*, evaluation.*, contestation.*, report.*, organization.*); `packages/db/src/schema/admin.ts` atualizado em sincronia
+- `packages/validators/package.json` precisou de export explícito `./projetos` (path glob `./*` não resolve subdiretórios)
+- Budget check implementado contra `admin.system_settings` com chave `projetos_budget_{orgId}_{year}`; quando o módulo Financeiro for construído, substituir pela query `financeiro.organization_budgets`
+- AI scoring e geração de versão compacta (GPT-4.1) são chamadas await dentro do `submitProject`; envolver em try/catch para não bloquear a submissão se a IA falhar. Migration para Inngest (background jobs) é débito técnico para P-2.x futuro
+- Campos do formulário sem coluna dedicada no DB (`metodologia`, `contextoMinisterial`, `mesesPagamento[]`, etc.) são preservados no JSONB `project_versions.data` na criação do rascunho
+- `meses` no DB é count de parcelas; o array real de meses de pagamento fica em `project_versions.data`
+- Geração de `payment_schedules` ao atingir stage `aprovado` distribui parcelas de Jan ao N-ésimo mês; o array exato de meses está no snapshot da versão
+- Botão de pânico: desempate por `reprovado` em caso de empate (default conservador)
+- Arquivo `packages/db/src/migrate.ts` tem lint error pré-existente (non-null assertion L37) — não é débito de P-2.8
+
+### Arquivos criados
+
+- `packages/ai/src/projects/scoring.ts`
+- `packages/ai/src/projects/compact-version.ts`
+- `apps/projetos/src/lib/safe-action.ts`
+- `apps/projetos/src/lib/audit.ts`
+- `apps/projetos/src/actions/projects.ts`
+- `apps/projetos/src/actions/organizations.ts`
+- `apps/projetos/src/actions/voting.ts`
+- `apps/projetos/src/actions/evaluations.ts`
+- `apps/projetos/src/actions/reports.ts`
+
+### Arquivos modificados
+
+- `packages/ai/package.json` (novos exports `./projects/scoring`, `./projects/compact-version`)
+- `packages/db/src/schema/admin.ts` (14 novos valores no `auditActionEnum`)
+- `packages/validators/package.json` (export `./projetos` adicionado)
+- `apps/projetos/package.json` (dependências: next-safe-action, @supabase/supabase-js, drizzle-orm, postgres, zod, @hebron/ai)
+- `SESSIONS.md` (este registro)

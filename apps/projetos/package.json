@@ -10,16 +10,22 @@
     "start": "next start --port 3001"
   },
   "dependencies": {
+    "@hebron/ai": "workspace:*",
     "@hebron/auth": "workspace:*",
     "@hebron/config": "workspace:*",
     "@hebron/db": "workspace:*",
     "@hebron/types": "workspace:*",
     "@hebron/ui": "workspace:*",
     "@hebron/validators": "workspace:*",
+    "@supabase/supabase-js": "^2.46.0",
+    "drizzle-orm": "^0.36.0",
     "lucide-react": "^0.460.0",
     "next": "^15.3.0",
+    "next-safe-action": "^7.9.0",
+    "postgres": "^3.4.4",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@hebron/eslint-config": "workspace:*",

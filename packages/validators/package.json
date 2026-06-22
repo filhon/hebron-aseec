@@ -5,6 +5,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./documentos": "./src/documentos/index.ts",
+    "./projetos": "./src/projetos/index.ts",
     "./*": "./src/*.ts"
   },
   "scripts": {
