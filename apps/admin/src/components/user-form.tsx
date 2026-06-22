@@ -59,17 +59,17 @@ function RoleCheckboxes({
 
   return (
     <fieldset className="flex flex-col gap-3">
-      <legend className="text-[--text-sm] font-medium">
+      <legend className="text-(--text-sm) font-medium">
         Papéis{" "}
-        <span className="ml-0.5 text-[--color-destructive]" aria-hidden="true">
+        <span className="ml-0.5 text-(--color-destructive)" aria-hidden="true">
           *
         </span>
       </legend>
 
       {hasConflict && (
-        <div className="flex items-start gap-2 rounded-[--radius] border border-amber-400/40 bg-amber-50 px-3 py-2.5">
+        <div className="flex items-start gap-2 rounded-(--radius) border border-amber-400/40 bg-amber-50 px-3 py-2.5">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-          <p className="text-[--text-sm]">
+          <p className="text-(--text-sm)">
             Conflito de interesse: diretores e conselheiros não devem acumular
             os papéis de submissor ou hóspede.
           </p>
@@ -83,12 +83,12 @@ function RoleCheckboxes({
             <label
               key={role}
               className={[
-                "flex cursor-pointer items-center gap-2 rounded-[--radius] border px-3 py-2.5",
-                "text-[--text-sm] transition-colors duration-[--transition-fast]",
+                "flex cursor-pointer items-center gap-2 rounded-(--radius) border px-3 py-2.5",
+                "text-(--text-sm) transition-colors duration-(--transition-fast)",
                 checked
-                  ? "border-[--color-primary] bg-[--color-primary]/8 text-[--color-primary]"
-                  : "border-[--color-border] bg-[--color-background] text-[--color-foreground]",
-                "hover:border-[--color-primary]/50",
+                  ? "border-(--color-primary) bg-(--color-primary)/8 text-(--color-primary)"
+                  : "border-(--color-border) bg-(--color-background) text-(--color-foreground)",
+                "hover:border-(--color-primary)/50",
               ].join(" ")}
             >
               <input
@@ -101,8 +101,8 @@ function RoleCheckboxes({
                 className={[
                   "flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border",
                   checked
-                    ? "border-[--color-primary] bg-[--color-primary]"
-                    : "border-[--color-border]",
+                    ? "border-(--color-primary) bg-(--color-primary)"
+                    : "border-(--color-border)",
                 ].join(" ")}
                 aria-hidden="true"
               >
@@ -125,7 +125,7 @@ function RoleCheckboxes({
       </div>
 
       {error && (
-        <p role="alert" className="text-[--text-xs]">
+        <p role="alert" className="text-(--text-xs)">
           {error}
         </p>
       )}
@@ -142,10 +142,10 @@ function ModuleAccessCheckboxes({
 }) {
   return (
     <fieldset className="flex flex-col gap-3">
-      <legend className="text-[--text-sm] font-medium">
+      <legend className="text-(--text-sm) font-medium">
         Suspensão granular por módulo
       </legend>
-      <p className="text-[--text-xs]">
+      <p className="text-(--text-xs)">
         Marque os módulos que este usuário <strong>não</strong> pode acessar.
         Vazio = acesso total.
       </p>
@@ -156,11 +156,11 @@ function ModuleAccessCheckboxes({
             <label
               key={scope}
               className={[
-                "flex cursor-pointer items-center gap-2 rounded-[--radius] border px-2.5 py-2",
-                "text-[--text-xs] transition-colors duration-[--transition-fast]",
+                "flex cursor-pointer items-center gap-2 rounded-(--radius) border px-2.5 py-2",
+                "text-(--text-xs) transition-colors duration-(--transition-fast)",
                 blocked
                   ? "border-red-300 bg-red-50 text-red-700"
-                  : "border-[--color-border] bg-[--color-background] text-[--color-foreground]",
+                  : "border-(--color-border) bg-(--color-background) text-(--color-foreground)",
               ].join(" ")}
             >
               <input
@@ -174,7 +174,7 @@ function ModuleAccessCheckboxes({
                   "flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-sm border",
                   blocked
                     ? "border-red-500 bg-red-500"
-                    : "border-[--color-border]",
+                    : "border-(--color-border)",
                 ].join(" ")}
                 aria-hidden="true"
               >
@@ -306,8 +306,8 @@ export function UserCreateForm({ onSubmit, isLoading }: UserCreateFormProps) {
           className={[
             "flex h-5 w-5 items-center justify-center rounded border",
             sendInvite
-              ? "border-[--color-primary] bg-[--color-primary]"
-              : "border-[--color-border] bg-[--color-background]",
+              ? "border-(--color-primary) bg-(--color-primary)"
+              : "border-(--color-border) bg-(--color-background)",
           ].join(" ")}
           aria-hidden="true"
         >
@@ -323,10 +323,10 @@ export function UserCreateForm({ onSubmit, isLoading }: UserCreateFormProps) {
             </svg>
           )}
         </span>
-        <span className="text-[--text-sm]">Enviar convite por e-mail</span>
+        <span className="text-(--text-sm)">Enviar convite por e-mail</span>
       </label>
 
-      <div className="flex items-center justify-end gap-3 border-t border-[--color-border] pt-4">
+      <div className="flex items-center justify-end gap-3 border-t border-(--color-border) pt-4">
         <Button type="submit" loading={loading}>
           Criar usuário
         </Button>
@@ -441,11 +441,11 @@ export function UserEditForm({
               <label
                 key={s}
                 className={[
-                  "flex cursor-pointer items-center gap-2 rounded-[--radius] border px-3 py-2",
-                  "text-[--text-sm] transition-colors duration-[--transition-fast]",
+                  "flex cursor-pointer items-center gap-2 rounded-(--radius) border px-3 py-2",
+                  "text-(--text-sm) transition-colors duration-(--transition-fast)",
                   currentStatus === s
-                    ? "border-[--color-primary] bg-[--color-primary]/8 text-[--color-primary]"
-                    : "border-[--color-border] text-[--color-foreground]",
+                    ? "border-(--color-primary) bg-(--color-primary)/8 text-(--color-primary)"
+                    : "border-(--color-border) text-(--color-foreground)",
                 ].join(" ")}
               >
                 <input
@@ -461,7 +461,7 @@ export function UserEditForm({
         </div>
       </FormField>
 
-      <div className="flex items-center justify-end gap-3 border-t border-[--color-border] pt-4">
+      <div className="flex items-center justify-end gap-3 border-t border-(--color-border) pt-4">
         <Button type="submit" loading={loading}>
           Salvar alterações
         </Button>

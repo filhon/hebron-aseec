@@ -244,7 +244,7 @@ export default async function UsuariosPage({
           type="submit"
           variant="outline"
           size="sm"
-          className="rounded-full border-[--brand] text-[--brand]"
+          className="rounded-full border-(--brand) text-(--brand)"
         >
           <Filter size={13} aria-hidden="true" />
           Filtrar

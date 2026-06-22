@@ -300,17 +300,17 @@ export default async function EditalDetailPage({ params }: PageProps) {
     public: {
       label: "Público",
       Icon: Globe,
-      cls: "bg-[--hb-green-muted] text-[--hb-green-fg]",
+      cls: "bg-(--hb-green-muted) text-(--hb-green-fg)",
     },
     internal: {
       label: "Interno",
       Icon: Users,
-      cls: "bg-[--hb-cyan-muted] text-[--hb-cyan-fg]",
+      cls: "bg-(--hb-cyan-muted) text-(--hb-cyan-fg)",
     },
     restricted: {
       label: "Restrito",
       Icon: Lock,
-      cls: "bg-[--color-destructive-muted] text-[--hb-red]",
+      cls: "bg-(--color-destructive-muted) text-(--hb-red)",
     },
   } as const;
 
@@ -318,22 +318,22 @@ export default async function EditalDetailPage({ params }: PageProps) {
     open: {
       label: "Aberto",
       dotColor: "var(--hb-green)",
-      cls: "bg-[--hb-green-muted] text-[--hb-green-fg]",
+      cls: "bg-(--hb-green-muted) text-(--hb-green-fg)",
     },
     closed: {
       label: "Encerrado",
       dotColor: "var(--hb-red)",
-      cls: "bg-[--color-destructive-muted] text-[--hb-red]",
+      cls: "bg-(--color-destructive-muted) text-(--hb-red)",
     },
     permanent: {
       label: "Permanente",
       dotColor: "var(--hb-cyan)",
-      cls: "bg-[--hb-cyan-muted] text-[--hb-cyan-fg]",
+      cls: "bg-(--hb-cyan-muted) text-(--hb-cyan-fg)",
     },
     upcoming: {
       label: "Em breve",
       dotColor: "var(--hb-orange)",
-      cls: "bg-[--hb-orange-muted] text-[--hb-orange-deep]",
+      cls: "bg-(--hb-orange-muted) text-(--hb-orange-deep)",
     },
   } as const;
 

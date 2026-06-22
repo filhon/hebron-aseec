@@ -1635,9 +1635,9 @@ Substituir mocks por dados reais em todas as telas de Projetos. Dashboard submis
 - [ ] Votação funcional (registra, calcula quórum, exibe resultado)
 - [ ] Pauta da reunião: saldo real do Financeiro (placeholder se módulo não existe ainda)
 - [ ] Score IA exibido apenas para diretoria
-- [ ] Mock data removido
-- [ ] Lint passa
-- [ ] Types passam
+- [x] Mock data removido
+- [x] Lint passa
+- [x] Types passam
 
 ---
 

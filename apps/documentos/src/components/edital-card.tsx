@@ -26,28 +26,28 @@ const STATUS_CONFIG: Record<EditalStatus, StatusConfig> = {
     label: "Aberto",
     description: "Submissões abertas",
     dotColor: "var(--hb-green)",
-    badgeClass: "bg-[--hb-green-muted] text-[--hb-green-fg]",
+    badgeClass: "bg-(--hb-green-muted) text-(--hb-green-fg)",
     Icon: CheckCircle2,
   },
   closed: {
     label: "Encerrado",
     description: "Prazo esgotado",
     dotColor: "var(--hb-red)",
-    badgeClass: "bg-[--color-destructive-muted] text-[--hb-red]",
+    badgeClass: "bg-(--color-destructive-muted) text-(--hb-red)",
     Icon: XCircle,
   },
   permanent: {
     label: "Permanente",
     description: "Sempre disponível",
     dotColor: "var(--hb-cyan)",
-    badgeClass: "bg-[--hb-cyan-muted] text-[--hb-cyan-fg]",
+    badgeClass: "bg-(--hb-cyan-muted) text-(--hb-cyan-fg)",
     Icon: InfinityIcon,
   },
   upcoming: {
     label: "Em breve",
     description: "Ainda não aberto",
     dotColor: "var(--hb-orange)",
-    badgeClass: "bg-[--hb-orange-muted] text-[--hb-orange-deep]",
+    badgeClass: "bg-(--hb-orange-muted) text-(--hb-orange-deep)",
     Icon: Clock,
   },
 };
@@ -97,7 +97,7 @@ export function EditalCard({
 
   return (
     <article
-      className={`hb-card hb-card-overflow flex flex-col transition-all duration-[--dur-fast] hover:border-[--brand] hover:shadow-[--shadow-md] ${className}`}
+      className={`hb-card hb-card-overflow flex flex-col transition-all duration-(--dur-fast) hover:border-(--brand) hover:shadow-(--shadow-md) ${className}`}
     >
       {/* Status stripe */}
       <div className="h-0.75" style={{ backgroundColor: cfg.dotColor }} />
@@ -105,7 +105,7 @@ export function EditalCard({
       <div className="p-5 flex flex-col gap-3 flex-1">
         {/* Header: category + status */}
         <div className="flex items-center justify-between gap-2">
-          <span className="inline-flex items-center gap-1.5 text-[--fg-muted] text-[11.5px] font-medium min-w-0">
+          <span className="inline-flex items-center gap-1.5 text-(--fg-muted) text-[11.5px] font-medium min-w-0">
             <Folder size={12} aria-hidden="true" className="shrink-0" />
             <span className="truncate">{edital.category.name}</span>
           </span>
@@ -123,14 +123,14 @@ export function EditalCard({
         {/* Title */}
         <Link
           href={href}
-          className="font-[--font-display] text-[15px] font-bold leading-tight tracking-[-0.01em] text-[--fg] hover:text-[--brand] transition-colors duration-[--dur-fast] no-underline line-clamp-2"
+          className="font-(--font-display) text-[15px] font-bold leading-tight tracking-[-0.01em] text-(--fg) hover:text-(--brand) transition-colors duration-(--dur-fast) no-underline line-clamp-2"
         >
           {edital.title}
         </Link>
 
         {/* Description */}
         {edital.description && (
-          <p className="text-[--fg-muted] text-[13px] leading-[1.55] line-clamp-2 flex-1">
+          <p className="text-(--fg-muted) text-[13px] leading-[1.55] line-clamp-2 flex-1">
             {edital.description}
           </p>
         )}
@@ -141,7 +141,7 @@ export function EditalCard({
             {edital.tags.slice(0, 3).map((tag) => (
               <span
                 key={tag.id}
-                className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-[--bg-alt] text-[--fg-muted] border border-[--border]"
+                className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-(--bg-alt) text-(--fg-muted) border border-(--border)"
               >
                 {tag.name}
               </span>
@@ -152,14 +152,14 @@ export function EditalCard({
         {/* Schedule */}
         {edital.cycleType === "anual" &&
           (edital.opensAt ?? edital.closesAt) && (
-            <div className="flex flex-col gap-1.5 p-3 rounded-[--radius-sm] bg-[--bg-alt] border border-[--border]">
+            <div className="flex flex-col gap-1.5 p-3 rounded-(--radius-sm) bg-(--bg-alt) border border-(--border)">
               <span className="hb-section-label mb-0">Cronograma</span>
-              <div className="flex flex-wrap gap-3 text-[12.5px] text-[--fg-muted]">
+              <div className="flex flex-wrap gap-3 text-[12.5px] text-(--fg-muted)">
                 {edital.opensAt && (
                   <span className="inline-flex items-center gap-1.5">
                     <CalendarDays size={12} aria-hidden="true" />
                     Abertura:{" "}
-                    <strong className="text-[--fg] font-semibold">
+                    <strong className="text-(--fg) font-semibold">
                       {formatDate(edital.opensAt)}
                     </strong>
                   </span>
@@ -168,7 +168,7 @@ export function EditalCard({
                   <span className="inline-flex items-center gap-1.5">
                     <CalendarDays size={12} aria-hidden="true" />
                     Encerramento:{" "}
-                    <strong className="text-[--fg] font-semibold">
+                    <strong className="text-(--fg) font-semibold">
                       {formatDate(edital.closesAt)}
                     </strong>
                   </span>
@@ -178,7 +178,7 @@ export function EditalCard({
           )}
 
         {/* CTA */}
-        <div className="pt-3 mt-auto border-t border-[--divider]">
+        <div className="pt-3 mt-auto border-t border-(--divider)">
           {isSubmittable ? (
             <a
               href={submitUrl}

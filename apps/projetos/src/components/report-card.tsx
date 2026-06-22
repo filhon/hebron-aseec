@@ -154,10 +154,10 @@ function AttachmentRow({ attachment }: { attachment: ReportAttachment }) {
   return (
     <div className="flex items-center gap-2.5 py-1.5">
       <FileIcon mimeType={attachment.mimeType} />
-      <span className="flex-1 text-sm text-[--fg] truncate">
+      <span className="flex-1 text-sm text-(--fg) truncate">
         {attachment.fileName}
       </span>
-      <span className="text-xs text-[--fg-muted] shrink-0">
+      <span className="text-xs text-(--fg-muted) shrink-0">
         {formatBytes(attachment.fileSizeBytes)}
       </span>
     </div>
@@ -176,18 +176,18 @@ export function ReportCard({ report, className }: ReportCardProps) {
 
   return (
     <div
-      className={`rounded-[--radius-md] border bg-[--surface] shadow-[--shadow-sm] overflow-hidden ${isOverdue ? "border-[--color-destructive]" : "border-[--border]"} ${className ?? ""}`}
+      className={`rounded-md border bg-(--surface) shadow-(--shadow-sm) overflow-hidden ${isOverdue ? "border-(--color-destructive)" : "border-(--border)"} ${className ?? ""}`}
     >
       {/* Header */}
-      <div className="flex items-start justify-between gap-3 p-4 border-b border-[--border]">
+      <div className="flex items-start justify-between gap-3 p-4 border-b border-(--border)">
         <div>
           <p
-            className="text-base font-semibold text-[--fg]"
+            className="text-base font-semibold text-(--fg)"
             style={{ fontFamily: "var(--font-display)" }}
           >
             Período {report.period}
           </p>
-          <p className="text-xs text-[--fg-muted] mt-0.5">
+          <p className="text-xs text-(--fg-muted) mt-0.5">
             {formatDate(report.periodStart)} — {formatDate(report.periodEnd)}
           </p>
         </div>
@@ -204,7 +204,7 @@ export function ReportCard({ report, className }: ReportCardProps) {
         {/* Overdue / pending notice */}
         {(isOverdue || isPending) && (
           <div
-            className="rounded-[--radius-sm] border px-3 py-2 text-sm font-medium flex items-start gap-2"
+            className="rounded-sm border px-3 py-2 text-sm font-medium flex items-start gap-2"
             style={
               isOverdue
                 ? {
@@ -250,10 +250,10 @@ export function ReportCard({ report, className }: ReportCardProps) {
         {/* Narrative (truncated) */}
         {report.narrativa && (
           <div>
-            <p className="text-xs font-semibold text-[--fg-muted] uppercase tracking-wider mb-1.5">
+            <p className="text-xs font-semibold text-(--fg-muted) uppercase tracking-wider mb-1.5">
               Narrativa
             </p>
-            <p className="text-sm text-[--fg] leading-relaxed line-clamp-3">
+            <p className="text-sm text-(--fg) leading-relaxed line-clamp-3">
               {report.narrativa}
             </p>
           </div>
@@ -262,10 +262,10 @@ export function ReportCard({ report, className }: ReportCardProps) {
         {/* Attachments */}
         {report.attachments.length > 0 && (
           <div>
-            <p className="text-xs font-semibold text-[--fg-muted] uppercase tracking-wider mb-1.5">
+            <p className="text-xs font-semibold text-(--fg-muted) uppercase tracking-wider mb-1.5">
               Anexos ({report.attachments.length})
             </p>
-            <div className="divide-y divide-[--border]">
+            <div className="divide-y divide-(--border)">
               {report.attachments.map((att) => (
                 <AttachmentRow key={att.id} attachment={att} />
               ))}
@@ -274,11 +274,11 @@ export function ReportCard({ report, className }: ReportCardProps) {
         )}
 
         {/* Submission + review info */}
-        <div className="flex flex-wrap gap-x-6 gap-y-1 pt-1 border-t border-[--border]">
+        <div className="flex flex-wrap gap-x-6 gap-y-1 pt-1 border-t border-(--border)">
           {report.submittedAt !== null && (
             <div>
-              <p className="text-xs text-[--fg-muted]">Entregue por</p>
-              <p className="text-xs font-medium text-[--fg]">
+              <p className="text-xs text-(--fg-muted)">Entregue por</p>
+              <p className="text-xs font-medium text-(--fg)">
                 {report.submittedByName ?? "—"} ·{" "}
                 {formatDate(report.submittedAt)}
               </p>
@@ -286,8 +286,8 @@ export function ReportCard({ report, className }: ReportCardProps) {
           )}
           {report.reviewedAt !== null && (
             <div>
-              <p className="text-xs text-[--fg-muted]">Revisado em</p>
-              <p className="text-xs font-medium text-[--fg]">
+              <p className="text-xs text-(--fg-muted)">Revisado em</p>
+              <p className="text-xs font-medium text-(--fg)">
                 {formatDate(report.reviewedAt)}
               </p>
             </div>

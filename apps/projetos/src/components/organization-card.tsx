@@ -38,16 +38,16 @@ export function OrganizationCard({
   if (compact) {
     return (
       <div
-        className={`flex items-center gap-3 rounded-[--radius-sm] border border-[--border] bg-[--surface] px-3 py-2.5 shadow-[--shadow-xs] ${className ?? ""}`}
+        className={`flex items-center gap-3 rounded-sm border border-(--border) bg-(--surface) px-3 py-2.5 shadow-(--shadow-xs) ${className ?? ""}`}
       >
         <span className="text-xl leading-none" aria-hidden>
           {countryFlag(organization.country)}
         </span>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-[--fg] truncate">
+          <p className="text-sm font-semibold text-(--fg) truncate">
             {organization.name}
           </p>
-          <p className="text-xs text-[--fg-muted]">
+          <p className="text-xs text-(--fg-muted)">
             {[organization.city, organization.state, organization.country]
               .filter(Boolean)
               .join(", ")}
@@ -93,23 +93,23 @@ export function OrganizationCard({
 
   return (
     <div
-      className={`rounded-[--radius-md] border border-[--border] bg-[--surface] shadow-[--shadow-sm] overflow-hidden ${className ?? ""}`}
+      className={`rounded-md border border-(--border) bg-(--surface) shadow-(--shadow-sm) overflow-hidden ${className ?? ""}`}
     >
       {/* Header */}
-      <div className="flex items-start justify-between gap-3 p-5 border-b border-[--border]">
+      <div className="flex items-start justify-between gap-3 p-5 border-b border-(--border)">
         <div className="flex items-center gap-3 min-w-0">
           <span className="text-3xl leading-none shrink-0" aria-hidden>
             {countryFlag(organization.country)}
           </span>
           <div className="min-w-0">
             <h3
-              className="text-lg font-semibold text-[--fg] leading-snug"
+              className="text-lg font-semibold text-(--fg) leading-snug"
               style={{ fontFamily: "var(--font-display)" }}
             >
               {organization.name}
             </h3>
             {organization.cnpj && (
-              <p className="text-xs text-[--fg-muted] mt-0.5 font-mono">
+              <p className="text-xs text-(--fg-muted) mt-0.5 font-mono">
                 {organization.cnpj}
               </p>
             )}
@@ -138,7 +138,7 @@ export function OrganizationCard({
       <div className="p-5 flex flex-col gap-4">
         {/* Description */}
         {organization.description && (
-          <p className="text-sm text-[--fg] leading-relaxed">
+          <p className="text-sm text-(--fg) leading-relaxed">
             {organization.description}
           </p>
         )}
@@ -146,18 +146,18 @@ export function OrganizationCard({
         {/* Location grid */}
         <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
           <div>
-            <p className="text-xs text-[--fg-muted] font-medium uppercase tracking-wider mb-0.5">
+            <p className="text-xs text-(--fg-muted) font-medium uppercase tracking-wider mb-0.5">
               Região
             </p>
-            <p className="text-sm text-[--fg]">{organization.region}</p>
+            <p className="text-sm text-(--fg)">{organization.region}</p>
           </div>
 
           {organization.city && (
             <div>
-              <p className="text-xs text-[--fg-muted] font-medium uppercase tracking-wider mb-0.5">
+              <p className="text-xs text-(--fg-muted) font-medium uppercase tracking-wider mb-0.5">
                 Cidade
               </p>
-              <p className="text-sm text-[--fg]">
+              <p className="text-sm text-(--fg)">
                 {organization.city}
                 {organization.state ? `, ${organization.state}` : ""}
               </p>
@@ -165,18 +165,18 @@ export function OrganizationCard({
           )}
 
           <div>
-            <p className="text-xs text-[--fg-muted] font-medium uppercase tracking-wider mb-0.5">
+            <p className="text-xs text-(--fg-muted) font-medium uppercase tracking-wider mb-0.5">
               País
             </p>
-            <p className="text-sm text-[--fg]">{organization.country}</p>
+            <p className="text-sm text-(--fg)">{organization.country}</p>
           </div>
 
           {projectCount !== undefined && (
             <div>
-              <p className="text-xs text-[--fg-muted] font-medium uppercase tracking-wider mb-0.5">
+              <p className="text-xs text-(--fg-muted) font-medium uppercase tracking-wider mb-0.5">
                 Projetos
               </p>
-              <p className="text-sm text-[--fg] font-semibold">
+              <p className="text-sm text-(--fg) font-semibold">
                 {projectCount}
               </p>
             </div>
@@ -187,27 +187,27 @@ export function OrganizationCard({
         {(organization.contactName ??
           organization.email ??
           organization.phone) && (
-          <div className="border-t border-[--border] pt-4 flex flex-col gap-1.5">
-            <p className="text-xs text-[--fg-muted] font-medium uppercase tracking-wider mb-0.5">
+          <div className="border-t border-(--border) pt-4 flex flex-col gap-1.5">
+            <p className="text-xs text-(--fg-muted) font-medium uppercase tracking-wider mb-0.5">
               Contato
             </p>
             {organization.contactName && (
-              <p className="text-sm text-[--fg] font-medium">
+              <p className="text-sm text-(--fg) font-medium">
                 {organization.contactName}
               </p>
             )}
             {organization.email && (
-              <p className="text-sm text-[--fg-muted]">{organization.email}</p>
+              <p className="text-sm text-(--fg-muted)">{organization.email}</p>
             )}
             {organization.phone && (
-              <p className="text-sm text-[--fg-muted]">{organization.phone}</p>
+              <p className="text-sm text-(--fg-muted)">{organization.phone}</p>
             )}
           </div>
         )}
 
         {/* Approval info */}
         {isApproved && (
-          <p className="text-xs text-[--fg-muted]">
+          <p className="text-xs text-(--fg-muted)">
             Aprovada em {formatDate(organization.approvedAt)}
           </p>
         )}

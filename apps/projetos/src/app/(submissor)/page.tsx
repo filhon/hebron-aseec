@@ -1,7 +1,13 @@
 import Link from "next/link";
 import { AlertCircle, ArrowRight, ChevronRight } from "lucide-react";
-import { mockProjects, mockReports } from "../../lib/mock-data";
-import type { AnnualProject } from "@hebron/types";
+import { redirect } from "next/navigation";
+import {
+  getAuthUser,
+  getSubmissorDashboard,
+  type DashboardProject,
+  type DashboardPayment,
+  type DashboardReport,
+} from "../../lib/queries";
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
 
@@ -17,106 +23,8 @@ function fmtMil(n: number) {
   return BRL.format(n);
 }
 
-// ─── Mock user data ───────────────────────────────────────────────────────────
-
-const MY_USER_ID = "user-sub-001";
-const MOCK_USER_NAME = "Pr. André Costa";
-// Budget limit set by admin per institution/year
+// ─── Budget limit (set by admin; finance module not yet built) ────────────────
 const ORCAMENTO_ANUAL_LIMITE = 150_000;
-
-const myProjects = mockProjects.filter((p) => p.submittedBy === MY_USER_ID);
-
-const activeProjects = myProjects.filter((p) =>
-  ["em_execucao", "aprovado", "homologacao", "votacao", "validacao"].includes(
-    p.stage,
-  ),
-);
-
-const emAvaliacao = myProjects.filter((p) =>
-  ["validacao", "votacao", "homologacao"].includes(p.stage),
-);
-
-const emVotacaoCount = myProjects.filter((p) => p.stage === "votacao").length;
-
-const pendingReports = mockReports.filter(
-  (r) =>
-    myProjects.some((p) => p.id === r.projectId) &&
-    (r.status === "pendente" || r.status === "em_atraso"),
-);
-
-const orcamentoComprometido = myProjects
-  .filter((p) => !["cancelado", "reprovado", "rascunho"].includes(p.stage))
-  .reduce((s, p) => s + p.valorTotal, 0);
-
-const orcamentoDisponivel = Math.max(
-  0,
-  ORCAMENTO_ANUAL_LIMITE - orcamentoComprometido,
-);
-
-const pctComprometido = Math.min(
-  100,
-  Math.round((orcamentoComprometido / ORCAMENTO_ANUAL_LIMITE) * 100),
-);
-
-// First active project org name as header eyebrow
-const institutionName =
-  activeProjects[0]?.organizacao.name ?? myProjects[0]?.organizacao.name;
-
-// ─── Upcoming payments ────────────────────────────────────────────────────────
-
-type UpcomingPayment = {
-  day: number;
-  monthAbbr: string;
-  label: string;
-  sublabel: string;
-  amount: number;
-  dim: boolean;
-};
-
-const upcomingPayments: UpcomingPayment[] = (() => {
-  const now = new Date();
-  const items: UpcomingPayment[] = [];
-
-  for (let offset = 0; offset <= 2 && items.length < 4; offset++) {
-    const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
-    const monthNum = d.getMonth() + 1;
-    const monthAbbr = d
-      .toLocaleString("pt-BR", { month: "short" })
-      .replace(".", "");
-    const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-
-    for (const p of myProjects) {
-      if (p.type !== "anual") continue;
-      const ap = p as AnnualProject;
-      if (!ap.mesesPagamento.includes(monthNum)) continue;
-      if (["cancelado", "reprovado"].includes(p.stage)) continue;
-
-      const paidBefore = ap.mesesPagamento
-        .slice()
-        .sort((a, b) => a - b)
-        .indexOf(monthNum);
-      const parcelaNum = paidBefore + 1;
-      const parcelaValor = Math.round(ap.valorTotal / ap.numeroParcelas);
-      const shortTitle = ap.titulo.split(" ").slice(0, 3).join(" ");
-
-      items.push({
-        day: lastDay,
-        monthAbbr,
-        label: `Parcela ${parcelaNum}/${ap.numeroParcelas} · ${shortTitle}`,
-        sublabel:
-          offset === 0
-            ? "último dia útil do mês"
-            : offset === 1
-              ? "aguardando aprovação"
-              : "previsto",
-        amount: parcelaValor,
-        dim: offset > 0,
-      });
-    }
-  }
-
-  return items.slice(0, 3);
-})();
 
 // ─── Stage display ────────────────────────────────────────────────────────────
 
@@ -137,19 +45,16 @@ type BadgeStyle = { bg: string; color: string };
 function stageBadge(stage: string): BadgeStyle {
   switch (stage) {
     case "em_execucao":
-      return {
-        bg: "rgba(42, 56, 160, 0.12)",
-        color: "var(--hb-blue-soft)",
-      };
+      return { bg: "rgba(42, 56, 160, 0.12)", color: "var(--hb-blue-soft)" };
     case "votacao":
       return { bg: "rgba(32, 44, 133, 0.10)", color: "var(--hb-blue)" };
     case "validacao":
-      return { bg: "rgba(7, 180, 231, 0.12)", color: "var(--hb-cyan-deeper)" };
-    case "homologacao":
       return {
-        bg: "rgba(234, 90, 6, 0.10)",
-        color: "var(--hb-orange-deep)",
+        bg: "rgba(7, 180, 231, 0.12)",
+        color: "var(--hb-cyan-darker)",
       };
+    case "homologacao":
+      return { bg: "rgba(234, 90, 6, 0.10)", color: "var(--hb-orange-deep)" };
     case "aprovado":
       return { bg: "rgba(130, 163, 23, 0.20)", color: "#5f7510" };
     case "concluido":
@@ -165,28 +70,56 @@ function stageBadge(stage: string): BadgeStyle {
   }
 }
 
-// Execution progress (% of installments paid, estimated by current month position)
-function executionProgress(p: AnnualProject): number | null {
+function executionProgress(p: DashboardProject): number | null {
   if (p.stage !== "em_execucao") return null;
-  const sorted = [...p.mesesPagamento].sort((a, b) => a - b);
-  const currentMonth = new Date().getMonth() + 1;
-  const paid = sorted.filter((m) => m < currentMonth).length;
-  if (p.numeroParcelas === 0) return null;
-  return Math.round((paid / p.numeroParcelas) * 100);
+  if (p.totalSchedules === 0) return null;
+  return Math.round((p.paidCount / p.totalSchedules) * 100);
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function SubmissorDashboard() {
-  // Keep "Pr." / "Ev." / "Dir." honorific + first given name: "Pr. André Costa" → "Pr. André"
-  const parts = MOCK_USER_NAME.split(" ");
+export default async function SubmissorDashboard() {
+  const authUser = await getAuthUser();
+  if (!authUser) redirect("/login");
+
+  const data = await getSubmissorDashboard(authUser.id);
+
+  const activeProjects = data.projects.filter((p) =>
+    ["em_execucao", "aprovado", "homologacao", "votacao", "validacao"].includes(
+      p.stage,
+    ),
+  );
+
+  const emAvaliacao = data.projects.filter((p) =>
+    ["validacao", "votacao", "homologacao"].includes(p.stage),
+  );
+
+  const emVotacaoCount = data.projects.filter(
+    (p) => p.stage === "votacao",
+  ).length;
+
+  const pendingReports = data.pendingReports;
+
+  const orcamentoComprometido = data.committedBudget;
+  const orcamentoDisponivel = Math.max(
+    0,
+    ORCAMENTO_ANUAL_LIMITE - orcamentoComprometido,
+  );
+  const pctComprometido = Math.min(
+    100,
+    Math.round((orcamentoComprometido / ORCAMENTO_ANUAL_LIMITE) * 100),
+  );
+
+  const institutionName = data.projects[0]?.orgNome ?? null;
+
+  const fullName = authUser.fullName ?? "Usuário";
+  const parts = fullName.split(" ");
   const firstName =
     parts.length >= 2 &&
     /^(Pr\.|Ev\.|Dir\.|Pastor|Diac\.)$/.test(parts[0] ?? "")
       ? `${parts[0]} ${parts[1]}`
-      : (parts[0] ?? MOCK_USER_NAME);
+      : (parts[0] ?? fullName);
 
-  // Summary sentence
   const relPart =
     pendingReports.length > 0
       ? `${pendingReports.length} relatório${pendingReports.length > 1 ? "s" : ""} a vencer`
@@ -195,6 +128,8 @@ export default function SubmissorDashboard() {
     emVotacaoCount > 0
       ? `${emVotacaoCount} projeto${emVotacaoCount > 1 ? "s" : ""} em votação`
       : null;
+
+  const currentYear = new Date().getFullYear();
 
   return (
     <div className="hb-page">
@@ -284,15 +219,12 @@ export default function SubmissorDashboard() {
           marginBottom: 24,
         }}
       >
-        {/* 1 · Projetos ativos */}
         <StatCard
           dot="var(--hb-blue)"
           label="Projetos ativos"
           value={activeProjects.length}
           sub={`${activeProjects.filter((p) => p.stage === "em_execucao").length} em execução · ${activeProjects.filter((p) => p.stage === "aprovado").length} aprovado`}
         />
-
-        {/* 2 · Em avaliação */}
         <StatCard
           dot="var(--hb-cyan)"
           label="Em avaliação"
@@ -303,8 +235,6 @@ export default function SubmissorDashboard() {
               : "Nenhum em processo"
           }
         />
-
-        {/* 3 · Relatórios pendentes */}
         <StatCard
           dot="var(--hb-orange)"
           label="Relatórios pendentes"
@@ -318,8 +248,6 @@ export default function SubmissorDashboard() {
               : `${pendingReports.length > 1 ? "Vencem" : "Vence"} em breve`
           }
         />
-
-        {/* 4 · Orçamento disponível */}
         <StatCard
           dot="var(--hb-green)"
           label="Orçamento disponível"
@@ -380,24 +308,20 @@ export default function SubmissorDashboard() {
             </Link>
           </div>
 
-          {myProjects.length === 0 ? (
+          {data.projects.length === 0 ? (
             <EmptyProjects />
           ) : (
-            myProjects.map((p, i) => {
+            data.projects.map((p, i) => {
               const badge = stageBadge(p.stage);
-              const isAnual = p.type === "anual";
-              const ap = isAnual ? (p as AnnualProject) : null;
-              const progress = ap ? executionProgress(ap) : null;
+              const progress = executionProgress(p);
               const paidStr =
-                ap && p.stage === "em_execucao"
-                  ? `parcela ${Math.floor((progress ?? 0) / (100 / ap.numeroParcelas))} de ${ap.numeroParcelas}`
+                p.stage === "em_execucao" && p.totalSchedules > 0
+                  ? `parcela ${p.paidCount} de ${p.parcelas ?? p.totalSchedules}`
                   : null;
 
               const metaParts = [
-                isAnual ? "Projeto anual" : "Projeto pontual",
-                p.organizacao.city
-                  ? `${p.organizacao.city}, ${p.organizacao.state ?? p.organizacao.country}`
-                  : p.organizacao.country,
+                p.tipo === "anual" ? "Projeto anual" : "Projeto pontual",
+                p.orgNome,
                 paidStr,
               ].filter(Boolean);
 
@@ -414,7 +338,7 @@ export default function SubmissorDashboard() {
                   )}
                   <Link
                     href={`/${p.id}`}
-                    className="hover:bg-[--bg-alt]"
+                    className="hover:bg-(--bg-alt)"
                     style={{
                       display: "flex",
                       gap: 16,
@@ -503,7 +427,7 @@ export default function SubmissorDashboard() {
                           color: "var(--fg)",
                         }}
                       >
-                        {BRL.format(p.valorTotal)}
+                        {BRL.format(p.budgetTotal)}
                       </div>
                       <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>
                         {progress !== null
@@ -542,7 +466,7 @@ export default function SubmissorDashboard() {
               Próximos pagamentos
             </h2>
 
-            {upcomingPayments.length === 0 ? (
+            {data.upcomingPayments.length === 0 ? (
               <p style={{ fontSize: 13, color: "var(--fg-muted)" }}>
                 Nenhum pagamento previsto nos próximos meses.
               </p>
@@ -550,76 +474,8 @@ export default function SubmissorDashboard() {
               <div
                 style={{ display: "flex", flexDirection: "column", gap: 14 }}
               >
-                {upcomingPayments.map((pay, i) => (
-                  <div
-                    key={i}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 12,
-                      opacity: pay.dim ? 0.62 : 1,
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: 42,
-                        flexShrink: 0,
-                        textAlign: "center",
-                      }}
-                    >
-                      <div
-                        style={{
-                          fontFamily: "var(--font-display)",
-                          fontWeight: 700,
-                          fontSize: 15,
-                          lineHeight: 1,
-                          color: "var(--fg)",
-                        }}
-                      >
-                        {pay.day}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: 10,
-                          textTransform: "uppercase",
-                          letterSpacing: "0.08em",
-                          color: "var(--fg-muted)",
-                        }}
-                      >
-                        {pay.monthAbbr}
-                      </div>
-                    </div>
-
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div
-                        style={{
-                          fontSize: 14,
-                          fontWeight: 600,
-                          color: "var(--fg)",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {pay.label}
-                      </div>
-                      <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>
-                        {pay.sublabel}
-                      </div>
-                    </div>
-
-                    <div
-                      style={{
-                        fontFamily: "var(--font-display)",
-                        fontWeight: 700,
-                        fontSize: 14,
-                        color: "var(--fg)",
-                        flexShrink: 0,
-                      }}
-                    >
-                      {BRL.format(pay.amount)}
-                    </div>
-                  </div>
+                {data.upcomingPayments.map((pay, i) => (
+                  <UpcomingPaymentRow key={pay.id} pay={pay} dim={i > 0} />
                 ))}
               </div>
             )}
@@ -653,7 +509,7 @@ export default function SubmissorDashboard() {
                 marginBottom: 14,
               }}
             >
-              Ano-calendário 2025
+              Ano-calendário {currentYear}
             </p>
 
             <div
@@ -691,7 +547,8 @@ export default function SubmissorDashboard() {
                 style={{
                   width: `${pctComprometido}%`,
                   height: "100%",
-                  background: `linear-gradient(90deg, var(--hb-blue), var(--hb-cyan))`,
+                  background:
+                    "linear-gradient(90deg, var(--hb-blue), var(--hb-cyan))",
                   borderRadius: 99,
                 }}
               />
@@ -707,79 +564,9 @@ export default function SubmissorDashboard() {
           </section>
 
           {/* Relatório pendente alert */}
-          {pendingReports.length > 0 &&
-            (() => {
-              const r = pendingReports[0];
-              if (!r) return null;
-              const proj = myProjects.find((p) => p.id === r.projectId);
-              const isOverdue = r.status === "em_atraso";
-              const dueStr = r.dueAt.toLocaleDateString("pt-BR", {
-                day: "2-digit",
-                month: "long",
-              });
-              return (
-                <section
-                  style={{
-                    background: "rgba(234, 90, 6, 0.06)",
-                    border: "1px solid rgba(234, 90, 6, 0.25)",
-                    borderRadius: "var(--radius-lg)",
-                    padding: 20,
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 8,
-                      color: "var(--hb-orange-deep)",
-                      fontWeight: 700,
-                      fontSize: 13,
-                      marginBottom: 6,
-                    }}
-                  >
-                    <AlertCircle width={16} height={16} aria-hidden />
-                    {isOverdue ? "Relatório em atraso" : "Relatório pendente"}
-                  </div>
-                  <p
-                    style={{
-                      fontSize: 14,
-                      fontWeight: 600,
-                      color: "var(--fg)",
-                      margin: 0,
-                    }}
-                  >
-                    {proj?.titulo ?? r.projectId} — {r.period}
-                  </p>
-                  <p
-                    style={{
-                      fontSize: 12,
-                      color: "var(--fg-muted)",
-                      margin: "4px 0 14px",
-                    }}
-                  >
-                    {isOverdue ? "Em atraso" : "Vence em breve"} · {dueStr}
-                  </p>
-                  <Link
-                    href={`/${r.projectId}`}
-                    style={{
-                      display: "block",
-                      width: "100%",
-                      textAlign: "center",
-                      background: "var(--hb-blue)",
-                      color: "#fff",
-                      textDecoration: "none",
-                      fontFamily: "var(--font-display)",
-                      fontWeight: 600,
-                      fontSize: 14,
-                      padding: 11,
-                      borderRadius: 99,
-                    }}
-                  >
-                    Enviar relatório
-                  </Link>
-                </section>
-              );
-            })()}
+          {pendingReports.length > 0 && (
+            <PendingReportAlert report={pendingReports[0]} />
+          )}
         </div>
       </div>
     </div>
@@ -836,7 +623,6 @@ function StatCard({
         />
         {label}
       </div>
-
       <div
         style={{
           fontFamily: "var(--font-display)",
@@ -850,11 +636,167 @@ function StatCard({
       >
         {valueFmt ?? value}
       </div>
-
       <div style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 6 }}>
         {sub}
       </div>
     </div>
+  );
+}
+
+function UpcomingPaymentRow({
+  pay,
+  dim,
+}: {
+  pay: DashboardPayment;
+  dim: boolean;
+}) {
+  const due = new Date(pay.dueDate + "T12:00:00");
+  const day = due.getDate();
+  const monthAbbr = due
+    .toLocaleString("pt-BR", { month: "short" })
+    .replace(".", "");
+  const shortTitle = pay.projectTitle.split(" ").slice(0, 3).join(" ");
+  const label = `Parcela ${pay.parcelNum}/${pay.parcelTotal ?? "?"} · ${shortTitle}`;
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        opacity: dim ? 0.62 : 1,
+      }}
+    >
+      <div style={{ width: 42, flexShrink: 0, textAlign: "center" }}>
+        <div
+          style={{
+            fontFamily: "var(--font-display)",
+            fontWeight: 700,
+            fontSize: 15,
+            lineHeight: 1,
+            color: "var(--fg)",
+          }}
+        >
+          {day}
+        </div>
+        <div
+          style={{
+            fontSize: 10,
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+            color: "var(--fg-muted)",
+          }}
+        >
+          {monthAbbr}
+        </div>
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div
+          style={{
+            fontSize: 14,
+            fontWeight: 600,
+            color: "var(--fg)",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {label}
+        </div>
+        <div style={{ fontSize: 12, color: "var(--fg-muted)" }}>
+          {dim ? "previsto" : "último dia útil do mês"}
+        </div>
+      </div>
+      <div
+        style={{
+          fontFamily: "var(--font-display)",
+          fontWeight: 700,
+          fontSize: 14,
+          color: "var(--fg)",
+          flexShrink: 0,
+        }}
+      >
+        {BRL.format(pay.amount)}
+      </div>
+    </div>
+  );
+}
+
+function PendingReportAlert({
+  report,
+}: {
+  report: DashboardReport | undefined;
+}) {
+  if (!report) return null;
+  const dueDate = report.dueDate
+    ? new Date(report.dueDate + "T12:00:00").toLocaleDateString("pt-BR", {
+        day: "2-digit",
+        month: "long",
+      })
+    : null;
+
+  return (
+    <section
+      style={{
+        background: "rgba(234, 90, 6, 0.06)",
+        border: "1px solid rgba(234, 90, 6, 0.25)",
+        borderRadius: "var(--radius-lg)",
+        padding: 20,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          color: "var(--hb-orange-deep)",
+          fontWeight: 700,
+          fontSize: 13,
+          marginBottom: 6,
+        }}
+      >
+        <AlertCircle width={16} height={16} aria-hidden />
+        {report.isOverdue ? "Relatório em atraso" : "Relatório pendente"}
+      </div>
+      <p
+        style={{
+          fontSize: 14,
+          fontWeight: 600,
+          color: "var(--fg)",
+          margin: 0,
+        }}
+      >
+        {report.projectTitle}
+      </p>
+      <p
+        style={{
+          fontSize: 12,
+          color: "var(--fg-muted)",
+          margin: "4px 0 14px",
+        }}
+      >
+        {report.isOverdue ? "Em atraso" : "Vence em breve"}
+        {dueDate ? ` · ${dueDate}` : ""}
+      </p>
+      <Link
+        href={`/${report.projectId}`}
+        style={{
+          display: "block",
+          width: "100%",
+          textAlign: "center",
+          background: "var(--hb-blue)",
+          color: "#fff",
+          textDecoration: "none",
+          fontFamily: "var(--font-display)",
+          fontWeight: 600,
+          fontSize: 14,
+          padding: 11,
+          borderRadius: 99,
+        }}
+      >
+        Enviar relatório
+      </Link>
+    </section>
   );
 }
 

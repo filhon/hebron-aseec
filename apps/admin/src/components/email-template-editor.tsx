@@ -56,7 +56,7 @@ export function EmailTemplateEditor({
       {/* Variables reference */}
       {template.variables.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          <span className="text-[--text-xs] text-[--color-muted-foreground]">
+          <span className="text-(--text-xs)">
             Variáveis disponíveis:
           </span>
           {template.variables.map((v) => (
@@ -64,8 +64,8 @@ export function EmailTemplateEditor({
               key={v}
               className={[
                 "rounded px-1.5 py-0.5",
-                "bg-[--color-primary]/10 text-[--color-primary]",
-                "text-[--text-xs] font-mono",
+                "bg-(--color-primary)/10 text-(--color-primary)",
+                "text-(--text-xs) font-mono",
               ].join(" ")}
             >
               {`{{${v}}}`}
@@ -106,10 +106,10 @@ export function EmailTemplateEditor({
 
         {/* Split view: HTML editor + preview */}
         <div className="flex flex-col gap-2">
-          <span className="text-[--text-sm] font-medium text-[--color-foreground]">
+          <span className="text-(--text-sm) font-medium">
             Corpo HTML{" "}
             <span
-              className="ml-0.5 text-[--color-destructive]"
+              className="ml-0.5 text-(--color-destructive)"
               aria-hidden="true"
             >
               *
@@ -119,7 +119,7 @@ export function EmailTemplateEditor({
           <div className="grid gap-3 lg:grid-cols-2">
             {/* Editor */}
             <div className="flex flex-col gap-1.5">
-              <span className="text-[--text-xs] font-medium text-[--color-muted-foreground] uppercase tracking-wide">
+              <span className="text-(--text-xs) font-medium uppercase tracking-wide">
                 Editor
               </span>
               <textarea
@@ -128,16 +128,16 @@ export function EmailTemplateEditor({
                 placeholder="<p>Olá {{name}},</p>"
                 className={[
                   "flex w-full resize-y font-mono",
-                  "rounded-[--radius] border border-[--color-border]",
-                  "bg-[--color-input-bg] text-[--color-foreground]",
-                  "px-3 py-2 text-[--text-xs]",
-                  "placeholder:text-[--color-muted-foreground]",
-                  "transition-colors duration-[--transition-fast]",
-                  "hover:border-[--color-primary]/50",
-                  "focus-visible:outline-none focus-visible:border-[--color-primary]",
-                  "focus-visible:ring-2 focus-visible:ring-[--color-ring]/20",
+                  "rounded-(--radius) border border-(--color-border)",
+                  "bg-(--color-input-bg) text-(--color-foreground)",
+                  "px-3 py-2 text-(--text-xs)",
+                  "placeholder:text-(--color-muted-foreground)",
+                  "transition-colors duration-(--transition-fast)",
+                  "hover:border-(--color-primary)/50",
+                  "focus-visible:outline-none focus-visible:border-(--color-primary)",
+                  "focus-visible:ring-2 focus-visible:ring-(--color-ring)/20",
                   errors.bodyHtml
-                    ? "border-[--color-destructive] focus-visible:ring-[--color-destructive]/20"
+                    ? "border-(--color-destructive) focus-visible:ring-(--color-destructive)/20"
                     : "",
                 ].join(" ")}
                 {...register("bodyHtml")}
@@ -145,7 +145,7 @@ export function EmailTemplateEditor({
               {errors.bodyHtml && (
                 <p
                   role="alert"
-                  className="text-[--text-xs] text-[--color-destructive]"
+                  className="text-(--color-destructive)"
                 >
                   {errors.bodyHtml.message}
                 </p>
@@ -154,23 +154,23 @@ export function EmailTemplateEditor({
 
             {/* Preview */}
             <div className="flex flex-col gap-1.5">
-              <span className="text-[--text-xs] font-medium text-[--color-muted-foreground] uppercase tracking-wide">
+              <span className="font-medium text-(--color-muted-foreground) uppercase tracking-wide">
                 Pré-visualização
               </span>
               <div
                 className={[
-                  "min-h-[15rem] rounded-[--radius] border border-[--color-border]",
-                  "bg-white px-4 py-3 text-[--text-sm]",
+                  "min-h-60 rounded-(--radius) border border-(--color-border)",
+                  "bg-white px-4 py-3 text-(--text-sm)",
                   "overflow-auto",
                 ].join(" ")}
               >
                 {/* Subject preview */}
                 {watchedSubject && (
-                  <div className="mb-3 border-b border-[--color-border] pb-2">
-                    <span className="text-[--text-xs] text-[--color-muted-foreground]">
+                  <div className="mb-3 border-b border-(--color-border) pb-2">
+                    <span className="text-(--text-xs)">
                       Assunto:{" "}
                     </span>
-                    <strong className="text-[--text-sm]">
+                    <strong className="text-(--text-sm)">
                       {watchedSubject}
                     </strong>
                   </div>
@@ -200,16 +200,16 @@ export function EmailTemplateEditor({
             placeholder="Olá {{name}}, você foi convidado para..."
             className={[
               "flex w-full resize-y",
-              "rounded-[--radius] border border-[--color-border]",
-              "bg-[--color-input-bg] text-[--color-foreground]",
-              "px-3 py-2 text-[--text-sm]",
-              "placeholder:text-[--color-muted-foreground]",
-              "transition-colors duration-[--transition-fast]",
-              "hover:border-[--color-primary]/50",
-              "focus-visible:outline-none focus-visible:border-[--color-primary]",
-              "focus-visible:ring-2 focus-visible:ring-[--color-ring]/20",
+              "rounded-(--radius) border border-(--color-border)",
+              "bg-(--color-input-bg) text-(--color-foreground)",
+              "px-3 py-2 text-(--text-sm)",
+              "placeholder:text-(--color-muted-foreground)",
+              "transition-colors duration-(--transition-fast)",
+              "hover:border-(--color-primary)/50",
+              "focus-visible:outline-none focus-visible:border-(--color-primary)",
+              "focus-visible:ring-2 focus-visible:ring-(--color-ring)/20",
               errors.bodyText
-                ? "border-[--color-destructive] focus-visible:ring-[--color-destructive]/20"
+                ? "border-(--color-destructive) focus-visible:ring-(--color-destructive)/20"
                 : "",
             ].join(" ")}
             {...register("bodyText")}
@@ -217,8 +217,8 @@ export function EmailTemplateEditor({
         </FormField>
 
         {/* Ações */}
-        <div className="flex items-center justify-between border-t border-[--color-border] pt-4">
-          <p className="text-[--text-xs] text-[--color-muted-foreground]">
+        <div className="flex items-center justify-between border-t border-(--color-border) pt-4">
+          <p className="text-(--text-xs)">
             Última edição:{" "}
             {template.updatedAt.toLocaleDateString("pt-BR", {
               day: "2-digit",

@@ -47,9 +47,9 @@ const VISIBILITY_LABEL: Record<string, string> = {
 };
 
 const VISIBILITY_CLS: Record<string, string> = {
-  public: "bg-[--hb-green-muted] text-[--hb-green-fg]",
-  internal: "bg-[--hb-cyan-muted] text-[--hb-cyan-fg]",
-  restricted: "bg-[--color-destructive-muted] text-[--hb-red]",
+  public: "bg-(--hb-green-muted) text-(--hb-green-fg)",
+  internal: "bg-(--hb-cyan-muted) text-(--hb-cyan-fg)",
+  restricted: "bg-(--color-destructive-muted) text-(--hb-red)",
 };
 
 const STATUS_COLOR: Record<string, string> = {

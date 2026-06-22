@@ -95,7 +95,7 @@ export function KanbanSkeleton() {
             {Array.from({ length: cardCount }).map((_, cardIdx) => (
               <div
                 key={cardIdx}
-                className="border bg-[--surface] p-3 flex flex-col gap-2.5"
+                className="border bg-(--surface) p-3 flex flex-col gap-2.5"
                 style={{
                   borderColor: "var(--border)",
                   borderRadius: "var(--radius-md)",

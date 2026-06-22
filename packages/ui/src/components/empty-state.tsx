@@ -46,23 +46,23 @@ export function EmptyState({
         className,
       )}
     >
-      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-[--surface-alt]">
-        <Icon className="h-8 w-8 text-[--fg-muted]" aria-hidden="true" />
+      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-(--surface-alt)">
+        <Icon className="h-8 w-8 text-(--fg-muted)" aria-hidden="true" />
       </div>
 
       <div className="max-w-sm space-y-2">
-        <h3 className="text-[--text-lg] font-[--font-weight-semibold]">
+        <h3 className="text-(--text-lg) font-(--font-weight-semibold)">
           {title}
         </h3>
-        {description && <p className="text-[--text-sm]">{description}</p>}
+        {description && <p className="text-(--text-sm)">{description}</p>}
       </div>
 
       {action && <div>{action}</div>}
 
       {!hideQuote && (
-        <blockquote className="max-w-xs border-l-2 border-[--border] pl-4 text-left">
-          <p className="italic text-[--fg-muted]">"{displayQuote.text}"</p>
-          <cite className="mt-1 block font-[--font-weight-medium] text-[--fg-muted] not-italic">
+        <blockquote className="max-w-xs border-l-2 border-(--border) pl-4 text-left">
+          <p className="italic text-(--fg-muted)">"{displayQuote.text}"</p>
+          <cite className="mt-1 block font-(--font-weight-medium) text-(--fg-muted) not-italic">
             — {displayQuote.reference}
           </cite>
         </blockquote>

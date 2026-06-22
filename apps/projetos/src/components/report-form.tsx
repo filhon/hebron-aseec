@@ -86,7 +86,7 @@ function CharCount({
 }
 
 const inputCls =
-  "w-full rounded-[--radius] border px-3.5 py-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--brand] focus-visible:border-transparent";
+  "w-full rounded-(--radius) border px-3.5 py-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--brand) focus-visible:border-transparent";
 const inputStyle = {
   borderColor: "var(--border)",
   backgroundColor: "var(--bg-alt)",
@@ -323,7 +323,7 @@ export function ReportForm({
     <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-6">
       {projectTitle && (
         <div
-          className="rounded-[--radius] border px-4 py-3"
+          className="rounded-(--radius) border px-4 py-3"
           style={{
             borderColor: "var(--border)",
             backgroundColor: "var(--surface-alt)",
@@ -528,7 +528,7 @@ export function ReportForm({
         </p>
 
         <div
-          className="rounded-[--radius-md] border border-dashed py-6 flex flex-col items-center gap-2 cursor-pointer transition-colors"
+          className="rounded-md border border-dashed py-6 flex flex-col items-center gap-2 cursor-pointer transition-colors"
           style={{ borderColor: "var(--border)" }}
           onClick={() => fileInputRef.current?.click()}
           onKeyDown={(e) => e.key === "Enter" && fileInputRef.current?.click()}
@@ -572,7 +572,7 @@ export function ReportForm({
             {attachments.map((entry) => (
               <div
                 key={entry.id}
-                className="flex items-center gap-3 rounded-[--radius] border px-3 py-2"
+                className="flex items-center gap-3 rounded-(--radius) border px-3 py-2"
                 style={{
                   borderColor: "var(--border)",
                   backgroundColor: "var(--surface-alt)",
@@ -623,7 +623,7 @@ export function ReportForm({
       {/* Global error */}
       {Object.keys(errors).length > 0 && (
         <div
-          className="flex items-center gap-2 rounded-[--radius] border px-4 py-3"
+          className="flex items-center gap-2 rounded-(--radius) border px-4 py-3"
           style={{
             borderColor: "var(--color-destructive)",
             backgroundColor: "var(--color-destructive-muted)",
@@ -644,7 +644,7 @@ export function ReportForm({
       <button
         type="submit"
         disabled={submitting}
-        className="flex items-center justify-center gap-2 rounded-[--radius-md] py-3 text-sm font-semibold transition-colors disabled:opacity-70"
+        className="flex items-center justify-center gap-2 rounded-md py-3 text-sm font-semibold transition-colors disabled:opacity-70"
         style={{
           backgroundColor: "var(--brand)",
           color: "var(--brand-fg)",

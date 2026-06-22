@@ -296,7 +296,7 @@ export default async function UserDetailPage({ params, searchParams }: Props) {
               type="submit"
               variant="outline"
               size="sm"
-              className="rounded-full border-[--brand] text-[--brand]"
+              className="rounded-full border-(--brand) text-(--brand)"
             >
               <KeyRound size={13} aria-hidden="true" />
               Resetar senha
@@ -438,7 +438,7 @@ export default async function UserDetailPage({ params, searchParams }: Props) {
                     type="submit"
                     variant="outline"
                     size="sm"
-                    className="rounded-full border-[--brand] text-[--brand]"
+                    className="rounded-full border-(--brand) text-(--brand)"
                   >
                     Reativar conta
                   </Button>

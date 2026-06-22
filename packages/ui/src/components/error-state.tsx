@@ -33,19 +33,19 @@ export function ErrorState({
         className,
       )}
     >
-      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[--color-destructive-muted]">
+      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-(--color-destructive-muted)">
         <AlertTriangle
-          className="h-7 w-7 text-[--color-destructive]"
+          className="h-7 w-7 text-(--color-destructive)"
           aria-hidden="true"
         />
       </div>
 
       <div className="max-w-sm space-y-1">
-        <h3 className="text-[--text-base] font-[--font-weight-semibold]">
+        <h3 className="text-(--text-base) font-(--font-weight-semibold)">
           {title}
         </h3>
         {displayDescription && (
-          <p className="text-[--text-sm]">{displayDescription}</p>
+          <p className="text-(--text-sm)">{displayDescription}</p>
         )}
       </div>
 

@@ -69,10 +69,10 @@ export function NotificationBell({
       <DropdownMenuPrimitive.Trigger asChild>
         <button
           className={cn(
-            "relative flex h-9 w-9 items-center justify-center rounded-[--radius]",
-            "text-[--fg-muted] transition-colors duration-[--transition-fast]",
-            "hover:bg-[--surface-alt] hover:text-[--fg]",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--brand]",
+            "relative flex h-9 w-9 items-center justify-center rounded-(--radius)",
+            "text-(--fg-muted) transition-colors duration-(--transition-fast)",
+            "hover:bg-(--surface-alt) hover:text-(--fg)",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--brand)",
             className,
           )}
           aria-label={
@@ -86,8 +86,8 @@ export function NotificationBell({
               aria-hidden="true"
               className={cn(
                 "absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center",
-                "rounded-full bg-[--accent] px-1",
-                "text-[10px] font-[--font-weight-semibold] leading-none text-white",
+                "rounded-full bg-(--accent) px-1",
+                "text-[10px] font-(--font-weight-semibold) leading-none text-white",
               )}
             >
               {unreadCount > 99 ? "99+" : unreadCount}
@@ -101,27 +101,27 @@ export function NotificationBell({
           align="end"
           sideOffset={8}
           className={cn(
-            "z-[--z-dropdown] w-90 rounded-[--radius-md]",
-            "border border-[--border] bg-[--bg]",
-            "shadow-[--shadow-lg]",
+            "z-(--z-dropdown) w-90 rounded-(--radius-md)",
+            "border border-(--border) bg-(--bg)",
+            "shadow-(--shadow-lg)",
             "data-[state=open]:animate-in data-[state=closed]:animate-out",
             "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
             "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
             "data-[side=bottom]:slide-in-from-top-2",
           )}
         >
-          <div className="flex items-center justify-between border-b border-[--border] px-4 py-3">
-            <h2 className="text-[--text-sm] font-[--font-weight-semibold]">
+          <div className="flex items-center justify-between border-b border-(--border) px-4 py-3">
+            <h2 className="text-(--text-sm) font-(--font-weight-semibold)">
               Notificações
             </h2>
             {hasUnread && (
               <button
                 onClick={onMarkAllRead}
                 className={cn(
-                  "flex items-center gap-1 rounded-[--radius-sm] px-2 py-1",
-                  "text-[--text-xs]",
-                  "transition-colors duration-[--transition-fast]",
-                  "hover:bg-[--surface-alt] hover:text-[--fg]",
+                  "flex items-center gap-1 rounded-(--radius-sm) px-2 py-1",
+                  "text-(--text-xs)",
+                  "transition-colors duration-(--transition-fast)",
+                  "hover:bg-(--surface-alt) hover:text-(--fg)",
                 )}
               >
                 <CheckCheck className="h-3.5 w-3.5" aria-hidden="true" />
@@ -134,11 +134,11 @@ export function NotificationBell({
             {displayed.length === 0 ? (
               <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
                 <Bell
-                  className="h-8 w-8 text-[--fg-muted] opacity-40"
+                  className="h-8 w-8 text-(--fg-muted) opacity-40"
                   aria-hidden="true"
                 />
-                <p className="text-[--text-sm]">Nenhuma notificação</p>
-                <p className="text-[--text-xs] opacity-70">
+                <p className="text-(--text-sm)">Nenhuma notificação</p>
+                <p className="text-(--text-xs) opacity-70">
                   "Espera pelo Senhor; tem bom ânimo."
                 </p>
               </div>
@@ -154,41 +154,41 @@ export function NotificationBell({
                           onClick={() => onRead(n.id, href)}
                           className={cn(
                             "relative w-full px-4 py-3 text-left",
-                            "transition-colors duration-[--transition-fast]",
-                            "hover:bg-[--surface-alt] focus:bg-[--surface-alt]",
-                            "outline-none border-b border-[--border] last:border-b-0",
-                            isUnread && "bg-[--brand]/4",
+                            "transition-colors duration-(--transition-fast)",
+                            "hover:bg-(--surface-alt) focus:bg-(--surface-alt)",
+                            "outline-none border-b border-(--border) last:border-b-0",
+                            isUnread && "bg-(--brand)/4",
                           )}
                         >
                           {isUnread && (
                             <span
                               aria-hidden="true"
-                              className="absolute left-2 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-[--brand]"
+                              className="absolute left-2 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-(--brand)"
                             />
                           )}
 
                           <div className="pl-2">
                             <p
                               className={cn(
-                                "truncate text-[--text-sm]",
-                                isUnread && "font-[--font-weight-semibold]",
+                                "truncate text-(--text-sm)",
+                                isUnread && "font-(--font-weight-semibold)",
                               )}
                             >
                               {n.title}
                             </p>
                             {n.body && (
-                              <p className="mt-0.5 line-clamp-2 text-[--text-xs]">
+                              <p className="mt-0.5 line-clamp-2 text-(--text-xs)">
                                 {n.body}
                               </p>
                             )}
-                            <p className="mt-1 text-[--text-xs] opacity-70">
+                            <p className="mt-1 text-(--text-xs) opacity-70">
                               {formatRelativeTime(n.createdAt)}
                             </p>
                           </div>
 
                           {!isUnread && (
                             <Check
-                              className="absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-[--fg-muted] opacity-40"
+                              className="absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-(--fg-muted) opacity-40"
                               aria-hidden="true"
                             />
                           )}
@@ -201,12 +201,12 @@ export function NotificationBell({
             )}
           </div>
 
-          <div className="border-t border-[--border] px-4 py-2.5">
+          <div className="border-t border-(--border) px-4 py-2.5">
             <a
               href={centerHref}
               className={cn(
-                "block w-full text-center text-[--text-xs]",
-                "text-[--brand] transition-colors duration-[--transition-fast]",
+                "block w-full text-center text-(--text-xs)",
+                "text-(--brand) transition-colors duration-(--transition-fast)",
                 "hover:underline focus-visible:outline-none focus-visible:underline",
               )}
             >

@@ -13,7 +13,6 @@ import {
   ChevronRight,
   Loader2,
 } from "lucide-react";
-import { mockOrganizations } from "../lib/mock-data";
 import { StepInstitution } from "./project-wizard-steps/step-institution";
 import { StepProposal } from "./project-wizard-steps/step-proposal";
 import { StepBudget } from "./project-wizard-steps/step-budget";
@@ -262,7 +261,7 @@ interface ProjectWizardProps {
 }
 
 export function ProjectWizard({
-  organizations = mockOrganizations,
+  organizations = [],
   editalId = "",
   categoriaInicial = "",
 }: ProjectWizardProps) {
@@ -382,7 +381,7 @@ export function ProjectWizard({
       </div>
 
       <div
-        className="rounded-[--radius-lg] border overflow-hidden"
+        className="rounded-lg border overflow-hidden"
         style={{
           borderColor: "var(--border)",
           backgroundColor: "var(--surface)",
@@ -475,7 +474,7 @@ export function ProjectWizard({
             type="button"
             onClick={handleBack}
             disabled={step === 1}
-            className="flex items-center gap-1.5 rounded-[--radius-md] border px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-40 disabled:pointer-events-none"
+            className="flex items-center gap-1.5 rounded-md border px-4 py-2 text-sm font-semibold transition-colors disabled:opacity-40 disabled:pointer-events-none"
             style={{ borderColor: "var(--border)", color: "var(--fg-muted)" }}
           >
             <ChevronLeft className="w-4 h-4" aria-hidden />
@@ -500,7 +499,7 @@ export function ProjectWizard({
             <button
               type="button"
               onClick={handleNext}
-              className="flex items-center gap-1.5 rounded-[--radius-md] px-4 py-2 text-sm font-semibold transition-colors"
+              className="flex items-center gap-1.5 rounded-md px-4 py-2 text-sm font-semibold transition-colors"
               style={{
                 backgroundColor: "var(--brand)",
                 color: "var(--brand-fg)",
@@ -514,7 +513,7 @@ export function ProjectWizard({
               type="button"
               onClick={handleSubmit}
               disabled={submitting}
-              className="flex items-center gap-1.5 rounded-[--radius-md] px-5 py-2 text-sm font-semibold text-white transition-colors disabled:opacity-70"
+              className="flex items-center gap-1.5 rounded-md px-5 py-2 text-sm font-semibold text-white transition-colors disabled:opacity-70"
               style={{ backgroundColor: "var(--hb-green)" }}
             >
               {submitting ? (

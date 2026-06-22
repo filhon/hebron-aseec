@@ -35,10 +35,10 @@ export function LoadingState({
       )}
     >
       <Loader2
-        className={cn(iconSizes[size], "animate-spin text-[--brand]")}
+        className={cn(iconSizes[size], "animate-spin text-(--brand)")}
         aria-hidden="true"
       />
-      {message && <p className="text-[--text-sm]">{message}</p>}
+      {message && <p className="text-(--text-sm)">{message}</p>}
     </div>
   );
 }

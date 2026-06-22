@@ -62,6 +62,7 @@
 | S-38   | 2026-06-22 | P-2.6 — Schema do Banco Projetos          | concluido |
 | S-39   | 2026-06-22 | P-2.7 — RLS Policies Projetos             | concluido |
 | S-40   | 2026-06-22 | P-2.8 — Server Actions Projetos           | concluido |
+| S-41   | 2026-06-22 | P-2.9 — Integração UI ↔ Backend Projetos  | concluido |
 
 ---
 
@@ -1553,3 +1554,44 @@ Criadas todas as 8 páginas do app `projetos` com dados mockados (Bloco A). Áre
 - `packages/validators/package.json` (export `./projetos` adicionado)
 - `apps/projetos/package.json` (dependências: next-safe-action, @supabase/supabase-js, drizzle-orm, postgres, zod, @hebron/ai)
 - `SESSIONS.md` (este registro)
+
+---
+
+## S-41 — P-2.9 — Integração UI ↔ Backend Projetos
+
+**Data:** 2026-06-22
+**Branch:** feat/P-2.9-projetos-integration
+**Status:** concluido
+
+### Decisões e observações
+
+- `"use server"` em `queries.ts` permite chamadas diretas de RSC e chamadas via HTTP de client components com `useEffect`
+- `VersionSnapshotData` centraliza os campos que existem apenas no JSONB `project_versions.data` (metodologia, regiao, beneficiariosQuantidade, etc.) sem coluna dedicada no DB
+- Pipeline page mantida como `"use client"` (filtros interativos) com `useEffect` → `getKanbanProjects()`; filtering ocorre client-side
+- Wizard `novo/page.tsx` reescrito inline (sem separar em componentes de steps em arquivos diferentes) conforme a lista de arquivos permitidos
+- `VotePanelWrapper` agora aceita `projectId` e usa `useAction(castVote)` — `hasVoted` passa a ser `true` durante `isPending` para prevenir duplo clique
+- `mockOrganizations` removida de `project-wizard.tsx` e `punctual-project-form.tsx` (componentes mortos, não importados em nenhuma página) substituída por `[]`
+- `VersionSnapshotData` estendida com `riscos?` e `parcerias?` para cobrir campos opcionais do schema Zod
+- `nowStr` fixado com `?? ""` para satisfazer `noUncheckedIndexedAccess` do tsconfig strict
+- Reunião page: sem tabela `meeting_agendas` no DB → agenda mostra placeholder com citação bíblica; BI panel usa `getMeetingBIData()` com dados reais
+
+### Arquivos criados
+
+- `apps/projetos/src/lib/queries.ts`
+
+### Arquivos modificados
+
+- `apps/projetos/src/app/(submissor)/page.tsx` (substituiu mocks por RSC + queries)
+- `apps/projetos/src/app/(submissor)/[id]/page.tsx` (substituiu mocks por RSC + queries)
+- `apps/projetos/src/app/(submissor)/novo/page.tsx` (reescrita completa do wizard com orgs reais e submit wired)
+- `apps/projetos/src/app/(diretoria)/pipeline/page.tsx` (substituiu mocks por useEffect + getKanbanProjects)
+- `apps/projetos/src/app/(diretoria)/pipeline/[id]/page.tsx` (substituiu mocks por RSC + queries)
+- `apps/projetos/src/app/(diretoria)/reuniao/page.tsx` (substituiu mocks por RSC + getMeetingBIData)
+- `apps/projetos/src/components/vote-panel-wrapper.tsx` (wired to castVote action)
+- `apps/projetos/src/components/project-wizard.tsx` (removida importação mock-data)
+- `apps/projetos/src/components/punctual-project-form.tsx` (removida importação mock-data)
+- `SESSIONS.md` (este registro)
+
+### Arquivos deletados
+
+- `apps/projetos/src/lib/mock-data.ts`

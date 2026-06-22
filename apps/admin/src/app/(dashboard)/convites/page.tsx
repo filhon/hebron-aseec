@@ -414,7 +414,7 @@ export default async function ConvitesPage({
                             type="submit"
                             variant="outline"
                             size="xs"
-                            className="rounded-full border-[--brand] text-[--brand]"
+                            className="rounded-full border-(--brand) text-(--brand)"
                           >
                             <Mail size={12} aria-hidden="true" />
                             Renovar

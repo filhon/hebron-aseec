@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Filter, LayoutGrid, X } from "lucide-react";
-import { mockCompactProjects } from "../../../lib/mock-data";
+import { getKanbanProjects } from "../../../lib/queries";
 import { ProjectKanban } from "../../../components/project-kanban";
-import type { ProjectStage } from "@hebron/types";
+import type { CompactProjectView, ProjectStage } from "@hebron/types";
 
 const BRL = new Intl.NumberFormat("pt-BR", {
   style: "currency",
@@ -43,7 +43,7 @@ const YEAR_OPTIONS = [
 function EmptyPipelineNoFilters() {
   return (
     <div
-      className="rounded-[--radius-lg] border border-dashed px-8 py-16 flex flex-col items-center text-center gap-5"
+      className="rounded-lg border border-dashed px-8 py-16 flex flex-col items-center text-center gap-5"
       style={{
         borderColor: "var(--hb-gray-200)",
         backgroundColor: "var(--bg-alt)",
@@ -94,7 +94,7 @@ function EmptyPipelineNoFilters() {
 function EmptyPipelineFiltered({ onClear }: { onClear: () => void }) {
   return (
     <div
-      className="rounded-[--radius-lg] border px-8 py-14 flex flex-col items-center text-center gap-4"
+      className="rounded-lg border px-8 py-14 flex flex-col items-center text-center gap-4"
       style={{
         borderColor: "var(--border)",
         backgroundColor: "var(--surface-alt)",
@@ -124,7 +124,7 @@ function EmptyPipelineFiltered({ onClear }: { onClear: () => void }) {
       <button
         type="button"
         onClick={onClear}
-        className="inline-flex items-center gap-1.5 rounded-[--radius-md] border px-4 py-2 text-sm font-semibold transition-colors hover:border-[--brand] hover:text-[--brand]"
+        className="inline-flex items-center gap-1.5 rounded-md border px-4 py-2 text-sm font-semibold transition-colors hover:border-(--brand) hover:text-(--brand)"
         style={{ borderColor: "var(--border)", color: "var(--fg-muted)" }}
       >
         <X className="w-3.5 h-3.5" aria-hidden />
@@ -136,12 +136,21 @@ function EmptyPipelineFiltered({ onClear }: { onClear: () => void }) {
 
 export default function DiretoriaPipelinePage() {
   const router = useRouter();
+  const [allProjects, setAllProjects] = useState<CompactProjectView[]>([]);
+  const [loading, setLoading] = useState(true);
   const [categoria, setCategoria] = useState("");
   const [tipo, setTipo] = useState("");
   const [ano, setAno] = useState("");
   const [showClosed, setShowClosed] = useState(false);
 
-  const filtered = mockCompactProjects.filter((p) => {
+  useEffect(() => {
+    void getKanbanProjects().then((ps) => {
+      setAllProjects(ps);
+      setLoading(false);
+    });
+  }, []);
+
+  const filtered = allProjects.filter((p) => {
     if (categoria && p.categoria !== categoria) return false;
     if (tipo && p.type !== tipo) return false;
     if (ano && p.anoReferencia !== null && String(p.anoReferencia) !== ano)
@@ -182,25 +191,26 @@ export default function DiretoriaPipelinePage() {
         <div>
           <p className="hb-eyebrow mb-1">Diretoria</p>
           <h1
-            className="text-2xl font-bold text-[--fg]"
+            className="text-2xl font-bold text-(--fg)"
             style={{ fontFamily: "var(--font-display)" }}
           >
             Pipeline de Projetos
           </h1>
-          <p className="text-sm text-[--fg-muted] mt-1">
-            {mockCompactProjects.length} projetos no portfólio · {activeCount}{" "}
-            ativos
+          <p className="text-sm text-(--fg-muted) mt-1">
+            {loading
+              ? "Carregando..."
+              : `${allProjects.length} projetos no portfólio · ${activeCount} ativos`}
           </p>
         </div>
 
         {/* Summary chips */}
         <div className="hidden sm:flex items-center gap-2">
           {pendingVotes > 0 && (
-            <div className="rounded-full px-3 py-1 text-xs font-semibold bg-[--brand-muted] text-[--brand]">
+            <div className="rounded-full px-3 py-1 text-xs font-semibold bg-(--brand-muted) text-(--brand)">
               {pendingVotes} em votação
             </div>
           )}
-          <div className="rounded-full px-3 py-1 text-xs font-semibold bg-[--surface-alt] text-[--fg-muted] border border-[--border]">
+          <div className="rounded-full px-3 py-1 text-xs font-semibold bg-(--surface-alt) text-(--fg-muted) border border-(--border)">
             {BRL.format(totalValue)} alocado
           </div>
         </div>
@@ -208,7 +218,7 @@ export default function DiretoriaPipelinePage() {
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-1.5 text-sm text-[--fg-muted] shrink-0">
+        <div className="flex items-center gap-1.5 text-sm text-(--fg-muted) shrink-0">
           <Filter className="w-4 h-4" aria-hidden />
           Filtrar:
         </div>
@@ -216,7 +226,7 @@ export default function DiretoriaPipelinePage() {
         <select
           value={categoria}
           onChange={(e) => setCategoria(e.target.value)}
-          className="rounded-[--radius] border border-[--border] bg-[--surface] px-3 py-1.5 text-sm text-[--fg] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--brand]"
+          className="rounded-(--radius) border border-(--border) bg-(--surface) px-3 py-1.5 text-sm text-(--fg) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--brand)"
           aria-label="Categoria"
         >
           {CATEGORY_OPTIONS.map((o) => (
@@ -229,7 +239,7 @@ export default function DiretoriaPipelinePage() {
         <select
           value={tipo}
           onChange={(e) => setTipo(e.target.value)}
-          className="rounded-[--radius] border border-[--border] bg-[--surface] px-3 py-1.5 text-sm text-[--fg] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--brand]"
+          className="rounded-(--radius) border border-(--border) bg-(--surface) px-3 py-1.5 text-sm text-(--fg) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--brand)"
           aria-label="Tipo"
         >
           {TYPE_OPTIONS.map((o) => (
@@ -242,7 +252,7 @@ export default function DiretoriaPipelinePage() {
         <select
           value={ano}
           onChange={(e) => setAno(e.target.value)}
-          className="rounded-[--radius] border border-[--border] bg-[--surface] px-3 py-1.5 text-sm text-[--fg] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--brand]"
+          className="rounded-(--radius) border border-(--border) bg-(--surface) px-3 py-1.5 text-sm text-(--fg) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--brand)"
           aria-label="Ano"
         >
           {YEAR_OPTIONS.map((o) => (
@@ -252,12 +262,12 @@ export default function DiretoriaPipelinePage() {
           ))}
         </select>
 
-        <label className="flex items-center gap-2 text-sm text-[--fg-muted] cursor-pointer select-none">
+        <label className="flex items-center gap-2 text-sm text-(--fg-muted) cursor-pointer select-none">
           <input
             type="checkbox"
             checked={showClosed}
             onChange={(e) => setShowClosed(e.target.checked)}
-            className="rounded border-[--border] text-[--brand] focus:ring-[--brand]"
+            className="rounded border-(--border) text-(--brand) focus:ring-(--brand)"
           />
           Exibir encerrados
         </label>
@@ -266,7 +276,7 @@ export default function DiretoriaPipelinePage() {
           <button
             type="button"
             onClick={clearFilters}
-            className="text-xs text-[--fg-muted] hover:text-[--color-destructive] transition-colors underline"
+            className="text-xs text-(--fg-muted) hover:text-(--color-destructive) transition-colors underline"
           >
             Limpar filtros
           </button>

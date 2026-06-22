@@ -85,7 +85,7 @@ function AttachmentSlot({
 
   return (
     <div
-      className="rounded-[--radius-md] border overflow-hidden"
+      className="rounded-md border overflow-hidden"
       style={{
         borderColor: error ? "var(--color-destructive)" : "var(--border)",
       }}
@@ -96,7 +96,7 @@ function AttachmentSlot({
         style={{ backgroundColor: "var(--surface-alt)" }}
       >
         <div
-          className="w-9 h-9 rounded-[--radius] flex items-center justify-center shrink-0"
+          className="w-9 h-9 rounded-(--radius) flex items-center justify-center shrink-0"
           style={{
             backgroundColor: file
               ? "var(--hb-green-muted)"
@@ -155,7 +155,7 @@ function AttachmentSlot({
           <button
             type="button"
             onClick={() => inputRef.current?.click()}
-            className="shrink-0 rounded-[--radius] border px-3 py-1.5 text-xs font-semibold transition-colors"
+            className="shrink-0 rounded-(--radius) border px-3 py-1.5 text-xs font-semibold transition-colors"
             style={{
               borderColor: "var(--border)",
               color: "var(--fg-muted)",
@@ -286,7 +286,7 @@ function VideoPreview({ file }: { file: File }) {
     <div className="flex items-start gap-3">
       <video
         src={url}
-        className="w-24 h-16 object-cover rounded-[--radius] shrink-0"
+        className="w-24 h-16 object-cover rounded-(--radius) shrink-0"
         preload="metadata"
         muted
         playsInline
@@ -428,7 +428,7 @@ export function StepAttachments({
       {/* Status summary */}
       {(files.video ?? files.spreadsheet ?? files.letter) && (
         <div
-          className="rounded-[--radius] border px-4 py-3 flex flex-col gap-1.5"
+          className="rounded-(--radius) border px-4 py-3 flex flex-col gap-1.5"
           style={{
             borderColor: "var(--border)",
             backgroundColor: "var(--surface-alt)",

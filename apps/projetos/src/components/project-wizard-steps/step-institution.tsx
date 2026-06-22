@@ -83,7 +83,7 @@ export function StepInstitution({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Buscar por nome, cidade ou país…"
-          className="w-full rounded-[--radius] border pl-10 pr-4 py-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2"
+          className="w-full rounded-(--radius) border pl-10 pr-4 py-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2"
           style={{
             borderColor: "var(--border)",
             backgroundColor: "var(--bg-alt)",
@@ -101,7 +101,7 @@ export function StepInstitution({
       >
         {filtered.length === 0 ? (
           <div
-            className="rounded-[--radius-md] border border-dashed py-8 flex flex-col items-center gap-2"
+            className="rounded-md border border-dashed py-8 flex flex-col items-center gap-2"
             style={{ borderColor: "var(--border)" }}
           >
             <Building2
@@ -123,7 +123,7 @@ export function StepInstitution({
                 role="option"
                 aria-selected={isSelected}
                 onClick={() => onChange({ organizacaoId: org.id })}
-                className="flex items-center gap-4 rounded-[--radius-md] border-2 px-4 py-3.5 text-left transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
+                className="flex items-center gap-4 rounded-md border-2 px-4 py-3.5 text-left transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-1"
                 style={{
                   borderColor: isSelected ? "var(--hb-blue)" : "var(--border)",
                   backgroundColor: isSelected
@@ -188,7 +188,7 @@ export function StepInstitution({
       {/* Selected summary */}
       {selected && (
         <div
-          className="rounded-[--radius] border px-4 py-3 flex items-center gap-3"
+          className="rounded-(--radius) border px-4 py-3 flex items-center gap-3"
           style={{
             borderColor: "var(--hb-blue)",
             backgroundColor: "var(--hb-gray-50)",

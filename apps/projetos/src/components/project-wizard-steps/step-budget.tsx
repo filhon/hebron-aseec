@@ -104,7 +104,7 @@ export function StepBudget({ data, errors, onChange }: StepProps) {
   }
 
   const inputCls =
-    "w-full rounded-[--radius] border px-3.5 py-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--brand] focus-visible:border-transparent";
+    "w-full rounded-(--radius) border px-3.5 py-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--brand) focus-visible:border-transparent";
   const inputStyle = {
     borderColor: "var(--border)",
     backgroundColor: "var(--bg-alt)",
@@ -231,7 +231,7 @@ export function StepBudget({ data, errors, onChange }: StepProps) {
                 onClick={() => !isComplete && toggleMonth(num)}
                 disabled={isComplete}
                 aria-pressed={selected}
-                className="rounded-[--radius] border-2 px-3 py-2.5 text-xs font-semibold transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="rounded-(--radius) border-2 px-3 py-2.5 text-xs font-semibold transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 disabled:opacity-40 disabled:cursor-not-allowed"
                 style={{
                   borderColor: selected ? "var(--hb-blue)" : "var(--border)",
                   backgroundColor: selected
@@ -265,7 +265,7 @@ export function StepBudget({ data, errors, onChange }: StepProps) {
       {/* Financial summary */}
       {total > 0 && (
         <div
-          className="rounded-[--radius-md] border p-4"
+          className="rounded-md border p-4"
           style={{
             borderColor: "var(--border)",
             backgroundColor: "var(--surface-alt)",

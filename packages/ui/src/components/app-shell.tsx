@@ -55,23 +55,23 @@ function MobileSidebar({
       <DialogPrimitive.Portal>
         <DialogPrimitive.Overlay
           className={cn(
-            "fixed inset-0 z-[--z-overlay] bg-black/40 backdrop-blur-[2px]",
+            "fixed inset-0 z-(--z-overlay) bg-black/40 backdrop-blur-[2px]",
             "lg:hidden",
             "data-[state=open]:animate-in data-[state=closed]:animate-out",
             "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
-            "duration-[--transition-medium]",
+            "duration-(--transition-medium)",
           )}
         />
         <DialogPrimitive.Content
           aria-describedby={undefined}
           className={cn(
-            "fixed inset-y-0 left-0 z-[--z-modal] w-64",
-            "border-r border-[--border] bg-[--bg]",
-            "shadow-[--shadow-xl]",
+            "fixed inset-y-0 left-0 z-(--z-modal) w-64",
+            "border-r border-(--border) bg-(--bg)",
+            "shadow-(--shadow-xl)",
             "lg:hidden",
             "data-[state=open]:animate-in data-[state=closed]:animate-out",
             "data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left",
-            "duration-[--transition-medium]",
+            "duration-(--transition-medium)",
           )}
         >
           <DialogPrimitive.Title className="sr-only">
@@ -79,7 +79,7 @@ function MobileSidebar({
           </DialogPrimitive.Title>
 
           {logo && (
-            <div className="flex h-14 items-center border-b border-[--border] px-4">
+            <div className="flex h-14 items-center border-b border-(--border) px-4">
               {logo}
             </div>
           )}
@@ -120,26 +120,26 @@ export function AppShell({
   const [mobileOpen, setMobileOpen] = React.useState(false);
 
   return (
-    <div className={cn("min-h-screen bg-[--bg]", className)}>
+    <div className={cn("min-h-screen bg-(--bg)", className)}>
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-[--z-sticky]",
+          "fixed inset-y-0 left-0 z-(--z-sticky)",
           "hidden lg:flex flex-col",
-          "border-r border-[--border] bg-[--bg]",
-          "transition-[width] duration-[--transition-medium]",
+          "border-r border-(--border) bg-(--bg)",
+          "transition-[width] duration-(--transition-medium)",
           desktopCollapsed ? "w-16" : "w-64",
         )}
         aria-label="Barra lateral de navegação"
       >
         <div
           className={cn(
-            "flex h-14 shrink-0 items-center border-b border-[--border]",
+            "flex h-14 shrink-0 items-center border-b border-(--border)",
             desktopCollapsed ? "justify-center px-3" : "px-4",
           )}
         >
           {logo}
           {!desktopCollapsed && appName && (
-            <span className="ml-2 truncate text-[--text-sm] font-[--font-weight-semibold]">
+            <span className="ml-2 truncate text-(--text-sm) font-(--font-weight-semibold)">
               {appName}
             </span>
           )}
@@ -169,20 +169,20 @@ export function AppShell({
 
       <header
         className={cn(
-          "fixed right-0 top-0 z-[--z-sticky] h-14",
-          "flex items-center gap-3 border-b border-[--border]",
-          "bg-[--bg]/95 px-4 backdrop-blur-sm",
-          "transition-[left] duration-[--transition-medium]",
+          "fixed right-0 top-0 z-(--z-sticky) h-14",
+          "flex items-center gap-3 border-b border-(--border)",
+          "bg-(--bg)/95 px-4 backdrop-blur-sm",
+          "transition-[left] duration-(--transition-medium)",
           "left-0",
           desktopCollapsed ? "lg:left-16" : "lg:left-64",
         )}
       >
         <button
           className={cn(
-            "flex h-8 w-8 items-center justify-center rounded-[--radius] lg:hidden",
-            "text-[--fg] transition-colors duration-[--transition-fast]",
-            "hover:bg-[--surface-alt]",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--brand]",
+            "flex h-8 w-8 items-center justify-center rounded-(--radius) lg:hidden",
+            "text-(--fg) transition-colors duration-(--transition-fast)",
+            "hover:bg-(--surface-alt)",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--brand)",
           )}
           onClick={() => setMobileOpen(true)}
           aria-label="Abrir menu de navegação"
@@ -194,7 +194,7 @@ export function AppShell({
           <div className="flex items-center gap-2 lg:hidden">
             {logo}
             {appName && (
-              <span className="text-[--text-sm] font-[--font-weight-semibold]">
+              <span className="text-(--text-sm) font-(--font-weight-semibold)">
                 {appName}
               </span>
             )}
@@ -208,7 +208,7 @@ export function AppShell({
 
       <main
         className={cn(
-          "pt-14 transition-[margin-left] duration-[--transition-medium]",
+          "pt-14 transition-[margin-left] duration-(--transition-medium)",
           "ml-0",
           desktopCollapsed ? "lg:ml-16" : "lg:ml-64",
         )}

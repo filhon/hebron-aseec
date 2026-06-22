@@ -92,7 +92,7 @@ function ReviewSection({
         </button>
       </div>
       <div
-        className="rounded-[--radius-md] border overflow-hidden"
+        className="rounded-md border overflow-hidden"
         style={{ borderColor: "var(--border)" }}
       >
         {rows.map((row, idx) => (
@@ -169,7 +169,7 @@ export function StepReview({
     <div className="flex flex-col gap-6">
       {/* Banner */}
       <div
-        className="rounded-[--radius] border px-4 py-3 text-sm font-medium"
+        className="rounded-(--radius) border px-4 py-3 text-sm font-medium"
         style={{
           borderColor: "var(--hb-blue)",
           backgroundColor: "var(--hb-gray-50)",
@@ -299,7 +299,7 @@ export function StepReview({
           </button>
         </div>
         <div
-          className="rounded-[--radius-md] border overflow-hidden"
+          className="rounded-md border overflow-hidden"
           style={{
             borderColor: "var(--border)",
             backgroundColor: "var(--surface)",
@@ -368,7 +368,7 @@ export function StepReview({
 
       {/* Declaration */}
       <div
-        className="rounded-[--radius-md] border px-4 py-4"
+        className="rounded-md border px-4 py-4"
         style={{
           borderColor: "var(--hb-green-deep)",
           backgroundColor: "var(--hb-green-muted)",

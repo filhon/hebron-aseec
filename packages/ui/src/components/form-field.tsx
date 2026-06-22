@@ -16,7 +16,7 @@ const Label = React.forwardRef<
   <LabelPrimitive.Root
     ref={ref}
     className={cn(
-      "text-[--text-sm] font-medium leading-none",
+      "text-(--text-sm) font-medium leading-none",
       "peer-disabled:cursor-not-allowed peer-disabled:opacity-70",
       className,
     )}
@@ -25,7 +25,7 @@ const Label = React.forwardRef<
     {children}
     {required && (
       <span
-        className="ml-0.5 text-[--color-destructive]"
+        className="ml-0.5 text-(--color-destructive)"
         aria-hidden="true"
         title="Obrigatório"
       >
@@ -95,14 +95,14 @@ function FormField({
         <p
           id={errorId}
           role="alert"
-          className="flex items-center gap-1 text-[--text-xs]"
+          className="flex items-center gap-1 text-(--text-xs)"
         >
           {error}
         </p>
       ) : hint ? (
         <p
           id={descriptionId}
-          className="text-[--text-xs] leading-[--leading-relaxed]"
+          className="text-(--text-xs) leading-(--leading-relaxed)"
         >
           {hint}
         </p>

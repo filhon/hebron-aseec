@@ -34,12 +34,12 @@ function CategoryNode({
           if (hasChildren) onToggle(category.id);
         }}
         className={[
-          "w-full flex items-center gap-2 px-3 py-2 rounded-[--radius-sm] text-left",
-          "text-[13.5px] transition-all duration-[--dur-fast]",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--brand]",
+          "w-full flex items-center gap-2 px-3 py-2 rounded-(--radius-sm) text-left",
+          "text-[13.5px] transition-all duration-(--dur-fast)",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--brand)",
           isSelected
-            ? "bg-[--brand] text-[--brand-fg] font-semibold shadow-[--shadow-xs]"
-            : "text-[--fg] hover:bg-[--bg-alt]",
+            ? "bg-(--brand) text-(--brand-fg) font-semibold shadow-(--shadow-xs)"
+            : "text-(--fg) hover:bg-(--bg-alt)",
         ].join(" ")}
         style={{ paddingLeft: `${12 + depth * 20}px` }}
         aria-expanded={hasChildren ? isExpanded : undefined}
@@ -47,7 +47,7 @@ function CategoryNode({
         {/* Expand chevron */}
         <span
           className={[
-            "shrink-0 transition-transform duration-[--dur-fast]",
+            "shrink-0 transition-transform duration-(--dur-fast)",
             hasChildren ? "opacity-100" : "opacity-0 pointer-events-none",
             isExpanded ? "rotate-90" : "",
           ].join(" ")}
@@ -61,12 +61,12 @@ function CategoryNode({
           {isExpanded && hasChildren ? (
             <FolderOpen
               size={15}
-              className={isSelected ? "text-[--brand-fg]" : "text-[--brand]"}
+              className={isSelected ? "text-(--brand-fg)" : "text-(--brand)"}
             />
           ) : (
             <Folder
               size={15}
-              className={isSelected ? "text-[--brand-fg]" : "text-[--fg-muted]"}
+              className={isSelected ? "text-(--brand-fg)" : "text-(--fg-muted)"}
             />
           )}
         </span>
@@ -80,8 +80,8 @@ function CategoryNode({
             className={[
               "shrink-0 text-[11px] font-semibold px-1.5 py-0.5 rounded-full",
               isSelected
-                ? "bg-white/20 text-[--brand-fg]"
-                : "bg-[--bg-alt] text-[--fg-muted] border border-[--border]",
+                ? "bg-white/20 text-(--brand-fg)"
+                : "bg-(--bg-alt) text-(--fg-muted) border border-(--border)",
             ].join(" ")}
           >
             {category.documentCount}
@@ -167,12 +167,12 @@ export function CategoryTree({
             type="button"
             onClick={() => handleSelect(null)}
             className={[
-              "w-full flex items-center gap-2 px-3 py-2 rounded-[--radius-sm] text-left",
-              "text-[13.5px] transition-all duration-[--dur-fast]",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--brand]",
+              "w-full flex items-center gap-2 px-3 py-2 rounded-(--radius-sm) text-left",
+              "text-[13.5px] transition-all duration-(--dur-fast)",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--brand)",
               selectedId === null
-                ? "bg-[--brand] text-[--brand-fg] font-semibold shadow-[--shadow-xs]"
-                : "text-[--fg] hover:bg-[--bg-alt]",
+                ? "bg-(--brand) text-(--brand-fg) font-semibold shadow-(--shadow-xs)"
+                : "text-(--fg) hover:bg-(--bg-alt)",
             ].join(" ")}
           >
             <span aria-hidden="true" className="shrink-0">
@@ -180,8 +180,8 @@ export function CategoryTree({
                 size={15}
                 className={
                   selectedId === null
-                    ? "text-[--brand-fg]"
-                    : "text-[--fg-muted]"
+                    ? "text-(--brand-fg)"
+                    : "text-(--fg-muted)"
                 }
               />
             </span>
@@ -191,8 +191,8 @@ export function CategoryTree({
                 className={[
                   "shrink-0 text-[11px] font-semibold px-1.5 py-0.5 rounded-full",
                   selectedId === null
-                    ? "bg-white/20 text-[--brand-fg]"
-                    : "bg-[--bg-alt] text-[--fg-muted] border border-[--border]",
+                    ? "bg-white/20 text-(--brand-fg)"
+                    : "bg-(--bg-alt) text-(--fg-muted) border border-(--border)",
                 ].join(" ")}
               >
                 {totalDocs}
@@ -203,7 +203,7 @@ export function CategoryTree({
 
         {/* Divider */}
         <li
-          className="h-px bg-[--divider] mx-3 my-2"
+          className="h-px bg-(--divider) mx-3 my-2"
           role="separator"
           aria-hidden="true"
         />

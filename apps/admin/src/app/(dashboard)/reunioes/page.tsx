@@ -147,7 +147,7 @@ export default async function ReunioesPage({
               variant="outline"
               size="sm"
               type="button"
-              className="rounded-full border-[--brand] text-[--brand]"
+              className="rounded-full border-(--brand) text-(--brand)"
             >
               <FileText size={14} aria-hidden="true" />
               Ver pauta
@@ -259,7 +259,7 @@ export default async function ReunioesPage({
                         variant="outline"
                         size="sm"
                         type="button"
-                        className="rounded-full border-[--brand] text-[--brand]"
+                        className="rounded-full border-(--brand) text-(--brand)"
                       >
                         <FileText size={13} aria-hidden="true" />
                         Ver ata

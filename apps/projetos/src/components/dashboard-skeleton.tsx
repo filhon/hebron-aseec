@@ -39,7 +39,7 @@ export function DashboardSkeleton() {
         {[0, 1, 2].map((i) => (
           <div
             key={i}
-            className="rounded-md border bg-[--surface] px-5 py-4"
+            className="rounded-md border bg-(--surface) px-5 py-4"
             style={{
               borderColor: "var(--border)",
               boxShadow: "var(--shadow-xs)",
@@ -69,7 +69,7 @@ export function DashboardSkeleton() {
           {[140, 120, 160, 130].map((titleW, i) => (
             <div
               key={i}
-              className="flex items-center gap-4 border bg-[--surface] px-5 py-4"
+              className="flex items-center gap-4 border bg-(--surface) px-5 py-4"
               style={{
                 borderColor: "var(--border)",
                 boxShadow: "var(--shadow-xs)",
@@ -111,7 +111,7 @@ export function DashboardSkeleton() {
               {Array.from({ length: col.rows }).map((_, ri) => (
                 <div
                   key={ri}
-                  className="border bg-[--surface] px-4 py-3 flex items-start gap-3"
+                  className="border bg-(--surface) px-4 py-3 flex items-start gap-3"
                   style={{
                     borderColor: "var(--border)",
                     borderRadius: "var(--radius-md)",

@@ -100,7 +100,7 @@ export function RoleAssignmentForm({
         className="flex flex-col gap-5"
         noValidate
       >
-        <h3 className="text-[--text-sm] font-semibold text-[--color-foreground]">
+        <h3 className="text-(--text-sm) font-semibold">
           Atribuir papel
         </h3>
 
@@ -198,23 +198,23 @@ export function RoleAssignmentForm({
       {/* Active assignments table */}
       {activeAssignments.length > 0 && (
         <div className="flex flex-col gap-3">
-          <h3 className="text-[--text-sm] font-semibold text-[--color-foreground]">
+          <h3 className="text-(--text-sm) font-semibold">
             Atribuições ativas
           </h3>
-          <div className="overflow-hidden rounded-[--radius] border border-[--color-border]">
-            <table className="w-full text-[--text-sm]">
+          <div className="overflow-hidden rounded-(--radius) border border-(--color-border)">
+            <table className="w-full text-(--text-sm)">
               <thead>
-                <tr className="border-b border-[--color-border] bg-[--color-muted]/40">
-                  <th className="px-4 py-2.5 text-left font-medium text-[--color-muted-foreground]">
+                <tr className="border-b border-(--color-border) bg-(--color-muted)/40">
+                  <th className="px-4 py-2.5 text-left font-medium text-(--color-muted-foreground)">
                     Usuário
                   </th>
-                  <th className="px-4 py-2.5 text-left font-medium text-[--color-muted-foreground]">
+                  <th className="px-4 py-2.5 text-left font-medium text-(--color-muted-foreground)">
                     Papel
                   </th>
-                  <th className="px-4 py-2.5 text-left font-medium text-[--color-muted-foreground]">
+                  <th className="px-4 py-2.5 text-left font-medium text-(--color-muted-foreground)">
                     Escopo
                   </th>
-                  <th className="px-4 py-2.5 text-left font-medium text-[--color-muted-foreground]">
+                  <th className="px-4 py-2.5 text-left font-medium text-(--color-muted-foreground)">
                     Concedido em
                   </th>
                   <th className="w-12 px-4 py-2.5" />
@@ -227,21 +227,21 @@ export function RoleAssignmentForm({
                     <tr
                       key={a.id}
                       className={[
-                        "transition-colors duration-[--transition-fast]",
-                        idx % 2 === 0 ? "" : "bg-[--color-muted]/20",
-                        "hover:bg-[--color-primary]/4",
+                        "transition-colors duration-(--transition-fast)",
+                        idx % 2 === 0 ? "" : "bg-(--color-muted)/20",
+                        "hover:bg-(--color-primary)/4",
                       ].join(" ")}
                     >
-                      <td className="px-4 py-3 text-[--color-foreground]">
+                      <td className="px-4 py-3 text-(--color-foreground)">
                         {user?.name ?? a.userId}
                       </td>
-                      <td className="px-4 py-3 text-[--color-foreground]">
+                      <td className="px-4 py-3 text-(--color-foreground)">
                         {ROLE_LABELS[a.role] ?? a.role}
                       </td>
-                      <td className="px-4 py-3 text-[--color-foreground]">
+                      <td className="px-4 py-3 text-(--color-foreground)">
                         {SCOPE_LABELS[a.scope] ?? a.scope}
                       </td>
-                      <td className="px-4 py-3 text-[--color-muted-foreground]">
+                      <td className="px-4 py-3 text-(--color-muted-foreground)">
                         {a.grantedAt.toLocaleDateString("pt-BR")}
                       </td>
                       <td className="px-4 py-3">
@@ -249,9 +249,9 @@ export function RoleAssignmentForm({
                           type="button"
                           onClick={() => onRevoke(a.id)}
                           className={[
-                            "flex h-7 w-7 items-center justify-center rounded-[--radius-sm]",
-                            "text-[--color-muted-foreground] transition-colors duration-[--transition-fast]",
-                            "hover:bg-[--color-destructive]/10 hover:text-[--color-destructive]",
+                            "flex h-7 w-7 items-center justify-center rounded-sm",
+                            "text-(--color-muted-foreground) transition-colors duration-(--transition-fast)",
+                            "hover:bg-(--color-destructive)/10 hover:text-(--color-destructive)",
                           ].join(" ")}
                           title="Revogar papel"
                           aria-label={`Revogar papel ${ROLE_LABELS[a.role]} de ${user?.name}`}

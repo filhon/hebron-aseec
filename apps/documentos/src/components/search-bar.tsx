@@ -92,7 +92,7 @@ export function SearchBar({
         <div className="hb-field flex-1 min-w-0">
           <Search
             size={16}
-            className="text-[--fg-muted] shrink-0"
+            className="text-(--fg-muted) shrink-0"
             aria-hidden="true"
           />
           <input
@@ -100,14 +100,14 @@ export function SearchBar({
             value={query}
             onChange={handleQueryChange}
             placeholder={placeholder}
-            className="flex-1 min-w-0 bg-transparent border-none outline-none text-[13.5px] text-[--fg] placeholder:text-[--fg-muted]"
+            className="flex-1 min-w-0 bg-transparent border-none outline-none text-[13.5px] text-(--fg) placeholder:text-(--fg-muted)"
             aria-label={placeholder}
           />
           {query && (
             <button
               type="button"
               onClick={handleQueryClear}
-              className="shrink-0 text-[--fg-muted] hover:text-[--fg] transition-colors duration-[--dur-fast]"
+              className="shrink-0 text-(--fg-muted) hover:text-(--fg) transition-colors duration-(--dur-fast)"
               aria-label="Limpar busca"
             >
               <X size={14} aria-hidden="true" />
@@ -136,7 +136,7 @@ export function SearchBar({
           <ChevronDown
             size={13}
             aria-hidden="true"
-            className={`transition-transform duration-[--dur-fast] ${filtersOpen ? "rotate-180" : ""}`}
+            className={`transition-transform duration-(--dur-fast) ${filtersOpen ? "rotate-180" : ""}`}
           />
         </button>
 
@@ -192,7 +192,7 @@ export function SearchBar({
 
           {/* Divider */}
           {categories.length > 0 && tags.length > 0 && (
-            <div className="h-px bg-[--divider]" aria-hidden="true" />
+            <div className="h-px bg-(--divider)" aria-hidden="true" />
           )}
 
           {/* Tag filter */}
@@ -233,11 +233,11 @@ export function SearchBar({
       {/* Active filter summary (collapsed state) */}
       {!filtersOpen && hasActiveFilters && (
         <div className="flex flex-wrap gap-1.5 items-center">
-          <span className="text-[11.5px] text-[--fg-muted] font-medium">
+          <span className="text-[11.5px] text-(--fg-muted) font-medium">
             Filtrando por:
           </span>
           {categoryId && (
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11.5px] font-medium bg-[--brand] text-[--brand-fg]">
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11.5px] font-medium bg-(--brand) text-(--brand-fg)">
               {categories.find((c) => c.id === categoryId)?.name ?? categoryId}
               <button
                 type="button"
@@ -255,7 +255,7 @@ export function SearchBar({
             return (
               <span
                 key={id}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11.5px] font-medium bg-[--brand] text-[--brand-fg]"
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11.5px] font-medium bg-(--brand) text-(--brand-fg)"
               >
                 {tag.name}
                 <button

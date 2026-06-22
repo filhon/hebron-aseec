@@ -26,7 +26,7 @@ export function ProjectDetailSkeleton() {
 
       {/* Project header card */}
       <div
-        className="border bg-[--surface] overflow-hidden"
+        className="border bg-(--surface) overflow-hidden"
         style={{
           borderColor: "var(--border)",
           borderRadius: "var(--radius-lg)",
@@ -98,7 +98,7 @@ export function ProjectDetailSkeleton() {
             <section key={label as string}>
               <Bone className="h-3.5 w-24 mb-3" />
               <div
-                className="border bg-[--surface] px-5 py-4 flex flex-col gap-2"
+                className="border bg-(--surface) px-5 py-4 flex flex-col gap-2"
                 style={{
                   borderColor: "var(--border)",
                   borderRadius: "var(--radius-md)",
@@ -124,7 +124,7 @@ export function ProjectDetailSkeleton() {
               {[0, 1].map((i) => (
                 <div
                   key={i}
-                  className="border bg-[--surface] px-4 py-4 flex items-start gap-3"
+                  className="border bg-(--surface) px-4 py-4 flex items-start gap-3"
                   style={{
                     borderColor: "var(--border)",
                     borderRadius: "var(--radius-md)",
@@ -152,7 +152,7 @@ export function ProjectDetailSkeleton() {
         <div className="lg:col-span-2">
           <Bone className="h-3.5 w-20 mb-3" />
           <div
-            className="border bg-[--surface] px-4 py-5 flex flex-col gap-0"
+            className="border bg-(--surface) px-4 py-5 flex flex-col gap-0"
             style={{
               borderColor: "var(--border)",
               borderRadius: "var(--radius-md)",

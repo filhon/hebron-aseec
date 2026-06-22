@@ -240,17 +240,17 @@ export default async function DocumentPage({ params }: PageProps) {
     public: {
       label: "Público",
       Icon: Globe,
-      cls: "bg-[--hb-green-muted] text-[--hb-green-fg]",
+      cls: "bg-(--hb-green-muted) text-(--hb-green-fg)",
     },
     internal: {
       label: "Interno",
       Icon: Users,
-      cls: "bg-[--hb-cyan-muted] text-[--hb-cyan-fg]",
+      cls: "bg-(--hb-cyan-muted) text-(--hb-cyan-fg)",
     },
     restricted: {
       label: "Restrito",
       Icon: Lock,
-      cls: "bg-[--color-destructive-muted] text-[--hb-red]",
+      cls: "bg-(--color-destructive-muted) text-(--hb-red)",
     },
   } as const;
 

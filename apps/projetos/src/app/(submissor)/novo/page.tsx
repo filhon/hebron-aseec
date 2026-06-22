@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   ChevronLeft,
@@ -13,7 +14,10 @@ import {
   Paperclip,
   Eye,
 } from "lucide-react";
-import { mockOrganizations } from "../../../lib/mock-data";
+import { useAction } from "next-safe-action/hooks";
+import { getMyOrganizations, type OrgOption } from "../../../lib/queries";
+import { createAnnualDraft } from "../../../actions/projects";
+import { createPunctualDraft } from "../../../actions/projects";
 
 type WizardStep = {
   id: number;
@@ -31,25 +35,35 @@ const STEPS: WizardStep[] = [
 ];
 
 type FormData = {
-  // Step 1 — Instituição
+  // Step 1
   orgId: string;
   projectType: "anual" | "pontual";
-  // Step 2 — Proposta
+  // Step 2 — anual
   titulo: string;
   categoria: string;
   objetivos: string;
   justificativa: string;
   metodologia: string;
+  contextoMinisterial: string;
+  tempoMinisterioAnos: string;
+  regiao: string;
+  pais: string;
   beneficiariosQuantidade: string;
   beneficiariosDescricao: string;
-  // Step 3 — Orçamento
+  resultadosEsperados: string;
+  // Step 2 — pontual
+  motivoEmergencial: string;
+  prazoNecessidade: string;
+  descricao: string;
+  // Step 3
   valorTotal: string;
   numeroParcelas: string;
   cofinancimento: string;
-  // Step 4 — Cronograma
+  // Step 4
   anoReferencia: string;
   mesesSelecionados: number[];
-  // Step 5 — Anexos (file names for display only)
+  // Step 5
+  cartaRecomendacao: boolean;
   anexos: string[];
 };
 
@@ -61,13 +75,22 @@ const INITIAL: FormData = {
   objetivos: "",
   justificativa: "",
   metodologia: "",
+  contextoMinisterial: "",
+  tempoMinisterioAnos: "",
+  regiao: "",
+  pais: "Brasil",
   beneficiariosQuantidade: "",
   beneficiariosDescricao: "",
+  resultadosEsperados: "",
+  motivoEmergencial: "",
+  prazoNecessidade: "",
+  descricao: "",
   valorTotal: "",
   numeroParcelas: "12",
   cofinancimento: "",
-  anoReferencia: "2026",
+  anoReferencia: String(new Date().getFullYear() + 1),
   mesesSelecionados: [],
+  cartaRecomendacao: false,
   anexos: [],
 };
 
@@ -105,6 +128,8 @@ const BRL = new Intl.NumberFormat("pt-BR", {
   minimumFractionDigits: 0,
 });
 
+// ─── Step indicator ───────────────────────────────────────────────────────────
+
 function StepIndicator({
   steps,
   current,
@@ -118,16 +143,14 @@ function StepIndicator({
         const isCompleted = step.id < current;
         const isCurrent = step.id === current;
         const Icon = step.icon;
-
         return (
           <div key={step.id} className="flex items-center">
             <div className="flex flex-col items-center gap-1.5">
               <div
-                className="w-8 h-8 rounded-full flex items-center justify-center transition-all duration-[--dur-fast]"
+                className="w-8 h-8 rounded-full flex items-center justify-center transition-all duration-(--dur-fast)"
                 style={{
-                  backgroundColor: isCompleted
-                    ? "var(--hb-blue)"
-                    : isCurrent
+                  backgroundColor:
+                    isCompleted || isCurrent
                       ? "var(--hb-blue)"
                       : "var(--hb-gray-100)",
                   color:
@@ -150,10 +173,9 @@ function StepIndicator({
                 {step.label}
               </span>
             </div>
-
             {idx < steps.length - 1 && (
               <div
-                className="h-px w-8 sm:w-12 mx-1 mb-5 transition-colors duration-[--dur-fast]"
+                className="h-px w-8 sm:w-12 mx-1 mb-5 transition-colors duration-(--dur-fast)"
                 style={{
                   backgroundColor:
                     step.id < current ? "var(--hb-blue)" : "var(--hb-gray-100)",
@@ -168,6 +190,8 @@ function StepIndicator({
   );
 }
 
+// ─── Field helpers ────────────────────────────────────────────────────────────
+
 function FieldLabel({
   children,
   required,
@@ -176,10 +200,10 @@ function FieldLabel({
   required?: boolean;
 }) {
   return (
-    <label className="block text-sm font-semibold text-[--fg] mb-1.5">
+    <label className="block text-sm font-semibold text-(--fg) mb-1.5">
       {children}
       {required && (
-        <span className="text-[--color-destructive] ml-0.5" aria-hidden>
+        <span className="text-(--color-destructive) ml-0.5" aria-hidden>
           *
         </span>
       )}
@@ -204,7 +228,7 @@ function TextInput({
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
-      className="w-full rounded-[--radius] border border-[--border] bg-[--bg-alt] px-3.5 py-2.5 text-sm text-[--fg] placeholder:text-[--fg-subtle] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--brand] focus-visible:border-transparent transition-colors"
+      className="w-full rounded-(--radius) border border-(--border) bg-(--bg-alt) px-3.5 py-2.5 text-sm text-(--fg) placeholder:text-(--fg-subtle) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--brand) focus-visible:border-transparent transition-colors"
     />
   );
 }
@@ -226,7 +250,7 @@ function Textarea({
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
       rows={rows}
-      className="w-full rounded-[--radius] border border-[--border] bg-[--bg-alt] px-3.5 py-2.5 text-sm text-[--fg] placeholder:text-[--fg-subtle] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--brand] focus-visible:border-transparent transition-colors resize-none"
+      className="w-full rounded-(--radius) border border-(--border) bg-(--bg-alt) px-3.5 py-2.5 text-sm text-(--fg) placeholder:text-(--fg-subtle) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--brand) focus-visible:border-transparent transition-colors resize-none"
     />
   );
 }
@@ -246,7 +270,7 @@ function SelectInput({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="w-full rounded-[--radius] border border-[--border] bg-[--bg-alt] px-3.5 py-2.5 text-sm text-[--fg] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--brand] focus-visible:border-transparent transition-colors"
+      className="w-full rounded-(--radius) border border-(--border) bg-(--bg-alt) px-3.5 py-2.5 text-sm text-(--fg) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--brand) focus-visible:border-transparent transition-colors"
     >
       {placeholder && (
         <option value="" disabled>
@@ -262,81 +286,99 @@ function SelectInput({
   );
 }
 
-// Step 1: Instituição
+// ─── Steps ────────────────────────────────────────────────────────────────────
+
 function Step1({
   data,
   onChange,
+  orgs,
+  orgsLoading,
 }: {
   data: FormData;
   onChange: (patch: Partial<FormData>) => void;
+  orgs: OrgOption[];
+  orgsLoading: boolean;
 }) {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <p className="text-xs text-[--fg-muted] mb-4 leading-relaxed">
+        <p className="text-xs text-(--fg-muted) mb-4 leading-relaxed">
           Selecione a instituição que submeterá este projeto. Caso sua
           organização ainda não esteja cadastrada, entre em contato com a
           diretoria.
         </p>
 
-        <div className="flex flex-col gap-2">
-          {mockOrganizations.slice(0, 4).map((org) => (
-            <button
-              key={org.id}
-              type="button"
-              onClick={() => onChange({ orgId: org.id })}
-              className="flex items-center gap-4 rounded-[--radius-md] border-2 px-4 py-3 text-left transition-all duration-[--dur-fast] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--brand]"
-              style={{
-                borderColor:
-                  data.orgId === org.id ? "var(--hb-blue)" : "var(--border)",
-                backgroundColor:
-                  data.orgId === org.id
-                    ? "var(--brand-muted)"
-                    : "var(--surface)",
-              }}
-            >
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-base"
-                aria-hidden
-              >
-                {org.country === "Brasil"
-                  ? "🇧🇷"
-                  : org.country === "Moçambique"
-                    ? "🇲🇿"
-                    : org.country === "Portugal"
-                      ? "🇵🇹"
-                      : "🌍"}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p
-                  className="text-sm font-semibold text-[--fg]"
-                  style={{
-                    color:
-                      data.orgId === org.id ? "var(--hb-blue)" : "var(--fg)",
-                  }}
-                >
-                  {org.name}
-                </p>
-                <p className="text-xs text-[--fg-muted]">
-                  {[org.city, org.country].filter(Boolean).join(", ")}
-                </p>
-              </div>
-              <div
-                className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0"
+        {orgsLoading ? (
+          <p className="text-sm text-(--fg-muted)">
+            Carregando instituições...
+          </p>
+        ) : orgs.length === 0 ? (
+          <div
+            className="rounded-md border border-dashed border-(--border) px-4 py-6 text-center"
+            style={{ backgroundColor: "var(--surface-alt)" }}
+          >
+            <p className="text-sm text-(--fg-muted)">
+              Nenhuma instituição encontrada. Entre em contato com a diretoria.
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {orgs.map((org) => (
+              <button
+                key={org.id}
+                type="button"
+                onClick={() => onChange({ orgId: org.id })}
+                className="flex items-center gap-4 rounded-md border-2 px-4 py-3 text-left transition-all duration-(--dur-fast) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--brand)"
                 style={{
                   borderColor:
                     data.orgId === org.id ? "var(--hb-blue)" : "var(--border)",
                   backgroundColor:
-                    data.orgId === org.id ? "var(--hb-blue)" : "transparent",
+                    data.orgId === org.id
+                      ? "var(--brand-muted)"
+                      : "var(--surface)",
                 }}
               >
-                {data.orgId === org.id && (
-                  <Check className="w-3 h-3 text-white" aria-hidden />
-                )}
-              </div>
-            </button>
-          ))}
-        </div>
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-base"
+                  style={{ backgroundColor: "var(--hb-blue)", color: "#fff" }}
+                >
+                  🏛️
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p
+                    className="text-sm font-semibold"
+                    style={{
+                      color:
+                        data.orgId === org.id ? "var(--hb-blue)" : "var(--fg)",
+                    }}
+                  >
+                    {org.nome}
+                  </p>
+                  {org.cnpj && (
+                    <p className="text-xs text-(--fg-muted)">
+                      CNPJ: {org.cnpj}
+                    </p>
+                  )}
+                </div>
+                <div
+                  className="w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0"
+                  style={{
+                    borderColor:
+                      data.orgId === org.id
+                        ? "var(--hb-blue)"
+                        : "var(--border)",
+                    backgroundColor:
+                      data.orgId === org.id ? "var(--hb-blue)" : "transparent",
+                  }}
+                >
+                  {data.orgId === org.id && (
+                    <Check className="w-3 h-3 text-white" aria-hidden />
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div>
@@ -347,7 +389,7 @@ function Step1({
               key={type}
               type="button"
               onClick={() => onChange({ projectType: type })}
-              className="flex-1 rounded-[--radius-md] border-2 px-4 py-3 text-sm font-semibold transition-all duration-[--dur-fast] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--brand]"
+              className="flex-1 rounded-md border-2 px-4 py-3 text-sm font-semibold transition-all duration-(--dur-fast) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--brand)"
               style={{
                 borderColor:
                   data.projectType === type
@@ -367,7 +409,7 @@ function Step1({
             </button>
           ))}
         </div>
-        <p className="text-xs text-[--fg-muted] mt-2">
+        <p className="text-xs text-(--fg-muted) mt-2">
           {data.projectType === "anual"
             ? "Projetos anuais têm duração de 12 meses e são vinculados a um edital."
             : "Projetos pontuais são solicitações emergenciais sem vínculo com edital."}
@@ -377,8 +419,7 @@ function Step1({
   );
 }
 
-// Step 2: Proposta
-function Step2({
+function Step2Annual({
   data,
   onChange,
 }: {
@@ -436,6 +477,45 @@ function Step2({
         />
       </div>
 
+      <div>
+        <FieldLabel required>Resultados Esperados</FieldLabel>
+        <Textarea
+          value={data.resultadosEsperados}
+          onChange={(v) => onChange({ resultadosEsperados: v })}
+          placeholder="Quais resultados concretos este projeto visa alcançar?"
+          rows={3}
+        />
+      </div>
+
+      <div>
+        <FieldLabel required>Contexto Ministerial</FieldLabel>
+        <Textarea
+          value={data.contextoMinisterial}
+          onChange={(v) => onChange({ contextoMinisterial: v })}
+          placeholder="Descreva o histórico e o contexto do ministério onde o projeto será realizado..."
+          rows={3}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        <div>
+          <FieldLabel required>Região de Atuação</FieldLabel>
+          <TextInput
+            value={data.regiao}
+            onChange={(v) => onChange({ regiao: v })}
+            placeholder="Ex.: Norte do Brasil, Moçambique, etc."
+          />
+        </div>
+        <div>
+          <FieldLabel required>País</FieldLabel>
+          <TextInput
+            value={data.pais}
+            onChange={(v) => onChange({ pais: v })}
+            placeholder="Ex.: Brasil"
+          />
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div>
           <FieldLabel required>Nº de Beneficiários</FieldLabel>
@@ -446,7 +526,6 @@ function Step2({
             type="number"
           />
         </div>
-
         <div>
           <FieldLabel required>Descrição dos Beneficiários</FieldLabel>
           <TextInput
@@ -456,11 +535,105 @@ function Step2({
           />
         </div>
       </div>
+
+      <div>
+        <FieldLabel required>Tempo de Ministério (anos)</FieldLabel>
+        <TextInput
+          value={data.tempoMinisterioAnos}
+          onChange={(v) => onChange({ tempoMinisterioAnos: v })}
+          placeholder="Ex.: 10"
+          type="number"
+        />
+        <p className="text-xs text-(--fg-muted) mt-1">
+          Há quantos anos a instituição realiza ministério ativo?
+        </p>
+      </div>
     </div>
   );
 }
 
-// Step 3: Orçamento
+function Step2Pontual({
+  data,
+  onChange,
+}: {
+  data: FormData;
+  onChange: (patch: Partial<FormData>) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-5">
+      <div>
+        <FieldLabel required>Título do Projeto</FieldLabel>
+        <TextInput
+          value={data.titulo}
+          onChange={(v) => onChange({ titulo: v })}
+          placeholder="Ex.: Auxílio Emergencial — Inundação Manaus"
+        />
+      </div>
+
+      <div>
+        <FieldLabel required>Categoria</FieldLabel>
+        <SelectInput
+          value={data.categoria}
+          onChange={(v) => onChange({ categoria: v })}
+          options={CATEGORIAS}
+          placeholder="Selecione uma categoria"
+        />
+      </div>
+
+      <div>
+        <FieldLabel required>Motivo Emergencial</FieldLabel>
+        <Textarea
+          value={data.motivoEmergencial}
+          onChange={(v) => onChange({ motivoEmergencial: v })}
+          placeholder="Descreva a situação de emergência que justifica este projeto pontual..."
+          rows={4}
+        />
+      </div>
+
+      <div>
+        <FieldLabel required>Prazo de Necessidade</FieldLabel>
+        <TextInput
+          value={data.prazoNecessidade}
+          onChange={(v) => onChange({ prazoNecessidade: v })}
+          type="date"
+        />
+        <p className="text-xs text-(--fg-muted) mt-1">
+          Data limite para que o recurso esteja disponível.
+        </p>
+      </div>
+
+      <div>
+        <FieldLabel>Descrição Adicional</FieldLabel>
+        <Textarea
+          value={data.descricao}
+          onChange={(v) => onChange({ descricao: v })}
+          placeholder="Detalhes adicionais sobre o projeto (opcional)..."
+          rows={3}
+        />
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        <div>
+          <FieldLabel>Região</FieldLabel>
+          <TextInput
+            value={data.regiao}
+            onChange={(v) => onChange({ regiao: v })}
+            placeholder="Ex.: Amazonas"
+          />
+        </div>
+        <div>
+          <FieldLabel>País</FieldLabel>
+          <TextInput
+            value={data.pais}
+            onChange={(v) => onChange({ pais: v })}
+            placeholder="Ex.: Brasil"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Step3({
   data,
   onChange,
@@ -469,7 +642,7 @@ function Step3({
   onChange: (patch: Partial<FormData>) => void;
 }) {
   const parcelas = parseInt(data.numeroParcelas) || 1;
-  const total = parseFloat(data.valorTotal.replace(/\D/g, "")) || 0;
+  const total = parseFloat(data.valorTotal) || 0;
   const porParcela = total > 0 && parcelas > 0 ? total / parcelas : 0;
 
   return (
@@ -482,7 +655,7 @@ function Step3({
           placeholder="Ex.: 48000"
           type="number"
         />
-        <p className="text-xs text-[--fg-muted] mt-1.5">
+        <p className="text-xs text-(--fg-muted) mt-1.5">
           Valor máximo anual: R$ 80.000 por projeto.
         </p>
       </div>
@@ -499,9 +672,9 @@ function Step3({
             }))}
           />
           {porParcela > 0 && (
-            <p className="text-xs text-[--fg-muted] mt-1.5">
+            <p className="text-xs text-(--fg-muted) mt-1.5">
               Valor por parcela:{" "}
-              <span className="font-semibold text-[--hb-blue]">
+              <span className="font-semibold text-(--hb-blue)">
                 {BRL.format(porParcela)}
               </span>
             </p>
@@ -514,29 +687,29 @@ function Step3({
         <Textarea
           value={data.cofinancimento}
           onChange={(v) => onChange({ cofinancimento: v })}
-          placeholder="Descreva se há outras fontes de financiamento para este projeto e seus respectivos valores..."
+          placeholder="Descreva se há outras fontes de financiamento para este projeto..."
           rows={2}
         />
       </div>
 
       {total > 0 && (
-        <div className="rounded-[--radius-md] border border-[--border] bg-[--surface-alt] p-4">
-          <p className="text-xs font-semibold text-[--fg-muted] uppercase tracking-wider mb-3">
+        <div className="rounded-md border border-(--border) bg-(--surface-alt) p-4">
+          <p className="text-xs font-semibold text-(--fg-muted) uppercase tracking-wider mb-3">
             Resumo Financeiro
           </p>
           <div className="flex flex-col gap-2">
             <div className="flex justify-between text-sm">
-              <span className="text-[--fg-muted]">Valor total</span>
-              <span className="font-semibold text-[--fg] tabular-nums">
+              <span className="text-(--fg-muted)">Valor total</span>
+              <span className="font-semibold text-(--fg) tabular-nums">
                 {BRL.format(total)}
               </span>
             </div>
-            {porParcela > 0 && (
+            {porParcela > 0 && data.projectType === "anual" && (
               <div className="flex justify-between text-sm">
-                <span className="text-[--fg-muted]">
+                <span className="text-(--fg-muted)">
                   Valor por parcela ({parcelas}x)
                 </span>
-                <span className="font-semibold text-[--fg] tabular-nums">
+                <span className="font-semibold text-(--fg) tabular-nums">
                   {BRL.format(porParcela)}
                 </span>
               </div>
@@ -548,7 +721,6 @@ function Step3({
   );
 }
 
-// Step 4: Cronograma
 function Step4({
   data,
   onChange,
@@ -561,9 +733,7 @@ function Step4({
     if (current.includes(m)) {
       onChange({ mesesSelecionados: current.filter((x) => x !== m) });
     } else {
-      onChange({
-        mesesSelecionados: [...current, m].sort((a, b) => a - b),
-      });
+      onChange({ mesesSelecionados: [...current, m].sort((a, b) => a - b) });
     }
   }
 
@@ -586,8 +756,9 @@ function Step4({
 
       <div>
         <FieldLabel required>Meses de Pagamento</FieldLabel>
-        <p className="text-xs text-[--fg-muted] mb-3">
-          Selecione os meses em que os recursos deverão ser liberados.
+        <p className="text-xs text-(--fg-muted) mb-3">
+          Selecione os meses em que os recursos deverão ser liberados. O número
+          deve coincidir com o de parcelas.
         </p>
         <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
           {MONTHS.map((month, idx) => {
@@ -598,7 +769,7 @@ function Step4({
                 key={num}
                 type="button"
                 onClick={() => toggleMonth(num)}
-                className="rounded-[--radius] border-2 px-3 py-2 text-xs font-semibold transition-all duration-[--dur-fast] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--brand]"
+                className="rounded-(--radius) border-2 px-3 py-2 text-xs font-semibold transition-all duration-(--dur-fast) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--brand)"
                 style={{
                   borderColor: selected ? "var(--hb-blue)" : "var(--border)",
                   backgroundColor: selected
@@ -613,7 +784,7 @@ function Step4({
           })}
         </div>
         {data.mesesSelecionados.length > 0 && (
-          <p className="text-xs text-[--fg-muted] mt-2">
+          <p className="text-xs text-(--fg-muted) mt-2">
             {data.mesesSelecionados.length} mês
             {data.mesesSelecionados.length !== 1 ? "es" : ""} selecionado
             {data.mesesSelecionados.length !== 1 ? "s" : ""}.
@@ -624,7 +795,6 @@ function Step4({
   );
 }
 
-// Step 5: Anexos
 function Step5({
   data,
   onChange,
@@ -633,11 +803,6 @@ function Step5({
   onChange: (patch: Partial<FormData>) => void;
 }) {
   const REQUIRED_DOCS = [
-    {
-      id: "carta",
-      label: "Carta de Recomendação",
-      description: "Carta assinada por liderança reconhecida",
-    },
     {
       id: "projeto",
       label: "Documento do Projeto",
@@ -652,30 +817,62 @@ function Step5({
 
   return (
     <div className="flex flex-col gap-5">
-      <p className="text-sm text-[--fg-muted]">
+      <p className="text-sm text-(--fg-muted)">
         Envie os documentos necessários para análise do projeto. Todos os
         arquivos devem estar em formato PDF.
       </p>
+
+      {/* Carta de recomendação checkbox */}
+      <div
+        className="rounded-md border border-(--border) bg-(--surface) px-4 py-4 flex items-start gap-3"
+        style={{ cursor: "pointer" }}
+        onClick={() => onChange({ cartaRecomendacao: !data.cartaRecomendacao })}
+      >
+        <div
+          className="w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 mt-0.5"
+          style={{
+            borderColor: data.cartaRecomendacao
+              ? "var(--hb-blue)"
+              : "var(--border)",
+            backgroundColor: data.cartaRecomendacao
+              ? "var(--hb-blue)"
+              : "transparent",
+          }}
+        >
+          {data.cartaRecomendacao && (
+            <Check className="w-3 h-3 text-white" aria-hidden />
+          )}
+        </div>
+        <div>
+          <p className="text-sm font-semibold text-(--fg)">
+            Carta de Recomendação
+          </p>
+          <p className="text-xs text-(--fg-muted) mt-0.5">
+            Confirmo que possuo carta de recomendação assinada por liderança
+            reconhecida pela Hebron Aseec.
+          </p>
+        </div>
+      </div>
 
       <div className="flex flex-col gap-3">
         {REQUIRED_DOCS.map((doc) => (
           <div
             key={doc.id}
-            className="rounded-[--radius-md] border border-dashed border-[--border] bg-[--surface-alt] px-4 py-4 flex items-center gap-4"
+            className="rounded-md border border-dashed border-(--border) bg-(--surface-alt) px-4 py-4 flex items-center gap-4"
           >
-            <div className="w-10 h-10 rounded-[--radius] bg-[--surface] border border-[--border] flex items-center justify-center shrink-0">
-              <Paperclip className="w-4 h-4 text-[--fg-muted]" aria-hidden />
+            <div className="w-10 h-10 rounded-(--radius) bg-(--surface) border border-(--border) flex items-center justify-center shrink-0">
+              <Paperclip className="w-4 h-4 text-(--fg-muted)" aria-hidden />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-[--fg]">{doc.label}</p>
-              <p className="text-xs text-[--fg-muted]">{doc.description}</p>
+              <p className="text-sm font-semibold text-(--fg)">{doc.label}</p>
+              <p className="text-xs text-(--fg-muted)">{doc.description}</p>
             </div>
             <button
               type="button"
               onClick={() =>
                 onChange({ anexos: [...data.anexos, doc.label + ".pdf"] })
               }
-              className="shrink-0 rounded-[--radius] border border-[--border] bg-[--surface] px-3 py-1.5 text-xs font-semibold text-[--fg-muted] hover:border-[--brand] hover:text-[--brand] transition-colors"
+              className="shrink-0 rounded-(--radius) border border-(--border) bg-(--surface) px-3 py-1.5 text-xs font-semibold text-(--fg-muted) hover:border-(--brand) hover:text-(--brand) transition-colors"
             >
               Selecionar
             </button>
@@ -685,20 +882,20 @@ function Step5({
 
       {data.anexos.length > 0 && (
         <div>
-          <p className="text-xs font-semibold text-[--fg-muted] uppercase tracking-wider mb-2">
+          <p className="text-xs font-semibold text-(--fg-muted) uppercase tracking-wider mb-2">
             Arquivos selecionados
           </p>
           <div className="flex flex-col gap-1.5">
             {data.anexos.map((name, i) => (
               <div
                 key={i}
-                className="flex items-center gap-2 rounded-[--radius-sm] bg-[--hb-green-muted] px-3 py-2"
+                className="flex items-center gap-2 rounded-sm bg-(--hb-green-muted) px-3 py-2"
               >
                 <Check
-                  className="w-3.5 h-3.5 text-[--hb-green-fg] shrink-0"
+                  className="w-3.5 h-3.5 text-(--hb-green-fg) shrink-0"
                   aria-hidden
                 />
-                <span className="text-xs text-[--hb-green-fg] font-medium flex-1">
+                <span className="text-xs text-(--hb-green-fg) font-medium flex-1">
                   {name}
                 </span>
                 <button
@@ -706,7 +903,7 @@ function Step5({
                   onClick={() =>
                     onChange({ anexos: data.anexos.filter((_, j) => j !== i) })
                   }
-                  className="text-xs text-[--fg-muted] hover:text-[--color-destructive]"
+                  className="text-xs text-(--fg-muted) hover:text-(--color-destructive)"
                 >
                   Remover
                 </button>
@@ -719,112 +916,97 @@ function Step5({
   );
 }
 
-// Step 6: Revisão
-function Step6({ data }: { data: FormData }) {
-  const org = mockOrganizations.find((o) => o.id === data.orgId);
+function Step6({ data, orgs }: { data: FormData; orgs: OrgOption[] }) {
+  const org = orgs.find((o) => o.id === data.orgId);
   const categoria = CATEGORIAS.find((c) => c.value === data.categoria);
-  const total = parseFloat(data.valorTotal.replace(/\D/g, "")) || 0;
+  const total = parseFloat(data.valorTotal) || 0;
   const parcelas = parseInt(data.numeroParcelas) || 1;
+
+  const sections = [
+    {
+      title: "Instituição",
+      items: [
+        { label: "Organização", value: org?.nome ?? "Não selecionada" },
+        {
+          label: "Tipo",
+          value:
+            data.projectType === "anual" ? "Projeto Anual" : "Projeto Pontual",
+        },
+      ],
+    },
+    {
+      title: "Proposta",
+      items: [
+        { label: "Título", value: data.titulo || "—" },
+        { label: "Categoria", value: categoria?.label ?? "—" },
+        {
+          label: "Beneficiários",
+          value: data.beneficiariosQuantidade
+            ? `${data.beneficiariosQuantidade} pessoas`
+            : "—",
+        },
+        ...(data.projectType === "anual"
+          ? [
+              { label: "Região", value: data.regiao || "—" },
+              { label: "País", value: data.pais || "—" },
+              {
+                label: "Carta de recomendação",
+                value: data.cartaRecomendacao ? "Sim" : "Não",
+              },
+            ]
+          : [
+              {
+                label: "Prazo de necessidade",
+                value: data.prazoNecessidade || "—",
+              },
+            ]),
+      ],
+    },
+    {
+      title: "Orçamento",
+      items: [
+        {
+          label: "Valor total",
+          value: total > 0 ? BRL.format(total) : "—",
+        },
+        ...(data.projectType === "anual"
+          ? [{ label: "Parcelas", value: `${parcelas}x` }]
+          : []),
+      ],
+    },
+    ...(data.projectType === "anual"
+      ? [
+          {
+            title: "Cronograma",
+            items: [
+              { label: "Ano", value: data.anoReferencia },
+              {
+                label: "Meses",
+                value:
+                  data.mesesSelecionados.length > 0
+                    ? data.mesesSelecionados
+                        .map((m) => MONTHS[m - 1]?.substring(0, 3) ?? "")
+                        .join(", ")
+                    : "—",
+              },
+            ],
+          },
+        ]
+      : []),
+  ];
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="rounded-[--radius-md] border border-[--hb-blue] bg-[--brand-muted] px-4 py-3 text-sm text-[--hb-blue] font-medium">
+      <div className="rounded-md border border-(--hb-blue) bg-(--brand-muted) px-4 py-3 text-sm text-(--hb-blue) font-medium">
         Revise todas as informações antes de submeter o projeto.
       </div>
 
-      {/* Section blocks */}
-      {[
-        {
-          title: "Instituição",
-          items: [
-            {
-              label: "Organização",
-              value: org?.name ?? "Não selecionada",
-            },
-            {
-              label: "Tipo",
-              value:
-                data.projectType === "anual"
-                  ? "Projeto Anual"
-                  : "Projeto Pontual",
-            },
-          ],
-        },
-        {
-          title: "Proposta",
-          items: [
-            { label: "Título", value: data.titulo || "—" },
-            {
-              label: "Categoria",
-              value: categoria?.label ?? "—",
-            },
-            {
-              label: "Beneficiários",
-              value: data.beneficiariosQuantidade
-                ? `${data.beneficiariosQuantidade} pessoas`
-                : "—",
-            },
-          ],
-        },
-        {
-          title: "Orçamento",
-          items: [
-            {
-              label: "Valor total",
-              value:
-                total > 0
-                  ? new Intl.NumberFormat("pt-BR", {
-                      style: "currency",
-                      currency: "BRL",
-                    }).format(total)
-                  : "—",
-            },
-            {
-              label: "Parcelas",
-              value: `${parcelas}x`,
-            },
-            {
-              label: "Cofinanciamento",
-              value: data.cofinancimento || "Nenhum",
-            },
-          ],
-        },
-        {
-          title: "Cronograma",
-          items: [
-            {
-              label: "Ano",
-              value: data.anoReferencia,
-            },
-            {
-              label: "Meses",
-              value:
-                data.mesesSelecionados.length > 0
-                  ? data.mesesSelecionados
-                      .map((m) => MONTHS[m - 1]?.substring(0, 3))
-                      .join(", ")
-                  : "—",
-            },
-          ],
-        },
-        {
-          title: "Anexos",
-          items: [
-            {
-              label: "Documentos",
-              value:
-                data.anexos.length > 0
-                  ? `${data.anexos.length} arquivo(s)`
-                  : "Nenhum anexo",
-            },
-          ],
-        },
-      ].map((section) => (
+      {sections.map((section) => (
         <div key={section.title}>
-          <p className="text-xs font-bold uppercase tracking-wider text-[--brand] mb-3">
+          <p className="text-xs font-bold uppercase tracking-wider text-(--brand) mb-3">
             {section.title}
           </p>
-          <div className="rounded-[--radius-md] border border-[--border] bg-[--surface] overflow-hidden">
+          <div className="rounded-md border border-(--border) bg-(--surface) overflow-hidden">
             {section.items.map((item, idx) => (
               <div
                 key={item.label}
@@ -833,10 +1015,10 @@ function Step6({ data }: { data: FormData }) {
                   borderTop: idx > 0 ? "1px solid var(--border)" : "none",
                 }}
               >
-                <span className="text-sm text-[--fg-muted] shrink-0">
+                <span className="text-sm text-(--fg-muted) shrink-0">
                   {item.label}
                 </span>
-                <span className="text-sm font-medium text-[--fg] text-right">
+                <span className="text-sm font-medium text-(--fg) text-right">
                   {item.value}
                 </span>
               </div>
@@ -848,10 +1030,56 @@ function Step6({ data }: { data: FormData }) {
   );
 }
 
+// ─── Main page ────────────────────────────────────────────────────────────────
+
 export default function NovoProjetoPage() {
+  const router = useRouter();
   const [step, setStep] = useState(1);
   const [data, setData] = useState<FormData>(INITIAL);
-  const [submitted, setSubmitted] = useState(false);
+  const [orgs, setOrgs] = useState<OrgOption[]>([]);
+  const [orgsLoading, setOrgsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void getMyOrganizations().then((result) => {
+      setOrgs(result);
+      setOrgsLoading(false);
+    });
+  }, []);
+
+  const { execute: submitAnual, isPending: isSubmittingAnual } = useAction(
+    createAnnualDraft,
+    {
+      onSuccess({ data: result }) {
+        if (result?.project?.id) {
+          router.push(`/${result.project.id}`);
+        }
+      },
+      onError({ error: err }) {
+        setError(
+          err.serverError ?? "Erro ao submeter o projeto. Tente novamente.",
+        );
+      },
+    },
+  );
+
+  const { execute: submitPontual, isPending: isSubmittingPontual } = useAction(
+    createPunctualDraft,
+    {
+      onSuccess({ data: result }) {
+        if (result?.project?.id) {
+          router.push(`/${result.project.id}`);
+        }
+      },
+      onError({ error: err }) {
+        setError(
+          err.serverError ?? "Erro ao submeter o projeto. Tente novamente.",
+        );
+      },
+    },
+  );
+
+  const isSubmitting = isSubmittingAnual || isSubmittingPontual;
 
   function patch(updates: Partial<FormData>) {
     setData((prev) => ({ ...prev, ...updates }));
@@ -866,47 +1094,55 @@ export default function NovoProjetoPage() {
   }
 
   function handleSubmit() {
-    setSubmitted(true);
+    setError(null);
+
+    if (data.projectType === "anual") {
+      submitAnual({
+        titulo: data.titulo,
+        categoria: data.categoria as Parameters<
+          typeof submitAnual
+        >[0]["categoria"],
+        organizacaoId: data.orgId,
+        anoReferencia: parseInt(data.anoReferencia),
+        objetivos: data.objetivos,
+        justificativa: data.justificativa,
+        metodologia: data.metodologia,
+        contextoMinisterial: data.contextoMinisterial,
+        tempoMinisterioAnos: parseInt(data.tempoMinisterioAnos) || 0,
+        regiao: data.regiao,
+        pais: data.pais,
+        beneficiariosQuantidade: parseInt(data.beneficiariosQuantidade) || 0,
+        beneficiariosDescricao: data.beneficiariosDescricao,
+        resultadosEsperados: data.resultadosEsperados,
+        cartaRecomendacao: data.cartaRecomendacao,
+        valorTotal: parseFloat(data.valorTotal) || 0,
+        numeroParcelas: parseInt(data.numeroParcelas) || 1,
+        mesesPagamento: data.mesesSelecionados,
+        cofinancimento: data.cofinancimento || null,
+      });
+    } else {
+      submitPontual({
+        titulo: data.titulo,
+        categoria: data.categoria as Parameters<
+          typeof submitPontual
+        >[0]["categoria"],
+        organizacaoId: data.orgId,
+        valorTotal: parseFloat(data.valorTotal) || 0,
+        motivoEmergencial: data.motivoEmergencial,
+        prazoNecessidade: data.prazoNecessidade
+          ? new Date(data.prazoNecessidade).toISOString()
+          : new Date().toISOString(),
+        descricao: data.descricao || undefined,
+        beneficiariosQuantidade: data.beneficiariosQuantidade
+          ? parseInt(data.beneficiariosQuantidade)
+          : undefined,
+        regiao: data.regiao || undefined,
+        pais: data.pais || undefined,
+      });
+    }
   }
 
-  if (submitted) {
-    return (
-      <div className="max-w-lg mx-auto px-4 sm:px-6 py-16 flex flex-col items-center text-center gap-6">
-        <div
-          className="w-16 h-16 rounded-full flex items-center justify-center"
-          style={{ backgroundColor: "var(--hb-green-muted)" }}
-        >
-          <Check
-            className="w-8 h-8"
-            style={{ color: "var(--hb-green-fg)" }}
-            aria-hidden
-          />
-        </div>
-        <div>
-          <h1
-            className="text-2xl font-bold text-[--fg] mb-2"
-            style={{ fontFamily: "var(--font-display)" }}
-          >
-            Projeto Submetido
-          </h1>
-          <p className="text-sm text-[--fg-muted]">
-            Seu projeto foi enviado para análise da diretoria. Você receberá uma
-            notificação quando houver atualizações.
-          </p>
-          <p className="text-xs text-[--fg-subtle] mt-4 italic">
-            "Entrega o teu caminho ao Senhor, confia nele, e ele tudo fará." —
-            Sl 37:5
-          </p>
-        </div>
-        <Link
-          href="/"
-          className="rounded-[--radius-md] bg-[--brand] text-[--brand-fg] px-6 py-2.5 text-sm font-semibold hover:bg-[--hb-blue-soft] transition-colors"
-        >
-          Voltar ao Dashboard
-        </Link>
-      </div>
-    );
-  }
+  const isLastStep = step === STEPS.length;
 
   return (
     <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8">
@@ -914,122 +1150,97 @@ export default function NovoProjetoPage() {
       <div className="mb-8">
         <Link
           href="/"
-          className="inline-flex items-center gap-1.5 text-sm text-[--fg-muted] hover:text-[--fg] transition-colors mb-4"
+          className="inline-flex items-center gap-1.5 text-sm text-(--fg-muted) hover:text-(--fg) transition-colors mb-4"
         >
           <ChevronLeft className="w-4 h-4" aria-hidden />
-          Meus Projetos
+          Voltar
         </Link>
         <h1
-          className="text-2xl font-bold text-[--fg]"
+          className="text-2xl font-bold text-(--fg) mb-2"
           style={{ fontFamily: "var(--font-display)" }}
         >
-          Novo Projeto
+          Submeter Projeto
         </h1>
-        <p className="text-sm text-[--fg-muted] mt-1">
-          Preencha as etapas abaixo para submeter sua solicitação.
+        <p className="text-sm text-(--fg-muted)">
+          Preencha as informações abaixo para submeter seu projeto à diretoria.
         </p>
       </div>
 
       {/* Step indicator */}
-      <div className="flex justify-center mb-8 overflow-x-auto pb-2">
+      <div className="mb-8 overflow-x-auto pb-2">
         <StepIndicator steps={STEPS} current={step} />
       </div>
 
       {/* Card */}
-      <div className="rounded-[--radius-lg] border border-[--border] bg-[--surface] shadow-[--shadow-md] overflow-hidden">
-        {/* Step header */}
-        <div className="px-6 py-5 border-b border-[--border] bg-[--surface-alt] flex items-center gap-3">
-          {(() => {
-            const currentStep = STEPS.find((s) => s.id === step);
-            const Icon = currentStep?.icon ?? FileText;
-            return (
-              <>
-                <div
-                  className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
-                  style={{ backgroundColor: "var(--brand)", color: "#fff" }}
-                >
-                  <Icon className="w-4 h-4" aria-hidden />
-                </div>
-                <div>
-                  <p className="text-xs font-semibold text-[--fg-muted] uppercase tracking-wider">
-                    Etapa {step} de {STEPS.length}
-                  </p>
-                  <p
-                    className="text-base font-semibold text-[--fg]"
-                    style={{ fontFamily: "var(--font-display)" }}
-                  >
-                    {currentStep?.label}
-                  </p>
-                </div>
-              </>
-            );
-          })()}
-        </div>
+      <div className="rounded-lg border border-(--border) bg-(--surface) shadow-(--shadow-sm) p-6 mb-6">
+        <h2
+          className="text-lg font-bold text-(--fg) mb-6"
+          style={{ fontFamily: "var(--font-display)" }}
+        >
+          {STEPS.find((s) => s.id === step)?.label}
+        </h2>
 
-        {/* Step content */}
-        <div className="px-6 py-6">
-          {step === 1 && <Step1 data={data} onChange={patch} />}
-          {step === 2 && <Step2 data={data} onChange={patch} />}
-          {step === 3 && <Step3 data={data} onChange={patch} />}
-          {step === 4 && <Step4 data={data} onChange={patch} />}
-          {step === 5 && <Step5 data={data} onChange={patch} />}
-          {step === 6 && <Step6 data={data} />}
-        </div>
+        {step === 1 && (
+          <Step1
+            data={data}
+            onChange={patch}
+            orgs={orgs}
+            orgsLoading={orgsLoading}
+          />
+        )}
+        {step === 2 &&
+          (data.projectType === "anual" ? (
+            <Step2Annual data={data} onChange={patch} />
+          ) : (
+            <Step2Pontual data={data} onChange={patch} />
+          ))}
+        {step === 3 && <Step3 data={data} onChange={patch} />}
+        {step === 4 && <Step4 data={data} onChange={patch} />}
+        {step === 5 && <Step5 data={data} onChange={patch} />}
+        {step === 6 && <Step6 data={data} orgs={orgs} />}
+      </div>
 
-        {/* Navigation */}
-        <div className="px-6 py-4 border-t border-[--border] flex items-center justify-between gap-4">
+      {/* Error */}
+      {error && (
+        <div className="rounded-md border border-(--color-destructive) bg-(--color-destructive-muted) px-4 py-3 text-sm text-(--color-destructive) mb-4">
+          {error}
+        </div>
+      )}
+
+      {/* Navigation */}
+      <div className="flex items-center justify-between gap-4">
+        <button
+          type="button"
+          onClick={handleBack}
+          disabled={step === 1}
+          className="inline-flex items-center gap-2 rounded-md border border-(--border) px-4 py-2.5 text-sm font-semibold text-(--fg-muted) hover:border-(--brand) hover:text-(--brand) transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          <ChevronLeft className="w-4 h-4" aria-hidden />
+          Anterior
+        </button>
+
+        {isLastStep ? (
           <button
             type="button"
-            onClick={handleBack}
-            disabled={step === 1}
-            className="flex items-center gap-1.5 rounded-[--radius-md] border border-[--border] px-4 py-2 text-sm font-semibold text-[--fg-muted] hover:border-[--brand] hover:text-[--brand] disabled:opacity-40 disabled:pointer-events-none transition-colors"
+            onClick={handleSubmit}
+            disabled={isSubmitting}
+            className="inline-flex items-center gap-2 rounded-md px-6 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60 disabled:cursor-not-allowed"
+            style={{ backgroundColor: "var(--hb-orange)" }}
           >
-            <ChevronLeft className="w-4 h-4" aria-hidden />
-            Voltar
+            {isSubmitting ? "Submetendo..." : "Submeter Projeto"}
+            <Check className="w-4 h-4" aria-hidden />
           </button>
-
-          <div className="flex-1 flex justify-center">
-            <div className="flex gap-1.5">
-              {STEPS.map((s) => (
-                <div
-                  key={s.id}
-                  className="w-2 h-2 rounded-full transition-all duration-[--dur-fast]"
-                  style={{
-                    backgroundColor:
-                      s.id === step
-                        ? "var(--hb-blue)"
-                        : s.id < step
-                          ? "var(--hb-blue)"
-                          : "var(--hb-gray-100)",
-                    opacity: s.id === step ? 1 : s.id < step ? 0.4 : 1,
-                  }}
-                  aria-hidden
-                />
-              ))}
-            </div>
-          </div>
-
-          {step < STEPS.length ? (
-            <button
-              type="button"
-              onClick={handleNext}
-              className="flex items-center gap-1.5 rounded-[--radius-md] bg-[--brand] text-[--brand-fg] px-4 py-2 text-sm font-semibold hover:bg-[--hb-blue-soft] transition-colors"
-            >
-              Próximo
-              <ChevronRight className="w-4 h-4" aria-hidden />
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={handleSubmit}
-              className="flex items-center gap-1.5 rounded-[--radius-md] px-5 py-2 text-sm font-semibold text-white transition-colors"
-              style={{ backgroundColor: "var(--hb-green)" }}
-            >
-              <Check className="w-4 h-4" aria-hidden />
-              Submeter Projeto
-            </button>
-          )}
-        </div>
+        ) : (
+          <button
+            type="button"
+            onClick={handleNext}
+            className="inline-flex items-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+            style={{ backgroundColor: "var(--hb-blue)" }}
+          >
+            Próximo
+            <ChevronRight className="w-4 h-4" aria-hidden />
+          </button>
+        )}
       </div>
     </div>
   );

@@ -47,7 +47,7 @@ function FieldError({ message }: { message?: string }) {
 }
 
 function inputCls() {
-  return "w-full rounded-[--radius] border px-3.5 py-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--brand] focus-visible:border-transparent";
+  return "w-full rounded-(--radius) border px-3.5 py-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--brand) focus-visible:border-transparent";
 }
 
 function inputStyle() {
@@ -262,7 +262,7 @@ function LocationInput({
 
       {open && suggestions.length > 0 && (
         <ul
-          className="absolute z-10 mt-1 w-full rounded-[--radius-md] border overflow-hidden shadow-lg"
+          className="absolute z-10 mt-1 w-full rounded-md border overflow-hidden shadow-lg"
           style={{
             borderColor: "var(--border)",
             backgroundColor: "var(--surface)",

@@ -14,7 +14,6 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { createPunctualProjectSchema } from "@hebron/validators";
-import { mockOrganizations } from "../lib/mock-data";
 
 // ─── Local primitives ─────────────────────────────────────────────────────────
 
@@ -61,7 +60,7 @@ function FieldError({ message }: { message?: string }) {
 }
 
 const inputCls =
-  "w-full rounded-[--radius] border px-3.5 py-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--brand] focus-visible:border-transparent";
+  "w-full rounded-(--radius) border px-3.5 py-2.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--brand) focus-visible:border-transparent";
 const inputStyle = {
   borderColor: "var(--border)",
   backgroundColor: "var(--bg-alt)",
@@ -153,7 +152,7 @@ interface PunctualProjectFormProps {
 }
 
 export function PunctualProjectForm({
-  organizations = mockOrganizations,
+  organizations = [],
   editalId: _editalId = "",
   categoriaInicial = "",
 }: PunctualProjectFormProps) {
@@ -274,7 +273,7 @@ export function PunctualProjectForm({
     <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-6">
       {/* Info banner */}
       <div
-        className="rounded-[--radius] border px-4 py-3 text-sm"
+        className="rounded-(--radius) border px-4 py-3 text-sm"
         style={{
           borderColor: "var(--hb-orange)",
           backgroundColor: "var(--hb-orange-muted)",
@@ -542,7 +541,7 @@ export function PunctualProjectForm({
           Anexos (opcional)
         </p>
         <div
-          className="rounded-[--radius-md] border border-dashed py-5 flex flex-col items-center gap-2 cursor-pointer"
+          className="rounded-md border border-dashed py-5 flex flex-col items-center gap-2 cursor-pointer"
           style={{ borderColor: "var(--border)" }}
           onClick={() => fileInputRef.current?.click()}
           onKeyDown={(e) => e.key === "Enter" && fileInputRef.current?.click()}
@@ -576,7 +575,7 @@ export function PunctualProjectForm({
             {attachments.map((file, idx) => (
               <div
                 key={`${file.name}-${idx}`}
-                className="flex items-center gap-3 rounded-[--radius] border px-3 py-2"
+                className="flex items-center gap-3 rounded-(--radius) border px-3 py-2"
                 style={{
                   borderColor: "var(--border)",
                   backgroundColor: "var(--surface-alt)",
@@ -619,7 +618,7 @@ export function PunctualProjectForm({
       {/* Global errors */}
       {Object.keys(errors).length > 0 && (
         <div
-          className="flex items-center gap-2 rounded-[--radius] border px-4 py-3"
+          className="flex items-center gap-2 rounded-(--radius) border px-4 py-3"
           style={{
             borderColor: "var(--color-destructive)",
             backgroundColor: "var(--color-destructive-muted)",
@@ -640,7 +639,7 @@ export function PunctualProjectForm({
       <button
         type="submit"
         disabled={submitting}
-        className="flex items-center justify-center gap-2 rounded-[--radius-md] py-3 text-sm font-semibold text-white transition-colors disabled:opacity-70"
+        className="flex items-center justify-center gap-2 rounded-md py-3 text-sm font-semibold text-white transition-colors disabled:opacity-70"
         style={{ backgroundColor: "var(--hb-orange)" }}
       >
         {submitting ? (

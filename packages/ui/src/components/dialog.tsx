@@ -22,7 +22,7 @@ const DialogOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      "fixed inset-0 z-[--z-overlay]",
+      "fixed inset-0 z-(--z-overlay)",
       "bg-black/50 backdrop-blur-[2px]",
       "data-[state=open]:animate-in data-[state=closed]:animate-out",
       "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
@@ -44,15 +44,15 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        "fixed left-1/2 top-1/2 z-[--z-modal]",
+        "fixed left-1/2 top-1/2 z-(--z-modal)",
         "-translate-x-1/2 -translate-y-1/2",
         "w-full max-w-lg",
-        "rounded-[--radius-lg]",
-        "border border-[--border]",
-        "bg-[--bg]",
+        "rounded-(--radius-lg)",
+        "border border-(--border)",
+        "bg-(--bg)",
         "p-6",
-        "shadow-[--shadow-xl]",
-        "duration-[--transition-medium]",
+        "shadow-(--shadow-xl)",
+        "duration-(--transition-medium)",
         "data-[state=open]:animate-in data-[state=closed]:animate-out",
         "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
         "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
@@ -69,12 +69,12 @@ const DialogContent = React.forwardRef<
           className={cn(
             "absolute right-4 top-4",
             "flex h-7 w-7 items-center justify-center",
-            "rounded-[--radius-sm]",
-            "text-[--fg-muted]",
-            "transition-colors duration-[--transition-fast]",
-            "hover:bg-[--surface-alt] hover:text-[--fg]",
+            "rounded-(--radius-sm)",
+            "text-(--fg-muted)",
+            "transition-colors duration-(--transition-fast)",
+            "hover:bg-(--surface-alt) hover:text-(--fg)",
             "focus-visible:outline-none focus-visible:ring-2",
-            "focus-visible:ring-[--brand] focus-visible:ring-offset-2",
+            "focus-visible:ring-(--brand) focus-visible:ring-offset-2",
             "disabled:pointer-events-none",
           )}
           aria-label="Fechar"
@@ -121,8 +121,8 @@ const DialogTitle = React.forwardRef<
   <DialogPrimitive.Title
     ref={ref}
     className={cn(
-      "text-[--text-lg] font-semibold leading-[--leading-tight]",
-      "text-[--fg]",
+      "text-(--text-lg) font-semibold leading-(--leading-tight)",
+      "text-(--fg)",
       className,
     )}
     {...props}
@@ -136,7 +136,7 @@ const DialogDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Description
     ref={ref}
-    className={cn("text-[--text-sm]", "leading-[--leading-relaxed]", className)}
+    className={cn("text-(--text-sm)", "leading-(--leading-relaxed)", className)}
     {...props}
   />
 ));

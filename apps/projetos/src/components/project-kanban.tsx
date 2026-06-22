@@ -145,30 +145,30 @@ function KanbanCard({
       }}
       onDragEnd={onDragEnd}
       className={cn(
-        "rounded-[--radius-sm] bg-[--surface] border border-[--border] p-3 shadow-[--shadow-xs]",
-        "transition-all duration-[--dur-fast]",
+        "rounded-sm bg-(--surface) border border-(--border) p-3 shadow-(--shadow-xs)",
+        "transition-all duration-(--dur-fast)",
         (draggable || onClick) &&
-          "cursor-pointer hover:shadow-[--shadow-sm] hover:border-[--hb-blue]",
+          "cursor-pointer hover:shadow-(--shadow-sm) hover:border-(--hb-blue)",
         draggable && "cursor-grab active:cursor-grabbing",
         isDragging && "opacity-40 scale-95",
       )}
     >
-      <p className="text-sm font-semibold text-[--fg] line-clamp-2 leading-snug mb-1.5">
+      <p className="text-sm font-semibold text-(--fg) line-clamp-2 leading-snug mb-1.5">
         {project.titulo}
       </p>
-      <p className="text-xs text-[--fg-muted] truncate mb-2">
+      <p className="text-xs text-(--fg-muted) truncate mb-2">
         {project.organizacaoNome}
       </p>
       <div className="flex items-center justify-between gap-1">
-        <span className="text-xs font-semibold text-[--fg] tabular-nums">
+        <span className="text-xs font-semibold text-(--fg) tabular-nums">
           {BRL.format(project.valorTotal)}
         </span>
-        <span className="text-xs text-[--fg-subtle]">
+        <span className="text-xs text-(--fg-subtle)">
           {CATEGORY_SHORT[project.categoria] ?? ""}
         </span>
       </div>
       {project.pendingReports > 0 && (
-        <div className="mt-2 flex items-center gap-1 text-xs font-medium text-[--color-destructive]">
+        <div className="mt-2 flex items-center gap-1 text-xs font-medium text-(--color-destructive)">
           <svg
             width="10"
             height="10"
@@ -229,7 +229,7 @@ function KanbanColumn({
   return (
     <div
       className={cn(
-        "flex flex-col min-w-55 max-w-65 rounded-[--radius-md] border-2 transition-all duration-[--dur-fast]",
+        "flex flex-col min-w-55 max-w-65 rounded-md border-2 transition-all duration-(--dur-fast)",
         isDragTarget ? "border-dashed" : "border-transparent",
       )}
       style={{
@@ -265,7 +265,7 @@ function KanbanColumn({
           </span>
         </div>
         <span
-          className="text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center text-[--fg-invert]"
+          className="text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center text-(--fg-invert)"
           style={{ backgroundColor: cfg.color }}
         >
           {projects.length}
@@ -276,7 +276,7 @@ function KanbanColumn({
       <div className="flex flex-col gap-2 p-2 flex-1 min-h-20 overflow-y-auto max-h-150">
         {projects.length === 0 && (
           <div className="flex-1 flex items-center justify-center py-6">
-            <p className="text-xs text-[--fg-subtle] text-center">
+            <p className="text-xs text-(--fg-subtle) text-center">
               {canDrag ? "Arraste projetos aqui" : "Nenhum projeto"}
             </p>
           </div>
@@ -375,7 +375,7 @@ export function ProjectKanban({
   return (
     <div className={`flex flex-col gap-4 ${className ?? ""}`}>
       {!canDrag && (
-        <p className="text-xs text-[--fg-muted] px-1">
+        <p className="text-xs text-(--fg-muted) px-1">
           Somente diretores podem mover projetos entre estágios.
         </p>
       )}
@@ -401,7 +401,7 @@ export function ProjectKanban({
       {/* Closed projects section */}
       {showClosed && closedProjects.length > 0 && (
         <details className="group">
-          <summary className="cursor-pointer text-sm font-medium text-[--fg-muted] hover:text-[--fg] transition-colors select-none list-none flex items-center gap-2">
+          <summary className="cursor-pointer text-sm font-medium text-(--fg-muted) hover:text-(--fg) transition-colors select-none list-none flex items-center gap-2">
             <svg
               width="14"
               height="14"

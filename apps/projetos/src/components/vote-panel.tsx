@@ -71,7 +71,7 @@ function QuorumRing({ voted, eligible, quorumMet }: QuorumRingProps) {
           de {eligible}
         </text>
       </svg>
-      <p className="text-xs text-center text-[--fg-muted]">
+      <p className="text-xs text-center text-(--fg-muted)">
         {quorumMet ? (
           <span
             className="font-semibold"
@@ -140,7 +140,7 @@ export function VotePanel({
 
   return (
     <div
-      className={`rounded-[--radius-lg] border border-[--border] bg-[--surface] shadow-[--shadow-md] overflow-hidden ${className ?? ""}`}
+      className={`rounded-lg border border-(--border) bg-(--surface) shadow-(--shadow-md) overflow-hidden ${className ?? ""}`}
     >
       {/* Question bubble */}
       <div
@@ -148,7 +148,7 @@ export function VotePanel({
         style={{ backgroundColor: "var(--hb-blue)" }}
       >
         <p
-          className="text-xs font-bold uppercase tracking-widest text-[--hb-cyan-muted] mb-3"
+          className="text-xs font-bold uppercase tracking-widest text-(--hb-cyan-muted) mb-3"
           aria-hidden
         >
           Votação Secreta
@@ -159,7 +159,7 @@ export function VotePanel({
         >
           Você sente paz em investir neste projeto?
         </p>
-        <p className="text-sm text-[--hb-gray-200] mt-2 line-clamp-1">
+        <p className="text-sm text-(--hb-gray-200) mt-2 line-clamp-1">
           {projectTitle}
         </p>
 
@@ -210,8 +210,8 @@ export function VotePanel({
                 />
               </svg>
             </div>
-            <p className="text-sm font-semibold text-[--fg]">Voto registrado</p>
-            <p className="text-xs text-[--fg-muted]">
+            <p className="text-sm font-semibold text-(--fg)">Voto registrado</p>
+            <p className="text-xs text-(--fg-muted)">
               Seu voto é secreto e não será revelado.
             </p>
           </div>
@@ -221,7 +221,7 @@ export function VotePanel({
               type="button"
               onClick={() => handleVote(true)}
               disabled={loading}
-              className="flex-1 flex flex-col items-center justify-center gap-2 rounded-[--radius-md] border-2 py-4 transition-all duration-[--dur-fast] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-60 disabled:pointer-events-none"
+              className="flex-1 flex flex-col items-center justify-center gap-2 rounded-md border-2 py-4 transition-all duration-(--dur-fast) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-60 disabled:pointer-events-none"
               style={{
                 borderColor: "var(--hb-green)",
                 backgroundColor: "var(--hb-green-muted)",
@@ -258,7 +258,7 @@ export function VotePanel({
               type="button"
               onClick={() => handleVote(false)}
               disabled={loading}
-              className="flex-1 flex flex-col items-center justify-center gap-2 rounded-[--radius-md] border-2 py-4 transition-all duration-[--dur-fast] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-60 disabled:pointer-events-none"
+              className="flex-1 flex flex-col items-center justify-center gap-2 rounded-md border-2 py-4 transition-all duration-(--dur-fast) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-60 disabled:pointer-events-none"
               style={{
                 borderColor: "var(--color-destructive)",
                 backgroundColor: "var(--color-destructive-muted)",
@@ -302,7 +302,7 @@ export function VotePanel({
         />
 
         {/* Secret ballot notice */}
-        <p className="text-xs text-center text-[--fg-muted] max-w-xs">
+        <p className="text-xs text-center text-(--fg-muted) max-w-xs">
           A identidade dos votantes não é revelada. Apenas a contagem total é
           exibida.
         </p>

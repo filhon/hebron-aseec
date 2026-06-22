@@ -15,16 +15,16 @@ export function SearchResultsSkeleton({ count = 5 }: { count?: number }) {
         >
           {/* Format icon placeholder */}
           <div
-            className="docs-search-fmt animate-pulse bg-[--bg-alt]"
+            className="docs-search-fmt animate-pulse bg-(--bg-alt)"
             style={{ border: "none" }}
           />
 
           <div style={{ minWidth: 0 }}>
             {/* Breadcrumb */}
-            <div className="h-3 w-36 rounded animate-pulse bg-[--bg-alt] mb-2" />
+            <div className="h-3 w-36 rounded animate-pulse bg-(--bg-alt) mb-2" />
             {/* Title */}
             <div
-              className="h-4 rounded animate-pulse bg-[--bg-alt] mb-2.5"
+              className="h-4 rounded animate-pulse bg-(--bg-alt) mb-2.5"
               style={{ width: `${TITLE_WIDTHS[i % TITLE_WIDTHS.length]}%` }}
             />
             {/* Excerpt lines */}
@@ -33,13 +33,13 @@ export function SearchResultsSkeleton({ count = 5 }: { count?: number }) {
               style={{ display: "flex", flexDirection: "column", gap: 5 }}
             >
               <div
-                className="h-3 rounded animate-pulse bg-[--bg-alt]"
+                className="h-3 rounded animate-pulse bg-(--bg-alt)"
                 style={{
                   width: `${EXCERPT_WIDTHS[i % EXCERPT_WIDTHS.length]}%`,
                 }}
               />
               <div
-                className="h-3 rounded animate-pulse bg-[--bg-alt]"
+                className="h-3 rounded animate-pulse bg-(--bg-alt)"
                 style={{
                   width: `${EXCERPT2_WIDTHS[i % EXCERPT2_WIDTHS.length]}%`,
                 }}
@@ -47,9 +47,9 @@ export function SearchResultsSkeleton({ count = 5 }: { count?: number }) {
             </div>
             {/* Meta row */}
             <div className="flex gap-2">
-              <div className="h-4 w-12 rounded animate-pulse bg-[--bg-alt]" />
-              <div className="h-4 w-20 rounded animate-pulse bg-[--bg-alt]" />
-              <div className="h-4 w-10 rounded animate-pulse bg-[--bg-alt]" />
+              <div className="h-4 w-12 rounded animate-pulse bg-(--bg-alt)" />
+              <div className="h-4 w-20 rounded animate-pulse bg-(--bg-alt)" />
+              <div className="h-4 w-10 rounded animate-pulse bg-(--bg-alt)" />
             </div>
           </div>
         </div>

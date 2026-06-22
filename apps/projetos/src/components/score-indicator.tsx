@@ -50,7 +50,7 @@ export function ScoreIndicator({
         className={`flex items-center gap-2 ${className ?? ""}`}
         title={`Score IA: ${clamped}/100 — ${scoreLabel(clamped)}`}
       >
-        <div className="w-20 h-1.5 rounded-full bg-[--hb-gray-100] overflow-hidden shrink-0">
+        <div className="w-20 h-1.5 rounded-full bg-(--hb-gray-100) overflow-hidden shrink-0">
           <div
             className="h-full rounded-full"
             style={{ width: `${clamped}%`, backgroundColor: color }}
@@ -90,7 +90,7 @@ export function ScoreIndicator({
               strokeLinejoin="round"
             />
           </svg>
-          <span className="text-xs font-semibold text-[--fg-muted] uppercase tracking-widest">
+          <span className="text-xs font-semibold text-(--fg-muted) uppercase tracking-widest">
             Score IA
           </span>
         </div>
@@ -101,17 +101,17 @@ export function ScoreIndicator({
           >
             {clamped}
           </span>
-          <span className="text-sm text-[--fg-muted]">/100</span>
+          <span className="text-sm text-(--fg-muted)">/100</span>
         </div>
       </div>
 
       {/* Bar */}
-      <div className="relative h-2.5 rounded-full bg-[--hb-gray-100] overflow-hidden">
+      <div className="relative h-2.5 rounded-full bg-(--hb-gray-100) overflow-hidden">
         {/* Track markers at 40 and 60 and 80 */}
         {[40, 60, 80].map((mark) => (
           <div
             key={mark}
-            className="absolute top-0 bottom-0 w-px bg-[--surface] z-10"
+            className="absolute top-0 bottom-0 w-px bg-(--surface) z-10"
             style={{ left: `${mark}%` }}
             aria-hidden
           />
@@ -129,10 +129,10 @@ export function ScoreIndicator({
       {/* Labels */}
       {showLabel && (
         <div className="flex items-center justify-between">
-          <span className="text-xs text-[--fg-muted]">
+          <span className="text-xs text-(--fg-muted)">
             {scoreLabel(clamped)}
           </span>
-          <div className="flex items-center gap-3 text-xs text-[--fg-subtle]">
+          <div className="flex items-center gap-3 text-xs text-(--fg-subtle)">
             <span>40</span>
             <span>60</span>
             <span>80</span>

@@ -83,10 +83,10 @@ export function InvitationForm({ onSubmit, isLoading }: InvitationFormProps) {
 
       {/* Papéis */}
       <fieldset className="flex flex-col gap-3">
-        <legend className="text-[--text-sm] font-medium">
+        <legend className="text-(--text-sm) font-medium">
           Papéis{" "}
           <span
-            className="ml-0.5 text-[--color-destructive]"
+            className="ml-0.5 text-(--color-destructive)"
             aria-hidden="true"
           >
             *
@@ -100,12 +100,12 @@ export function InvitationForm({ onSubmit, isLoading }: InvitationFormProps) {
               <label
                 key={role}
                 className={[
-                  "flex cursor-pointer items-center gap-2 rounded-[--radius] border px-3 py-2.5",
-                  "text-[--text-sm] transition-colors duration-[--transition-fast]",
+                  "flex cursor-pointer items-center gap-2 rounded-(--radius) border px-3 py-2.5",
+                  "text-(--text-sm) transition-colors duration-(--transition-fast)",
                   checked
-                    ? "border-[--color-primary] bg-[--color-primary]/8 text-[--color-primary]"
-                    : "border-[--color-border] bg-[--color-background] text-[--color-foreground]",
-                  "hover:border-[--color-primary]/50",
+                    ? "border-(--color-primary) bg-(--color-primary)/8 text-(--color-primary)"
+                    : "border-(--color-border) bg-(--color-background) text-(--color-foreground)",
+                  "hover:border-(--color-primary)/50",
                 ].join(" ")}
               >
                 <input
@@ -118,8 +118,8 @@ export function InvitationForm({ onSubmit, isLoading }: InvitationFormProps) {
                   className={[
                     "flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border",
                     checked
-                      ? "border-[--color-primary] bg-[--color-primary]"
-                      : "border-[--color-border]",
+                      ? "border-(--color-primary) bg-(--color-primary)"
+                      : "border-(--color-border)",
                   ].join(" ")}
                   aria-hidden="true"
                 >
@@ -142,7 +142,7 @@ export function InvitationForm({ onSubmit, isLoading }: InvitationFormProps) {
         </div>
 
         {errors.roles && (
-          <p role="alert" className="text-[--text-xs]">
+          <p role="alert" className="text-(--text-xs)">
             {errors.roles.message ??
               (errors.roles as { root?: { message?: string } }).root?.message}
           </p>
@@ -179,16 +179,16 @@ export function InvitationForm({ onSubmit, isLoading }: InvitationFormProps) {
           placeholder="Olá! Você foi convidado para fazer parte da plataforma Hebron Aseec."
           className={[
             "flex w-full resize-none",
-            "rounded-[--radius] border border-[--color-border]",
-            "bg-[--color-input-bg] text-[--color-foreground]",
-            "px-3 py-2 text-[--text-sm]",
-            "placeholder:text-[--color-muted-foreground]",
-            "transition-colors duration-[--transition-fast]",
-            "hover:border-[--color-primary]/50",
-            "focus-visible:outline-none focus-visible:border-[--color-primary]",
-            "focus-visible:ring-2 focus-visible:ring-[--color-ring]/20",
+            "rounded-(--radius) border border-(--color-border)",
+            "bg-(--color-input-bg) text-(--color-foreground)",
+            "px-3 py-2 text-(--text-sm)",
+            "placeholder:text-(--color-muted-foreground)",
+            "transition-colors duration-(--transition-fast)",
+            "hover:border-(--color-primary)/50",
+            "focus-visible:outline-none focus-visible:border-(--color-primary)",
+            "focus-visible:ring-2 focus-visible:ring-(--color-ring)/20",
             errors.message
-              ? "border-[--color-destructive] focus-visible:ring-[--color-destructive]/20"
+              ? "border-(--color-destructive) focus-visible:ring-(--color-destructive)/20"
               : "",
           ].join(" ")}
           {...register("message")}
@@ -196,7 +196,7 @@ export function InvitationForm({ onSubmit, isLoading }: InvitationFormProps) {
       </FormField>
 
       {/* Ações */}
-      <div className="flex items-center justify-end gap-3 border-t border-[--color-border] pt-4">
+      <div className="flex items-center justify-end gap-3 border-t border-(--color-border) pt-4">
         <Button type="submit" loading={loading}>
           Enviar convite
         </Button>

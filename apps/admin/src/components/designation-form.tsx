@@ -92,17 +92,17 @@ export function DesignationForm({
         noValidate
       >
         <div>
-          <h3 className="text-[--text-sm] font-semibold">
+          <h3 className="text-(--text-sm) font-semibold">
             Configurar designação
           </h3>
-          <p className="mt-1 text-[--text-xs]">
+          <p className="mt-1 text-(--text-xs)">
             Somente diretores podem ser designados como gestor ou autorizador.
           </p>
         </div>
 
         {directors.length === 0 ? (
-          <div className="rounded-[--radius] border border-[--color-border] px-4 py-6 text-center">
-            <p className="text-[--text-sm]">
+          <div className="rounded-(--radius) border border-(--color-border) px-4 py-6 text-center">
+            <p className="text-(--text-sm)">
               Nenhum diretor encontrado. Atribua o papel de diretor a um usuário
               primeiro.
             </p>
@@ -209,21 +209,21 @@ export function DesignationForm({
       {/* Active designations */}
       {activeDesignations.length > 0 && (
         <div className="flex flex-col gap-3">
-          <h3 className="text-[--text-sm] font-semibold">Designações ativas</h3>
-          <div className="overflow-hidden rounded-[--radius] border border-[--color-border]">
-            <table className="w-full text-[--text-sm]">
+          <h3 className="text-(--text-sm) font-semibold">Designações ativas</h3>
+          <div className="overflow-hidden rounded-(--radius) border border-(--color-border)">
+            <table className="w-full text-(--text-sm)">
               <thead>
-                <tr className="border-b border-[--color-border] bg-[--color-muted]/40">
-                  <th className="px-4 py-2.5 text-left font-medium text-[--color-muted-foreground]">
+                <tr className="border-b border-(--color-border) bg-(--color-muted)/40">
+                  <th className="px-4 py-2.5 text-left font-medium text-(--color-muted-foreground)">
                     Diretor
                   </th>
-                  <th className="px-4 py-2.5 text-left font-medium text-[--color-muted-foreground]">
+                  <th className="px-4 py-2.5 text-left font-medium text-(--color-muted-foreground)">
                     Tipo
                   </th>
-                  <th className="px-4 py-2.5 text-left font-medium text-[--color-muted-foreground]">
+                  <th className="px-4 py-2.5 text-left font-medium text-(--color-muted-foreground)">
                     Escopo
                   </th>
-                  <th className="px-4 py-2.5 text-left font-medium text-[--color-muted-foreground]">
+                  <th className="px-4 py-2.5 text-left font-medium text-(--color-muted-foreground)">
                     Desde
                   </th>
                   <th className="w-12 px-4 py-2.5" />
@@ -234,23 +234,23 @@ export function DesignationForm({
                   <tr
                     key={d.id}
                     className={[
-                      "transition-colors duration-[--transition-fast]",
-                      idx % 2 === 0 ? "" : "bg-[--color-muted]/20",
-                      "hover:bg-[--color-primary]/4",
+                      "transition-colors duration-(--transition-fast)",
+                      idx % 2 === 0 ? "" : "bg-(--color-muted)/20",
+                      "hover:bg-(--color-primary)/4",
                     ].join(" ")}
                   >
-                    <td className="px-4 py-3 text-[--color-foreground]">
+                    <td className="px-4 py-3 text-(--color-foreground)">
                       {d.directorName}
                     </td>
-                    <td className="px-4 py-3 text-[--color-foreground]">
+                    <td className="px-4 py-3 text-(--color-foreground)">
                       {DESIGNATION_TYPE_LABELS[d.type]}
                     </td>
-                    <td className="px-4 py-3 text-[--color-foreground]">
+                    <td className="px-4 py-3 text-(--color-foreground)">
                       {d.scope
                         ? (SCOPE_LABELS[d.scope] ?? d.scope)
                         : "Organização inteira"}
                     </td>
-                    <td className="px-4 py-3 text-[--color-muted-foreground]">
+                    <td className="px-4 py-3 text-(--color-muted-foreground)">
                       {d.assignedAt.toLocaleDateString("pt-BR")}
                     </td>
                     <td className="px-4 py-3">
@@ -258,9 +258,9 @@ export function DesignationForm({
                         type="button"
                         onClick={() => onRevoke(d.id)}
                         className={[
-                          "flex h-7 w-7 items-center justify-center rounded-[--radius-sm]",
-                          "text-[--color-muted-foreground] transition-colors duration-[--transition-fast]",
-                          "hover:bg-[--color-destructive]/10 hover:text-[--color-destructive]",
+                          "flex h-7 w-7 items-center justify-center rounded-sm",
+                          "text-(--color-muted-foreground) transition-colors duration-(--transition-fast)",
+                          "hover:bg-(--color-destructive)/10 hover:text-(--color-destructive)",
                         ].join(" ")}
                         title="Revogar designação"
                         aria-label={`Revogar designação de ${d.directorName}`}

@@ -58,7 +58,7 @@ export function AuditLogExport({
       size="sm"
       onClick={handleExport}
       disabled={exporting || entries.length === 0}
-      className="rounded-full border-[--brand] text-[--brand]"
+      className="rounded-full border-(--brand) text-(--brand)"
       title={
         entries.length === 0
           ? "Sem dados para exportar"

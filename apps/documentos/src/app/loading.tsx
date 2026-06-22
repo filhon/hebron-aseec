@@ -88,8 +88,8 @@ export default function HomeLoading() {
         <section className="docs-section">
           <div className="docs-section-head">
             <div className="left">
-              <div className="h-3 w-28 rounded-full animate-pulse bg-[--bg-alt] mb-2" />
-              <div className="h-6 w-56 rounded animate-pulse bg-[--bg-alt]" />
+              <div className="h-3 w-28 rounded-full animate-pulse bg-(--bg-alt) mb-2" />
+              <div className="h-6 w-56 rounded animate-pulse bg-(--bg-alt)" />
             </div>
           </div>
           <div
@@ -110,8 +110,8 @@ export default function HomeLoading() {
           <section>
             <div className="docs-section-head">
               <div className="left">
-                <div className="h-3 w-28 rounded-full animate-pulse bg-[--bg-alt] mb-2" />
-                <div className="h-6 w-40 rounded animate-pulse bg-[--bg-alt]" />
+                <div className="h-3 w-28 rounded-full animate-pulse bg-(--bg-alt) mb-2" />
+                <div className="h-6 w-40 rounded animate-pulse bg-(--bg-alt)" />
               </div>
             </div>
             <DocumentListSkeleton rows={6} />
@@ -121,8 +121,8 @@ export default function HomeLoading() {
           <section>
             <div className="docs-section-head">
               <div className="left">
-                <div className="h-3 w-20 rounded-full animate-pulse bg-[--bg-alt] mb-2" />
-                <div className="h-6 w-36 rounded animate-pulse bg-[--bg-alt]" />
+                <div className="h-3 w-20 rounded-full animate-pulse bg-(--bg-alt) mb-2" />
+                <div className="h-6 w-36 rounded animate-pulse bg-(--bg-alt)" />
               </div>
             </div>
             <div className="docs-cat-grid">
@@ -133,11 +133,11 @@ export default function HomeLoading() {
                   style={{ pointerEvents: "none" }}
                 >
                   <div
-                    className="docs-cat-icon animate-pulse bg-[--bg-alt]"
+                    className="docs-cat-icon animate-pulse bg-(--bg-alt)"
                     style={{ border: "none" }}
                   />
-                  <div className="h-3.5 w-24 rounded animate-pulse bg-[--bg-alt]" />
-                  <div className="h-3 w-16 rounded animate-pulse bg-[--bg-alt]" />
+                  <div className="h-3.5 w-24 rounded animate-pulse bg-(--bg-alt)" />
+                  <div className="h-3 w-16 rounded animate-pulse bg-(--bg-alt)" />
                 </div>
               ))}
             </div>
@@ -148,8 +148,8 @@ export default function HomeLoading() {
         <section className="docs-section">
           <div className="docs-section-head">
             <div className="left">
-              <div className="h-3 w-24 rounded-full animate-pulse bg-[--bg-alt] mb-2" />
-              <div className="h-6 w-48 rounded animate-pulse bg-[--bg-alt]" />
+              <div className="h-3 w-24 rounded-full animate-pulse bg-(--bg-alt) mb-2" />
+              <div className="h-6 w-48 rounded animate-pulse bg-(--bg-alt)" />
             </div>
           </div>
           <div

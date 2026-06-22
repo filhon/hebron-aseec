@@ -120,7 +120,7 @@ export function ProjectTimeline({
               >
                 {event.isCurrent ? (
                   <div
-                    className="w-2 h-2 rounded-full bg-[--surface]"
+                    className="w-2 h-2 rounded-full bg-(--surface)"
                     aria-hidden
                   />
                 ) : (
@@ -150,13 +150,13 @@ export function ProjectTimeline({
                 >
                   {event.label}
                 </span>
-                <span className="text-xs text-[--fg-muted] shrink-0 tabular-nums">
+                <span className="text-xs text-(--fg-muted) shrink-0 tabular-nums">
                   {formatDate(event.date)}
                 </span>
               </div>
-              <p className="text-xs text-[--fg-muted]">por {event.actor}</p>
+              <p className="text-xs text-(--fg-muted)">por {event.actor}</p>
               {event.notes && (
-                <p className="mt-1.5 text-sm text-[--fg] bg-[--surface-alt] rounded-[--radius-sm] px-2.5 py-2 border-l-2 border-[--border-strong]">
+                <p className="mt-1.5 text-sm text-(--fg) bg-(--surface-alt) rounded-sm px-2.5 py-2 border-l-2 border-(--border-strong)">
                   {event.notes}
                 </p>
               )}

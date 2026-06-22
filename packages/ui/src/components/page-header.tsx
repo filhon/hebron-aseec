@@ -30,7 +30,7 @@ export function PageHeader({
     <header className={cn("space-y-2 pb-6", className)}>
       {breadcrumb && breadcrumb.length > 0 && (
         <nav aria-label="Localização atual">
-          <ol className="flex flex-wrap items-center gap-1.5 text-[--fg-muted]">
+          <ol className="flex flex-wrap items-center gap-1.5 text-(--fg-muted)">
             {breadcrumb.map((item, i) => (
               <React.Fragment key={item.label}>
                 {i > 0 && (
@@ -42,7 +42,7 @@ export function PageHeader({
                   {item.href ? (
                     <a
                       href={item.href}
-                      className="transition-colors duration-[--transition-fast] hover:text-[--fg]"
+                      className="transition-colors duration-(--transition-fast) hover:text-(--fg)"
                     >
                       {item.label}
                     </a>
@@ -50,7 +50,7 @@ export function PageHeader({
                     <span
                       className={
                         i === breadcrumb.length - 1
-                          ? "font-[--font-weight-medium] text-[--fg]"
+                          ? "font-(--font-weight-medium) text-(--fg)"
                           : ""
                       }
                       aria-current={
@@ -69,10 +69,10 @@ export function PageHeader({
 
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1">
-          <h1 className="font-[--font-editorial] text-[--text-2xl] leading-[--leading-tight]">
+          <h1 className="font-(--font-editorial) text-(--text-2xl) leading-(--leading-tight)">
             {title}
           </h1>
-          {description && <p className="text-[--text-sm]">{description}</p>}
+          {description && <p className="text-(--text-sm)">{description}</p>}
         </div>
 
         {actions && (
