@@ -1524,16 +1524,16 @@ Criar tabelas Drizzle no schema `projetos`: organizations, organization_members 
 - `packages/db/src/migrations/0006_projetos.sql`
 
 **Critérios de aceite:**
-- [ ] organizations: nome, cnpj, endereco, telefone, responsavel_legal, denominacao, estatuto_url
-- [ ] organization_members: organization_id, user_id (many-to-many)
-- [ ] projects: 20+ campos incluindo stage, tipo, budget_total, parcelas, meses, parent_project_id, edital_id, score_ai, deleted_at (soft-delete)
-- [ ] votes: project_id, user_id, value (boolean), criado secreto (sem JOIN visível a não-admin)
-- [ ] contestations: project_id, user_id, justification, max 2 por projeto, 1 por pessoa
-- [ ] reports: project_id, content, status, due_date, submitted_at
-- [ ] payment_schedules: project_id, amount, month, due_date, status
-- [ ] Transições de stage definidas (sem permitir pular stages)
-- [ ] Migration aplica sem erros
-- [ ] Types passam
+- [x] organizations: nome, cnpj, endereco, telefone, responsavel_legal, denominacao, estatuto_url
+- [x] organization_members: organization_id, user_id (many-to-many)
+- [x] projects: 20+ campos incluindo stage, tipo, budget_total, parcelas, meses, parent_project_id, edital_id, score_ai, deleted_at (soft-delete)
+- [x] votes: project_id, user_id, value (boolean), criado secreto (sem JOIN visível a não-admin)
+- [x] contestations: project_id, user_id, justification, max 2 por projeto, 1 por pessoa
+- [x] reports: project_id, content, status, due_date, submitted_at
+- [x] payment_schedules: project_id, amount, month, due_date, status
+- [x] Transições de stage definidas (sem permitir pular stages)
+- [x] Migration aplica sem erros
+- [x] Types passam
 
 ---
 
