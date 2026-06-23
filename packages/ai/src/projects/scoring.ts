@@ -51,17 +51,17 @@ export const DEFAULT_SCORING_CRITERIA: ScoringCriteria = {
     },
     {
       name: "clareza_objetivos",
-      weight: 0.20,
+      weight: 0.2,
       description: "Clareza e mensurabilidade dos objetivos",
     },
     {
       name: "viabilidade_orcamentaria",
-      weight: 0.20,
+      weight: 0.2,
       description: "Adequação e viabilidade do orçamento solicitado",
     },
     {
       name: "impacto_esperado",
-      weight: 0.20,
+      weight: 0.2,
       description: "Impacto esperado no público-alvo e na região",
     },
     {
@@ -99,7 +99,9 @@ export async function scoreProject(
     input.objectives ? `Objetivos: ${input.objectives}` : null,
     input.justification ? `Justificativa: ${input.justification}` : null,
     input.targetAudience ? `Público-alvo: ${input.targetAudience}` : null,
-    input.expectedResults ? `Resultados esperados: ${input.expectedResults}` : null,
+    input.expectedResults
+      ? `Resultados esperados: ${input.expectedResults}`
+      : null,
     input.budgetTotal
       ? `Orçamento total: R$ ${parseFloat(input.budgetTotal).toFixed(2)}`
       : null,

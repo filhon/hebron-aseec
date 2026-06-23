@@ -100,9 +100,7 @@ export function RoleAssignmentForm({
         className="flex flex-col gap-5"
         noValidate
       >
-        <h3 className="text-(--text-sm) font-semibold">
-          Atribuir papel
-        </h3>
+        <h3 className="text-(--text-sm) font-semibold">Atribuir papel</h3>
 
         <div className="grid gap-4 sm:grid-cols-3">
           {/* Usuário */}
@@ -198,9 +196,7 @@ export function RoleAssignmentForm({
       {/* Active assignments table */}
       {activeAssignments.length > 0 && (
         <div className="flex flex-col gap-3">
-          <h3 className="text-(--text-sm) font-semibold">
-            Atribuições ativas
-          </h3>
+          <h3 className="text-(--text-sm) font-semibold">Atribuições ativas</h3>
           <div className="overflow-hidden rounded-(--radius) border border-(--color-border)">
             <table className="w-full text-(--text-sm)">
               <thead>

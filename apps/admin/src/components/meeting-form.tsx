@@ -135,9 +135,7 @@ export function MeetingForm({
       >
         {directors.length === 0 ? (
           <div className="flex h-10 items-center rounded-(--radius) border border-(--color-border) px-3">
-            <span className="text-(--text-sm)">
-              Nenhum diretor disponível
-            </span>
+            <span className="text-(--text-sm)">Nenhum diretor disponível</span>
           </div>
         ) : (
           <Select

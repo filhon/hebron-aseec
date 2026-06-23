@@ -12,6 +12,7 @@
   "dependencies": {
     "@hebron/ai": "workspace:*",
     "@hebron/auth": "workspace:*",
+    "@hebron/email": "workspace:*",
     "@hebron/config": "workspace:*",
     "@hebron/db": "workspace:*",
     "@hebron/types": "workspace:*",

@@ -123,16 +123,15 @@ export const createAnnualProjectSchema = z
     }
   });
 
-export type CreateAnnualProjectInput = z.infer<typeof createAnnualProjectSchema>;
+export type CreateAnnualProjectInput = z.infer<
+  typeof createAnnualProjectSchema
+>;
 
 // ─── createPunctualProjectSchema ─────────────────────────────────────────────
 // 6 required fields per BRAIN.md 6.2 — emergencial, avaliado mensalmente.
 
 export const createPunctualProjectSchema = z.object({
-  titulo: z
-    .string()
-    .min(5, "Título deve ter pelo menos 5 caracteres")
-    .max(200),
+  titulo: z.string().min(5, "Título deve ter pelo menos 5 caracteres").max(200),
   categoria: projectCategoryEnum,
   organizacaoId: z.string().uuid("Selecione uma instituição válida"),
   valorTotal: z.number().positive("Valor deve ser positivo"),
@@ -145,11 +144,7 @@ export const createPunctualProjectSchema = z.object({
     .datetime({ message: "Data de necessidade inválida" }),
   // Optional (not part of the 6 required)
   descricao: z.string().max(5000).optional(),
-  beneficiariosQuantidade: z
-    .number()
-    .int()
-    .min(1)
-    .optional(),
+  beneficiariosQuantidade: z.number().int().min(1).optional(),
   regiao: z.string().max(200).optional(),
   pais: z.string().max(100).optional(),
   editalId: z.string().uuid().nullable().optional(),
@@ -165,7 +160,9 @@ export const createPunctualProjectSchema = z.object({
     .optional(),
 });
 
-export type CreatePunctualProjectInput = z.infer<typeof createPunctualProjectSchema>;
+export type CreatePunctualProjectInput = z.infer<
+  typeof createPunctualProjectSchema
+>;
 
 // ─── createReportSchema ───────────────────────────────────────────────────────
 
@@ -197,7 +194,7 @@ export const createReportSchema = z.object({
         fileName: z.string().min(1),
         fileSizeBytes: z.number().int().positive(),
         mimeType: z.string().min(1),
-      })
+      }),
     )
     .optional(),
 });
@@ -223,10 +220,7 @@ export type CreateEvaluationInput = z.infer<typeof createEvaluationSchema>;
 
 export const createContestationSchema = z.object({
   projectId: z.string().uuid("Projeto inválido"),
-  reason: z
-    .string()
-    .min(30, "Descreva o motivo da contestação")
-    .max(2000),
+  reason: z.string().min(30, "Descreva o motivo da contestação").max(2000),
 });
 
 export type CreateContestationInput = z.infer<typeof createContestationSchema>;

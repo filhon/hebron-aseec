@@ -66,30 +66,35 @@ hebron-aseec/
 ## Convenções de código
 
 ### Nomenclatura
-| Contexto | Padrão |
-|---|---|
-| Arquivos e pastas | `kebab-case` |
-| Componentes React | `PascalCase` |
-| Funções/variáveis | `camelCase` |
-| Tipos/interfaces | `PascalCase` |
-| Tabelas/colunas DB | `snake_case` |
-| Schemas DB | nome do módulo (`projetos`, `financeiro`, `admin`) |
+
+| Contexto           | Padrão                                             |
+| ------------------ | -------------------------------------------------- |
+| Arquivos e pastas  | `kebab-case`                                       |
+| Componentes React  | `PascalCase`                                       |
+| Funções/variáveis  | `camelCase`                                        |
+| Tipos/interfaces   | `PascalCase`                                       |
+| Tabelas/colunas DB | `snake_case`                                       |
+| Schemas DB         | nome do módulo (`projetos`, `financeiro`, `admin`) |
 
 ### Server Actions
+
 - Sempre usar `next-safe-action` com schema Zod
 - RBAC check no handler, RLS como segunda camada no banco
 - Schemas Zod compartilhados em `packages/validators`
 
 ### Componentes
+
 - Fork customizado em `packages/ui` — nunca usar shadcn vanilla
 - Compostos: `PageHeader`, `EmptyState`, `ErrorState`, `LoadingState`, `AppShell`
 
 ### Estilização
+
 - Tailwind v4 com design tokens via CSS variables em `tokens.css`
 - Sem `tailwind.config.js` (v4 usa CSS nativo)
 - Mobile-first, espaçamento generoso, animações sutis
 
 ### Design tokens
+
 - **Primário:** Azul `#202C85` | **Accent:** Laranja `#EA5A06`
 - **Suporte:** Verde `#A1C520`, Azul Claro `#07B4E7`
 - **Tipografia:** Parkinsans (títulos/display) | Titillium Web (UI/corpo)
@@ -107,6 +112,7 @@ hebron-aseec/
 ## Permissões (RBAC + RLS)
 
 Três camadas obrigatórias, nunca apenas uma:
+
 1. **Middleware Next.js** — bloqueia rota antes de renderizar
 2. **Server Action gates** — valida ação específica
 3. **RLS no Postgres** — última linha de defesa
@@ -133,18 +139,21 @@ pnpm turbo test           # Rodar testes
 5. Se decisão mudou → criar PATCH em `PATCHES/`
 
 **Blocos por módulo:**
+
 - **Bloco A (P-X.1 a P-X.5):** UI com dados mockados → PAUSA para validação com diretoria
 - **Bloco B (P-X.6 a P-X.12):** Backend + integração (substitui mocks por dados reais)
 
 ## Checklists
 
 ### Antes de cada prompt
+
 - [ ] `BRAIN.md` carregado no contexto
 - [ ] Prompt atual lido em `PROMPTS.md`
 - [ ] Pré-condições verificadas (branch, dependências, env vars)
 - [ ] Apenas arquivos permitidos serão criados/editados
 
 ### Antes de concluir cada prompt
+
 - [ ] TypeScript strict (zero `any`)
 - [ ] RLS em toda tabela nova
 - [ ] Zod validation em todo input

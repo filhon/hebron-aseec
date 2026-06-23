@@ -343,9 +343,7 @@ export default async function EditorialDashboardPage() {
                           </span>
                         )}
                       </td>
-                      <td
-                        style={{ fontSize: 12.5, color: "var(--fg-muted)" }}
-                      >
+                      <td style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>
                         {doc.categoryName ?? "—"}
                       </td>
                       <td>

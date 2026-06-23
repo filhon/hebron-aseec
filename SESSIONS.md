@@ -63,6 +63,7 @@
 | S-39   | 2026-06-22 | P-2.7 — RLS Policies Projetos             | concluido |
 | S-40   | 2026-06-22 | P-2.8 — Server Actions Projetos           | concluido |
 | S-41   | 2026-06-22 | P-2.9 — Integração UI ↔ Backend Projetos  | concluido |
+| S-42   | 2026-06-23 | P-2.10 — Notificações e Emails Projetos   | concluido |
 
 ---
 
@@ -1379,16 +1380,19 @@ Criados os 8 componentes UI do módulo Projetos com dados mockados. Todos os com
 Criadas todas as 8 páginas do app `projetos` com dados mockados (Bloco A). Área do submissor: dashboard com stats, wizard 6-etapas para novo projeto, detalhe do projeto com timeline e relatórios. Área da diretoria: kanban pipeline com filtros, detalhe analítico com painel de IA + VotePanel + EvaluationCard, pauta de reunião com BI financeiro.
 
 **Decisões tomadas:**
+
 - Routing conflict entre `(submissor)/page.tsx` e `(diretoria)/page.tsx` em `/` conhecido e aceito — middleware a implementar no Bloco B.
 - `lucide-react` adicionado como dependência direta do app projetos (não herdado de `@hebron/ui`).
 - `eslint.config.mjs` do projetos atualizado com `ignores: ["next-env.d.ts", ".next/**"]` para paridade com o app admin.
 - Globals.css e layout.tsx raiz criados como infraestrutura necessária (fora da lista de arquivos permitidos pelo prompt, mas obrigatórios pelo Next.js).
 
 **Débitos técnicos:**
+
 - Middleware de roteamento por role (`submissor` vs `diretoria`) — deferred para Bloco B.
 - Nenhuma integração de backend (Bloco A = mocks apenas).
 
 **Arquivos criados/modificados:**
+
 - `apps/projetos/src/app/globals.css` (criado — infraestrutura)
 - `apps/projetos/src/app/layout.tsx` (criado — infraestrutura)
 - `apps/projetos/src/app/(submissor)/layout.tsx` (criado)
@@ -1525,7 +1529,7 @@ Criadas todas as 8 páginas do app `projetos` com dados mockados (Bloco A). Áre
 
 ### Decisões e observações
 
-- `audit_action` enum do DB estendido via `ALTER TYPE ADD VALUE IF NOT EXISTS` com 14 novos valores de projetos (project.*, vote.*, evaluation.*, contestation.*, report.*, organization.*); `packages/db/src/schema/admin.ts` atualizado em sincronia
+- `audit_action` enum do DB estendido via `ALTER TYPE ADD VALUE IF NOT EXISTS` com 14 novos valores de projetos (project._, vote._, evaluation._, contestation._, report._, organization._); `packages/db/src/schema/admin.ts` atualizado em sincronia
 - `packages/validators/package.json` precisou de export explícito `./projetos` (path glob `./*` não resolve subdiretórios)
 - Budget check implementado contra `admin.system_settings` com chave `projetos_budget_{orgId}_{year}`; quando o módulo Financeiro for construído, substituir pela query `financeiro.organization_budgets`
 - AI scoring e geração de versão compacta (GPT-4.1) são chamadas await dentro do `submitProject`; envolver em try/catch para não bloquear a submissão se a IA falhar. Migration para Inngest (background jobs) é débito técnico para P-2.x futuro
@@ -1595,3 +1599,44 @@ Criadas todas as 8 páginas do app `projetos` com dados mockados (Bloco A). Áre
 ### Arquivos deletados
 
 - `apps/projetos/src/lib/mock-data.ts`
+
+---
+
+### S-42 — 2026-06-23 — P-2.10 Notificações e Emails Projetos
+
+**Prompt:** P-2.10
+**Modelo:** claude-sonnet-4-6
+**Status:** concluido
+
+**Resumo:**
+Implementados todos os templates de email do módulo Projetos, o dispatcher central de notificações e o suporte a templates editáveis via Admin. Criados 4 templates React Email, 1 arquivo de notificações com 9 funções exportadas e atualização da página `apps/admin/src/app/(dashboard)/templates-email/page.tsx` com 15 slugs (3 Geral + 12 Projetos) e navegação lateral agrupada.
+
+**Decisoes tomadas:**
+
+- `paymentSchedules.amount` é `numeric` em Reais (não centavos) — template `PaymentConfirmationEmail` aceita `amount: string` e usa `parseFloat` + `Intl.NumberFormat` para formatar
+- `paymentSchedules.month` é o número do mês (1-12), não índice de parcela — exibido como "Pagamento referente ao mês N"
+- `ProjectStatusChangeEmail` é um template polimórfico com `statusEvent` union que cobre: validacao, votacao_aberta, aprovado, reprovado, bloqueado, contestacao, designado
+- Cada função de notificação usa `Promise.allSettled` para isolar falhas por destinatário
+- `getUsersByRoles` usa query em dois passos (IDs → usuários) seguindo o padrão do módulo Documentos, com filtro `isNull(suspendedAt)`
+- DB template override: `getDbTemplate(slug)` + `applyVars(tpl, vars)` — carregado uma vez antes do flatMap; aplicado por destinatário dentro do flatMap (apenas variável `nome` difere)
+- `packages/email/src/lib/send.ts` estendido com campo `html?: string` em `SendEmailOptions` — tem precedência sobre `template?: React.ReactElement` ao renderizar via Resend
+- Admin page refatorada de tabs horizontais para sidebar agrupada em 2 colunas (grupo "Geral" | "Projetos")
+- `apps/admin/tsconfig.json` corrigido: `plugins` movido para dentro de `compilerOptions` (estava no nível raiz — erro pré-existente)
+- `@hebron/email` adicionado como dependência workspace em `apps/projetos/package.json`
+
+**Debitos tecnicos:**
+
+- Jobs automáticos de lembrete de relatório (Inngest): scheduling não implementado aqui — as funções `notifyReportReminder` estão prontas para chamada por jobs Inngest em P-2.11+
+
+**Arquivos criados/modificados:**
+
+- `packages/email/src/templates/project-submitted.tsx` (criado)
+- `packages/email/src/templates/project-status-change.tsx` (criado)
+- `packages/email/src/templates/report-reminder.tsx` (criado)
+- `packages/email/src/templates/payment-confirmation.tsx` (criado)
+- `packages/email/src/lib/send.ts` (modificado — `html?: string` em `SendEmailOptions`)
+- `apps/projetos/src/lib/notifications.ts` (criado — 9 funções com override DB)
+- `apps/projetos/package.json` (adicionado @hebron/email)
+- `apps/admin/src/app/(dashboard)/templates-email/page.tsx` (atualizado — 15 slugs, sidebar agrupada)
+- `apps/admin/tsconfig.json` (corrigido — plugins dentro de compilerOptions)
+- `SESSIONS.md` (este registro)

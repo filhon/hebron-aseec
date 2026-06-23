@@ -35,8 +35,17 @@ export type InsertNotificationFn = (
 export interface SendEmailOptions {
   /** Endereço de email do destinatário */
   to: string;
-  /** Componente React Email a ser renderizado como corpo do email */
-  template: React.ReactElement;
+  /**
+   * Componente React Email a ser renderizado como corpo do email.
+   * Obrigatório quando `html` não é fornecido.
+   */
+  template?: React.ReactElement;
+  /**
+   * HTML bruto a ser enviado diretamente via Resend.
+   * Usado quando o admin sobrescreveu o template via Admin.
+   * Tem precedência sobre `template` quando ambos estão presentes.
+   */
+  html?: string;
   /** Assunto do email (padrão: o title da notificação) */
   subject?: string;
   /** Endereço "De" (padrão: noreply@hebronaseec.com.br) */
@@ -109,7 +118,16 @@ export async function createNotification({
 
     const resend = new Resend(apiKey);
 
-    const html = await renderAsync(email.template);
+    let html: string;
+    if (email.html) {
+      html = email.html;
+    } else if (email.template) {
+      html = await renderAsync(email.template);
+    } else {
+      throw new Error(
+        'createNotification: "email.template" ou "email.html" é obrigatório quando channel = "email"',
+      );
+    }
 
     const { error } = await resend.emails.send({
       from: email.from ?? "Hebron Aseec <noreply@hebronaseec.com.br>",

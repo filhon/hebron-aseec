@@ -77,14 +77,14 @@ export type ProjectStage = (typeof PROJECT_STAGES)[number];
 // pontual: validacao → aprovado | reprovado (skip votacao/homologacao)
 // anual:   validacao → votacao → homologacao → aprovado | reprovado
 export const VALID_STAGE_TRANSITIONS: Record<ProjectStage, ProjectStage[]> = {
-  rascunho:    ["validacao"],
-  validacao:   ["votacao", "aprovado", "reprovado"],
-  votacao:     ["homologacao"],
+  rascunho: ["validacao"],
+  validacao: ["votacao", "aprovado", "reprovado"],
+  votacao: ["homologacao"],
   homologacao: ["aprovado", "reprovado"],
-  aprovado:    ["em_execucao"],
-  reprovado:   [],
+  aprovado: ["em_execucao"],
+  reprovado: [],
   em_execucao: ["concluido"],
-  concluido:   [],
+  concluido: [],
 };
 
 // ---------------------------------------------------------------------------
@@ -184,10 +184,9 @@ export const projects = projetosSchema.table(
     editalId: uuid("edital_id").references(() => editals.id, {
       onDelete: "set null",
     }),
-    organizationId: uuid("organization_id").references(
-      () => organizations.id,
-      { onDelete: "set null" },
-    ),
+    organizationId: uuid("organization_id").references(() => organizations.id, {
+      onDelete: "set null",
+    }),
     submitterId: uuid("submitter_id")
       .notNull()
       .references(() => users.id),
@@ -213,7 +212,8 @@ export const projects = projetosSchema.table(
 
     // AI scoring
     scoreAi: numeric("score_ai", { precision: 5, scale: 2 }),
-    scoreAiBreakdown: jsonb("score_ai_breakdown").$type<Record<string, number>>(),
+    scoreAiBreakdown:
+      jsonb("score_ai_breakdown").$type<Record<string, number>>(),
 
     // Stage timestamps
     submittedAt: timestamp("submitted_at", { withTimezone: true }),
@@ -378,10 +378,7 @@ export const contestations = projetosSchema.table(
   (table) => [
     index("contestations_project_id_idx").on(table.projectId),
     // 1 contestação por pessoa por projeto
-    unique("contestations_project_user_uniq").on(
-      table.projectId,
-      table.userId,
-    ),
+    unique("contestations_project_user_uniq").on(table.projectId, table.userId),
   ],
 );
 
@@ -489,9 +486,7 @@ export const projectAttachments = projetosSchema.table(
       .notNull()
       .defaultNow(),
   },
-  (table) => [
-    index("project_attachments_project_id_idx").on(table.projectId),
-  ],
+  (table) => [index("project_attachments_project_id_idx").on(table.projectId)],
 );
 
 // ---------------------------------------------------------------------------

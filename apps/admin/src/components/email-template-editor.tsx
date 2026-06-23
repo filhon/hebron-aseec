@@ -56,9 +56,7 @@ export function EmailTemplateEditor({
       {/* Variables reference */}
       {template.variables.length > 0 && (
         <div className="flex flex-wrap gap-2">
-          <span className="text-(--text-xs)">
-            Variáveis disponíveis:
-          </span>
+          <span className="text-(--text-xs)">Variáveis disponíveis:</span>
           {template.variables.map((v) => (
             <code
               key={v}
@@ -143,10 +141,7 @@ export function EmailTemplateEditor({
                 {...register("bodyHtml")}
               />
               {errors.bodyHtml && (
-                <p
-                  role="alert"
-                  className="text-(--color-destructive)"
-                >
+                <p role="alert" className="text-(--color-destructive)">
                   {errors.bodyHtml.message}
                 </p>
               )}
@@ -167,9 +162,7 @@ export function EmailTemplateEditor({
                 {/* Subject preview */}
                 {watchedSubject && (
                   <div className="mb-3 border-b border-(--color-border) pb-2">
-                    <span className="text-(--text-xs)">
-                      Assunto:{" "}
-                    </span>
+                    <span className="text-(--text-xs)">Assunto: </span>
                     <strong className="text-(--text-sm)">
                       {watchedSubject}
                     </strong>

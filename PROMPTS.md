@@ -9,19 +9,19 @@
 
 ## Sumário
 
-| Fase | Módulo | Prompts | Bloco A | Bloco B |
-|------|--------|---------|---------|---------|
-| 0 | Fundação | P-0.1 a P-0.6 | — | — |
-| 1 | Admin | P-1.1 a P-1.12 | P-1.1–1.5 | P-1.6–1.12 |
-| 1 | Documentos | P-1.13 a P-1.24 | P-1.13–1.17 | P-1.18–1.24 |
-| 2 | Projetos | P-2.1 a P-2.12 | P-2.1–2.5 | P-2.6–2.12 |
-| 3 | Financeiro | P-3.1 a P-3.12 | P-3.1–3.5 | P-3.6–3.12 |
-| 4 | Tarefas | P-4.1 a P-4.12 | P-4.1–4.5 | P-4.6–4.12 |
-| 5 | Intranet | P-5.1 a P-5.12 | P-5.1–5.5 | P-5.6–5.12 |
-| 6 | Plataforma | P-6.1 a P-6.12 | P-6.1–6.5 | P-6.6–6.12 |
-| 7 | Flats | P-7.1 a P-7.12 | P-7.1–7.5 | P-7.6–7.12 |
-| 8 | Rádio | P-8.1 a P-8.12 | P-8.1–8.5 | P-8.6–8.12 |
-| 9 | Polimento | P-9.1 a P-9.5 | — | — |
+| Fase | Módulo     | Prompts         | Bloco A     | Bloco B     |
+| ---- | ---------- | --------------- | ----------- | ----------- |
+| 0    | Fundação   | P-0.1 a P-0.6   | —           | —           |
+| 1    | Admin      | P-1.1 a P-1.12  | P-1.1–1.5   | P-1.6–1.12  |
+| 1    | Documentos | P-1.13 a P-1.24 | P-1.13–1.17 | P-1.18–1.24 |
+| 2    | Projetos   | P-2.1 a P-2.12  | P-2.1–2.5   | P-2.6–2.12  |
+| 3    | Financeiro | P-3.1 a P-3.12  | P-3.1–3.5   | P-3.6–3.12  |
+| 4    | Tarefas    | P-4.1 a P-4.12  | P-4.1–4.5   | P-4.6–4.12  |
+| 5    | Intranet   | P-5.1 a P-5.12  | P-5.1–5.5   | P-5.6–5.12  |
+| 6    | Plataforma | P-6.1 a P-6.12  | P-6.1–6.5   | P-6.6–6.12  |
+| 7    | Flats      | P-7.1 a P-7.12  | P-7.1–7.5   | P-7.6–7.12  |
+| 8    | Rádio      | P-8.1 a P-8.12  | P-8.1–8.5   | P-8.6–8.12  |
+| 9    | Polimento  | P-9.1 a P-9.5   | —           | —           |
 
 ---
 
@@ -30,19 +30,24 @@
 > Estas regras valem para **todos** os prompts abaixo. Elas existem para evitar o erro "o que foi pedido vs. o que foi implementado". Siga-as ao pé da letra. Em dúvida, **não invente**: pare e pergunte ao Filipe.
 
 ## G1. Modelo executor: seja literal, não abstraia
+
 O código destes prompts é gerado por um modelo de capacidade média (Sonnet 4.7). Portanto:
+
 - Implemente **exatamente** o que o prompt lista. Não adicione telas, campos, libs ou "melhorias" não pedidas.
 - Não crie arquivos fora da lista **Arquivos permitidos**. Se faltar um arquivo de infraestrutura óbvio (ex.: `layout.tsx`, `globals.css`), crie-o e **registre em SESSIONS.md** como débito/decisão.
 - Se uma instrução parecer ambígua, escolha a opção mais simples e **registre a suposição** em SESSIONS.md. Nunca "preencha lacunas" de regra de negócio por conta própria.
 - Ao terminar, rode `pnpm turbo lint typecheck` e só feche o prompt com ambos verdes.
 
 ## G2. Skill `/frontend-design` — OBRIGATÓRIA em todo prompt de UI
+
 Para **todo** prompt de tipo `ui` (todos os Bloco A: P-X.1 a P-X.5) e qualquer prompt que crie/edite telas, componentes, layouts ou estados:
+
 1. **Invoque a skill `/frontend-design` ANTES de escrever qualquer JSX/CSS.**
 2. Use também `impeccable` para refinar/auditar uma tela já existente.
 3. Só comece a implementar depois de a skill ter sido carregada.
 
 ## G3. Procedimento de consumo das referências de design (passo a passo)
+
 As referências visuais ficam em **`design-refs/<app>/`** (versionadas no repo). Hoje existem para: `admin`, `documentos`, `financeiro`. Antes de implementar UI de um módulo:
 
 1. **Verifique** se `design-refs/<nome-do-app>/` existe.
@@ -60,23 +65,24 @@ As referências visuais ficam em **`design-refs/<app>/`** (versionadas no repo).
 5. Se faltar no protótipo algo que o prompt pede (ou vice-versa), **BRAIN.md/PROMPTS.md vencem** sobre o protótipo para regra de negócio; o protótipo vence para aparência. Registre a divergência em SESSIONS.md.
 
 ## G4. Tokens canônicos (use SEMPRE estes nomes)
+
 Definidos em `packages/ui/src/tokens.css`. Nunca hardcode o hex; use o token.
 
-| Cor / papel | Token | Hex (só referência) |
-|---|---|---|
-| Primário (azul Hebron) | `--hb-blue` | #202C85 |
-| Azul press / hover | `--hb-blue-deep` / `--hb-blue-soft` | #19236A / #2A38A0 |
-| Accent (laranja, CTA) | `--hb-orange` | #EA5A06 |
-| Suporte verde | `--hb-green` | #A1C520 |
-| Suporte ciano | `--hb-cyan` | #07B4E7 |
-| Fundo de página | `--hb-cream` / `--bg-alt` | #F7F8FC |
-| Superfície (card) | `--surface` | #FFFFFF |
-| Texto | `--fg` | #131737 |
-| Texto secundário | `--fg-muted` | ~#6C7390 |
-| Borda | `--border` | #DCDFEA |
-| Divisória | `--divider` | rgba(19,23,55,.08) |
-| Título/display (fonte) | `--font-display` (Parkinsans) | — |
-| UI/corpo (fonte) | `--font-body` (Titillium Web) | — |
+| Cor / papel            | Token                               | Hex (só referência) |
+| ---------------------- | ----------------------------------- | ------------------- |
+| Primário (azul Hebron) | `--hb-blue`                         | #202C85             |
+| Azul press / hover     | `--hb-blue-deep` / `--hb-blue-soft` | #19236A / #2A38A0   |
+| Accent (laranja, CTA)  | `--hb-orange`                       | #EA5A06             |
+| Suporte verde          | `--hb-green`                        | #A1C520             |
+| Suporte ciano          | `--hb-cyan`                         | #07B4E7             |
+| Fundo de página        | `--hb-cream` / `--bg-alt`           | #F7F8FC             |
+| Superfície (card)      | `--surface`                         | #FFFFFF             |
+| Texto                  | `--fg`                              | #131737             |
+| Texto secundário       | `--fg-muted`                        | ~#6C7390            |
+| Borda                  | `--border`                          | #DCDFEA             |
+| Divisória              | `--divider`                         | rgba(19,23,55,.08)  |
+| Título/display (fonte) | `--font-display` (Parkinsans)       | —                   |
+| UI/corpo (fonte)       | `--font-body` (Titillium Web)       | —                   |
 
 Semânticos preferenciais em componentes: `--brand`, `--brand-fg`, `--accent`, `--highlight-warm/cool/life`, `--surface-alt`, `--fg-invert`, `--border-strong`. Forma de marca: classe `.hb-balao` (+ variantes `--orange/--green/--cyan/--white`).
 
@@ -94,6 +100,7 @@ Semânticos preferenciais em componentes: `--brand`, `--brand-fg`, `--accent`, `
 **Módulo:** fundacao
 **Tipo:** config
 **Pré-condições:**
+
 - Branch: `main`
 - Dependências: nenhuma
 - Env vars: nenhuma
@@ -102,6 +109,7 @@ Semânticos preferenciais em componentes: `--brand`, `--brand-fg`, `--accent`, `
 Inicializar o monorepo com pnpm 9 + Turborepo 2. Criar a estrutura de diretórios para os 9 apps e 8 packages. Configurar tsconfig base com strict mode (zero `any`), ESLint compartilhado e Tailwind CSS v4 com CSS variables. Configurar `turbo.json` com pipelines de build, dev, lint e typecheck.
 
 **Arquivos permitidos para criação/edição:**
+
 - `package.json`
 - `pnpm-workspace.yaml`
 - `turbo.json`
@@ -112,6 +120,7 @@ Inicializar o monorepo com pnpm 9 + Turborepo 2. Criar a estrutura de diretório
 - `packages/ui/package.json` (template replicado para os 8 packages)
 
 **Critérios de aceite:**
+
 - [x] `pnpm install` executa sem erros
 - [x] `pnpm turbo build` resolve dependências entre packages
 - [x] TypeScript strict mode habilitado em toda a workspace
@@ -130,6 +139,7 @@ Apps: admin, projetos, plataforma, radio, financeiro, intranet, documentos, flat
 **Módulo:** fundacao
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-0.2-design-system`
 - Dependências: P-0.1 concluído
 - Env vars: nenhuma
@@ -140,6 +150,7 @@ Apps: admin, projetos, plataforma, radio, financeiro, intranet, documentos, flat
 Criar o design system em `packages/ui` como fork customizado do shadcn/ui. Definir tokens de cor (Azul `#202C85`, Laranja `#EA5A06`, Verde `#A1C520`, Azul Claro `#07B4E7`) em `tokens.css` como CSS variables, usando o **vocabulário canônico `--hb-*` + semânticos** (ver BRAIN.md §5 e `design-refs/admin/hebron-tokens.css`). Configurar tipografia: **Parkinsans** (títulos/display, `--font-display`) + **Titillium Web** (UI/corpo, `--font-body`) via `next/font`. Implementar componentes primitivos: Button, Input, Select, Dialog, Drawer, Tooltip, Toast, FormField. Aplicar princípios visuais anti-IA (ver BRAIN.md seção 5).
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/ui/src/tokens.css`
 - `packages/ui/src/components/button.tsx`
 - `packages/ui/src/components/input.tsx`
@@ -150,6 +161,7 @@ Criar o design system em `packages/ui` como fork customizado do shadcn/ui. Defin
 - `packages/ui/src/index.ts`
 
 **Critérios de aceite:**
+
 - [x] Tokens de cor disponíveis como CSS variables (`--color-primary`, `--color-accent`, etc.)
 - [~] Tipografia **Parkinsans + Titillium Web** configuradas via `next/font` (correção e unificação final em P-0.2b)
 - [x] Componentes primitivos exportados e importáveis por qualquer app
@@ -169,6 +181,7 @@ Ref: BRAIN.md seção 5. Ref visual: `.docs/Identidade Visual da Hebron Aseec.md
 **Módulo:** fundacao
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-0.2b-design-system-unificacao`
 - Dependências: P-0.2 concluído; referências em `design-refs/` presentes
 - Env vars: nenhuma
@@ -178,6 +191,7 @@ Ref: BRAIN.md seção 5. Ref visual: `.docs/Identidade Visual da Hebron Aseec.md
 Hoje existem **3 vocabulários de token desconectados** para as mesmas cores: `--color-*` (em `packages/ui/src/tokens.css`), `--hb-*` (nas referências de design) e `--hb-primary` + hex hardcoded (em `apps/admin/src/app/admin.css`). O Admin contornou o design system com CSS próprio. Isto unifica tudo em **um** vocabulário canônico (`--hb-*` + semânticos), que é o das referências de design.
 
 **Escopo (siga na ordem):**
+
 1. **Reescrever `packages/ui/src/tokens.css`** adotando o conteúdo de **`design-refs/admin/hebron-tokens.css`** como base canônica:
    - Copie os blocos `:root` de cores `--hb-*`, neutros, **semânticos** (`--bg`, `--surface`, `--fg`, `--fg-muted`, `--brand`, `--accent`, `--border`, `--divider`, etc.), escala tipográfica, radii, sombras e motion.
    - Copie também as classes de tipo (`.hb-display-xl`, `.hb-h1`…`.hb-h4`, `.hb-eyebrow`, `.hb-body*`, `.hb-caption`) e a forma de marca **`.hb-balao`** (+ variantes).
@@ -187,30 +201,31 @@ Hoje existem **3 vocabulários de token desconectados** para as mesmas cores: `-
    - Mantenha os tokens semânticos de estado já existentes que não há na referência: `--color-destructive*`, `--color-success*`, `--color-warning*`, `--color-info*` (renomeie depois se quiser, mas não os perca).
 2. **Adicionar bloco de ALIASES de compatibilidade** no fim do `:root` (comentado como `/* DEPRECATED — remover após migração dos apps */`), mapeando os nomes antigos para os novos, para nada quebrar entre este prompt e P-1.12b:
 
-   | Antigo (deprecated) | Novo (canônico) |
-   |---|---|
-   | `--color-primary` | `var(--hb-blue)` |
-   | `--color-primary-hover` | `var(--hb-blue-soft)` |
-   | `--color-primary-active` | `var(--hb-blue-deep)` |
-   | `--color-primary-foreground` | `var(--brand-fg)` |
-   | `--color-accent` | `var(--hb-orange)` |
-   | `--color-accent-hover` | `var(--hb-orange-deep)` |
-   | `--color-support-green` | `var(--hb-green)` |
-   | `--color-support-sky` | `var(--hb-cyan)` |
-   | `--color-background` | `var(--bg)` |
-   | `--color-foreground` | `var(--fg)` |
-   | `--color-muted` | `var(--surface-alt)` |
-   | `--color-muted-foreground` | `var(--fg-muted)` |
-   | `--color-subtle` | `var(--hb-gray-100)` |
-   | `--color-border` | `var(--border)` |
-   | `--color-ring` | `var(--hb-blue)` |
-   | `--font-ui` | `var(--font-body)` |
+   | Antigo (deprecated)          | Novo (canônico)         |
+   | ---------------------------- | ----------------------- |
+   | `--color-primary`            | `var(--hb-blue)`        |
+   | `--color-primary-hover`      | `var(--hb-blue-soft)`   |
+   | `--color-primary-active`     | `var(--hb-blue-deep)`   |
+   | `--color-primary-foreground` | `var(--brand-fg)`       |
+   | `--color-accent`             | `var(--hb-orange)`      |
+   | `--color-accent-hover`       | `var(--hb-orange-deep)` |
+   | `--color-support-green`      | `var(--hb-green)`       |
+   | `--color-support-sky`        | `var(--hb-cyan)`        |
+   | `--color-background`         | `var(--bg)`             |
+   | `--color-foreground`         | `var(--fg)`             |
+   | `--color-muted`              | `var(--surface-alt)`    |
+   | `--color-muted-foreground`   | `var(--fg-muted)`       |
+   | `--color-subtle`             | `var(--hb-gray-100)`    |
+   | `--color-border`             | `var(--border)`         |
+   | `--color-ring`               | `var(--hb-blue)`        |
+   | `--font-ui`                  | `var(--font-body)`      |
 
 3. **Criar `packages/ui/src/styles/patterns.css`** com as classes de layout/estrutura recorrentes que hoje vivem em `apps/admin/src/app/admin.css` e nas `styles.css` das referências (ex.: `.hb-page`, `.hb-card`, `.hb-card-header`, `.hb-stat`, `.hb-stat-dot`, `.hb-timeline`, `.hb-role-count-*`, `.hb-grid`, `.hb-grid-4`). Use **somente tokens canônicos** (sem hex). Exportar para os apps importarem (`@hebron/ui/styles/patterns.css`).
 4. **Refatorar os componentes de `packages/ui`** para usar os tokens canônicos no lugar dos antigos (find/replace pela tabela do item 2). Arquivos: button, input, select, dialog, toast, form-field, app-shell, navigation-sidebar, page-header, empty-state, error-state, loading-state, user-menu, notification-bell, notification-center, impersonation-banner, brand-mark.
 5. Atualizar `packages/ui/src/index.ts` se precisar exportar o novo `patterns.css`.
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/ui/src/tokens.css`
 - `packages/ui/src/styles/patterns.css` (criar)
 - `packages/ui/src/components/*.tsx` (apenas troca de tokens)
@@ -218,6 +233,7 @@ Hoje existem **3 vocabulários de token desconectados** para as mesmas cores: `-
 - `packages/ui/package.json` (se precisar adicionar export `./styles/patterns.css`)
 
 **Critérios de aceite:**
+
 - [x] `packages/ui/src/tokens.css` usa o vocabulário `--hb-*` + semânticos (igual a `design-refs/admin/hebron-tokens.css`, sem os `@font-face`)
 - [x] `--font-display` = Parkinsans e `--font-body` = Titillium Web (via variáveis next/font)
 - [x] Bloco de aliases deprecated presente (nada quebra nos apps existentes)
@@ -238,6 +254,7 @@ Ref: BRAIN.md §5 (fonte única da verdade). Este prompt **não** mexe nos apps;
 **Módulo:** fundacao
 **Tipo:** schema
 **Pré-condições:**
+
 - Branch: `feat/P-0.3-supabase-setup`
 - Dependências: P-0.1 concluído
 - Env vars: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
@@ -246,6 +263,7 @@ Ref: BRAIN.md §5 (fonte única da verdade). Este prompt **não** mexe nos apps;
 Configurar o package `packages/db` com Drizzle ORM. Criar os schemas PostgreSQL separados por módulo (admin, projetos, plataforma, radio, financeiro, intranet, documentos, flats, tarefas). Criar tabelas base compartilhadas em `public`: `users` (espelho de auth.users), `role_assignments`, `notifications`, `designations`. Configurar Drizzle Kit para migrations versionadas.
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/db/src/client.ts`
 - `packages/db/src/schema/public.ts`
 - `packages/db/drizzle.config.ts`
@@ -254,6 +272,7 @@ Configurar o package `packages/db` com Drizzle ORM. Criar os schemas PostgreSQL 
 - `packages/types/src/roles.ts`
 
 **Critérios de aceite:**
+
 - [x] Conexão com Supabase funcional via Drizzle
 - [x] Schemas criados: public, admin, projetos, plataforma, radio, financeiro, intranet, documentos, flats, tarefas
 - [x] Tabela `public.users` com campos: id, email, full_name, avatar_url, created_at, updated_at, suspended_at
@@ -274,6 +293,7 @@ Ref: BRAIN.md seção 3 (RBAC + RLS) e seção 6.1 (Admin). Designações (diret
 **Módulo:** fundacao
 **Tipo:** schema
 **Pré-condições:**
+
 - Branch: `feat/P-0.3b-migration-pipeline`
 - Dependências: P-0.3 a P-1.7 concluídos (migrations 0000–0003 já aplicadas manualmente)
 - Env vars: `DATABASE_URL`
@@ -283,12 +303,14 @@ As migrations 0000–0003 são SQL manuais (com RLS, partições, funções `SEC
 
 **Decisão de abordagem (confirmar com Filipe se houver dúvida — regra G1):**
 Manter os **arquivos SQL numerados manuais como fonte da verdade** (eles expressam RLS/partições/policies que o `drizzle-kit generate` não gera bem), e:
+
 1. Apontar `drizzle.config.ts` → `./src/schema/index.ts` (barrel completo) apenas para **tipagem** das queries (não para gerar migrations).
 2. Criar um **runner idempotente** `packages/db/src/migrate.ts` que: cria a tabela `public._migrations(id text primary key, applied_at timestamptz default now())` se não existir; lê os `.sql` de `src/migrations/` em ordem alfabética; aplica os ainda não registrados; grava o id aplicado. Roda dentro de transação por arquivo.
 3. Adicionar script `"db:migrate": "tsx src/migrate.ts"` em `packages/db/package.json`.
 4. Documentar o fluxo no topo de `packages/db/src/migrations/` (ou `packages/db/README.md`): "migrations são SQL manuais numeradas; aplicar com `pnpm --filter @hebron/db db:migrate`; nunca editar uma migration já aplicada — criar uma nova".
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/db/drizzle.config.ts`
 - `packages/db/src/schema/index.ts` (garantir barrel completo)
 - `packages/db/src/migrate.ts` (criar)
@@ -296,6 +318,7 @@ Manter os **arquivos SQL numerados manuais como fonte da verdade** (eles express
 - `packages/db/README.md` (criar/atualizar — documentar fluxo)
 
 **Critérios de aceite:**
+
 - [x] `drizzle.config.ts` aponta para o barrel completo de schemas
 - [x] `pnpm --filter @hebron/db db:migrate` aplica migrations pendentes e é idempotente (rodar 2x não duplica)
 - [x] Tabela `public._migrations` registra os arquivos aplicados (incluindo 0000–0003 marcados como aplicados)
@@ -314,6 +337,7 @@ Cuidado: 0000–0003 **já foram aplicadas** no banco — o runner deve marcá-l
 **Módulo:** fundacao
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-0.4-auth`
 - Dependências: P-0.3 concluído
 - Env vars: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `NEXT_PUBLIC_SITE_URL`
@@ -322,6 +346,7 @@ Cuidado: 0000–0003 **já foram aplicadas** no banco — o runner deve marcá-l
 Implementar autenticação via Supabase Auth no package `packages/auth`. Métodos v1: email + senha e magic link (sem Google OAuth). Configurar SSO cross-platform via cookies no domínio `.hebronaseec.com.br`. Implementar middleware Next.js para detecção de sessão e redirect para `app.hebronaseec.com.br/login?return_to=...`. Configurar MFA TOTP obrigatório para super_admin e diretor. Criar página de login canônica na Intranet.
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/auth/src/client.ts`
 - `packages/auth/src/middleware.ts`
 - `packages/auth/src/mfa.ts`
@@ -331,6 +356,7 @@ Implementar autenticação via Supabase Auth no package `packages/auth`. Método
 - `apps/intranet/src/middleware.ts`
 
 **Critérios de aceite:**
+
 - [x] Login por email + senha funcional
 - [x] Login por magic link funcional
 - [x] Cookies configurados com `Domain=.hebronaseec.com.br` (em produção)
@@ -352,6 +378,7 @@ Ref: BRAIN.md seção 3 (SSO cross-platform). Login canônico em `app.hebronasee
 **Módulo:** fundacao
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-0.5-app-shell`
 - Dependências: P-0.2, P-0.4 concluídos
 - Env vars: nenhuma
@@ -360,6 +387,7 @@ Ref: BRAIN.md seção 3 (SSO cross-platform). Login canônico em `app.hebronasee
 Criar componentes de layout compartilhados em `packages/ui`: AppShell (sidebar + topbar + conteúdo), NavigationSidebar (colapsável, com ícones Lucide), PageHeader, EmptyState (com citações bíblicas), ErrorState, LoadingState. O AppShell deve suportar navegação entre módulos com destaque do app ativo. Sidebar recebe config de navegação por props (cada app define suas rotas).
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/ui/src/components/app-shell.tsx`
 - `packages/ui/src/components/navigation-sidebar.tsx`
 - `packages/ui/src/components/page-header.tsx`
@@ -369,6 +397,7 @@ Criar componentes de layout compartilhados em `packages/ui`: AppShell (sidebar +
 - `packages/ui/src/components/user-menu.tsx`
 
 **Critérios de aceite:**
+
 - [x] AppShell renderiza sidebar + topbar + área de conteúdo
 - [x] Sidebar colapsável com ícones e labels
 - [x] Sidebar suporta seções e separadores
@@ -389,6 +418,7 @@ Ref: BRAIN.md seção 4 (Convenções — componentes compostos) e seção 5 (pr
 **Módulo:** fundacao
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-0.6-notifications`
 - Dependências: P-0.3, P-0.5 concluídos
 - Env vars: `RESEND_API_KEY`
@@ -397,6 +427,7 @@ Ref: BRAIN.md seção 4 (Convenções — componentes compostos) e seção 5 (pr
 Implementar sistema de notificações base. Tabela `public.notifications` com campos: user_id, channel (in_app, email), type, title, body, payload (jsonb), read_at, sent_at. Componente compartilhado: sino com dropdown (últimas notificações) + central de notificações completa. Helper para criar notificações (in_app + email via Resend). Configurar `packages/email` com React Email e header/footer institucional.
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/db/src/schema/notifications.ts`
 - `packages/ui/src/components/notification-bell.tsx`
 - `packages/ui/src/components/notification-center.tsx`
@@ -405,6 +436,7 @@ Implementar sistema de notificações base. Tabela `public.notifications` com ca
 - `packages/db/src/migrations/0001_notifications.sql`
 
 **Critérios de aceite:**
+
 - [x] Tabela `public.notifications` criada com migration
 - [x] Componente de sino com badge de contagem de não lidas
 - [x] Dropdown com últimas 10 notificações
@@ -434,6 +466,7 @@ Ref: BRAIN.md seção 9 (checklists). v1 usa apenas in_app + email. Push e SMS r
 **Módulo:** admin
 **Tipo:** schema
 **Pré-condições:**
+
 - Branch: `feat/P-1.1-admin-types`
 - Dependências: P-0.6 concluído
 - Env vars: nenhuma
@@ -442,11 +475,13 @@ Ref: BRAIN.md seção 9 (checklists). v1 usa apenas in_app + email. Push e SMS r
 Definir todos os tipos TypeScript e schemas Zod do módulo Admin. Inclui: User, RoleAssignment, Invitation, AuditLogEntry, SystemSetting, FeatureFlag, EmailTemplate, MeetingSession, Designation. Dados mockados para telas de UI. Schemas Zod em `packages/validators` para formulários de criação/edição de usuários, convites e configurações.
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/types/src/admin/index.ts`
 - `packages/validators/src/admin/index.ts`
 - `apps/admin/src/lib/mock-data.ts`
 
 **Critérios de aceite:**
+
 - [x] Tipos exportados: User, RoleAssignment, Invitation, AuditLogEntry, SystemSetting, FeatureFlag, EmailTemplate, MeetingSession, Designation
 - [x] Schemas Zod: createUserSchema, updateUserSchema, createInvitationSchema, updateSettingSchema
 - [x] Mock data: 10+ usuários, 5+ convites, 20+ entradas de audit log, 3+ feature flags
@@ -465,6 +500,7 @@ Ref: BRAIN.md seção 6.1 (Admin). MeetingSession: data, tipo (mensal/ordinária
 **Módulo:** admin
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-1.2-admin-components`
 - Dependências: P-1.1 concluído
 - Env vars: nenhuma
@@ -473,6 +509,7 @@ Ref: BRAIN.md seção 6.1 (Admin). MeetingSession: data, tipo (mensal/ordinária
 Criar componentes de UI específicos do Admin: UserTable (TanStack Table com filtros, ordenação, busca), UserCard (avatar, nome, papéis, status), RoleBadge (cor por papel), InvitationCard, AuditLogTable (com filtros avançados: ator, ação, entidade, período), FeatureFlagToggle, StatusBadge (ativo/suspenso/pendente). Todos usam dados mockados.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/admin/src/components/user-table.tsx`
 - `apps/admin/src/components/user-card.tsx`
 - `apps/admin/src/components/role-badge.tsx`
@@ -482,6 +519,7 @@ Criar componentes de UI específicos do Admin: UserTable (TanStack Table com fil
 - `apps/admin/src/components/status-badge.tsx`
 
 **Critérios de aceite:**
+
 - [x] UserTable com busca por nome/email, filtro por papel e status, ordenação por colunas
 - [x] RoleBadge com cor distinta por papel (8 papéis)
 - [x] AuditLogTable com filtros: ator, ação, entidade, data (range)
@@ -501,6 +539,7 @@ Ref: BRAIN.md seção 5 (design system). TanStack Table v8 para tabelas. Lucide 
 **Módulo:** admin
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-1.3-admin-pages`
 - Dependências: P-1.2 concluído
 - Env vars: nenhuma
@@ -509,6 +548,7 @@ Ref: BRAIN.md seção 5 (design system). TanStack Table v8 para tabelas. Lucide 
 Criar todas as páginas do Admin usando App Router. Dashboard (visão geral com cards de resumo: total usuários, convites pendentes, alertas). Lista de usuários. Detalhe do usuário. Convites pendentes. Auditoria. Feature flags. Configurações gerais (logos, branding, textos). Templates de email. Designações (gestor/autorizador). Reuniões. Todas com dados mockados.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/admin/src/app/(dashboard)/layout.tsx`
 - `apps/admin/src/app/(dashboard)/page.tsx`
 - `apps/admin/src/app/(dashboard)/usuarios/page.tsx`
@@ -519,6 +559,7 @@ Criar todas as páginas do Admin usando App Router. Dashboard (visão geral com 
 - `apps/admin/src/app/(dashboard)/reunioes/page.tsx`
 
 **Critérios de aceite:**
+
 - [x] Dashboard com cards: total de usuários por papel, convites pendentes, últimas ações
 - [x] Lista de usuários com UserTable (busca, filtros, paginação)
 - [x] Detalhe do usuário: perfil, papéis, histórico de atividade, botão suspender
@@ -542,6 +583,7 @@ Ref: BRAIN.md seção 6.1. Layout usa AppShell do P-0.5. Reuniões: sistema cria
 **Módulo:** admin
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-1.4-admin-forms`
 - Dependências: P-1.3 concluído
 - Env vars: nenhuma
@@ -550,6 +592,7 @@ Ref: BRAIN.md seção 6.1. Layout usa AppShell do P-0.5. Reuniões: sistema cria
 Implementar formulários do Admin com React Hook Form + Zod (schemas do P-1.1). Criar/editar usuário (nome, email, papéis, módulos). Convidar usuário (email, papéis, mensagem). Atribuir/revogar papéis. Configurar designações (gestor/autorizador). Editar templates de email (textarea com preview). Criar/editar reunião (data, tipo, presidente). Validação client-side com feedback visual.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/admin/src/components/user-form.tsx`
 - `apps/admin/src/components/invitation-form.tsx`
 - `apps/admin/src/components/role-assignment-form.tsx`
@@ -558,6 +601,7 @@ Implementar formulários do Admin com React Hook Form + Zod (schemas do P-1.1). 
 - `apps/admin/src/components/meeting-form.tsx`
 
 **Critérios de aceite:**
+
 - [x] Formulário de usuário valida email, nome obrigatório, pelo menos 1 papel
 - [x] Formulário de convite valida email e permite selecionar papéis
 - [x] Formulário de designação mostra dropdown apenas com diretores
@@ -579,6 +623,7 @@ Ref: BRAIN.md seção 4 (Server Actions com next-safe-action + Zod). Suspensão 
 **Módulo:** admin
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-1.5-admin-states`
 - Dependências: P-1.4 concluído
 - Env vars: nenhuma
@@ -587,6 +632,7 @@ Ref: BRAIN.md seção 4 (Server Actions com next-safe-action + Zod). Suspensão 
 Implementar estados de loading, empty e error em todas as telas do Admin. Loading: skeletons alinhados ao layout de cada tela (não spinners genéricos). Empty: mensagens contextuais com citações bíblicas pertinentes. Error: mensagens claras com ação de retry. Skeleton para tabelas, cards e formulários.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/admin/src/components/user-table-skeleton.tsx`
 - `apps/admin/src/components/dashboard-skeleton.tsx`
 - `apps/admin/src/components/audit-log-skeleton.tsx`
@@ -595,6 +641,7 @@ Implementar estados de loading, empty e error em todas as telas do Admin. Loadin
 - `apps/admin/src/app/(dashboard)/auditoria/page.tsx` (adicionar loading/error)
 
 **Critérios de aceite:**
+
 - [x] Cada tela principal tem skeleton específico (não genérico)
 - [x] Estado vazio em cada lista com mensagem contextual
 - [x] Estado de erro com mensagem e botão de retry
@@ -621,6 +668,7 @@ Ref: BRAIN.md seção 5 (estados vazios com citações bíblicas). Ex: lista de 
 **Módulo:** admin
 **Tipo:** schema
 **Pré-condições:**
+
 - Branch: `feat/P-1.6-admin-schema`
 - Dependências: P-1.5 concluído, validação da diretoria OK
 - Env vars: `DATABASE_URL`
@@ -629,11 +677,13 @@ Ref: BRAIN.md seção 5 (estados vazios com citações bíblicas). Ex: lista de 
 Criar tabelas Drizzle no schema `admin`: audit_log (particionado por mês), system_settings, feature_flags, invitations (com token, expires_at, accepted_at), email_templates, meeting_sessions. Adicionar campos faltantes em `public.users`: phone, document_cpf, suspended_modules (jsonb). Migration incremental.
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/db/src/schema/admin.ts`
 - `packages/db/src/schema/public.ts` (atualizar users)
 - `packages/db/src/migrations/0002_admin.sql`
 
 **Critérios de aceite:**
+
 - [x] Tabela `admin.audit_log`: actor_id, action, entity, entity_id, diff (jsonb), ip, user_agent, created_at
 - [x] Tabela `admin.invitations`: email, roles (jsonb), token, invited_by, expires_at, accepted_at
 - [x] Tabela `admin.email_templates`: slug, subject, body_html, body_text, variables (jsonb)
@@ -654,6 +704,7 @@ Ref: BRAIN.md seção 6.1. audit_log é particionado por mês para performance. 
 **Módulo:** admin
 **Tipo:** schema
 **Pré-condições:**
+
 - Branch: `feat/P-1.7-admin-rls`
 - Dependências: P-1.6 concluído
 - Env vars: `DATABASE_URL`
@@ -662,11 +713,13 @@ Ref: BRAIN.md seção 6.1. audit_log é particionado por mês para performance. 
 Criar RLS policies DENY-by-default para todas as tabelas do schema admin e tabelas public (users, role_assignments, designations, notifications). Super_admin: full access. Diretores: leitura em users e role_assignments. Demais: leitura do próprio perfil. Audit_log: apenas super_admin. Feature_flags e system_settings: apenas super_admin. Invitations: super_admin cria; convidado aceita.
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/db/src/migrations/0003_admin_rls.sql`
 - `packages/db/src/rls/admin.ts` (declaração para referência)
 
 **Critérios de aceite:**
-- [x] RLS habilitado em TODAS as tabelas (admin.* e public.*)
+
+- [x] RLS habilitado em TODAS as tabelas (admin._ e public._)
 - [x] Default DENY em todas as tabelas
 - [x] super_admin: CRUD em todas as tabelas admin
 - [x] Diretores: SELECT em public.users e public.role_assignments
@@ -687,6 +740,7 @@ Ref: BRAIN.md seção 3 (RBAC + RLS — DENY by default, USING e WITH CHECK sepa
 **Módulo:** admin
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-1.8-admin-actions`
 - Dependências: P-1.7 concluído
 - Env vars: `DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
@@ -695,6 +749,7 @@ Ref: BRAIN.md seção 3 (RBAC + RLS — DENY by default, USING e WITH CHECK sepa
 Implementar Server Actions com `next-safe-action` + Zod para o Admin. CRUD de usuários (criar, editar, suspender por módulo, reset de senha). Envio de convites por email. Atribuição/revogação de papéis (com verificação de conflito de interesse). Gerenciar designações. CRUD de feature flags e system_settings. Criar/editar reuniões. Auto-criação de reuniões mensais (1a quarta de cada mês). Registrar audit log em toda mutação.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/admin/src/actions/users.ts`
 - `apps/admin/src/actions/invitations.ts`
 - `apps/admin/src/actions/roles.ts`
@@ -703,6 +758,7 @@ Implementar Server Actions com `next-safe-action` + Zod para o Admin. CRUD de us
 - `apps/admin/src/lib/audit.ts`
 
 **Critérios de aceite:**
+
 - [x] createUser, updateUser, suspendUser (granular por módulo)
 - [x] sendInvitation (cria convite + dispara email via Resend)
 - [x] assignRole com verificação de conflito (diretor/conselheiro ≠ submissor/hospede)
@@ -726,6 +782,7 @@ Ref: BRAIN.md seção 6.1. Conflito de interesse: diretores/conselheiros NÃO po
 **Módulo:** admin
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-1.9-admin-integration`
 - Dependências: P-1.8 concluído
 - Env vars: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`
@@ -734,6 +791,7 @@ Ref: BRAIN.md seção 6.1. Conflito de interesse: diretores/conselheiros NÃO po
 Substituir dados mockados por dados reais em todas as telas do Admin. Conectar formulários às Server Actions. Implementar revalidação de cache após mutações. Conectar tabelas a queries reais com filtros server-side. Dashboard com contadores reais. Lista de usuários com busca server-side.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/admin/src/app/(dashboard)/page.tsx`
 - `apps/admin/src/app/(dashboard)/usuarios/page.tsx`
 - `apps/admin/src/app/(dashboard)/usuarios/[id]/page.tsx`
@@ -744,6 +802,7 @@ Substituir dados mockados por dados reais em todas as telas do Admin. Conectar f
 - `apps/admin/src/lib/mock-data.ts` (remover)
 
 **Critérios de aceite:**
+
 - [x] Todas as telas carregam dados reais do banco (RSC)
 - [x] Formulários chamam Server Actions e exibem feedback (sucesso/erro)
 - [x] Revalidação de cache após cada mutação (revalidatePath)
@@ -763,6 +822,7 @@ Preferir RSC + Server Actions sobre TanStack Query quando possível. Ref: BRAIN.
 **Módulo:** admin
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-1.10-admin-notifications`
 - Dependências: P-1.9 concluído
 - Env vars: `RESEND_API_KEY`
@@ -771,6 +831,7 @@ Preferir RSC + Server Actions sobre TanStack Query quando possível. Ref: BRAIN.
 Implementar notificações específicas do Admin: convite enviado (email ao convidado), convite aceito (in_app ao admin), usuário suspenso (in_app), papel alterado (in_app ao usuário). Criar templates de email: convite, boas-vindas, reset de senha. Tela de configuração de templates de email com preview e variáveis dinâmicas.
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/email/src/templates/invitation.tsx`
 - `packages/email/src/templates/welcome.tsx`
 - `packages/email/src/templates/password-reset.tsx`
@@ -779,6 +840,7 @@ Implementar notificações específicas do Admin: convite enviado (email ao conv
 - `apps/admin/src/components/email-template-preview.tsx`
 
 **Critérios de aceite:**
+
 - [x] Email de convite enviado ao criar convite (com link de aceitação)
 - [x] Notificação in_app quando convite aceito
 - [x] Template de boas-vindas enviado ao aceitar convite
@@ -798,6 +860,7 @@ Ref: BRAIN.md seção 6.1 (templates editáveis, nunca hardcoded). Templates em 
 **Módulo:** admin
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-1.11-admin-impersonation`
 - Dependências: P-1.9 concluído
 - Env vars: `DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
@@ -806,6 +869,7 @@ Ref: BRAIN.md seção 6.1 (templates editáveis, nunca hardcoded). Templates em 
 Implementar impersonation auditada: super_admin pode "assumir" identidade de qualquer usuário. Banner persistente vermelho no topo de todas as telas durante impersonation ("Você está operando como [Nome] — Sair da impersonação"). Log obrigatório: quem, quando, duração, ações realizadas. Botão de encerrar impersonation sempre visível. Audit log avançado: filtros por ator, ação, entidade, período; exportação CSV.
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/auth/src/impersonation.ts`
 - `packages/ui/src/components/impersonation-banner.tsx`
 - `apps/admin/src/actions/impersonation.ts`
@@ -813,6 +877,7 @@ Implementar impersonation auditada: super_admin pode "assumir" identidade de qua
 - `apps/admin/src/components/audit-log-export.tsx`
 
 **Critérios de aceite:**
+
 - [x] Super_admin pode iniciar impersonation a partir do detalhe do usuário
 - [x] Banner vermelho persistente em TODOS os apps durante impersonation
 - [x] Toda ação durante impersonation logada com actor_id original + impersonated_id
@@ -833,6 +898,7 @@ Ref: BRAIN.md seção 6.1 (Impersonação — ESSENCIAL). Cenário real: submiss
 **Módulo:** admin
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-1.12-admin-tests`
 - Dependências: P-1.11 concluído
 - Env vars: `DATABASE_URL`, `SUPABASE_URL`
@@ -841,12 +907,14 @@ Ref: BRAIN.md seção 6.1 (Impersonação — ESSENCIAL). Cenário real: submiss
 Testes de integração para o Admin. Testar: RLS policies (queries como cada papel), Server Actions (CRUD de usuários, convites, papéis), conflito de interesse (rejeitar papel proibido), impersonation (log gerado), audit log (registrado em mutações). Testar fluxo completo: criar convite → aceitar → usuário ativo.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/admin/src/__tests__/rls.test.ts`
 - `apps/admin/src/__tests__/actions.test.ts`
 - `apps/admin/src/__tests__/impersonation.test.ts`
 - `apps/admin/src/__tests__/audit.test.ts`
 
 **Critérios de aceite:**
+
 - [x] RLS: super_admin acessa tudo; diretor lê users; colaborador lê apenas próprio perfil
 - [x] RLS: usuário comum NÃO acessa audit_log
 - [x] Conflito de interesse: atribuir submissor a diretor retorna erro
@@ -865,6 +933,7 @@ Testes de integração para o Admin. Testar: RLS policies (queries como cada pap
 **Módulo:** admin
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-1.12b-admin-ds-reconcile`
 - Dependências: **P-0.2b concluído** (tokens canônicos existem) e P-1.12 concluído
 - Env vars: nenhuma
@@ -874,6 +943,7 @@ Testes de integração para o Admin. Testar: RLS policies (queries como cada pap
 O Admin foi construído antes das referências de design e usa `apps/admin/src/app/admin.css` (CSS próprio que redefine tokens `--hb-primary` e cores em hex) + hex hardcoded inline nas páginas (ex.: `style={{color:'#07b4e7'}}`). Isso duplica o design system. Este prompt faz o Admin passar a consumir o `packages/ui` unificado, **sem mudar a aparência** (a aparência atual já segue `design-refs/admin/`).
 
 **Escopo (siga na ordem):**
+
 1. Em `apps/admin/src/app/globals.css`, manter `@import "tailwindcss";` + `@import` do `tokens.css` de `@hebron/ui` e **adicionar** o import de `@hebron/ui/styles/patterns.css`.
 2. **Esvaziar `apps/admin/src/app/admin.css`** de tudo que duplica o design system: remover o bloco `:root` com `--hb-page-bg/--hb-primary/...` (agora vêm dos tokens canônicos) e remover as classes que foram movidas para `patterns.css` em P-0.2b. Manter apenas o que for **exclusivo do Admin** e não couber em `patterns.css` (se sobrar algo, comentar explicando).
 3. **Substituir todos os hex de marca hardcoded** nas páginas e componentes do Admin por tokens canônicos. Rode e zere:
@@ -883,12 +953,14 @@ O Admin foi construído antes das referências de design e usa `apps/admin/src/a
 5. Conferir cada tela contra `design-refs/admin/` (overview, users, invites, audit-meetings, settings) — o resultado visual deve continuar fiel ao protótipo.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/admin/src/app/globals.css`
 - `apps/admin/src/app/admin.css`
 - `apps/admin/src/app/(dashboard)/**/*.tsx` (apenas troca de hex→token e classes→componentes)
 - `apps/admin/src/components/**/*.tsx` (idem)
 
 **Critérios de aceite:**
+
 - [x] `grep -rn "#202c85\|#07b4e7\|#ea5a06\|#a1c520\|#131737\|#6b7280" apps/admin/src` não retorna nada (zero hex de marca)
 - [x] `admin.css` não redefine tokens da marca nem duplica classes do design system
 - [x] Botões usam `<Button>` de `@hebron/ui` (sem `.hb-btn` local)
@@ -916,6 +988,7 @@ Ref: BRAIN.md §5. **Não** altere regra de negócio, queries ou Server Actions 
 **Módulo:** documentos
 **Tipo:** schema
 **Pré-condições:**
+
 - Branch: `feat/P-1.13-docs-types`
 - Dependências: P-0.6 concluído
 - Env vars: nenhuma
@@ -924,11 +997,13 @@ Ref: BRAIN.md §5. **Não** altere regra de negócio, queries ou Server Actions 
 Definir tipos TypeScript e schemas Zod para o módulo Documentos. Tipos: Document (com visibility: public | internal | restricted), Category (árvore hierárquica), Tag, DocumentVersion, Edital (subtipo com datas de abertura/fechamento), Subscription. Dados mockados para UI. Schemas Zod para criação/edição de documentos e editais.
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/types/src/documentos/index.ts`
 - `packages/validators/src/documentos/index.ts`
 - `apps/documentos/src/lib/mock-data.ts`
 
 **Critérios de aceite:**
+
 - [x] Tipos exportados: Document, Category, Tag, DocumentVersion, Edital, Subscription
 - [x] Visibility enum: public, internal, restricted
 - [x] Edital herda de Document com campos: opens_at, closes_at, project_type, project_category
@@ -949,6 +1024,7 @@ Ref: BRAIN.md seção 6.7. Editais pontuais = permanentemente disponíveis; anua
 **Módulo:** documentos
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-1.14-docs-components`
 - Dependências: P-1.13 concluído
 - Env vars: nenhuma
@@ -957,6 +1033,7 @@ Ref: BRAIN.md seção 6.7. Editais pontuais = permanentemente disponíveis; anua
 Criar componentes específicos: DocumentCard (título, resumo, categoria, tags, data, badge de visibilidade), EditalCard (com status aberto/fechado e botão "submeter projeto"), CategoryTree (navegação em árvore), DocumentViewer (renderização inline de PDF/Markdown), SearchBar (busca por título, categoria, tag), VersionHistory (lista de versões com diff visual).
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/documentos/src/components/document-card.tsx`
 - `apps/documentos/src/components/edital-card.tsx`
 - `apps/documentos/src/components/category-tree.tsx`
@@ -965,6 +1042,7 @@ Criar componentes específicos: DocumentCard (título, resumo, categoria, tags, 
 - `apps/documentos/src/components/version-history.tsx`
 
 **Critérios de aceite:**
+
 - [x] DocumentCard com badge de visibilidade (público=verde, interno=azul, restrito=vermelho)
 - [x] EditalCard mostra status (aberto/fechado), cronograma e CTA
 - [x] CategoryTree com navegação hierárquica colapsável
@@ -986,6 +1064,7 @@ Ref: BRAIN.md seção 6.7. Botão "submeter projeto" no edital leva ao módulo P
 **Módulo:** documentos
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-1.15-docs-pages`
 - Dependências: P-1.14 concluído
 - Env vars: nenhuma
@@ -994,6 +1073,7 @@ Ref: BRAIN.md seção 6.7. Botão "submeter projeto" no edital leva ao módulo P
 Criar páginas do portal público de Documentos. Home com destaques e editais abertos. Listagem por categoria com filtros (visibilidade, tags, data). Página de documento (viewer + download + versões). Página de edital (cronograma, FAQ, botão submeter projeto). Busca global. Área editorial (dashboard, editor Markdown + upload PDF, gestão de categorias). SEO: metadata dinâmica, OG tags.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/documentos/src/app/page.tsx`
 - `apps/documentos/src/app/[slug]/page.tsx`
 - `apps/documentos/src/app/editais/page.tsx`
@@ -1004,6 +1084,7 @@ Criar páginas do portal público de Documentos. Home com destaques e editais ab
 - `apps/documentos/src/app/(editorial)/novo/page.tsx`
 
 **Critérios de aceite:**
+
 - [x] Home com seção de destaques e editais abertos em destaque
 - [x] Listagem com filtros por categoria, visibilidade e tags
 - [x] Página de documento com viewer inline, download e versões
@@ -1026,6 +1107,7 @@ Ref: BRAIN.md seção 6.7. Parte pública acessível sem login. Parte editorial 
 **Módulo:** documentos
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-1.16-docs-forms`
 - Dependências: P-1.15 concluído
 - Env vars: nenhuma
@@ -1034,6 +1116,7 @@ Ref: BRAIN.md seção 6.7. Parte pública acessível sem login. Parte editorial 
 Formulários editoriais: criar/editar documento (título, slug, conteúdo Markdown ou upload PDF, categoria, tags, visibilidade). Criar/editar edital (herda documento + datas abertura/fechamento, tipo de projeto, categoria de projeto, FAQ). Gestão de categorias (criar, editar, reordenar na árvore). Subscriptions (email para alertas por categoria).
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/documentos/src/components/document-form.tsx`
 - `apps/documentos/src/components/edital-form.tsx`
 - `apps/documentos/src/components/category-form.tsx`
@@ -1041,6 +1124,7 @@ Formulários editoriais: criar/editar documento (título, slug, conteúdo Markdo
 - `apps/documentos/src/components/markdown-editor.tsx`
 
 **Critérios de aceite:**
+
 - [x] Editor Markdown com preview em tempo real (split view)
 - [x] Upload de PDF com preview inline
 - [x] Seleção de categoria via árvore hierárquica
@@ -1062,6 +1146,7 @@ Ref: BRAIN.md seção 6.7. Apenas super_admin e colaboradores com papel "editor"
 **Módulo:** documentos
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-1.17-docs-states`
 - Dependências: P-1.16 concluído
 - Env vars: nenhuma
@@ -1070,6 +1155,7 @@ Ref: BRAIN.md seção 6.7. Apenas super_admin e colaboradores com papel "editor"
 Implementar estados de loading, empty e error em todas as telas de Documentos. Skeletons para cards de documento, lista, edital e busca. Estados vazios contextuais para portal público e área editorial. Skeleton para o viewer de documento.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/documentos/src/components/document-card-skeleton.tsx`
 - `apps/documentos/src/components/document-viewer-skeleton.tsx`
 - `apps/documentos/src/components/search-results-skeleton.tsx`
@@ -1077,6 +1163,7 @@ Implementar estados de loading, empty e error em todas as telas de Documentos. S
 - `apps/documentos/src/app/busca/page.tsx` (adicionar estados)
 
 **Critérios de aceite:**
+
 - [x] Skeleton específico para cards, viewer e busca
 - [x] Estado vazio no portal: "Nenhum documento encontrado" com busca alternativa
 - [x] Estado vazio nos editais: "Nenhum edital aberto no momento"
@@ -1100,6 +1187,7 @@ Implementar estados de loading, empty e error em todas as telas de Documentos. S
 **Módulo:** documentos
 **Tipo:** schema
 **Pré-condições:**
+
 - Branch: `feat/P-1.18-docs-schema`
 - Dependências: P-1.17 concluído, validação da diretoria OK
 - Env vars: `DATABASE_URL`
@@ -1108,10 +1196,12 @@ Implementar estados de loading, empty e error em todas as telas de Documentos. S
 Criar tabelas Drizzle no schema `documentos`: documents (title, slug, content_md, file_url, visibility, published_at, author_id), categories (name, parent_id — árvore), tags, document_tags, document_versions (content, file_url, version_number, created_by), editals (extends documents: opens_at, closes_at, project_type, project_category_id), subscriptions (user_id, category_id), views (document_id, user_id, viewed_at).
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/db/src/schema/documentos.ts`
 - `packages/db/src/migrations/0004_documentos.sql`
 
 **Critérios de aceite:**
+
 - [x] Tabela `documentos.documents` com visibility enum (public, internal, restricted)
 - [x] Tabela `documentos.categories` com parent_id (auto-referência para árvore)
 - [x] Tabela `documentos.document_versions` com FK para documents
@@ -1130,17 +1220,20 @@ Criar tabelas Drizzle no schema `documentos`: documents (title, slug, content_md
 **Módulo:** documentos
 **Tipo:** schema
 **Pré-condições:**
+
 - Branch: `feat/P-1.19-docs-rls`
 - Dependências: P-1.18 concluído
 - Env vars: `DATABASE_URL`
 
 **Escopo:**
-RLS DENY-by-default para todas as tabelas documentos.*. Público (anon): SELECT em documents com visibility = 'public'. Usuários autenticados: SELECT em documents com visibility = 'public' ou 'internal'. Super_admin e editor: CRUD completo. Restricted: visível apenas para papéis definidos (verificar via role_assignments). Versions: mesma regra do documento pai.
+RLS DENY-by-default para todas as tabelas documentos.\*. Público (anon): SELECT em documents com visibility = 'public'. Usuários autenticados: SELECT em documents com visibility = 'public' ou 'internal'. Super_admin e editor: CRUD completo. Restricted: visível apenas para papéis definidos (verificar via role_assignments). Versions: mesma regra do documento pai.
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/db/src/migrations/0005_documentos_rls.sql`
 
 **Critérios de aceite:**
+
 - [x] Anon: vê apenas documentos public
 - [x] Autenticado: vê public + internal
 - [x] Restricted: vê apenas se tem papel permitido
@@ -1157,6 +1250,7 @@ RLS DENY-by-default para todas as tabelas documentos.*. Público (anon): SELECT 
 **Módulo:** documentos
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-1.20-docs-actions`
 - Dependências: P-1.19 concluído
 - Env vars: `DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
@@ -1165,6 +1259,7 @@ RLS DENY-by-default para todas as tabelas documentos.*. Público (anon): SELECT 
 Server Actions para Documentos: CRUD de documentos (criar, editar, publicar/despublicar, soft-delete). Upload de PDF para Supabase Storage. Versionamento (cada edição cria nova versão). CRUD de categorias. CRUD de editais. Gerenciar subscriptions. Busca full-text (título, conteúdo, tags). Registrar views. Audit log em mutações.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/documentos/src/actions/documents.ts`
 - `apps/documentos/src/actions/categories.ts`
 - `apps/documentos/src/actions/editals.ts`
@@ -1172,6 +1267,7 @@ Server Actions para Documentos: CRUD de documentos (criar, editar, publicar/desp
 - `apps/documentos/src/actions/search.ts`
 
 **Critérios de aceite:**
+
 - [x] createDocument com upload de PDF para Supabase Storage (signed URL)
 - [x] updateDocument cria nova versão automaticamente
 - [x] Busca full-text por título, conteúdo Markdown e tags
@@ -1191,6 +1287,7 @@ Server Actions para Documentos: CRUD de documentos (criar, editar, publicar/desp
 **Módulo:** documentos
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-1.21-docs-integration`
 - Dependências: P-1.20 concluído
 - Env vars: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`
@@ -1199,6 +1296,7 @@ Server Actions para Documentos: CRUD de documentos (criar, editar, publicar/desp
 Substituir mocks por dados reais em todas as telas. Conectar formulários editoriais às actions. Portal público com SSR (SEO). Busca server-side. Viewer carregando PDF do Supabase Storage. Versionamento funcional com navegação entre versões.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/documentos/src/app/page.tsx`
 - `apps/documentos/src/app/[slug]/page.tsx`
 - `apps/documentos/src/app/editais/page.tsx`
@@ -1209,6 +1307,7 @@ Substituir mocks por dados reais em todas as telas. Conectar formulários editor
 - `apps/documentos/src/lib/mock-data.ts` (remover)
 
 **Critérios de aceite:**
+
 - [x] Portal público renderiza documentos do banco com SSR
 - [x] Busca funcional com resultados do banco
 - [x] Viewer carrega PDFs do Supabase Storage
@@ -1226,6 +1325,7 @@ Substituir mocks por dados reais em todas as telas. Conectar formulários editor
 **Módulo:** documentos
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-1.22-docs-notifications`
 - Dependências: P-1.21 concluído
 - Env vars: `RESEND_API_KEY`
@@ -1234,12 +1334,14 @@ Substituir mocks por dados reais em todas as telas. Conectar formulários editor
 Notificações: novo documento publicado em categoria assinada (email para subscribers). Edital aberto (email para todos os submissores ativos). Edital prestes a fechar (7 dias antes, email para submissores).
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/email/src/templates/new-document.tsx`
 - `packages/email/src/templates/edital-open.tsx`
 - `packages/email/src/templates/edital-closing.tsx`
 - `apps/documentos/src/lib/notifications.ts`
 
 **Critérios de aceite:**
+
 - [x] Email enviado a subscribers quando documento publicado em categoria assinada
 - [x] Email de edital aberto enviado a todos os submissores
 - [x] Email de lembrete 7 dias antes do fechamento do edital
@@ -1255,6 +1357,7 @@ Notificações: novo documento publicado em categoria assinada (email para subsc
 **Módulo:** documentos
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-1.23-docs-projetos`
 - Dependências: P-1.21 concluído
 - Env vars: nenhuma
@@ -1263,11 +1366,13 @@ Notificações: novo documento publicado em categoria assinada (email para subsc
 Implementar integração entre edital e módulo Projetos. Botão "submeter projeto" no edital gera URL com query params: `projetos.hebronaseec.com.br/novo?edital_id=X&tipo=anual&categoria=Y`. Preparar a recepção desses params no módulo Projetos (placeholder). Vincular projeto ao edital de origem (campo edital_id no schema de Projetos).
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/documentos/src/components/edital-submit-button.tsx`
 - `packages/types/src/projetos/index.ts` (adicionar edital_id)
 - `apps/documentos/src/app/editais/[slug]/page.tsx` (adicionar botão)
 
 **Critérios de aceite:**
+
 - [x] Botão "submeter projeto" visível em editais abertos
 - [x] URL gerada com edital_id, tipo e categoria como query params
 - [x] Tipo projetos/index.ts inclui campo edital_id opcional
@@ -1286,6 +1391,7 @@ Ref: BRAIN.md seção 7 (Documentos → Projetos). A recepção completa dos par
 **Módulo:** documentos
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-1.24-docs-tests`
 - Dependências: P-1.23 concluído
 - Env vars: `DATABASE_URL`
@@ -1294,11 +1400,13 @@ Ref: BRAIN.md seção 7 (Documentos → Projetos). A recepção completa dos par
 Testes de integração para Documentos. RLS: anon vê public, autenticado vê public+internal, restricted apenas com papel. Actions: CRUD de documentos, versionamento (edição cria versão), busca full-text, categorias hierárquicas. Fluxo: criar documento → publicar → subscriber recebe notificação.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/documentos/src/__tests__/rls.test.ts`
 - `apps/documentos/src/__tests__/actions.test.ts`
 - `apps/documentos/src/__tests__/search.test.ts`
 
 **Critérios de aceite:**
+
 - [x] RLS: anon vê apenas public; autenticado vê public+internal; restricted respeita papel
 - [x] Versionamento: edição incrementa versão e preserva histórico
 - [x] Busca retorna resultados por título, conteúdo e tags
@@ -1323,6 +1431,7 @@ Testes de integração para Documentos. RLS: anon vê public, autenticado vê pu
 **Módulo:** projetos
 **Tipo:** schema
 **Pré-condições:**
+
 - Branch: `feat/P-2.1-projetos-types`
 - Dependências: P-1.24 concluído
 - Env vars: nenhuma
@@ -1331,11 +1440,13 @@ Testes de integração para Documentos. RLS: anon vê public, autenticado vê pu
 Definir tipos e schemas Zod do módulo Projetos — o mais complexo do ecossistema. Tipos: Project (com stages, dois tipos: pontual/anual), Organization, ProjectVersion, Evaluation, Vote, Contestation, Report, ReportAttachment, CompactVersion, MeetingAgenda. Stages como enum: rascunho, validacao, votacao, homologacao, aprovado, reprovado, em_execucao, concluido, cancelado. Mock data extenso para todas as telas.
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/types/src/projetos/index.ts`
 - `packages/validators/src/projetos/index.ts`
 - `apps/projetos/src/lib/mock-data.ts`
 
 **Critérios de aceite:**
+
 - [x] Tipos: Project, Organization, ProjectVersion, Evaluation, Vote, Contestation, Report, CompactVersion
 - [x] Stages enum completo (9 estados)
 - [x] Formulário anual: 10+ campos obrigatórios (ver BRAIN.md 6.2)
@@ -1357,6 +1468,7 @@ Ref: BRAIN.md seção 6.2 (Projetos). parent_project_id para renovações. edita
 **Módulo:** projetos
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-2.2-projetos-components`
 - Dependências: P-2.1 concluído
 - Env vars: nenhuma
@@ -1365,6 +1477,7 @@ Ref: BRAIN.md seção 6.2 (Projetos). parent_project_id para renovações. edita
 Componentes para ambas as áreas (submissor e diretoria). ProjectCard (título, instituição, valor, stage, badge). ProjectKanban (pipeline por stage com drag-drop). ProjectTimeline (histórico de transições). VotePanel (pergunta "Você sente paz...", botões sim/não, quórum). EvaluationCard (parecer do avaliador). ReportCard (relatório com status e anexos). ScoreIndicator (barra visual de score IA, visível apenas para diretoria). OrganizationCard.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/projetos/src/components/project-card.tsx`
 - `apps/projetos/src/components/project-kanban.tsx`
 - `apps/projetos/src/components/project-timeline.tsx`
@@ -1375,6 +1488,7 @@ Componentes para ambas as áreas (submissor e diretoria). ProjectCard (título, 
 - `apps/projetos/src/components/organization-card.tsx`
 
 **Critérios de aceite:**
+
 - [x] ProjectCard com badge de stage colorido e formatação de valor em BRL
 - [x] ProjectKanban com colunas por stage e drag-drop (somente para diretoria)
 - [x] VotePanel: pergunta "Você sente paz em investir neste projeto?", sim/não, contador de quórum
@@ -1395,6 +1509,7 @@ Ref: BRAIN.md seção 6.2 (votação secreta — ninguém vê quem votou). VoteP
 **Módulo:** projetos
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-2.3-projetos-pages`
 - Dependências: P-2.2 concluído
 - Env vars: nenhuma
@@ -1403,6 +1518,7 @@ Ref: BRAIN.md seção 6.2 (votação secreta — ninguém vê quem votou). VoteP
 Criar todas as páginas. Área do submissor: dashboard (meus projetos + status + pagamentos + relatórios pendentes + orçamento), wizard de novo projeto (multi-step), detalhe do projeto, envio de relatório, prestação de contas, perfil da instituição. Área da diretoria: pipeline kanban, detalhe analítico (painel IA), tela de avaliação, pauta da reunião (com BI: saldo, meses restantes), relatórios consolidados.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/projetos/src/app/(submissor)/layout.tsx`
 - `apps/projetos/src/app/(submissor)/page.tsx`
 - `apps/projetos/src/app/(submissor)/novo/page.tsx`
@@ -1413,6 +1529,7 @@ Criar todas as páginas. Área do submissor: dashboard (meus projetos + status +
 - `apps/projetos/src/app/(diretoria)/reuniao/page.tsx`
 
 **Critérios de aceite:**
+
 - [x] Dashboard submissor: meus projetos, projeção de pagamentos, relatórios pendentes, orçamento disponível
 - [x] Wizard multi-step: instituição → proposta → orçamento → cronograma → anexos → revisão
 - [x] Detalhe do projeto com timeline de stages
@@ -1435,6 +1552,7 @@ Ref: BRAIN.md seção 6.2. Dashboard do submissor: simplicidade e clareza (públ
 **Módulo:** projetos
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-2.4-projetos-forms`
 - Dependências: P-2.3 concluído
 - Env vars: nenhuma
@@ -1443,6 +1561,7 @@ Ref: BRAIN.md seção 6.2. Dashboard do submissor: simplicidade e clareza (públ
 Implementar formulários do módulo. Wizard de projeto anual (multi-step com validação por etapa): instituição (autocomplete), proposta (nome, responsável, descrição, local com Google Places + fallback texto, categoria), orçamento (valor total, parcelas, meses), anexos (vídeo até 3min, planilha orçamento, carta recomendação), revisão final. Formulário pontual (6 campos simplificados, anexos opcionais). Formulário de relatório. Formulário de avaliação/parecer. Formulário de voto. Formulário de contestação.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/projetos/src/components/project-wizard.tsx`
 - `apps/projetos/src/components/project-wizard-steps/step-institution.tsx`
 - `apps/projetos/src/components/project-wizard-steps/step-proposal.tsx`
@@ -1453,6 +1572,7 @@ Implementar formulários do módulo. Wizard de projeto anual (multi-step com val
 - `apps/projetos/src/components/report-form.tsx`
 
 **Critérios de aceite:**
+
 - [x] Wizard anual: 5 steps com validação Zod por step, navegação prev/next
 - [x] Local com autocomplete (Google Places) + fallback texto livre
 - [x] Meses de pagamento: seleção múltipla (checkboxes dos 12 meses)
@@ -1474,6 +1594,7 @@ Ref: BRAIN.md seção 6.2 (formulários anual e pontual confirmados). Duração 
 **Módulo:** projetos
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-2.5-projetos-states`
 - Dependências: P-2.4 concluído
 - Env vars: nenhuma
@@ -1482,6 +1603,7 @@ Ref: BRAIN.md seção 6.2 (formulários anual e pontual confirmados). Duração 
 Loading, empty e error states para todas as telas de Projetos. Skeletons para dashboard submissor, kanban diretoria, wizard, detalhe do projeto. Estado vazio para submissor sem projetos. Estado vazio para diretoria sem projetos no stage. Indicadores de progresso no wizard.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/projetos/src/components/dashboard-skeleton.tsx`
 - `apps/projetos/src/components/kanban-skeleton.tsx`
 - `apps/projetos/src/components/project-detail-skeleton.tsx`
@@ -1489,6 +1611,7 @@ Loading, empty e error states para todas as telas de Projetos. Skeletons para da
 - `apps/projetos/src/app/(diretoria)/page.tsx` (adicionar estados)
 
 **Critérios de aceite:**
+
 - [x] Skeleton por tela (dashboard, kanban, detalhe)
 - [x] Estado vazio submissor: "Você ainda não submeteu nenhum projeto" + CTA
 - [x] Estado vazio diretoria: mensagem por coluna do kanban
@@ -1512,6 +1635,7 @@ Loading, empty e error states para todas as telas de Projetos. Skeletons para da
 **Módulo:** projetos
 **Tipo:** schema
 **Pré-condições:**
+
 - Branch: `feat/P-2.6-projetos-schema`
 - Dependências: P-2.5 concluído, validação da diretoria OK
 - Env vars: `DATABASE_URL`
@@ -1520,10 +1644,12 @@ Loading, empty e error states para todas as telas de Projetos. Skeletons para da
 Criar tabelas Drizzle no schema `projetos`: organizations, organization_members (N:N), projects (com stages, tipo, parent_project_id, edital_id), project_versions, evaluations, votes (secreto), contestations, reports, report_attachments, categories, compact_versions, payment_schedules. State machine de stages com transições válidas.
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/db/src/schema/projetos.ts`
 - `packages/db/src/migrations/0006_projetos.sql`
 
 **Critérios de aceite:**
+
 - [x] organizations: nome, cnpj, endereco, telefone, responsavel_legal, denominacao, estatuto_url
 - [x] organization_members: organization_id, user_id (many-to-many)
 - [x] projects: 20+ campos incluindo stage, tipo, budget_total, parcelas, meses, parent_project_id, edital_id, score_ai, deleted_at (soft-delete)
@@ -1543,6 +1669,7 @@ Criar tabelas Drizzle no schema `projetos`: organizations, organization_members 
 **Módulo:** projetos
 **Tipo:** schema
 **Pré-condições:**
+
 - Branch: `feat/P-2.7-projetos-rls`
 - Dependências: P-2.6 concluído
 - Env vars: `DATABASE_URL`
@@ -1551,9 +1678,11 @@ Criar tabelas Drizzle no schema `projetos`: organizations, organization_members 
 RLS para schema projetos. Submissor: vê apenas projetos da própria instituição. Diretor/conselheiro: vê todos os projetos em votação+. Super_admin: full access. Votes: INSERT para diretores/conselheiros; SELECT apenas por super_admin (segredo). Evaluations: INSERT pelo avaliador designado; SELECT por diretores. Contestations: INSERT por diretores/conselheiros (max 1/pessoa/projeto). Reports: INSERT pelo submissor; SELECT por super_admin e diretores.
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/db/src/migrations/0007_projetos_rls.sql`
 
 **Critérios de aceite:**
+
 - [x] Submissor: CRUD apenas em projetos de suas instituições
 - [x] Diretor/conselheiro: SELECT em projetos stage >= votacao
 - [x] Super_admin: full access
@@ -1574,6 +1703,7 @@ Ref: BRAIN.md seção 6.2 (voto secreto, score invisível para submissor).
 **Módulo:** projetos
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-2.8-projetos-actions`
 - Dependências: P-2.7 concluído
 - Env vars: `DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`
@@ -1582,6 +1712,7 @@ Ref: BRAIN.md seção 6.2 (voto secreto, score invisível para submissor).
 Server Actions para Projetos. CRUD de projetos (criar rascunho, submeter, editar em rascunho). Transições de stage (state machine com validações). CRUD de organizações e membros. Votação (registrar voto secreto, verificar quórum). Contestação (verificar limites). Avaliação (designar avaliador, registrar parecer). Relatórios (criar, submeter). Soft-delete com justificativa. Bloqueio de submissão se orçamento excedido. Geração de versão compacta via IA (GPT-4.1). Triagem e score IA.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/projetos/src/actions/projects.ts`
 - `apps/projetos/src/actions/organizations.ts`
 - `apps/projetos/src/actions/voting.ts`
@@ -1591,6 +1722,7 @@ Server Actions para Projetos. CRUD de projetos (criar rascunho, submeter, editar
 - `packages/ai/src/projects/compact-version.ts`
 
 **Critérios de aceite:**
+
 - [x] State machine: transições válidas (rascunho→validacao→votacao→homologacao→aprovado/reprovado→em_execucao→concluido)
 - [x] Bloqueio de submissão se orçamento da instituição excedido
 - [x] Votação: registra voto secreto; calcula quórum (>=50% diretores+conselheiros); maioria simples
@@ -1612,6 +1744,7 @@ Server Actions para Projetos. CRUD de projetos (criar rascunho, submeter, editar
 **Módulo:** projetos
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-2.9-projetos-integration`
 - Dependências: P-2.8 concluído
 - Env vars: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`
@@ -1620,6 +1753,7 @@ Server Actions para Projetos. CRUD de projetos (criar rascunho, submeter, editar
 Substituir mocks por dados reais em todas as telas de Projetos. Dashboard submissor com dados reais (projetos, pagamentos, relatórios, orçamento). Pipeline kanban com projetos do banco. Wizard conectado às actions. Votação funcional. Pauta da reunião com dados de BI reais (saldo, meses).
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/projetos/src/app/(submissor)/page.tsx`
 - `apps/projetos/src/app/(submissor)/novo/page.tsx`
 - `apps/projetos/src/app/(submissor)/[id]/page.tsx`
@@ -1629,6 +1763,7 @@ Substituir mocks por dados reais em todas as telas de Projetos. Dashboard submis
 - `apps/projetos/src/lib/mock-data.ts` (remover)
 
 **Critérios de aceite:**
+
 - [x] Dashboard submissor com dados reais
 - [x] Wizard salva projeto no banco, faz upload de anexos
 - [x] Pipeline kanban reflete stages do banco
@@ -1647,6 +1782,7 @@ Substituir mocks por dados reais em todas as telas de Projetos. Dashboard submis
 **Módulo:** projetos
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-2.10-projetos-notifications`
 - Dependências: P-2.9 concluído
 - Env vars: `RESEND_API_KEY`
@@ -1655,6 +1791,7 @@ Substituir mocks por dados reais em todas as telas de Projetos. Dashboard submis
 Implementar todas as notificações do módulo Projetos (ver lista no BRAIN.md seção 6.2). Templates de email: submissão recebida, projeto em validação, aprovado/reprovado, relatório pendente (lembretes: 7 dias antes, no dia, 7 dias antes de expirar), pagamento realizado, bloqueio por falta de relatório. Emails editáveis via Admin.
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/email/src/templates/project-submitted.tsx`
 - `packages/email/src/templates/project-status-change.tsx`
 - `packages/email/src/templates/report-reminder.tsx`
@@ -1662,18 +1799,19 @@ Implementar todas as notificações do módulo Projetos (ver lista no BRAIN.md s
 - `apps/projetos/src/lib/notifications.ts`
 
 **Critérios de aceite:**
-- [ ] Submissão → super_admins (in_app + email)
-- [ ] Validação → submissor (in_app + email)
-- [ ] Votação aberta → diretores/conselheiros (in_app + email)
-- [ ] Aprovado/reprovado (após homologação) → submissor (email)
-- [ ] Relatório pendente: 3 lembretes (7d antes, no dia, 7d antes de expirar)
-- [ ] Pagamento realizado → submissor (email com comprovante)
-- [ ] Bloqueio por falta de relatório → submissor + super_admins
-- [ ] Contestação de diretor → todos diretores/conselheiros
-- [ ] Lista de projetos designados → avaliador (7d antes da reunião)
-- [ ] Templates editáveis no Admin
-- [ ] Lint passa
-- [ ] Types passam
+
+- [x] Submissão → super_admins (in_app + email)
+- [x] Validação → submissor (in_app + email)
+- [x] Votação aberta → diretores/conselheiros (in_app + email)
+- [x] Aprovado/reprovado (após homologação) → submissor (email)
+- [~] Relatório pendente: 3 lembretes (7d antes, no dia, 7d antes de expirar)
+- [x] Pagamento realizado → submissor (email com comprovante)
+- [x] Bloqueio por falta de relatório → submissor + super_admins
+- [x] Contestação de diretor → todos diretores/conselheiros
+- [~] Lista de projetos designados → avaliador (7d antes da reunião)
+- [x] Templates editáveis no Admin
+- [x] Lint passa
+- [x] Types passam
 
 ---
 
@@ -1683,6 +1821,7 @@ Implementar todas as notificações do módulo Projetos (ver lista no BRAIN.md s
 **Módulo:** projetos
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-2.11-projetos-cross`
 - Dependências: P-2.10 concluído
 - Env vars: `DATABASE_URL`
@@ -1691,12 +1830,14 @@ Implementar todas as notificações do módulo Projetos (ver lista no BRAIN.md s
 Integração Projetos → Financeiro: aprovação cria centro de custo + payment_schedules no schema financeiro (placeholder se tabelas não existem ainda — criar stubs). Integração Projetos → Tarefas: submissão cria checklist padrão (stub). Integração Documentos → Projetos: recepção de edital_id com pré-preenchimento no wizard. Flats → Projetos: campo "participação em projetos" auto-calculado para scoring de flats.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/projetos/src/lib/integrations/financeiro.ts`
 - `apps/projetos/src/lib/integrations/tarefas.ts`
 - `apps/projetos/src/lib/integrations/documentos.ts`
 - `packages/db/src/schema/financeiro-stubs.ts`
 
 **Critérios de aceite:**
+
 - [ ] Aprovação de projeto dispara criação de centro de custo (stub ou real)
 - [ ] Aprovação cria payment_schedules baseado nas parcelas definidas
 - [ ] Submissão dispara criação de checklist de análise (stub)
@@ -1716,6 +1857,7 @@ Ref: BRAIN.md seção 7 (Integrações cross-app). Pagamentos nascem NÃO aprova
 **Módulo:** projetos
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-2.12-projetos-tests`
 - Dependências: P-2.11 concluído
 - Env vars: `DATABASE_URL`
@@ -1724,12 +1866,14 @@ Ref: BRAIN.md seção 7 (Integrações cross-app). Pagamentos nascem NÃO aprova
 Testes de integração para Projetos. RLS (submissor vê apenas próprios, votes secretos). State machine (transições válidas/inválidas). Votação (quórum, maioria, botão de pânico). Contestação (limites). Bloqueio de orçamento. Fluxo completo: rascunho → submissão → validação → votação → homologação → aprovado → em execução.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/projetos/src/__tests__/rls.test.ts`
 - `apps/projetos/src/__tests__/state-machine.test.ts`
 - `apps/projetos/src/__tests__/voting.test.ts`
 - `apps/projetos/src/__tests__/flow.test.ts`
 
 **Critérios de aceite:**
+
 - [ ] RLS: submissor não vê projetos de outras instituições
 - [ ] RLS: votes não visíveis para não-admin
 - [ ] State machine: transição inválida retorna erro
@@ -1758,6 +1902,7 @@ Testes de integração para Projetos. RLS (submissor vê apenas próprios, votes
 **Módulo:** financeiro
 **Tipo:** schema
 **Pré-condições:**
+
 - Branch: `feat/P-3.1-financeiro-types`
 - Dependências: P-2.12 concluído
 - Env vars: nenhuma
@@ -1766,11 +1911,13 @@ Testes de integração para Projetos. RLS (submissor vê apenas próprios, votes
 Definir tipos e schemas Zod do Financeiro. Tipos: BankAccount, CostCenter, Category (plano de contas hierárquico), Payable, Receivable, Transaction (imutável), TransactionReversal, Budget, BudgetItem, Attachment, BankImport, BatchApproval. Governança: approval (1a camada) e authorization (2a camada). Mock data com cenários de conciliação.
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/types/src/financeiro/index.ts`
 - `packages/validators/src/financeiro/index.ts`
 - `apps/financeiro/src/lib/mock-data.ts`
 
 **Critérios de aceite:**
+
 - [ ] Transaction imutável (sem update, correções via TransactionReversal)
 - [ ] Payable com status: pendente, aprovado, autorizado, pago, cancelado
 - [ ] BatchApproval: lote semanal de pagamentos para aprovação do diretor gestor
@@ -1792,6 +1939,7 @@ Ref: BRAIN.md seção 6.5. Imutabilidade: correções via estorno + novo lançam
 **Módulo:** financeiro
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-3.2-financeiro-components`
 - Dependências: P-3.1 concluído
 - Env vars: nenhuma
@@ -1800,6 +1948,7 @@ Ref: BRAIN.md seção 6.5. Imutabilidade: correções via estorno + novo lançam
 Componentes: TransactionTable (TanStack Table com filtros avançados e exportação), PayableCard (com indicador de vencimento e status de governança), CashFlowChart (gráfico de fluxo de caixa projetado 30/60/90 dias), BudgetComparison (planejado vs executado em barras), ConciliationView (split view: extrato bancário vs lançamentos), CategoryTree (plano de contas navegável), BatchApprovalCard (lote semanal para aprovação).
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/financeiro/src/components/transaction-table.tsx`
 - `apps/financeiro/src/components/payable-card.tsx`
 - `apps/financeiro/src/components/cash-flow-chart.tsx`
@@ -1809,6 +1958,7 @@ Componentes: TransactionTable (TanStack Table com filtros avançados e exportaç
 - `apps/financeiro/src/components/batch-approval-card.tsx`
 
 **Critérios de aceite:**
+
 - [ ] TransactionTable com filtros: data, categoria, conta, tipo, valor; exportação CSV/Excel
 - [ ] PayableCard com cores: verde (em dia), amarelo (próximo), vermelho (vencido)
 - [ ] ConciliationView: split view com match automático destacado
@@ -1827,6 +1977,7 @@ Componentes: TransactionTable (TanStack Table com filtros avançados e exportaç
 **Módulo:** financeiro
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-3.3-financeiro-pages`
 - Dependências: P-3.2 concluído
 - Env vars: nenhuma
@@ -1835,6 +1986,7 @@ Componentes: TransactionTable (TanStack Table com filtros avançados e exportaç
 Páginas: Dashboard (saldo por conta, fluxo do mês, contas a pagar próximas). Lançamentos (lista com filtros). Nova despesa / receita. Contas a pagar (com vencimento). Contas a receber. Conciliação bancária (split view). Fluxo de caixa projetado. Centros de custo (por projeto). Orçamento anual. Plano de contas. Importação de extrato (OFX/CSV). Relatórios.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/financeiro/src/app/(dashboard)/layout.tsx`
 - `apps/financeiro/src/app/(dashboard)/page.tsx`
 - `apps/financeiro/src/app/(dashboard)/lancamentos/page.tsx`
@@ -1845,6 +1997,7 @@ Páginas: Dashboard (saldo por conta, fluxo do mês, contas a pagar próximas). 
 - `apps/financeiro/src/app/(dashboard)/importacao/page.tsx`
 
 **Critérios de aceite:**
+
 - [ ] Dashboard com saldo real por conta bancária e visão consolidada
 - [ ] Lista de lançamentos com filtros avançados e exportação
 - [ ] Conciliação: split view extrato × lançamentos com match visual
@@ -1863,6 +2016,7 @@ Páginas: Dashboard (saldo por conta, fluxo do mês, contas a pagar próximas). 
 **Módulo:** financeiro
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-3.4-financeiro-forms`
 - Dependências: P-3.3 concluído
 - Env vars: nenhuma
@@ -1871,6 +2025,7 @@ Páginas: Dashboard (saldo por conta, fluxo do mês, contas a pagar próximas). 
 Formulários: nova despesa (valor, data, categoria, centro de custo, descrição, anexo de comprovante). Nova receita (mesma estrutura). Estorno (justificativa obrigatória, valor, referência à transação original). Aprovação de lote (aprovar/rejeitar com observações). Importação OFX/CSV (upload, mapeamento de colunas, confirmação). Plano de contas (criar/editar categoria na árvore). Orçamento (definir por centro de custo e mês).
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/financeiro/src/components/expense-form.tsx`
 - `apps/financeiro/src/components/revenue-form.tsx`
 - `apps/financeiro/src/components/reversal-form.tsx`
@@ -1879,6 +2034,7 @@ Formulários: nova despesa (valor, data, categoria, centro de custo, descrição
 - `apps/financeiro/src/components/budget-form.tsx`
 
 **Critérios de aceite:**
+
 - [ ] Despesa: categorização via plano de contas (dropdown hierárquico), upload de comprovante
 - [ ] Estorno: seleciona transação original, justificativa obrigatória, valor preenchido automaticamente
 - [ ] Aprovação de lote: lista de payables com checkbox individual + aprovar todos
@@ -1896,6 +2052,7 @@ Formulários: nova despesa (valor, data, categoria, centro de custo, descrição
 **Módulo:** financeiro
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-3.5-financeiro-states`
 - Dependências: P-3.4 concluído
 - Env vars: nenhuma
@@ -1904,6 +2061,7 @@ Formulários: nova despesa (valor, data, categoria, centro de custo, descrição
 Loading, empty e error states para todas as telas do Financeiro. Skeletons para dashboard, tabela de lançamentos, conciliação, gráficos. Estado vazio para importação (nenhum extrato importado). Estado vazio para conciliação (tudo conciliado).
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/financeiro/src/components/dashboard-skeleton.tsx`
 - `apps/financeiro/src/components/transaction-table-skeleton.tsx`
 - `apps/financeiro/src/components/conciliation-skeleton.tsx`
@@ -1911,6 +2069,7 @@ Loading, empty e error states para todas as telas do Financeiro. Skeletons para 
 - `apps/financeiro/src/app/(dashboard)/conciliacao/page.tsx` (adicionar estados)
 
 **Critérios de aceite:**
+
 - [ ] Skeletons específicos por tela
 - [ ] Estado vazio conciliação: "Todas as transações estão conciliadas"
 - [ ] Estado vazio importação: "Importe seu primeiro extrato bancário"
@@ -1933,6 +2092,7 @@ Loading, empty e error states para todas as telas do Financeiro. Skeletons para 
 **Módulo:** financeiro
 **Tipo:** schema
 **Pré-condições:**
+
 - Branch: `feat/P-3.6-financeiro-schema`
 - Dependências: P-3.5 concluído, validação da diretoria OK
 - Env vars: `DATABASE_URL`
@@ -1941,10 +2101,12 @@ Loading, empty e error states para todas as telas do Financeiro. Skeletons para 
 Criar tabelas Drizzle no schema `financeiro`: accounts (contas bancárias), cost_centers (FK para projetos.projects), categories (plano de contas hierárquico), payables, receivables, transactions (imutável, sem UPDATE/DELETE), transaction_reversals, budgets, budget_items, attachments, bank_imports, bank_import_rows, batch_approvals, batch_approval_items.
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/db/src/schema/financeiro.ts`
 - `packages/db/src/migrations/0008_financeiro.sql`
 
 **Critérios de aceite:**
+
 - [ ] transactions: sem UPDATE ou DELETE via constraint (imutável)
 - [ ] transaction_reversals: FK para transaction original, justificativa obrigatória
 - [ ] payables: status enum (pendente, aprovado, autorizado, pago, cancelado)
@@ -1964,6 +2126,7 @@ Criar tabelas Drizzle no schema `financeiro`: accounts (contas bancárias), cost
 **Módulo:** financeiro
 **Tipo:** schema
 **Pré-condições:**
+
 - Branch: `feat/P-3.7-financeiro-rls`
 - Dependências: P-3.6 concluído
 - Env vars: `DATABASE_URL`
@@ -1972,10 +2135,12 @@ Criar tabelas Drizzle no schema `financeiro`: accounts (contas bancárias), cost
 RLS para schema financeiro. Super_admin: full access. Diretor gestor (designation): SELECT + aprovar lotes. Diretor autorizador (designation): SELECT. Colaborador financeiro: CRUD em transações, payables, receivables. Submissor: vê apenas payment_schedules dos próprios projetos (via cross-schema). Demais: sem acesso.
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/db/src/migrations/0009_financeiro_rls.sql`
 
 **Critérios de aceite:**
-- [ ] Super_admin: full CRUD em financeiro.*
+
+- [ ] Super_admin: full CRUD em financeiro.\*
 - [ ] Diretor gestor: SELECT + UPDATE em batch_approvals (aprovar)
 - [ ] Colaborador financeiro: CRUD em transações, payables, receivables
 - [ ] Submissor: SELECT em payment_schedules de projetos da própria instituição
@@ -1991,6 +2156,7 @@ RLS para schema financeiro. Super_admin: full access. Diretor gestor (designatio
 **Módulo:** financeiro
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-3.8-financeiro-actions`
 - Dependências: P-3.7 concluído
 - Env vars: `DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`
@@ -1999,6 +2165,7 @@ RLS para schema financeiro. Super_admin: full access. Diretor gestor (designatio
 Server Actions: CRUD de despesas/receitas (criar transação imutável). Estornos (criar reversal + nova transação). Importação OFX/CSV (parse, preview, confirmar). Match automático (valor + data + descrição). Conciliação manual (vincular import_row a transação). CRUD de plano de contas. CRUD de orçamento. Agrupamento semanal de payables em lote. Aprovação de lote (diretor gestor). Marcar como pago (super_admin). OCR de notas fiscais (GPT-4 Vision). Audit log em toda mutação.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/financeiro/src/actions/transactions.ts`
 - `apps/financeiro/src/actions/conciliation.ts`
 - `apps/financeiro/src/actions/import.ts`
@@ -2007,6 +2174,7 @@ Server Actions: CRUD de despesas/receitas (criar transação imutável). Estorno
 - `packages/ai/src/financeiro/ocr.ts`
 
 **Critérios de aceite:**
+
 - [ ] Transação criada como imutável (INSERT only)
 - [ ] Estorno: cria reversal referenciando original + nova transação corretiva
 - [ ] Import OFX/CSV: parse, normaliza, apresenta para confirmação
@@ -2026,6 +2194,7 @@ Server Actions: CRUD de despesas/receitas (criar transação imutável). Estorno
 **Módulo:** financeiro
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-3.9-financeiro-integration`
 - Dependências: P-3.8 concluído
 - Env vars: `DATABASE_URL`, `SUPABASE_URL`
@@ -2034,6 +2203,7 @@ Server Actions: CRUD de despesas/receitas (criar transação imutável). Estorno
 Substituir mocks por dados reais. Dashboard com saldos reais. Tabela de lançamentos com dados do banco. Conciliação com dados de importação. Formulários conectados às actions. Gráficos com dados reais.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/financeiro/src/app/(dashboard)/page.tsx`
 - `apps/financeiro/src/app/(dashboard)/lancamentos/page.tsx`
 - `apps/financeiro/src/app/(dashboard)/conciliacao/page.tsx`
@@ -2043,6 +2213,7 @@ Substituir mocks por dados reais. Dashboard com saldos reais. Tabela de lançame
 - `apps/financeiro/src/lib/mock-data.ts` (remover)
 
 **Critérios de aceite:**
+
 - [ ] Saldos reais por conta bancária no dashboard
 - [ ] Transações do banco com filtros server-side
 - [ ] Conciliação funcional: import → match → confirmar
@@ -2059,6 +2230,7 @@ Substituir mocks por dados reais. Dashboard com saldos reais. Tabela de lançame
 **Módulo:** financeiro
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-3.10-financeiro-notifications`
 - Dependências: P-3.9 concluído
 - Env vars: `RESEND_API_KEY`
@@ -2067,12 +2239,14 @@ Substituir mocks por dados reais. Dashboard com saldos reais. Tabela de lançame
 Notificações: lote semanal para aprovação (email ao diretor gestor com CC autorizador). Lote aprovado (in_app ao super_admin). Pagamento marcado como pago (in_app). Vencimento próximo (3 dias antes). Orçamento >80% executado (in_app + email ao super_admin). Relatório mensal automático por email aos diretores/conselheiros.
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/email/src/templates/batch-approval.tsx`
 - `packages/email/src/templates/monthly-financial-report.tsx`
 - `packages/email/src/templates/budget-alert.tsx`
 - `apps/financeiro/src/lib/notifications.ts`
 
 **Critérios de aceite:**
+
 - [ ] Lote semanal: email ao diretor gestor com lista de pagamentos e total
 - [ ] Alerta de orçamento >80%: email ao super_admin
 - [ ] Relatório mensal: PDF+XLSX com totais por categoria, enviado por email
@@ -2088,6 +2262,7 @@ Notificações: lote semanal para aprovação (email ao diretor gestor com CC au
 **Módulo:** financeiro
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-3.11-financeiro-cross`
 - Dependências: P-3.10 concluído
 - Env vars: `DATABASE_URL`
@@ -2096,11 +2271,13 @@ Notificações: lote semanal para aprovação (email ao diretor gestor com CC au
 Conectar integrações reais. Projetos → Financeiro: substituir stubs por lógica real (aprovação cria centro de custo + payables). Financeiro → Projetos: query cross-schema executado vs orçado em tempo real. Preparar stubs para: Flats → Financeiro (ajuda de custo cria despesas).
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/financeiro/src/lib/integrations/projetos.ts`
 - `apps/financeiro/src/lib/integrations/flats-stub.ts`
 - `apps/projetos/src/lib/integrations/financeiro.ts` (atualizar stubs)
 
 **Critérios de aceite:**
+
 - [ ] Aprovação de projeto cria centro de custo e payables reais no financeiro
 - [ ] Payables de projeto nascem NÃO aprovados
 - [ ] Query cross-schema: executado vs orçado em tempo real
@@ -2116,6 +2293,7 @@ Conectar integrações reais. Projetos → Financeiro: substituir stubs por lóg
 **Módulo:** financeiro
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-3.12-financeiro-tests`
 - Dependências: P-3.11 concluído
 - Env vars: `DATABASE_URL`
@@ -2124,12 +2302,14 @@ Conectar integrações reais. Projetos → Financeiro: substituir stubs por lóg
 Testes de integração. RLS (super_admin full, diretor gestor aprova, submissor vê só pagamentos próprios). Imutabilidade de transações (UPDATE/DELETE proibido). Estorno (cria reversal + nova transação). Import OFX/CSV (parse correto). Match automático (encontra correspondência). Governança (aprovação → autorização → pago). Integração Projetos → Financeiro (aprovação cria payables).
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/financeiro/src/__tests__/rls.test.ts`
 - `apps/financeiro/src/__tests__/transactions.test.ts`
 - `apps/financeiro/src/__tests__/conciliation.test.ts`
 - `apps/financeiro/src/__tests__/governance.test.ts`
 
 **Critérios de aceite:**
+
 - [ ] Transação: UPDATE/DELETE retorna erro
 - [ ] Estorno: cria reversal corretamente
 - [ ] Import OFX: parse correto dos campos
@@ -2155,6 +2335,7 @@ Testes de integração. RLS (super_admin full, diretor gestor aprova, submissor 
 **Módulo:** tarefas
 **Tipo:** schema
 **Pré-condições:**
+
 - Branch: `feat/P-4.1-tarefas-types`
 - Dependências: P-3.12 concluído
 - Env vars: nenhuma
@@ -2163,11 +2344,13 @@ Testes de integração. RLS (super_admin full, diretor gestor aprova, submissor 
 Definir tipos e schemas Zod. Tipos: Workspace (6 fixos: Administrativo, Financeiro, Contábil e Fiscal, Eclesiástico, Comunicação, Tecnologia e Inovação), Task, Subtask, Assignee, Comment, Attachment, TimeEntry, Tag, RecurrenceRule, TaskTemplate, ApprovalRequest. Mock data com cenários de recorrência e tarefas automáticas.
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/types/src/tarefas/index.ts`
 - `packages/validators/src/tarefas/index.ts`
 - `apps/tarefas/src/lib/mock-data.ts`
 
 **Critérios de aceite:**
+
 - [ ] 6 workspaces fixos como enum
 - [ ] Task com: título, descrição, prioridade (baixa/média/alta/urgente), status (a fazer/em progresso/em revisão/concluído), workspace, due_date, recurrence_rule
 - [ ] RecurrenceRule: tipo (diária/semanal/mensal/anual), intervalo, dia_da_semana, dia_do_mes
@@ -2185,6 +2368,7 @@ Definir tipos e schemas Zod. Tipos: Workspace (6 fixos: Administrativo, Financei
 **Módulo:** tarefas
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-4.2-tarefas-components`
 - Dependências: P-4.1 concluído
 - Env vars: nenhuma
@@ -2193,6 +2377,7 @@ Definir tipos e schemas Zod. Tipos: Workspace (6 fixos: Administrativo, Financei
 Componentes: TaskCard (título, assignee, prioridade, due_date, subtask progress). KanbanBoard (colunas por status, drag-drop). TaskList (filtrável, ordenável). TreeView (estilo Xmind: cada pessoa = branch, sub-branches = tarefas). CommentThread (com @menções). FocusMode (agenda do dia + timer pomodoro). TimeTracker (start/stop/total). CommandMenu (Cmd+K para criar/buscar tarefas).
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/tarefas/src/components/task-card.tsx`
 - `apps/tarefas/src/components/kanban-board.tsx`
 - `apps/tarefas/src/components/task-list.tsx`
@@ -2203,6 +2388,7 @@ Componentes: TaskCard (título, assignee, prioridade, due_date, subtask progress
 - `apps/tarefas/src/components/command-menu.tsx`
 
 **Critérios de aceite:**
+
 - [ ] KanbanBoard com drag-drop entre colunas (a fazer → em progresso → concluído)
 - [ ] TreeView estilo Xmind: pessoa → tarefas (para despacho do diretor gestor)
 - [ ] TaskCard com badge de prioridade, avatar do assignee, barra de subtarefas
@@ -2225,6 +2411,7 @@ Ref: BRAIN.md seção 6.9. Referência visual: Xmind para TreeView (diretor gest
 **Módulo:** tarefas
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-4.3-tarefas-pages`
 - Dependências: P-4.2 concluído
 - Env vars: nenhuma
@@ -2233,6 +2420,7 @@ Ref: BRAIN.md seção 6.9. Referência visual: Xmind para TreeView (diretor gest
 Páginas: "Minhas tarefas" (lista priorizada). Board por workspace (kanban + lista + árvore como toggle). Detalhe da tarefa (descrição rich, anexos, subtarefas, comentários, time entries, log). Calendário de prazos. Tarefas recorrentes (configuração). Templates. Modo foco. Configuração do workspace (colunas customizáveis).
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/tarefas/src/app/(dashboard)/layout.tsx`
 - `apps/tarefas/src/app/(dashboard)/page.tsx`
 - `apps/tarefas/src/app/(dashboard)/workspace/[slug]/page.tsx`
@@ -2243,6 +2431,7 @@ Páginas: "Minhas tarefas" (lista priorizada). Board por workspace (kanban + lis
 - `apps/tarefas/src/app/(dashboard)/templates/page.tsx`
 
 **Critérios de aceite:**
+
 - [ ] "Minhas tarefas" com filtros: workspace, prioridade, status, assignee
 - [ ] Board com toggle Kanban/Lista/Árvore
 - [ ] Detalhe: sidebar com metadados, corpo com descrição + comentários
@@ -2262,6 +2451,7 @@ Páginas: "Minhas tarefas" (lista priorizada). Board por workspace (kanban + lis
 **Módulo:** tarefas
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-4.4-tarefas-forms`
 - Dependências: P-4.3 concluído
 - Env vars: nenhuma
@@ -2270,6 +2460,7 @@ Páginas: "Minhas tarefas" (lista priorizada). Board por workspace (kanban + lis
 Formulários: criar/editar tarefa (título, descrição rich text, workspace, assignee, prioridade, due_date, tags, anexos). Criar subtarefa. Comentário com @menções (autocomplete de usuários). Configurar recorrência (tipo, intervalo, dia). Criar template (nome, lista de tarefas pré-definidas). Pedido de aprovação (selecionar diretor). Time entry manual.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/tarefas/src/components/task-form.tsx`
 - `apps/tarefas/src/components/subtask-form.tsx`
 - `apps/tarefas/src/components/comment-form.tsx`
@@ -2278,6 +2469,7 @@ Formulários: criar/editar tarefa (título, descrição rich text, workspace, as
 - `apps/tarefas/src/components/approval-request-form.tsx`
 
 **Critérios de aceite:**
+
 - [ ] Task form com editor rich text para descrição
 - [ ] @menções com autocomplete de usuários do workspace
 - [ ] Recurrence form com preview visual (ex: "Toda segunda-feira às 9h")
@@ -2294,6 +2486,7 @@ Formulários: criar/editar tarefa (título, descrição rich text, workspace, as
 **Módulo:** tarefas
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-4.5-tarefas-states`
 - Dependências: P-4.4 concluído
 - Env vars: nenhuma
@@ -2302,6 +2495,7 @@ Formulários: criar/editar tarefa (título, descrição rich text, workspace, as
 Loading, empty e error states para todas as telas. Skeletons para kanban, lista, árvore, calendário. Estado vazio por workspace (sem tarefas). Estado vazio no modo foco (sem tarefas para hoje).
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/tarefas/src/components/kanban-skeleton.tsx`
 - `apps/tarefas/src/components/task-list-skeleton.tsx`
 - `apps/tarefas/src/components/calendar-skeleton.tsx`
@@ -2309,6 +2503,7 @@ Loading, empty e error states para todas as telas. Skeletons para kanban, lista,
 - `apps/tarefas/src/app/(dashboard)/foco/page.tsx` (adicionar estados)
 
 **Critérios de aceite:**
+
 - [ ] Skeletons por view (kanban, lista, árvore, calendário)
 - [ ] Modo foco vazio: "Nenhuma tarefa para hoje. Bom descanso!"
 - [ ] Workspace vazio: mensagem contextual + CTA criar tarefa
@@ -2331,6 +2526,7 @@ Loading, empty e error states para todas as telas. Skeletons para kanban, lista,
 **Módulo:** tarefas
 **Tipo:** schema
 **Pré-condições:**
+
 - Branch: `feat/P-4.6-tarefas-schema`
 - Dependências: P-4.5 concluído, validação da diretoria OK
 - Env vars: `DATABASE_URL`
@@ -2339,10 +2535,12 @@ Loading, empty e error states para todas as telas. Skeletons para kanban, lista,
 Criar tabelas Drizzle no schema `tarefas`: workspaces (6 fixos + custom), tasks, subtasks, assignees, comments, attachments, time_entries, tags, task_tags, recurrence_rules, task_templates, template_items, approval_requests, task_events (log de mudanças).
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/db/src/schema/tarefas.ts`
 - `packages/db/src/migrations/0010_tarefas.sql`
 
 **Critérios de aceite:**
+
 - [ ] 6 workspaces padrão seed na migration
 - [ ] tasks: title, description, workspace_id, status, priority, due_date, created_by, source (manual/auto), source_ref
 - [ ] subtasks: task_id, title, completed
@@ -2361,6 +2559,7 @@ Criar tabelas Drizzle no schema `tarefas`: workspaces (6 fixos + custom), tasks,
 **Módulo:** tarefas
 **Tipo:** schema
 **Pré-condições:**
+
 - Branch: `feat/P-4.7-tarefas-rls`
 - Dependências: P-4.6 concluído
 - Env vars: `DATABASE_URL`
@@ -2369,9 +2568,11 @@ Criar tabelas Drizzle no schema `tarefas`: workspaces (6 fixos + custom), tasks,
 RLS para schema tarefas. Super_admin: full access. Colaborador: CRUD em tarefas dos workspaces que tem acesso; vê apenas tarefas atribuídas a si ou criadas por si. Diretor: SELECT em todos os workspaces (para TreeView de despacho); recebe approval_requests. Demais: sem acesso.
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/db/src/migrations/0011_tarefas_rls.sql`
 
 **Critérios de aceite:**
+
 - [ ] Super_admin: full CRUD
 - [ ] Colaborador: CRUD em tarefas que é assignee ou creator
 - [ ] Diretor: SELECT em todas as tarefas (para visualização árvore)
@@ -2387,6 +2588,7 @@ RLS para schema tarefas. Super_admin: full access. Colaborador: CRUD em tarefas 
 **Módulo:** tarefas
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-4.8-tarefas-actions`
 - Dependências: P-4.7 concluído
 - Env vars: `DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
@@ -2395,6 +2597,7 @@ RLS para schema tarefas. Super_admin: full access. Colaborador: CRUD em tarefas 
 Server Actions: CRUD de tarefas. Mover entre colunas (drag-drop). Criar/completar subtarefas (progresso agregado). Comentários com @menções. Upload de anexos. Time tracking (start/stop/manual). Recorrência (criar regra, gerar próxima tarefa via Inngest job). Templates (instanciar template). Approval requests (enviar/aprovar/rejeitar). Tarefas automáticas de outros módulos (receber via function).
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/tarefas/src/actions/tasks.ts`
 - `apps/tarefas/src/actions/comments.ts`
 - `apps/tarefas/src/actions/time-tracking.ts`
@@ -2403,6 +2606,7 @@ Server Actions: CRUD de tarefas. Mover entre colunas (drag-drop). Criar/completa
 - `apps/tarefas/src/actions/approvals.ts`
 
 **Critérios de aceite:**
+
 - [ ] CRUD de tarefas com audit log (task_events)
 - [ ] Mover tarefa entre colunas atualiza status
 - [ ] Subtarefas: progresso agregado (3/5 = 60%)
@@ -2422,6 +2626,7 @@ Server Actions: CRUD de tarefas. Mover entre colunas (drag-drop). Criar/completa
 **Módulo:** tarefas
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-4.9-tarefas-integration`
 - Dependências: P-4.8 concluído
 - Env vars: `DATABASE_URL`, `SUPABASE_URL`
@@ -2430,6 +2635,7 @@ Server Actions: CRUD de tarefas. Mover entre colunas (drag-drop). Criar/completa
 Substituir mocks por dados reais. Kanban, lista e árvore com dados do banco. Formulários conectados. Drag-drop funcional com persistência. Modo foco com tarefas reais do dia. Command menu (Cmd+K) funcional.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/tarefas/src/app/(dashboard)/page.tsx`
 - `apps/tarefas/src/app/(dashboard)/workspace/[slug]/page.tsx`
 - `apps/tarefas/src/app/(dashboard)/tarefa/[id]/page.tsx`
@@ -2438,6 +2644,7 @@ Substituir mocks por dados reais. Kanban, lista e árvore com dados do banco. Fo
 - `apps/tarefas/src/lib/mock-data.ts` (remover)
 
 **Critérios de aceite:**
+
 - [ ] Kanban com dados reais e drag-drop persistido
 - [ ] TreeView com dados reais (pessoa → tarefas)
 - [ ] Modo foco com tarefas do dia do banco
@@ -2454,6 +2661,7 @@ Substituir mocks por dados reais. Kanban, lista e árvore com dados do banco. Fo
 **Módulo:** tarefas
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-4.10-tarefas-notifications`
 - Dependências: P-4.9 concluído
 - Env vars: `RESEND_API_KEY`
@@ -2462,12 +2670,14 @@ Substituir mocks por dados reais. Kanban, lista e árvore com dados do banco. Fo
 Notificações: tarefa atribuída (in_app + email). @menção em comentário (in_app). Prazo próximo (1 dia antes, in_app). Prazo vencido (in_app + email). Pedido de aprovação (in_app + email ao diretor). Aprovação/rejeição (in_app ao solicitante).
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/email/src/templates/task-assigned.tsx`
 - `packages/email/src/templates/task-overdue.tsx`
 - `packages/email/src/templates/approval-request.tsx`
 - `apps/tarefas/src/lib/notifications.ts`
 
 **Critérios de aceite:**
+
 - [ ] Atribuição: in_app + email ao assignee
 - [ ] @menção: in_app ao mencionado
 - [ ] Prazo: 1 dia antes (in_app); vencido (in_app + email)
@@ -2483,6 +2693,7 @@ Notificações: tarefa atribuída (in_app + email). @menção em comentário (in
 **Módulo:** tarefas
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-4.11-tarefas-cross`
 - Dependências: P-4.10 concluído
 - Env vars: `DATABASE_URL`
@@ -2491,12 +2702,14 @@ Notificações: tarefa atribuída (in_app + email). @menção em comentário (in
 Conectar integrações. Projetos → Tarefas: submissão cria checklist de análise (substituir stub). Flats → Tarefas: reserva confirmada cria tarefas de limpeza (stub — será conectado na fase 7). Intranet → Tarefas: action items de reunião viram tarefas (stub — fase 5). Function pública `createAutoTask` que outros módulos chamam.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/tarefas/src/lib/integrations/auto-tasks.ts`
 - `apps/tarefas/src/lib/integrations/projetos.ts`
 - `apps/tarefas/src/lib/integrations/flats-stub.ts`
 - `apps/tarefas/src/lib/integrations/intranet-stub.ts`
 
 **Critérios de aceite:**
+
 - [ ] `createAutoTask(source, sourceRef, templateId)` function exportada
 - [ ] Submissão de projeto cria tarefas de análise (real)
 - [ ] Tarefas automáticas nascem SEM assignee (super_admin atribui depois)
@@ -2512,6 +2725,7 @@ Conectar integrações. Projetos → Tarefas: submissão cria checklist de anál
 **Módulo:** tarefas
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-4.12-tarefas-tests`
 - Dependências: P-4.11 concluído
 - Env vars: `DATABASE_URL`
@@ -2520,12 +2734,14 @@ Conectar integrações. Projetos → Tarefas: submissão cria checklist de anál
 Testes: RLS (colaborador vê apenas próprias, diretor vê todas). Recorrência (gera próxima tarefa). Templates (instancia corretamente). Subtarefas (progresso agregado). Approval (fluxo completo). Integração Projetos → Tarefas.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/tarefas/src/__tests__/rls.test.ts`
 - `apps/tarefas/src/__tests__/recurrence.test.ts`
 - `apps/tarefas/src/__tests__/templates.test.ts`
 - `apps/tarefas/src/__tests__/integrations.test.ts`
 
 **Critérios de aceite:**
+
 - [ ] RLS: colaborador não vê tarefas de outro colaborador (a menos que esteja no mesmo workspace)
 - [ ] Recorrência: gera tarefa no próximo período
 - [ ] Template: instancia todas as sub-tarefas
@@ -2550,6 +2766,7 @@ Testes: RLS (colaborador vê apenas próprias, diretor vê todas). Recorrência 
 **Módulo:** intranet
 **Tipo:** schema
 **Pré-condições:**
+
 - Branch: `feat/P-5.1-intranet-types`
 - Dependências: P-4.12 concluído
 - Env vars: nenhuma
@@ -2558,11 +2775,13 @@ Testes: RLS (colaborador vê apenas próprias, diretor vê todas). Recorrência 
 Tipos e schemas Zod: Announcement (título, corpo, prioridade: normal/importante/urgente, author_id), DashboardWidget (configurável por usuário), KPI (métrica, valor, trend), DirectoryMember, CalendarEvent, MeetingDecision (vinculada a meeting_session). Mock data com KPIs agregados de outros módulos.
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/types/src/intranet/index.ts`
 - `packages/validators/src/intranet/index.ts`
 - `apps/intranet/src/lib/mock-data.ts`
 
 **Critérios de aceite:**
+
 - [ ] Announcement com prioridade e corpo rich text
 - [ ] DashboardWidget: tipo (kpi/chart/feed/calendar), posição, config (jsonb)
 - [ ] KPI: nome, valor, unidade, trend (up/down/stable), período
@@ -2579,6 +2798,7 @@ Tipos e schemas Zod: Announcement (título, corpo, prioridade: normal/importante
 **Módulo:** intranet
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-5.2-intranet-components`
 - Dependências: P-5.1 concluído
 - Env vars: nenhuma
@@ -2587,6 +2807,7 @@ Tipos e schemas Zod: Announcement (título, corpo, prioridade: normal/importante
 Componentes: KPICard (valor, trend, sparkline). AnnouncementCard (com badge de prioridade). WidgetGrid (grid configurável drag-drop). DirectoryCard (foto, nome, papel, contato). CalendarWidget (mini calendário com eventos). FeedWidget (últimas atualizações cross-app). AppLauncher (atalhos para os 8 outros módulos). SearchGlobal (busca unificada cross-app).
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/intranet/src/components/kpi-card.tsx`
 - `apps/intranet/src/components/announcement-card.tsx`
 - `apps/intranet/src/components/widget-grid.tsx`
@@ -2597,6 +2818,7 @@ Componentes: KPICard (valor, trend, sparkline). AnnouncementCard (com badge de p
 - `apps/intranet/src/components/search-global.tsx`
 
 **Critérios de aceite:**
+
 - [ ] KPICard com valor formatado, seta de trend e sparkline
 - [ ] WidgetGrid com drag-drop para reorganizar widgets
 - [ ] AppLauncher com ícones e links para os 8 módulos
@@ -2614,6 +2836,7 @@ Componentes: KPICard (valor, trend, sparkline). AnnouncementCard (com badge de p
 **Módulo:** intranet
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-5.3-intranet-pages`
 - Dependências: P-5.2 concluído
 - Env vars: nenhuma
@@ -2622,6 +2845,7 @@ Componentes: KPICard (valor, trend, sparkline). AnnouncementCard (com badge de p
 Páginas: Dashboard personalizado (widgets configuráveis por usuário). Feed de anúncios. KPIs (projetos ativos, alunos, doações, audiência). Diretório de membros (todos: diretores, conselheiros, colaboradores, submissores, parceiros). Agenda/calendário. Reuniões (atas e decisões). Busca global cross-app. Notificações centralizadas.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/intranet/src/app/(dashboard)/layout.tsx`
 - `apps/intranet/src/app/(dashboard)/page.tsx`
 - `apps/intranet/src/app/(dashboard)/anuncios/page.tsx`
@@ -2631,6 +2855,7 @@ Páginas: Dashboard personalizado (widgets configuráveis por usuário). Feed de
 - `apps/intranet/src/app/(dashboard)/busca/page.tsx`
 
 **Critérios de aceite:**
+
 - [ ] Dashboard com widgets configuráveis (cada usuário monta o seu)
 - [ ] Feed de anúncios com filtro de prioridade
 - [ ] Diretório completo com busca e filtro por papel
@@ -2649,6 +2874,7 @@ Páginas: Dashboard personalizado (widgets configuráveis por usuário). Feed de
 **Módulo:** intranet
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-5.4-intranet-forms`
 - Dependências: P-5.3 concluído
 - Env vars: nenhuma
@@ -2657,12 +2883,14 @@ Páginas: Dashboard personalizado (widgets configuráveis por usuário). Feed de
 Formulários: criar anúncio (título, corpo, prioridade). Configurar dashboard (adicionar/remover/reordenar widgets). Registrar decisão de reunião (vinculada a meeting_session, com opção de gerar tarefa). Configurar briefing (opt-in, frequência). Perfil no diretório.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/intranet/src/components/announcement-form.tsx`
 - `apps/intranet/src/components/widget-config-form.tsx`
 - `apps/intranet/src/components/meeting-decision-form.tsx`
 - `apps/intranet/src/components/briefing-config-form.tsx`
 
 **Critérios de aceite:**
+
 - [ ] Anúncio: título, corpo rich text, prioridade (normal/importante/urgente)
 - [ ] Widget config: drag-drop para adicionar/remover/reordenar
 - [ ] Decisão: texto, reunião vinculada, checkbox "criar tarefa"
@@ -2678,6 +2906,7 @@ Formulários: criar anúncio (título, corpo, prioridade). Configurar dashboard 
 **Módulo:** intranet
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-5.5-intranet-states`
 - Dependências: P-5.4 concluído
 - Env vars: nenhuma
@@ -2686,12 +2915,14 @@ Formulários: criar anúncio (título, corpo, prioridade). Configurar dashboard 
 Loading, empty e error states. Skeletons para dashboard (grid de widgets), feed, diretório, calendário. Estados vazios contextuais.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/intranet/src/components/dashboard-skeleton.tsx`
 - `apps/intranet/src/components/feed-skeleton.tsx`
 - `apps/intranet/src/components/directory-skeleton.tsx`
 - `apps/intranet/src/app/(dashboard)/page.tsx` (adicionar estados)
 
 **Critérios de aceite:**
+
 - [ ] Skeletons para cada widget no dashboard
 - [ ] Feed vazio: "Nenhum anúncio recente"
 - [ ] Diretório vazio: "Nenhum membro encontrado"
@@ -2714,6 +2945,7 @@ Loading, empty e error states. Skeletons para dashboard (grid de widgets), feed,
 **Módulo:** intranet
 **Tipo:** schema
 **Pré-condições:**
+
 - Branch: `feat/P-5.6-intranet-schema`
 - Dependências: P-5.5 concluído, validação da diretoria OK
 - Env vars: `DATABASE_URL`
@@ -2722,10 +2954,12 @@ Loading, empty e error states. Skeletons para dashboard (grid de widgets), feed,
 Criar tabelas Drizzle no schema `intranet`: announcements, dashboard_configs (user_id, widgets jsonb), meeting_decisions (meeting_session_id, content, task_id), briefing_preferences (user_id, enabled, frequency), kpi_snapshots (para cache de KPIs agregados).
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/db/src/schema/intranet.ts`
 - `packages/db/src/migrations/0012_intranet.sql`
 
 **Critérios de aceite:**
+
 - [ ] announcements: title, body, priority, author_id, published_at
 - [ ] dashboard_configs: user_id (unique), widgets (jsonb com posições)
 - [ ] meeting_decisions: meeting_session_id (FK admin.meeting_sessions), content, task_id (FK tarefas.tasks, nullable)
@@ -2742,6 +2976,7 @@ Criar tabelas Drizzle no schema `intranet`: announcements, dashboard_configs (us
 **Módulo:** intranet
 **Tipo:** schema
 **Pré-condições:**
+
 - Branch: `feat/P-5.7-intranet-rls`
 - Dependências: P-5.6 concluído
 - Env vars: `DATABASE_URL`
@@ -2750,9 +2985,11 @@ Criar tabelas Drizzle no schema `intranet`: announcements, dashboard_configs (us
 RLS para schema intranet. Super_admin: full access. Diretores/conselheiros: SELECT + INSERT em announcements; SELECT em meeting_decisions; CRUD na própria dashboard_config. Colaboradores: SELECT em announcements e diretório; CRUD na própria dashboard_config. Submissores/externos: sem acesso.
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/db/src/migrations/0013_intranet_rls.sql`
 
 **Critérios de aceite:**
+
 - [ ] Super_admin: full CRUD
 - [ ] Diretores/conselheiros: criar anúncios, ver decisões
 - [ ] Colaboradores: ver anúncios (não criar), ver diretório
@@ -2768,6 +3005,7 @@ RLS para schema intranet. Super_admin: full access. Diretores/conselheiros: SELE
 **Módulo:** intranet
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-5.8-intranet-actions`
 - Dependências: P-5.7 concluído
 - Env vars: `DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
@@ -2776,6 +3014,7 @@ RLS para schema intranet. Super_admin: full access. Diretores/conselheiros: SELE
 Server Actions: CRUD de anúncios. Salvar/carregar config de dashboard. Registrar decisão de reunião (com opção de criar tarefa no módulo Tarefas). KPIs agregados: queries cross-schema (projetos ativos, alunos, transações do mês). Busca global cross-app (consulta todos os schemas). Briefing: job Inngest que gera resumo e envia por email.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/intranet/src/actions/announcements.ts`
 - `apps/intranet/src/actions/dashboard.ts`
 - `apps/intranet/src/actions/decisions.ts`
@@ -2783,6 +3022,7 @@ Server Actions: CRUD de anúncios. Salvar/carregar config de dashboard. Registra
 - `apps/intranet/src/actions/search.ts`
 
 **Critérios de aceite:**
+
 - [ ] CRUD de anúncios com audit log
 - [ ] Dashboard config persiste por usuário
 - [ ] Decisão de reunião com criação automática de tarefa (via createAutoTask)
@@ -2799,6 +3039,7 @@ Server Actions: CRUD de anúncios. Salvar/carregar config de dashboard. Registra
 **Módulo:** intranet
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-5.9-intranet-integration`
 - Dependências: P-5.8 concluído
 - Env vars: `DATABASE_URL`, `SUPABASE_URL`
@@ -2807,6 +3048,7 @@ Server Actions: CRUD de anúncios. Salvar/carregar config de dashboard. Registra
 Substituir mocks. Dashboard com KPIs reais. Feed de anúncios do banco. Diretório com dados de public.users. Calendário com meeting_sessions. Busca cross-app funcional.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/intranet/src/app/(dashboard)/page.tsx`
 - `apps/intranet/src/app/(dashboard)/anuncios/page.tsx`
 - `apps/intranet/src/app/(dashboard)/diretorio/page.tsx`
@@ -2815,6 +3057,7 @@ Substituir mocks. Dashboard com KPIs reais. Feed de anúncios do banco. Diretór
 - `apps/intranet/src/lib/mock-data.ts` (remover)
 
 **Critérios de aceite:**
+
 - [ ] KPIs com dados reais cross-schema
 - [ ] Diretório com todos os membros do public.users
 - [ ] Calendário com reuniões de admin.meeting_sessions
@@ -2831,6 +3074,7 @@ Substituir mocks. Dashboard com KPIs reais. Feed de anúncios do banco. Diretór
 **Módulo:** intranet
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-5.10-intranet-notifications`
 - Dependências: P-5.9 concluído
 - Env vars: `RESEND_API_KEY`
@@ -2839,12 +3083,14 @@ Substituir mocks. Dashboard com KPIs reais. Feed de anúncios do banco. Diretór
 Notificações: anúncio urgente (in_app + email para todos do escopo). Decisão de reunião (in_app para diretores). Briefing (email periódico com resumo agregado: projetos, tarefas, financeiro). Relatório financeiro mensal (email para diretores/conselheiros).
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/email/src/templates/urgent-announcement.tsx`
 - `packages/email/src/templates/briefing.tsx`
 - `apps/intranet/src/lib/notifications.ts`
 - `apps/intranet/src/lib/briefing-job.ts`
 
 **Critérios de aceite:**
+
 - [ ] Anúncio urgente: notificação imediata para todos os internos
 - [ ] Briefing: job Inngest com frequência configurável (diário/semanal)
 - [ ] Briefing: resumo com KPIs + últimos eventos de cada módulo
@@ -2859,6 +3105,7 @@ Notificações: anúncio urgente (in_app + email para todos do escopo). Decisão
 **Módulo:** intranet
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-5.11-intranet-cross`
 - Dependências: P-5.10 concluído
 - Env vars: `DATABASE_URL`
@@ -2867,12 +3114,14 @@ Notificações: anúncio urgente (in_app + email para todos do escopo). Decisão
 Conectar integrações reais. Intranet → Tarefas: decisão de reunião cria tarefa (substituir stub). Plataforma → Intranet: KPI de alunos (stub até fase 6). Rádio → Intranet: KPI de audiência (stub até fase 8). Feed: agregar últimos eventos de Projetos, Financeiro, Tarefas.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/intranet/src/lib/integrations/tarefas.ts`
 - `apps/intranet/src/lib/integrations/plataforma-stub.ts`
 - `apps/intranet/src/lib/integrations/radio-stub.ts`
 - `apps/intranet/src/lib/integrations/feed-aggregator.ts`
 
 **Critérios de aceite:**
+
 - [ ] Decisão de reunião cria tarefa no módulo Tarefas (real)
 - [ ] Feed agrega eventos reais de Projetos, Financeiro, Tarefas
 - [ ] Stubs para Plataforma e Rádio documentados
@@ -2887,6 +3136,7 @@ Conectar integrações reais. Intranet → Tarefas: decisão de reunião cria ta
 **Módulo:** intranet
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-5.12-intranet-tests`
 - Dependências: P-5.11 concluído
 - Env vars: `DATABASE_URL`
@@ -2895,11 +3145,13 @@ Conectar integrações reais. Intranet → Tarefas: decisão de reunião cria ta
 Testes: RLS (diretor cria anúncio, colaborador não). KPIs cross-schema retornam valores corretos. Busca cross-app funciona. Dashboard config persiste e carrega. Decisão → tarefa funciona.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/intranet/src/__tests__/rls.test.ts`
 - `apps/intranet/src/__tests__/kpis.test.ts`
 - `apps/intranet/src/__tests__/search.test.ts`
 
 **Critérios de aceite:**
+
 - [ ] RLS: colaborador não cria anúncios; diretor sim
 - [ ] KPIs: queries cross-schema retornam contagens corretas
 - [ ] Busca: resultados de múltiplos módulos
@@ -2922,6 +3174,7 @@ Testes: RLS (diretor cria anúncio, colaborador não). KPIs cross-schema retorna
 **Módulo:** plataforma
 **Tipo:** schema
 **Pré-condições:**
+
 - Branch: `feat/P-6.1-plataforma-types`
 - Dependências: P-5.12 concluído
 - Env vars: nenhuma
@@ -2930,11 +3183,13 @@ Testes: RLS (diretor cria anúncio, colaborador não). KPIs cross-schema retorna
 Tipos e schemas Zod: Course, Module, Lesson (tipo: video/text/quiz/download), Enrollment, Progress, Quiz, QuizAttempt, Certificate, Discussion, DiscussionPost, Instructor. Trilha sequencial (unlock). Mock data com curso piloto como referência.
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/types/src/plataforma/index.ts`
 - `packages/validators/src/plataforma/index.ts`
 - `apps/plataforma/src/lib/mock-data.ts`
 
 **Critérios de aceite:**
+
 - [ ] Lesson com tipo enum: video, text, quiz, download
 - [ ] Progress granular por aula (lesson_id, user_id, completed_at)
 - [ ] Trilha sequencial: next_lesson_id, requires_completion
@@ -2952,6 +3207,7 @@ Tipos e schemas Zod: Course, Module, Lesson (tipo: video/text/quiz/download), En
 **Módulo:** plataforma
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-6.2-plataforma-components`
 - Dependências: P-6.1 concluído
 - Env vars: nenhuma
@@ -2960,6 +3216,7 @@ Tipos e schemas Zod: Course, Module, Lesson (tipo: video/text/quiz/download), En
 Componentes: CourseCard (capa, título, instrutor, progresso). LessonPlayer (video HLS + controls). LessonContent (rich text). QuizForm (múltipla escolha, dissertativa). ProgressBar (por curso e geral). CertificateCard. DiscussionThread (por aula). CourseSidebar (lista de módulos/aulas com status de progresso). NoteWidget (notas no minuto do vídeo).
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/plataforma/src/components/course-card.tsx`
 - `apps/plataforma/src/components/lesson-player.tsx`
 - `apps/plataforma/src/components/quiz-form.tsx`
@@ -2970,6 +3227,7 @@ Componentes: CourseCard (capa, título, instrutor, progresso). LessonPlayer (vid
 - `apps/plataforma/src/components/note-widget.tsx`
 
 **Critérios de aceite:**
+
 - [ ] LessonPlayer com video HLS (hls.js), controle de velocidade, marcadores
 - [ ] CourseSidebar com módulos/aulas e ícones de progresso (completo/em andamento/locked)
 - [ ] QuizForm com tipos: múltipla escolha e dissertativa
@@ -2987,6 +3245,7 @@ Componentes: CourseCard (capa, título, instrutor, progresso). LessonPlayer (vid
 **Módulo:** plataforma
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-6.3-plataforma-pages`
 - Dependências: P-6.2 concluído
 - Env vars: nenhuma
@@ -2995,6 +3254,7 @@ Componentes: CourseCard (capa, título, instrutor, progresso). LessonPlayer (vid
 Páginas do aluno: Catálogo de cursos (filtros: categoria, dificuldade, instrutor). Página do curso (descrição, ementa, instrutor, CTA matrícula). Player de aula (vídeo + sidebar de navegação). Quiz. "Minha jornada" (cursos em andamento, progresso). Certificados. Discussões. Páginas do instrutor/pedagógico: Dashboard com estatísticas. Editor de curso (drag-drop módulos/aulas). Editor de aula. Editor de quiz.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/plataforma/src/app/(aluno)/layout.tsx`
 - `apps/plataforma/src/app/(aluno)/page.tsx`
 - `apps/plataforma/src/app/(aluno)/curso/[slug]/page.tsx`
@@ -3005,6 +3265,7 @@ Páginas do aluno: Catálogo de cursos (filtros: categoria, dificuldade, instrut
 - `apps/plataforma/src/app/(instrutor)/page.tsx`
 
 **Critérios de aceite:**
+
 - [ ] Catálogo com filtros e busca simples (título, série, categoria)
 - [ ] Página de curso: descrição, ementa, instrutor, CTA matrícula
 - [ ] Player: vídeo + sidebar navegação + notas + discussão
@@ -3023,6 +3284,7 @@ Páginas do aluno: Catálogo de cursos (filtros: categoria, dificuldade, instrut
 **Módulo:** plataforma
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-6.4-plataforma-forms`
 - Dependências: P-6.3 concluído
 - Env vars: nenhuma
@@ -3031,6 +3293,7 @@ Páginas do aluno: Catálogo de cursos (filtros: categoria, dificuldade, instrut
 Formulários: criar/editar curso (título, descrição, categoria, instrutor, capa). Criar/editar módulo (título, ordem). Criar/editar aula (título, tipo, conteúdo/vídeo URL, anexos). Criar quiz (perguntas, opções, pontuação). Matrícula (botão). Post no fórum de discussão. Nota pessoal (com timestamp).
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/plataforma/src/components/course-form.tsx`
 - `apps/plataforma/src/components/lesson-form.tsx`
 - `apps/plataforma/src/components/quiz-editor.tsx`
@@ -3038,6 +3301,7 @@ Formulários: criar/editar curso (título, descrição, categoria, instrutor, ca
 - `apps/plataforma/src/components/note-form.tsx`
 
 **Critérios de aceite:**
+
 - [ ] Curso form: título, descrição rich text, capa (upload), categoria, instrutor
 - [ ] Lesson form: upload de vídeo (URL Bunny.net) ou conteúdo rich text
 - [ ] Quiz editor: adicionar/remover perguntas, definir respostas corretas
@@ -3053,6 +3317,7 @@ Formulários: criar/editar curso (título, descrição, categoria, instrutor, ca
 **Módulo:** plataforma
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-6.5-plataforma-states`
 - Dependências: P-6.4 concluído
 - Env vars: nenhuma
@@ -3061,12 +3326,14 @@ Formulários: criar/editar curso (título, descrição, categoria, instrutor, ca
 Loading, empty e error states. Skeletons para catálogo, player, jornada. Estado vazio: "Nenhum curso disponível ainda", "Você ainda não se matriculou em nenhum curso".
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/plataforma/src/components/course-card-skeleton.tsx`
 - `apps/plataforma/src/components/player-skeleton.tsx`
 - `apps/plataforma/src/app/(aluno)/page.tsx` (adicionar estados)
 - `apps/plataforma/src/app/(aluno)/jornada/page.tsx` (adicionar estados)
 
 **Critérios de aceite:**
+
 - [ ] Skeletons por tela
 - [ ] Estados vazios contextuais
 - [ ] Lint passa
@@ -3088,6 +3355,7 @@ Loading, empty e error states. Skeletons para catálogo, player, jornada. Estado
 **Módulo:** plataforma
 **Tipo:** schema
 **Pré-condições:**
+
 - Branch: `feat/P-6.6-plataforma-schema`
 - Dependências: P-6.5 concluído, validação da diretoria OK
 - Env vars: `DATABASE_URL`
@@ -3096,10 +3364,12 @@ Loading, empty e error states. Skeletons para catálogo, player, jornada. Estado
 Criar tabelas no schema `plataforma`: courses, modules, lessons, enrollments, progress, quizzes, quiz_questions, quiz_attempts, certificates, discussions, discussion_posts, instructors, notes (user_id, lesson_id, timestamp_seconds, content).
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/db/src/schema/plataforma.ts`
 - `packages/db/src/migrations/0014_plataforma.sql`
 
 **Critérios de aceite:**
+
 - [ ] courses: title, slug, description, category, cover_url, instructor_id, published
 - [ ] lessons: module_id, title, type (video/text/quiz/download), content, video_url, order, requires_previous
 - [ ] progress: lesson_id, user_id, completed_at (unique constraint)
@@ -3116,6 +3386,7 @@ Criar tabelas no schema `plataforma`: courses, modules, lessons, enrollments, pr
 **Módulo:** plataforma
 **Tipo:** schema
 **Pré-condições:**
+
 - Branch: `feat/P-6.7-plataforma-rls`
 - Dependências: P-6.6 concluído
 - Env vars: `DATABASE_URL`
@@ -3124,9 +3395,11 @@ Criar tabelas no schema `plataforma`: courses, modules, lessons, enrollments, pr
 RLS para schema plataforma. Qualquer usuário autenticado: SELECT em courses publicados, lessons de cursos matriculados. Progresso e notas: apenas próprios. Super_admin e instrutor: CRUD completo. Certificados: SELECT próprio + verificação pública por hash.
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/db/src/migrations/0015_plataforma_rls.sql`
 
 **Critérios de aceite:**
+
 - [ ] Autenticado: vê cursos publicados
 - [ ] Matriculado: vê aulas do curso, registra progresso
 - [ ] Aula locked: não visível se anterior não concluída (trilha sequencial)
@@ -3143,6 +3416,7 @@ RLS para schema plataforma. Qualquer usuário autenticado: SELECT em courses pub
 **Módulo:** plataforma
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-6.8-plataforma-actions`
 - Dependências: P-6.7 concluído
 - Env vars: `DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
@@ -3151,6 +3425,7 @@ RLS para schema plataforma. Qualquer usuário autenticado: SELECT em courses pub
 Server Actions: CRUD de cursos, módulos, aulas (instrutor/admin). Matrícula. Registrar progresso (marcar aula como concluída). Submeter quiz. Emissão automática de certificado (ao concluir trilha). CRUD de discussões e posts. Notas pessoais. Busca simples (título, série, categoria).
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/plataforma/src/actions/courses.ts`
 - `apps/plataforma/src/actions/enrollment.ts`
 - `apps/plataforma/src/actions/progress.ts`
@@ -3159,6 +3434,7 @@ Server Actions: CRUD de cursos, módulos, aulas (instrutor/admin). Matrícula. R
 - `apps/plataforma/src/actions/discussions.ts`
 
 **Critérios de aceite:**
+
 - [ ] CRUD de cursos/módulos/aulas com reordenação
 - [ ] Matrícula: cria enrollment e libera acesso
 - [ ] Progresso: marcar aula como concluída, verificar trilha sequencial
@@ -3177,6 +3453,7 @@ Server Actions: CRUD de cursos, módulos, aulas (instrutor/admin). Matrícula. R
 **Módulo:** plataforma
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-6.9-plataforma-integration`
 - Dependências: P-6.8 concluído
 - Env vars: `DATABASE_URL`, `SUPABASE_URL`
@@ -3185,6 +3462,7 @@ Server Actions: CRUD de cursos, módulos, aulas (instrutor/admin). Matrícula. R
 Substituir mocks. Catálogo com cursos reais. Player com vídeo via Bunny.net HLS. Progresso real. Certificados reais com download PDF. Discussões reais.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/plataforma/src/app/(aluno)/page.tsx`
 - `apps/plataforma/src/app/(aluno)/curso/[slug]/page.tsx`
 - `apps/plataforma/src/app/(aluno)/curso/[slug]/aula/[id]/page.tsx`
@@ -3194,6 +3472,7 @@ Substituir mocks. Catálogo com cursos reais. Player com vídeo via Bunny.net HL
 - `apps/plataforma/src/lib/mock-data.ts` (remover)
 
 **Critérios de aceite:**
+
 - [ ] Catálogo com cursos do banco
 - [ ] Player carrega vídeo via Bunny.net HLS
 - [ ] Trilha sequencial funcional (aula locked até anterior concluída)
@@ -3210,6 +3489,7 @@ Substituir mocks. Catálogo com cursos reais. Player com vídeo via Bunny.net HL
 **Módulo:** plataforma
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-6.10-plataforma-notifications`
 - Dependências: P-6.9 concluído
 - Env vars: `RESEND_API_KEY`
@@ -3218,12 +3498,14 @@ Substituir mocks. Catálogo com cursos reais. Player com vídeo via Bunny.net HL
 Notificações: matrícula confirmada (email). Novo curso publicado (email para todos os matriculados). Certificado emitido (email + in_app). Resposta no fórum (in_app).
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/email/src/templates/enrollment-confirmed.tsx`
 - `packages/email/src/templates/new-course.tsx`
 - `packages/email/src/templates/certificate-issued.tsx`
 - `apps/plataforma/src/lib/notifications.ts`
 
 **Critérios de aceite:**
+
 - [ ] Matrícula: email de confirmação com link para o curso
 - [ ] Novo curso: email para todos os usuários ativos
 - [ ] Certificado: email com link de download + in_app
@@ -3239,6 +3521,7 @@ Notificações: matrícula confirmada (email). Novo curso publicado (email para 
 **Módulo:** plataforma
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-6.11-plataforma-cross`
 - Dependências: P-6.10 concluído
 - Env vars: `DATABASE_URL`
@@ -3247,10 +3530,12 @@ Notificações: matrícula confirmada (email). Novo curso publicado (email para 
 Plataforma → Intranet: KPI de alunos (total matriculados, cursos ativos, taxa de conclusão). Substituir stub na Intranet. Preparar estrutura para papel "professor" futuro (flag no schema, sem funcionalidade adicional na v1).
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/plataforma/src/lib/integrations/intranet.ts`
 - `apps/intranet/src/lib/integrations/plataforma-stub.ts` (substituir por real)
 
 **Critérios de aceite:**
+
 - [ ] KPI de alunos disponível para Intranet (query cross-schema)
 - [ ] Stub da Intranet substituído por dados reais
 - [ ] Campo instructor_role preparado no schema (sem funcionalidade extra na v1)
@@ -3265,6 +3550,7 @@ Plataforma → Intranet: KPI de alunos (total matriculados, cursos ativos, taxa 
 **Módulo:** plataforma
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-6.12-plataforma-tests`
 - Dependências: P-6.11 concluído
 - Env vars: `DATABASE_URL`
@@ -3273,11 +3559,13 @@ Plataforma → Intranet: KPI de alunos (total matriculados, cursos ativos, taxa 
 Testes: RLS (aluno vê apenas cursos publicados e próprio progresso). Trilha sequencial (não acessa aula se anterior não concluída). Quiz (submissão e scoring). Certificado (emissão automática ao 100%). Discussões (moderação).
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/plataforma/src/__tests__/rls.test.ts`
 - `apps/plataforma/src/__tests__/progress.test.ts`
 - `apps/plataforma/src/__tests__/certificates.test.ts`
 
 **Critérios de aceite:**
+
 - [ ] Trilha: aula 3 inacessível se aula 2 não concluída
 - [ ] Certificado: emitido quando todas as aulas marcadas como concluídas
 - [ ] Quiz: score calculado corretamente
@@ -3301,6 +3589,7 @@ Testes: RLS (aluno vê apenas cursos publicados e próprio progresso). Trilha se
 **Módulo:** flats
 **Tipo:** schema
 **Pré-condições:**
+
 - Branch: `feat/P-7.1-flats-types`
 - Dependências: P-6.12 concluído
 - Env vars: nenhuma
@@ -3309,11 +3598,13 @@ Testes: RLS (aluno vê apenas cursos publicados e próprio progresso). Trilha se
 Tipos e schemas Zod: Unit (2 flats fixos), Reservation (com 3 períodos de preferência), Guest (responsável + acompanhantes), Vehicle, ScoringCriteria (10 critérios com pontuação automática, max 80 pts), AidRequest (diária + transporte). Mock data com cenários de scoring e desempate.
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/types/src/flats/index.ts`
 - `packages/validators/src/flats/index.ts`
 - `apps/flats/src/lib/mock-data.ts`
 
 **Critérios de aceite:**
+
 - [ ] Unit: nome, capacidade (6), quartos (2), fotos, amenidades
 - [ ] Reservation com 3 preferred_periods: [{start, end}, {start, end}, {start, end}]
 - [ ] Guest: responsável + até 6 acompanhantes + 2 menores de 3 anos
@@ -3335,6 +3626,7 @@ Ref: BRAIN.md seção 6.8 e edital de flats em `.docs/EDITAL PARA SOLICITAÇÕES
 **Módulo:** flats
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-7.2-flats-components`
 - Dependências: P-7.1 concluído
 - Env vars: nenhuma
@@ -3343,6 +3635,7 @@ Ref: BRAIN.md seção 6.8 e edital de flats em `.docs/EDITAL PARA SOLICITAÇÕES
 Componentes: UnitCard (fotos, capacidade, status). AvailabilityCalendar (timeline com reservas por flat). ReservationCard (hóspede, período, score, status). ScoringPanel (breakdown dos 10 critérios com pontuação). GuestList (responsável + acompanhantes). ApprovalQueue (fila de reservas pendentes para o diretor gestor). PeriodPicker (seletor de 3 períodos de preferência).
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/flats/src/components/unit-card.tsx`
 - `apps/flats/src/components/availability-calendar.tsx`
 - `apps/flats/src/components/reservation-card.tsx`
@@ -3352,6 +3645,7 @@ Componentes: UnitCard (fotos, capacidade, status). AvailabilityCalendar (timelin
 - `apps/flats/src/components/period-picker.tsx`
 
 **Critérios de aceite:**
+
 - [ ] AvailabilityCalendar: timeline horizontal com reservas coloridas por status
 - [ ] ScoringPanel: 10 critérios com barra de pontuação e total
 - [ ] PeriodPicker: 3 seletores de range de data com validação (max 7 dias cada)
@@ -3368,6 +3662,7 @@ Componentes: UnitCard (fotos, capacidade, status). AvailabilityCalendar (timelin
 **Módulo:** flats
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-7.3-flats-pages`
 - Dependências: P-7.2 concluído
 - Env vars: nenhuma
@@ -3376,6 +3671,7 @@ Componentes: UnitCard (fotos, capacidade, status). AvailabilityCalendar (timelin
 Páginas do hóspede: catálogo de flats (fotos, disponibilidade). Formulário de reserva (dados pessoais + acompanhantes + veículo + 3 períodos + critérios de scoring). Status da reserva. Histórico. Páginas admin: calendário consolidado. Fila de aprovação. Detalhe da reserva. Check-in/check-out.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/flats/src/app/(hospede)/layout.tsx`
 - `apps/flats/src/app/(hospede)/page.tsx`
 - `apps/flats/src/app/(hospede)/reservar/page.tsx`
@@ -3386,6 +3682,7 @@ Páginas do hóspede: catálogo de flats (fotos, disponibilidade). Formulário d
 - `apps/flats/src/app/(admin)/aprovacao/page.tsx`
 
 **Critérios de aceite:**
+
 - [ ] Catálogo com fotos e disponibilidade por flat
 - [ ] Formulário completo: dados pessoais, acompanhantes, veículo, 3 períodos, critérios
 - [ ] Status da reserva com timeline visual
@@ -3403,6 +3700,7 @@ Páginas do hóspede: catálogo de flats (fotos, disponibilidade). Formulário d
 **Módulo:** flats
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-7.4-flats-forms`
 - Dependências: P-7.3 concluído
 - Env vars: nenhuma
@@ -3411,6 +3709,7 @@ Páginas do hóspede: catálogo de flats (fotos, disponibilidade). Formulário d
 Formulários: reserva completa multi-step (dados do responsável com upload de documento → acompanhantes com CPF e data nascimento → veículo → 3 períodos de preferência → critérios de scoring → ajuda de custo opcional → revisão). Aprovação (selecionar período final, observações). Check-in (checklist de inventário).
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/flats/src/components/reservation-wizard.tsx`
 - `apps/flats/src/components/reservation-wizard-steps/step-guest.tsx`
 - `apps/flats/src/components/reservation-wizard-steps/step-companions.tsx`
@@ -3421,6 +3720,7 @@ Formulários: reserva completa multi-step (dados do responsável com upload de d
 - `apps/flats/src/components/checkin-form.tsx`
 
 **Critérios de aceite:**
+
 - [ ] Wizard com 6+ steps e validação Zod por step
 - [ ] Upload de documento de identidade (obrigatório)
 - [ ] Acompanhantes: dinâmico (adicionar/remover), max 6+2 menores
@@ -3439,6 +3739,7 @@ Formulários: reserva completa multi-step (dados do responsável com upload de d
 **Módulo:** flats
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-7.5-flats-states`
 - Dependências: P-7.4 concluído
 - Env vars: nenhuma
@@ -3447,12 +3748,14 @@ Formulários: reserva completa multi-step (dados do responsável com upload de d
 Loading, empty e error states. Skeletons para catálogo, calendário, fila de aprovação. Estado vazio: "Nenhuma reserva pendente", "Sem reservas nos próximos 30 dias".
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/flats/src/components/calendar-skeleton.tsx`
 - `apps/flats/src/components/approval-queue-skeleton.tsx`
 - `apps/flats/src/app/(hospede)/page.tsx` (adicionar estados)
 - `apps/flats/src/app/(admin)/page.tsx` (adicionar estados)
 
 **Critérios de aceite:**
+
 - [ ] Skeletons por tela
 - [ ] Estados vazios contextuais
 - [ ] Lint passa
@@ -3474,6 +3777,7 @@ Loading, empty e error states. Skeletons para catálogo, calendário, fila de ap
 **Módulo:** flats
 **Tipo:** schema
 **Pré-condições:**
+
 - Branch: `feat/P-7.6-flats-schema`
 - Dependências: P-7.5 concluído, validação da diretoria OK
 - Env vars: `DATABASE_URL`
@@ -3482,10 +3786,12 @@ Loading, empty e error states. Skeletons para catálogo, calendário, fila de ap
 Criar tabelas no schema `flats`: units (2 fixas, seed), reservations (status, selected_period, score_total), preferred_periods (reservation_id, start, end), guests (reservation_id, name, cpf, birth_date, is_responsible), vehicles (reservation_id), scoring_responses (reservation_id, criterion, value, points), aid_requests (reservation_id, type, amount), usage_history (para regra de 7 dias/12 meses).
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/db/src/schema/flats.ts`
 - `packages/db/src/migrations/0016_flats.sql`
 
 **Critérios de aceite:**
+
 - [ ] units: 2 registros seed (flat 1, flat 2)
 - [ ] reservations: status (solicitada, aprovada, rejeitada, confirmada, em_curso, concluida, cancelada)
 - [ ] preferred_periods: 3 por reserva (constraint)
@@ -3503,6 +3809,7 @@ Criar tabelas no schema `flats`: units (2 fixas, seed), reservations (status, se
 **Módulo:** flats
 **Tipo:** schema
 **Pré-condições:**
+
 - Branch: `feat/P-7.7-flats-rls`
 - Dependências: P-7.6 concluído
 - Env vars: `DATABASE_URL`
@@ -3511,9 +3818,11 @@ Criar tabelas no schema `flats`: units (2 fixas, seed), reservations (status, se
 RLS para schema flats. Hóspede: CRUD apenas nas próprias reservas. Diretor gestor (designation): SELECT + UPDATE para aprovar/rejeitar. Super_admin: full access. Diretores/conselheiros: NÃO podem criar reservas (conflito de interesse).
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/db/src/migrations/0017_flats_rls.sql`
 
 **Critérios de aceite:**
+
 - [ ] Hóspede: CRUD apenas nas próprias reservas
 - [ ] Diretor gestor: SELECT all + UPDATE (aprovar/rejeitar)
 - [ ] Super_admin: full access
@@ -3529,6 +3838,7 @@ RLS para schema flats. Hóspede: CRUD apenas nas próprias reservas. Diretor ges
 **Módulo:** flats
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-7.8-flats-actions`
 - Dependências: P-7.7 concluído
 - Env vars: `DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
@@ -3537,6 +3847,7 @@ RLS para schema flats. Hóspede: CRUD apenas nas próprias reservas. Diretor ges
 Server Actions: criar reserva (com validação de elegibilidade, limite 7d/12m, disponibilidade). Calcular score automaticamente (10 critérios, auto-calcular b e j do histórico). Aprovar/rejeitar (diretor gestor, selecionar período final). Solicitar ajuda de custo. Confirmar reserva. Check-in/check-out. Desempate (idade → tempo sem descanso → nunca usou → sorteio). Soft-delete com justificativa.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/flats/src/actions/reservations.ts`
 - `apps/flats/src/actions/scoring.ts`
 - `apps/flats/src/actions/approval.ts`
@@ -3544,6 +3855,7 @@ Server Actions: criar reserva (com validação de elegibilidade, limite 7d/12m, 
 - `apps/flats/src/actions/aid.ts`
 
 **Critérios de aceite:**
+
 - [ ] Validação de elegibilidade: pastores/missionários (via papel hospede)
 - [ ] Validação: max 7 dias nos últimos 12 meses por indivíduo
 - [ ] Score: 10 critérios calculados, b (frequência) e j (participação em projetos) do banco
@@ -3562,6 +3874,7 @@ Server Actions: criar reserva (com validação de elegibilidade, limite 7d/12m, 
 **Módulo:** flats
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-7.9-flats-integration`
 - Dependências: P-7.8 concluído
 - Env vars: `DATABASE_URL`, `SUPABASE_URL`
@@ -3570,6 +3883,7 @@ Server Actions: criar reserva (com validação de elegibilidade, limite 7d/12m, 
 Substituir mocks. Calendário com reservas reais. Fila de aprovação com score real. Wizard conectado. Check-in funcional.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/flats/src/app/(hospede)/page.tsx`
 - `apps/flats/src/app/(hospede)/reservar/page.tsx`
 - `apps/flats/src/app/(hospede)/minhas-reservas/page.tsx`
@@ -3579,6 +3893,7 @@ Substituir mocks. Calendário com reservas reais. Fila de aprovação com score 
 - `apps/flats/src/lib/mock-data.ts` (remover)
 
 **Critérios de aceite:**
+
 - [ ] Calendário com reservas reais do banco
 - [ ] Score calculado automaticamente ao submeter
 - [ ] Fila de aprovação ordenada por score com desempate
@@ -3594,6 +3909,7 @@ Substituir mocks. Calendário com reservas reais. Fila de aprovação com score 
 **Módulo:** flats
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-7.10-flats-notifications`
 - Dependências: P-7.9 concluído
 - Env vars: `RESEND_API_KEY`
@@ -3602,12 +3918,14 @@ Substituir mocks. Calendário com reservas reais. Fila de aprovação com score 
 Notificações: reserva submetida (in_app ao diretor gestor). Reserva aprovada/rejeitada (email ao hóspede com período selecionado ou motivo). Instruções de check-in (email 3 dias antes com endereço, contato, regras). Lembrete de check-out (email no dia).
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/email/src/templates/reservation-submitted.tsx`
 - `packages/email/src/templates/reservation-approved.tsx`
 - `packages/email/src/templates/checkin-instructions.tsx`
 - `apps/flats/src/lib/notifications.ts`
 
 **Critérios de aceite:**
+
 - [ ] Reserva submetida: in_app ao diretor gestor + email
 - [ ] Aprovada: email ao hóspede com período final e instruções
 - [ ] Rejeitada: email ao hóspede com motivo
@@ -3624,6 +3942,7 @@ Notificações: reserva submetida (in_app ao diretor gestor). Reserva aprovada/r
 **Módulo:** flats
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-7.11-flats-cross`
 - Dependências: P-7.10 concluído
 - Env vars: `DATABASE_URL`
@@ -3632,12 +3951,14 @@ Notificações: reserva submetida (in_app ao diretor gestor). Reserva aprovada/r
 Conectar integrações. Flats → Tarefas: reserva confirmada gera tarefas de limpeza (pré e pós-estadia) via createAutoTask (substituir stub). Flats → Financeiro: ajuda de custo aprovada cria despesas (data = dia anterior ao início da reserva). Flats ← Projetos: campo "participação em projetos" auto-calculado para scoring.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/flats/src/lib/integrations/tarefas.ts`
 - `apps/flats/src/lib/integrations/financeiro.ts`
 - `apps/flats/src/lib/integrations/projetos.ts`
 - `apps/tarefas/src/lib/integrations/flats-stub.ts` (substituir por real)
 
 **Critérios de aceite:**
+
 - [ ] Reserva confirmada cria tarefa de limpeza pré-estadia + pós-estadia (real)
 - [ ] Ajuda de custo aprovada cria despesa no Financeiro (data = dia anterior à reserva)
 - [ ] Scoring critério j: auto-calculado do histórico de projetos aprovados
@@ -3653,6 +3974,7 @@ Conectar integrações. Flats → Tarefas: reserva confirmada gera tarefas de li
 **Módulo:** flats
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-7.12-flats-tests`
 - Dependências: P-7.11 concluído
 - Env vars: `DATABASE_URL`
@@ -3661,11 +3983,13 @@ Conectar integrações. Flats → Tarefas: reserva confirmada gera tarefas de li
 Testes: RLS (hóspede vê apenas próprias, diretor/conselheiro não cria reserva). Scoring (10 critérios calculam corretamente). Desempate. Regra 7d/12m. Double-booking prevention. Fluxo completo: submeter → aprovar → confirmar → check-in → check-out.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/flats/src/__tests__/rls.test.ts`
 - `apps/flats/src/__tests__/scoring.test.ts`
 - `apps/flats/src/__tests__/reservations.test.ts`
 
 **Critérios de aceite:**
+
 - [ ] RLS: diretor/conselheiro não cria reserva (conflito de interesse)
 - [ ] Scoring: 10 critérios somam corretamente (max 80)
 - [ ] Desempate: ordem correta (idade → tempo → nunca usou → sorteio)
@@ -3691,6 +4015,7 @@ Testes: RLS (hóspede vê apenas próprias, diretor/conselheiro não cria reserv
 **Módulo:** radio
 **Tipo:** schema
 **Pré-condições:**
+
 - Branch: `feat/P-8.1-radio-types`
 - Dependências: P-7.12 concluído
 - Env vars: nenhuma
@@ -3699,11 +4024,13 @@ Testes: RLS (hóspede vê apenas próprias, diretor/conselheiro não cria reserv
 Tipos e schemas Zod para o escopo REDUZIDO da Rádio. Tipos: Track (mp3 pré-gravado), Playlist, Author, Series, NowPlaying, ExclusiveMaterial, TermAcceptance. Sem: shows, schedule_slots, song_requests, podcast_subscribers, DJs, grade. Mock data com playlists de sermões organizados por autor e série.
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/types/src/radio/index.ts`
 - `packages/validators/src/radio/index.ts`
 - `apps/radio/src/lib/mock-data.ts`
 
 **Critérios de aceite:**
+
 - [ ] Track: title, author_id, series_id, file_url (R2), duration_seconds
 - [ ] Playlist: name, tracks (ordered), loop
 - [ ] Author: name, bio, photo
@@ -3726,6 +4053,7 @@ Ref: BRAIN.md seção 6.4 (escopo REDUZIDO). Auto DJ 24/7 tocando .mp3 do R2. Se
 **Módulo:** radio
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-8.2-radio-components`
 - Dependências: P-8.1 concluído
 - Env vars: nenhuma
@@ -3734,6 +4062,7 @@ Ref: BRAIN.md seção 6.4 (escopo REDUZIDO). Auto DJ 24/7 tocando .mp3 do R2. Se
 Componentes: Player (persistente, background play, tocando agora). TrackInfo (autor, série, duração). PlaylistView (lista de faixas). AuthorCard (nome, bio, foto, séries). SeriesList (por autor). MaterialCard (download exclusivo com status do termo). TermsAcceptDialog (aceite de termo de responsabilidade).
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/radio/src/components/player.tsx`
 - `apps/radio/src/components/track-info.tsx`
 - `apps/radio/src/components/playlist-view.tsx`
@@ -3742,6 +4071,7 @@ Componentes: Player (persistente, background play, tocando agora). TrackInfo (au
 - `apps/radio/src/components/terms-accept-dialog.tsx`
 
 **Critérios de aceite:**
+
 - [ ] Player persistente no footer (continua tocando entre páginas)
 - [ ] Player com: play/pause, próxima, anterior, volume, barra de progresso
 - [ ] "Tocando agora" com nome da faixa, autor e série
@@ -3760,6 +4090,7 @@ Componentes: Player (persistente, background play, tocando agora). TrackInfo (au
 **Módulo:** radio
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-8.3-radio-pages`
 - Dependências: P-8.2 concluído
 - Env vars: nenhuma
@@ -3768,6 +4099,7 @@ Componentes: Player (persistente, background play, tocando agora). TrackInfo (au
 Páginas: Home com player principal e "tocando agora". Catálogo por autor. Catálogo por série. Página do autor (bio, séries, faixas). Página da série (faixas). Materiais exclusivos (requer login + termo). Sobre a rádio. Área admin: upload de faixas, gestão de playlists, gestão de materiais exclusivos.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/radio/src/app/layout.tsx`
 - `apps/radio/src/app/page.tsx`
 - `apps/radio/src/app/autores/page.tsx`
@@ -3778,6 +4110,7 @@ Páginas: Home com player principal e "tocando agora". Catálogo por autor. Cat�
 - `apps/radio/src/app/(admin)/page.tsx`
 
 **Critérios de aceite:**
+
 - [ ] Home com player em destaque e "tocando agora"
 - [ ] Catálogos por autor e por série com busca
 - [ ] Página de autor: bio, foto, lista de séries
@@ -3799,6 +4132,7 @@ Home pública (sem login para ouvir). PWA será configurada no Bloco B.
 **Módulo:** radio
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-8.4-radio-forms`
 - Dependências: P-8.3 concluído
 - Env vars: nenhuma
@@ -3807,6 +4141,7 @@ Home pública (sem login para ouvir). PWA será configurada no Bloco B.
 Formulários admin: upload de faixa (título, autor, série, arquivo .mp3). Criar/editar autor (nome, bio, foto). Criar/editar série. Criar/editar playlist (drag-drop para ordenar faixas). Upload de material exclusivo (título, arquivo, descrição).
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/radio/src/components/track-upload-form.tsx`
 - `apps/radio/src/components/author-form.tsx`
 - `apps/radio/src/components/series-form.tsx`
@@ -3814,6 +4149,7 @@ Formulários admin: upload de faixa (título, autor, série, arquivo .mp3). Cria
 - `apps/radio/src/components/material-upload-form.tsx`
 
 **Critérios de aceite:**
+
 - [ ] Upload de .mp3 com extração automática de duração
 - [ ] Playlist com drag-drop para reordenar faixas
 - [ ] Material exclusivo com campo de descrição e upload
@@ -3829,6 +4165,7 @@ Formulários admin: upload de faixa (título, autor, série, arquivo .mp3). Cria
 **Módulo:** radio
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-8.5-radio-states`
 - Dependências: P-8.4 concluído
 - Env vars: nenhuma
@@ -3837,11 +4174,13 @@ Formulários admin: upload de faixa (título, autor, série, arquivo .mp3). Cria
 Loading, empty e error states. Skeleton para player, catálogo, materiais. Estado vazio: "Nenhuma faixa disponível". Estado de erro no player (falha ao carregar áudio).
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/radio/src/components/player-skeleton.tsx`
 - `apps/radio/src/components/catalog-skeleton.tsx`
 - `apps/radio/src/app/page.tsx` (adicionar estados)
 
 **Critérios de aceite:**
+
 - [ ] Skeletons por tela
 - [ ] Player error state: "Não foi possível carregar o áudio. Tentando novamente..."
 - [ ] Lint passa
@@ -3863,6 +4202,7 @@ Loading, empty e error states. Skeleton para player, catálogo, materiais. Estad
 **Módulo:** radio
 **Tipo:** schema
 **Pré-condições:**
+
 - Branch: `feat/P-8.6-radio-schema`
 - Dependências: P-8.5 concluído, validação da diretoria OK
 - Env vars: `DATABASE_URL`
@@ -3871,10 +4211,12 @@ Loading, empty e error states. Skeleton para player, catálogo, materiais. Estad
 Criar tabelas no schema `radio`: tracks, authors, series, playlists, playlist_tracks (ordered), exclusive_materials, term_acceptances, now_playing (singleton), listener_stats (snapshot). Sem: shows, schedule_slots, song_requests, podcast_subscribers.
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/db/src/schema/radio.ts`
 - `packages/db/src/migrations/0018_radio.sql`
 
 **Critérios de aceite:**
+
 - [ ] tracks: title, author_id, series_id, file_url, duration_seconds, uploaded_at
 - [ ] playlists: name, is_active (apenas 1 ativa por vez)
 - [ ] playlist_tracks: playlist_id, track_id, position
@@ -3893,6 +4235,7 @@ Criar tabelas no schema `radio`: tracks, authors, series, playlists, playlist_tr
 **Módulo:** radio
 **Tipo:** schema
 **Pré-condições:**
+
 - Branch: `feat/P-8.7-radio-rls`
 - Dependências: P-8.6 concluído
 - Env vars: `DATABASE_URL`
@@ -3901,9 +4244,11 @@ Criar tabelas no schema `radio`: tracks, authors, series, playlists, playlist_tr
 RLS para schema radio. Anon: SELECT em tracks, authors, series, playlists, now_playing (ouvir sem cadastro). Autenticado com termo aceito: SELECT em exclusive_materials + download via signed URL. Super_admin: full CRUD. Demais: leitura pública.
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/db/src/migrations/0019_radio_rls.sql`
 
 **Critérios de aceite:**
+
 - [ ] Anon: SELECT em tracks, authors, series, now_playing
 - [ ] Autenticado: SELECT em exclusive_materials SE term_acceptances existe
 - [ ] Super_admin: full CRUD
@@ -3918,6 +4263,7 @@ RLS para schema radio. Anon: SELECT em tracks, authors, series, playlists, now_p
 **Módulo:** radio
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-8.8-radio-actions`
 - Dependências: P-8.7 concluído
 - Env vars: `DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`
@@ -3926,6 +4272,7 @@ RLS para schema radio. Anon: SELECT em tracks, authors, series, playlists, now_p
 Server Actions: upload de faixa para Cloudflare R2. CRUD de autores, séries, playlists. Auto DJ: API route server-side que serve áudio do R2 (proxy com playlist ativa). Atualizar "tocando agora" via Supabase Realtime. Aceitar termo (1x por usuário). Download de material exclusivo via signed URL. Configurar PWA (manifest + service worker para background play).
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/radio/src/actions/tracks.ts`
 - `apps/radio/src/actions/playlists.ts`
 - `apps/radio/src/actions/materials.ts`
@@ -3934,6 +4281,7 @@ Server Actions: upload de faixa para Cloudflare R2. CRUD de autores, séries, pl
 - `apps/radio/src/app/manifest.ts`
 
 **Critérios de aceite:**
+
 - [ ] Upload de .mp3 para R2 com URL retornada
 - [ ] Auto DJ: API route que serve faixa atual do playlist ativo (não stream contínuo — cada ouvinte pode estar em ponto diferente)
 - [ ] "Tocando agora" atualizado via Supabase Realtime (broadcast)
@@ -3954,6 +4302,7 @@ Ref: BRAIN.md seção 6.4. Não é stream contínuo — cada ouvinte em ponto di
 **Módulo:** radio
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-8.9-radio-integration`
 - Dependências: P-8.8 concluído
 - Env vars: `DATABASE_URL`, `SUPABASE_URL`, `R2_PUBLIC_URL`
@@ -3962,6 +4311,7 @@ Ref: BRAIN.md seção 6.4. Não é stream contínuo — cada ouvinte em ponto di
 Substituir mocks. Player tocando áudio real do R2. "Tocando agora" via Supabase Realtime. Catálogos com dados do banco. Materiais exclusivos com signed URLs. PWA funcional.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/radio/src/app/page.tsx`
 - `apps/radio/src/app/autores/page.tsx`
 - `apps/radio/src/app/autores/[slug]/page.tsx`
@@ -3970,6 +4320,7 @@ Substituir mocks. Player tocando áudio real do R2. "Tocando agora" via Supabase
 - `apps/radio/src/lib/mock-data.ts` (remover)
 
 **Critérios de aceite:**
+
 - [ ] Player toca áudio real do R2
 - [ ] "Tocando agora" atualiza em tempo real via Supabase Realtime
 - [ ] Catálogos com dados do banco
@@ -3987,6 +4338,7 @@ Substituir mocks. Player tocando áudio real do R2. "Tocando agora" via Supabase
 **Módulo:** radio
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-8.10-radio-notifications`
 - Dependências: P-8.9 concluído
 - Env vars: `RESEND_API_KEY`
@@ -3995,10 +4347,12 @@ Substituir mocks. Player tocando áudio real do R2. "Tocando agora" via Supabase
 Notificações mínimas: novo material exclusivo disponível (email para usuários com termo aceito). Novo conteúdo de autor favorito (in_app, se implementar favoritos — nice-to-have).
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/email/src/templates/new-material.tsx`
 - `apps/radio/src/lib/notifications.ts`
 
 **Critérios de aceite:**
+
 - [ ] Novo material exclusivo: email para todos com termo aceito
 - [ ] Template com layout institucional
 - [ ] Lint passa
@@ -4012,6 +4366,7 @@ Notificações mínimas: novo material exclusivo disponível (email para usuári
 **Módulo:** radio
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-8.11-radio-cross`
 - Dependências: P-8.10 concluído
 - Env vars: `DATABASE_URL`
@@ -4020,11 +4375,13 @@ Notificações mínimas: novo material exclusivo disponível (email para usuári
 Rádio → Intranet: KPI de audiência (total ouvintes, faixas tocadas). Substituir stub na Intranet. Métricas básicas: listener_stats com snapshots periódicos.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/radio/src/lib/integrations/intranet.ts`
 - `apps/radio/src/lib/listener-stats.ts`
 - `apps/intranet/src/lib/integrations/radio-stub.ts` (substituir por real)
 
 **Critérios de aceite:**
+
 - [ ] KPI de audiência disponível para Intranet
 - [ ] Stub substituído por dados reais
 - [ ] Snapshot de listener_stats periódico (via Inngest)
@@ -4039,6 +4396,7 @@ Rádio → Intranet: KPI de audiência (total ouvintes, faixas tocadas). Substit
 **Módulo:** radio
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-8.12-radio-tests`
 - Dependências: P-8.11 concluído
 - Env vars: `DATABASE_URL`
@@ -4047,11 +4405,13 @@ Rádio → Intranet: KPI de audiência (total ouvintes, faixas tocadas). Substit
 Testes: RLS (anon ouve, autenticado+termo acessa materiais). Upload de faixa para R2. Playlist ativa (apenas 1). Termo aceito 1x. Signed URL expira.
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/radio/src/__tests__/rls.test.ts`
 - `apps/radio/src/__tests__/playlist.test.ts`
 - `apps/radio/src/__tests__/materials.test.ts`
 
 **Critérios de aceite:**
+
 - [ ] RLS: anon acessa tracks; sem termo não acessa materials
 - [ ] Playlist: apenas 1 ativa por vez
 - [ ] Termo: duplo aceite retorna erro
@@ -4070,6 +4430,7 @@ Testes: RLS (anon ouve, autenticado+termo acessa materiais). Upload de faixa par
 **Módulo:** fundacao
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-9.1-security-audit`
 - Dependências: P-8.12 concluído
 - Env vars: `DATABASE_URL`
@@ -4078,10 +4439,12 @@ Testes: RLS (anon ouve, autenticado+termo acessa materiais). Upload de faixa par
 Auditoria completa de RLS em todos os schemas. Verificar: DENY-by-default em toda tabela. Cross-schema leaks (submissor não acessa financeiro). Impersonation não bypassa RLS. Conflitos de interesse enforced (diretor não cria reserva). Middleware gates alinhados com RLS. Revisão de signed URLs (expiração, escopo). Verificação de SQL injection em queries dinâmicas. **Decidir e documentar a postura de conexão das Server Actions** (superuser via `DATABASE_URL` vs. `authenticated` + JWT) — ver BRAIN.md §3 "Decisão técnica pendente"; se ficar com superuser, confirmar que TODA action de mutação passa pelo gate de RBAC (nenhuma exceção).
 
 **Arquivos permitidos para criação/edição:**
+
 - `apps/admin/src/__tests__/security-audit.test.ts`
 - `packages/db/src/migrations/0020_rls_fixes.sql` (se necessário)
 
 **Critérios de aceite:**
+
 - [ ] Toda tabela com RLS habilitado e DENY-by-default verificado
 - [ ] Nenhum cross-schema leak identificado
 - [ ] Conflitos de interesse enforced em RLS (não apenas middleware)
@@ -4098,6 +4461,7 @@ Auditoria completa de RLS em todos os schemas. Verificar: DENY-by-default em tod
 **Módulo:** fundacao
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-9.2-lgpd-audit`
 - Dependências: P-9.1 concluído
 - Env vars: nenhuma
@@ -4106,6 +4470,7 @@ Auditoria completa de RLS em todos os schemas. Verificar: DENY-by-default em tod
 Implementar compliance LGPD. Tela "Meus Dados" em cada app: visualizar, exportar (JSON + CSV), solicitar exclusão. Consentimento granular no cadastro (newsletter, marketing, compartilhamento). Política de retenção configurável por tipo de dado. Log de acesso a dados pessoais. Revisão de todos os dados pessoais armazenados (CPF, documentos, fotos) para verificar criptografia e acesso adequado.
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/ui/src/components/my-data-page.tsx`
 - `packages/auth/src/data-export.ts`
 - `packages/auth/src/data-deletion.ts`
@@ -4113,6 +4478,7 @@ Implementar compliance LGPD. Tela "Meus Dados" em cada app: visualizar, exportar
 - `packages/db/src/migrations/0021_lgpd.sql`
 
 **Critérios de aceite:**
+
 - [ ] "Meus Dados" acessível em cada app com visualização, export e solicitação de exclusão
 - [ ] Consentimento granular no cadastro (opt-in, nunca opt-out)
 - [ ] Export em JSON + CSV funcional
@@ -4130,6 +4496,7 @@ Implementar compliance LGPD. Tela "Meus Dados" em cada app: visualizar, exportar
 **Módulo:** fundacao
 **Tipo:** integration
 **Pré-condições:**
+
 - Branch: `feat/P-9.3-performance`
 - Dependências: P-9.2 concluído
 - Env vars: nenhuma
@@ -4138,11 +4505,13 @@ Implementar compliance LGPD. Tela "Meus Dados" em cada app: visualizar, exportar
 Otimização de performance em todos os apps. Verificar: bundle size (code splitting por rota). Queries N+1 (Drizzle). Indexes faltantes em queries frequentes. Cache headers (stale-while-revalidate). Image optimization (Next.js Image). Font loading (next/font preload). Web Vitals targets: LCP < 2.5s, FID < 100ms, CLS < 0.1. Lazy loading de componentes pesados (gráficos, editores).
 
 **Arquivos permitidos para criação/edição:**
+
 - `packages/db/src/migrations/0022_indexes.sql` (se necessário)
 - Qualquer arquivo de página para lazy loading (limitado a imports)
 - `turbo.json` (se ajuste de build necessário)
 
 **Critérios de aceite:**
+
 - [ ] Nenhuma query N+1 identificada
 - [ ] Indexes criados para queries frequentes
 - [ ] Bundle size por app < 500KB initial load
@@ -4160,6 +4529,7 @@ Otimização de performance em todos os apps. Verificar: bundle size (code split
 **Módulo:** fundacao
 **Tipo:** ui
 **Pré-condições:**
+
 - Branch: `feat/P-9.4-copy-review`
 - Dependências: P-9.3 concluído
 - Env vars: nenhuma
@@ -4168,10 +4538,12 @@ Otimização de performance em todos os apps. Verificar: bundle size (code split
 Revisão de toda a microcopy do ecossistema para eliminar "cara de IA". Verificar: botões, labels, mensagens de erro, estados vazios, tooltips, placeholders. Substituir frases genéricas por copy institucional. Verificar citações bíblicas nos estados vazios (pertinentes ao contexto). Revisar português: sem anglicismos desnecessários, tom institucional mas acessível. Evitar exclamações genéricas e frases como "vamos lá!".
 
 **Arquivos permitidos para criação/edição:**
+
 - Qualquer arquivo `.tsx` contendo texto visível ao usuário (componentes e páginas)
 - `packages/ui/src/components/empty-state.tsx` (atualizar citações)
 
 **Critérios de aceite:**
+
 - [ ] Nenhuma frase genérica "cara de IA" encontrada
 - [ ] Citações bíblicas nos estados vazios pertinentes ao contexto de cada módulo
 - [ ] Tom institucional consistente em todos os apps
@@ -4191,6 +4563,7 @@ Ref: BRAIN.md seção 5 (princípios visuais — fugir do "cara de IA"). Públic
 **Módulo:** fundacao
 **Tipo:** config
 **Pré-condições:**
+
 - Branch: `main` (merge de todas as features)
 - Dependências: P-9.4 concluído
 - Env vars: todas as env vars de produção configuradas na Vercel
@@ -4199,12 +4572,14 @@ Ref: BRAIN.md seção 5 (princípios visuais — fugir do "cara de IA"). Públic
 Configurar deploy de produção. Vercel: 9 projetos separados (1 por app) com domínios customizados. DNS Cloudflare: subdomínios apontando para Vercel. Supabase: migration de produção aplicada. GitHub Actions: pipeline CI/CD (lint, typecheck, test em PR; deploy automático em merge na main). Sentry: DSN configurado em cada app. Monitoring: Better Stack com 9 monitores (1 por subdomínio). Seed de dados iniciais (2 super_admins, papéis, workspaces de tarefas, plano de contas padrão).
 
 **Arquivos permitidos para criação/edição:**
+
 - `.github/workflows/ci.yml`
 - `.github/workflows/deploy.yml`
 - `apps/*/vercel.json` (se necessário)
 - `packages/db/src/seed.ts`
 
 **Critérios de aceite:**
+
 - [ ] 9 apps deployados com subdomínios corretos
 - [ ] SSO funcional entre todos os subdomínios
 - [ ] CI/CD: lint + typecheck + test em PRs; deploy em merge
@@ -4220,18 +4595,18 @@ Configurar deploy de produção. Vercel: 9 projetos separados (1 por app) com do
 
 ## Legenda
 
-| Tipo | Descrição |
-|------|-----------|
-| `config` | Setup de infraestrutura, tooling, CI/CD |
-| `schema` | Definição de tipos, schemas de banco, migrations |
-| `ui` | Componentes e telas (nunca toca no banco — usa mocks) |
+| Tipo          | Descrição                                              |
+| ------------- | ------------------------------------------------------ |
+| `config`      | Setup de infraestrutura, tooling, CI/CD                |
+| `schema`      | Definição de tipos, schemas de banco, migrations       |
+| `ui`          | Componentes e telas (nunca toca no banco — usa mocks)  |
 | `integration` | Conecta UI ao backend, substitui mocks por dados reais |
 
-| Convenção | Regra |
-|-----------|-------|
-| Bloco A | P-X.1 a P-X.5 — UI com dados mockados |
-| Pausa | Validar telas com diretoria antes de prosseguir |
-| Bloco B | P-X.6 a P-X.12 — Backend + integração + testes |
-| Branch | `feat/P-X.Y-nome-curto` |
-| 1 sessão | 1 prompt. Nunca misturar prompts. |
-| BRAIN.md | Carregado em toda sessão como contexto fixo |
+| Convenção | Regra                                           |
+| --------- | ----------------------------------------------- |
+| Bloco A   | P-X.1 a P-X.5 — UI com dados mockados           |
+| Pausa     | Validar telas com diretoria antes de prosseguir |
+| Bloco B   | P-X.6 a P-X.12 — Backend + integração + testes  |
+| Branch    | `feat/P-X.Y-nome-curto`                         |
+| 1 sessão  | 1 prompt. Nunca misturar prompts.               |
+| BRAIN.md  | Carregado em toda sessão como contexto fixo     |

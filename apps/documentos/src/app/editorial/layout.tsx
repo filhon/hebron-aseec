@@ -47,7 +47,10 @@ export default function EditorialLayout({
             Conteúdo
           </div>
 
-          <Link href="/editorial/documentos" className="docs-editorial-nav-item">
+          <Link
+            href="/editorial/documentos"
+            className="docs-editorial-nav-item"
+          >
             <FileText size={15} aria-hidden="true" />
             Documentos
           </Link>
@@ -77,10 +80,7 @@ export default function EditorialLayout({
             Assinaturas
           </Link>
 
-          <Link
-            href="/editorial/auditoria"
-            className="docs-editorial-nav-item"
-          >
+          <Link href="/editorial/auditoria" className="docs-editorial-nav-item">
             <ClipboardList size={15} aria-hidden="true" />
             Auditoria
           </Link>

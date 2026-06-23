@@ -770,9 +770,7 @@ export function EditDocumentClient({ doc }: { doc: InitialDocData }) {
                         className={`docs-checklist-item ${item.done ? "done" : ""}`}
                       >
                         <span className="docs-checklist-check">
-                          {item.done && (
-                            <Check size={11} aria-hidden="true" />
-                          )}
+                          {item.done && <Check size={11} aria-hidden="true" />}
                         </span>
                         {item.label}
                       </li>

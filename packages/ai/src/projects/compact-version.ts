@@ -56,8 +56,7 @@ export const DEFAULT_COMPACT_TEMPLATE: CompactVersionTemplate = {
     },
     {
       name: "Impacto Esperado",
-      prompt:
-        "Descreva o impacto esperado do projeto em 2-3 frases objetivas.",
+      prompt: "Descreva o impacto esperado do projeto em 2-3 frases objetivas.",
       maxChars: 400,
     },
     {
@@ -90,14 +89,18 @@ export async function generateCompactVersion(
     `**Título:** ${input.title}`,
     `**Tipo:** ${input.tipo === "anual" ? "Projeto Anual" : "Projeto Pontual/Emergencial"}`,
     input.evaluationYear ? `**Ano:** ${input.evaluationYear}` : null,
-    input.organizationName ? `**Organização:** ${input.organizationName}` : null,
+    input.organizationName
+      ? `**Organização:** ${input.organizationName}`
+      : null,
     input.submitterName ? `**Responsável:** ${input.submitterName}` : null,
     input.ministryRegion ? `**Região:** ${input.ministryRegion}` : null,
     input.ministryArea ? `**País/Área:** ${input.ministryArea}` : null,
     input.objectives ? `**Objetivos:** ${input.objectives}` : null,
     input.justification ? `**Justificativa:** ${input.justification}` : null,
     input.targetAudience ? `**Público-alvo:** ${input.targetAudience}` : null,
-    input.expectedResults ? `**Resultados esperados:** ${input.expectedResults}` : null,
+    input.expectedResults
+      ? `**Resultados esperados:** ${input.expectedResults}`
+      : null,
     input.budgetTotal
       ? `**Orçamento total:** R$ ${parseFloat(input.budgetTotal).toFixed(2)}`
       : null,
