@@ -90,6 +90,27 @@ Semânticos preferenciais em componentes: `--brand`, `--brand-fg`, `--accent`, `
 
 ---
 
+## G5. Layouts nos prompts de integração (P-X.9)
+
+Todo prompt de integração **P-X.9** de qualquer módulo **deve incluir os arquivos de layout do módulo** (`(grupo)/layout.tsx`) na lista de arquivos permitidos, para:
+
+1. Converter o layout de `"use client"` para Server Component.
+2. Substituir `MOCK_USER` hardcoded por dados reais via `getAuthUser()`.
+3. Criar o componente `(grupo)/shell.tsx` Client Component correspondente (mantém `usePathname` e recebe `user` como prop).
+4. Conectar `logoutAction` ao `onLogout` do `AppShell`.
+
+**Padrão obrigatório (Server/Client split):**
+
+```
+(grupo)/layout.tsx   → Server Component: chama getAuthUser(), redireciona se null, renderiza <Shell user={user}>
+(grupo)/shell.tsx    → "use client": recebe user como prop, usa usePathname, renderiza AppShell
+actions/auth.ts      → logoutAction: signOut + redirect(CANONICAL_LOGIN_URL)
+```
+
+> **Origem:** lacuna identificada em P-2.9b (registrada em SESSIONS.md). Aplica-se a partir de P-3.9 (Financeiro) em diante.
+
+---
+
 # Fase 0 — Fundação
 
 ---
@@ -1773,6 +1794,53 @@ Substituir mocks por dados reais em todas as telas de Projetos. Dashboard submis
 - [x] Mock data removido
 - [x] Lint passa
 - [x] Types passam
+
+---
+
+### P-2.9b — Usuário Real no Header de Projetos (CORRETIVO)
+
+**Fase:** 2
+**Módulo:** projetos
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-2.9b-projetos-real-user`
+- Dependências: P-2.9 concluído
+- Env vars: `SUPABASE_URL`, `SUPABASE_ANON_KEY`
+
+**Problema que este prompt resolve (contexto):**
+Os layouts `(submissor)/layout.tsx` e `(diretoria)/layout.tsx` foram criados em P-2.3 com `MOCK_USER` hardcoded. O prompt P-2.9 não incluiu layouts nos arquivos permitidos, deixando nome e email do usuário no header sempre com dados fictícios. Este prompt corrige a lacuna aplicando o padrão Server/Client split aos layouts.
+
+**Escopo:**
+
+1. Estender `getAuthUser()` em `apps/projetos/src/lib/queries.ts` para também retornar `email` (disponível no objeto `user` do Supabase Auth — não requer query adicional ao banco).
+2. Criar `apps/projetos/src/app/(submissor)/shell.tsx` — componente `"use client"` que recebe `user` como prop e renderiza `AppShell` com `usePathname`. Migrar toda a lógica atual do layout para cá (seções de navegação, `profileHref`, etc.).
+3. Converter `apps/projetos/src/app/(submissor)/layout.tsx` em Server Component (remover `"use client"`): chamar `getAuthUser()`, redirecionar para `CANONICAL_LOGIN_URL` se `null`, renderizar `<SubmissorShell user={user}>`.
+4. Repetir os passos 2–3 para `(diretoria)`: criar `diretoria/shell.tsx`, converter `diretoria/layout.tsx`.
+5. Criar `apps/projetos/src/actions/auth.ts` com uma Server Action `logoutAction` que chama `supabase.auth.signOut()` e redireciona para `CANONICAL_LOGIN_URL`. Passar ao `onLogout` do shell em vez de `() => undefined`.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/projetos/src/lib/queries.ts` (adicionar `email` ao retorno de `getAuthUser`)
+- `apps/projetos/src/app/(submissor)/layout.tsx` (converter para Server Component)
+- `apps/projetos/src/app/(submissor)/shell.tsx` (criar — Client Component)
+- `apps/projetos/src/app/(diretoria)/layout.tsx` (converter para Server Component)
+- `apps/projetos/src/app/(diretoria)/shell.tsx` (criar — Client Component)
+- `apps/projetos/src/actions/auth.ts` (criar — `logoutAction`)
+
+**Critérios de aceite:**
+
+- [x] Header exibe nome e email reais do usuário autenticado
+- [x] `MOCK_USER` removido de ambos os layouts
+- [x] `layout.tsx` de ambos os grupos é Server Component (sem `"use client"`)
+- [x] `shell.tsx` de ambos os grupos é Client Component (mantém `usePathname`)
+- [x] Logout funcional: chama `signOut` e redireciona para login canônico
+- [x] Layout não autentica usuários não logados (redireciona para `CANONICAL_LOGIN_URL`)
+- [x] Lint passa
+- [x] Types passam
+
+**Notas:**
+Lacuna identificada: P-2.9 não incluiu layouts nos arquivos permitidos. Registrar em SESSIONS.md. Adicionar às **Instruções Globais** uma regra G5: "todo prompt P-X.9 (integração) deve incluir os arquivos de layout do módulo na lista de arquivos permitidos, para substituição de `MOCK_USER` por dados reais do usuário autenticado".
 
 ---
 

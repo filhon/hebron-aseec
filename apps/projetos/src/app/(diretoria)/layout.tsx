@@ -1,70 +1,15 @@
-"use client";
+import { redirect } from "next/navigation";
+import { CANONICAL_LOGIN_URL } from "@hebron/auth";
+import { getAuthUser } from "../../lib/queries";
+import DiretoriaShell from "./shell";
 
-import { usePathname } from "next/navigation";
-import { AppShell, BrandMark, type NavSection } from "@hebron/ui";
-import {
-  LayoutDashboard,
-  CalendarDays,
-  BarChart3,
-  Settings,
-} from "lucide-react";
-
-const SECTIONS: NavSection[] = [
-  {
-    items: [
-      {
-        label: "Pipeline",
-        href: "/pipeline",
-        icon: LayoutDashboard,
-        exact: true,
-      },
-      {
-        label: "Pauta da Reunião",
-        href: "/reuniao",
-        icon: CalendarDays,
-      },
-      {
-        label: "Relatórios",
-        href: "/relatorios-dir",
-        icon: BarChart3,
-      },
-    ],
-  },
-  {
-    title: "Sistema",
-    items: [
-      {
-        label: "Configurações",
-        href: "/configuracoes",
-        icon: Settings,
-      },
-    ],
-  },
-];
-
-const MOCK_USER = {
-  name: "Dir. Fábio Ribeiro",
-  email: "fabio.ribeiro@hebronaseec.com.br",
-};
-
-export default function DiretoriaLayout({
+export default async function DiretoriaLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const path = usePathname();
+  const user = await getAuthUser();
+  if (!user) redirect(CANONICAL_LOGIN_URL);
 
-  return (
-    <AppShell
-      sections={SECTIONS}
-      user={MOCK_USER}
-      profileHref="/configuracoes"
-      onLogout={() => undefined}
-      currentPath={path}
-      appName="Projetos"
-      logo={<BrandMark showName={false} />}
-    >
-      {children}
-    </AppShell>
-  );
+  return <DiretoriaShell user={user}>{children}</DiretoriaShell>;
 }

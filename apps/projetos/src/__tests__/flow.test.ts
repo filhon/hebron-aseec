@@ -58,24 +58,72 @@ const BUDGET_LIMIT = 50000;
 
 beforeAll(async () => {
   const userFixtures = [
-    { id: IDS.users.superAdmin, email: "flow-super@test.hebron", fullName: "Flow SuperAdmin" },
-    { id: IDS.users.diretor1, email: "flow-dir1@test.hebron", fullName: "Flow Diretor 1" },
-    { id: IDS.users.diretor2, email: "flow-dir2@test.hebron", fullName: "Flow Diretor 2" },
-    { id: IDS.users.conselheiro1, email: "flow-cons1@test.hebron", fullName: "Flow Conselheiro 1" },
-    { id: IDS.users.submissor1, email: "flow-sub1@test.hebron", fullName: "Flow Submissor 1" },
-    { id: IDS.users.submissor2, email: "flow-sub2@test.hebron", fullName: "Flow Submissor 2" },
+    {
+      id: IDS.users.superAdmin,
+      email: "flow-super@test.hebron",
+      fullName: "Flow SuperAdmin",
+    },
+    {
+      id: IDS.users.diretor1,
+      email: "flow-dir1@test.hebron",
+      fullName: "Flow Diretor 1",
+    },
+    {
+      id: IDS.users.diretor2,
+      email: "flow-dir2@test.hebron",
+      fullName: "Flow Diretor 2",
+    },
+    {
+      id: IDS.users.conselheiro1,
+      email: "flow-cons1@test.hebron",
+      fullName: "Flow Conselheiro 1",
+    },
+    {
+      id: IDS.users.submissor1,
+      email: "flow-sub1@test.hebron",
+      fullName: "Flow Submissor 1",
+    },
+    {
+      id: IDS.users.submissor2,
+      email: "flow-sub2@test.hebron",
+      fullName: "Flow Submissor 2",
+    },
   ];
   for (const u of userFixtures) {
     await db.insert(users).values(u).onConflictDoNothing();
   }
 
   const roleSeed = [
-    { userId: IDS.users.superAdmin, role: "super_admin" as const, grantedBy: IDS.users.superAdmin },
-    { userId: IDS.users.diretor1, role: "diretor" as const, grantedBy: IDS.users.superAdmin },
-    { userId: IDS.users.diretor2, role: "diretor" as const, grantedBy: IDS.users.superAdmin },
-    { userId: IDS.users.conselheiro1, role: "conselheiro" as const, grantedBy: IDS.users.superAdmin },
-    { userId: IDS.users.submissor1, role: "submissor" as const, grantedBy: IDS.users.superAdmin },
-    { userId: IDS.users.submissor2, role: "submissor" as const, grantedBy: IDS.users.superAdmin },
+    {
+      userId: IDS.users.superAdmin,
+      role: "super_admin" as const,
+      grantedBy: IDS.users.superAdmin,
+    },
+    {
+      userId: IDS.users.diretor1,
+      role: "diretor" as const,
+      grantedBy: IDS.users.superAdmin,
+    },
+    {
+      userId: IDS.users.diretor2,
+      role: "diretor" as const,
+      grantedBy: IDS.users.superAdmin,
+    },
+    {
+      userId: IDS.users.conselheiro1,
+      role: "conselheiro" as const,
+      grantedBy: IDS.users.superAdmin,
+    },
+    {
+      userId: IDS.users.submissor1,
+      role: "submissor" as const,
+      grantedBy: IDS.users.superAdmin,
+    },
+    {
+      userId: IDS.users.submissor2,
+      role: "submissor" as const,
+      grantedBy: IDS.users.superAdmin,
+    },
   ];
   for (const r of roleSeed) {
     await db.insert(roleAssignments).values(r).onConflictDoNothing();
@@ -83,13 +131,20 @@ beforeAll(async () => {
 
   await db
     .insert(organizations)
-    .values({ id: IDS.orgs.orgFlow, nome: "Org Flow Test", createdBy: IDS.users.submissor1 })
+    .values({
+      id: IDS.orgs.orgFlow,
+      nome: "Org Flow Test",
+      createdBy: IDS.users.submissor1,
+    })
     .onConflictDoNothing();
 
-  await db.insert(organizationMembers).values([
-    { organizationId: IDS.orgs.orgFlow, userId: IDS.users.submissor1 },
-    { organizationId: IDS.orgs.orgFlow, userId: IDS.users.submissor2 },
-  ]).onConflictDoNothing();
+  await db
+    .insert(organizationMembers)
+    .values([
+      { organizationId: IDS.orgs.orgFlow, userId: IDS.users.submissor1 },
+      { organizationId: IDS.orgs.orgFlow, userId: IDS.users.submissor2 },
+    ])
+    .onConflictDoNothing();
 });
 
 afterAll(async () => {
@@ -106,7 +161,9 @@ afterAll(async () => {
     await db.delete(projects).where(eq(projects.id, pid));
   }
 
-  await db.delete(systemSettings).where(eq(systemSettings.key, BUDGET_SETTING_KEY));
+  await db
+    .delete(systemSettings)
+    .where(eq(systemSettings.key, BUDGET_SETTING_KEY));
   await db
     .delete(organizationMembers)
     .where(eq(organizationMembers.organizationId, IDS.orgs.orgFlow));
@@ -233,7 +290,13 @@ describe("Fluxo — Ciclo de vida completo do projeto anual", () => {
       stage: "homologacao",
       data: {
         _source: "test:voteComplete",
-        result: { totalVoted: 2, inFavor: 2, against: 0, quorumMet: true, approved: true },
+        result: {
+          totalVoted: 2,
+          inFavor: 2,
+          against: 0,
+          quorumMet: true,
+          approved: true,
+        },
       },
       createdBy: IDS.users.diretor1,
     });
@@ -256,9 +319,27 @@ describe("Fluxo — Ciclo de vida completo do projeto anual", () => {
 
     // Simula generatePaymentSchedule (12000 / 3 parcelas = 4000/mês)
     await db.insert(paymentSchedules).values([
-      { projectId: FLOW_PROJECT_ID, amount: "4000.00", month: 1, dueDate: "2026-01-01", status: "pendente" },
-      { projectId: FLOW_PROJECT_ID, amount: "4000.00", month: 2, dueDate: "2026-02-01", status: "pendente" },
-      { projectId: FLOW_PROJECT_ID, amount: "4000.00", month: 3, dueDate: "2026-03-01", status: "pendente" },
+      {
+        projectId: FLOW_PROJECT_ID,
+        amount: "4000.00",
+        month: 1,
+        dueDate: "2026-01-01",
+        status: "pendente",
+      },
+      {
+        projectId: FLOW_PROJECT_ID,
+        amount: "4000.00",
+        month: 2,
+        dueDate: "2026-02-01",
+        status: "pendente",
+      },
+      {
+        projectId: FLOW_PROJECT_ID,
+        amount: "4000.00",
+        month: 3,
+        dueDate: "2026-03-01",
+        status: "pendente",
+      },
     ]);
 
     const [project] = await db
@@ -510,7 +591,8 @@ describe("Contestação — Limites e restrições", () => {
     await db.insert(contestations).values({
       projectId: CONTEST_PROJECT_ID,
       userId: IDS.users.conselheiro1,
-      justification: "Orçamento sem detalhamento adequado — segunda contestação",
+      justification:
+        "Orçamento sem detalhamento adequado — segunda contestação",
       status: "pending",
     });
 
@@ -592,7 +674,9 @@ describe("Imutabilidade — Soft-delete preserva audit trail", () => {
     const active = await db
       .select()
       .from(projects)
-      .where(and(eq(projects.id, DELETE_PROJECT_ID), isNull(projects.deletedAt)));
+      .where(
+        and(eq(projects.id, DELETE_PROJECT_ID), isNull(projects.deletedAt)),
+      );
 
     expect(active).toHaveLength(0);
   });

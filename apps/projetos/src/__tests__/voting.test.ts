@@ -93,22 +93,62 @@ function panicApproved(inFavor: number, against: number): boolean {
 
 beforeAll(async () => {
   const userFixtures = [
-    { id: IDS.users.superAdmin, email: "vote-super@test.hebron", fullName: "Vote SuperAdmin" },
-    { id: IDS.users.diretor1, email: "vote-dir1@test.hebron", fullName: "Vote Diretor 1" },
-    { id: IDS.users.diretor2, email: "vote-dir2@test.hebron", fullName: "Vote Diretor 2" },
-    { id: IDS.users.conselheiro1, email: "vote-cons1@test.hebron", fullName: "Vote Conselheiro 1" },
-    { id: IDS.users.submissor1, email: "vote-sub1@test.hebron", fullName: "Vote Submissor 1" },
+    {
+      id: IDS.users.superAdmin,
+      email: "vote-super@test.hebron",
+      fullName: "Vote SuperAdmin",
+    },
+    {
+      id: IDS.users.diretor1,
+      email: "vote-dir1@test.hebron",
+      fullName: "Vote Diretor 1",
+    },
+    {
+      id: IDS.users.diretor2,
+      email: "vote-dir2@test.hebron",
+      fullName: "Vote Diretor 2",
+    },
+    {
+      id: IDS.users.conselheiro1,
+      email: "vote-cons1@test.hebron",
+      fullName: "Vote Conselheiro 1",
+    },
+    {
+      id: IDS.users.submissor1,
+      email: "vote-sub1@test.hebron",
+      fullName: "Vote Submissor 1",
+    },
   ];
   for (const u of userFixtures) {
     await db.insert(users).values(u).onConflictDoNothing();
   }
 
   const roleSeed = [
-    { userId: IDS.users.superAdmin, role: "super_admin" as const, grantedBy: IDS.users.superAdmin },
-    { userId: IDS.users.diretor1, role: "diretor" as const, grantedBy: IDS.users.superAdmin },
-    { userId: IDS.users.diretor2, role: "diretor" as const, grantedBy: IDS.users.superAdmin },
-    { userId: IDS.users.conselheiro1, role: "conselheiro" as const, grantedBy: IDS.users.superAdmin },
-    { userId: IDS.users.submissor1, role: "submissor" as const, grantedBy: IDS.users.superAdmin },
+    {
+      userId: IDS.users.superAdmin,
+      role: "super_admin" as const,
+      grantedBy: IDS.users.superAdmin,
+    },
+    {
+      userId: IDS.users.diretor1,
+      role: "diretor" as const,
+      grantedBy: IDS.users.superAdmin,
+    },
+    {
+      userId: IDS.users.diretor2,
+      role: "diretor" as const,
+      grantedBy: IDS.users.superAdmin,
+    },
+    {
+      userId: IDS.users.conselheiro1,
+      role: "conselheiro" as const,
+      grantedBy: IDS.users.superAdmin,
+    },
+    {
+      userId: IDS.users.submissor1,
+      role: "submissor" as const,
+      grantedBy: IDS.users.superAdmin,
+    },
   ];
   for (const r of roleSeed) {
     await db.insert(roleAssignments).values(r).onConflictDoNothing();
@@ -116,40 +156,50 @@ beforeAll(async () => {
 
   await db
     .insert(organizations)
-    .values({ id: IDS.orgs.orgVoting, nome: "Org Voting Test", createdBy: IDS.users.submissor1 })
+    .values({
+      id: IDS.orgs.orgVoting,
+      nome: "Org Voting Test",
+      createdBy: IDS.users.submissor1,
+    })
     .onConflictDoNothing();
 
   await db
     .insert(organizationMembers)
-    .values({ organizationId: IDS.orgs.orgVoting, userId: IDS.users.submissor1 })
+    .values({
+      organizationId: IDS.orgs.orgVoting,
+      userId: IDS.users.submissor1,
+    })
     .onConflictDoNothing();
 
-  await db.insert(projects).values([
-    {
-      id: IDS.projects.projectVoting,
-      title: "Projeto Votação Test",
-      tipo: "anual",
-      stage: "votacao",
-      organizationId: IDS.orgs.orgVoting,
-      submitterId: IDS.users.submissor1,
-      evaluationYear: 2026,
-      budgetTotal: "10000.00",
-      parcelas: 3,
-      meses: 3,
-    },
-    {
-      id: IDS.projects.projectPanic,
-      title: "Projeto Pânico Test",
-      tipo: "anual",
-      stage: "votacao",
-      organizationId: IDS.orgs.orgVoting,
-      submitterId: IDS.users.submissor1,
-      evaluationYear: 2026,
-      budgetTotal: "15000.00",
-      parcelas: 3,
-      meses: 3,
-    },
-  ]).onConflictDoNothing();
+  await db
+    .insert(projects)
+    .values([
+      {
+        id: IDS.projects.projectVoting,
+        title: "Projeto Votação Test",
+        tipo: "anual",
+        stage: "votacao",
+        organizationId: IDS.orgs.orgVoting,
+        submitterId: IDS.users.submissor1,
+        evaluationYear: 2026,
+        budgetTotal: "10000.00",
+        parcelas: 3,
+        meses: 3,
+      },
+      {
+        id: IDS.projects.projectPanic,
+        title: "Projeto Pânico Test",
+        tipo: "anual",
+        stage: "votacao",
+        organizationId: IDS.orgs.orgVoting,
+        submitterId: IDS.users.submissor1,
+        evaluationYear: 2026,
+        budgetTotal: "15000.00",
+        parcelas: 3,
+        meses: 3,
+      },
+    ])
+    .onConflictDoNothing();
 
   // Grants para os testes de RLS de votos
   await sql`GRANT USAGE ON SCHEMA projetos TO authenticated`;
@@ -165,13 +215,15 @@ afterAll(async () => {
   await sql`REVOKE USAGE ON SCHEMA projetos FROM authenticated`;
 
   // Cascade delete votes, versions via project FK
-  await db.delete(projects).where(
-    inArray(projects.id, Object.values(IDS.projects)),
-  );
+  await db
+    .delete(projects)
+    .where(inArray(projects.id, Object.values(IDS.projects)));
   await db
     .delete(organizationMembers)
     .where(eq(organizationMembers.organizationId, IDS.orgs.orgVoting));
-  await db.delete(organizations).where(eq(organizations.id, IDS.orgs.orgVoting));
+  await db
+    .delete(organizations)
+    .where(eq(organizations.id, IDS.orgs.orgVoting));
   for (const id of Object.values(IDS.users)) {
     await db.delete(roleAssignments).where(eq(roleAssignments.userId, id));
   }
@@ -273,12 +325,14 @@ describe("Votação — Botão de pânico (force-close sem quórum)", () => {
 
 describe("Votação — DB: 1 voto por pessoa por projeto (UNIQUE constraint)", () => {
   afterEach(async () => {
-    await db.delete(votes).where(
-      and(
-        eq(votes.projectId, IDS.projects.projectVoting),
-        eq(votes.userId, IDS.users.diretor1),
-      ),
-    );
+    await db
+      .delete(votes)
+      .where(
+        and(
+          eq(votes.projectId, IDS.projects.projectVoting),
+          eq(votes.userId, IDS.users.diretor1),
+        ),
+      );
   });
 
   it("primeiro voto é inserido com sucesso", async () => {
@@ -336,12 +390,20 @@ describe("Votação — DB: 1 voto por pessoa por projeto (UNIQUE constraint)", 
   it("usuários diferentes podem votar no mesmo projeto", async () => {
     await db
       .insert(votes)
-      .values({ projectId: IDS.projects.projectVoting, userId: IDS.users.diretor1, value: true })
+      .values({
+        projectId: IDS.projects.projectVoting,
+        userId: IDS.users.diretor1,
+        value: true,
+      })
       .onConflictDoNothing();
 
     await db
       .insert(votes)
-      .values({ projectId: IDS.projects.projectVoting, userId: IDS.users.diretor2, value: false })
+      .values({
+        projectId: IDS.projects.projectVoting,
+        userId: IDS.users.diretor2,
+        value: false,
+      })
       .onConflictDoNothing();
 
     const allVotes = await db
@@ -352,9 +414,14 @@ describe("Votação — DB: 1 voto por pessoa por projeto (UNIQUE constraint)", 
     expect(allVotes.length).toBeGreaterThanOrEqual(2);
 
     // Cleanup diretor2's vote too
-    await db.delete(votes).where(
-      and(eq(votes.projectId, IDS.projects.projectVoting), eq(votes.userId, IDS.users.diretor2)),
-    );
+    await db
+      .delete(votes)
+      .where(
+        and(
+          eq(votes.projectId, IDS.projects.projectVoting),
+          eq(votes.userId, IDS.users.diretor2),
+        ),
+      );
   });
 });
 
@@ -362,14 +429,27 @@ describe("Votação — DB: 1 voto por pessoa por projeto (UNIQUE constraint)", 
 
 describe("Votação — RLS: cédula secreta", () => {
   beforeAll(async () => {
-    await db.insert(votes).values([
-      { projectId: IDS.projects.projectPanic, userId: IDS.users.diretor1, value: true },
-      { projectId: IDS.projects.projectPanic, userId: IDS.users.diretor2, value: false },
-    ]).onConflictDoNothing();
+    await db
+      .insert(votes)
+      .values([
+        {
+          projectId: IDS.projects.projectPanic,
+          userId: IDS.users.diretor1,
+          value: true,
+        },
+        {
+          projectId: IDS.projects.projectPanic,
+          userId: IDS.users.diretor2,
+          value: false,
+        },
+      ])
+      .onConflictDoNothing();
   });
 
   afterAll(async () => {
-    await db.delete(votes).where(eq(votes.projectId, IDS.projects.projectPanic));
+    await db
+      .delete(votes)
+      .where(eq(votes.projectId, IDS.projects.projectPanic));
   });
 
   it("submissor NÃO vê votos", async () => {

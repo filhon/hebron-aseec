@@ -8,13 +8,7 @@ import {
   FileText,
 } from "lucide-react";
 import { getMeetingBIData } from "../../../lib/queries";
-
-const BRL = new Intl.NumberFormat("pt-BR", {
-  style: "currency",
-  currency: "BRL",
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 0,
-});
+import { BRL } from "../../../lib/stage-utils";
 
 export default async function ReuniaoPage() {
   const bi = await getMeetingBIData();

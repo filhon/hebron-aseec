@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AlertCircle, ArrowRight, ChevronRight } from "lucide-react";
 import { redirect } from "next/navigation";
+import { CANONICAL_LOGIN_URL } from "@hebron/auth";
 import {
   getAuthUser,
   getSubmissorDashboard,
@@ -8,15 +9,9 @@ import {
   type DashboardPayment,
   type DashboardReport,
 } from "../../lib/queries";
+import { BRL, STAGE_LABELS, getStageBadge } from "../../lib/stage-utils";
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
-
-const BRL = new Intl.NumberFormat("pt-BR", {
-  style: "currency",
-  currency: "BRL",
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 0,
-});
 
 function fmtMil(n: number) {
   if (n >= 1000) return `R$ ${Math.round(n / 1000)} mil`;
@@ -25,50 +20,6 @@ function fmtMil(n: number) {
 
 // ─── Budget limit (set by admin; finance module not yet built) ────────────────
 const ORCAMENTO_ANUAL_LIMITE = 150_000;
-
-// ─── Stage display ────────────────────────────────────────────────────────────
-
-const STAGE_LABELS: Record<string, string> = {
-  rascunho: "Rascunho",
-  validacao: "Em Validação",
-  votacao: "Em Votação",
-  homologacao: "Homologação",
-  aprovado: "Aprovado",
-  reprovado: "Reprovado",
-  em_execucao: "Em Execução",
-  concluido: "Concluído",
-  cancelado: "Cancelado",
-};
-
-type BadgeStyle = { bg: string; color: string };
-
-function stageBadge(stage: string): BadgeStyle {
-  switch (stage) {
-    case "em_execucao":
-      return { bg: "rgba(42, 56, 160, 0.12)", color: "var(--hb-blue-soft)" };
-    case "votacao":
-      return { bg: "rgba(32, 44, 133, 0.10)", color: "var(--hb-blue)" };
-    case "validacao":
-      return {
-        bg: "rgba(7, 180, 231, 0.12)",
-        color: "var(--hb-cyan-darker)",
-      };
-    case "homologacao":
-      return { bg: "rgba(234, 90, 6, 0.10)", color: "var(--hb-orange-deep)" };
-    case "aprovado":
-      return { bg: "rgba(130, 163, 23, 0.20)", color: "#5f7510" };
-    case "concluido":
-      return { bg: "rgba(130, 163, 23, 0.20)", color: "#5f7510" };
-    case "reprovado":
-    case "cancelado":
-      return {
-        bg: "var(--color-destructive-muted)",
-        color: "var(--color-destructive)",
-      };
-    default:
-      return { bg: "var(--hb-gray-50)", color: "var(--hb-gray-400)" };
-  }
-}
 
 function executionProgress(p: DashboardProject): number | null {
   if (p.stage !== "em_execucao") return null;
@@ -80,7 +31,7 @@ function executionProgress(p: DashboardProject): number | null {
 
 export default async function SubmissorDashboard() {
   const authUser = await getAuthUser();
-  if (!authUser) redirect("/login");
+  if (!authUser) redirect(CANONICAL_LOGIN_URL);
 
   const data = await getSubmissorDashboard(authUser.id);
 
@@ -110,15 +61,19 @@ export default async function SubmissorDashboard() {
     Math.round((orcamentoComprometido / ORCAMENTO_ANUAL_LIMITE) * 100),
   );
 
-  const institutionName = data.projects[0]?.orgNome ?? null;
+  const institution = data.institutions[0] ?? null;
+  const institutionName = institution?.nome ?? null;
 
-  const fullName = authUser.fullName ?? "Usuário";
-  const parts = fullName.split(" ");
-  const firstName =
-    parts.length >= 2 &&
-    /^(Pr\.|Ev\.|Dir\.|Pastor|Diac\.)$/.test(parts[0] ?? "")
-      ? `${parts[0]} ${parts[1]}`
-      : (parts[0] ?? fullName);
+  const fullName = authUser.fullName;
+  const firstName = fullName
+    ? (() => {
+        const parts = fullName.split(" ");
+        return parts.length >= 2 &&
+          /^(Pr\.|Ev\.|Dir\.|Pastor|Diac\.)$/.test(parts[0] ?? "")
+          ? `${parts[0]} ${parts[1]}`
+          : (parts[0] ?? fullName);
+      })()
+    : null;
 
   const relPart =
     pendingReports.length > 0
@@ -164,7 +119,7 @@ export default async function SubmissorDashboard() {
               color: "var(--fg)",
             }}
           >
-            Paz do Senhor, {firstName}.
+            {firstName ? `Paz do Senhor, ${firstName}.` : "Paz do Senhor!"}
           </h1>
 
           {(relPart ?? votPart) ? (
@@ -199,7 +154,7 @@ export default async function SubmissorDashboard() {
             fontWeight: 600,
             fontSize: 15,
             padding: "13px 22px",
-            borderRadius: 99,
+            borderRadius: "var(--radius-pill)",
             boxShadow: "var(--shadow-sm)",
             whiteSpace: "nowrap",
             flexShrink: 0,
@@ -214,7 +169,9 @@ export default async function SubmissorDashboard() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
+          gridTemplateColumns: institution
+            ? "repeat(4, 1fr)"
+            : "repeat(3, 1fr)",
           gap: 16,
           marginBottom: 24,
         }}
@@ -248,13 +205,15 @@ export default async function SubmissorDashboard() {
               : `${pendingReports.length > 1 ? "Vencem" : "Vence"} em breve`
           }
         />
-        <StatCard
-          dot="var(--hb-green)"
-          label="Orçamento disponível"
-          valueFmt={fmtMil(orcamentoDisponivel)}
-          sub={`de ${fmtMil(ORCAMENTO_ANUAL_LIMITE)} no ano`}
-          compact
-        />
+        {institution && (
+          <StatCard
+            dot="var(--hb-green)"
+            label="Orçamento disponível"
+            valueFmt={fmtMil(orcamentoDisponivel)}
+            sub={`de ${fmtMil(ORCAMENTO_ANUAL_LIMITE)} no ano`}
+            compact
+          />
+        )}
       </div>
 
       {/* ── Main 2-col layout ─────────────────────────────────────────────── */}
@@ -312,7 +271,7 @@ export default async function SubmissorDashboard() {
             <EmptyProjects />
           ) : (
             data.projects.map((p, i) => {
-              const badge = stageBadge(p.stage);
+              const badge = getStageBadge(p.stage);
               const progress = executionProgress(p);
               const paidStr =
                 p.stage === "em_execucao" && p.totalSchedules > 0
@@ -344,7 +303,7 @@ export default async function SubmissorDashboard() {
                       gap: 16,
                       alignItems: "center",
                       padding: 16,
-                      borderRadius: 16,
+                      borderRadius: "var(--radius-md)",
                       textDecoration: "none",
                       transition: "background-color 120ms",
                     }}
@@ -375,9 +334,9 @@ export default async function SubmissorDashboard() {
                             letterSpacing: "0.04em",
                             textTransform: "uppercase",
                             padding: "3px 9px",
-                            borderRadius: 99,
+                            borderRadius: "var(--radius-pill)",
                             background: badge.bg,
-                            color: badge.color,
+                            color: badge.text,
                             flexShrink: 0,
                           }}
                         >
@@ -401,7 +360,7 @@ export default async function SubmissorDashboard() {
                           style={{
                             height: 6,
                             background: "var(--surface-alt)",
-                            borderRadius: 99,
+                            borderRadius: "var(--radius-pill)",
                             marginTop: 10,
                             overflow: "hidden",
                           }}
@@ -411,7 +370,7 @@ export default async function SubmissorDashboard() {
                               width: `${progress}%`,
                               height: "100%",
                               background: "var(--hb-green)",
-                              borderRadius: 99,
+                              borderRadius: "var(--radius-pill)",
                             }}
                           />
                         </div>
@@ -482,86 +441,92 @@ export default async function SubmissorDashboard() {
           </section>
 
           {/* Orçamento da instituição */}
-          <section
-            style={{
-              background: "var(--surface)",
-              border: "1px solid var(--border)",
-              borderRadius: "var(--radius-lg)",
-              boxShadow: "var(--shadow-sm)",
-              padding: 20,
-            }}
-          >
-            <h2
+          {institution && (
+            <section
               style={{
-                fontFamily: "var(--font-display)",
-                fontWeight: 700,
-                fontSize: 16,
-                margin: "0 0 6px",
-                color: "var(--fg)",
+                background: "var(--surface)",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--radius-lg)",
+                boxShadow: "var(--shadow-sm)",
+                padding: 20,
               }}
             >
-              Orçamento da instituição
-            </h2>
-            <p
-              style={{
-                fontSize: 12,
-                color: "var(--fg-muted)",
-                marginBottom: 14,
-              }}
-            >
-              Ano-calendário {currentYear}
-            </p>
-
-            <div
-              style={{
-                display: "flex",
-                alignItems: "baseline",
-                justifyContent: "space-between",
-                marginBottom: 8,
-              }}
-            >
-              <span
+              <h2
                 style={{
                   fontFamily: "var(--font-display)",
-                  fontWeight: 800,
-                  fontSize: 26,
+                  fontWeight: 700,
+                  fontSize: 16,
+                  margin: "0 0 6px",
                   color: "var(--fg)",
                 }}
               >
-                {fmtMil(orcamentoComprometido)}
-              </span>
-              <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>
-                de {fmtMil(ORCAMENTO_ANUAL_LIMITE)}
-              </span>
-            </div>
+                Orçamento da instituição
+              </h2>
+              <p
+                style={{
+                  fontSize: 12,
+                  color: "var(--fg-muted)",
+                  marginBottom: 14,
+                }}
+              >
+                Ano-calendário {currentYear}
+              </p>
 
-            <div
-              style={{
-                height: 10,
-                background: "var(--surface-alt)",
-                borderRadius: 99,
-                overflow: "hidden",
-              }}
-            >
               <div
                 style={{
-                  width: `${pctComprometido}%`,
-                  height: "100%",
-                  background:
-                    "linear-gradient(90deg, var(--hb-blue), var(--hb-cyan))",
-                  borderRadius: 99,
+                  display: "flex",
+                  alignItems: "baseline",
+                  justifyContent: "space-between",
+                  marginBottom: 8,
                 }}
-              />
-            </div>
+              >
+                <span
+                  style={{
+                    fontFamily: "var(--font-display)",
+                    fontWeight: 800,
+                    fontSize: 26,
+                    color: "var(--fg)",
+                  }}
+                >
+                  {fmtMil(orcamentoComprometido)}
+                </span>
+                <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>
+                  de {fmtMil(ORCAMENTO_ANUAL_LIMITE)}
+                </span>
+              </div>
 
-            <p
-              style={{ fontSize: 12, color: "var(--fg-muted)", marginTop: 10 }}
-            >
-              {pctComprometido}% comprometido.
-              {pctComprometido >= 90 &&
-                " Acima do teto, a submissão é bloqueada — contate o administrador."}
-            </p>
-          </section>
+              <div
+                style={{
+                  height: 10,
+                  background: "var(--surface-alt)",
+                  borderRadius: "var(--radius-pill)",
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    width: `${pctComprometido}%`,
+                    height: "100%",
+                    background:
+                      "linear-gradient(90deg, var(--hb-blue), var(--hb-cyan))",
+                    borderRadius: "var(--radius-pill)",
+                  }}
+                />
+              </div>
+
+              <p
+                style={{
+                  fontSize: 12,
+                  color: "var(--fg-muted)",
+                  marginTop: 10,
+                }}
+              >
+                {pctComprometido}% comprometido.
+                {pctComprometido >= 90 &&
+                  " Acima do teto, a submissão é bloqueada — contate o administrador."}
+              </p>
+            </section>
+          )}
 
           {/* Relatório pendente alert */}
           {pendingReports.length > 0 && (
@@ -616,7 +581,7 @@ function StatCard({
           style={{
             width: 9,
             height: 9,
-            borderRadius: 99,
+            borderRadius: "var(--radius-pill)",
             background: dot,
             flexShrink: 0,
           }}
@@ -791,7 +756,7 @@ function PendingReportAlert({
           fontWeight: 600,
           fontSize: 14,
           padding: 11,
-          borderRadius: 99,
+          borderRadius: "var(--radius-pill)",
         }}
       >
         Enviar relatório
@@ -846,7 +811,7 @@ function EmptyProjects() {
           fontWeight: 600,
           fontSize: 14,
           padding: "10px 20px",
-          borderRadius: 99,
+          borderRadius: "var(--radius-pill)",
         }}
       >
         Submeter meu primeiro projeto

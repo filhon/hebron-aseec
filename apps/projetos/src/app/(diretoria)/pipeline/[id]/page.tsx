@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { CANONICAL_LOGIN_URL } from "@hebron/auth";
 import {
   ChevronLeft,
   MapPin,
@@ -10,81 +11,25 @@ import {
   Sparkles,
   CheckCircle2,
   XCircle,
+  Building2,
 } from "lucide-react";
 import { getAuthUser, getDirectorProjectDetail } from "../../../../lib/queries";
 import { ScoreIndicator } from "../../../../components/score-indicator";
 import { EvaluationCard } from "../../../../components/evaluation-card";
 import { VotePanelWrapper } from "../../../../components/vote-panel-wrapper";
 import { ProjectTimeline } from "../../../../components/project-timeline";
+import {
+  BRL,
+  STAGE_LABELS,
+  CATEGORY_LABELS,
+  getStageBadge,
+} from "../../../../lib/stage-utils";
 import type {
   Evaluation,
   ProjectVersion,
   ProjectStage,
   VoteSummary,
 } from "@hebron/types";
-
-const BRL = new Intl.NumberFormat("pt-BR", {
-  style: "currency",
-  currency: "BRL",
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 0,
-});
-
-const STAGE_LABELS: Record<string, string> = {
-  rascunho: "Rascunho",
-  validacao: "Validação",
-  votacao: "Votação",
-  homologacao: "Homologação",
-  aprovado: "Aprovado",
-  reprovado: "Reprovado",
-  em_execucao: "Em Execução",
-  concluido: "Concluído",
-  cancelado: "Cancelado",
-};
-
-const STAGE_COLORS: Record<string, { bg: string; text: string }> = {
-  rascunho: { bg: "var(--hb-gray-50)", text: "var(--hb-gray-400)" },
-  validacao: { bg: "var(--hb-cyan-muted)", text: "var(--hb-cyan-darker)" },
-  votacao: { bg: "var(--brand-muted)", text: "var(--hb-blue)" },
-  homologacao: { bg: "var(--hb-orange-muted)", text: "var(--hb-orange-deep)" },
-  aprovado: { bg: "var(--hb-green-muted)", text: "var(--hb-green-fg)" },
-  reprovado: {
-    bg: "var(--color-destructive-muted)",
-    text: "var(--color-destructive)",
-  },
-  em_execucao: { bg: "var(--hb-cyan-muted)", text: "var(--hb-cyan-fg)" },
-  concluido: { bg: "var(--hb-green-muted)", text: "var(--hb-green-fg)" },
-  cancelado: {
-    bg: "var(--color-destructive-muted)",
-    text: "var(--hb-red-deep)",
-  },
-};
-
-const CATEGORY_LABELS: Record<string, string> = {
-  evangelismo: "Evangelismo",
-  missoes_transculturais: "Missões Transculturais",
-  educacao_crista: "Educação Cristã",
-  assistencia_social: "Assistência Social",
-  saude: "Saúde",
-  capacitacao_lideranca: "Capacitação de Liderança",
-  infraestrutura_ministerial: "Infraestrutura Ministerial",
-  plantacao_de_igrejas: "Plantação de Igrejas",
-  discipulado: "Discipulado",
-  outros: "Outros",
-};
-
-function AIRiskItem({ text }: { text: string }) {
-  return (
-    <div className="flex items-start gap-2.5 py-2.5 border-b border-(--border) last:border-0">
-      <AlertTriangle
-        className="w-4 h-4 shrink-0 mt-0.5"
-        style={{ color: "var(--hb-orange)" }}
-        aria-hidden
-      />
-      <p className="text-sm text-(--fg) leading-relaxed">{text}</p>
-    </div>
-  );
-}
 
 export default async function DirectorProjectDetailPage({
   params,
@@ -94,15 +39,12 @@ export default async function DirectorProjectDetailPage({
   const { id } = await params;
 
   const authUser = await getAuthUser();
-  if (!authUser) redirect("/login");
+  if (!authUser) redirect(CANONICAL_LOGIN_URL);
 
   const project = await getDirectorProjectDetail(id, authUser.id);
   if (!project) notFound();
 
-  const stage = STAGE_COLORS[project.stage] ?? {
-    bg: "var(--hb-gray-50)",
-    text: "var(--hb-gray-400)",
-  };
+  const stage = getStageBadge(project.stage);
 
   const isAnnual = project.tipo === "anual";
   const snap = project.snapshot;
@@ -193,7 +135,19 @@ export default async function DirectorProjectDetailPage({
                         style={{ backgroundColor: "var(--hb-orange-muted)" }}
                       >
                         {risks.slice(0, 3).map((r, i) => (
-                          <AIRiskItem key={i} text={r} />
+                          <div
+                            key={i}
+                            className="flex items-start gap-2.5 py-2.5 border-b border-(--border) last:border-0"
+                          >
+                            <AlertTriangle
+                              className="w-4 h-4 shrink-0 mt-0.5"
+                              style={{ color: "var(--hb-orange)" }}
+                              aria-hidden
+                            />
+                            <p className="text-sm text-(--fg) leading-relaxed">
+                              {r}
+                            </p>
+                          </div>
                         ))}
                       </div>
                     </div>
@@ -358,9 +312,10 @@ export default async function DirectorProjectDetailPage({
               className="px-5 py-2.5 border-t border-(--border) flex items-center gap-2"
               style={{ backgroundColor: "var(--surface-alt)" }}
             >
-              <span className="text-base" aria-hidden>
-                🏛️
-              </span>
+              <Building2
+                className="w-4 h-4 shrink-0 text-(--fg-muted)"
+                aria-hidden
+              />
               <p className="text-xs text-(--fg-muted) truncate">
                 <span className="font-semibold text-(--fg)">
                   {project.orgNome}

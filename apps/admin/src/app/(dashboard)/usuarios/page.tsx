@@ -350,7 +350,7 @@ export default async function UsuariosPage({
                           <Shield size={13} aria-hidden="true" /> —
                         </span>
                       </td>
-                      <td onClick={(e) => e.stopPropagation()}>
+                      <td>
                         <Button
                           asChild
                           variant="ghost"

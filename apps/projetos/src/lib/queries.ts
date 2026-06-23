@@ -2,7 +2,7 @@
 
 import { db } from "@hebron/db/client";
 import { cookies } from "next/headers";
-import { createClient } from "@supabase/supabase-js";
+import { createSupabaseServerActionClient } from "@hebron/auth";
 import { and, count, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
   compactVersions,
@@ -28,20 +28,20 @@ import type { CompactProjectView, ProjectStage } from "@hebron/types";
 export async function getAuthUser(): Promise<{
   id: string;
   fullName: string | null;
+  email: string | null;
 } | null> {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!supabaseUrl || !anonKey) return null;
-
   const cookieStore = await cookies();
-  const cookieHeader = cookieStore
-    .getAll()
-    .map((c) => `${c.name}=${c.value}`)
-    .join("; ");
-
-  const supabase = createClient(supabaseUrl, anonKey, {
-    global: { headers: { cookie: cookieHeader } },
-    auth: { persistSession: false },
+  const supabase = createSupabaseServerActionClient({
+    getAll: () => cookieStore.getAll(),
+    setAll: (cookiesToSet) => {
+      try {
+        cookiesToSet.forEach(({ name, value, options }) =>
+          cookieStore.set(name, value, options),
+        );
+      } catch {
+        // Server Component — não pode setar cookies, ignorar
+      }
+    },
   });
 
   const {
@@ -55,7 +55,11 @@ export async function getAuthUser(): Promise<{
     .where(eq(users.id, user.id))
     .limit(1);
 
-  return { id: user.id, fullName: rows[0]?.fullName ?? null };
+  return {
+    id: user.id,
+    fullName: rows[0]?.fullName ?? null,
+    email: user.email ?? null,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -123,6 +127,7 @@ export type DashboardData = {
   upcomingPayments: DashboardPayment[];
   pendingReports: DashboardReport[];
   committedBudget: number;
+  institutions: { id: string; nome: string }[];
 };
 
 export async function getSubmissorDashboard(
@@ -283,11 +288,21 @@ export async function getSubmissorDashboard(
     .filter((p) => !["reprovado", "rascunho"].includes(p.stage))
     .reduce((s, p) => s + p.budgetTotal, 0);
 
+  const myOrgs = await db
+    .select({ id: organizations.id, nome: organizations.nome })
+    .from(organizations)
+    .innerJoin(
+      organizationMembers,
+      eq(organizationMembers.organizationId, organizations.id),
+    )
+    .where(eq(organizationMembers.userId, userId));
+
   return {
     projects: mappedProjects,
     upcomingPayments,
     pendingReports,
     committedBudget,
+    institutions: myOrgs,
   };
 }
 

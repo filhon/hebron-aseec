@@ -65,6 +65,8 @@
 | S-41   | 2026-06-22 | P-2.9 — Integração UI ↔ Backend Projetos  | concluido |
 | S-42   | 2026-06-23 | P-2.10 — Notificações e Emails Projetos   | concluido |
 | S-43   | 2026-06-23 | P-2.11 — Integrações Cross-App Projetos   | parcial   |
+| S-44   | 2026-06-23 | P-2.9b — Usuário Real no Header Projetos  | concluido |
+| S-45   | 2026-06-23 | Polish — apps/projetos/src/app            | concluido |
 
 ---
 
@@ -1676,4 +1678,35 @@ Implementadas as 4 integrações cross-app do módulo Projetos: stub `financeiro
 - `apps/projetos/src/lib/integrations/tarefas.ts` (criado — `onProjectSubmitted` stub com 7 itens de checklist)
 - `apps/projetos/src/lib/integrations/documentos.ts` (criado — `getEditalPrefill` + `getProjectParticipationScore`)
 - `apps/projetos/src/actions/projects.ts` (modificado — wiring de `onProjectSubmitted` e `onProjectApproved`)
+- `SESSIONS.md` (este registro)
+
+---
+
+### S-44 — 2026-06-23 — P-2.9b Usuário Real no Header de Projetos (Corretivo)
+
+**Prompt:** P-2.9b
+**Modelo:** claude-sonnet-4-6
+**Status:** concluido
+
+**Resumo:**
+Corrigido o header dos dois layouts do módulo Projetos (submissor e diretoria) que permaneciam com `MOCK_USER` hardcoded após P-2.9. Aplicado o padrão Server/Client split: `layout.tsx` convertido para Server Component com `getAuthUser()` e redirect; `shell.tsx` criado como Client Component que recebe `user` como prop e mantém `usePathname`. Criado `actions/auth.ts` com `logoutAction` conectado ao `onLogout` do AppShell.
+
+**Decisoes tomadas:**
+
+- Fallback no header: `user.fullName ?? user.email ?? "Usuário"` — prioriza nome completo do banco, depois email do Supabase Auth, depois literal genérico; nunca mostra vazio
+- `logoutAction` não usa `next-safe-action` (sem input Zod) — é uma action simples de efeito colateral, padrão consistente com outras actions de redirect no ecossistema
+- Importações via caminho relativo (`../../lib/queries`, `../../actions/auth`) — o app projetos não tem path alias `@/` configurado no tsconfig; consistente com todos os outros arquivos do módulo
+
+**Debitos tecnicos:**
+
+- Nenhum
+
+**Arquivos criados/modificados:**
+
+- `apps/projetos/src/lib/queries.ts` (modificado — `getAuthUser` agora retorna `email: string | null`)
+- `apps/projetos/src/app/(submissor)/layout.tsx` (modificado — convertido para Server Component)
+- `apps/projetos/src/app/(submissor)/shell.tsx` (criado — Client Component com user como prop)
+- `apps/projetos/src/app/(diretoria)/layout.tsx` (modificado — convertido para Server Component)
+- `apps/projetos/src/app/(diretoria)/shell.tsx` (criado — Client Component com user como prop)
+- `apps/projetos/src/actions/auth.ts` (criado — `logoutAction`)
 - `SESSIONS.md` (este registro)

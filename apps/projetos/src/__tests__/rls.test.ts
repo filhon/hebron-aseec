@@ -75,11 +75,31 @@ async function queryAs(userId: string, query: string): Promise<postgres.Row[]> {
 beforeAll(async () => {
   // Users
   const userFixtures = [
-    { id: IDS.users.superAdmin, email: "rls-proj-super@test.hebron", fullName: "RLS Proj SuperAdmin" },
-    { id: IDS.users.diretor1, email: "rls-proj-dir@test.hebron", fullName: "RLS Proj Diretor" },
-    { id: IDS.users.conselheiro1, email: "rls-proj-cons@test.hebron", fullName: "RLS Proj Conselheiro" },
-    { id: IDS.users.submissorA, email: "rls-proj-sub-a@test.hebron", fullName: "RLS Proj Submissor A" },
-    { id: IDS.users.submissorB, email: "rls-proj-sub-b@test.hebron", fullName: "RLS Proj Submissor B" },
+    {
+      id: IDS.users.superAdmin,
+      email: "rls-proj-super@test.hebron",
+      fullName: "RLS Proj SuperAdmin",
+    },
+    {
+      id: IDS.users.diretor1,
+      email: "rls-proj-dir@test.hebron",
+      fullName: "RLS Proj Diretor",
+    },
+    {
+      id: IDS.users.conselheiro1,
+      email: "rls-proj-cons@test.hebron",
+      fullName: "RLS Proj Conselheiro",
+    },
+    {
+      id: IDS.users.submissorA,
+      email: "rls-proj-sub-a@test.hebron",
+      fullName: "RLS Proj Submissor A",
+    },
+    {
+      id: IDS.users.submissorB,
+      email: "rls-proj-sub-b@test.hebron",
+      fullName: "RLS Proj Submissor B",
+    },
   ];
   for (const u of userFixtures) {
     await db.insert(users).values(u).onConflictDoNothing();
@@ -87,73 +107,113 @@ beforeAll(async () => {
 
   // Role assignments
   const roleSeed = [
-    { userId: IDS.users.superAdmin, role: "super_admin" as const, grantedBy: IDS.users.superAdmin },
-    { userId: IDS.users.diretor1, role: "diretor" as const, grantedBy: IDS.users.superAdmin },
-    { userId: IDS.users.conselheiro1, role: "conselheiro" as const, grantedBy: IDS.users.superAdmin },
-    { userId: IDS.users.submissorA, role: "submissor" as const, grantedBy: IDS.users.superAdmin },
-    { userId: IDS.users.submissorB, role: "submissor" as const, grantedBy: IDS.users.superAdmin },
+    {
+      userId: IDS.users.superAdmin,
+      role: "super_admin" as const,
+      grantedBy: IDS.users.superAdmin,
+    },
+    {
+      userId: IDS.users.diretor1,
+      role: "diretor" as const,
+      grantedBy: IDS.users.superAdmin,
+    },
+    {
+      userId: IDS.users.conselheiro1,
+      role: "conselheiro" as const,
+      grantedBy: IDS.users.superAdmin,
+    },
+    {
+      userId: IDS.users.submissorA,
+      role: "submissor" as const,
+      grantedBy: IDS.users.superAdmin,
+    },
+    {
+      userId: IDS.users.submissorB,
+      role: "submissor" as const,
+      grantedBy: IDS.users.superAdmin,
+    },
   ];
   for (const r of roleSeed) {
     await db.insert(roleAssignments).values(r).onConflictDoNothing();
   }
 
   // Organizations
-  await db.insert(organizations).values([
-    { id: IDS.orgs.orgA, nome: "Org RLS A", createdBy: IDS.users.submissorA },
-    { id: IDS.orgs.orgB, nome: "Org RLS B", createdBy: IDS.users.submissorB },
-  ]).onConflictDoNothing();
+  await db
+    .insert(organizations)
+    .values([
+      { id: IDS.orgs.orgA, nome: "Org RLS A", createdBy: IDS.users.submissorA },
+      { id: IDS.orgs.orgB, nome: "Org RLS B", createdBy: IDS.users.submissorB },
+    ])
+    .onConflictDoNothing();
 
   // Organization members
-  await db.insert(organizationMembers).values([
-    { organizationId: IDS.orgs.orgA, userId: IDS.users.submissorA },
-    { organizationId: IDS.orgs.orgB, userId: IDS.users.submissorB },
-  ]).onConflictDoNothing();
+  await db
+    .insert(organizationMembers)
+    .values([
+      { organizationId: IDS.orgs.orgA, userId: IDS.users.submissorA },
+      { organizationId: IDS.orgs.orgB, userId: IDS.users.submissorB },
+    ])
+    .onConflictDoNothing();
 
   // Projects at different stages
-  await db.insert(projects).values([
-    {
-      id: IDS.projects.projectARascunho,
-      title: "Projeto A Rascunho",
-      tipo: "anual",
-      stage: "rascunho",
-      organizationId: IDS.orgs.orgA,
-      submitterId: IDS.users.submissorA,
-      evaluationYear: 2026,
-      budgetTotal: "10000.00",
-      parcelas: 1,
-      meses: 1,
-    },
-    {
-      id: IDS.projects.projectAVotacao,
-      title: "Projeto A Votacao",
-      tipo: "anual",
-      stage: "votacao",
-      organizationId: IDS.orgs.orgA,
-      submitterId: IDS.users.submissorA,
-      evaluationYear: 2026,
-      budgetTotal: "15000.00",
-      parcelas: 3,
-      meses: 3,
-    },
-    {
-      id: IDS.projects.projectBVotacao,
-      title: "Projeto B Votacao",
-      tipo: "anual",
-      stage: "votacao",
-      organizationId: IDS.orgs.orgB,
-      submitterId: IDS.users.submissorB,
-      evaluationYear: 2026,
-      budgetTotal: "20000.00",
-      parcelas: 6,
-      meses: 6,
-    },
-  ]).onConflictDoNothing();
+  await db
+    .insert(projects)
+    .values([
+      {
+        id: IDS.projects.projectARascunho,
+        title: "Projeto A Rascunho",
+        tipo: "anual",
+        stage: "rascunho",
+        organizationId: IDS.orgs.orgA,
+        submitterId: IDS.users.submissorA,
+        evaluationYear: 2026,
+        budgetTotal: "10000.00",
+        parcelas: 1,
+        meses: 1,
+      },
+      {
+        id: IDS.projects.projectAVotacao,
+        title: "Projeto A Votacao",
+        tipo: "anual",
+        stage: "votacao",
+        organizationId: IDS.orgs.orgA,
+        submitterId: IDS.users.submissorA,
+        evaluationYear: 2026,
+        budgetTotal: "15000.00",
+        parcelas: 3,
+        meses: 3,
+      },
+      {
+        id: IDS.projects.projectBVotacao,
+        title: "Projeto B Votacao",
+        tipo: "anual",
+        stage: "votacao",
+        organizationId: IDS.orgs.orgB,
+        submitterId: IDS.users.submissorB,
+        evaluationYear: 2026,
+        budgetTotal: "20000.00",
+        parcelas: 6,
+        meses: 6,
+      },
+    ])
+    .onConflictDoNothing();
 
   // Votes on projectAVotacao (for secrecy test)
-  await db.insert(votes).values([
-    { projectId: IDS.projects.projectAVotacao, userId: IDS.users.diretor1, value: true },
-    { projectId: IDS.projects.projectAVotacao, userId: IDS.users.conselheiro1, value: false },
-  ]).onConflictDoNothing();
+  await db
+    .insert(votes)
+    .values([
+      {
+        projectId: IDS.projects.projectAVotacao,
+        userId: IDS.users.diretor1,
+        value: true,
+      },
+      {
+        projectId: IDS.projects.projectAVotacao,
+        userId: IDS.users.conselheiro1,
+        value: false,
+      },
+    ])
+    .onConflictDoNothing();
 
   // Grant schema access to authenticated role for RLS evaluation
   await sql`GRANT USAGE ON SCHEMA projetos TO authenticated`;
@@ -170,12 +230,12 @@ afterAll(async () => {
   await sql`REVOKE USAGE ON SCHEMA projetos FROM authenticated`;
 
   // Cleanup in FK-safe order (project cascade deletes votes)
-  await db.delete(projects).where(
-    inArray(projects.id, Object.values(IDS.projects)),
-  );
-  await db.delete(organizations).where(
-    inArray(organizations.id, Object.values(IDS.orgs)),
-  );
+  await db
+    .delete(projects)
+    .where(inArray(projects.id, Object.values(IDS.projects)));
+  await db
+    .delete(organizations)
+    .where(inArray(organizations.id, Object.values(IDS.orgs)));
   for (const id of Object.values(IDS.users)) {
     await db.delete(roleAssignments).where(eq(roleAssignments.userId, id));
   }

@@ -33,17 +33,29 @@ const SM_IDS = {
 beforeAll(async () => {
   await db
     .insert(users)
-    .values({ id: SM_IDS.submissor, email: "sm-sub@test.hebron", fullName: "SM Submissor" })
+    .values({
+      id: SM_IDS.submissor,
+      email: "sm-sub@test.hebron",
+      fullName: "SM Submissor",
+    })
     .onConflictDoNothing();
 
   await db
     .insert(roleAssignments)
-    .values({ userId: SM_IDS.submissor, role: "submissor", grantedBy: SM_IDS.submissor })
+    .values({
+      userId: SM_IDS.submissor,
+      role: "submissor",
+      grantedBy: SM_IDS.submissor,
+    })
     .onConflictDoNothing();
 
   await db
     .insert(organizations)
-    .values({ id: SM_IDS.org, nome: "Org SM Test", createdBy: SM_IDS.submissor })
+    .values({
+      id: SM_IDS.org,
+      nome: "Org SM Test",
+      createdBy: SM_IDS.submissor,
+    })
     .onConflictDoNothing();
 
   await db
@@ -129,38 +141,54 @@ describe("State Machine — transição inválida retorna erro", () => {
   }
 
   it("rascunho → aprovado lança erro", () => {
-    expect(() => assertInvalid("rascunho", "aprovado")).toThrow("Transição inválida");
+    expect(() => assertInvalid("rascunho", "aprovado")).toThrow(
+      "Transição inválida",
+    );
   });
 
   it("rascunho → concluido lança erro", () => {
-    expect(() => assertInvalid("rascunho", "concluido")).toThrow("Transição inválida");
+    expect(() => assertInvalid("rascunho", "concluido")).toThrow(
+      "Transição inválida",
+    );
   });
 
   it("rascunho → votacao lança erro (deve passar por validacao)", () => {
-    expect(() => assertInvalid("rascunho", "votacao")).toThrow("Transição inválida");
+    expect(() => assertInvalid("rascunho", "votacao")).toThrow(
+      "Transição inválida",
+    );
   });
 
   it("votacao → aprovado lança erro (deve passar por homologacao)", () => {
-    expect(() => assertInvalid("votacao", "aprovado")).toThrow("Transição inválida");
+    expect(() => assertInvalid("votacao", "aprovado")).toThrow(
+      "Transição inválida",
+    );
   });
 
   it("votacao → reprovado lança erro (deve passar por homologacao)", () => {
-    expect(() => assertInvalid("votacao", "reprovado")).toThrow("Transição inválida");
+    expect(() => assertInvalid("votacao", "reprovado")).toThrow(
+      "Transição inválida",
+    );
   });
 
   it("aprovado → concluido lança erro (deve passar por em_execucao)", () => {
-    expect(() => assertInvalid("aprovado", "concluido")).toThrow("Transição inválida");
+    expect(() => assertInvalid("aprovado", "concluido")).toThrow(
+      "Transição inválida",
+    );
   });
 
   it("reprovado → qualquer estágio lança erro (terminal)", () => {
     for (const stage of PROJECT_STAGES) {
-      expect(() => assertInvalid("reprovado", stage)).toThrow("Transição inválida");
+      expect(() => assertInvalid("reprovado", stage)).toThrow(
+        "Transição inválida",
+      );
     }
   });
 
   it("concluido → qualquer estágio lança erro (terminal)", () => {
     for (const stage of PROJECT_STAGES) {
-      expect(() => assertInvalid("concluido", stage)).toThrow("Transição inválida");
+      expect(() => assertInvalid("concluido", stage)).toThrow(
+        "Transição inválida",
+      );
     }
   });
 });

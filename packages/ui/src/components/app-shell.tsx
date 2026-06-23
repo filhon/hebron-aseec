@@ -29,6 +29,7 @@ export interface AppShellProps {
   appName?: string;
   LinkComponent?: LinkComponent;
   className?: string;
+  sidebarDark?: boolean;
 }
 
 interface MobileSidebarProps {
@@ -39,6 +40,7 @@ interface MobileSidebarProps {
   currentPath?: string;
   logo?: React.ReactNode;
   LinkComponent?: LinkComponent;
+  dark?: boolean;
 }
 
 function MobileSidebar({
@@ -49,6 +51,7 @@ function MobileSidebar({
   currentPath,
   logo,
   LinkComponent,
+  dark,
 }: MobileSidebarProps) {
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
@@ -66,7 +69,9 @@ function MobileSidebar({
           aria-describedby={undefined}
           className={cn(
             "fixed inset-y-0 left-0 z-(--z-modal) w-64",
-            "border-r border-(--border) bg-(--bg)",
+            dark
+              ? "border-r border-white/10 bg-(--hb-blue)"
+              : "border-r border-(--border) bg-(--bg)",
             "shadow-(--shadow-xl)",
             "lg:hidden",
             "data-[state=open]:animate-in data-[state=closed]:animate-out",
@@ -79,7 +84,12 @@ function MobileSidebar({
           </DialogPrimitive.Title>
 
           {logo && (
-            <div className="flex h-14 items-center border-b border-(--border) px-4">
+            <div
+              className={cn(
+                "flex h-14 items-center border-b px-4",
+                dark ? "border-white/10" : "border-(--border)",
+              )}
+            >
               {logo}
             </div>
           )}
@@ -94,6 +104,7 @@ function MobileSidebar({
               showCollapseToggle={false}
               onNavItemClick={() => onOpenChange(false)}
               LinkComponent={LinkComponent}
+              dark={dark}
               className={logo ? "h-[calc(100%-3.5rem)]" : "h-full"}
             />
           </div>
@@ -115,6 +126,7 @@ export function AppShell({
   appName,
   LinkComponent,
   className,
+  sidebarDark,
 }: AppShellProps) {
   const [desktopCollapsed, setDesktopCollapsed] = React.useState(false);
   const [mobileOpen, setMobileOpen] = React.useState(false);
@@ -125,7 +137,9 @@ export function AppShell({
         className={cn(
           "fixed inset-y-0 left-0 z-(--z-sticky)",
           "hidden lg:flex flex-col",
-          "border-r border-(--border) bg-(--bg)",
+          sidebarDark
+            ? "border-r border-white/10 bg-(--hb-blue)"
+            : "border-r border-(--border) bg-(--bg)",
           "transition-[width] duration-(--transition-medium)",
           desktopCollapsed ? "w-16" : "w-64",
         )}
@@ -133,7 +147,8 @@ export function AppShell({
       >
         <div
           className={cn(
-            "flex h-14 shrink-0 items-center border-b border-(--border)",
+            "flex h-14 shrink-0 items-center border-b",
+            sidebarDark ? "border-white/10" : "border-(--border)",
             desktopCollapsed ? "justify-center px-3" : "px-4",
           )}
         >
@@ -153,6 +168,7 @@ export function AppShell({
           currentPath={currentPath}
           showCollapseToggle={true}
           LinkComponent={LinkComponent}
+          dark={sidebarDark}
           className="h-[calc(100%-3.5rem)]"
         />
       </aside>
@@ -165,6 +181,7 @@ export function AppShell({
         currentPath={currentPath}
         logo={logo}
         LinkComponent={LinkComponent}
+        dark={sidebarDark}
       />
 
       <header

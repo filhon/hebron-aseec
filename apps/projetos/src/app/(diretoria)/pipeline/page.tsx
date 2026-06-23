@@ -5,14 +5,8 @@ import { useRouter } from "next/navigation";
 import { Filter, LayoutGrid, X } from "lucide-react";
 import { getKanbanProjects } from "../../../lib/queries";
 import { ProjectKanban } from "../../../components/project-kanban";
+import { BRL } from "../../../lib/stage-utils";
 import type { CompactProjectView, ProjectStage } from "@hebron/types";
-
-const BRL = new Intl.NumberFormat("pt-BR", {
-  style: "currency",
-  currency: "BRL",
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 0,
-});
 
 const CATEGORY_OPTIONS = [
   { value: "", label: "Todas as categorias" },

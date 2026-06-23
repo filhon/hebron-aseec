@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { CANONICAL_LOGIN_URL } from "@hebron/auth";
 import {
   ChevronLeft,
   MapPin,
@@ -7,47 +8,12 @@ import {
   DollarSign,
   FileText,
   Send,
+  Building2,
 } from "lucide-react";
 import { getAuthUser, getSubmissorProjectDetail } from "../../../lib/queries";
 import { ProjectTimeline } from "../../../components/project-timeline";
+import { BRL, STAGE_LABELS, getStageBadge } from "../../../lib/stage-utils";
 import type { ProjectVersion, ProjectStage } from "@hebron/types";
-
-const BRL = new Intl.NumberFormat("pt-BR", {
-  style: "currency",
-  currency: "BRL",
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 0,
-});
-
-const STAGE_LABELS: Record<string, string> = {
-  rascunho: "Rascunho",
-  validacao: "Validação",
-  votacao: "Votação",
-  homologacao: "Homologação",
-  aprovado: "Aprovado",
-  reprovado: "Reprovado",
-  em_execucao: "Em Execução",
-  concluido: "Concluído",
-  cancelado: "Cancelado",
-};
-
-const STAGE_COLORS: Record<string, { bg: string; text: string }> = {
-  rascunho: { bg: "var(--hb-gray-50)", text: "var(--hb-gray-400)" },
-  validacao: { bg: "var(--hb-cyan-muted)", text: "var(--hb-cyan-darker)" },
-  votacao: { bg: "var(--brand-muted)", text: "var(--hb-blue)" },
-  homologacao: { bg: "var(--hb-orange-muted)", text: "var(--hb-orange-deep)" },
-  aprovado: { bg: "var(--hb-green-muted)", text: "var(--hb-green-fg)" },
-  reprovado: {
-    bg: "var(--color-destructive-muted)",
-    text: "var(--color-destructive)",
-  },
-  em_execucao: { bg: "var(--hb-cyan-muted)", text: "var(--hb-cyan-fg)" },
-  concluido: { bg: "var(--hb-green-muted)", text: "var(--hb-green-fg)" },
-  cancelado: {
-    bg: "var(--color-destructive-muted)",
-    text: "var(--hb-red-deep)",
-  },
-};
 
 function formatDate(d: Date | null | string): string {
   if (!d) return "—";
@@ -97,15 +63,12 @@ export default async function ProjectDetailPage({
 }) {
   const { id } = await params;
   const authUser = await getAuthUser();
-  if (!authUser) redirect("/login");
+  if (!authUser) redirect(CANONICAL_LOGIN_URL);
 
   const project = await getSubmissorProjectDetail(id, authUser.id);
   if (!project) notFound();
 
-  const stage = STAGE_COLORS[project.stage] ?? {
-    bg: "var(--hb-gray-50)",
-    text: "var(--hb-gray-400)",
-  };
+  const stage = getStageBadge(project.stage);
 
   const canSendReport =
     project.stage === "em_execucao" || project.stage === "aprovado";
@@ -233,9 +196,10 @@ export default async function ProjectDetailPage({
           className="px-6 py-3 border-t border-(--border) flex items-center gap-2"
           style={{ backgroundColor: "var(--surface-alt)" }}
         >
-          <span className="text-base" aria-hidden>
-            🏛️
-          </span>
+          <Building2
+            className="w-4 h-4 shrink-0 text-(--fg-muted)"
+            aria-hidden
+          />
           <p className="text-sm text-(--fg-muted)">
             <span className="font-semibold text-(--fg)">{project.orgNome}</span>
             {project.orgResponsavel ? ` · ${project.orgResponsavel}` : ""}
@@ -251,7 +215,7 @@ export default async function ProjectDetailPage({
             <>
               {project.objectives && (
                 <section>
-                  <h2 className="text-sm font-bold text-(--fg-muted) uppercase tracking-wider mb-3 flex items-center gap-2">
+                  <h2 className="text-xs font-bold text-(--fg-muted) uppercase tracking-wider mb-3 flex items-center gap-2">
                     <FileText className="w-4 h-4" aria-hidden />
                     Objetivos
                   </h2>
@@ -265,7 +229,7 @@ export default async function ProjectDetailPage({
 
               {snap.metodologia && (
                 <section>
-                  <h2 className="text-sm font-bold text-(--fg-muted) uppercase tracking-wider mb-3">
+                  <h2 className="text-xs font-bold text-(--fg-muted) uppercase tracking-wider mb-3">
                     Metodologia
                   </h2>
                   <div className="rounded-md border border-(--border) bg-(--surface) px-5 py-4">
@@ -280,7 +244,7 @@ export default async function ProjectDetailPage({
 
           {!isAnnual && snap.descricao && (
             <section>
-              <h2 className="text-sm font-bold text-(--fg-muted) uppercase tracking-wider mb-3">
+              <h2 className="text-xs font-bold text-(--fg-muted) uppercase tracking-wider mb-3">
                 Descrição
               </h2>
               <div className="rounded-md border border-(--border) bg-(--surface) px-5 py-4">
@@ -294,7 +258,7 @@ export default async function ProjectDetailPage({
           {/* Reports */}
           {project.reports.length > 0 && (
             <section>
-              <h2 className="text-sm font-bold text-(--fg-muted) uppercase tracking-wider mb-3">
+              <h2 className="text-xs font-bold text-(--fg-muted) uppercase tracking-wider mb-3">
                 Relatórios ({project.reports.length})
               </h2>
               <div className="flex flex-col gap-3">
@@ -348,7 +312,7 @@ export default async function ProjectDetailPage({
         {/* Right: timeline */}
         <div className="lg:col-span-2 flex flex-col gap-6">
           <section>
-            <h2 className="text-sm font-bold text-(--fg-muted) uppercase tracking-wider mb-3">
+            <h2 className="text-xs font-bold text-(--fg-muted) uppercase tracking-wider mb-3">
               Histórico
             </h2>
             <div className="rounded-md border border-(--border) bg-(--surface) px-4 py-4 shadow-(--shadow-xs)">

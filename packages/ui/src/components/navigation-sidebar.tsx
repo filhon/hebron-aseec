@@ -50,6 +50,7 @@ export interface NavigationSidebarProps {
   onNavItemClick?: () => void;
   LinkComponent?: LinkComponent;
   className?: string;
+  dark?: boolean;
 }
 
 const DefaultLink: LinkComponent = React.forwardRef<
@@ -108,6 +109,7 @@ interface NavItemButtonProps {
   active: boolean;
   onClick?: () => void;
   LinkComponent: LinkComponent;
+  dark?: boolean;
 }
 
 function NavItemButton({
@@ -116,6 +118,7 @@ function NavItemButton({
   active,
   onClick,
   LinkComponent: Link,
+  dark,
 }: NavItemButtonProps) {
   const Icon = item.icon;
 
@@ -131,8 +134,12 @@ function NavItemButton({
           "transition-all duration-(--transition-fast)",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--brand)",
           active
-            ? "bg-(--brand-muted) text-(--brand)"
-            : "text-(--fg-muted) hover:bg-(--surface-alt) hover:text-(--fg)",
+            ? dark
+              ? "bg-white/[14%] text-white"
+              : "bg-(--brand-muted) text-(--brand)"
+            : dark
+              ? "text-white/60 hover:bg-white/[8%] hover:text-white"
+              : "text-(--fg-muted) hover:bg-(--surface-alt) hover:text-(--fg)",
           collapsed && "justify-center px-2",
         )}
       >
@@ -141,8 +148,12 @@ function NavItemButton({
             "shrink-0 transition-colors duration-(--transition-fast)",
             collapsed ? "h-5 w-5" : "h-4 w-4",
             active
-              ? "text-(--brand)"
-              : "text-(--fg-muted) group-hover:text-(--fg)",
+              ? dark
+                ? "text-white"
+                : "text-(--brand)"
+              : dark
+                ? "text-white/60 group-hover:text-white"
+                : "text-(--fg-muted) group-hover:text-(--fg)",
           )}
           aria-hidden="true"
         />
@@ -155,8 +166,12 @@ function NavItemButton({
                   "ml-auto inline-flex h-5 min-w-5 items-center justify-center",
                   "rounded-full px-1.5 text-(--text-xs) font-(--font-weight-medium)",
                   active
-                    ? "bg-(--brand) text-(--brand-fg)"
-                    : "bg-(--hb-gray-100) text-(--fg-muted)",
+                    ? dark
+                      ? "bg-white/20 text-white"
+                      : "bg-(--brand) text-(--brand-fg)"
+                    : dark
+                      ? "bg-white/10 text-white/60"
+                      : "bg-(--hb-gray-100) text-(--fg-muted)",
                 )}
               >
                 {item.badge}
@@ -223,6 +238,7 @@ export function NavigationSidebar({
   onNavItemClick,
   LinkComponent = DefaultLink,
   className,
+  dark,
 }: NavigationSidebarProps) {
   const CollapseIcon = collapsed ? ChevronRight : ChevronLeft;
 
@@ -235,7 +251,8 @@ export function NavigationSidebar({
         {showCollapseToggle && (
           <div
             className={cn(
-              "flex h-14 shrink-0 items-center border-b border-(--border) px-3",
+              "flex h-14 shrink-0 items-center border-b px-3",
+              dark ? "border-white/10" : "border-(--border)",
               collapsed ? "justify-center" : "justify-end",
             )}
           >
@@ -244,8 +261,10 @@ export function NavigationSidebar({
               aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
               className={cn(
                 "flex h-7 w-7 items-center justify-center rounded-(--radius)",
-                "text-(--fg-muted) transition-colors duration-(--transition-fast)",
-                "hover:bg-(--surface-alt) hover:text-(--fg)",
+                dark
+                  ? "text-white/60 hover:bg-white/[8%] hover:text-white"
+                  : "text-(--fg-muted) hover:bg-(--surface-alt) hover:text-(--fg)",
+                "transition-colors duration-(--transition-fast)",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--brand)",
               )}
             >
@@ -259,7 +278,10 @@ export function NavigationSidebar({
             <React.Fragment key={section.title ?? sectionIndex}>
               {sectionIndex > 0 && (
                 <SeparatorPrimitive.Root
-                  className="mx-3 my-2 h-px bg-(--border)"
+                  className={cn(
+                    "mx-3 my-2 h-px",
+                    dark ? "bg-white/10" : "bg-(--border)",
+                  )}
                   aria-hidden="true"
                 />
               )}
@@ -268,7 +290,8 @@ export function NavigationSidebar({
                 <p
                   className={cn(
                     "mb-1 px-3 text-(--text-xs) font-(--font-weight-semibold)",
-                    "uppercase tracking-wider text-(--fg-muted)",
+                    "uppercase tracking-wider",
+                    dark ? "text-white/40" : "text-(--fg-muted)",
                   )}
                 >
                   {section.title}
@@ -284,6 +307,7 @@ export function NavigationSidebar({
                       active={isItemActive(item.href, currentPath, item.exact)}
                       onClick={onNavItemClick}
                       LinkComponent={LinkComponent}
+                      dark={dark}
                     />
                   </li>
                 ))}
@@ -293,7 +317,12 @@ export function NavigationSidebar({
         </div>
 
         {apps && apps.length > 0 && (
-          <div className="shrink-0 border-t border-(--border) py-3">
+          <div
+            className={cn(
+              "shrink-0 border-t py-3",
+              dark ? "border-white/10" : "border-(--border)",
+            )}
+          >
             {!collapsed && (
               <div className="mb-1 flex items-center gap-1.5 px-3">
                 <LayoutGrid

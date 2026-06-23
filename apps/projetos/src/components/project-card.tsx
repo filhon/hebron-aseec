@@ -1,17 +1,11 @@
 "use client";
 
 import type { CompactProjectView, ProjectStage } from "@hebron/types";
+import { BRL, CATEGORY_LABELS } from "../lib/stage-utils";
 
 function cn(...cls: (string | undefined | false | null)[]): string {
   return cls.filter(Boolean).join(" ");
 }
-
-const BRL = new Intl.NumberFormat("pt-BR", {
-  style: "currency",
-  currency: "BRL",
-  minimumFractionDigits: 0,
-  maximumFractionDigits: 0,
-});
 
 type StageMeta = { label: string; pill: string; bar: string };
 
@@ -61,19 +55,6 @@ const STAGE: Record<ProjectStage, StageMeta> = {
     pill: "bg-(--color-destructive-muted) text-(--hb-red-deep)",
     bar: "var(--hb-red)",
   },
-};
-
-const CATEGORY_LABELS: Record<string, string> = {
-  evangelismo: "Evangelismo",
-  missoes_transculturais: "Missões Transculturais",
-  educacao_crista: "Educação Cristã",
-  assistencia_social: "Assistência Social",
-  saude: "Saúde",
-  capacitacao_lideranca: "Liderança",
-  infraestrutura_ministerial: "Infraestrutura",
-  plantacao_de_igrejas: "Plantação de Igrejas",
-  discipulado: "Discipulado",
-  outros: "Outros",
 };
 
 function scoreColor(score: number): string {
@@ -206,7 +187,7 @@ export function ProjectCard({
                       color: "var(--brand)",
                     }
                   : {
-                      backgroundColor: "#ede8f8",
+                      backgroundColor: "rgba(107, 78, 200, 0.10)",
                       color: "var(--hb-purple)",
                     }
               }
