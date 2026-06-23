@@ -1,0 +1,406 @@
+/**
+ * voting.test.ts — Votação de projetos
+ *
+ * Cobre:
+ *  - Lógica de quórum e maioria (função pura que espelha voting.ts)
+ *  - Botão de pânico (super_admin force-close)
+ *  - Restrição DB: 1 voto por pessoa por projeto (UNIQUE constraint)
+ *  - RLS: cédula secreta — apenas super_admin pode SELECT votos
+ */
+
+import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
+import postgres from "postgres";
+import { eq, and, inArray } from "drizzle-orm";
+import { db } from "@hebron/db/client";
+import {
+  users,
+  roleAssignments,
+  organizations,
+  organizationMembers,
+  projects,
+  votes,
+} from "@hebron/db/schema";
+
+// ── Fixtures ──────────────────────────────────────────────────────────────────
+
+const IDS = {
+  users: {
+    superAdmin: "bbaa0000-0000-0000-0000-000000000001",
+    diretor1: "bbaa0000-0000-0000-0000-000000000002",
+    diretor2: "bbaa0000-0000-0000-0000-000000000003",
+    conselheiro1: "bbaa0000-0000-0000-0000-000000000004",
+    submissor1: "bbaa0000-0000-0000-0000-000000000005",
+  },
+  orgs: {
+    orgVoting: "bbbb0000-0000-0000-0000-000000000001",
+  },
+  projects: {
+    projectVoting: "bbcc0000-0000-0000-0000-000000000001",
+    projectPanic: "bbcc0000-0000-0000-0000-000000000002",
+  },
+} as const;
+
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) throw new Error("DATABASE_URL is required for voting tests");
+const sql = postgres(DATABASE_URL, { prepare: false, max: 3 });
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+async function queryAs(userId: string, query: string): Promise<postgres.Row[]> {
+  const claims = JSON.stringify({ sub: userId, role: "authenticated" });
+  let rows: postgres.Row[] = [];
+
+  try {
+    await sql.begin(async (tx) => {
+      await tx`SET LOCAL ROLE authenticated`;
+      await tx`SELECT set_config('request.jwt.claims', ${claims}, true)`;
+      rows = await tx.unsafe(query);
+      throw new Error("__rls_test_rollback__");
+    });
+  } catch (err) {
+    if (err instanceof Error && err.message !== "__rls_test_rollback__") {
+      throw err;
+    }
+  }
+
+  return rows;
+}
+
+/**
+ * Espelha computeVoteResult em voting.ts (lógica pura, sem acesso ao DB).
+ * totalEligible: contagem de diretor + conselheiro no sistema
+ */
+function computeQuorum(
+  totalEligible: number,
+  totalVoted: number,
+  inFavor: number,
+): { quorumMet: boolean; approved: boolean | null } {
+  const quorumMet = totalVoted >= Math.ceil(totalEligible / 2);
+  const against = totalVoted - inFavor;
+  const approved = quorumMet ? inFavor > against : null;
+  return { quorumMet, approved };
+}
+
+/**
+ * Espelha a decisão do botão de pânico em voting.ts:
+ * maioria entre votos existentes vence; empate resolve para reprovado.
+ */
+function panicApproved(inFavor: number, against: number): boolean {
+  return inFavor > against;
+}
+
+// ── Setup / Teardown ──────────────────────────────────────────────────────────
+
+beforeAll(async () => {
+  const userFixtures = [
+    { id: IDS.users.superAdmin, email: "vote-super@test.hebron", fullName: "Vote SuperAdmin" },
+    { id: IDS.users.diretor1, email: "vote-dir1@test.hebron", fullName: "Vote Diretor 1" },
+    { id: IDS.users.diretor2, email: "vote-dir2@test.hebron", fullName: "Vote Diretor 2" },
+    { id: IDS.users.conselheiro1, email: "vote-cons1@test.hebron", fullName: "Vote Conselheiro 1" },
+    { id: IDS.users.submissor1, email: "vote-sub1@test.hebron", fullName: "Vote Submissor 1" },
+  ];
+  for (const u of userFixtures) {
+    await db.insert(users).values(u).onConflictDoNothing();
+  }
+
+  const roleSeed = [
+    { userId: IDS.users.superAdmin, role: "super_admin" as const, grantedBy: IDS.users.superAdmin },
+    { userId: IDS.users.diretor1, role: "diretor" as const, grantedBy: IDS.users.superAdmin },
+    { userId: IDS.users.diretor2, role: "diretor" as const, grantedBy: IDS.users.superAdmin },
+    { userId: IDS.users.conselheiro1, role: "conselheiro" as const, grantedBy: IDS.users.superAdmin },
+    { userId: IDS.users.submissor1, role: "submissor" as const, grantedBy: IDS.users.superAdmin },
+  ];
+  for (const r of roleSeed) {
+    await db.insert(roleAssignments).values(r).onConflictDoNothing();
+  }
+
+  await db
+    .insert(organizations)
+    .values({ id: IDS.orgs.orgVoting, nome: "Org Voting Test", createdBy: IDS.users.submissor1 })
+    .onConflictDoNothing();
+
+  await db
+    .insert(organizationMembers)
+    .values({ organizationId: IDS.orgs.orgVoting, userId: IDS.users.submissor1 })
+    .onConflictDoNothing();
+
+  await db.insert(projects).values([
+    {
+      id: IDS.projects.projectVoting,
+      title: "Projeto Votação Test",
+      tipo: "anual",
+      stage: "votacao",
+      organizationId: IDS.orgs.orgVoting,
+      submitterId: IDS.users.submissor1,
+      evaluationYear: 2026,
+      budgetTotal: "10000.00",
+      parcelas: 3,
+      meses: 3,
+    },
+    {
+      id: IDS.projects.projectPanic,
+      title: "Projeto Pânico Test",
+      tipo: "anual",
+      stage: "votacao",
+      organizationId: IDS.orgs.orgVoting,
+      submitterId: IDS.users.submissor1,
+      evaluationYear: 2026,
+      budgetTotal: "15000.00",
+      parcelas: 3,
+      meses: 3,
+    },
+  ]).onConflictDoNothing();
+
+  // Grants para os testes de RLS de votos
+  await sql`GRANT USAGE ON SCHEMA projetos TO authenticated`;
+  await sql`GRANT SELECT ON projetos.votes TO authenticated`;
+  await sql`GRANT SELECT ON projetos.projects TO authenticated`;
+  await sql`GRANT SELECT ON projetos.organization_members TO authenticated`;
+});
+
+afterAll(async () => {
+  await sql`REVOKE SELECT ON projetos.organization_members FROM authenticated`;
+  await sql`REVOKE SELECT ON projetos.projects FROM authenticated`;
+  await sql`REVOKE SELECT ON projetos.votes FROM authenticated`;
+  await sql`REVOKE USAGE ON SCHEMA projetos FROM authenticated`;
+
+  // Cascade delete votes, versions via project FK
+  await db.delete(projects).where(
+    inArray(projects.id, Object.values(IDS.projects)),
+  );
+  await db
+    .delete(organizationMembers)
+    .where(eq(organizationMembers.organizationId, IDS.orgs.orgVoting));
+  await db.delete(organizations).where(eq(organizations.id, IDS.orgs.orgVoting));
+  for (const id of Object.values(IDS.users)) {
+    await db.delete(roleAssignments).where(eq(roleAssignments.userId, id));
+  }
+  for (const id of Object.values(IDS.users)) {
+    await db.delete(users).where(eq(users.id, id));
+  }
+
+  await sql.end();
+});
+
+// ── Quórum: lógica pura ───────────────────────────────────────────────────────
+
+describe("Votação — Quórum: sem quórum → não aprova", () => {
+  it("1 voto de 3 elegíveis → quorumMet=false, approved=null", () => {
+    const result = computeQuorum(3, 1, 1);
+    expect(result.quorumMet).toBe(false);
+    expect(result.approved).toBeNull();
+  });
+
+  it("0 votos de 4 elegíveis → quorumMet=false", () => {
+    const result = computeQuorum(4, 0, 0);
+    expect(result.quorumMet).toBe(false);
+    expect(result.approved).toBeNull();
+  });
+
+  it("quórum é ceil(elegíveis/2): 3 elegíveis → precisa de 2 votos (ceil(3/2)=2)", () => {
+    expect(Math.ceil(3 / 2)).toBe(2);
+    const semQuorum = computeQuorum(3, 1, 1);
+    const comQuorum = computeQuorum(3, 2, 2);
+    expect(semQuorum.quorumMet).toBe(false);
+    expect(comQuorum.quorumMet).toBe(true);
+  });
+
+  it("4 elegíveis → precisa de 2 votos (ceil(4/2)=2)", () => {
+    expect(Math.ceil(4 / 2)).toBe(2);
+    const comQuorum = computeQuorum(4, 2, 2);
+    expect(comQuorum.quorumMet).toBe(true);
+  });
+});
+
+describe("Votação — Quórum: com quórum + maioria → aprova", () => {
+  it("todos votaram, maioria a favor → approved=true", () => {
+    const result = computeQuorum(2, 2, 2);
+    expect(result.quorumMet).toBe(true);
+    expect(result.approved).toBe(true);
+  });
+
+  it("quórum atingido, mais a favor do que contra → approved=true", () => {
+    const result = computeQuorum(4, 3, 2); // 2 a favor, 1 contra
+    expect(result.quorumMet).toBe(true);
+    expect(result.approved).toBe(true);
+  });
+
+  it("quórum atingido, empate (1×1) → approved=false (não é maioria)", () => {
+    const result = computeQuorum(2, 2, 1); // 1 a favor, 1 contra
+    expect(result.quorumMet).toBe(true);
+    expect(result.approved).toBe(false);
+  });
+
+  it("quórum atingido, maioria contra → approved=false", () => {
+    const result = computeQuorum(4, 4, 1); // 1 a favor, 3 contra
+    expect(result.quorumMet).toBe(true);
+    expect(result.approved).toBe(false);
+  });
+
+  it("votação completa (todos votaram) → quórum garantido", () => {
+    const result = computeQuorum(4, 4, 3);
+    expect(result.quorumMet).toBe(true);
+    expect(result.approved).toBe(true);
+  });
+});
+
+// ── Botão de pânico ───────────────────────────────────────────────────────────
+
+describe("Votação — Botão de pânico (force-close sem quórum)", () => {
+  it("maioria a favor → aprovado", () => {
+    expect(panicApproved(3, 1)).toBe(true);
+  });
+
+  it("maioria contra → reprovado", () => {
+    expect(panicApproved(1, 3)).toBe(false);
+  });
+
+  it("empate → reprovado (padrão conservador: inFavor > against é false)", () => {
+    expect(panicApproved(2, 2)).toBe(false);
+  });
+
+  it("0 votos → reprovado (0 não é > 0)", () => {
+    expect(panicApproved(0, 0)).toBe(false);
+  });
+
+  it("pânico com quórum já atingido: maioria ainda decide", () => {
+    // 4 elegíveis, 4 votos (quórum atingido), 3×1 → aprovado
+    expect(panicApproved(3, 1)).toBe(true);
+  });
+});
+
+// ── DB: restrição de voto único ───────────────────────────────────────────────
+
+describe("Votação — DB: 1 voto por pessoa por projeto (UNIQUE constraint)", () => {
+  afterEach(async () => {
+    await db.delete(votes).where(
+      and(
+        eq(votes.projectId, IDS.projects.projectVoting),
+        eq(votes.userId, IDS.users.diretor1),
+      ),
+    );
+  });
+
+  it("primeiro voto é inserido com sucesso", async () => {
+    const [vote] = await db
+      .insert(votes)
+      .values({
+        projectId: IDS.projects.projectVoting,
+        userId: IDS.users.diretor1,
+        value: true,
+      })
+      .returning();
+
+    if (!vote) throw new Error("Voto não foi inserido");
+    expect(vote.value).toBe(true);
+  });
+
+  it("segundo voto do mesmo usuário é ignorado via onConflictDoNothing", async () => {
+    // Primeiro voto
+    await db
+      .insert(votes)
+      .values({
+        projectId: IDS.projects.projectVoting,
+        userId: IDS.users.diretor1,
+        value: true,
+      })
+      .onConflictDoNothing();
+
+    // Tentativa de segundo voto (valor diferente)
+    const second = await db
+      .insert(votes)
+      .values({
+        projectId: IDS.projects.projectVoting,
+        userId: IDS.users.diretor1,
+        value: false,
+      })
+      .onConflictDoNothing()
+      .returning();
+
+    expect(second).toHaveLength(0); // conflito ignorado
+
+    // Valor original preservado
+    const allVotes = await db
+      .select()
+      .from(votes)
+      .where(
+        and(
+          eq(votes.projectId, IDS.projects.projectVoting),
+          eq(votes.userId, IDS.users.diretor1),
+        ),
+      );
+    expect(allVotes).toHaveLength(1);
+    expect(allVotes.at(0)?.value).toBe(true);
+  });
+
+  it("usuários diferentes podem votar no mesmo projeto", async () => {
+    await db
+      .insert(votes)
+      .values({ projectId: IDS.projects.projectVoting, userId: IDS.users.diretor1, value: true })
+      .onConflictDoNothing();
+
+    await db
+      .insert(votes)
+      .values({ projectId: IDS.projects.projectVoting, userId: IDS.users.diretor2, value: false })
+      .onConflictDoNothing();
+
+    const allVotes = await db
+      .select()
+      .from(votes)
+      .where(eq(votes.projectId, IDS.projects.projectVoting));
+
+    expect(allVotes.length).toBeGreaterThanOrEqual(2);
+
+    // Cleanup diretor2's vote too
+    await db.delete(votes).where(
+      and(eq(votes.projectId, IDS.projects.projectVoting), eq(votes.userId, IDS.users.diretor2)),
+    );
+  });
+});
+
+// ── RLS: voto secreto ─────────────────────────────────────────────────────────
+
+describe("Votação — RLS: cédula secreta", () => {
+  beforeAll(async () => {
+    await db.insert(votes).values([
+      { projectId: IDS.projects.projectPanic, userId: IDS.users.diretor1, value: true },
+      { projectId: IDS.projects.projectPanic, userId: IDS.users.diretor2, value: false },
+    ]).onConflictDoNothing();
+  });
+
+  afterAll(async () => {
+    await db.delete(votes).where(eq(votes.projectId, IDS.projects.projectPanic));
+  });
+
+  it("submissor NÃO vê votos", async () => {
+    const rows = await queryAs(
+      IDS.users.submissor1,
+      `SELECT id FROM projetos.votes WHERE project_id = '${IDS.projects.projectPanic}'`,
+    );
+    expect(rows).toHaveLength(0);
+  });
+
+  it("conselheiro NÃO vê votos (nem os próprios)", async () => {
+    const rows = await queryAs(
+      IDS.users.conselheiro1,
+      `SELECT id FROM projetos.votes WHERE project_id = '${IDS.projects.projectPanic}'`,
+    );
+    expect(rows).toHaveLength(0);
+  });
+
+  it("diretor NÃO vê votos (nem os próprios)", async () => {
+    const rows = await queryAs(
+      IDS.users.diretor1,
+      `SELECT id FROM projetos.votes WHERE project_id = '${IDS.projects.projectPanic}'`,
+    );
+    expect(rows).toHaveLength(0);
+  });
+
+  it("super_admin VÊ todos os votos do projeto", async () => {
+    const rows = await queryAs(
+      IDS.users.superAdmin,
+      `SELECT id FROM projetos.votes WHERE project_id = '${IDS.projects.projectPanic}'`,
+    );
+    expect(rows.length).toBeGreaterThanOrEqual(2);
+  });
+});

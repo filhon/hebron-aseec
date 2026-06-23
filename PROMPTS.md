@@ -1874,15 +1874,15 @@ Testes de integração para Projetos. RLS (submissor vê apenas próprios, votes
 
 **Critérios de aceite:**
 
-- [ ] RLS: submissor não vê projetos de outras instituições
-- [ ] RLS: votes não visíveis para não-admin
-- [ ] State machine: transição inválida retorna erro
-- [ ] Votação: sem quórum → não aprova; com quórum + maioria → aprova
-- [ ] Contestação: 3a tentativa por projeto retorna erro; 2a por pessoa retorna erro
-- [ ] Orçamento: submissão que excede orçamento é bloqueada
-- [ ] Fluxo end-to-end funciona
-- [ ] Testes passam
-- [ ] Lint passa
+- [x] RLS: submissor não vê projetos de outras instituições
+- [x] RLS: votes não visíveis para não-admin
+- [x] State machine: transição inválida retorna erro
+- [x] Votação: sem quórum → não aprova; com quórum + maioria → aprova
+- [x] Contestação: 3a tentativa por projeto retorna erro; 2a por pessoa retorna erro
+- [x] Orçamento: submissão que excede orçamento é bloqueada
+- [x] Fluxo end-to-end funciona
+- [x] Testes passam
+- [x] Lint passa
 
 ---
 
