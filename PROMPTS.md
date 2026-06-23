@@ -1986,15 +1986,15 @@ Definir tipos e schemas Zod do Financeiro. Tipos: BankAccount, CostCenter, Categ
 
 **Critérios de aceite:**
 
-- [ ] Transaction imutável (sem update, correções via TransactionReversal)
-- [ ] Payable com status: pendente, aprovado, autorizado, pago, cancelado
-- [ ] BatchApproval: lote semanal de pagamentos para aprovação do diretor gestor
-- [ ] Category com parent_id (árvore hierárquica)
-- [ ] CostCenter vinculado a projetos.projects
-- [ ] Mock data: 50+ transações, 10+ payables, 3+ contas bancárias, plano de contas
-- [ ] Schemas Zod: createPayableSchema, createReceivableSchema, createTransactionSchema
-- [ ] Lint passa
-- [ ] Types passam
+- [x] Transaction imutável (sem update, correções via TransactionReversal)
+- [x] Payable com status: pendente, aprovado, autorizado, pago, cancelado
+- [x] BatchApproval: lote semanal de pagamentos para aprovação do diretor gestor
+- [x] Category com parent_id (árvore hierárquica)
+- [x] CostCenter vinculado a projetos.projects
+- [x] Mock data: 50+ transações, 10+ payables, 3+ contas bancárias, plano de contas
+- [x] Schemas Zod: createPayableSchema, createReceivableSchema, createTransactionSchema
+- [x] Lint passa
+- [x] Types passam
 
 **Notas:**
 Ref: BRAIN.md seção 6.5. Imutabilidade: correções via estorno + novo lançamento, nunca edit/delete.

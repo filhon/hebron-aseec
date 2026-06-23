@@ -67,6 +67,7 @@
 | S-43   | 2026-06-23 | P-2.11 — Integrações Cross-App Projetos   | parcial   |
 | S-44   | 2026-06-23 | P-2.9b — Usuário Real no Header Projetos  | concluido |
 | S-45   | 2026-06-23 | Polish — apps/projetos/src/app            | concluido |
+| S-46   | 2026-06-23 | P-3.1 — Schema de Tipos Financeiro        | concluido |
 
 ---
 
@@ -1709,4 +1710,38 @@ Corrigido o header dos dois layouts do módulo Projetos (submissor e diretoria) 
 - `apps/projetos/src/app/(diretoria)/layout.tsx` (modificado — convertido para Server Component)
 - `apps/projetos/src/app/(diretoria)/shell.tsx` (criado — Client Component com user como prop)
 - `apps/projetos/src/actions/auth.ts` (criado — `logoutAction`)
+- `SESSIONS.md` (este registro)
+
+---
+
+### S-46 — 2026-06-23 — P-3.1 Schema de Tipos Financeiro
+
+**Prompt:** P-3.1
+**Modelo:** claude-sonnet-4-6
+**Status:** concluido
+
+**Resumo:**
+Definidos todos os tipos TypeScript e schemas Zod do módulo Financeiro, além de mock data rico para desenvolvimento UI. Implementada a imutabilidade de `Transaction` via campos `readonly` e ausência de `updatedAt`; correções feitas exclusivamente via `TransactionReversal`. Governança dual de despesas modelada em `BatchApproval` com `approvedBy` (diretor gestor, 1ª camada) e `authorizedBy` (diretor autorizador, 2ª camada — pessoas distintas).
+
+**Decisoes tomadas:**
+
+- `Category` renomeada para `AccountCategory` — colisão de nome com `documentos.Category` ao exportar via barrel `packages/types/src/index.ts`; mesma estrutura, nome mais preciso para plano de contas
+- `Transaction` usa `readonly` em todos os campos em vez de apenas comentário — enforça imutabilidade no nível do tipo TypeScript, não apenas por convenção
+- Mock data usa `Array.filter()` em vez de indexação direta (`mockPayables[n]`) nos `BatchApproval.payables` — `noUncheckedIndexedAccess` retorna `T | undefined` para indexação de array, resolvido sem `!` (proibido pelo projeto)
+- Adicionados exports explícitos `./financeiro` em `packages/types/package.json` e `packages/validators/package.json` — o wildcard `./*` do Node.js package exports não resolve diretórios com `index.ts`
+- `createBudgetItemSchema` exportado separadamente além de ser composição de `createBudgetSchema` — permite validação de itens isolados em formulários de edição
+
+**Debitos tecnicos:**
+
+- Nenhum
+
+**Arquivos criados/modificados:**
+
+- `packages/types/src/financeiro/index.ts` (criado)
+- `packages/types/src/index.ts` (modificado — re-export `./financeiro`)
+- `packages/types/package.json` (modificado — export explícito `./financeiro`)
+- `packages/validators/src/financeiro/index.ts` (criado)
+- `packages/validators/src/index.ts` (modificado — re-export `./financeiro`)
+- `packages/validators/package.json` (modificado — export explícito `./financeiro`)
+- `apps/financeiro/src/lib/mock-data.ts` (criado)
 - `SESSIONS.md` (este registro)
