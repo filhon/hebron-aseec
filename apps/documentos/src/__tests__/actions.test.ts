@@ -52,14 +52,19 @@ vi.mock("next/headers", () => ({
   }),
 }));
 
-vi.mock("@supabase/supabase-js", () => ({
-  createClient: vi.fn().mockReturnValue({
+vi.mock("@hebron/auth/server", () => ({
+  createSupabaseServerActionClient: vi.fn().mockReturnValue({
     auth: {
       getUser: vi.fn().mockResolvedValue({
         data: { user: { id: ACTOR_ID, email: ACTOR_EMAIL } },
         error: null,
       }),
     },
+  }),
+}));
+
+vi.mock("@supabase/supabase-js", () => ({
+  createClient: vi.fn().mockReturnValue({
     storage: {
       from: vi.fn().mockReturnValue({
         createSignedUploadUrl: vi.fn().mockResolvedValue({
@@ -156,10 +161,16 @@ afterAll(async () => {
     await db.delete(categories).where(inArray(categories.id, allCatIds));
   }
 
-  for (const id of [ACTOR_ID, SUBSCRIBER_ID]) {
-    await db.delete(roleAssignments).where(eq(roleAssignments.userId, id));
-    await db.delete(users).where(eq(users.id, id));
-  }
+  // Apaga todas as role assignments destes usuários de uma vez,
+  // incluindo as que têm grantedBy = ACTOR_ID (FK da coluna granted_by).
+  await db
+    .delete(roleAssignments)
+    .where(inArray(roleAssignments.userId, [ACTOR_ID, SUBSCRIBER_ID]));
+  await db
+    .delete(roleAssignments)
+    .where(eq(roleAssignments.grantedBy, ACTOR_ID));
+  await db.delete(users).where(eq(users.id, SUBSCRIBER_ID));
+  await db.delete(users).where(eq(users.id, ACTOR_ID));
 });
 
 // ── createDocument ─────────────────────────────────────────────────────────────

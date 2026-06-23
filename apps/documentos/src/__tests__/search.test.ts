@@ -62,8 +62,8 @@ vi.mock("next/headers", () => ({
   }),
 }));
 
-vi.mock("@supabase/supabase-js", () => ({
-  createClient: vi.fn().mockReturnValue({
+vi.mock("@hebron/auth/server", () => ({
+  createSupabaseServerActionClient: vi.fn().mockReturnValue({
     auth: {
       getUser: vi.fn().mockResolvedValue({
         data: { user: { id: ACTOR_ID, email: ACTOR_EMAIL } },
