@@ -43,6 +43,8 @@ import {
   projetosAction,
 } from "../lib/safe-action";
 import { logProjectAudit, computeDiff } from "../lib/audit";
+import { onProjectApproved } from "../lib/integrations/financeiro";
+import { onProjectSubmitted } from "../lib/integrations/tarefas";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -558,6 +560,11 @@ export const submitProject = submissorAction
       },
     });
 
+    // Cross-app: criar checklist de análise no módulo tarefas (stub)
+    onProjectSubmitted(parsedInput.projectId).catch((err) =>
+      console.error("[projetos/submit] tarefas integration failed:", err),
+    );
+
     return { project: submittedProject };
   });
 
@@ -628,7 +635,7 @@ export const transitionProjectStage = diretorAction
       ctx.actorId,
     );
 
-    // When approved: generate payment schedule
+    // When approved: generate payment schedule + cross-app financeiro integration
     if (
       parsedInput.toStage === "aprovado" &&
       afterProject.parcelas &&
@@ -636,6 +643,11 @@ export const transitionProjectStage = diretorAction
       afterProject.budgetTotal
     ) {
       await generatePaymentSchedule(afterProject);
+
+      // Cross-app: criar centro de custo no módulo financeiro
+      onProjectApproved(parsedInput.projectId).catch((err) =>
+        console.error("[projetos/approve] financeiro integration failed:", err),
+      );
     }
 
     // When entering homologacao: notify submissor (7-day window)

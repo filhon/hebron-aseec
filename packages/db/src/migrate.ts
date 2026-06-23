@@ -34,7 +34,8 @@ const isNonTransactional = (sql: string) =>
   /ALTER\s+TYPE\s+\S+\s+ADD\s+VALUE/i.test(sql);
 
 async function migrate() {
-  const sql = postgres(DATABASE_URL!, { prepare: false, max: 1 });
+  if (!DATABASE_URL) throw new Error("DATABASE_URL is not set");
+  const sql = postgres(DATABASE_URL, { prepare: false, max: 1 });
 
   try {
     await sql`

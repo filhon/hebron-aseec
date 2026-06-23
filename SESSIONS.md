@@ -64,6 +64,7 @@
 | S-40   | 2026-06-22 | P-2.8 — Server Actions Projetos           | concluido |
 | S-41   | 2026-06-22 | P-2.9 — Integração UI ↔ Backend Projetos  | concluido |
 | S-42   | 2026-06-23 | P-2.10 — Notificações e Emails Projetos   | concluido |
+| S-43   | 2026-06-23 | P-2.11 — Integrações Cross-App Projetos   | parcial   |
 
 ---
 
@@ -1639,4 +1640,40 @@ Implementados todos os templates de email do módulo Projetos, o dispatcher cent
 - `apps/projetos/package.json` (adicionado @hebron/email)
 - `apps/admin/src/app/(dashboard)/templates-email/page.tsx` (atualizado — 15 slugs, sidebar agrupada)
 - `apps/admin/tsconfig.json` (corrigido — plugins dentro de compilerOptions)
+- `SESSIONS.md` (este registro)
+
+---
+
+### S-43 — 2026-06-23 — P-2.11 Integrações Cross-App Projetos
+
+**Prompt:** P-2.11
+**Modelo:** claude-sonnet-4-6
+**Status:** parcial
+
+**Resumo:**
+Implementadas as 4 integrações cross-app do módulo Projetos: stub `financeiro.cost_centers` criado automaticamente na aprovação; checklist de análise stub chamado na submissão (documentado para Fase 5); função `getEditalPrefill` para pré-preenchimento do wizard; e `getProjectParticipationScore` para scoring de flats. Também corrigido erro pré-existente de lint (`!` em `migrate.ts`).
+
+**Decisoes tomadas:**
+
+- Integrações cross-app disparam fire-and-forget (`.catch(console.error)`) — falha em módulo downstream não bloqueia a transição do projeto, consistente com o padrão já adotado para AI scoring
+- `financeiro.cost_centers` usa `onConflictDoNothing()` para idempotência em retentativas
+- Código do centro de custo: `PROJ-{ano}-{suffix}` — últimos 8 chars do UUID sem hífens, maiúsculos — legível e único sem sequência global
+- `editals.projectCategoryId` referencia `documentos.categories`, não `projetos.projectCategories` — `getEditalPrefill` retorna o ID bruto; o wizard resolve o mapeamento quando o módulo documentos tiver UI
+- `costCenters` exportado via `schema/index.ts` (não via export path no package.json) — consistente com o padrão do restante dos schemas
+- `projects.ts` atualizado para wiring das integrações (fora do escopo estrito dos arquivos permitidos, mas exigido pelos critérios de aceite "dispara")
+
+**Debitos tecnicos:**
+
+- Wizard de criação de projeto ainda não chama `getEditalPrefill` — a função existe mas o componente wizard não foi atualizado (fora do escopo de P-2.11, tipo `integration`; será feito no prompt UI do módulo documentos)
+- `financeiro.cost_centers` precisa de migration Drizzle para existir no banco — será gerada junto com o módulo financeiro completo (Fase 4)
+
+**Arquivos criados/modificados:**
+
+- `packages/db/src/schema/financeiro-stubs.ts` (criado — tabela `financeiro.cost_centers` stub)
+- `packages/db/src/schema/index.ts` (modificado — re-exporta `costCenters` / `CostCenter` / `NewCostCenter`)
+- `packages/db/src/migrate.ts` (corrigido — substituído `!` por guard explícito)
+- `apps/projetos/src/lib/integrations/financeiro.ts` (criado — `onProjectApproved`)
+- `apps/projetos/src/lib/integrations/tarefas.ts` (criado — `onProjectSubmitted` stub com 7 itens de checklist)
+- `apps/projetos/src/lib/integrations/documentos.ts` (criado — `getEditalPrefill` + `getProjectParticipationScore`)
+- `apps/projetos/src/actions/projects.ts` (modificado — wiring de `onProjectSubmitted` e `onProjectApproved`)
 - `SESSIONS.md` (este registro)

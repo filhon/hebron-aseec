@@ -92,6 +92,10 @@ export type {
 } from "./documentos";
 
 // Projetos schema
+// Financeiro stubs (substituídos pelo módulo completo na Fase 4)
+export { costCenters } from "./financeiro-stubs";
+export type { CostCenter, NewCostCenter } from "./financeiro-stubs";
+
 export {
   projectTypeEnum,
   projectStageEnum,

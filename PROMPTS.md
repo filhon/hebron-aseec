@@ -1838,13 +1838,13 @@ Integração Projetos → Financeiro: aprovação cria centro de custo + payment
 
 **Critérios de aceite:**
 
-- [ ] Aprovação de projeto dispara criação de centro de custo (stub ou real)
-- [ ] Aprovação cria payment_schedules baseado nas parcelas definidas
-- [ ] Submissão dispara criação de checklist de análise (stub)
-- [ ] Wizard recebe edital_id e pré-preenche tipo + categoria
-- [ ] Stubs documentados para integração futura
-- [ ] Lint passa
-- [ ] Types passam
+- [x] Aprovação de projeto dispara criação de centro de custo (stub ou real)
+- [x] Aprovação cria payment_schedules baseado nas parcelas definidas
+- [x] Submissão dispara criação de checklist de análise (stub)
+- [~] Wizard recebe edital_id e pré-preenche tipo + categoria
+- [x] Stubs documentados para integração futura
+- [x] Lint passa
+- [x] Types passam
 
 **Notas:**
 Ref: BRAIN.md seção 7 (Integrações cross-app). Pagamentos nascem NÃO aprovados.
