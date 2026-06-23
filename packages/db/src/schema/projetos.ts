@@ -470,6 +470,31 @@ export const paymentSchedules = projetosSchema.table(
 );
 
 // ---------------------------------------------------------------------------
+// projetos.project_attachments — docs attached at submission time
+// ---------------------------------------------------------------------------
+export const projectAttachments = projetosSchema.table(
+  "project_attachments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    fileUrl: text("file_url").notNull(),
+    fileName: text("file_name").notNull(),
+    fileSize: integer("file_size"),
+    uploadedBy: uuid("uploaded_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("project_attachments_project_id_idx").on(table.projectId),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // Inferred types
 // ---------------------------------------------------------------------------
 export type ProjectCategory = typeof projectCategories.$inferSelect;
@@ -494,5 +519,7 @@ export type Report = typeof reports.$inferSelect;
 export type NewReport = typeof reports.$inferInsert;
 export type ReportAttachment = typeof reportAttachments.$inferSelect;
 export type NewReportAttachment = typeof reportAttachments.$inferInsert;
+export type ProjectAttachment = typeof projectAttachments.$inferSelect;
+export type NewProjectAttachment = typeof projectAttachments.$inferInsert;
 export type PaymentSchedule = typeof paymentSchedules.$inferSelect;
 export type NewPaymentSchedule = typeof paymentSchedules.$inferInsert;

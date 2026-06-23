@@ -1629,12 +1629,12 @@ Substituir mocks por dados reais em todas as telas de Projetos. Dashboard submis
 - `apps/projetos/src/lib/mock-data.ts` (remover)
 
 **Critérios de aceite:**
-- [ ] Dashboard submissor com dados reais
-- [ ] Wizard salva projeto no banco, faz upload de anexos
-- [ ] Pipeline kanban reflete stages do banco
-- [ ] Votação funcional (registra, calcula quórum, exibe resultado)
-- [ ] Pauta da reunião: saldo real do Financeiro (placeholder se módulo não existe ainda)
-- [ ] Score IA exibido apenas para diretoria
+- [x] Dashboard submissor com dados reais
+- [x] Wizard salva projeto no banco, faz upload de anexos
+- [x] Pipeline kanban reflete stages do banco
+- [x] Votação funcional (registra, calcula quórum, exibe resultado)
+- [x] Pauta da reunião: saldo real do Financeiro (placeholder se módulo não existe ainda)
+- [x] Score IA exibido apenas para diretoria
 - [x] Mock data removido
 - [x] Lint passa
 - [x] Types passam

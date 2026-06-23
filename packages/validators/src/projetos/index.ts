@@ -95,6 +95,15 @@ export const createAnnualProjectSchema = z
     parcerias: z.string().max(2000).nullable().optional(),
     riscos: z.string().max(2000).nullable().optional(),
     indicadoresExito: z.string().max(2000).nullable().optional(),
+    attachments: z
+      .array(
+        z.object({
+          fileUrl: z.string().min(1),
+          fileName: z.string().min(1),
+          fileSize: z.number().int().positive().optional(),
+        }),
+      )
+      .optional(),
   })
   .superRefine((data, ctx) => {
     if (data.mesesPagamento.length !== data.numeroParcelas) {
@@ -145,6 +154,15 @@ export const createPunctualProjectSchema = z.object({
   pais: z.string().max(100).optional(),
   editalId: z.string().uuid().nullable().optional(),
   parentProjectId: z.string().uuid().nullable().optional(),
+  attachments: z
+    .array(
+      z.object({
+        fileUrl: z.string().min(1),
+        fileName: z.string().min(1),
+        fileSize: z.number().int().positive().optional(),
+      }),
+    )
+    .optional(),
 });
 
 export type CreatePunctualProjectInput = z.infer<typeof createPunctualProjectSchema>;

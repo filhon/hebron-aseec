@@ -112,6 +112,7 @@ export {
   contestations,
   reports,
   reportAttachments,
+  projectAttachments,
   paymentSchedules,
 } from "./projetos";
 
@@ -139,6 +140,8 @@ export type {
   NewReport,
   ReportAttachment,
   NewReportAttachment,
+  ProjectAttachment,
+  NewProjectAttachment,
   PaymentSchedule,
   NewPaymentSchedule,
 } from "./projetos";

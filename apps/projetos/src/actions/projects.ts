@@ -9,6 +9,7 @@ import {
   compactVersions,
   contestations,
   paymentSchedules,
+  projectAttachments,
   notifications,
   organizations,
   systemSettings,
@@ -210,6 +211,18 @@ export const createAnnualDraft = submissorAction
       ctx.actorId,
     );
 
+    if (parsedInput.attachments?.length) {
+      await db.insert(projectAttachments).values(
+        parsedInput.attachments.map((a) => ({
+          projectId: project.id,
+          fileUrl: a.fileUrl,
+          fileName: a.fileName,
+          fileSize: a.fileSize ?? null,
+          uploadedBy: ctx.actorId,
+        })),
+      );
+    }
+
     await logProjectAudit({
       actorId: ctx.actorId,
       action: "project.created",
@@ -222,6 +235,7 @@ export const createAnnualDraft = submissorAction
           stage: "rascunho",
           evaluationYear: year,
           organizationId: project.organizationId,
+          attachmentsCount: parsedInput.attachments?.length ?? 0,
         },
       },
     });
@@ -271,6 +285,18 @@ export const createPunctualDraft = submissorAction
       ctx.actorId,
     );
 
+    if (parsedInput.attachments?.length) {
+      await db.insert(projectAttachments).values(
+        parsedInput.attachments.map((a) => ({
+          projectId: project.id,
+          fileUrl: a.fileUrl,
+          fileName: a.fileName,
+          fileSize: a.fileSize ?? null,
+          uploadedBy: ctx.actorId,
+        })),
+      );
+    }
+
     await logProjectAudit({
       actorId: ctx.actorId,
       action: "project.created",
@@ -282,6 +308,7 @@ export const createPunctualDraft = submissorAction
           tipo: "pontual",
           stage: "rascunho",
           organizationId: project.organizationId,
+          attachmentsCount: parsedInput.attachments?.length ?? 0,
         },
       },
     });
