@@ -68,6 +68,7 @@
 | S-44   | 2026-06-23 | P-2.9b — Usuário Real no Header Projetos  | concluido |
 | S-45   | 2026-06-23 | Polish — apps/projetos/src/app            | concluido |
 | S-46   | 2026-06-23 | P-3.1 — Schema de Tipos Financeiro        | concluido |
+| S-47   | 2026-06-25 | P-3.2 — Componentes UI Financeiro         | concluido |
 
 ---
 
@@ -1744,4 +1745,37 @@ Definidos todos os tipos TypeScript e schemas Zod do módulo Financeiro, além d
 - `packages/validators/src/index.ts` (modificado — re-export `./financeiro`)
 - `packages/validators/package.json` (modificado — export explícito `./financeiro`)
 - `apps/financeiro/src/lib/mock-data.ts` (criado)
+- `SESSIONS.md` (este registro)
+
+---
+
+### S-47 — 2026-06-25 — P-3.2 Componentes UI Financeiro
+
+**Prompt:** P-3.2
+**Modelo:** claude-sonnet-4-6
+**Status:** concluido
+
+**Resumo:**
+Criados os 7 componentes UI do módulo financeiro (Bloco A — dados mockados), fiéis aos protótipos em `design-refs/financeiro/`. Todos usam exclusivamente `@hebron/ui`, tokens `--hb-*` canônicos via Tailwind v4 e zero CSS customizado por app.
+
+**Decisoes tomadas:**
+- `BatchApprovalStatus` não tem estágio "pago" — o lote termina em "autorizado"; pagamentos individuais são rastreados via `Payable.status`. A etapa "Pagamento" na timeline do `BatchApprovalCard` usa `batch.payables.every(p => p.status === "pago")`.
+- `CashFlowChart` implementado em SVG puro (sem biblioteca de charts) — TanStack Charts não está instalado.
+- `TransactionTable` usa `useState`/`useMemo` + `<table>` nativo — TanStack Table não instalado no app.
+- Font display via `style={{ fontFamily: 'var(--font-display)' }}` inline (Tailwind v4 não tem utility para font-family customizada sem config).
+- `lucide-react` adicionado ao `apps/financeiro/package.json` (estava ausente).
+- BOM UTF-8 no CSV exportado: usado `"﻿"` (escape) em vez de literal para passar no `no-irregular-whitespace` do ESLint.
+
+**Debitos tecnicos:**
+- Nenhum. Typecheck e lint passam limpos.
+
+**Arquivos criados/modificados:**
+- `apps/financeiro/src/components/transaction-table.tsx` (criado)
+- `apps/financeiro/src/components/payable-card.tsx` (criado)
+- `apps/financeiro/src/components/cash-flow-chart.tsx` (criado)
+- `apps/financeiro/src/components/budget-comparison.tsx` (criado)
+- `apps/financeiro/src/components/conciliation-view.tsx` (criado)
+- `apps/financeiro/src/components/category-tree.tsx` (criado)
+- `apps/financeiro/src/components/batch-approval-card.tsx` (criado)
+- `apps/financeiro/package.json` (modificado — lucide-react adicionado)
 - `SESSIONS.md` (este registro)

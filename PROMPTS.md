@@ -2027,15 +2027,15 @@ Componentes: TransactionTable (TanStack Table com filtros avançados e exportaç
 
 **Critérios de aceite:**
 
-- [ ] TransactionTable com filtros: data, categoria, conta, tipo, valor; exportação CSV/Excel
-- [ ] PayableCard com cores: verde (em dia), amarelo (próximo), vermelho (vencido)
-- [ ] ConciliationView: split view com match automático destacado
-- [ ] CategoryTree: plano de contas hierárquico editável
-- [ ] BudgetComparison: barras planejado vs executado com % de execução
-- [ ] BatchApprovalCard: lista de pagamentos do lote com total e botão aprovar
-- [ ] Responsivo
-- [ ] Lint passa
-- [ ] Types passam
+- [x] TransactionTable com filtros: data, categoria, conta, tipo, valor; exportação CSV/Excel
+- [x] PayableCard com cores: verde (em dia), amarelo (próximo), vermelho (vencido)
+- [x] ConciliationView: split view com match automático destacado
+- [x] CategoryTree: plano de contas hierárquico editável
+- [x] BudgetComparison: barras planejado vs executado com % de execução
+- [x] BatchApprovalCard: lista de pagamentos do lote com total e botão aprovar
+- [x] Responsivo
+- [x] Lint passa
+- [x] Types passam
 
 ---
 
