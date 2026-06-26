@@ -73,6 +73,7 @@
 | S-49   | 2026-06-26 | P-3.4 — Formulários Financeiro            | concluido |
 | S-50   | 2026-06-26 | P-3.5 — Estados Financeiro                | concluido |
 | S-51   | 2026-06-26 | P-3.6 — Schema do Banco Financeiro        | concluido |
+| S-52   | 2026-06-26 | P-3.7 — RLS Policies Financeiro           | concluido |
 
 ---
 
@@ -1962,3 +1963,41 @@ Criação do schema Drizzle completo para o módulo financeiro (14 tabelas, 9 en
 - `packages/db/src/schema/financeiro.ts` (criado)
 - `packages/db/src/migrations/0010_financeiro.sql` (criado)
 - `packages/db/src/schema/index.ts` (modificado — substituídos exports de `financeiro-stubs` pelo módulo completo)
+
+---
+
+### S-52 — 2026-06-26 — P-3.7 RLS Policies Financeiro
+
+**Prompt:** P-3.7
+**Duracao:** ~20 min
+**Modelo:** claude-sonnet-4-6
+**Status:** concluido
+
+**Resumo:**
+Criada a migration `0009_financeiro_rls.sql` refinando as políticas RLS do schema financeiro. Adicionado o helper `public.has_designation(d text)` para verificar a designation do usuário corrente (gestor/autorizador) sem expor lógica de negócio na camada de banco. Substituídas 4 policies coarsas da 0010 por policies granulares que respeitam o modelo de governança dual. Atualizada também a policy `projetos.payment_schedules` para estender o acesso do submissor a todos os membros da organização.
+
+**Criterios de aceite verificados:**
+
+- [x] Super_admin: full CRUD em financeiro.* (coberto por policies FOR ALL + novas INSERT/UPDATE)
+- [x] Diretor gestor: SELECT + UPDATE em batch_approvals (batch_approvals_update_gestor com has_designation('gestor'))
+- [x] Colaborador financeiro: CRUD em transações, payables, receivables (novas policies insert/update)
+- [x] Submissor: SELECT em payment_schedules de projetos da própria instituição (JOIN organization_members)
+- [x] transactions: sem UPDATE/DELETE para ninguém (deny-by-default + trigger forbid_transaction_mutation)
+- [x] Demais papéis: sem acesso ao schema financeiro (RLS ENABLED + nenhuma policy os inclui)
+- [x] Types passam (pnpm turbo typecheck — 17/17 tasks successful)
+
+**Decisoes tomadas:**
+
+- `has_designation` criada como `STABLE SECURITY DEFINER` no schema `public` — mesma convenção de `has_role`, evita recursão RLS e garante que a função leia `public.designations` com os privilégios do owner
+- `receivables_mutate_admin` (FOR ALL super_admin) substituída por duas policies separadas (INSERT + UPDATE) — segue o padrão de explicitação por operação adotado nas demais tabelas; sem UPDATE/DELETE em payables (imutabilidade via soft-delete)
+- `payables_update_staff` inclui `diretor` genérico (gestor e autorizador) — a separação quem-aprova vs. quem-autoriza é enforced no Server Action com verificação de designation; o RLS delimita apenas o conjunto de atores elegíveis
+- `batch_approvals_update_gestor` restringe UPDATE ao diretor com `has_designation('gestor')` — autorizador tem apenas SELECT; super_admin autoriza o lote (segunda etapa da governança dual)
+- `projetos.payment_schedules` policy recriada nesta migration (não em 0009_fix_rls_org_members_votes.sql) — escopo cross-schema necessário para o módulo financeiro exibir parcelas ao submissor
+
+**Debitos tecnicos:**
+
+- Nenhum
+
+**Arquivos criados/modificados:**
+
+- `packages/db/src/migrations/0009_financeiro_rls.sql` (criado)

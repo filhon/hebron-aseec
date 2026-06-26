@@ -2208,13 +2208,13 @@ RLS para schema financeiro. Super_admin: full access. Diretor gestor (designatio
 
 **Critérios de aceite:**
 
-- [ ] Super_admin: full CRUD em financeiro.\*
-- [ ] Diretor gestor: SELECT + UPDATE em batch_approvals (aprovar)
-- [ ] Colaborador financeiro: CRUD em transações, payables, receivables
-- [ ] Submissor: SELECT em payment_schedules de projetos da própria instituição
-- [ ] transactions: sem UPDATE/DELETE para ninguém (constraint + RLS)
-- [ ] Demais papéis: sem acesso ao schema financeiro
-- [ ] Types passam
+- [x] Super_admin: full CRUD em financeiro.\*
+- [x] Diretor gestor: SELECT + UPDATE em batch_approvals (aprovar)
+- [x] Colaborador financeiro: CRUD em transações, payables, receivables
+- [x] Submissor: SELECT em payment_schedules de projetos da própria instituição
+- [x] transactions: sem UPDATE/DELETE para ninguém (constraint + RLS)
+- [x] Demais papéis: sem acesso ao schema financeiro
+- [x] Types passam
 
 ---
 
