@@ -2066,15 +2066,15 @@ Páginas: Dashboard (saldo por conta, fluxo do mês, contas a pagar próximas). 
 
 **Critérios de aceite:**
 
-- [ ] Dashboard com saldo real por conta bancária e visão consolidada
-- [ ] Lista de lançamentos com filtros avançados e exportação
-- [ ] Conciliação: split view extrato × lançamentos com match visual
-- [ ] Orçamento: planejado vs executado por centro de custo
-- [ ] Plano de contas: árvore hierárquica editável (drag-drop para reordenar)
-- [ ] Importação de extrato: upload OFX/CSV com preview antes de confirmar
-- [ ] Responsivo
-- [ ] Lint passa
-- [ ] Types passam
+- [x] Dashboard com saldo real por conta bancária e visão consolidada
+- [x] Lista de lançamentos com filtros avançados e exportação
+- [x] Conciliação: split view extrato × lançamentos com match visual
+- [x] Orçamento: planejado vs executado por centro de custo
+- [x] Plano de contas: árvore hierárquica editável (drag-drop para reordenar)
+- [x] Importação de extrato: upload OFX/CSV com preview antes de confirmar
+- [x] Responsivo
+- [x] Lint passa
+- [x] Types passam
 
 ---
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import {
   ChevronRight,
   Plus,
@@ -12,6 +12,7 @@ import {
   Download,
   Link,
   BarChart3,
+  GripVertical,
 } from "lucide-react";
 import type { AccountCategory } from "@hebron/types/financeiro";
 
@@ -25,6 +26,11 @@ interface CategoryTreeProps {
 
 interface TreeNode extends AccountCategory {
   children: TreeNode[];
+}
+
+interface DragState {
+  id: string;
+  parentId: string | null;
 }
 
 function clsx(...cls: (string | false | null | undefined)[]): string {
@@ -57,6 +63,28 @@ function buildTree(categories: AccountCategory[]): TreeNode[] {
   return roots;
 }
 
+function buildOrderMap(
+  nodes: TreeNode[],
+  parentId: string | null,
+  map: Map<string | null, string[]>,
+) {
+  map.set(
+    parentId,
+    nodes.map((n) => n.id),
+  );
+  for (const n of nodes) {
+    if (n.children.length > 0) buildOrderMap(n.children, n.id, map);
+  }
+}
+
+function reorder<T>(arr: T[], fromIdx: number, toIdx: number): T[] {
+  const result = [...arr];
+  const item = result.splice(fromIdx, 1)[0];
+  if (item === undefined) return result;
+  result.splice(toIdx, 0, item);
+  return result;
+}
+
 const ROOT_ICONS: Record<string, React.ReactNode> = {
   "1": <TrendingUp className="h-3.5 w-3.5" />,
   "2": <Building2 className="h-3.5 w-3.5" />,
@@ -65,14 +93,8 @@ const ROOT_ICONS: Record<string, React.ReactNode> = {
 };
 
 const ROOT_COLORS: Record<string, { icon: string; bg: string } | undefined> = {
-  receita: {
-    icon: "text-(--hb-green-deep)",
-    bg: "bg-(--hb-green-muted)",
-  },
-  despesa: {
-    icon: "text-(--hb-blue)",
-    bg: "bg-[rgba(32,44,133,0.10)]",
-  },
+  receita: { icon: "text-(--hb-green-deep)", bg: "bg-(--hb-green-muted)" },
+  despesa: { icon: "text-(--hb-blue)", bg: "bg-[rgba(32,44,133,0.10)]" },
 };
 
 const ROOT_COLOR_DEFAULT = {
@@ -89,6 +111,11 @@ function TreeNodeRow({
   onToggle,
   onAddChild,
   onEdit,
+  onReorder,
+  dragState,
+  setDragState,
+  dropTargetId,
+  setDropTargetId,
 }: {
   node: TreeNode;
   depth: NodeDepth;
@@ -96,6 +123,11 @@ function TreeNodeRow({
   onToggle: (id: string) => void;
   onAddChild?: (parentId: string) => void;
   onEdit?: (id: string) => void;
+  onReorder: (parentId: string | null, fromId: string, toId: string) => void;
+  dragState: DragState | null;
+  setDragState: (s: DragState | null) => void;
+  dropTargetId: string | null;
+  setDropTargetId: (id: string | null) => void;
 }) {
   const [hovered, setHovered] = useState(false);
   const hasChildren = node.children.length > 0;
@@ -103,31 +135,91 @@ function TreeNodeRow({
   const rootColor = ROOT_COLORS[node.type] ?? ROOT_COLOR_DEFAULT;
 
   const paddingLeft = depth === 0 ? "pl-3" : depth === 1 ? "pl-9" : "pl-[52px]";
-
   const weightClass =
     depth === 0 ? "font-bold" : depth === 1 ? "font-semibold" : "font-medium";
-
   const textColor =
     depth === 0
       ? "text-(--fg)"
       : depth === 1
         ? "text-(--fg)"
         : "text-(--fg-muted)";
-
   const fontSize = depth === 2 ? "text-xs" : "text-sm";
+
+  const isDragging = dragState?.id === node.id;
+  // Can only drop onto same-level siblings
+  const canReceiveDrop =
+    dragState !== null &&
+    dragState.parentId === node.parentId &&
+    dragState.id !== node.id;
+  const isDropTarget = dropTargetId === node.id && canReceiveDrop;
+
+  function handleDragStart(e: React.DragEvent) {
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", node.id);
+    setDragState({ id: node.id, parentId: node.parentId });
+  }
+
+  function handleDragOver(e: React.DragEvent) {
+    if (!canReceiveDrop) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDropTargetId(node.id);
+  }
+
+  function handleDragLeave() {
+    if (dropTargetId === node.id) setDropTargetId(null);
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    if (!canReceiveDrop || !dragState) return;
+    onReorder(node.parentId, dragState.id, node.id);
+    setDragState(null);
+    setDropTargetId(null);
+  }
+
+  function handleDragEnd() {
+    setDragState(null);
+    setDropTargetId(null);
+  }
 
   return (
     <>
       <div
+        draggable
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        onDragEnd={handleDragEnd}
         className={clsx(
-          "flex items-center gap-2 py-2.5 pr-3 rounded-lg transition-colors cursor-pointer",
+          "flex items-center gap-2 py-2.5 pr-3 rounded-lg transition-colors select-none",
           paddingLeft,
-          hovered ? "bg-(--surface-alt)" : "",
+          isDragging ? "opacity-40" : "cursor-pointer",
+          !isDragging && hovered ? "bg-(--surface-alt)" : "",
         )}
+        style={{
+          borderTop: isDropTarget
+            ? "2px solid var(--hb-blue)"
+            : "2px solid transparent",
+        }}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
-        onClick={() => hasChildren && onToggle(node.id)}
+        onClick={() => {
+          if (!dragState && hasChildren) onToggle(node.id);
+        }}
       >
+        {/* Drag handle — visible on hover */}
+        <span
+          className={clsx(
+            "shrink-0 transition-opacity",
+            hovered && !isDragging ? "opacity-100 cursor-grab" : "opacity-0",
+          )}
+          style={{ width: 12 }}
+        >
+          <GripVertical className="h-3 w-3 text-(--fg-muted)" />
+        </span>
+
         {/* Chevron */}
         <span className="w-4 h-4 flex items-center justify-center shrink-0">
           {hasChildren ? (
@@ -185,7 +277,7 @@ function TreeNodeRow({
         )}
 
         {/* Hover actions */}
-        {hovered && (
+        {hovered && !isDragging && (
           <span className="flex items-center gap-1 shrink-0">
             {onAddChild && (
               <button
@@ -225,6 +317,11 @@ function TreeNodeRow({
               onToggle={onToggle}
               onAddChild={onAddChild}
               onEdit={onEdit}
+              onReorder={onReorder}
+              dragState={dragState}
+              setDragState={setDragState}
+              dropTargetId={dropTargetId}
+              setDropTargetId={setDropTargetId}
             />
           ))}
         </>
@@ -240,27 +337,67 @@ export function CategoryTree({
   onEdit,
   onExport,
 }: CategoryTreeProps) {
-  const tree = useMemo(() => buildTree(categories), [categories]);
+  const baseTree = useMemo(() => buildTree(categories), [categories]);
 
-  // Start with all root nodes expanded
   const [expanded, setExpanded] = useState<Set<string>>(
     () => new Set(categories.filter((c) => c.level === 1).map((c) => c.id)),
+  );
+
+  const [dragState, setDragState] = useState<DragState | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+
+  // Tracks user-defined order per parent (null = roots)
+  const [orderMap, setOrderMap] = useState<Map<string | null, string[]>>(() => {
+    const map = new Map<string | null, string[]>();
+    buildOrderMap(baseTree, null, map);
+    return map;
+  });
+
+  // Apply orderMap on top of baseTree
+  const orderedTree = useMemo(() => {
+    function applyOrder(
+      nodes: TreeNode[],
+      parentId: string | null,
+    ): TreeNode[] {
+      const order = orderMap.get(parentId);
+      const sorted = order
+        ? order
+            .map((id) => nodes.find((n) => n.id === id))
+            .filter((n): n is TreeNode => n !== undefined)
+        : nodes;
+      return sorted.map((n) => ({
+        ...n,
+        children: applyOrder(n.children, n.id),
+      }));
+    }
+    return applyOrder(baseTree, null);
+  }, [baseTree, orderMap]);
+
+  const handleReorder = useCallback(
+    (parentId: string | null, fromId: string, toId: string) => {
+      setOrderMap((prev) => {
+        const current = prev.get(parentId) ?? [];
+        const fromIdx = current.indexOf(fromId);
+        const toIdx = current.indexOf(toId);
+        if (fromIdx === -1 || toIdx === -1 || fromIdx === toIdx) return prev;
+        const next = new Map(prev);
+        next.set(parentId, reorder(current, fromIdx, toIdx));
+        return next;
+      });
+    },
+    [],
   );
 
   const toggle = (id: string) => {
     setExpanded((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   };
 
   const expandAll = () => setExpanded(new Set(categories.map((c) => c.id)));
-
   const collapseAll = () =>
     setExpanded(
       new Set(categories.filter((c) => c.level === 1).map((c) => c.id)),
@@ -268,13 +405,12 @@ export function CategoryTree({
 
   const leafCount = categories.filter((c) => c.level === 3).length;
   const groupCount = categories.filter((c) => c.level === 2).length;
-  const rootCount = tree.length;
+  const rootCount = orderedTree.length;
 
   return (
     <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
       {/* Tree panel */}
       <div className="rounded-xl border border-(--border) bg-(--surface) overflow-hidden">
-        {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-(--border)">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-(--fg-muted)">
@@ -304,7 +440,6 @@ export function CategoryTree({
           </div>
         </div>
 
-        {/* Expand / Collapse controls */}
         <div className="flex items-center gap-3 px-4 py-2 border-b border-(--divider) bg-(--bg-alt)">
           <button
             onClick={expandAll}
@@ -319,20 +454,23 @@ export function CategoryTree({
           >
             Recolher
           </button>
+          <span className="ml-auto flex items-center gap-1 text-[10px] text-(--fg-muted) font-medium">
+            <GripVertical className="h-3 w-3" />
+            Arraste para reordenar
+          </span>
         </div>
 
-        {/* Tree */}
         <div
           className="px-2 py-2"
           style={{ maxHeight: 520, overflowY: "auto" }}
         >
-          {tree.length === 0 ? (
+          {orderedTree.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3 text-(--fg-muted)">
               <FileText className="h-8 w-8 opacity-30" />
               <p className="text-sm">Nenhuma categoria cadastrada.</p>
             </div>
           ) : (
-            tree.map((root) => (
+            orderedTree.map((root) => (
               <TreeNodeRow
                 key={root.id}
                 node={root}
@@ -341,6 +479,11 @@ export function CategoryTree({
                 onToggle={toggle}
                 onAddChild={onAddChild}
                 onEdit={onEdit}
+                onReorder={handleReorder}
+                dragState={dragState}
+                setDragState={setDragState}
+                dropTargetId={dropTargetId}
+                setDropTargetId={setDropTargetId}
               />
             ))
           )}
@@ -349,7 +492,6 @@ export function CategoryTree({
 
       {/* Side panel */}
       <div className="flex flex-col gap-4">
-        {/* Stats card */}
         <div className="rounded-xl border border-(--border) bg-(--surface) px-5 py-4">
           <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-(--fg-muted) mb-3">
             Estrutura atual
@@ -375,7 +517,6 @@ export function CategoryTree({
           </p>
         </div>
 
-        {/* Quick actions */}
         <div className="rounded-xl border border-(--border) bg-(--surface) px-5 py-4">
           <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-(--fg-muted) mb-3">
             Operações comuns
@@ -413,7 +554,6 @@ export function CategoryTree({
           </div>
         </div>
 
-        {/* Tip card */}
         <div className="rounded-xl bg-(--hb-blue) text-(--fg-invert) px-5 py-4">
           <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-(--hb-cyan) mb-2">
             Boa prática

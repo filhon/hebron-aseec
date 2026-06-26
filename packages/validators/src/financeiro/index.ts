@@ -38,16 +38,23 @@ export const createPayableSchema = z.object({
     .string()
     .min(5, "Descrição deve ter pelo menos 5 caracteres")
     .max(500, "Descrição deve ter no máximo 500 caracteres"),
-  supplierName: z
-    .string()
-    .min(2, "Nome do fornecedor é obrigatório")
-    .max(200),
+  supplierName: z.string().min(2, "Nome do fornecedor é obrigatório").max(200),
   supplierCnpj: cnpj.optional().default(null),
   amount: positiveAmount,
   dueAt: z.coerce.date({ invalid_type_error: "Data de vencimento inválida" }),
   categoryId: z.string().uuid("Selecione uma categoria válida"),
-  costCenterId: z.string().uuid("Selecione um centro de custo válido").nullable().optional().default(null),
-  projectId: z.string().uuid("Projeto inválido").nullable().optional().default(null),
+  costCenterId: z
+    .string()
+    .uuid("Selecione um centro de custo válido")
+    .nullable()
+    .optional()
+    .default(null),
+  projectId: z
+    .string()
+    .uuid("Projeto inválido")
+    .nullable()
+    .optional()
+    .default(null),
   notes: z
     .string()
     .max(1000, "Observações devem ter no máximo 1000 caracteres")
@@ -98,16 +105,20 @@ export const createReceivableSchema = z.object({
     .string()
     .min(5, "Descrição deve ter pelo menos 5 caracteres")
     .max(500),
-  payerName: z
-    .string()
-    .min(2, "Nome do pagador é obrigatório")
-    .max(200),
+  payerName: z.string().min(2, "Nome do pagador é obrigatório").max(200),
   payerCnpj: cnpj.optional().default(null),
   amount: positiveAmount,
-  expectedAt: z.coerce.date({ invalid_type_error: "Data de previsão inválida" }),
+  expectedAt: z.coerce.date({
+    invalid_type_error: "Data de previsão inválida",
+  }),
   categoryId: z.string().uuid("Selecione uma categoria válida"),
   costCenterId: z.string().uuid().nullable().optional().default(null),
-  bankAccountId: z.string().uuid("Selecione uma conta bancária").nullable().optional().default(null),
+  bankAccountId: z
+    .string()
+    .uuid("Selecione uma conta bancária")
+    .nullable()
+    .optional()
+    .default(null),
   notes: z.string().max(1000).nullable().optional().default(null),
 });
 
@@ -125,8 +136,15 @@ export const createTransactionSchema = z.object({
     .string()
     .min(3, "Descrição deve ter pelo menos 3 caracteres")
     .max(500),
-  occurredAt: z.coerce.date({ invalid_type_error: "Data da transação inválida" }),
-  categoryId: z.string().uuid("Selecione uma categoria").nullable().optional().default(null),
+  occurredAt: z.coerce.date({
+    invalid_type_error: "Data da transação inválida",
+  }),
+  categoryId: z
+    .string()
+    .uuid("Selecione uma categoria")
+    .nullable()
+    .optional()
+    .default(null),
   costCenterId: z.string().uuid().nullable().optional().default(null),
   payableId: z.string().uuid().nullable().optional().default(null),
   receivableId: z.string().uuid().nullable().optional().default(null),
@@ -174,7 +192,9 @@ export const createAccountCategorySchema = z.object({
   parentId: z.string().uuid().nullable().optional().default(null),
 });
 
-export type CreateAccountCategoryInput = z.infer<typeof createAccountCategorySchema>;
+export type CreateAccountCategoryInput = z.infer<
+  typeof createAccountCategorySchema
+>;
 
 // ─── createBudgetSchema ───────────────────────────────────────────────────────
 
@@ -188,11 +208,7 @@ export const createBudgetItemSchema = z.object({
 
 export const createBudgetSchema = z.object({
   name: z.string().min(3, "Nome do orçamento é obrigatório").max(200),
-  year: z
-    .number()
-    .int()
-    .min(2020, "Ano inválido")
-    .max(2100, "Ano inválido"),
+  year: z.number().int().min(2020, "Ano inválido").max(2100, "Ano inválido"),
   projectId: z.string().uuid().nullable().optional().default(null),
   costCenterId: z.string().uuid().nullable().optional().default(null),
   items: z
@@ -217,7 +233,12 @@ export type BankImportInput = z.infer<typeof bankImportSchema>;
 
 export const reconcileItemSchema = z.object({
   bankImportItemId: z.string().uuid(),
-  action: z.enum(["vincular_payable", "vincular_receivable", "ignorar", "criar_novo"]),
+  action: z.enum([
+    "vincular_payable",
+    "vincular_receivable",
+    "ignorar",
+    "criar_novo",
+  ]),
   payableId: z.string().uuid().nullable().optional().default(null),
   receivableId: z.string().uuid().nullable().optional().default(null),
 });

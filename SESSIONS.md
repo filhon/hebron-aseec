@@ -69,6 +69,7 @@
 | S-45   | 2026-06-23 | Polish — apps/projetos/src/app            | concluido |
 | S-46   | 2026-06-23 | P-3.1 — Schema de Tipos Financeiro        | concluido |
 | S-47   | 2026-06-25 | P-3.2 — Componentes UI Financeiro         | concluido |
+| S-48   | 2026-06-25 | P-3.3 — Telas e Páginas Financeiro        | concluido |
 
 ---
 
@@ -97,6 +98,45 @@
 - `caminho/outro.tsx` (modificado)
 
 ----->
+
+### S-48 — 2026-06-25 — P-3.3 Telas e Páginas Financeiro
+
+**Prompt:** P-3.3
+**Duracao:** ~60 min
+**Modelo:** claude-sonnet-4-6
+**Status:** concluido
+
+**Resumo:**
+Criação completa da estrutura App Router do `apps/financeiro` com 8 arquivos de página (dashboard, lançamentos, contas a pagar, conciliação, orçamento, plano de contas, importação + layout/shell). Todas as páginas usam dados mockados (Bloco A). Typecheck e lint passam sem erros.
+
+**Decisoes tomadas:**
+
+- Todas as pages são `"use client"` para Bloco A — evita serialização de Date entre RSC e client components
+- `LinkComponent` removido do shell (usa `<a>` nativo em Bloco A); será adicionado no Bloco B com auth real
+- Dashboard usa `new Date("2026-06-01")` como data de referência, alinhado com âncora do mock-data
+- Conciliação e plano de contas delegam 100% aos componentes de P-3.2 (sem lógica extra na page)
+
+**Debitos tecnicos:**
+
+- Nenhum
+
+**Arquivos criados/modificados:**
+
+- `apps/financeiro/postcss.config.mjs` (criado)
+- `apps/financeiro/src/app/globals.css` (criado)
+- `apps/financeiro/src/app/layout.tsx` (criado)
+- `apps/financeiro/src/app/(dashboard)/shell.tsx` (criado)
+- `apps/financeiro/src/app/(dashboard)/layout.tsx` (criado)
+- `apps/financeiro/src/app/(dashboard)/page.tsx` (criado)
+- `apps/financeiro/src/app/(dashboard)/lancamentos/page.tsx` (criado)
+- `apps/financeiro/src/app/(dashboard)/contas-pagar/page.tsx` (criado)
+- `apps/financeiro/src/app/(dashboard)/conciliacao/page.tsx` (criado)
+- `apps/financeiro/src/app/(dashboard)/orcamento/page.tsx` (criado)
+- `apps/financeiro/src/app/(dashboard)/plano-contas/page.tsx` (criado)
+- `apps/financeiro/src/app/(dashboard)/importacao/page.tsx` (criado)
+- `apps/financeiro/eslint.config.mjs` (modificado — adicionado ignore `.next/**`)
+
+---
 
 ### S-1 — 2026-05-21 — P-0.1 Monorepo Setup
 
@@ -1759,6 +1799,7 @@ Definidos todos os tipos TypeScript e schemas Zod do módulo Financeiro, além d
 Criados os 7 componentes UI do módulo financeiro (Bloco A — dados mockados), fiéis aos protótipos em `design-refs/financeiro/`. Todos usam exclusivamente `@hebron/ui`, tokens `--hb-*` canônicos via Tailwind v4 e zero CSS customizado por app.
 
 **Decisoes tomadas:**
+
 - `BatchApprovalStatus` não tem estágio "pago" — o lote termina em "autorizado"; pagamentos individuais são rastreados via `Payable.status`. A etapa "Pagamento" na timeline do `BatchApprovalCard` usa `batch.payables.every(p => p.status === "pago")`.
 - `CashFlowChart` implementado em SVG puro (sem biblioteca de charts) — TanStack Charts não está instalado.
 - `TransactionTable` usa `useState`/`useMemo` + `<table>` nativo — TanStack Table não instalado no app.
@@ -1767,9 +1808,11 @@ Criados os 7 componentes UI do módulo financeiro (Bloco A — dados mockados), 
 - BOM UTF-8 no CSV exportado: usado `"﻿"` (escape) em vez de literal para passar no `no-irregular-whitespace` do ESLint.
 
 **Debitos tecnicos:**
+
 - Nenhum. Typecheck e lint passam limpos.
 
 **Arquivos criados/modificados:**
+
 - `apps/financeiro/src/components/transaction-table.tsx` (criado)
 - `apps/financeiro/src/components/payable-card.tsx` (criado)
 - `apps/financeiro/src/components/cash-flow-chart.tsx` (criado)
