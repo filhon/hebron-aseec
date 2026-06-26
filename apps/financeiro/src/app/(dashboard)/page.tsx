@@ -10,6 +10,8 @@ import {
   Plus,
   Info,
   RefreshCw,
+  ChevronDown,
+  Download,
 } from "lucide-react";
 import {
   mockBankAccounts,
@@ -20,6 +22,9 @@ import {
 } from "../../lib/mock-data";
 import { CashFlowChart } from "../../components/cash-flow-chart";
 import { DashboardSkeleton } from "../../components/dashboard-skeleton";
+import { ExpenseForm } from "../../components/expense-form";
+import { RevenueForm } from "../../components/revenue-form";
+import { BankAccountForm } from "../../components/bank-account-form";
 import type {
   CashFlowDataPoint,
   CashFlowEvent,
@@ -203,9 +208,37 @@ function KpiCard({
   );
 }
 
+type FormMode = null | "despesa" | "receita" | "conta";
+
+function exportDashboardCSV() {
+  const rows = [
+    ["Data", "Descrição", "Conta", "Tipo", "Valor"],
+    ...sortedTx.map((t) => {
+      const acct = mockBankAccounts.find((a) => a.id === t.bankAccountId);
+      return [
+        fmtDate(t.occurredAt),
+        t.description,
+        acct?.bank ?? "",
+        t.type === "credito" ? "Receita" : "Despesa",
+        (t.type === "credito" ? "+" : "-") + t.amount.toFixed(2),
+      ];
+    }),
+  ];
+  const csv = rows.map((r) => r.map((c) => `"${c}"`).join(";")).join("\n");
+  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "financeiro-painel.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [formMode, setFormMode] = useState<FormMode>(null);
+  const [lancMenuOpen, setLancMenuOpen] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => setLoading(false), 1200);
@@ -281,22 +314,56 @@ export default function DashboardPage() {
           </div>
           <div className="ml-auto flex items-center gap-2">
             <button
+              onClick={exportDashboardCSV}
               className="flex items-center gap-1.5 px-3 py-2 rounded-(--radius) border text-xs font-semibold transition-colors"
               style={{ borderColor: "var(--border)", color: "var(--fg-muted)" }}
             >
-              <ArrowDown className="h-3 w-3" />
+              <Download className="h-3 w-3" />
               Exportar
             </button>
-            <button
-              className="flex items-center gap-1.5 px-3 py-2 rounded-(--radius) text-xs font-semibold transition-colors"
-              style={{
-                background: "var(--hb-blue)",
-                color: "var(--fg-invert)",
-              }}
-            >
-              <Plus className="h-3 w-3" />
-              Novo lançamento
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => setLancMenuOpen((v) => !v)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-(--radius) text-xs font-semibold transition-colors"
+                style={{
+                  background: "var(--hb-blue)",
+                  color: "var(--fg-invert)",
+                }}
+              >
+                <Plus className="h-3 w-3" />
+                Novo lançamento
+                <ChevronDown className="h-3 w-3" />
+              </button>
+              {lancMenuOpen && (
+                <div
+                  className="absolute right-0 top-full mt-1 w-44 rounded-(--radius) border py-1 z-20"
+                  style={{
+                    background: "var(--bg)",
+                    borderColor: "var(--border)",
+                    boxShadow: "0 4px 20px rgba(0,0,0,0.12)",
+                  }}
+                >
+                  {(
+                    [
+                      { key: "despesa", label: "Nova despesa" },
+                      { key: "receita", label: "Nova receita" },
+                    ] as const
+                  ).map((item) => (
+                    <button
+                      key={item.key}
+                      onClick={() => {
+                        setFormMode(item.key);
+                        setLancMenuOpen(false);
+                      }}
+                      className="w-full text-left px-4 py-2.5 text-sm font-semibold transition-colors"
+                      style={{ color: "var(--fg)" }}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -373,6 +440,7 @@ export default function DashboardPage() {
                   </p>
                 </div>
                 <button
+                  onClick={() => setFormMode("conta")}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors"
                   style={{
                     borderColor: "var(--border)",
@@ -576,6 +644,14 @@ export default function DashboardPage() {
               </div>
             </div>
           </div>
+
+          {/* Click-away for lançamento menu */}
+          {lancMenuOpen && (
+            <div
+              className="fixed inset-0 z-10"
+              onClick={() => setLancMenuOpen(false)}
+            />
+          )}
 
           {/* Right column */}
           <div className="space-y-5">
@@ -903,6 +979,17 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {/* Slide-in forms */}
+      {formMode === "despesa" && (
+        <ExpenseForm onClose={() => setFormMode(null)} />
+      )}
+      {formMode === "receita" && (
+        <RevenueForm onClose={() => setFormMode(null)} />
+      )}
+      {formMode === "conta" && (
+        <BankAccountForm onClose={() => setFormMode(null)} />
+      )}
     </div>
   );
 }
