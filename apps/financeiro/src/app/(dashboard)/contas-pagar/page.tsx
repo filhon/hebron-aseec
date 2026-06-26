@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import { mockPayables, mockBatchApprovals } from "../../../lib/mock-data";
 import { BatchApprovalCard } from "../../../components/batch-approval-card";
+import { ExpenseForm } from "../../../components/expense-form";
+import { BatchApprovalForm } from "../../../components/batch-approval-form";
 import type { PayableStatus } from "@hebron/types/financeiro";
 
 type Tab = "pendente" | "aprovado" | "autorizado";
@@ -94,6 +96,8 @@ const TAB_INFO: Record<
 export default function ContasPagarPage() {
   const [activeTab, setActiveTab] = useState<Tab>("pendente");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [expenseFormOpen, setExpenseFormOpen] = useState(false);
+  const [batchFormOpen, setBatchFormOpen] = useState(false);
 
   const filtered = mockPayables.filter(
     (p) =>
@@ -157,6 +161,7 @@ export default function ContasPagarPage() {
             </p>
           </div>
           <button
+            onClick={() => setExpenseFormOpen(true)}
             className="ml-auto flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold"
             style={{ background: "var(--hb-blue)", color: "var(--fg-invert)" }}
           >
@@ -272,6 +277,7 @@ export default function ContasPagarPage() {
                 </span>
                 {activeTab === "pendente" && (
                   <button
+                    onClick={() => setBatchFormOpen(true)}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
                     style={{
                       background: "var(--hb-blue)",
@@ -484,6 +490,14 @@ export default function ContasPagarPage() {
           )}
         </div>
       </div>
+
+      {/* Forms */}
+      {expenseFormOpen && (
+        <ExpenseForm onClose={() => setExpenseFormOpen(false)} />
+      )}
+      {batchFormOpen && (
+        <BatchApprovalForm onClose={() => setBatchFormOpen(false)} />
+      )}
     </div>
   );
 }

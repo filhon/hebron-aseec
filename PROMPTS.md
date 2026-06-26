@@ -2103,14 +2103,14 @@ Formulários: nova despesa (valor, data, categoria, centro de custo, descrição
 
 **Critérios de aceite:**
 
-- [ ] Despesa: categorização via plano de contas (dropdown hierárquico), upload de comprovante
-- [ ] Estorno: seleciona transação original, justificativa obrigatória, valor preenchido automaticamente
-- [ ] Aprovação de lote: lista de payables com checkbox individual + aprovar todos
-- [ ] Import OFX/CSV: upload → preview tabular → mapear colunas → confirmar
-- [ ] Orçamento: grid de meses × categorias com totais
-- [ ] Validação Zod em todos os formulários
-- [ ] Lint passa
-- [ ] Types passam
+- [x] Despesa: categorização via plano de contas (dropdown hierárquico), upload de comprovante
+- [x] Estorno: seleciona transação original, justificativa obrigatória, valor preenchido automaticamente
+- [x] Aprovação de lote: lista de payables com checkbox individual + aprovar todos
+- [x] Import OFX/CSV: upload → preview tabular → mapear colunas → confirmar
+- [x] Orçamento: grid de meses × categorias com totais
+- [x] Validação Zod em todos os formulários
+- [x] Lint passa
+- [x] Types passam
 
 ---
 

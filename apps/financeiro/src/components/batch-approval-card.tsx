@@ -403,7 +403,7 @@ export function BatchApprovalCard({
                 >
                   {item.done ? <Check className="h-2.5 w-2.5" /> : i + 1}
                 </span>
-                <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-(--fg-muted)">
+                <span className="text-[10px] font-bold uppercase tracking-widest text-(--fg-muted)">
                   {item.step}
                 </span>
               </div>

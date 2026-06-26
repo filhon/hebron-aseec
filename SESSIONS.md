@@ -70,6 +70,7 @@
 | S-46   | 2026-06-23 | P-3.1 — Schema de Tipos Financeiro        | concluido |
 | S-47   | 2026-06-25 | P-3.2 — Componentes UI Financeiro         | concluido |
 | S-48   | 2026-06-25 | P-3.3 — Telas e Páginas Financeiro        | concluido |
+| S-49   | 2026-06-26 | P-3.4 — Formulários Financeiro            | concluido |
 
 ---
 
@@ -135,6 +136,41 @@ Criação completa da estrutura App Router do `apps/financeiro` com 8 arquivos d
 - `apps/financeiro/src/app/(dashboard)/plano-contas/page.tsx` (criado)
 - `apps/financeiro/src/app/(dashboard)/importacao/page.tsx` (criado)
 - `apps/financeiro/eslint.config.mjs` (modificado — adicionado ignore `.next/**`)
+
+---
+
+### S-49 — 2026-06-26 — P-3.4 Formulários Financeiro
+
+**Prompt:** P-3.4
+**Duracao:** ~90 min
+**Modelo:** claude-sonnet-4-6
+**Status:** concluido
+
+**Resumo:**
+Criação de 6 componentes de formulário slide-in (sheet drawer) para o `apps/financeiro`: `ExpenseForm`, `RevenueForm`, `ReversalForm`, `BatchApprovalForm`, `ImportForm` e `BudgetForm`. Todos usam React Hook Form + Zod, design tokens canônicos `--hb-*`, e dados mockados (Bloco A). Typecheck e lint passam sem erros.
+
+**Decisoes tomadas:**
+
+- `useForm()` sem generic explícito em todos os forms — contorna breaking change do hookform/resolvers v5, que retorna `Resolver<z.input<T>>` incompatível com `useForm<z.output<T>>` quando há campos `.default()`
+- `onSubmit(data: unknown)` em todos os handlers — adequado para Bloco A (mock); Bloco B tipará corretamente via Server Actions
+- `ImportForm` usa wizard 3 passos com state local sem `handleSubmit` (navegação por `onClick`); `onFinalSubmit` inline no step 3
+- `BudgetForm` tem view toggle Lista/Matriz; `useFieldArray` funciona via inferência sem generic
+- `BatchApprovalForm` define schema Zod localmente (não em `@hebron/validators`) por ser schema de UI pura, não de domínio
+- `zod` adicionado como dependência direta em `apps/financeiro/package.json` (necessário para schema local do `BatchApprovalForm`)
+
+**Debitos tecnicos:**
+
+- Nenhum
+
+**Arquivos criados/modificados:**
+
+- `apps/financeiro/package.json` (modificado — adicionado `react-hook-form`, `@hookform/resolvers`, `zod`)
+- `apps/financeiro/src/components/expense-form.tsx` (criado)
+- `apps/financeiro/src/components/revenue-form.tsx` (criado)
+- `apps/financeiro/src/components/reversal-form.tsx` (criado)
+- `apps/financeiro/src/components/batch-approval-form.tsx` (criado)
+- `apps/financeiro/src/components/import-form.tsx` (criado)
+- `apps/financeiro/src/components/budget-form.tsx` (criado)
 
 ---
 

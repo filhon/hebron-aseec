@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import { Plus, ArrowUp, ArrowDown } from "lucide-react";
 import { mockBudgets, mockTransactions } from "../../../lib/mock-data";
 import { BudgetComparison } from "../../../components/budget-comparison";
+import { BudgetForm } from "../../../components/budget-form";
 
 function fmtBRL(n: number): string {
   return new Intl.NumberFormat("pt-BR", {
@@ -81,6 +83,8 @@ function KpiCard({ label, value, sub, accent, dir }: KpiCardProps) {
 }
 
 export default function OrcamentoPage() {
+  const [budgetFormOpen, setBudgetFormOpen] = useState(false);
+
   return (
     <div className="min-h-screen" style={{ background: "var(--bg-alt)" }}>
       {/* Topbar */}
@@ -104,6 +108,7 @@ export default function OrcamentoPage() {
             </p>
           </div>
           <button
+            onClick={() => setBudgetFormOpen(true)}
             className="ml-auto flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold"
             style={{ background: "var(--hb-blue)", color: "var(--fg-invert)" }}
           >
@@ -145,9 +150,13 @@ export default function OrcamentoPage() {
         <BudgetComparison
           budgets={mockBudgets}
           transactions={mockTransactions}
-          onNew={() => {}}
+          onNew={() => setBudgetFormOpen(true)}
         />
       </div>
+
+      {budgetFormOpen && (
+        <BudgetForm onClose={() => setBudgetFormOpen(false)} />
+      )}
     </div>
   );
 }
