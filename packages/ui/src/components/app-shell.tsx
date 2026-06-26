@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { Menu } from "lucide-react";
+import { Menu, ChevronLeft, ChevronRight } from "lucide-react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import {
@@ -26,11 +26,73 @@ export interface AppShellProps {
   onLogout: () => void;
   currentPath?: string;
   logo?: React.ReactNode;
+  /** Module name shown in the sidebar brand area (e.g. "Admin", "Financeiro") */
   appName?: string;
+  /** Organisation name shown above the module name. Defaults to "Hebron Aseec" */
+  orgName?: string;
   LinkComponent?: LinkComponent;
   className?: string;
   sidebarDark?: boolean;
 }
+
+// ── Brand row shown inside the sidebar ────────────────────────────────────────
+
+interface SidebarBrandProps {
+  logo?: React.ReactNode;
+  appName?: string;
+  orgName?: string;
+  collapsed: boolean;
+  dark?: boolean;
+}
+
+function SidebarBrand({
+  logo,
+  appName,
+  orgName = "Hebron Aseec",
+  collapsed,
+  dark,
+}: SidebarBrandProps) {
+  return (
+    <div
+      className={cn(
+        "flex h-14 shrink-0 items-center border-b",
+        dark ? "border-white/10" : "border-(--border)",
+        collapsed ? "justify-center px-2" : "gap-3 px-4 pr-10",
+      )}
+    >
+      {/* Logo mark */}
+      {logo && <span className="shrink-0">{logo}</span>}
+
+      {/* 2-line brand text — hidden when collapsed */}
+      {!collapsed && (appName ?? orgName) && (
+        <div className="flex min-w-0 flex-1 flex-col gap-0 leading-none">
+          <span
+            className={cn(
+              "truncate font-(--font-display) font-(--font-weight-semibold) uppercase",
+              dark ? "text-white/45" : "text-(--fg-muted)",
+            )}
+            style={{ fontSize: "9.5px", letterSpacing: "0.1em" }}
+          >
+            {orgName}
+          </span>
+          {appName && (
+            <span
+              className={cn(
+                "truncate font-(--font-display) font-(--font-weight-bold)",
+                dark ? "text-white" : "text-(--fg)",
+              )}
+              style={{ fontSize: "15px", letterSpacing: "-0.01em" }}
+            >
+              {appName}
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Mobile sidebar drawer ──────────────────────────────────────────────────────
 
 interface MobileSidebarProps {
   open: boolean;
@@ -39,6 +101,8 @@ interface MobileSidebarProps {
   apps?: AppShortcut[];
   currentPath?: string;
   logo?: React.ReactNode;
+  appName?: string;
+  orgName?: string;
   LinkComponent?: LinkComponent;
   dark?: boolean;
 }
@@ -50,6 +114,8 @@ function MobileSidebar({
   apps,
   currentPath,
   logo,
+  appName,
+  orgName,
   LinkComponent,
   dark,
 }: MobileSidebarProps) {
@@ -83,36 +149,60 @@ function MobileSidebar({
             Menu de navegação
           </DialogPrimitive.Title>
 
-          {logo && (
+          {/* Brand row in mobile drawer (no collapse button) */}
+          {(logo ?? appName) && (
             <div
               className={cn(
-                "flex h-14 items-center border-b px-4",
+                "flex h-14 items-center gap-3 border-b px-4",
                 dark ? "border-white/10" : "border-(--border)",
               )}
             >
-              {logo}
+              {logo && <span className="shrink-0">{logo}</span>}
+              {appName && (
+                <div className="flex min-w-0 flex-1 flex-col gap-0 leading-none">
+                  {orgName && (
+                    <span
+                      className={cn(
+                        "truncate font-(--font-display) font-(--font-weight-semibold) uppercase",
+                        dark ? "text-white/45" : "text-(--fg-muted)",
+                      )}
+                      style={{ fontSize: "9.5px", letterSpacing: "0.1em" }}
+                    >
+                      {orgName ?? "Hebron Aseec"}
+                    </span>
+                  )}
+                  <span
+                    className={cn(
+                      "truncate font-(--font-display) font-(--font-weight-bold)",
+                      dark ? "text-white" : "text-(--fg)",
+                    )}
+                    style={{ fontSize: "15px", letterSpacing: "-0.01em" }}
+                  >
+                    {appName}
+                  </span>
+                </div>
+              )}
             </div>
           )}
 
-          <div className={cn("h-full", logo ? "pt-0" : "")}>
-            <NavigationSidebar
-              sections={sections}
-              apps={apps}
-              collapsed={false}
-              onCollapsedChange={() => undefined}
-              currentPath={currentPath}
-              showCollapseToggle={false}
-              onNavItemClick={() => onOpenChange(false)}
-              LinkComponent={LinkComponent}
-              dark={dark}
-              className={logo ? "h-[calc(100%-3.5rem)]" : "h-full"}
-            />
-          </div>
+          <NavigationSidebar
+            sections={sections}
+            apps={apps}
+            collapsed={false}
+            onCollapsedChange={() => undefined}
+            currentPath={currentPath}
+            onNavItemClick={() => onOpenChange(false)}
+            LinkComponent={LinkComponent}
+            dark={dark}
+            className={(logo ?? appName) ? "h-[calc(100%-3.5rem)]" : "h-full"}
+          />
         </DialogPrimitive.Content>
       </DialogPrimitive.Portal>
     </DialogPrimitive.Root>
   );
 }
+
+// ── AppShell ───────────────────────────────────────────────────────────────────
 
 export function AppShell({
   children,
@@ -124,6 +214,7 @@ export function AppShell({
   currentPath,
   logo,
   appName,
+  orgName = "Hebron Aseec",
   LinkComponent,
   className,
   sidebarDark,
@@ -133,6 +224,7 @@ export function AppShell({
 
   return (
     <div className={cn("min-h-screen bg-(--bg)", className)}>
+      {/* ── Desktop sidebar ── */}
       <aside
         className={cn(
           "fixed inset-y-0 left-0 z-(--z-sticky)",
@@ -145,20 +237,33 @@ export function AppShell({
         )}
         aria-label="Barra lateral de navegação"
       >
-        <div
+        <SidebarBrand
+          logo={logo}
+          appName={appName}
+          orgName={orgName}
+          collapsed={desktopCollapsed}
+          dark={sidebarDark}
+        />
+
+        {/* Collapse toggle — tab on the right edge, vertically centered in brand bar */}
+        <button
+          onClick={() => setDesktopCollapsed((v) => !v)}
+          aria-label={desktopCollapsed ? "Expandir menu" : "Recolher menu"}
           className={cn(
-            "flex h-14 shrink-0 items-center border-b",
-            sidebarDark ? "border-white/10" : "border-(--border)",
-            desktopCollapsed ? "justify-center px-3" : "px-4",
+            "absolute right-0 top-0 flex h-14 w-8 items-center justify-center",
+            sidebarDark
+              ? "text-white/35 hover:text-white/70"
+              : "text-(--fg-muted) hover:text-(--fg)",
+            "transition-colors duration-(--transition-fast)",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--brand)",
           )}
         >
-          {logo}
-          {!desktopCollapsed && appName && (
-            <span className="ml-2 truncate text-(--text-sm) font-(--font-weight-semibold)">
-              {appName}
-            </span>
+          {desktopCollapsed ? (
+            <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+          ) : (
+            <ChevronLeft className="h-3.5 w-3.5" aria-hidden="true" />
           )}
-        </div>
+        </button>
 
         <NavigationSidebar
           sections={sections}
@@ -166,13 +271,13 @@ export function AppShell({
           collapsed={desktopCollapsed}
           onCollapsedChange={setDesktopCollapsed}
           currentPath={currentPath}
-          showCollapseToggle={true}
           LinkComponent={LinkComponent}
           dark={sidebarDark}
           className="h-[calc(100%-3.5rem)]"
         />
       </aside>
 
+      {/* ── Mobile drawer ── */}
       <MobileSidebar
         open={mobileOpen}
         onOpenChange={setMobileOpen}
@@ -180,10 +285,13 @@ export function AppShell({
         apps={apps}
         currentPath={currentPath}
         logo={logo}
+        appName={appName}
+        orgName={orgName}
         LinkComponent={LinkComponent}
         dark={sidebarDark}
       />
 
+      {/* ── Top header ── */}
       <header
         className={cn(
           "fixed right-0 top-0 z-(--z-sticky) h-14",
@@ -194,6 +302,7 @@ export function AppShell({
           desktopCollapsed ? "lg:left-16" : "lg:left-64",
         )}
       >
+        {/* Mobile: hamburger + brand */}
         <button
           className={cn(
             "flex h-8 w-8 items-center justify-center rounded-(--radius) lg:hidden",
@@ -207,15 +316,10 @@ export function AppShell({
           <Menu className="h-5 w-5" aria-hidden="true" />
         </button>
 
-        {(logo || appName) && (
-          <div className="flex items-center gap-2 lg:hidden">
-            {logo}
-            {appName && (
-              <span className="text-(--text-sm) font-(--font-weight-semibold)">
-                {appName}
-              </span>
-            )}
-          </div>
+        {appName && (
+          <span className="text-(--text-sm) font-(--font-weight-semibold) lg:hidden">
+            {appName}
+          </span>
         )}
 
         <div className="flex-1" />
@@ -223,6 +327,7 @@ export function AppShell({
         <UserMenu user={user} profileHref={profileHref} onLogout={onLogout} />
       </header>
 
+      {/* ── Content ── */}
       <main
         className={cn(
           "pt-14 transition-[margin-left] duration-(--transition-medium)",

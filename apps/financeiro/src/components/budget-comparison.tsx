@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useMemo } from "react";
 import { Download, Plus, TrendingUp } from "lucide-react";
@@ -130,7 +130,7 @@ export function BudgetComparison({
   };
 
   return (
-    <div className="rounded-xl border border-(--border) bg-(--surface) overflow-hidden">
+    <div className="rounded-(--radius) border border-(--border) bg-(--surface) overflow-hidden">
       {/* KPI summary */}
       <div className="grid grid-cols-3 divide-x divide-(--border) border-b border-(--border)">
         {[
@@ -188,7 +188,7 @@ export function BudgetComparison({
 
       {/* Toolbar */}
       <div className="flex items-center gap-3 px-5 py-3 border-b border-(--border)">
-        <div className="flex bg-(--bg-alt) border border-(--border) p-1 rounded-xl gap-1">
+        <div className="flex bg-(--bg-alt) border border-(--border) p-1 rounded-(--radius) gap-1">
           {(
             [
               { id: "categorias" as ViewMode, label: "Por categoria" },

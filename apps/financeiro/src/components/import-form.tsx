@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useRef } from "react";
 import { useForm } from "react-hook-form";
@@ -91,7 +91,7 @@ export function ImportForm({ onClose, onSuccess }: ImportFormProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex justify-end"
+      className="fixed inset-0 z-(--z-overlay) flex justify-end"
       style={{ background: "rgba(19,23,55,0.42)" }}
       onClick={onClose}
     >
@@ -124,7 +124,7 @@ export function ImportForm({ onClose, onSuccess }: ImportFormProps) {
           </div>
           <button
             onClick={onClose}
-            className="flex items-center justify-center w-9 h-9 rounded-xl transition-colors"
+            className="flex items-center justify-center w-9 h-9 rounded-(--radius) transition-colors"
             style={{ color: "var(--fg-muted)" }}
           >
             <X className="h-4 w-4" />
@@ -205,7 +205,7 @@ export function ImportForm({ onClose, onSuccess }: ImportFormProps) {
                 <div className="relative">
                   <select
                     {...register("bankAccountId")}
-                    className="w-full px-3 py-2.5 rounded-xl border text-sm transition-colors outline-none appearance-none cursor-pointer pr-8 border-(--border) bg-(--bg) text-(--fg) focus:border-(--hb-blue)"
+                    className="w-full px-3 py-2.5 rounded-(--radius) border text-sm transition-colors outline-none appearance-none cursor-pointer pr-8 border-(--border) bg-(--bg) text-(--fg) focus:border-(--hb-blue)"
                   >
                     {mockBankAccounts.map((ba) => (
                       <option key={ba.id} value={ba.id}>
@@ -246,7 +246,7 @@ export function ImportForm({ onClose, onSuccess }: ImportFormProps) {
                         setFormat(f);
                         setValue("format", f);
                       }}
-                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 text-sm font-semibold transition-colors flex-1 justify-center"
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-(--radius) border-2 text-sm font-semibold transition-colors flex-1 justify-center"
                       style={{
                         borderColor:
                           format === f ? "var(--hb-blue)" : "var(--border)",
@@ -272,7 +272,7 @@ export function ImportForm({ onClose, onSuccess }: ImportFormProps) {
                   Arquivo
                 </label>
                 <div
-                  className="relative rounded-xl border-2 border-dashed flex flex-col items-center justify-center gap-4 py-14 px-8 text-center cursor-pointer transition-colors"
+                  className="relative rounded-(--radius) border-2 border-dashed flex flex-col items-center justify-center gap-4 py-14 px-8 text-center cursor-pointer transition-colors"
                   style={{
                     borderColor: dragOver
                       ? "var(--hb-blue)"
@@ -388,7 +388,7 @@ export function ImportForm({ onClose, onSuccess }: ImportFormProps) {
             <div className="space-y-5">
               {/* Meta do arquivo */}
               <div
-                className="rounded-xl p-4 flex items-start justify-between gap-4"
+                className="rounded-(--radius) p-4 flex items-start justify-between gap-4"
                 style={{
                   background: "var(--bg-alt)",
                   border: "1px solid var(--border)",
@@ -455,7 +455,7 @@ export function ImportForm({ onClose, onSuccess }: ImportFormProps) {
                 ].map((kpi) => (
                   <div
                     key={kpi.label}
-                    className="rounded-xl p-3"
+                    className="rounded-(--radius) p-3"
                     style={{
                       background: kpi.bg ?? "var(--surface)",
                       border: "1px solid var(--border)",
@@ -482,7 +482,7 @@ export function ImportForm({ onClose, onSuccess }: ImportFormProps) {
 
               {/* Tabela de preview */}
               <div
-                className="rounded-xl border overflow-hidden"
+                className="rounded-(--radius) border overflow-hidden"
                 style={{ borderColor: "var(--border)" }}
               >
                 <div className="overflow-x-auto">
@@ -599,7 +599,7 @@ export function ImportForm({ onClose, onSuccess }: ImportFormProps) {
 
               {/* Conciliação automática toggle */}
               <div
-                className="flex items-center justify-between rounded-xl px-4 py-3"
+                className="flex items-center justify-between rounded-(--radius) px-4 py-3"
                 style={{
                   background: "var(--surface)",
                   border: "1px solid var(--border)",
@@ -638,7 +638,7 @@ export function ImportForm({ onClose, onSuccess }: ImportFormProps) {
             <div className="space-y-5">
               {/* Success summary */}
               <div
-                className="flex flex-col items-center justify-center py-12 text-center rounded-xl"
+                className="flex flex-col items-center justify-center py-12 text-center rounded-(--radius)"
                 style={{ background: "var(--hb-green-muted)" }}
               >
                 <span
@@ -690,7 +690,7 @@ export function ImportForm({ onClose, onSuccess }: ImportFormProps) {
                 <button
                   type="button"
                   onClick={() => setStep(1)}
-                  className="flex-1 px-4 py-3 rounded-xl border text-sm font-semibold transition-colors text-center"
+                  className="flex-1 px-4 py-3 rounded-(--radius) border text-sm font-semibold transition-colors text-center"
                   style={{ borderColor: "var(--border)", color: "var(--fg)" }}
                 >
                   Importar outro extrato
@@ -701,7 +701,7 @@ export function ImportForm({ onClose, onSuccess }: ImportFormProps) {
                     onSuccess?.();
                     onClose();
                   }}
-                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-semibold transition-colors"
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-(--radius) text-sm font-semibold transition-colors"
                   style={{
                     background: "var(--hb-blue)",
                     color: "var(--fg-invert)",
@@ -726,7 +726,7 @@ export function ImportForm({ onClose, onSuccess }: ImportFormProps) {
               onClick={
                 step === 1 ? onClose : () => setStep((s) => (s - 1) as Step)
               }
-              className="px-4 py-2.5 rounded-xl border text-sm font-semibold transition-colors"
+              className="px-4 py-2.5 rounded-(--radius) border text-sm font-semibold transition-colors"
               style={{ borderColor: "var(--border)", color: "var(--fg)" }}
             >
               {step === 1 ? "Cancelar" : "← Voltar"}
@@ -735,7 +735,7 @@ export function ImportForm({ onClose, onSuccess }: ImportFormProps) {
               type="button"
               disabled={step === 1 && !fileName}
               onClick={() => setStep((s) => (s + 1) as Step)}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors disabled:opacity-50"
+              className="flex items-center gap-2 px-5 py-2.5 rounded-(--radius) text-sm font-semibold transition-colors disabled:opacity-50"
               style={{
                 background: "var(--hb-blue)",
                 color: "var(--fg-invert)",

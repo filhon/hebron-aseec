@@ -19,12 +19,11 @@ import {
   BookOpen,
   Briefcase,
   CheckCircle,
-  BadgeDollarSign,
 } from "lucide-react";
+import { FinanceiroLogo } from "../../components/financeiro-logo";
 
 const SECTIONS: NavSection[] = [
   {
-    title: "Operação",
     items: [
       {
         label: "Painel",
@@ -67,7 +66,6 @@ const SECTIONS: NavSection[] = [
     ],
   },
   {
-    title: "Relatórios",
     items: [
       {
         label: "Demonstrativos",
@@ -147,12 +145,7 @@ export default function FinanceiroShell({ children }: ShellProps) {
       onLogout={() => {}}
       currentPath={path}
       appName="Financeiro"
-      logo={
-        <BadgeDollarSign
-          className="h-5 w-5 shrink-0"
-          style={{ color: "var(--hb-green)" }}
-        />
-      }
+      logo={<FinanceiroLogo />}
       sidebarDark
     >
       {children}

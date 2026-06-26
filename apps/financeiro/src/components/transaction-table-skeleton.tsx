@@ -1,4 +1,4 @@
-function Bone({ className }: { className: string }) {
+﻿function Bone({ className }: { className: string }) {
   return (
     <div
       className={`animate-pulse ${className}`}
@@ -20,7 +20,7 @@ const COLS = [
 export function TransactionTableSkeleton() {
   return (
     <div
-      className="rounded-xl border overflow-hidden"
+      className="rounded-(--radius) border overflow-hidden"
       style={{ background: "var(--surface)", borderColor: "var(--border)" }}
     >
       {/* Toolbar */}

@@ -1,5 +1,6 @@
 /*
   Hebron ASEEC — Admin Module Styles (exclusivo do Admin)
+  Shell, sidebar e header estão em AppShell (@hebron/ui).
   Classes genéricas/reutilizáveis estão em @hebron/ui/styles/patterns.css.
   Usa APENAS tokens canônicos de tokens.css (--hb-*, semânticos).
 */
@@ -16,182 +17,19 @@
   }
 }
 
-/* ─── APP SHELL ─────────────────────────────────────────────────────────────── */
-
-.hb-admin-shell {
-  display: grid;
-  grid-template-columns: 260px 1fr;
-  min-height: 100vh;
-  background: var(--bg-alt);
-}
-
-/* ─── SIDEBAR ────────────────────────────────────────────────────────────────── */
-
-.hb-sidebar {
-  background: var(--hb-blue);
-  color: var(--fg-invert);
-  display: flex;
-  flex-direction: column;
-  position: sticky;
-  top: 0;
-  height: 100vh;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 22px 0 24px;
-  z-index: 20;
-}
-
-.hb-sidebar-brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 4px 22px 26px;
-}
-
-.hb-sidebar-mark {
-  width: 36px;
-  height: 36px;
-  background: var(--hb-white);
-  border-radius: 10px;
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  font-family: var(--font-display);
-  font-weight: 800;
-  font-size: 13px;
-  color: var(--hb-blue);
-  letter-spacing: -0.03em;
-}
-
-.hb-sidebar-brand-text {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.1;
-}
-.hb-sidebar-brand-text .org {
-  font-family: var(--font-display);
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  font-size: 11px;
-  color: var(--fg-invert-muted);
-  text-transform: uppercase;
-}
-.hb-sidebar-brand-text .module {
-  font-family: var(--font-display);
-  font-weight: 700;
-  font-size: 22px;
-  letter-spacing: -0.01em;
-  color: var(--fg-invert);
-}
-
-.hb-sidebar-section-label {
-  font-size: 10.5px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--fg-invert-muted);
-  padding: 18px 22px 8px;
-  font-weight: 700;
-}
-
-.hb-sidebar-nav {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 0 12px;
-}
-
-.hb-nav-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 12px;
-  border-radius: 10px;
-  color: var(--fg-invert-muted);
-  font-size: 14px;
-  font-weight: 500;
-  background: transparent;
-  border: none;
-  text-align: left;
-  width: 100%;
-  cursor: pointer;
-  text-decoration: none;
-  transition:
-    background var(--dur-fast) var(--ease-out),
-    color var(--dur-fast) var(--ease-out);
-  font-family: var(--font-body);
-}
-.hb-nav-item:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--fg-invert);
-}
-.hb-nav-item.active {
-  background: var(--hb-white);
-  color: var(--hb-blue);
-  font-weight: 600;
-}
-
-.hb-nav-count {
-  margin-left: auto;
-  background: rgba(255, 255, 255, 0.16);
-  color: var(--fg-invert);
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: var(--radius-pill);
-  font-weight: 700;
-}
-.hb-nav-item.active .hb-nav-count {
-  background: var(--hb-orange);
-  color: var(--fg-invert);
-}
-
-.hb-sidebar-apps {
-  margin-top: auto;
-  padding: 18px 22px 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-}
-.hb-sidebar-apps-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 6px;
-  margin-top: 10px;
-}
-.hb-app-tile {
-  background: rgba(255, 255, 255, 0.07);
-  border-radius: 8px;
-  padding: 8px 4px;
-  text-align: center;
-  font-size: 10px;
-  color: var(--fg-invert-muted);
-  cursor: pointer;
-  border: none;
-  transition: background var(--dur-fast);
-  font-weight: 500;
-  font-family: var(--font-body);
-  text-decoration: none;
-  display: block;
-}
-.hb-app-tile:hover {
-  background: rgba(255, 255, 255, 0.14);
-  color: var(--fg-invert);
-}
-.hb-app-tile.current {
-  background: var(--hb-cyan);
-  color: var(--fg-invert);
-  font-weight: 600;
-}
-
-/* ─── TOPBAR ─────────────────────────────────────────────────────────────────── */
+/* ─── TOPBAR (sticky dentro da área de conteúdo) ─────────────────────────────── */
 
 .hb-topbar {
   display: flex;
   align-items: center;
   gap: 14px;
   padding: 0 36px;
-  height: 64px;
+  height: 56px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   position: sticky;
-  top: 0;
+  /* Fica abaixo do header fixo do AppShell (h-14 = 3.5rem = 56px) */
+  top: 3.5rem;
   z-index: 10;
 }
 
@@ -205,23 +43,6 @@
 /* ─── RESPONSIVE ─────────────────────────────────────────────────────────────── */
 
 @media (max-width: 900px) {
-  .hb-admin-shell {
-    grid-template-columns: 64px 1fr;
-  }
-  .hb-sidebar-brand-text,
-  .hb-sidebar-section-label,
-  .hb-nav-item span:not(.hb-nav-count),
-  .hb-sidebar-apps {
-    display: none;
-  }
-  .hb-nav-item {
-    justify-content: center;
-    padding: 12px;
-  }
-  .hb-sidebar-brand {
-    justify-content: center;
-    padding: 4px 0 26px;
-  }
   .hb-topbar {
     padding: 0 16px;
   }

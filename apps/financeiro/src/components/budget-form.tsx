@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
@@ -90,7 +90,7 @@ function Label({
 }
 
 const inputCls = [
-  "w-full px-3 py-2.5 rounded-xl border text-sm transition-colors outline-none",
+  "w-full px-3 py-2.5 rounded-(--radius) border text-sm transition-colors outline-none",
   "border-(--border) bg-(--bg) text-(--fg)",
   "placeholder:text-(--fg-muted)",
   "focus:border-(--hb-blue) focus:ring-2 focus:ring-(--hb-blue)/10",
@@ -159,7 +159,7 @@ export function BudgetForm({ onClose, onSuccess }: BudgetFormProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex justify-end"
+      className="fixed inset-0 z-(--z-overlay) flex justify-end"
       style={{ background: "rgba(19,23,55,0.42)" }}
       onClick={onClose}
     >
@@ -193,7 +193,7 @@ export function BudgetForm({ onClose, onSuccess }: BudgetFormProps) {
 
           {/* View toggle */}
           <div
-            className="flex p-1 rounded-xl"
+            className="flex p-1 rounded-(--radius)"
             style={{
               background: "var(--surface)",
               border: "1px solid var(--border)",
@@ -233,7 +233,7 @@ export function BudgetForm({ onClose, onSuccess }: BudgetFormProps) {
 
           <button
             onClick={onClose}
-            className="flex items-center justify-center w-9 h-9 rounded-xl transition-colors"
+            className="flex items-center justify-center w-9 h-9 rounded-(--radius) transition-colors"
             style={{ color: "var(--fg-muted)" }}
           >
             <X className="h-4 w-4" />
@@ -290,7 +290,7 @@ export function BudgetForm({ onClose, onSuccess }: BudgetFormProps) {
                 </div>
                 <div className="flex items-end pb-0.5">
                   <div
-                    className="w-full rounded-xl px-4 py-3 text-right"
+                    className="w-full rounded-(--radius) px-4 py-3 text-right"
                     style={{ background: "var(--hb-blue)" }}
                   >
                     <p
@@ -446,7 +446,7 @@ export function BudgetForm({ onClose, onSuccess }: BudgetFormProps) {
                       notes: null,
                     })
                   }
-                  className="flex items-center gap-2 w-full px-4 py-2.5 rounded-xl border-2 border-dashed text-sm font-semibold transition-colors"
+                  className="flex items-center gap-2 w-full px-4 py-2.5 rounded-(--radius) border-2 border-dashed text-sm font-semibold transition-colors"
                   style={{
                     borderColor: "var(--border-strong)",
                     color: "var(--fg-muted)",
@@ -703,7 +703,7 @@ export function BudgetForm({ onClose, onSuccess }: BudgetFormProps) {
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2.5 rounded-xl border text-sm font-semibold transition-colors"
+              className="px-4 py-2.5 rounded-(--radius) border text-sm font-semibold transition-colors"
               style={{ borderColor: "var(--border)", color: "var(--fg)" }}
             >
               Cancelar
@@ -712,7 +712,7 @@ export function BudgetForm({ onClose, onSuccess }: BudgetFormProps) {
               type="submit"
               form="budget-form"
               disabled={isSubmitting}
-              className="px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors disabled:opacity-60"
+              className="px-5 py-2.5 rounded-(--radius) text-sm font-semibold transition-colors disabled:opacity-60"
               style={{
                 background: "var(--hb-blue)",
                 color: "var(--fg-invert)",

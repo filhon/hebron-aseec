@@ -1,4 +1,4 @@
-function Bone({ className }: { className: string }) {
+﻿function Bone({ className }: { className: string }) {
   return (
     <div
       className={`animate-pulse ${className}`}
@@ -10,7 +10,7 @@ function Bone({ className }: { className: string }) {
 function ReconColumnSkeleton() {
   return (
     <div
-      className="rounded-xl border overflow-hidden"
+      className="rounded-(--radius) border overflow-hidden"
       style={{ background: "var(--surface)", borderColor: "var(--border)" }}
     >
       {/* Column header */}
@@ -59,7 +59,7 @@ export function ConciliationSkeleton() {
           (col, i) => (
             <div
               key={i}
-              className="rounded-xl border p-4 space-y-2"
+              className="rounded-(--radius) border p-4 space-y-2"
               style={{
                 background: "var(--surface)",
                 borderColor: "var(--border)",

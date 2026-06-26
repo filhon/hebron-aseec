@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useMemo } from "react";
 import { Check, Sparkles, X, Plus, Upload } from "lucide-react";
@@ -135,12 +135,12 @@ export function ConciliationView({
   return (
     <div className="flex flex-col gap-4">
       {/* Info card */}
-      <div className="rounded-xl border border-(--border) bg-(--surface) px-5 py-4">
+      <div className="rounded-(--radius) border border-(--border) bg-(--surface) px-5 py-4">
         <div className="flex flex-wrap items-center gap-5">
           {/* Account info */}
           <div className="flex items-center gap-3">
             <div
-              className="w-11 h-11 rounded-xl flex items-center justify-center text-sm font-bold text-(--fg-invert) shrink-0"
+              className="w-11 h-11 rounded-(--radius) flex items-center justify-center text-sm font-bold text-(--fg-invert) shrink-0"
               style={{ background: "var(--hb-blue)" }}
             >
               {bankAccount.bank.slice(0, 2).toUpperCase()}
@@ -233,7 +233,7 @@ export function ConciliationView({
 
       {/* Auto-match hint */}
       {unmatched.length > 0 && (
-        <div className="flex items-center gap-3 rounded-xl border border-(--hb-cyan-muted) bg-(--hb-cyan-muted) px-4 py-3">
+        <div className="flex items-center gap-3 rounded-(--radius) border border-(--hb-cyan-muted) bg-(--hb-cyan-muted) px-4 py-3">
           <Sparkles className="h-4 w-4 text-(--hb-cyan-deep) shrink-0" />
           <p className="text-sm text-(--fg) flex-1">
             <strong>Sugestões automáticas</strong> · {unmatched.length}{" "}
@@ -252,7 +252,7 @@ export function ConciliationView({
       {/* Split view */}
       <div className="grid gap-4 lg:grid-cols-2">
         {/* ── Extrato bancário ─────────────────────────────────────────────────── */}
-        <div className="rounded-xl border border-(--border) bg-(--surface) overflow-hidden">
+        <div className="rounded-(--radius) border border-(--border) bg-(--surface) overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-(--border)">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-(--fg-muted)">
@@ -342,7 +342,7 @@ export function ConciliationView({
         </div>
 
         {/* ── Lançamentos do sistema ───────────────────────────────────────────── */}
-        <div className="rounded-xl border border-(--border) bg-(--surface) overflow-hidden">
+        <div className="rounded-(--radius) border border-(--border) bg-(--surface) overflow-hidden">
           <div className="flex items-center justify-between px-4 py-3 border-b border-(--border)">
             <div>
               <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-(--fg-muted)">
@@ -465,7 +465,7 @@ export function ConciliationView({
 
       {/* Complete state */}
       {unmatched.length === 0 && total > 0 && (
-        <div className="rounded-xl border border-(--hb-green-muted) bg-(--hb-green-muted) px-6 py-8 flex flex-col items-center gap-3 text-center">
+        <div className="rounded-(--radius) border border-(--hb-green-muted) bg-(--hb-green-muted) px-6 py-8 flex flex-col items-center gap-3 text-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-(--hb-green) text-(--hb-blue)">
             <Check className="h-6 w-6" />
           </div>

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { useForm } from "react-hook-form";
@@ -92,7 +92,7 @@ function Label({
 }
 
 const inputCls = [
-  "w-full px-3 py-2.5 rounded-xl border text-sm transition-colors outline-none",
+  "w-full px-3 py-2.5 rounded-(--radius) border text-sm transition-colors outline-none",
   "border-(--border) bg-(--bg) text-(--fg)",
   "placeholder:text-(--fg-muted)",
   "focus:border-(--hb-blue) focus:ring-2 focus:ring-(--hb-blue)/10",
@@ -128,7 +128,7 @@ export function ExpenseForm({ onClose, onSuccess }: ExpenseFormProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex justify-end"
+      className="fixed inset-0 z-(--z-overlay) flex justify-end"
       style={{ background: "rgba(19,23,55,0.42)" }}
       onClick={onClose}
     >
@@ -161,7 +161,7 @@ export function ExpenseForm({ onClose, onSuccess }: ExpenseFormProps) {
           </div>
           <button
             onClick={onClose}
-            className="flex items-center justify-center w-9 h-9 rounded-xl transition-colors"
+            className="flex items-center justify-center w-9 h-9 rounded-(--radius) transition-colors"
             style={{ color: "var(--fg-muted)" }}
           >
             <X className="h-4 w-4" />
@@ -265,7 +265,7 @@ export function ExpenseForm({ onClose, onSuccess }: ExpenseFormProps) {
             <div className="mt-4">
               <Label>Comprovante</Label>
               <label
-                className="flex flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed py-8 px-4 cursor-pointer transition-colors"
+                className="flex flex-col items-center justify-center gap-3 rounded-(--radius) border-2 border-dashed py-8 px-4 cursor-pointer transition-colors"
                 style={{
                   borderColor: "var(--border-strong)",
                   background: "var(--bg-alt)",
@@ -338,7 +338,7 @@ export function ExpenseForm({ onClose, onSuccess }: ExpenseFormProps) {
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2.5 rounded-xl border text-sm font-semibold transition-colors"
+            className="px-4 py-2.5 rounded-(--radius) border text-sm font-semibold transition-colors"
             style={{ borderColor: "var(--border)", color: "var(--fg)" }}
           >
             Cancelar
@@ -347,7 +347,7 @@ export function ExpenseForm({ onClose, onSuccess }: ExpenseFormProps) {
             type="submit"
             form="expense-form"
             disabled={isSubmitting}
-            className="px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors disabled:opacity-60"
+            className="px-5 py-2.5 rounded-(--radius) text-sm font-semibold transition-colors disabled:opacity-60"
             style={{ background: "var(--hb-blue)", color: "var(--fg-invert)" }}
           >
             {isSubmitting ? "Salvando…" : "Registrar despesa"}

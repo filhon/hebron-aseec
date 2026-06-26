@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect } from "react";
 import {
@@ -175,7 +175,9 @@ function KpiCard({
           : "text-(--fg-muted)";
 
   return (
-    <div className={`relative overflow-hidden rounded-xl border p-5 ${base}`}>
+    <div
+      className={`relative overflow-hidden rounded-(--radius) border p-5 ${base}`}
+    >
       <p
         className={`text-[10px] font-bold uppercase tracking-[0.14em] mb-2 ${labelCls}`}
       >
@@ -220,7 +222,7 @@ export default function DashboardPage() {
       >
         <div className="flex flex-col items-center text-center max-w-sm px-6 py-16">
           <div
-            className="flex h-14 w-14 items-center justify-center rounded-2xl mb-5"
+            className="flex h-14 w-14 items-center justify-center rounded-sm mb-5"
             style={{ background: "rgba(234,90,6,0.10)" }}
           >
             <AlertCircle
@@ -244,7 +246,7 @@ export default function DashboardPage() {
               setLoading(true);
               setTimeout(() => setLoading(false), 1200);
             }}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold"
+            className="flex items-center gap-2 px-5 py-2.5 rounded-(--radius) text-sm font-semibold"
             style={{ background: "var(--hb-blue)", color: "var(--fg-invert)" }}
           >
             <RefreshCw className="h-4 w-4" />
@@ -279,14 +281,14 @@ export default function DashboardPage() {
           </div>
           <div className="ml-auto flex items-center gap-2">
             <button
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border text-xs font-semibold transition-colors"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-(--radius) border text-xs font-semibold transition-colors"
               style={{ borderColor: "var(--border)", color: "var(--fg-muted)" }}
             >
               <ArrowDown className="h-3 w-3" />
               Exportar
             </button>
             <button
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-(--radius) text-xs font-semibold transition-colors"
               style={{
                 background: "var(--hb-blue)",
                 color: "var(--fg-invert)",
@@ -393,7 +395,7 @@ export default function DashboardPage() {
                   return (
                     <div
                       key={acc.id}
-                      className="relative overflow-hidden rounded-xl border p-5"
+                      className="relative overflow-hidden rounded-(--radius) border p-5"
                       style={{
                         background: "var(--surface)",
                         borderColor: "var(--border)",
@@ -445,7 +447,7 @@ export default function DashboardPage() {
 
             {/* Recent transactions */}
             <div
-              className="rounded-xl border overflow-hidden"
+              className="rounded-(--radius) border overflow-hidden"
               style={{
                 background: "var(--surface)",
                 borderColor: "var(--border)",
@@ -580,7 +582,7 @@ export default function DashboardPage() {
             {/* Pending batch alert */}
             {pendingBatch && (
               <div
-                className="rounded-xl border overflow-hidden"
+                className="rounded-(--radius) border overflow-hidden"
                 style={{
                   borderColor: "var(--hb-orange)",
                   background: "var(--surface)",
@@ -648,7 +650,7 @@ export default function DashboardPage() {
 
             {/* Governance flow */}
             <div
-              className="rounded-xl border overflow-hidden"
+              className="rounded-(--radius) border overflow-hidden"
               style={{
                 background: "var(--surface)",
                 borderColor: "var(--border)",
@@ -751,7 +753,7 @@ export default function DashboardPage() {
                 ))}
               </div>
               <div
-                className="mx-5 my-3 flex items-start gap-2.5 rounded-xl p-3"
+                className="mx-5 my-3 flex items-start gap-2.5 rounded-xs p-3"
                 style={{ background: "var(--bg-alt)" }}
               >
                 <Info
@@ -770,7 +772,7 @@ export default function DashboardPage() {
 
             {/* Reconciliation status */}
             <div
-              className="rounded-xl border overflow-hidden"
+              className="rounded-(--radius) border overflow-hidden"
               style={{
                 background: "var(--surface)",
                 borderColor: "var(--border)",
@@ -871,7 +873,7 @@ export default function DashboardPage() {
 
             {/* Verse */}
             <div
-              className="rounded-xl px-5 py-5"
+              className="rounded-(--radius) px-5 py-5"
               style={{ background: "var(--hb-blue)" }}
             >
               <p

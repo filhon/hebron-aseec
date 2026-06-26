@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import {
@@ -162,7 +162,7 @@ export default function ContasPagarPage() {
           </div>
           <button
             onClick={() => setExpenseFormOpen(true)}
-            className="ml-auto flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold"
+            className="ml-auto flex items-center gap-1.5 px-3 py-2 rounded-(--radius) text-xs font-semibold"
             style={{ background: "var(--hb-blue)", color: "var(--fg-invert)" }}
           >
             <Plus className="h-3 w-3" />
@@ -210,7 +210,7 @@ export default function ContasPagarPage() {
       <div className="p-6 space-y-5">
         {/* Stage info banner */}
         <div
-          className="flex items-start gap-3 rounded-xl border px-5 py-4"
+          className="flex items-start gap-3 rounded-(--radius) border px-5 py-4"
           style={{ background: "var(--surface)", borderColor: "var(--border)" }}
         >
           <span
@@ -256,7 +256,7 @@ export default function ContasPagarPage() {
 
         {/* Payables table */}
         <div
-          className="rounded-xl border overflow-hidden"
+          className="rounded-(--radius) border overflow-hidden"
           style={{ background: "var(--surface)", borderColor: "var(--border)" }}
         >
           <div

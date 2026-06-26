@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect } from "react";
 import { Upload, CheckCircle2, RefreshCw, AlertCircle } from "lucide-react";
@@ -17,11 +17,11 @@ const bankAccount = mockBankAccounts[0];
 function EmptyNoImport() {
   return (
     <div
-      className="flex flex-col items-center text-center rounded-2xl border py-20 px-8"
+      className="flex flex-col items-center text-center rounded-(--radius) border py-20 px-8"
       style={{ background: "var(--surface)", borderColor: "var(--border)" }}
     >
       <div
-        className="flex h-16 w-16 items-center justify-center rounded-2xl mb-6"
+        className="flex h-16 w-16 items-center justify-center rounded-(--radius) mb-6"
         style={{ background: "rgba(32,44,133,0.08)" }}
       >
         <Upload className="h-8 w-8" style={{ color: "var(--hb-blue)" }} />
@@ -38,14 +38,14 @@ function EmptyNoImport() {
       </p>
       <a
         href="/importacao"
-        className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold"
+        className="flex items-center gap-2 px-5 py-2.5 rounded-(--radius) text-sm font-semibold"
         style={{ background: "var(--hb-blue)", color: "var(--fg-invert)" }}
       >
         <Upload className="h-4 w-4" />
         Importar extrato
       </a>
       <div
-        className="mt-10 w-full max-w-sm rounded-xl px-5 py-4 text-left"
+        className="mt-10 w-full max-w-sm rounded-(--radius) px-5 py-4 text-left"
         style={{ background: "var(--hb-blue)" }}
       >
         <p
@@ -78,11 +78,11 @@ function EmptyNoImport() {
 function EmptyAllConciliated() {
   return (
     <div
-      className="flex flex-col items-center text-center rounded-2xl border py-20 px-8"
+      className="flex flex-col items-center text-center rounded-(--radius) border py-20 px-8"
       style={{ background: "var(--surface)", borderColor: "var(--border)" }}
     >
       <div
-        className="flex h-16 w-16 items-center justify-center rounded-2xl mb-6"
+        className="flex h-16 w-16 items-center justify-center rounded-(--radius) mb-6"
         style={{ background: "var(--hb-green)" }}
       >
         <CheckCircle2 className="h-8 w-8" style={{ color: "var(--hb-blue)" }} />
@@ -99,13 +99,13 @@ function EmptyAllConciliated() {
       </p>
       <a
         href="/importacao"
-        className="flex items-center gap-2 px-5 py-2.5 rounded-xl border text-sm font-semibold"
+        className="flex items-center gap-2 px-5 py-2.5 rounded-(--radius) border text-sm font-semibold"
         style={{ borderColor: "var(--border)", color: "var(--fg-muted)" }}
       >
         Importar novo extrato
       </a>
       <div
-        className="mt-10 w-full max-w-sm rounded-xl px-5 py-4 text-left"
+        className="mt-10 w-full max-w-sm rounded-(--radius) px-5 py-4 text-left"
         style={{ background: "var(--hb-blue)" }}
       >
         <p
@@ -139,11 +139,11 @@ function EmptyAllConciliated() {
 function ErrorState({ onRetry }: { onRetry: () => void }) {
   return (
     <div
-      className="flex flex-col items-center text-center rounded-2xl border py-20 px-8"
+      className="flex flex-col items-center text-center rounded-(--radius) border py-20 px-8"
       style={{ background: "var(--surface)", borderColor: "var(--border)" }}
     >
       <div
-        className="flex h-14 w-14 items-center justify-center rounded-2xl mb-5"
+        className="flex h-14 w-14 items-center justify-center rounded-(--radius) mb-5"
         style={{ background: "rgba(234,90,6,0.10)" }}
       >
         <AlertCircle
@@ -163,7 +163,7 @@ function ErrorState({ onRetry }: { onRetry: () => void }) {
       </p>
       <button
         onClick={onRetry}
-        className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold"
+        className="flex items-center gap-2 px-5 py-2.5 rounded-(--radius) text-sm font-semibold"
         style={{ background: "var(--hb-blue)", color: "var(--fg-invert)" }}
       >
         <RefreshCw className="h-4 w-4" />

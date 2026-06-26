@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { Plus, ArrowUp, ArrowDown } from "lucide-react";
@@ -40,7 +40,7 @@ interface KpiCardProps {
 function KpiCard({ label, value, sub, accent, dir }: KpiCardProps) {
   return (
     <div
-      className="rounded-xl border p-5"
+      className="rounded-(--radius) border p-5"
       style={{
         background: accent ? "var(--hb-blue)" : "var(--surface)",
         borderColor: accent ? "transparent" : "var(--border)",
@@ -109,7 +109,7 @@ export default function OrcamentoPage() {
           </div>
           <button
             onClick={() => setBudgetFormOpen(true)}
-            className="ml-auto flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold"
+            className="ml-auto flex items-center gap-1.5 px-3 py-2 rounded-(--radius) text-xs font-semibold"
             style={{ background: "var(--hb-blue)", color: "var(--fg-invert)" }}
           >
             <Plus className="h-3 w-3" />

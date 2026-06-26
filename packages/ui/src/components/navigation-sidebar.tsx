@@ -3,7 +3,6 @@
 import * as React from "react";
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 import * as SeparatorPrimitive from "@radix-ui/react-separator";
-import { ChevronLeft, ChevronRight, LayoutGrid } from "lucide-react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import type { LucideIcon } from "lucide-react";
@@ -46,6 +45,7 @@ export interface NavigationSidebarProps {
   collapsed: boolean;
   onCollapsedChange: (collapsed: boolean) => void;
   currentPath?: string;
+  /** @deprecated collapse toggle moved to AppShell brand row */
   showCollapseToggle?: boolean;
   onNavItemClick?: () => void;
   LinkComponent?: LinkComponent;
@@ -90,7 +90,7 @@ function NavTooltip({ label, collapsed, children }: NavTooltipProps) {
           sideOffset={8}
           className={cn(
             "z-(--z-tooltip) rounded-(--radius) px-2.5 py-1.5",
-            "bg-(--fg) text-(--text-xs)",
+            "bg-(--fg) text-(--text-xs) text-(--bg)",
             "shadow-(--shadow-md)",
             "animate-in fade-in-0 zoom-in-95",
           )}
@@ -129,30 +129,28 @@ function NavItemButton({
         onClick={onClick}
         aria-current={active ? "page" : undefined}
         className={cn(
-          "group flex items-center gap-3 rounded-(--radius) px-2.5 py-2",
-          "text-(--text-sm) font-(--font-weight-medium)",
-          "transition-all duration-(--transition-fast)",
+          "group flex items-center gap-2.5 rounded-(--radius) px-2.5 py-2",
+          "text-(--text-sm) transition-all duration-(--transition-fast)",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--brand)",
           active
             ? dark
-              ? "bg-white/[14%] text-white"
-              : "bg-(--brand-muted) text-(--brand)"
+              ? "bg-white/20 font-(--font-weight-semibold) text-white"
+              : "bg-(--brand-muted) font-(--font-weight-semibold) text-(--brand)"
             : dark
-              ? "text-white/60 hover:bg-white/[8%] hover:text-white"
+              ? "text-white/55 hover:bg-white/[8%] hover:text-white"
               : "text-(--fg-muted) hover:bg-(--surface-alt) hover:text-(--fg)",
           collapsed && "justify-center px-2",
         )}
       >
         <Icon
           className={cn(
-            "shrink-0 transition-colors duration-(--transition-fast)",
-            collapsed ? "h-5 w-5" : "h-4 w-4",
+            "h-4 w-4 shrink-0 transition-colors duration-(--transition-fast)",
             active
               ? dark
                 ? "text-white"
                 : "text-(--brand)"
               : dark
-                ? "text-white/60 group-hover:text-white"
+                ? "text-white/55 group-hover:text-white"
                 : "text-(--fg-muted) group-hover:text-(--fg)",
           )}
           aria-hidden="true"
@@ -167,10 +165,10 @@ function NavItemButton({
                   "rounded-full px-1.5 text-(--text-xs) font-(--font-weight-medium)",
                   active
                     ? dark
-                      ? "bg-white/20 text-white"
+                      ? "bg-white/25 text-white"
                       : "bg-(--brand) text-(--brand-fg)"
                     : dark
-                      ? "bg-white/10 text-white/60"
+                      ? "bg-white/10 text-white/55"
                       : "bg-(--hb-gray-100) text-(--fg-muted)",
                 )}
               >
@@ -184,45 +182,44 @@ function NavItemButton({
   );
 }
 
-interface AppShortcutButtonProps {
+interface AppShortcutTileProps {
   app: AppShortcut;
-  collapsed: boolean;
   LinkComponent: LinkComponent;
+  dark?: boolean;
 }
 
-function AppShortcutButton({
+function AppShortcutTile({
   app,
-  collapsed,
   LinkComponent: Link,
-}: AppShortcutButtonProps) {
+  dark,
+}: AppShortcutTileProps) {
   const Icon = app.icon;
 
   return (
-    <NavTooltip label={app.label} collapsed={collapsed}>
+    <NavTooltip label={app.label} collapsed={false}>
       <Link
         href={app.href}
         aria-label={app.label}
         className={cn(
-          "group flex items-center gap-2.5 rounded-(--radius) px-2.5 py-1.5",
-          "text-(--text-xs) font-(--font-weight-medium)",
+          "group flex flex-col items-center gap-1 rounded-(--radius-xs) p-2",
           "transition-all duration-(--transition-fast)",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--brand)",
           app.active
-            ? "bg-(--hb-orange-muted) text-(--accent)"
-            : "text-(--fg-muted) hover:bg-(--surface-alt) hover:text-(--fg)",
-          collapsed && "justify-center px-2",
+            ? dark
+              ? "bg-white/15 text-white"
+              : "bg-(--brand-muted) text-(--brand)"
+            : dark
+              ? "text-white/45 hover:bg-white/10 hover:text-white/80"
+              : "text-(--fg-muted) hover:bg-(--surface-alt) hover:text-(--fg)",
         )}
       >
-        <Icon
-          className={cn(
-            "h-4 w-4 shrink-0",
-            app.active
-              ? "text-(--accent)"
-              : "text-(--fg-muted) group-hover:text-(--fg)",
-          )}
-          aria-hidden="true"
-        />
-        {!collapsed && <span className="truncate">{app.label}</span>}
+        <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+        <span
+          className="w-full truncate text-center leading-none"
+          style={{ fontSize: "9.5px" }}
+        >
+          {app.label}
+        </span>
       </Link>
     </NavTooltip>
   );
@@ -232,47 +229,19 @@ export function NavigationSidebar({
   sections,
   apps,
   collapsed,
-  onCollapsedChange,
+  onCollapsedChange: _onCollapsedChange,
   currentPath = "",
-  showCollapseToggle = true,
   onNavItemClick,
   LinkComponent = DefaultLink,
   className,
   dark,
 }: NavigationSidebarProps) {
-  const CollapseIcon = collapsed ? ChevronRight : ChevronLeft;
-
   return (
     <TooltipPrimitive.Provider>
       <nav
         aria-label="Navegação principal"
         className={cn("flex h-full flex-col", className)}
       >
-        {showCollapseToggle && (
-          <div
-            className={cn(
-              "flex h-14 shrink-0 items-center border-b px-3",
-              dark ? "border-white/10" : "border-(--border)",
-              collapsed ? "justify-center" : "justify-end",
-            )}
-          >
-            <button
-              onClick={() => onCollapsedChange(!collapsed)}
-              aria-label={collapsed ? "Expandir menu" : "Recolher menu"}
-              className={cn(
-                "flex h-7 w-7 items-center justify-center rounded-(--radius)",
-                dark
-                  ? "text-white/60 hover:bg-white/[8%] hover:text-white"
-                  : "text-(--fg-muted) hover:bg-(--surface-alt) hover:text-(--fg)",
-                "transition-colors duration-(--transition-fast)",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--brand)",
-              )}
-            >
-              <CollapseIcon className="h-4 w-4" aria-hidden="true" />
-            </button>
-          </div>
-        )}
-
         <div className="flex-1 overflow-y-auto overflow-x-hidden py-3">
           {sections.map((section, sectionIndex) => (
             <React.Fragment key={section.title ?? sectionIndex}>
@@ -289,9 +258,9 @@ export function NavigationSidebar({
               {section.title && !collapsed && (
                 <p
                   className={cn(
-                    "mb-1 px-3 text-(--text-xs) font-(--font-weight-semibold)",
+                    "mb-1.5 mt-1 px-3 text-(--text-xs) font-(--font-weight-semibold)",
                     "uppercase tracking-wider",
-                    dark ? "text-white/40" : "text-(--fg-muted)",
+                    dark ? "text-white/35" : "text-(--fg-muted)",
                   )}
                 >
                   {section.title}
@@ -316,49 +285,23 @@ export function NavigationSidebar({
           ))}
         </div>
 
-        {apps && apps.length > 0 && (
+        {apps && apps.length > 0 && !collapsed && (
           <div
             className={cn(
-              "shrink-0 border-t py-3",
+              "shrink-0 border-t px-3 py-3",
               dark ? "border-white/10" : "border-(--border)",
             )}
           >
-            {!collapsed && (
-              <div className="mb-1 flex items-center gap-1.5 px-3">
-                <LayoutGrid
-                  className="h-3.5 w-3.5 text-(--fg-muted)"
-                  aria-hidden="true"
-                />
-                <p className="text-(--text-xs) font-(--font-weight-semibold) uppercase tracking-wider">
-                  Apps
-                </p>
-              </div>
-            )}
-
-            {collapsed && (
-              <div className="mb-1 flex justify-center px-2">
-                <NavTooltip label="Apps do ecossistema" collapsed={collapsed}>
-                  <span className="flex h-7 w-7 items-center justify-center">
-                    <LayoutGrid
-                      className="h-4 w-4 text-(--fg-muted)"
-                      aria-hidden="true"
-                    />
-                  </span>
-                </NavTooltip>
-              </div>
-            )}
-
-            <ul className="space-y-0.5 px-2">
+            <div className="grid grid-cols-3 gap-1">
               {apps.map((app) => (
-                <li key={app.id}>
-                  <AppShortcutButton
-                    app={app}
-                    collapsed={collapsed}
-                    LinkComponent={LinkComponent}
-                  />
-                </li>
+                <AppShortcutTile
+                  key={app.id}
+                  app={app}
+                  LinkComponent={LinkComponent}
+                  dark={dark}
+                />
               ))}
-            </ul>
+            </div>
           </div>
         )}
       </nav>

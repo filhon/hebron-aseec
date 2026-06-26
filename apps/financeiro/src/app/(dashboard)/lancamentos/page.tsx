@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { Plus, Info, ArrowUp, ArrowDown, ChevronDown } from "lucide-react";
@@ -51,7 +51,7 @@ interface KpiCardProps {
 function KpiCard({ label, value, sub, accent, dir }: KpiCardProps) {
   return (
     <div
-      className="rounded-xl border p-5"
+      className="rounded-(--radius) border p-5"
       style={{
         background: accent ? "var(--hb-blue)" : "var(--surface)",
         borderColor: accent ? "transparent" : "var(--border)",
@@ -124,7 +124,7 @@ export default function LancamentosPage() {
           <div className="ml-auto relative">
             <button
               onClick={() => setMenuOpen((v) => !v)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-(--radius) text-xs font-semibold"
               style={{
                 background: "var(--hb-blue)",
                 color: "var(--fg-invert)",
@@ -136,7 +136,7 @@ export default function LancamentosPage() {
             </button>
             {menuOpen && (
               <div
-                className="absolute right-0 top-full mt-1 w-44 rounded-xl border py-1 z-20"
+                className="absolute right-0 top-full mt-1 w-44 rounded-(--radius) border py-1 z-20"
                 style={{
                   background: "var(--bg)",
                   borderColor: "var(--border)",
@@ -199,7 +199,7 @@ export default function LancamentosPage() {
 
         {/* Imutability notice */}
         <div
-          className="flex items-center gap-2.5 rounded-xl border px-4 py-3 text-xs"
+          className="flex items-center gap-2.5 rounded-(--radius) border px-4 py-3 text-xs"
           style={{
             background: "var(--surface)",
             borderColor: "var(--border)",

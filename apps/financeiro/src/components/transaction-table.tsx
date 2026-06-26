@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useMemo, useCallback } from "react";
 import {
@@ -228,7 +228,7 @@ export function TransactionTable({
     ) : null;
 
   return (
-    <div className="rounded-xl border border-(--border) bg-(--surface) overflow-hidden">
+    <div className="rounded-(--radius) border border-(--border) bg-(--surface) overflow-hidden">
       {/* ── Toolbar ─────────────────────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-(--border)">
         {/* Search */}

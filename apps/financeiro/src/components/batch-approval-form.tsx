@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { useForm } from "react-hook-form";
@@ -81,7 +81,7 @@ function PayableCheckRow({
   const due = getDueCls(payable.dueAt);
   return (
     <div
-      className="flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors cursor-pointer"
+      className="flex items-center gap-3 px-4 py-3 rounded-(--radius) border transition-colors cursor-pointer"
       style={{
         borderColor: checked ? "var(--hb-blue)" : "var(--border)",
         background: checked ? "rgba(32,44,133,0.04)" : "var(--bg)",
@@ -180,7 +180,7 @@ export function BatchApprovalForm({
   if (!batch) {
     return (
       <div
-        className="fixed inset-0 z-50 flex justify-end"
+        className="fixed inset-0 z-(--z-overlay) flex justify-end"
         style={{ background: "rgba(19,23,55,0.42)" }}
         onClick={onClose}
       >
@@ -225,7 +225,7 @@ export function BatchApprovalForm({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex justify-end"
+      className="fixed inset-0 z-(--z-overlay) flex justify-end"
       style={{ background: "rgba(19,23,55,0.42)" }}
       onClick={onClose}
     >
@@ -258,7 +258,7 @@ export function BatchApprovalForm({
           </div>
           <button
             onClick={onClose}
-            className="flex items-center justify-center w-9 h-9 rounded-xl transition-colors"
+            className="flex items-center justify-center w-9 h-9 rounded-(--radius) transition-colors"
             style={{ color: "var(--fg-muted)" }}
           >
             <X className="h-4 w-4" />
@@ -275,7 +275,7 @@ export function BatchApprovalForm({
           >
             {/* Governance reminder */}
             <div
-              className="flex items-start gap-3 rounded-xl px-4 py-3"
+              className="flex items-start gap-3 rounded-(--radius) px-4 py-3"
               style={{ background: "var(--hb-orange-muted)" }}
             >
               <AlertTriangle
@@ -295,7 +295,7 @@ export function BatchApprovalForm({
 
             {/* Payables list */}
             <div
-              className="rounded-xl border overflow-hidden"
+              className="rounded-(--radius) border overflow-hidden"
               style={{ borderColor: "var(--border)" }}
             >
               {/* Header da lista */}
@@ -400,7 +400,7 @@ export function BatchApprovalForm({
                   onClick={() => {
                     setAction("aprovar");
                   }}
-                  className="flex items-center gap-2 px-4 py-3 rounded-xl border-2 text-sm font-semibold transition-colors"
+                  className="flex items-center gap-2 px-4 py-3 rounded-(--radius) border-2 text-sm font-semibold transition-colors"
                   style={{
                     borderColor:
                       action === "aprovar"
@@ -424,7 +424,7 @@ export function BatchApprovalForm({
                   onClick={() => {
                     setAction("rejeitar");
                   }}
-                  className="flex items-center gap-2 px-4 py-3 rounded-xl border-2 text-sm font-semibold transition-colors"
+                  className="flex items-center gap-2 px-4 py-3 rounded-(--radius) border-2 text-sm font-semibold transition-colors"
                   style={{
                     borderColor:
                       action === "rejeitar"
@@ -468,7 +468,7 @@ export function BatchApprovalForm({
                 )}
                 rows={3}
                 className={[
-                  "w-full px-3 py-2.5 rounded-xl border text-sm transition-colors outline-none resize-none",
+                  "w-full px-3 py-2.5 rounded-(--radius) border text-sm transition-colors outline-none resize-none",
                   "border-(--border) bg-(--bg) text-(--fg) placeholder:text-(--fg-muted)",
                   "focus:border-(--hb-blue) focus:ring-2 focus:ring-(--hb-blue)/10",
                 ].join(" ")}
@@ -503,7 +503,7 @@ export function BatchApprovalForm({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2.5 rounded-xl border text-sm font-semibold transition-colors"
+              className="px-4 py-2.5 rounded-(--radius) border text-sm font-semibold transition-colors"
               style={{ borderColor: "var(--border)", color: "var(--fg)" }}
             >
               Cancelar
@@ -512,7 +512,7 @@ export function BatchApprovalForm({
               type="submit"
               form="batch-form"
               disabled={isSubmitting || selected.size === 0}
-              className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors disabled:opacity-60"
+              className="flex items-center gap-2 px-5 py-2.5 rounded-(--radius) text-sm font-semibold transition-colors disabled:opacity-60"
               style={{
                 background:
                   action === "aprovar" ? "var(--hb-blue)" : "var(--hb-orange)",

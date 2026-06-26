@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useMemo, useCallback } from "react";
 import {
@@ -410,7 +410,7 @@ export function CategoryTree({
   return (
     <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
       {/* Tree panel */}
-      <div className="rounded-xl border border-(--border) bg-(--surface) overflow-hidden">
+      <div className="rounded-(--radius) border border-(--border) bg-(--surface) overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-(--border)">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-(--fg-muted)">
@@ -492,7 +492,7 @@ export function CategoryTree({
 
       {/* Side panel */}
       <div className="flex flex-col gap-4">
-        <div className="rounded-xl border border-(--border) bg-(--surface) px-5 py-4">
+        <div className="rounded-(--radius) border border-(--border) bg-(--surface) px-5 py-4">
           <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-(--fg-muted) mb-3">
             Estrutura atual
           </p>
@@ -517,7 +517,7 @@ export function CategoryTree({
           </p>
         </div>
 
-        <div className="rounded-xl border border-(--border) bg-(--surface) px-5 py-4">
+        <div className="rounded-(--radius) border border-(--border) bg-(--surface) px-5 py-4">
           <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-(--fg-muted) mb-3">
             Operações comuns
           </p>
@@ -542,7 +542,7 @@ export function CategoryTree({
             ].map((action) => (
               <button
                 key={action.label}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl border border-(--border) bg-(--bg) text-sm font-medium text-(--fg) text-left hover:border-(--border-strong) hover:bg-(--bg-alt) transition-colors"
+                className="flex items-center gap-3 px-4 py-3 rounded-(--radius) border border-(--border) bg-(--bg) text-sm font-medium text-(--fg) text-left hover:border-(--border-strong) hover:bg-(--bg-alt) transition-colors"
               >
                 <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-(--surface-alt) text-(--hb-blue) shrink-0">
                   {action.icon}
@@ -554,7 +554,7 @@ export function CategoryTree({
           </div>
         </div>
 
-        <div className="rounded-xl bg-(--hb-blue) text-(--fg-invert) px-5 py-4">
+        <div className="rounded-(--radius) bg-(--hb-blue) text-(--fg-invert) px-5 py-4">
           <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-(--hb-cyan) mb-2">
             Boa prática
           </p>

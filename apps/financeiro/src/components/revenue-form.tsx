@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -88,7 +88,7 @@ function Label({
 }
 
 const inputCls = [
-  "w-full px-3 py-2.5 rounded-xl border text-sm transition-colors outline-none",
+  "w-full px-3 py-2.5 rounded-(--radius) border text-sm transition-colors outline-none",
   "border-(--border) bg-(--bg) text-(--fg)",
   "placeholder:text-(--fg-muted)",
   "focus:border-(--hb-blue) focus:ring-2 focus:ring-(--hb-blue)/10",
@@ -121,7 +121,7 @@ export function RevenueForm({ onClose, onSuccess }: RevenueFormProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex justify-end"
+      className="fixed inset-0 z-(--z-overlay) flex justify-end"
       style={{ background: "rgba(19,23,55,0.42)" }}
       onClick={onClose}
     >
@@ -154,7 +154,7 @@ export function RevenueForm({ onClose, onSuccess }: RevenueFormProps) {
           </div>
           <button
             onClick={onClose}
-            className="flex items-center justify-center w-9 h-9 rounded-xl transition-colors"
+            className="flex items-center justify-center w-9 h-9 rounded-(--radius) transition-colors"
             style={{ color: "var(--fg-muted)" }}
           >
             <X className="h-4 w-4" />
@@ -293,7 +293,7 @@ export function RevenueForm({ onClose, onSuccess }: RevenueFormProps) {
 
             {/* Info card */}
             <div
-              className="flex items-start gap-3 rounded-xl p-4"
+              className="flex items-start gap-3 rounded-(--radius) p-4"
               style={{ background: "var(--hb-green-muted)" }}
             >
               <div
@@ -316,7 +316,7 @@ export function RevenueForm({ onClose, onSuccess }: RevenueFormProps) {
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2.5 rounded-xl border text-sm font-semibold transition-colors"
+            className="px-4 py-2.5 rounded-(--radius) border text-sm font-semibold transition-colors"
             style={{ borderColor: "var(--border)", color: "var(--fg)" }}
           >
             Cancelar
@@ -325,7 +325,7 @@ export function RevenueForm({ onClose, onSuccess }: RevenueFormProps) {
             type="submit"
             form="revenue-form"
             disabled={isSubmitting}
-            className="px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors disabled:opacity-60"
+            className="px-5 py-2.5 rounded-(--radius) text-sm font-semibold transition-colors disabled:opacity-60"
             style={{ background: "var(--hb-green)", color: "var(--hb-blue)" }}
           >
             {isSubmitting ? "Salvando…" : "Registrar receita"}

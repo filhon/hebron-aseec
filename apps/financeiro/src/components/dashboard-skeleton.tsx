@@ -1,4 +1,4 @@
-function Bone({ className }: { className: string }) {
+﻿function Bone({ className }: { className: string }) {
   return (
     <div
       className={`animate-pulse ${className}`}
@@ -21,8 +21,8 @@ export function DashboardSkeleton() {
             <Bone className="h-6 w-44 rounded-lg" />
           </div>
           <div className="ml-auto flex gap-2">
-            <Bone className="h-9 w-24 rounded-xl" />
-            <Bone className="h-9 w-36 rounded-xl" />
+            <Bone className="h-9 w-24 rounded-(--radius)" />
+            <Bone className="h-9 w-36 rounded-(--radius)" />
           </div>
         </div>
       </div>
@@ -33,7 +33,7 @@ export function DashboardSkeleton() {
           {Array.from({ length: 4 }).map((_, i) => (
             <div
               key={i}
-              className="rounded-xl border p-5 space-y-3"
+              className="rounded-(--radius) border p-5 space-y-3"
               style={{
                 background: "var(--surface)",
                 borderColor: "var(--border)",
@@ -52,7 +52,7 @@ export function DashboardSkeleton() {
           <div className="space-y-5">
             {/* Cash flow chart */}
             <div
-              className="rounded-xl border p-5"
+              className="rounded-(--radius) border p-5"
               style={{
                 background: "var(--surface)",
                 borderColor: "var(--border)",
@@ -69,7 +69,7 @@ export function DashboardSkeleton() {
                   <Bone className="h-6 w-10 rounded-full" />
                 </div>
               </div>
-              <Bone className="h-44 w-full rounded-xl" />
+              <Bone className="h-44 w-full rounded-(--radius)" />
               <div className="flex gap-4 mt-3">
                 <Bone className="h-3 w-28 rounded" />
                 <Bone className="h-3 w-28 rounded" />
@@ -90,7 +90,7 @@ export function DashboardSkeleton() {
                 {Array.from({ length: 3 }).map((_, i) => (
                   <div
                     key={i}
-                    className="relative overflow-hidden rounded-xl border p-5 space-y-2"
+                    className="relative overflow-hidden rounded-(--radius) border p-5 space-y-2"
                     style={{
                       background: "var(--surface)",
                       borderColor: "var(--border)",
@@ -110,7 +110,7 @@ export function DashboardSkeleton() {
 
             {/* Recent transactions table */}
             <div
-              className="rounded-xl border overflow-hidden"
+              className="rounded-(--radius) border overflow-hidden"
               style={{
                 background: "var(--surface)",
                 borderColor: "var(--border)",
@@ -143,7 +143,7 @@ export function DashboardSkeleton() {
           <div className="space-y-5">
             {/* Alert card */}
             <div
-              className="rounded-xl border p-5 space-y-3"
+              className="rounded-(--radius) border p-5 space-y-3"
               style={{
                 background: "var(--surface)",
                 borderColor: "var(--border)",
@@ -158,14 +158,14 @@ export function DashboardSkeleton() {
                 </div>
               </div>
               <div className="flex gap-2">
-                <Bone className="h-9 flex-1 rounded-xl" />
-                <Bone className="h-9 w-20 rounded-xl" />
+                <Bone className="h-9 flex-1 rounded-(--radius)" />
+                <Bone className="h-9 w-20 rounded-(--radius)" />
               </div>
             </div>
 
             {/* Governance card */}
             <div
-              className="rounded-xl border overflow-hidden"
+              className="rounded-(--radius) border overflow-hidden"
               style={{
                 background: "var(--surface)",
                 borderColor: "var(--border)",
@@ -188,7 +188,7 @@ export function DashboardSkeleton() {
                 ))}
               </div>
               <div
-                className="mx-5 my-3 p-3 rounded-xl"
+                className="mx-5 my-3 p-3 rounded-(--radius)"
                 style={{ background: "var(--bg-alt)" }}
               >
                 <Bone className="h-3 w-full rounded" />
@@ -197,7 +197,7 @@ export function DashboardSkeleton() {
 
             {/* Conciliation card */}
             <div
-              className="rounded-xl border overflow-hidden"
+              className="rounded-(--radius) border overflow-hidden"
               style={{
                 background: "var(--surface)",
                 borderColor: "var(--border)",
@@ -225,7 +225,7 @@ export function DashboardSkeleton() {
 
             {/* Verse card */}
             <div
-              className="rounded-xl p-5 space-y-3"
+              className="rounded-(--radius) p-5 space-y-3"
               style={{ background: "var(--hb-blue)" }}
             >
               <div

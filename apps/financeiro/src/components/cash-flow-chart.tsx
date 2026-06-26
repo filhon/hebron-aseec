@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useMemo } from "react";
 
@@ -115,7 +115,7 @@ export function CashFlowChart({
 
   return (
     <div
-      className={`rounded-xl border border-(--border) bg-(--surface) overflow-hidden ${className}`}
+      className={`rounded-(--radius) border border-(--border) bg-(--surface) overflow-hidden ${className}`}
     >
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-(--border)">

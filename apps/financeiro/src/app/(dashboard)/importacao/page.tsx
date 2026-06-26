@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState, useRef } from "react";
 import {
@@ -106,7 +106,7 @@ function Step1Upload({ onNext }: { onNext: () => void }) {
         onDragLeave={() => setDragging(false)}
         onDrop={handleDrop}
         onClick={() => inputRef.current?.click()}
-        className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed cursor-pointer transition-colors py-16 px-8 text-center"
+        className="flex flex-col items-center justify-center rounded-(--radius) border-2 border-dashed cursor-pointer transition-colors py-16 px-8 text-center"
         style={{
           borderColor: dragging ? "var(--hb-blue)" : "var(--border)",
           background: dragging ? "rgba(32,44,133,0.04)" : "var(--surface)",
@@ -123,7 +123,7 @@ function Step1Upload({ onNext }: { onNext: () => void }) {
           }}
         />
         <div
-          className="flex h-14 w-14 items-center justify-center rounded-2xl mb-4"
+          className="flex h-14 w-14 items-center justify-center rounded-(--radius) mb-4"
           style={{ background: "var(--hb-blue)" }}
         >
           <Upload className="h-7 w-7 text-white" />
@@ -143,7 +143,7 @@ function Step1Upload({ onNext }: { onNext: () => void }) {
 
       {/* Format info */}
       <div
-        className="flex items-start gap-3 rounded-xl border px-4 py-3.5"
+        className="flex items-start gap-3 rounded-(--radius) border px-4 py-3.5"
         style={{ background: "var(--surface)", borderColor: "var(--border)" }}
       >
         <AlertTriangle
@@ -164,7 +164,7 @@ function Step1Upload({ onNext }: { onNext: () => void }) {
 
       {/* Demo shortcut */}
       <div
-        className="flex items-center justify-between rounded-xl border px-5 py-4"
+        className="flex items-center justify-between rounded-(--radius) border px-5 py-4"
         style={{ background: "var(--hb-blue)", borderColor: "transparent" }}
       >
         <div>
@@ -177,7 +177,7 @@ function Step1Upload({ onNext }: { onNext: () => void }) {
         </div>
         <button
           onClick={onNext}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-colors"
+          className="flex items-center gap-1.5 px-4 py-2 rounded-(--radius) text-xs font-semibold transition-colors"
           style={{ background: "var(--hb-green)", color: "var(--hb-blue)" }}
         >
           Carregar extrato
@@ -189,7 +189,7 @@ function Step1Upload({ onNext }: { onNext: () => void }) {
         <button
           onClick={file ? onNext : undefined}
           disabled={!file}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold transition-colors disabled:opacity-40"
+          className="flex items-center gap-2 px-5 py-2.5 rounded-(--radius) text-sm font-semibold transition-colors disabled:opacity-40"
           style={{ background: "var(--hb-blue)", color: "var(--fg-invert)" }}
         >
           Avançar
@@ -242,7 +242,7 @@ function Step2Preview({
         ].map((s) => (
           <div
             key={s.label}
-            className="rounded-xl border p-4"
+            className="rounded-(--radius) border p-4"
             style={{
               background: "var(--surface)",
               borderColor: "var(--border)",
@@ -266,7 +266,7 @@ function Step2Preview({
 
       {/* Preview table */}
       <div
-        className="rounded-xl border overflow-hidden"
+        className="rounded-(--radius) border overflow-hidden"
         style={{ background: "var(--surface)", borderColor: "var(--border)" }}
       >
         <div
@@ -400,14 +400,14 @@ function Step2Preview({
       <div className="flex items-center justify-between">
         <button
           onClick={onBack}
-          className="px-4 py-2.5 rounded-xl border text-sm font-semibold"
+          className="px-4 py-2.5 rounded-(--radius) border text-sm font-semibold"
           style={{ borderColor: "var(--border)", color: "var(--fg-muted)" }}
         >
           Voltar
         </button>
         <button
           onClick={onNext}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold"
+          className="flex items-center gap-2 px-5 py-2.5 rounded-(--radius) text-sm font-semibold"
           style={{ background: "var(--hb-blue)", color: "var(--fg-invert)" }}
         >
           Confirmar importação
@@ -422,7 +422,7 @@ function Step3Success() {
   return (
     <div className="max-w-2xl mx-auto">
       <div
-        className="flex flex-col items-center text-center rounded-2xl border py-16 px-8"
+        className="flex flex-col items-center text-center rounded-(--radius) border py-16 px-8"
         style={{ background: "var(--surface)", borderColor: "var(--border)" }}
       >
         <div
@@ -447,7 +447,7 @@ function Step3Success() {
 
         {/* Verse */}
         <div
-          className="w-full rounded-xl px-6 py-5 text-left"
+          className="w-full rounded-(--radius) px-6 py-5 text-left"
           style={{ background: "var(--hb-blue)" }}
         >
           <p
@@ -477,14 +477,14 @@ function Step3Success() {
         <div className="flex gap-3 mt-6 w-full">
           <a
             href="/conciliacao"
-            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold"
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-(--radius) text-sm font-semibold"
             style={{ background: "var(--hb-blue)", color: "var(--fg-invert)" }}
           >
             Ir para conciliação
           </a>
           <a
             href="/lancamentos"
-            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm font-semibold"
+            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-(--radius) border text-sm font-semibold"
             style={{ borderColor: "var(--border)", color: "var(--fg-muted)" }}
           >
             Ver lançamentos

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { Calendar, Link2, Check, MoreHorizontal } from "lucide-react";
 import type { Payable } from "@hebron/types/financeiro";
@@ -101,7 +101,7 @@ export function PayableCard({ payable, onAction }: PayableCardProps) {
   const currentStep = STATUS_ORDER.indexOf(payable.status);
 
   return (
-    <div className="relative overflow-hidden rounded-xl border border-(--border) bg-(--surface) transition-shadow hover:shadow-sm">
+    <div className="relative overflow-hidden rounded-(--radius) border border-(--border) bg-(--surface) transition-shadow hover:shadow-sm">
       {/* Left color band */}
       <div
         className={clsx("absolute left-0 top-0 h-full w-1", cfg.band)}

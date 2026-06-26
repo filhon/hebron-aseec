@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import {
@@ -62,7 +62,7 @@ const DUE_PILL: Record<string, string> = {
 function PayableRow({ p }: { p: Payable }) {
   const dueStatus = getDueStatus(p.dueAt);
   return (
-    <div className="flex items-center gap-3 px-3 py-3 rounded-xl border border-(--border) bg-(--bg)">
+    <div className="flex items-center gap-3 px-3 py-3 rounded-(--radius) border border-(--border) bg-(--bg)">
       <div className="flex-1 min-w-0">
         <p className="text-sm font-semibold text-(--fg) truncate">
           {p.description}
@@ -164,7 +164,7 @@ export function BatchApprovalCard({
   return (
     <div
       className={clsx(
-        "rounded-xl border bg-(--surface) overflow-hidden",
+        "rounded-(--radius) border bg-(--surface) overflow-hidden",
         cfg.cardBorder,
       )}
     >
@@ -172,7 +172,7 @@ export function BatchApprovalCard({
       <div className="flex items-center gap-4 px-5 py-4 border-b border-(--border)">
         <span
           className={clsx(
-            "flex items-center justify-center w-11 h-11 rounded-xl shrink-0",
+            "flex items-center justify-center w-11 h-11 rounded-(--radius) shrink-0",
             cfg.iconBg,
             cfg.iconColor,
           )}
@@ -251,7 +251,7 @@ export function BatchApprovalCard({
           <textarea
             rows={2}
             placeholder="Ex: Pagamentos urgentes. Pr. Samuel precisa do apoio até sexta."
-            className="w-full rounded-xl border border-(--border) bg-(--bg) px-3 py-2 text-sm text-(--fg) resize-none outline-none focus:border-(--hb-blue) transition-colors"
+            className="w-full rounded-(--radius) border border-(--border) bg-(--bg) px-3 py-2 text-sm text-(--fg) resize-none outline-none focus:border-(--hb-blue) transition-colors"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
           />
@@ -318,7 +318,7 @@ export function BatchApprovalCard({
           ))}
 
           {/* Total */}
-          <div className="flex items-center justify-between px-3 py-3 rounded-xl border border-(--border) bg-(--bg-alt) mt-1">
+          <div className="flex items-center justify-between px-3 py-3 rounded-(--radius) border border-(--border) bg-(--bg-alt) mt-1">
             <span className="text-sm font-bold text-(--fg-muted) uppercase tracking-[0.08em]">
               Total do lote
             </span>
@@ -332,7 +332,7 @@ export function BatchApprovalCard({
 
           {/* Governance dual warning */}
           {stage === "pendente" && (
-            <div className="flex items-start gap-2 px-3 py-3 rounded-xl border border-(--hb-orange-muted) bg-(--hb-orange-muted)">
+            <div className="flex items-start gap-2 px-3 py-3 rounded-(--radius) border border-(--hb-orange-muted) bg-(--hb-orange-muted)">
               <AlertTriangle className="h-4 w-4 text-(--hb-orange-deep) mt-0.5 shrink-0" />
               <div className="text-xs text-(--fg)">
                 <strong>Governança dual obrigatória.</strong> O aprovador e o

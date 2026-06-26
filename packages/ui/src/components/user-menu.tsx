@@ -21,6 +21,10 @@ function getInitials(name: string): string {
     .toUpperCase();
 }
 
+function getFirstName(name: string): string {
+  return name.trim().split(/\s+/)[0] ?? name;
+}
+
 export interface AvatarProps {
   name: string;
   avatarUrl?: string;
@@ -66,7 +70,6 @@ export function Avatar({
       className={cn(
         "inline-flex shrink-0 select-none items-center justify-center rounded-full",
         "bg-(--brand) font-(--font-weight-semibold) text-(--brand-fg)",
-        "ring-1 ring-(--border)",
         avatarSizes[size],
         className,
       )}
@@ -95,26 +98,41 @@ export function UserMenu({
   onLogout,
   className,
 }: UserMenuProps) {
+  const [open, setOpen] = React.useState(false);
+
   return (
-    <DropdownMenuPrimitive.Root>
+    <DropdownMenuPrimitive.Root open={open} onOpenChange={setOpen}>
       <DropdownMenuPrimitive.Trigger asChild>
         <button
           className={cn(
-            "flex items-center gap-2 rounded-(--radius) px-2 py-1.5",
-            "text-(--text-sm)",
-            "transition-colors duration-(--transition-fast) hover:bg-(--surface-alt)",
+            "flex h-8 items-center gap-1.5 rounded-full pl-1 pr-2.5",
+            "border border-(--border)",
+            "text-(--text-sm) font-(--font-weight-medium)",
+            "transition-colors duration-(--transition-fast)",
+            open
+              ? "bg-(--surface-alt)"
+              : "bg-transparent hover:bg-(--surface-alt)",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--brand)",
             "select-none",
             className,
           )}
           aria-label="Menu do usuário"
         >
-          <Avatar name={user.name} avatarUrl={user.avatarUrl} size="sm" />
-          <span className="hidden max-w-35 truncate font-(--font-weight-medium) sm:block">
-            {user.name}
+          <Avatar
+            name={user.name}
+            avatarUrl={user.avatarUrl}
+            size="sm"
+            className="h-6 w-6 text-[10px]"
+          />
+          <span className="hidden max-w-28 truncate leading-none sm:block">
+            {getFirstName(user.name)}
           </span>
           <ChevronDown
-            className="h-3.5 w-3.5 text-(--fg-muted)"
+            className={cn(
+              "h-3 w-3 shrink-0 text-(--fg-muted)",
+              "transition-transform duration-(--transition-fast)",
+              open && "rotate-180",
+            )}
             aria-hidden="true"
           />
         </button>
@@ -125,51 +143,64 @@ export function UserMenu({
           align="end"
           sideOffset={6}
           className={cn(
-            "z-(--z-dropdown) min-w-50 rounded-(--radius-md)",
+            "z-(--z-dropdown) w-56 overflow-hidden rounded-(--radius-md)",
             "border border-(--border) bg-(--bg)",
-            "shadow-(--shadow-md) py-1",
+            "shadow-(--shadow-md)",
             "data-[state=open]:animate-in data-[state=closed]:animate-out",
             "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
             "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
             "data-[side=bottom]:slide-in-from-top-2",
           )}
         >
-          <div className="border-b border-(--border) px-3 py-2.5">
-            <p className="truncate text-(--text-sm) font-(--font-weight-medium)">
+          {/* Identity header — tinted, no avatar (already visible in trigger) */}
+          <div className="border-b border-(--border) bg-(--surface-alt) px-3.5 py-3">
+            <p className="truncate text-(--text-sm) font-(--font-weight-semibold) leading-tight">
               {user.name}
             </p>
-            <p className="truncate text-(--text-xs)">{user.email}</p>
+            <p className="mt-0.5 truncate text-(--text-xs) leading-tight text-(--fg-muted)">
+              {user.email}
+            </p>
           </div>
 
-          <DropdownMenuPrimitive.Item asChild>
-            <a
-              href={profileHref}
+          <div className="py-1">
+            <DropdownMenuPrimitive.Item asChild>
+              <a
+                href={profileHref}
+                style={{ outline: "none" }}
+                className={cn(
+                  "mx-1 flex cursor-pointer items-center gap-2.5 rounded-(--radius-sm)",
+                  "px-2.5 py-2 text-(--text-sm) text-(--fg)",
+                  "transition-colors duration-(--transition-fast)",
+                  "data-[highlighted]:bg-(--surface-alt)",
+                )}
+              >
+                <User
+                  className="h-3.5 w-3.5 shrink-0 text-(--fg-muted)"
+                  aria-hidden="true"
+                />
+                Meu perfil
+              </a>
+            </DropdownMenuPrimitive.Item>
+          </div>
+
+          <DropdownMenuPrimitive.Separator className="mx-1 h-px bg-(--border)" />
+
+          <div className="py-1">
+            <DropdownMenuPrimitive.Item
+              onSelect={onLogout}
+              style={{ outline: "none" }}
               className={cn(
-                "mx-1 mt-1 flex cursor-pointer items-center gap-2 rounded-(--radius-sm)",
+                "mx-1 flex cursor-pointer items-center gap-2.5 rounded-(--radius-sm)",
                 "px-2.5 py-2 text-(--text-sm)",
-                "outline-none transition-colors duration-(--transition-fast)",
-                "hover:bg-(--surface-alt) focus:bg-(--surface-alt)",
+                "text-(--color-destructive)",
+                "transition-colors duration-(--transition-fast)",
+                "data-[highlighted]:bg-(--color-destructive-muted)",
               )}
             >
-              <User className="h-4 w-4 text-(--fg-muted)" aria-hidden="true" />
-              Meu perfil
-            </a>
-          </DropdownMenuPrimitive.Item>
-
-          <DropdownMenuPrimitive.Separator className="mx-1 my-1 h-px bg-(--border)" />
-
-          <DropdownMenuPrimitive.Item
-            onSelect={onLogout}
-            className={cn(
-              "mx-1 mb-1 flex cursor-pointer items-center gap-2 rounded-(--radius-sm)",
-              "px-2.5 py-2 text-(--text-sm)",
-              "outline-none transition-colors duration-(--transition-fast)",
-              "hover:bg-(--color-destructive-muted) focus:bg-(--color-destructive-muted)",
-            )}
-          >
-            <LogOut className="h-4 w-4" aria-hidden="true" />
-            Sair
-          </DropdownMenuPrimitive.Item>
+              <LogOut className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+              Sair
+            </DropdownMenuPrimitive.Item>
+          </div>
         </DropdownMenuPrimitive.Content>
       </DropdownMenuPrimitive.Portal>
     </DropdownMenuPrimitive.Root>
