@@ -92,9 +92,63 @@ export type {
 } from "./documentos";
 
 // Projetos schema
-// Financeiro stubs (substituídos pelo módulo completo na Fase 4)
-export { costCenters } from "./financeiro-stubs";
-export type { CostCenter, NewCostCenter } from "./financeiro-stubs";
+// Financeiro schema (módulo completo — P-3.6)
+export {
+  accountTypeEnum,
+  financialCategoryTypeEnum,
+  payableStatusEnum,
+  receivableStatusEnum,
+  receivableSourceEnum,
+  transactionTypeEnum,
+  importFormatEnum,
+  importRowStatusEnum,
+  attachmentRefTypeEnum,
+  bankAccounts,
+  financialCategories,
+  costCenters,
+  budgets,
+  budgetItems,
+  payables,
+  receivables,
+  transactions,
+  transactionReversals,
+  financialAttachments,
+  bankImports,
+  bankImportRows,
+  batchApprovals,
+  batchApprovalItems,
+} from "./financeiro";
+
+export type {
+  BankAccount,
+  NewBankAccount,
+  FinancialCategory,
+  NewFinancialCategory,
+  CostCenter,
+  NewCostCenter,
+  Budget,
+  NewBudget,
+  BudgetItem,
+  NewBudgetItem,
+  Payable,
+  NewPayable,
+  Receivable,
+  NewReceivable,
+  Transaction,
+  NewTransaction,
+  TransactionReversal,
+  NewTransactionReversal,
+  FinancialAttachment,
+  NewFinancialAttachment,
+  BankImport,
+  NewBankImport,
+  BankImportRow,
+  NewBankImportRow,
+  BatchApproval,
+  NewBatchApproval,
+  BatchApprovalItem,
+  NewBatchApprovalItem,
+} from "./financeiro";
 
 export {
   projectTypeEnum,

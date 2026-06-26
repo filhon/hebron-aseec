@@ -72,6 +72,7 @@
 | S-48   | 2026-06-25 | P-3.3 — Telas e Páginas Financeiro        | concluido |
 | S-49   | 2026-06-26 | P-3.4 — Formulários Financeiro            | concluido |
 | S-50   | 2026-06-26 | P-3.5 — Estados Financeiro                | concluido |
+| S-51   | 2026-06-26 | P-3.6 — Schema do Banco Financeiro        | concluido |
 
 ---
 
@@ -1915,3 +1916,49 @@ Criação de 3 componentes skeleton específicos por tela (dashboard, tabela de 
 - `apps/financeiro/src/components/conciliation-skeleton.tsx` (criado)
 - `apps/financeiro/src/app/(dashboard)/page.tsx` (modificado — loading + error states)
 - `apps/financeiro/src/app/(dashboard)/conciliacao/page.tsx` (modificado — loading + empty states EmptyNoImport / EmptyAllConciliated / ErrorState)
+
+---
+
+### S-51 — 2026-06-26 — P-3.6 Schema do Banco Financeiro
+
+**Prompt:** P-3.6
+**Duracao:** ~25 min
+**Modelo:** claude-sonnet-4-6
+**Status:** concluido
+
+**Resumo:**
+Criação do schema Drizzle completo para o módulo financeiro (14 tabelas, 9 enums) e da migration SQL correspondente com RLS DENY-by-default em todas as tabelas. A tabela `financeiro.transactions` é imutável por trigger Postgres que levanta EXCEPTION em UPDATE ou DELETE. O `index.ts` foi atualizado para exportar o módulo completo substituindo o stub anterior.
+
+**Criterios de aceite verificados:**
+
+- [x] `transactions`: trigger `forbid_transaction_mutation` bloqueia UPDATE e DELETE com RAISE EXCEPTION
+- [x] `transaction_reversals`: FK para transaction original + FK para reversal transaction; `justification NOT NULL`; UNIQUE em `original_transaction_id` (1 reversão por lançamento)
+- [x] `payables`: status enum `pendente | aprovado | autorizado | pago | cancelado`
+- [x] `cost_centers`: FK cross-schema `projetos.projects` com `ON DELETE RESTRICT`
+- [x] `categories`: `parent_id` auto-referencial (árvore); seed com 14 categorias padrão (`is_system = true`)
+- [x] `bank_imports`: `file_url`, `format` (ofx/csv), `imported_at`
+- [x] `bank_import_rows`: `date`, `amount`, `description`, `match_transaction_id`
+- [x] `batch_approvals`: `week_start`, `week_end`, `approved_by`, `approved_at`
+- [x] Migration aplica sem erros (IF NOT EXISTS + DO $$ EXCEPTION THEN NULL em todos os objetos)
+- [x] Types passam (`tsc --noEmit` limpo)
+
+**Decisoes tomadas:**
+
+- Migration numerada `0010_financeiro.sql` (não `0008` como no prompt) — `0008_project_attachments.sql` e `0009_fix_rls_org_members_votes.sql` já existiam
+- `transactions` sem coluna `updated_at` (tabela imutável — nenhuma atualização possível)
+- Polimorfismo em `attachments` e `transactions.reference_id` via `ref_type + ref_id` sem FK SQL — validação na camada Server Action
+- `transaction_reversals` com UNIQUE em `original_transaction_id` E em `reversal_transaction_id` — evita dupla reversão e duplo uso da mesma transação como estorno
+- `batch_approval_items` como join table separada (sem `batch_approval_id` em `payables`) — desacopla payable de seu lote; um payable pode ser reincluído em novo lote se cancelado
+- `categories.is_system = true`: não deletável (enforced no Server Action, não em constraint DB)
+- RLS: `transactions` permite apenas INSERT para `super_admin`; UPDATE/DELETE bloqueados pelo trigger (segunda linha de defesa)
+- `approved_by ≠ authorized_by` (governança dual) enforced no Server Action, não no DB — constraint SQL entre duas colunas da mesma tabela seria frágil
+
+**Debitos tecnicos:**
+
+- Nenhum
+
+**Arquivos criados/modificados:**
+
+- `packages/db/src/schema/financeiro.ts` (criado)
+- `packages/db/src/migrations/0010_financeiro.sql` (criado)
+- `packages/db/src/schema/index.ts` (modificado — substituídos exports de `financeiro-stubs` pelo módulo completo)

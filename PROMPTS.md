@@ -2175,16 +2175,16 @@ Criar tabelas Drizzle no schema `financeiro`: accounts (contas bancárias), cost
 
 **Critérios de aceite:**
 
-- [ ] transactions: sem UPDATE ou DELETE via constraint (imutável)
-- [ ] transaction_reversals: FK para transaction original, justificativa obrigatória
-- [ ] payables: status enum (pendente, aprovado, autorizado, pago, cancelado)
-- [ ] cost_centers: FK para projetos.projects (cross-schema)
-- [ ] categories: parent_id (árvore), com defaults sugeridos
-- [ ] bank_imports: file_url, format (ofx/csv), imported_at
-- [ ] bank_import_rows: data parseada (data, valor, descrição, match_transaction_id)
-- [ ] batch_approvals: week_start, week_end, approved_by, approved_at
-- [ ] Migration aplica sem erros
-- [ ] Types passam
+- [x] transactions: sem UPDATE ou DELETE via constraint (imutável)
+- [x] transaction_reversals: FK para transaction original, justificativa obrigatória
+- [x] payables: status enum (pendente, aprovado, autorizado, pago, cancelado)
+- [x] cost_centers: FK para projetos.projects (cross-schema)
+- [x] categories: parent_id (árvore), com defaults sugeridos
+- [x] bank_imports: file_url, format (ofx/csv), imported_at
+- [x] bank_import_rows: data parseada (data, valor, descrição, match_transaction_id)
+- [x] batch_approvals: week_start, week_end, approved_by, approved_at
+- [x] Migration aplica sem erros
+- [x] Types passam
 
 ---
 
