@@ -370,7 +370,7 @@ export function ConciliationView({
             <div className="px-4 py-3 border-b border-(--divider) bg-(--hb-green-muted)">
               <div className="flex items-start justify-between gap-3 mb-2">
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-(--hb-green-deep) flex items-center gap-1 mb-1">
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-(--hb-green-deep) flex items-center gap-1 mb-1">
                     <Sparkles className="h-3 w-3" />
                     Sugestão para "{selectedItem.description}"
                   </p>

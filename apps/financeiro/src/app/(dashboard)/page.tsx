@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import {
   ArrowUp,
   ArrowDown,
@@ -8,6 +9,7 @@ import {
   ArrowRight,
   Plus,
   Info,
+  RefreshCw,
 } from "lucide-react";
 import {
   mockBankAccounts,
@@ -17,6 +19,7 @@ import {
   mockReceivables,
 } from "../../lib/mock-data";
 import { CashFlowChart } from "../../components/cash-flow-chart";
+import { DashboardSkeleton } from "../../components/dashboard-skeleton";
 import type {
   CashFlowDataPoint,
   CashFlowEvent,
@@ -199,6 +202,59 @@ function KpiCard({
 }
 
 export default function DashboardPage() {
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    const t = setTimeout(() => setLoading(false), 1200);
+    return () => clearTimeout(t);
+  }, []);
+
+  if (loading) return <DashboardSkeleton />;
+
+  if (error) {
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center"
+        style={{ background: "var(--bg-alt)" }}
+      >
+        <div className="flex flex-col items-center text-center max-w-sm px-6 py-16">
+          <div
+            className="flex h-14 w-14 items-center justify-center rounded-2xl mb-5"
+            style={{ background: "rgba(234,90,6,0.10)" }}
+          >
+            <AlertCircle
+              className="h-7 w-7"
+              style={{ color: "var(--hb-orange-deep)" }}
+            />
+          </div>
+          <p
+            className="text-xl font-bold mb-2"
+            style={{ fontFamily: "var(--font-display)", color: "var(--fg)" }}
+          >
+            Erro ao carregar painel
+          </p>
+          <p className="text-sm mb-6" style={{ color: "var(--fg-muted)" }}>
+            Não foi possível buscar os dados financeiros. Verifique sua conexão
+            e tente novamente.
+          </p>
+          <button
+            onClick={() => {
+              setError(false);
+              setLoading(true);
+              setTimeout(() => setLoading(false), 1200);
+            }}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold"
+            style={{ background: "var(--hb-blue)", color: "var(--fg-invert)" }}
+          >
+            <RefreshCw className="h-4 w-4" />
+            Tentar novamente
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen" style={{ background: "var(--bg-alt)" }}>
       {/* Topbar */}

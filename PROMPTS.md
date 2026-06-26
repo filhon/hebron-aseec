@@ -2138,11 +2138,11 @@ Loading, empty e error states para todas as telas do Financeiro. Skeletons para 
 
 **Critérios de aceite:**
 
-- [ ] Skeletons específicos por tela
-- [ ] Estado vazio conciliação: "Todas as transações estão conciliadas"
-- [ ] Estado vazio importação: "Importe seu primeiro extrato bancário"
-- [ ] Lint passa
-- [ ] Types passam
+- [x] Skeletons específicos por tela
+- [x] Estado vazio conciliação: "Todas as transações estão conciliadas"
+- [x] Estado vazio importação: "Importe seu primeiro extrato bancário"
+- [x] Lint passa
+- [x] Types passam
 
 ---
 

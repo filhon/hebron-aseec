@@ -71,6 +71,7 @@
 | S-47   | 2026-06-25 | P-3.2 — Componentes UI Financeiro         | concluido |
 | S-48   | 2026-06-25 | P-3.3 — Telas e Páginas Financeiro        | concluido |
 | S-49   | 2026-06-26 | P-3.4 — Formulários Financeiro            | concluido |
+| S-50   | 2026-06-26 | P-3.5 — Estados Financeiro                | concluido |
 
 ---
 
@@ -99,80 +100,6 @@
 - `caminho/outro.tsx` (modificado)
 
 ----->
-
-### S-48 — 2026-06-25 — P-3.3 Telas e Páginas Financeiro
-
-**Prompt:** P-3.3
-**Duracao:** ~60 min
-**Modelo:** claude-sonnet-4-6
-**Status:** concluido
-
-**Resumo:**
-Criação completa da estrutura App Router do `apps/financeiro` com 8 arquivos de página (dashboard, lançamentos, contas a pagar, conciliação, orçamento, plano de contas, importação + layout/shell). Todas as páginas usam dados mockados (Bloco A). Typecheck e lint passam sem erros.
-
-**Decisoes tomadas:**
-
-- Todas as pages são `"use client"` para Bloco A — evita serialização de Date entre RSC e client components
-- `LinkComponent` removido do shell (usa `<a>` nativo em Bloco A); será adicionado no Bloco B com auth real
-- Dashboard usa `new Date("2026-06-01")` como data de referência, alinhado com âncora do mock-data
-- Conciliação e plano de contas delegam 100% aos componentes de P-3.2 (sem lógica extra na page)
-
-**Debitos tecnicos:**
-
-- Nenhum
-
-**Arquivos criados/modificados:**
-
-- `apps/financeiro/postcss.config.mjs` (criado)
-- `apps/financeiro/src/app/globals.css` (criado)
-- `apps/financeiro/src/app/layout.tsx` (criado)
-- `apps/financeiro/src/app/(dashboard)/shell.tsx` (criado)
-- `apps/financeiro/src/app/(dashboard)/layout.tsx` (criado)
-- `apps/financeiro/src/app/(dashboard)/page.tsx` (criado)
-- `apps/financeiro/src/app/(dashboard)/lancamentos/page.tsx` (criado)
-- `apps/financeiro/src/app/(dashboard)/contas-pagar/page.tsx` (criado)
-- `apps/financeiro/src/app/(dashboard)/conciliacao/page.tsx` (criado)
-- `apps/financeiro/src/app/(dashboard)/orcamento/page.tsx` (criado)
-- `apps/financeiro/src/app/(dashboard)/plano-contas/page.tsx` (criado)
-- `apps/financeiro/src/app/(dashboard)/importacao/page.tsx` (criado)
-- `apps/financeiro/eslint.config.mjs` (modificado — adicionado ignore `.next/**`)
-
----
-
-### S-49 — 2026-06-26 — P-3.4 Formulários Financeiro
-
-**Prompt:** P-3.4
-**Duracao:** ~90 min
-**Modelo:** claude-sonnet-4-6
-**Status:** concluido
-
-**Resumo:**
-Criação de 6 componentes de formulário slide-in (sheet drawer) para o `apps/financeiro`: `ExpenseForm`, `RevenueForm`, `ReversalForm`, `BatchApprovalForm`, `ImportForm` e `BudgetForm`. Todos usam React Hook Form + Zod, design tokens canônicos `--hb-*`, e dados mockados (Bloco A). Typecheck e lint passam sem erros.
-
-**Decisoes tomadas:**
-
-- `useForm()` sem generic explícito em todos os forms — contorna breaking change do hookform/resolvers v5, que retorna `Resolver<z.input<T>>` incompatível com `useForm<z.output<T>>` quando há campos `.default()`
-- `onSubmit(data: unknown)` em todos os handlers — adequado para Bloco A (mock); Bloco B tipará corretamente via Server Actions
-- `ImportForm` usa wizard 3 passos com state local sem `handleSubmit` (navegação por `onClick`); `onFinalSubmit` inline no step 3
-- `BudgetForm` tem view toggle Lista/Matriz; `useFieldArray` funciona via inferência sem generic
-- `BatchApprovalForm` define schema Zod localmente (não em `@hebron/validators`) por ser schema de UI pura, não de domínio
-- `zod` adicionado como dependência direta em `apps/financeiro/package.json` (necessário para schema local do `BatchApprovalForm`)
-
-**Debitos tecnicos:**
-
-- Nenhum
-
-**Arquivos criados/modificados:**
-
-- `apps/financeiro/package.json` (modificado — adicionado `react-hook-form`, `@hookform/resolvers`, `zod`)
-- `apps/financeiro/src/components/expense-form.tsx` (criado)
-- `apps/financeiro/src/components/revenue-form.tsx` (criado)
-- `apps/financeiro/src/components/reversal-form.tsx` (criado)
-- `apps/financeiro/src/components/batch-approval-form.tsx` (criado)
-- `apps/financeiro/src/components/import-form.tsx` (criado)
-- `apps/financeiro/src/components/budget-form.tsx` (criado)
-
----
 
 ### S-1 — 2026-05-21 — P-0.1 Monorepo Setup
 
@@ -1858,3 +1785,133 @@ Criados os 7 componentes UI do módulo financeiro (Bloco A — dados mockados), 
 - `apps/financeiro/src/components/batch-approval-card.tsx` (criado)
 - `apps/financeiro/package.json` (modificado — lucide-react adicionado)
 - `SESSIONS.md` (este registro)
+
+---
+
+### S-48 — 2026-06-25 — P-3.3 Telas e Páginas Financeiro
+
+**Prompt:** P-3.3
+**Duracao:** ~60 min
+**Modelo:** claude-sonnet-4-6
+**Status:** concluido
+
+**Resumo:**
+Criação completa da estrutura App Router do `apps/financeiro` com 8 arquivos de página (dashboard, lançamentos, contas a pagar, conciliação, orçamento, plano de contas, importação + layout/shell). Todas as páginas usam dados mockados (Bloco A). Typecheck e lint passam sem erros.
+
+**Decisoes tomadas:**
+
+- Todas as pages são `"use client"` para Bloco A — evita serialização de Date entre RSC e client components
+- `LinkComponent` removido do shell (usa `<a>` nativo em Bloco A); será adicionado no Bloco B com auth real
+- Dashboard usa `new Date("2026-06-01")` como data de referência, alinhado com âncora do mock-data
+- Conciliação e plano de contas delegam 100% aos componentes de P-3.2 (sem lógica extra na page)
+
+**Debitos tecnicos:**
+
+- Nenhum
+
+**Arquivos criados/modificados:**
+
+- `apps/financeiro/postcss.config.mjs` (criado)
+- `apps/financeiro/src/app/globals.css` (criado)
+- `apps/financeiro/src/app/layout.tsx` (criado)
+- `apps/financeiro/src/app/(dashboard)/shell.tsx` (criado)
+- `apps/financeiro/src/app/(dashboard)/layout.tsx` (criado)
+- `apps/financeiro/src/app/(dashboard)/page.tsx` (criado)
+- `apps/financeiro/src/app/(dashboard)/lancamentos/page.tsx` (criado)
+- `apps/financeiro/src/app/(dashboard)/contas-pagar/page.tsx` (criado)
+- `apps/financeiro/src/app/(dashboard)/conciliacao/page.tsx` (criado)
+- `apps/financeiro/src/app/(dashboard)/orcamento/page.tsx` (criado)
+- `apps/financeiro/src/app/(dashboard)/plano-contas/page.tsx` (criado)
+- `apps/financeiro/src/app/(dashboard)/importacao/page.tsx` (criado)
+- `apps/financeiro/eslint.config.mjs` (modificado — adicionado ignore `.next/**`)
+
+---
+
+### S-49 — 2026-06-26 — P-3.4 Formulários Financeiro
+
+**Prompt:** P-3.4
+**Duracao:** ~120 min (2 janelas de contexto)
+**Modelo:** claude-sonnet-4-6
+**Status:** concluido
+
+**Resumo:**
+Criação de 6 componentes de formulário slide-in (sheet drawer) para o `apps/financeiro`: `ExpenseForm`, `RevenueForm`, `ReversalForm`, `BatchApprovalForm`, `ImportForm` e `BudgetForm`. Todos usam React Hook Form + Zod, design tokens canônicos `--hb-*`, e dados mockados (Bloco A). Formulários ligados às páginas correspondentes via state local. Typecheck e lint passam sem erros (14/14 tasks).
+
+**Criterios de aceite verificados:**
+
+- [x] Despesa: dropdown hierárquico de plano de contas + upload de comprovante
+- [x] Estorno: seleção de transação original, valor preenchido automaticamente, justificativa obrigatória
+- [x] Aprovação de lote: checkboxes individuais + toggle "selecionar todos"
+- [x] Import OFX/CSV: wizard 3 passos (upload → preview tabular → confirmar)
+- [x] Orçamento: grid meses × categorias com totais + view lista/matriz
+- [x] Validação Zod em todos os formulários
+- [x] Lint passa
+- [x] Types passam
+
+**Decisoes tomadas:**
+
+- `useForm()` sem generic explícito em todos os forms — contorna breaking change do hookform/resolvers v5, que retorna `Resolver<z.input<T>>` incompatível com `useForm<z.output<T>>` quando há campos `.default()`
+- `onSubmit(data: unknown)` em todos os handlers — adequado para Bloco A (mock); Bloco B tipará corretamente via Server Actions
+- `ImportForm` (sheet) não ligado à `importacao/page.tsx` — a página já tem wizard full-page embutido, UX mais adequado para fluxo de 3 passos sem modal
+- `BatchApprovalForm` define schema Zod localmente (não em `@hebron/validators`) — schema de UI pura, não de domínio de negócio
+- `zod` adicionado como dependência direta em `apps/financeiro/package.json` (necessário para schema local do `BatchApprovalForm`)
+- `BudgetForm` tem view toggle Lista/Matriz; `useFieldArray` funciona via inferência sem generic
+- Lançamentos: dropdown "Novo lançamento" com 3 opções (Despesa / Receita / Estorno) — evita botões múltiplos no topbar
+
+**Debitos tecnicos:**
+
+- Nenhum
+
+**Arquivos criados/modificados:**
+
+- `apps/financeiro/package.json` (modificado — adicionado `react-hook-form`, `@hookform/resolvers`, `zod`)
+- `apps/financeiro/src/components/expense-form.tsx` (criado)
+- `apps/financeiro/src/components/revenue-form.tsx` (criado)
+- `apps/financeiro/src/components/reversal-form.tsx` (criado)
+- `apps/financeiro/src/components/batch-approval-form.tsx` (criado)
+- `apps/financeiro/src/components/import-form.tsx` (criado)
+- `apps/financeiro/src/components/budget-form.tsx` (criado)
+- `apps/financeiro/src/app/(dashboard)/lancamentos/page.tsx` (modificado — dropdown Novo lançamento → ExpenseForm / RevenueForm / ReversalForm)
+- `apps/financeiro/src/app/(dashboard)/contas-pagar/page.tsx` (modificado — "Novo pagamento" → ExpenseForm, "Enviar para aprovação" → BatchApprovalForm)
+- `apps/financeiro/src/app/(dashboard)/orcamento/page.tsx` (modificado — "Novo orçamento" → BudgetForm)
+
+---
+
+### S-50 — 2026-06-26 — P-3.5 Estados Financeiro
+
+**Prompt:** P-3.5
+**Duracao:** ~30 min
+**Modelo:** claude-sonnet-4-6
+**Status:** concluido
+
+**Resumo:**
+Criação de 3 componentes skeleton específicos por tela (dashboard, tabela de lançamentos, conciliação) e adição de estados de loading, empty e error nas páginas dashboard e conciliação. Loading state simulado com `setTimeout` de 1.2s para demonstrar os skeletons no Bloco A (mock). Empty states com citações bíblicas pertinentes.
+
+**Criterios de aceite verificados:**
+
+- [x] Skeletons específicos por tela (dashboard, lançamentos, conciliação)
+- [x] Estado vazio conciliação: "Todas as transações estão conciliadas" (Provérbios 14:4)
+- [x] Estado vazio importação: "Importe seu primeiro extrato bancário" (Lucas 16:10)
+- [x] Lint passa
+- [x] Types passam
+
+**Decisoes tomadas:**
+
+- Loading state simulado com `setTimeout(1200ms)` no Bloco A — Bloco B substituirá por dados reais via TanStack Query / Suspense
+- `Bone` helper definido localmente em cada skeleton (sem utilitário compartilhado) — componentes simples sem necessidade de abstração prematura
+- Empty state "importação" exposto na página de conciliação (quando `!bankImport`) — faz sentido semântico pois conciliação sem extrato = "vai importar"
+- Empty state "tudo conciliado" ativado quando `bankImport.pendingItems === 0` — não visível com mock atual (pendingItems=2), mas corretamente conectado para dados reais
+- Sem `"use client"` nos arquivos de skeleton — renderizados dentro de client components, não precisam do directive próprio
+- Error state inline nas páginas (sem arquivo separado) — estados simples que não justificam componentes isolados no Bloco A
+
+**Debitos tecnicos:**
+
+- Nenhum
+
+**Arquivos criados/modificados:**
+
+- `apps/financeiro/src/components/dashboard-skeleton.tsx` (criado)
+- `apps/financeiro/src/components/transaction-table-skeleton.tsx` (criado)
+- `apps/financeiro/src/components/conciliation-skeleton.tsx` (criado)
+- `apps/financeiro/src/app/(dashboard)/page.tsx` (modificado — loading + error states)
+- `apps/financeiro/src/app/(dashboard)/conciliacao/page.tsx` (modificado — loading + empty states EmptyNoImport / EmptyAllConciliated / ErrorState)
