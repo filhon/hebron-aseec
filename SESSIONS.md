@@ -74,6 +74,7 @@
 | S-50   | 2026-06-26 | P-3.5 — Estados Financeiro                | concluido |
 | S-51   | 2026-06-26 | P-3.6 — Schema do Banco Financeiro        | concluido |
 | S-52   | 2026-06-26 | P-3.7 — RLS Policies Financeiro           | concluido |
+| S-53   | 2026-06-26 | P-3.8 — Server Actions Financeiro         | concluido |
 
 ---
 
@@ -2001,3 +2002,56 @@ Criada a migration `0009_financeiro_rls.sql` refinando as políticas RLS do sche
 **Arquivos criados/modificados:**
 
 - `packages/db/src/migrations/0009_financeiro_rls.sql` (criado)
+
+---
+
+### S-53 — 2026-06-26 — P-3.8 Server Actions Financeiro
+
+**Prompt:** P-3.8
+**Duracao:** ~40 min
+**Modelo:** claude-sonnet-4-6
+**Status:** concluido
+
+**Resumo:**
+Implementados todos os Server Actions do módulo financeiro: CRUD de payables/receivables com ciclo de vida imutável, estornos via `transactionReversals`, importação OFX/CSV com parsers próprios, match automático por valor+data(±3d)+descrição, conciliação manual com 4 ações, lote semanal de aprovação dual (diretor gestor → super_admin), e utilitário OCR para NF via GPT-4o Vision. Criados também os helpers de infraestrutura `safe-action.ts` e `audit.ts` específicos para o módulo financeiro.
+
+**Criterios de aceite verificados:**
+
+- [x] Transação criada como imutável (INSERT only) — nenhum `UPDATE`/`DELETE` em `transactions` em nenhuma action
+- [x] Estorno — `createReversal` cria counter-transaction com `referenceType:"reversal"` + registro em `transactionReversals`; guarda contra estorno duplo
+- [x] Import OFX/CSV — `parseImportFile` (preview sem DB) + `confirmImport`; parsers OFX (SGML regex) e CSV (detecção de headers, normalização DD/MM/YYYY)
+- [x] Match automático — `autoMatchImport`: valor exato, data ±3 dias, containment de descrição; `confirmImport`: exact date|amount via Map
+- [x] Lote semanal com email ao diretor gestor — `createWeeklyBatch` agrupa payables por ISO week, faz join `roleAssignments ⊕ users` para emails e chama `createNotification({channel:"email"})` via Resend
+- [x] Aprovação de lote — `approveBatch` (diretor → "aprovado" + notifica super_admin); `authorizeBatch` enforça governança dual (autorizador ≠ aprovador); `markPayableAsPaid` cria transação débito imutável
+- [x] OCR — `extractNfData` em `packages/ai/src/financeiro/ocr.ts` extrai valor, CNPJ, data, razão social, número NF e sugere categoria contábil via GPT-4o Vision
+- [x] Audit log em toda mutação — 19 action types específicos; `autoMatchImport` corrigido após verificação
+- [x] Lint passa — 18/18 tarefas
+- [x] Types passam — TypeScript strict, zero `any`
+
+**Decisoes tomadas:**
+
+- `safe-action.ts` criado em `apps/financeiro/src/lib/` seguindo padrão de `apps/projetos` — `colaboradorAction`, `diretorAction`, `superAdminAction`; não reutilizado o de projetos para isolar responsabilidades por módulo
+- Campos do validator sem coluna no DB (`supplierCnpj`, `payerCnpj`, `payerName`) mapeados para o campo `notes` via concatenação — schema DB de P-3.6 não pode ser alterado neste prompt; mapeamento documentado inline
+- `budget.name` armazenado em `notes` com prefixo `"Budget: "` — coluna `name` não existe em `financeiro.budgets`; seria débito técnico do schema
+- Parser OFX implementado sem biblioteca externa — dependência de `ofx-parse` ou similar foi descartada para manter zero deps externos novos; cobre o formato SGML padrão dos principais bancos brasileiros
+- Email de lote usa HTML inline simples — sem template React Email específico para `batch_approval`; template dedicado pode ser adicionado em iteração futura
+- `parseImportFile` recebe conteúdo do arquivo como string (lido via FileReader no cliente) — alternativa de upload direto via Supabase Storage foi descartada para não bloquear o prompt com infra de storage do módulo financeiro
+
+**Debitos tecnicos:**
+
+- `budget.name` não tem coluna dedicada no DB — workaround via `notes`; considerar migration futura para adicionar `name text not null`
+- Template React Email para notificação de lote de aprovação está como HTML inline em `approval.ts` — extrair para `packages/email/src/templates/` em sessão futura
+- `parseImportFile` suporta somente CSV com separador vírgula — bancos brasileiros frequentemente exportam ponto-e-vírgula; ampliar o parser em iteração futura
+
+**Arquivos criados/modificados:**
+
+- `apps/financeiro/src/lib/safe-action.ts` (criado)
+- `apps/financeiro/src/lib/audit.ts` (criado)
+- `apps/financeiro/src/actions/transactions.ts` (criado)
+- `apps/financeiro/src/actions/conciliation.ts` (criado)
+- `apps/financeiro/src/actions/import.ts` (criado)
+- `apps/financeiro/src/actions/approval.ts` (criado)
+- `apps/financeiro/src/actions/categories.ts` (criado)
+- `packages/ai/src/financeiro/ocr.ts` (criado)
+- `apps/financeiro/package.json` (modificado — adicionados `next-safe-action`, `@hebron/ai`, `@hebron/email`, `@supabase/supabase-js`, `drizzle-orm`, `postgres`)
+- `packages/ai/package.json` (modificado — adicionado export `./financeiro/ocr`)

@@ -2243,16 +2243,16 @@ Server Actions: CRUD de despesas/receitas (criar transação imutável). Estorno
 
 **Critérios de aceite:**
 
-- [ ] Transação criada como imutável (INSERT only)
-- [ ] Estorno: cria reversal referenciando original + nova transação corretiva
-- [ ] Import OFX/CSV: parse, normaliza, apresenta para confirmação
-- [ ] Match automático: sugere correspondência por valor+data+descrição
-- [ ] Lote semanal: agrupa payables da semana, envia email ao diretor gestor
-- [ ] Aprovação de lote: diretor gestor aprova; gera notificação para super_admin incluir no banco
-- [ ] OCR: extrai valor, CNPJ, data de imagem de NF e sugere categorização
-- [ ] Audit log em toda mutação
-- [ ] Lint passa
-- [ ] Types passam
+- [x] Transação criada como imutável (INSERT only)
+- [x] Estorno: cria reversal referenciando original + nova transação corretiva
+- [x] Import OFX/CSV: parse, normaliza, apresenta para confirmação
+- [x] Match automático: sugere correspondência por valor+data+descrição
+- [x] Lote semanal: agrupa payables da semana, envia email ao diretor gestor
+- [x] Aprovação de lote: diretor gestor aprova; gera notificação para super_admin incluir no banco
+- [x] OCR: extrai valor, CNPJ, data de imagem de NF e sugere categorização
+- [x] Audit log em toda mutação
+- [x] Lint passa
+- [x] Types passam
 
 ---
 
