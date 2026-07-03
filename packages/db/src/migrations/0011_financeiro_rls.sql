@@ -1,4 +1,4 @@
--- Migration: 0009_financeiro_rls
+-- Migration: 0011_financeiro_rls
 -- Refina as políticas RLS do schema financeiro (P-3.7):
 --   • Adiciona helper public.has_designation para verificar designação do usuário
 --   • Colaborador financeiro: CRUD em transactions, payables, receivables

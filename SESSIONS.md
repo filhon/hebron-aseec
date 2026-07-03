@@ -75,6 +75,7 @@
 | S-51   | 2026-06-26 | P-3.6 — Schema do Banco Financeiro        | concluido |
 | S-52   | 2026-06-26 | P-3.7 — RLS Policies Financeiro           | concluido |
 | S-53   | 2026-06-26 | P-3.8 — Server Actions Financeiro         | concluido |
+| S-54   | 2026-07-03 | P-0.7 — Resgate do Banco (Onda 0)         | concluido |
 
 ---
 
@@ -2055,3 +2056,53 @@ Implementados todos os Server Actions do módulo financeiro: CRUD de payables/re
 - `packages/ai/src/financeiro/ocr.ts` (criado)
 - `apps/financeiro/package.json` (modificado — adicionados `next-safe-action`, `@hebron/ai`, `@hebron/email`, `@supabase/supabase-js`, `drizzle-orm`, `postgres`)
 - `packages/ai/package.json` (modificado — adicionado export `./financeiro/ocr`)
+
+---
+
+### S-54 — 2026-07-03 — P-0.7 Resgate do Banco (Onda 0)
+
+**Prompt:** P-0.7 (`AUDIT/04-prompts-pendentes.md` §4)
+**Duracao:** ~65 min
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Corrigidos os três defeitos de bootstrap/runtime identificados na Fase 4 da auditoria (F3-01, F3-02, F3-06) que impediam a reconstrução do banco do zero e faziam a auditoria de Projetos/Financeiro nunca gravar. Migrations criadas/ajustadas e aplicadas em produção pelo Filipe (`pnpm --filter @hebron/db db:migrate`); critérios de aceite verificados contra o banco real via MCP Supabase (inserts de teste em transação com `ROLLBACK`, sem residuo).
+
+**Criterios de aceite verificados:**
+
+- [x] `admin.audit_log` particionada mensalmente até 2027-12 + partição `DEFAULT` como rede de segurança (`0013_audit_log_partitions.sql`)
+- [x] `pg_cron` agendado (`admin_audit_log_create_partitions`, dia 1 de cada mês) para criar partições dos 3 meses seguintes automaticamente — nunca mais depende de migration manual
+- [x] `admin.audit_action` recebe os 14 valores de Projetos e os 20 de Financeiro nunca adicionados ao tipo do banco (`0012_audit_action_modules.sql`); lista canônica também sincronizada em `admin.ts` (TS)
+- [x] `0000_easy_alex_power.sql` (duplicata sem FK gerada pelo drizzle-kit) removida; `0000_initial.sql` (com FK `users→auth.users` e RLS) é a única baseline de bootstrap
+- [x] `0009_financeiro_rls.sql` renomeada para `0011_financeiro_rls.sql` — corrige ordem alfabética que fazia a RLS do financeiro rodar antes de `0010_financeiro.sql` criar as tabelas
+- [x] `migrate.ts`: seed de baseline agora é condicional (só roda se `public.users` já existir) — antes, um banco efêmero/novo pulava `0000_initial`..`0003_admin_rls` sem nunca executá-los, quebrando toda reconstrução a partir de `0004` em diante; bug não estava listado no F3-06 mas é a causa raiz do "banco novo não se reconstrói"
+- [x] `migrate.ts`: limpeza automática do registro órfão `0000_easy_alex_power` e renomeação idempotente `0009_financeiro_rls → 0011_financeiro_rls` em `public._migrations`, aplicadas a cada execução do runner (idempotentes, no-op em banco já corrigido ou em banco novo)
+- [x] lint/typecheck verdes em `@hebron/db`, `apps/financeiro`, `apps/projetos`, `apps/documentos`
+- [x] Banco reconstruído sem erro — Filipe rodou `db:migrate` em produção; `0011_financeiro_rls`, `0012_audit_action_modules`, `0013_audit_log_partitions` aplicadas às 2026-07-03 15:35:49, histórico anterior (`0000_initial`..`0010_financeiro`) preservado em `public._migrations`
+- [x] INSERT em `audit_log` com `created_at` 2026-08-15 e 2027-06-01 — testado via MCP Supabase em transação com `ROLLBACK`; caiu nas partições `audit_log_2026_08` e `audit_log_2027_06` respectivamente, sem deixar resíduo
+- [x] `logProjetosAudit`/`logFinanceiroAudit` gravam de verdade — testado insert real com as ações `project.created` e `financeiro.payable.created` (mesmo mecanismo usado pelas duas funções), aceito pelo enum sem erro
+- [x] `pg_cron` job `admin_audit_log_create_partitions` confirmado `active=true`, schedule `0 3 1 * *`, comando idêntico ao documentado no README
+
+**Decisoes tomadas:**
+
+- Baseline seeding em `migrate.ts` passou de incondicional para condicional (`EXISTS public.users`) — necessário para o critério de reconstrução funcionar; não estava no escopo textual do prompt, mas é pré-requisito lógico do próprio critério de aceite "banco efêmero reconstruído do zero"
+- Renomeação de id em `_migrations` implementada como `UPDATE` automático dentro do runner (não como script manual avulso) — mantém o runner idempotente e autocontido, consistente com o padrão já usado para o baseline seed
+- Enum `admin.audit_action`: os 20 valores do Financeiro foram adicionados também a `admin.ts` (TS), não só ao `ALTER TYPE` — antes só existiam como `FinanceiroAuditAction` em `apps/financeiro/src/lib/audit.ts`, fora do enum compartilhado; unifica a lista canônica sem alterar os casts `as unknown as` existentes (fora de escopo — pertence ao P-0.8)
+- Partições futuras: cron mantém 3 meses de antecedência sobre a partição `DEFAULT`, evitando depender de qualquer prompt futuro para criar partições além de 2027-12
+
+**Debitos tecnicos / pendencias:**
+
+- Partição `DEFAULT` de `admin.audit_log` cobre hoje qualquer `created_at` fora de 2026-05..2027-12; se o pg_cron falhar silenciosamente por 3+ meses, novas linhas caem ali sem alarme — nenhum monitoramento foi criado (fora de escopo; considerar em P-0.9/observabilidade)
+- P-0.7 não altera a semântica de falha de audit (try/catch silencioso em `logProjectAudit`/`logFinanceiroAudit`) — isso é decisão F3-Q4, escopo de P-0.8
+- A reconstrução "do zero" (banco genuinamente vazio, sem histórico) foi validada por leitura de código (baseline seed agora condicional a `EXISTS public.users`), não por execução real — não há Docker/psql neste ambiente para subir um Postgres efêmero com bootstrap Supabase (`auth`, extensões). A aplicação real testada foi incremental sobre produção, que já tinha 0000-0010 aplicadas
+
+**Arquivos criados/modificados:**
+
+- `packages/db/src/migrations/0000_easy_alex_power.sql` (removido)
+- `packages/db/src/migrations/0009_financeiro_rls.sql` → `0011_financeiro_rls.sql` (renomeado)
+- `packages/db/src/migrations/0012_audit_action_modules.sql` (criado)
+- `packages/db/src/migrations/0013_audit_log_partitions.sql` (criado)
+- `packages/db/src/migrations/meta/_journal.json` (modificado — tag `0000_easy_alex_power` → `0000_initial`)
+- `packages/db/src/migrate.ts` (modificado — baseline condicional, limpeza de id órfão, rename idempotente de id)
+- `packages/db/src/schema/admin.ts` (modificado — 20 valores `financeiro.*` adicionados a `auditActionEnum`)

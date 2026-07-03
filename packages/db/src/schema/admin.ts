@@ -56,6 +56,27 @@ export const auditActionEnum = adminSchema.enum("audit_action", [
   "report.submitted",
   "organization.created",
   "organization.updated",
+  // Financeiro module — added via ALTER TYPE in P-0.7 migration
+  "financeiro.payable.created",
+  "financeiro.payable.cancelled",
+  "financeiro.payable.approved",
+  "financeiro.payable.authorized",
+  "financeiro.payable.paid",
+  "financeiro.receivable.created",
+  "financeiro.receivable.received",
+  "financeiro.transaction.created",
+  "financeiro.transaction.reversed",
+  "financeiro.import.confirmed",
+  "financeiro.import.row.reconciled",
+  "financeiro.batch.created",
+  "financeiro.batch.approved",
+  "financeiro.batch.authorized",
+  "financeiro.category.created",
+  "financeiro.category.updated",
+  "financeiro.category.deleted",
+  "financeiro.budget.created",
+  "financeiro.budget.updated",
+  "financeiro.budget.deleted",
 ]);
 
 export const meetingTypeEnum = adminSchema.enum("meeting_type", [

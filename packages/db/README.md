@@ -43,6 +43,20 @@ The command is **idempotent** — running it twice is safe.
 | `db:push`     | Push schema directly to the database (dev only, never in production)                        |
 | `db:studio`   | Open Drizzle Studio connected to `DATABASE_URL`                                             |
 
+### admin.audit_log partitioning
+
+`admin.audit_log` is range-partitioned by month (`created_at`). Explicit partitions exist through 2027-12 (`0002_admin.sql` + `0013_audit_log_partitions.sql`), plus an `admin.audit_log_default` catch-all partition as a safety net. A `pg_cron` job (`admin_audit_log_create_partitions`, scheduled `0 3 1 * *`) creates the next 3 months of partitions automatically on the 1st of every month via `admin.create_audit_log_partition_for_month(date)` — no manual migration is needed to keep partitioning ahead of the calendar. If the job ever needs to be re-created manually:
+
+```sql
+SELECT cron.schedule(
+  'admin_audit_log_create_partitions',
+  '0 3 1 * *',
+  $$ SELECT admin.create_audit_log_partition_for_month(
+       (date_trunc('month', now()) + (n || ' month')::interval)::date
+     ) FROM generate_series(1, 3) AS n; $$
+);
+```
+
 ### Environment
 
 Set `DATABASE_URL` in `.env.local` at the monorepo root:

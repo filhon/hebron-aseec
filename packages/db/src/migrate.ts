@@ -22,12 +22,25 @@ const MIGRATIONS_DIR = join(__dirname, "migrations");
 // applied in the database. Inserted as baseline records on first run so they
 // are never re-executed.
 const BASELINE_IDS = [
-  "0000_easy_alex_power",
   "0000_initial",
   "0001_notifications",
   "0002_admin",
   "0003_admin_rls",
 ];
+
+// 0000_easy_alex_power.sql was a duplicate of 0000_initial.sql (auto-generated
+// by drizzle-kit, superseded by the hand-authored version with the FK to
+// auth.users and RLS) and has been deleted (P-0.7). Its baseline bookkeeping
+// row is stale on databases where the runner already ran — clean it up.
+const STALE_IDS = ["0000_easy_alex_power"];
+
+// Migration files renamed after being applied in production keep their
+// bookkeeping row in sync so the runner doesn't try to re-apply them under
+// the new id (P-0.7: 0009_financeiro_rls ordered before 0010_financeiro,
+// which created the tables it modifies — renamed to run after it).
+const ID_RENAMES: Record<string, string> = {
+  "0009_financeiro_rls": "0011_financeiro_rls",
+};
 
 // ALTER TYPE ... ADD VALUE cannot run inside a transaction block in PostgreSQL.
 const isNonTransactional = (sql: string) =>
@@ -45,11 +58,40 @@ async function migrate() {
       )
     `;
 
-    // Seed baseline records (idempotent — ON CONFLICT DO NOTHING)
-    for (const id of BASELINE_IDS) {
+    // Baseline records only apply to a database that already had these
+    // objects created before this runner existed (production, or a restore
+    // of it). A genuinely fresh/ephemeral database (CI, a new Supabase
+    // project) has none of this — seeding the baseline there would make the
+    // runner skip 0000_initial..0003_admin_rls without ever running them,
+    // so every later migration referencing their schemas/types/tables would
+    // fail. Detect which case this is before seeding.
+    const [{ exists: alreadyBootstrapped }] = await sql<[{ exists: boolean }]>`
+      SELECT EXISTS (
+        SELECT 1 FROM information_schema.tables
+        WHERE table_schema = 'public' AND table_name = 'users'
+      ) AS exists
+    `;
+
+    if (alreadyBootstrapped) {
+      for (const id of BASELINE_IDS) {
+        await sql`
+          INSERT INTO public._migrations (id) VALUES (${id})
+          ON CONFLICT DO NOTHING
+        `;
+      }
+    }
+
+    // Drop bookkeeping rows for deleted migration files (idempotent — no-op
+    // if the row was never inserted, e.g. on a freshly rebuilt database).
+    for (const id of STALE_IDS) {
+      await sql`DELETE FROM public._migrations WHERE id = ${id}`;
+    }
+
+    // Rename bookkeeping rows for migration files that were renamed after
+    // being applied (idempotent — no-op if the old id was never recorded).
+    for (const [from, to] of Object.entries(ID_RENAMES)) {
       await sql`
-        INSERT INTO public._migrations (id) VALUES (${id})
-        ON CONFLICT DO NOTHING
+        UPDATE public._migrations SET id = ${to} WHERE id = ${from}
       `;
     }
 
