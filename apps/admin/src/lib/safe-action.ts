@@ -1,58 +1,27 @@
 import { createSafeActionClient } from "next-safe-action";
 import { cookies } from "next/headers";
-import { createClient } from "@supabase/supabase-js";
-import { db } from "@hebron/db/client";
-import { eq } from "drizzle-orm";
-import { roleAssignments } from "@hebron/db/schema";
+import { resolveSession } from "@hebron/auth/server";
 
 /**
- * Admin safe-action client.
- * Middleware valida sessão Supabase + papel super_admin no banco.
- * Injeta { actorId } no contexto de todos os actions.
+ * Base authenticated action — resolves the real session via @hebron/auth
+ * (createServerClient from @supabase/ssr). A raw createClient() forwarding
+ * a Cookie header never parses Supabase's session cookies and silently
+ * denies everyone — see packages/auth/src/server.ts for why.
  */
-export const adminAction = createSafeActionClient().use(async ({ next }) => {
+const baseAction = createSafeActionClient().use(async ({ next }) => {
   const cookieStore = await cookies();
+  const { actorId, roles } = await resolveSession(cookieStore);
+  return next({ ctx: { actorId, roles } });
+});
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !anonKey) {
-    throw new Error(
-      "NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_ANON_KEY são obrigatórios",
-    );
-  }
-
-  // Forward cookies to Supabase to resolve the session
-  const allCookies = cookieStore.getAll();
-  const cookieHeader = allCookies.map((c) => `${c.name}=${c.value}`).join("; ");
-
-  const supabase = createClient(supabaseUrl, anonKey, {
-    global: { headers: { cookie: cookieHeader } },
-    auth: { persistSession: false },
-  });
-
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-
-  if (error || !user) {
-    throw new Error("Não autenticado");
-  }
-
-  const rows = await db
-    .select({ role: roleAssignments.role })
-    .from(roleAssignments)
-    .where(eq(roleAssignments.userId, user.id));
-
-  const isSuperAdmin = rows.some((r) => r.role === "super_admin");
-  if (!isSuperAdmin) {
+/** admin: super_admin exclusivamente. */
+export const adminAction = baseAction.use(async ({ next, ctx }) => {
+  if (!ctx.roles.includes("super_admin")) {
     throw new Error(
       "Acesso negado: apenas super_admin pode executar esta ação",
     );
   }
-
-  return next({ ctx: { actorId: user.id } });
+  return next({ ctx });
 });
 
 /**

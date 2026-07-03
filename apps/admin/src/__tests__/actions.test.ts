@@ -46,14 +46,12 @@ vi.mock("@hebron/email/templates/welcome", () => ({
   WelcomeEmail: vi.fn().mockReturnValue(null),
 }));
 
-// Mock Supabase: retorna ACTOR_ID como usuário autenticado
+// Mock Supabase: usado diretamente por actions/users.ts para operações de
+// admin API (createUser, generateLink, updateUserById) — não para resolução
+// de sessão, que agora vive em @hebron/auth/server (mockado abaixo).
 vi.mock("@supabase/supabase-js", () => ({
   createClient: vi.fn().mockReturnValue({
     auth: {
-      getUser: vi.fn().mockResolvedValue({
-        data: { user: { id: ACTOR_ID, email: ACTOR_EMAIL } },
-        error: null,
-      }),
       admin: {
         createUser: vi.fn().mockImplementation(async () => ({
           data: { user: { id: TARGET_ID } },
@@ -63,6 +61,15 @@ vi.mock("@supabase/supabase-js", () => ({
         updateUserById: vi.fn().mockResolvedValue({ data: {}, error: null }),
       },
     },
+  }),
+}));
+
+// Mock da resolução de sessão (kit compartilhado @hebron/auth) — retorna
+// ACTOR_ID como usuário autenticado com o papel super_admin.
+vi.mock("@hebron/auth/server", () => ({
+  resolveSession: vi.fn().mockResolvedValue({
+    actorId: ACTOR_ID,
+    roles: ["super_admin"],
   }),
 }));
 

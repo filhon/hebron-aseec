@@ -178,7 +178,7 @@ _Critérios:_ [x] banco efêmero reconstruído do zero pelo runner sem erro; [x]
 **P-0.8 — Kit de backend compartilhado (sessão, audit, notificações)**
 _Problema:_ resolução de sessão manual não funciona e existe em 3 cópias (F3-03/F3-08); 4 semânticas de audit; 3 libs de notificação; supabase-js em 2 versões (F3-12); pool por render (F3-14).
 _Escopo:_ mover para `@hebron/auth` o `resolveSession`/action-client (padrão documentos, `createSupabaseServerActionClient`); criar `logAudit` único em package (parâmetro de criticidade: módulos de governança **abortam** em falha — decisão F3-Q4); extrair miolo comum de notificações; adotar nos 4 apps apagando as cópias; alinhar `@supabase/supabase-js` em `^2.106.x` via catalog/overrides (+ drizzle e zod por higiene); `convites/page.tsx` usa o singleton `db`; apagar `financeiro-stubs.ts` (F3-17).
-_Critérios:_ [ ] grep `createClient(url, anonKey, { global: { headers: { cookie` → zero em apps; [ ] 1 teste de sessão **sem mock** por app (login real → action gated retorna sucesso); [ ] falha simulada de audit aborta mutação no financeiro e em votação; [ ] `pnpm ls @supabase/supabase-js` resolve 1 versão; [ ] lint/typecheck verdes.
+_Critérios:_ [x] grep `createClient(url, anonKey, { global: { headers: { cookie` → zero em apps; [x] 1 teste de sessão **sem mock** por app (login real → action gated retorna sucesso); [x] falha simulada de audit aborta mutação no financeiro e em votação; [x] `pnpm ls @supabase/supabase-js` resolve 1 versão; [x] lint/typecheck verdes.
 
 **P-0.9 — CI mínimo**
 _Problema:_ `.github/` não existe (F3-10); CLAUDE.md promete CI que não há; os 3 críticos de runtime sobreviveram porque nada roda sistematicamente.

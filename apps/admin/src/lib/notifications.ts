@@ -1,7 +1,5 @@
-import { db } from "@hebron/db/client";
-import { notifications } from "@hebron/db/schema";
+import { makeNotificationInserter } from "@hebron/db/notifications";
 import { createNotification } from "@hebron/email";
-import type { NotificationInsertData } from "@hebron/email";
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Labels
@@ -35,25 +33,7 @@ const ROLE_LABELS: Record<string, string> = {
 // Internal insert helper
 // ──────────────────────────────────────────────────────────────────────────────
 
-async function insertNotification(
-  data: NotificationInsertData & { sentAt?: string },
-): Promise<{ id: string }> {
-  const rows = await db
-    .insert(notifications)
-    .values({
-      userId: data.userId,
-      channel: data.channel,
-      type: data.type,
-      title: data.title,
-      body: data.body ?? null,
-      payload: data.payload ?? null,
-    })
-    .returning({ id: notifications.id });
-
-  const row = rows[0];
-  if (!row) throw new Error("Falha ao inserir notificação");
-  return { id: row.id };
-}
+const insertNotification = makeNotificationInserter();
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Exported notification helpers

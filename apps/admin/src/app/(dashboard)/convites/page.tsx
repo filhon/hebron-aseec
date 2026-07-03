@@ -1,21 +1,12 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { drizzle } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
 import { eq, desc } from "drizzle-orm";
+import { db } from "@hebron/db/client";
 import { users } from "@hebron/db/schema";
 import { invitations } from "@hebron/db/schema";
 import { Plus, Mail, RotateCcw } from "lucide-react";
 import { Button } from "@hebron/ui";
 import { revokeInvitation, sendInvitation } from "../../../actions/invitations";
-
-// ─── DB ───────────────────────────────────────────────────────────────────────
-
-function getDb() {
-  const url = process.env.DATABASE_URL;
-  if (!url) throw new Error("DATABASE_URL não configurado");
-  return drizzle(postgres(url, { prepare: false }));
-}
 
 // ─── Server Actions ───────────────────────────────────────────────────────────
 
@@ -141,7 +132,6 @@ export default async function ConvitesPage({
 }) {
   const params = await searchParams;
   const filter = (params.filter ?? "all") as InvStatus | "all";
-  const db = getDb();
 
   // Fetch invitations with sender info
   const allInvitations = await db

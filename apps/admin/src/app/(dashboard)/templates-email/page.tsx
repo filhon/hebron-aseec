@@ -3,8 +3,8 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { eq } from "drizzle-orm";
 import { db } from "@hebron/db/client";
-import { createClient } from "@supabase/supabase-js";
-import { emailTemplates, roleAssignments } from "@hebron/db/schema";
+import { resolveSession } from "@hebron/auth/server";
+import { emailTemplates } from "@hebron/db/schema";
 import type { EmailTemplateInput } from "@hebron/validators";
 import type { EmailTemplate } from "@hebron/types/admin";
 import { Mail, Check, AlertCircle } from "lucide-react";
@@ -370,34 +370,9 @@ export default async function TemplatesEmailPage({ searchParams }: PageProps) {
     "use server";
 
     const cookieStore = await cookies();
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const { actorId, roles } = await resolveSession(cookieStore);
 
-    if (!supabaseUrl || !anonKey) throw new Error("Supabase não configurado");
-
-    const cookieHeader = cookieStore
-      .getAll()
-      .map((c) => `${c.name}=${c.value}`)
-      .join("; ");
-
-    const supabase = createClient(supabaseUrl, anonKey, {
-      global: { headers: { cookie: cookieHeader } },
-      auth: { persistSession: false },
-    });
-
-    const {
-      data: { user },
-      error: authError,
-    } = await supabase.auth.getUser();
-
-    if (authError || !user) throw new Error("Não autenticado");
-
-    const roleRows = await db
-      .select({ role: roleAssignments.role })
-      .from(roleAssignments)
-      .where(eq(roleAssignments.userId, user.id));
-
-    if (!roleRows.some((r) => r.role === "super_admin")) {
+    if (!roles.includes("super_admin")) {
       throw new Error(
         "Acesso negado: apenas super_admin pode editar templates",
       );
@@ -418,7 +393,7 @@ export default async function TemplatesEmailPage({ searchParams }: PageProps) {
         bodyHtml: data.bodyHtml,
         bodyText: data.bodyText,
         variables: vars,
-        updatedBy: user.id,
+        updatedBy: actorId,
         updatedAt: new Date(),
       })
       .onConflictDoUpdate({
@@ -428,13 +403,13 @@ export default async function TemplatesEmailPage({ searchParams }: PageProps) {
           bodyHtml: data.bodyHtml,
           bodyText: data.bodyText,
           variables: vars,
-          updatedBy: user.id,
+          updatedBy: actorId,
           updatedAt: new Date(),
         },
       });
 
     await logAudit({
-      actorId: user.id,
+      actorId,
       action: "email_template.updated",
       entity: "email_template",
       diff: { slug: activeSlug, subject: data.subject },

@@ -1,5 +1,4 @@
-import { sql } from "drizzle-orm";
-import { db } from "@hebron/db/client";
+import { logAudit } from "@hebron/db/audit";
 
 export type DocumentAuditAction =
   | "document.created"
@@ -14,9 +13,8 @@ export type DocumentAuditAction =
   | "edital.updated";
 
 /**
- * Grava entrada no admin.audit_log via SQL bruto.
- * Requer que a migration de extensão do enum admin.audit_action
- * inclua os valores acima (ex.: document.created, document.published etc.).
+ * Grava entrada no admin.audit_log via @hebron/db/audit (default: aborta em
+ * falha). Os valores acima já existem no enum admin.audit_action.
  */
 export async function logDocumentAudit(params: {
   actorId: string;
@@ -25,18 +23,5 @@ export async function logDocumentAudit(params: {
   entityId: string;
   diff?: Record<string, unknown>;
 }): Promise<void> {
-  const diffJson = JSON.stringify(params.diff ?? {});
-  await db.execute(sql`
-    INSERT INTO admin.audit_log
-      (id, actor_id, action, entity, entity_id, diff, created_at)
-    VALUES (
-      gen_random_uuid(),
-      ${params.actorId}::uuid,
-      ${params.action}::text::admin.audit_action,
-      ${params.entity},
-      ${params.entityId}::uuid,
-      ${diffJson}::jsonb,
-      now()
-    )
-  `);
+  await logAudit(params);
 }

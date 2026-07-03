@@ -5,13 +5,12 @@ import {
   categories,
   documents,
   editals,
-  notifications,
   roleAssignments,
   subscriptions,
   users,
 } from "@hebron/db/schema";
+import { makeNotificationInserter } from "@hebron/db/notifications";
 import { createNotification } from "@hebron/email";
-import type { InsertNotificationFn } from "@hebron/email";
 import { NewDocumentEmail } from "@hebron/email/templates/new-document";
 import { EditalOpenEmail } from "@hebron/email/templates/edital-open";
 import { EditalClosingEmail } from "@hebron/email/templates/edital-closing";
@@ -19,25 +18,7 @@ import { EditalClosingEmail } from "@hebron/email/templates/edital-closing";
 // ──────────────────────────────────────────────────────────────────────────────
 
 const BASE_URL = "https://docs.hebronaseec.com.br";
-
-function makeInsert(): InsertNotificationFn {
-  return async (data) => {
-    const [record] = await db
-      .insert(notifications)
-      .values({
-        userId: data.userId,
-        channel: data.channel,
-        type: data.type,
-        title: data.title,
-        body: data.body ?? null,
-        payload: (data.payload ?? null) as Record<string, unknown> | null,
-        sentAt: data.sentAt ? new Date(data.sentAt) : null,
-      })
-      .returning({ id: notifications.id });
-    if (!record) throw new Error("Falha ao registrar notificação");
-    return record;
-  };
-}
+const makeInsert = makeNotificationInserter;
 
 // ──────────────────────────────────────────────────────────────────────────────
 // notifyNewDocument — dispara emails para subscribers da categoria do documento

@@ -2,10 +2,10 @@
 
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
+import { resolveSession } from "@hebron/auth/server";
 import { db } from "@hebron/db/client";
 import { eq } from "drizzle-orm";
-import { users, roleAssignments } from "@hebron/db/schema";
+import { users } from "@hebron/db/schema";
 import { logAudit } from "../lib/audit";
 import {
   IMPERSONATION_COOKIE_NAME,
@@ -18,36 +18,13 @@ import {
 
 async function requireSuperAdmin(): Promise<string> {
   const cookieStore = await cookies();
+  const { actorId, roles } = await resolveSession(cookieStore);
 
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!supabaseUrl || !anonKey) throw new Error("Supabase env vars ausentes");
-
-  const allCookies = cookieStore.getAll();
-  const cookieHeader = allCookies.map((c) => `${c.name}=${c.value}`).join("; ");
-
-  const supabase = createClient(supabaseUrl, anonKey, {
-    global: { headers: { cookie: cookieHeader } },
-    auth: { persistSession: false },
-  });
-
-  const {
-    data: { user },
-    error,
-  } = await supabase.auth.getUser();
-
-  if (error || !user) throw new Error("Não autenticado");
-
-  const rows = await db
-    .select({ role: roleAssignments.role })
-    .from(roleAssignments)
-    .where(eq(roleAssignments.userId, user.id));
-
-  if (!rows.some((r) => r.role === "super_admin")) {
+  if (!roles.includes("super_admin")) {
     throw new Error("Acesso negado: apenas super_admin pode impersonar");
   }
 
-  return user.id;
+  return actorId;
 }
 
 const COOKIE_DOMAIN =

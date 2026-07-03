@@ -2,3 +2,12 @@ packages:
   - "apps/*"
   - "packages/*"
   - "tooling/*"
+
+# P-0.8: versões compartilhadas entre apps/packages para evitar drift
+# (supabase-js chegou a existir em 2 versões — ^2.46.0 e ^2.106.1 — o que
+# quebra o parsing de cookies do @supabase/ssr quando misturado no mesmo
+# processo). Sempre referenciar via "catalog:" nos package.json.
+catalog:
+  "@supabase/supabase-js": ^2.106.1
+  drizzle-orm: ^0.36.4
+  zod: ^3.24.0

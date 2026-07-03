@@ -1,10 +1,9 @@
 import * as React from "react";
 import { db } from "@hebron/db/client";
+import { makeNotificationInserter } from "@hebron/db/notifications";
 import { createNotification } from "@hebron/email";
-import type { InsertNotificationFn } from "@hebron/email";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import {
-  notifications,
   users,
   roleAssignments,
   projects,
@@ -63,25 +62,7 @@ function buildProjectUrl(projectId: string) {
   return `${PROJETOS_BASE_URL}/projetos/${projectId}`;
 }
 
-function makeInsert(): InsertNotificationFn {
-  return async (data) => {
-    const [record] = await db
-      .insert(notifications)
-      .values({
-        userId: data.userId,
-        channel: data.channel,
-        type: data.type,
-        title: data.title,
-        body: data.body ?? null,
-        payload: (data.payload ?? null) as Record<string, unknown> | null,
-        sentAt: data.sentAt ? new Date(data.sentAt) : null,
-      })
-      .returning({ id: notifications.id });
-    if (!record)
-      throw new Error("[projetos/notifications] DB insert returned no row");
-    return record;
-  };
-}
+const makeInsert = makeNotificationInserter;
 
 type UserRecord = { id: string; fullName: string | null; email: string };
 

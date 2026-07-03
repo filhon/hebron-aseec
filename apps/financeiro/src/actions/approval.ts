@@ -194,53 +194,75 @@ const approveBatchSchema = z.object({
 export const approveBatch = diretorAction
   .schema(approveBatchSchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    const batchRows = await db
-      .select()
-      .from(batchApprovals)
-      .where(eq(batchApprovals.id, input.batchId))
-      .limit(1);
-
-    const batch = batchRows[0];
-    if (!batch) throw new Error("Lote de aprovação não encontrado");
-
-    if (batch.approvedBy) {
-      throw new Error("Este lote já foi aprovado");
-    }
-
     const now = new Date();
 
-    // Update batch
-    await db
-      .update(batchApprovals)
-      .set({ approvedBy: ctx.actorId, approvedAt: now })
-      .where(eq(batchApprovals.id, input.batchId));
+    // Governança dual (BRAIN §6.5): a mudança de status e a entrada de
+    // audit são atômicas — se o audit falhar, a aprovação é revertida.
+    const { payableIds, weekStart, weekEnd } = await db.transaction(
+      async (tx) => {
+        const batchRows = await tx
+          .select()
+          .from(batchApprovals)
+          .where(eq(batchApprovals.id, input.batchId))
+          .limit(1);
 
-    // Move all batch payables to "aprovado"
-    const batchItems = await db
-      .select({ payableId: batchApprovalItems.payableId })
-      .from(batchApprovalItems)
-      .where(eq(batchApprovalItems.batchApprovalId, input.batchId));
+        const batch = batchRows[0];
+        if (!batch) throw new Error("Lote de aprovação não encontrado");
 
-    const payableIds = batchItems.map((i) => i.payableId);
+        if (batch.approvedBy) {
+          throw new Error("Este lote já foi aprovado");
+        }
 
-    if (payableIds.length > 0) {
-      await db
-        .update(payables)
-        .set({
-          status: "aprovado",
-          approvedBy: ctx.actorId,
-          approvedAt: now,
-          updatedAt: now,
-        })
-        .where(
-          and(
-            inArray(payables.id, payableIds),
-            eq(payables.status, "pendente"),
-          ),
+        // Update batch
+        await tx
+          .update(batchApprovals)
+          .set({ approvedBy: ctx.actorId, approvedAt: now })
+          .where(eq(batchApprovals.id, input.batchId));
+
+        // Move all batch payables to "aprovado"
+        const batchItems = await tx
+          .select({ payableId: batchApprovalItems.payableId })
+          .from(batchApprovalItems)
+          .where(eq(batchApprovalItems.batchApprovalId, input.batchId));
+
+        const ids = batchItems.map((i) => i.payableId);
+
+        if (ids.length > 0) {
+          await tx
+            .update(payables)
+            .set({
+              status: "aprovado",
+              approvedBy: ctx.actorId,
+              approvedAt: now,
+              updatedAt: now,
+            })
+            .where(
+              and(inArray(payables.id, ids), eq(payables.status, "pendente")),
+            );
+        }
+
+        await logFinanceiroAudit(
+          {
+            actorId: ctx.actorId,
+            action: "financeiro.batch.approved",
+            entity: "batch_approval",
+            entityId: input.batchId,
+            diff: { approvedAt: now.toISOString(), payableCount: ids.length },
+          },
+          tx,
         );
-    }
 
-    // Notify super_admins for authorization
+        return {
+          payableIds: ids,
+          weekStart: batch.weekStart,
+          weekEnd: batch.weekEnd,
+        };
+      },
+    );
+
+    // Notify super_admins for authorization — best-effort, outside the
+    // governance transaction (a notification failure must not undo an
+    // already-audited approval).
     const superAdminRows = await db
       .select({ userId: roleAssignments.userId })
       .from(roleAssignments)
@@ -254,20 +276,12 @@ export const approveBatch = diretorAction
           type: "financeiro.batch.approved",
           title: `Lote aprovado — aguarda inclusão no banco`,
           body:
-            `O lote da semana de ${batch.weekStart} a ${batch.weekEnd} foi aprovado ` +
+            `O lote da semana de ${weekStart} a ${weekEnd} foi aprovado ` +
             `e aguarda sua autorização para inclusão no banco.`,
-          payload: { batchId: batch.id, approvedBy: ctx.actorId },
+          payload: { batchId: input.batchId, approvedBy: ctx.actorId },
         })),
       );
     }
-
-    await logFinanceiroAudit({
-      actorId: ctx.actorId,
-      action: "financeiro.batch.approved",
-      entity: "batch_approval",
-      entityId: input.batchId,
-      diff: { approvedAt: now.toISOString(), payableCount: payableIds.length },
-    });
 
     return { ok: true, approvedPayables: payableIds.length };
   });
@@ -285,73 +299,79 @@ const authorizeBatchSchema = z.object({
 export const authorizeBatch = superAdminAction
   .schema(authorizeBatchSchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    const batchRows = await db
-      .select()
-      .from(batchApprovals)
-      .where(eq(batchApprovals.id, input.batchId))
-      .limit(1);
-
-    const batch = batchRows[0];
-    if (!batch) throw new Error("Lote de aprovação não encontrado");
-
-    if (!batch.approvedBy) {
-      throw new Error(
-        "O lote precisa ser aprovado pelo diretor antes de ser autorizado",
-      );
-    }
-
-    if (batch.authorizedBy) {
-      throw new Error("Este lote já foi autorizado");
-    }
-
-    // Dual governance: authorizer must differ from approver
-    if (batch.approvedBy === ctx.actorId) {
-      throw new Error(
-        "O autorizador deve ser uma pessoa diferente do aprovador (governança dual)",
-      );
-    }
-
     const now = new Date();
 
-    await db
-      .update(batchApprovals)
-      .set({ authorizedBy: ctx.actorId, authorizedAt: now })
-      .where(eq(batchApprovals.id, input.batchId));
+    // Governança dual (BRAIN §6.5): a mudança de status e a entrada de
+    // audit são atômicas — se o audit falhar, a autorização é revertida.
+    const payableIds = await db.transaction(async (tx) => {
+      const batchRows = await tx
+        .select()
+        .from(batchApprovals)
+        .where(eq(batchApprovals.id, input.batchId))
+        .limit(1);
 
-    // Move all batch payables to "autorizado"
-    const batchItems = await db
-      .select({ payableId: batchApprovalItems.payableId })
-      .from(batchApprovalItems)
-      .where(eq(batchApprovalItems.batchApprovalId, input.batchId));
+      const batch = batchRows[0];
+      if (!batch) throw new Error("Lote de aprovação não encontrado");
 
-    const payableIds = batchItems.map((i) => i.payableId);
-
-    if (payableIds.length > 0) {
-      await db
-        .update(payables)
-        .set({
-          status: "autorizado",
-          authorizedBy: ctx.actorId,
-          authorizedAt: now,
-          updatedAt: now,
-        })
-        .where(
-          and(
-            inArray(payables.id, payableIds),
-            eq(payables.status, "aprovado"),
-          ),
+      if (!batch.approvedBy) {
+        throw new Error(
+          "O lote precisa ser aprovado pelo diretor antes de ser autorizado",
         );
-    }
+      }
 
-    await logFinanceiroAudit({
-      actorId: ctx.actorId,
-      action: "financeiro.batch.authorized",
-      entity: "batch_approval",
-      entityId: input.batchId,
-      diff: {
-        authorizedAt: now.toISOString(),
-        payableCount: payableIds.length,
-      },
+      if (batch.authorizedBy) {
+        throw new Error("Este lote já foi autorizado");
+      }
+
+      // Dual governance: authorizer must differ from approver
+      if (batch.approvedBy === ctx.actorId) {
+        throw new Error(
+          "O autorizador deve ser uma pessoa diferente do aprovador (governança dual)",
+        );
+      }
+
+      await tx
+        .update(batchApprovals)
+        .set({ authorizedBy: ctx.actorId, authorizedAt: now })
+        .where(eq(batchApprovals.id, input.batchId));
+
+      // Move all batch payables to "autorizado"
+      const batchItems = await tx
+        .select({ payableId: batchApprovalItems.payableId })
+        .from(batchApprovalItems)
+        .where(eq(batchApprovalItems.batchApprovalId, input.batchId));
+
+      const ids = batchItems.map((i) => i.payableId);
+
+      if (ids.length > 0) {
+        await tx
+          .update(payables)
+          .set({
+            status: "autorizado",
+            authorizedBy: ctx.actorId,
+            authorizedAt: now,
+            updatedAt: now,
+          })
+          .where(
+            and(inArray(payables.id, ids), eq(payables.status, "aprovado")),
+          );
+      }
+
+      await logFinanceiroAudit(
+        {
+          actorId: ctx.actorId,
+          action: "financeiro.batch.authorized",
+          entity: "batch_approval",
+          entityId: input.batchId,
+          diff: {
+            authorizedAt: now.toISOString(),
+            payableCount: ids.length,
+          },
+        },
+        tx,
+      );
+
+      return ids;
     });
 
     return { ok: true, authorizedPayables: payableIds.length };
@@ -371,73 +391,84 @@ const markPayableAsPaidSchema = z.object({
 export const markPayableAsPaid = superAdminAction
   .schema(markPayableAsPaidSchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    const payableRows = await db
-      .select()
-      .from(payables)
-      .where(and(eq(payables.id, input.payableId), isNull(payables.deletedAt)))
-      .limit(1);
+    // O lançamento contábil, a mudança de status e o audit são atômicos —
+    // se qualquer um falhar, nenhum pagamento fica registrado pela metade.
+    const paymentTx = await db.transaction(async (dbTx) => {
+      const payableRows = await dbTx
+        .select()
+        .from(payables)
+        .where(
+          and(eq(payables.id, input.payableId), isNull(payables.deletedAt)),
+        )
+        .limit(1);
 
-    const payable = payableRows[0];
-    if (!payable) throw new Error("Conta a pagar não encontrada");
+      const payable = payableRows[0];
+      if (!payable) throw new Error("Conta a pagar não encontrada");
 
-    if (payable.status !== "autorizado") {
-      throw new Error(
-        `Apenas contas com status "autorizado" podem ser marcadas como pagas. ` +
-          `Status atual: "${payable.status}"`,
+      if (payable.status !== "autorizado") {
+        throw new Error(
+          `Apenas contas com status "autorizado" podem ser marcadas como pagas. ` +
+            `Status atual: "${payable.status}"`,
+        );
+      }
+
+      const now = new Date();
+      const paidDate = input.paidDate ?? now;
+      const dateStr = paidDate.toISOString().split("T")[0] ?? "";
+
+      // Create immutable debit transaction
+      const txInserted = await dbTx
+        .insert(transactions)
+        .values({
+          type: "debito",
+          amount: payable.amount,
+          description: `PGTO — ${payable.description}`,
+          date: dateStr,
+          accountId: input.bankAccountId,
+          costCenterId: payable.costCenterId ?? null,
+          categoryId: payable.categoryId ?? null,
+          referenceType: "payable",
+          referenceId: payable.id,
+          createdBy: ctx.actorId,
+        })
+        .returning();
+
+      const ledgerTx = txInserted[0];
+      if (!ledgerTx) throw new Error("Falha ao criar transação de pagamento");
+
+      // Update payable
+      await dbTx
+        .update(payables)
+        .set({
+          status: "pago",
+          paidBy: ctx.actorId,
+          paidAt: paidDate,
+          accountId: input.bankAccountId,
+          updatedAt: now,
+        })
+        .where(eq(payables.id, input.payableId));
+
+      await logFinanceiroAudit(
+        {
+          actorId: ctx.actorId,
+          action: "financeiro.payable.paid",
+          entity: "payable",
+          entityId: input.payableId,
+          diff: {
+            status: { from: "autorizado", to: "pago" },
+            transactionId: ledgerTx.id,
+            paidDate: dateStr,
+            bankAccountId: input.bankAccountId,
+          },
+        },
+        dbTx,
       );
-    }
 
-    const now = new Date();
-    const paidDate = input.paidDate ?? now;
-    const dateStr = paidDate.toISOString().split("T")[0] ?? "";
-
-    // Create immutable debit transaction
-    const txInserted = await db
-      .insert(transactions)
-      .values({
-        type: "debito",
-        amount: payable.amount,
-        description: `PGTO — ${payable.description}`,
-        date: dateStr,
-        accountId: input.bankAccountId,
-        costCenterId: payable.costCenterId ?? null,
-        categoryId: payable.categoryId ?? null,
-        referenceType: "payable",
-        referenceId: payable.id,
-        createdBy: ctx.actorId,
-      })
-      .returning();
-
-    const tx = txInserted[0];
-    if (!tx) throw new Error("Falha ao criar transação de pagamento");
-
-    // Update payable
-    await db
-      .update(payables)
-      .set({
-        status: "pago",
-        paidBy: ctx.actorId,
-        paidAt: paidDate,
-        accountId: input.bankAccountId,
-        updatedAt: now,
-      })
-      .where(eq(payables.id, input.payableId));
-
-    await logFinanceiroAudit({
-      actorId: ctx.actorId,
-      action: "financeiro.payable.paid",
-      entity: "payable",
-      entityId: input.payableId,
-      diff: {
-        status: { from: "autorizado", to: "pago" },
-        transactionId: tx.id,
-        paidDate: dateStr,
-        bankAccountId: input.bankAccountId,
-      },
+      return ledgerTx;
     });
 
     return {
       payable: { id: input.payableId, status: "pago" },
-      transaction: tx,
+      transaction: paymentTx,
     };
   });

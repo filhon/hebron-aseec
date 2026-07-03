@@ -59,15 +59,12 @@ vi.mock("next/headers", () => ({
   }),
 }));
 
-// Mock Supabase auth para retornar ACTOR_ID
-vi.mock("@supabase/supabase-js", () => ({
-  createClient: vi.fn().mockReturnValue({
-    auth: {
-      getUser: vi.fn().mockResolvedValue({
-        data: { user: { id: ACTOR_ID, email: "imp-actor@test.hebron" } },
-        error: null,
-      }),
-    },
+// Mock da resolução de sessão (kit compartilhado @hebron/auth) — retorna
+// ACTOR_ID como usuário autenticado com o papel super_admin.
+vi.mock("@hebron/auth/server", () => ({
+  resolveSession: vi.fn().mockResolvedValue({
+    actorId: ACTOR_ID,
+    roles: ["super_admin"],
   }),
 }));
 

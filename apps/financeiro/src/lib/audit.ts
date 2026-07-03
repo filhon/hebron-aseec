@@ -1,10 +1,9 @@
-import { db } from "@hebron/db/client";
-import { auditLog } from "@hebron/db/schema";
-import type { NewAuditLog } from "@hebron/db/schema";
+import { logAudit } from "@hebron/db/audit";
+import type { AuditDbHandle } from "@hebron/db/audit";
 
 // ---------------------------------------------------------------------------
-// Financeiro-specific audit action types (cast at insert — values added to
-// the DB enum via migration alongside this module's tables in P-3.6)
+// Financeiro-specific audit action types (values live in the shared DB enum
+// — added via ALTER TYPE alongside this module's tables in P-0.7)
 // ---------------------------------------------------------------------------
 
 export type FinanceiroAuditAction =
@@ -38,21 +37,20 @@ export interface LogFinanceiroAuditParams {
 }
 
 /**
- * Writes a financeiro-module event to admin.audit_log.
- * Wrapped in try/catch so a logging failure never breaks the main operation.
+ * Writes a financeiro-module event to admin.audit_log via @hebron/db/audit.
+ *
+ * Financeiro is a governance module (decision F3-Q4): a failure to write
+ * the audit entry ABORTS the caller — this used to be swallowed in a
+ * try/catch, which meant money-moving mutations could succeed with no
+ * durable trail. That is exactly the bug this shared function fixes.
+ *
+ * Pass `dbHandle` (a `tx` from `db.transaction(...)`) for governance flows
+ * that need the mutation and its audit entry to commit or roll back
+ * together (see approveBatch / authorizeBatch / markPayableAsPaid).
  */
 export async function logFinanceiroAudit(
   params: LogFinanceiroAuditParams,
+  dbHandle?: AuditDbHandle,
 ): Promise<void> {
-  try {
-    await db.insert(auditLog).values({
-      actorId: params.actorId,
-      action: params.action as unknown as NewAuditLog["action"],
-      entity: params.entity,
-      entityId: params.entityId,
-      diff: params.diff ?? null,
-    });
-  } catch (err) {
-    console.error("[financeiro/audit] Failed to write audit log entry:", err);
-  }
+  await logAudit({ ...params, criticality: "critical" }, dbHandle);
 }

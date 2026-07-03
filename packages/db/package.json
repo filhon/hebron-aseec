@@ -5,7 +5,9 @@
   "exports": {
     ".": "./src/index.ts",
     "./schema": "./src/schema/index.ts",
-    "./client": "./src/client.ts"
+    "./client": "./src/client.ts",
+    "./audit": "./src/audit.ts",
+    "./notifications": "./src/notifications.ts"
   },
   "scripts": {
     "lint": "eslint .",
@@ -16,9 +18,10 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@hebron/email": "workspace:*",
     "@hebron/types": "workspace:*",
-    "@supabase/supabase-js": "^2.46.0",
-    "drizzle-orm": "^0.36.0",
+    "@supabase/supabase-js": "catalog:",
+    "drizzle-orm": "catalog:",
     "postgres": "^3.4.4"
   },
   "devDependencies": {

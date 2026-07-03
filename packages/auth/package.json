@@ -7,16 +7,19 @@
     "./server": "./src/server.ts",
     "./client": "./src/client.ts",
     "./middleware": "./src/middleware.ts",
-    "./impersonation": "./src/impersonation.ts"
+    "./impersonation": "./src/impersonation.ts",
+    "./testing": "./src/testing.ts"
   },
   "scripts": {
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@hebron/db": "workspace:*",
     "@hebron/types": "workspace:*",
     "@supabase/ssr": "^0.5.0",
-    "@supabase/supabase-js": "^2.46.0"
+    "@supabase/supabase-js": "catalog:",
+    "drizzle-orm": "catalog:"
   },
   "devDependencies": {
     "@hebron/eslint-config": "workspace:*",

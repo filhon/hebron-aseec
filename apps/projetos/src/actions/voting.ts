@@ -14,11 +14,17 @@ import { conselheiroDiretorAction, superAdminAction } from "../lib/safe-action";
 import { logProjectAudit } from "../lib/audit";
 
 // ---------------------------------------------------------------------------
-// Helpers
+// Helpers — take an explicit db/tx executor so they can run either against
+// the singleton `db` or inside a `db.transaction(...)` callback.
 // ---------------------------------------------------------------------------
 
-async function getVotingProject(projectId: string) {
-  const rows = await db
+// `Pick`, not `typeof db` directly: a `tx` from `db.transaction(...)` lacks
+// the `$client` property that the full `PostgresJsDatabase` type carries,
+// but has the same query-builder methods — which is all these helpers need.
+type DbExecutor = Pick<typeof db, "select" | "update" | "insert">;
+
+async function getVotingProject(executor: DbExecutor, projectId: string) {
+  const rows = await executor
     .select()
     .from(projects)
     .where(and(eq(projects.id, projectId)))
@@ -31,8 +37,8 @@ async function getVotingProject(projectId: string) {
   return project;
 }
 
-async function countEligibleVoters(): Promise<number> {
-  const result = await db
+async function countEligibleVoters(executor: DbExecutor): Promise<number> {
+  const result = await executor
     .select({ count: count() })
     .from(roleAssignments)
     .where(inArray(roleAssignments.role, ["diretor", "conselheiro"]));
@@ -49,10 +55,13 @@ interface VoteResult {
   approved: boolean | null;
 }
 
-async function computeVoteResult(projectId: string): Promise<VoteResult> {
-  const totalEligible = await countEligibleVoters();
+async function computeVoteResult(
+  executor: DbExecutor,
+  projectId: string,
+): Promise<VoteResult> {
+  const totalEligible = await countEligibleVoters(executor);
 
-  const projectVotes = await db
+  const projectVotes = await executor
     .select({ value: votes.value })
     .from(votes)
     .where(eq(votes.projectId, projectId));
@@ -70,8 +79,11 @@ async function computeVoteResult(projectId: string): Promise<VoteResult> {
   return { totalEligible, totalVoted, inFavor, against, quorumMet, approved };
 }
 
-async function getNextVersionNumber(projectId: string): Promise<number> {
-  const result = await db
+async function getNextVersionNumber(
+  executor: DbExecutor,
+  projectId: string,
+): Promise<number> {
+  const result = await executor
     .select({ count: count() })
     .from(projectVersions)
     .where(eq(projectVersions.projectId, projectId));
@@ -81,6 +93,10 @@ async function getNextVersionNumber(projectId: string): Promise<number> {
 
 // ---------------------------------------------------------------------------
 // castVote — secret vote; voter identity never exposed to other participants
+//
+// Votação é governança dual (decisão F3-Q4): o voto, a eventual transição de
+// estágio e as entradas de audit correspondentes são atômicos — se o audit
+// falhar, nada do voto é persistido.
 // ---------------------------------------------------------------------------
 
 export const castVote = conselheiroDiretorAction
@@ -92,89 +108,98 @@ export const castVote = conselheiroDiretorAction
     }),
   )
   .action(async ({ parsedInput, ctx }) => {
-    const project = await getVotingProject(parsedInput.projectId);
+    return db.transaction(async (tx) => {
+      const project = await getVotingProject(tx, parsedInput.projectId);
 
-    // Insert — unique constraint (project_id, user_id) blocks double voting
-    await db
-      .insert(votes)
-      .values({
-        projectId: parsedInput.projectId,
-        userId: ctx.actorId,
-        value: parsedInput.value,
-      })
-      .onConflictDoNothing();
+      // Insert — unique constraint (project_id, user_id) blocks double voting
+      await tx
+        .insert(votes)
+        .values({
+          projectId: parsedInput.projectId,
+          userId: ctx.actorId,
+          value: parsedInput.value,
+        })
+        .onConflictDoNothing();
 
-    // After every vote, re-check if quorum is now met and all eligible have voted
-    const result = await computeVoteResult(parsedInput.projectId);
+      // After every vote, re-check if quorum is now met and all eligible have voted
+      const result = await computeVoteResult(tx, parsedInput.projectId);
 
-    let stageTransitioned = false;
+      let stageTransitioned = false;
 
-    if (result.quorumMet && result.approved !== null) {
-      // All eligible voted or quorum reached with decisive majority — auto-close
-      const totalEligible = await countEligibleVoters();
-      if (result.totalVoted >= totalEligible) {
-        const newStage = result.approved
-          ? "homologacao"
-          : ("reprovado" as const);
+      if (result.quorumMet && result.approved !== null) {
+        // All eligible voted or quorum reached with decisive majority — auto-close
+        const totalEligible = await countEligibleVoters(tx);
+        if (result.totalVoted >= totalEligible) {
+          const newStage = result.approved
+            ? "homologacao"
+            : ("reprovado" as const);
 
-        const validNextStages = VALID_STAGE_TRANSITIONS[project.stage];
-        if ((validNextStages as string[]).includes(newStage)) {
-          const versionNumber = await getNextVersionNumber(
-            parsedInput.projectId,
-          );
+          const validNextStages = VALID_STAGE_TRANSITIONS[project.stage];
+          if ((validNextStages as string[]).includes(newStage)) {
+            const versionNumber = await getNextVersionNumber(
+              tx,
+              parsedInput.projectId,
+            );
 
-          await db
-            .update(projects)
-            .set({ stage: newStage, updatedAt: new Date() })
-            .where(eq(projects.id, parsedInput.projectId));
+            await tx
+              .update(projects)
+              .set({ stage: newStage, updatedAt: new Date() })
+              .where(eq(projects.id, parsedInput.projectId));
 
-          await db.insert(projectVersions).values({
-            projectId: parsedInput.projectId,
-            versionNumber,
-            stage: newStage,
-            data: {
-              trigger: "vote_complete",
-              result,
-              transitionedAt: new Date().toISOString(),
-            },
-            createdBy: ctx.actorId,
-          });
+            await tx.insert(projectVersions).values({
+              projectId: parsedInput.projectId,
+              versionNumber,
+              stage: newStage,
+              data: {
+                trigger: "vote_complete",
+                result,
+                transitionedAt: new Date().toISOString(),
+              },
+              createdBy: ctx.actorId,
+            });
 
-          stageTransitioned = true;
+            stageTransitioned = true;
 
-          await logProjectAudit({
-            actorId: ctx.actorId,
-            action: "project.stage_transition",
-            entity: "project",
-            entityId: parsedInput.projectId,
-            diff: {
-              from: project.stage,
-              to: newStage,
-              trigger: "vote_complete",
-              result,
-            },
-          });
+            await logProjectAudit(
+              {
+                actorId: ctx.actorId,
+                action: "project.stage_transition",
+                entity: "project",
+                entityId: parsedInput.projectId,
+                diff: {
+                  from: project.stage,
+                  to: newStage,
+                  trigger: "vote_complete",
+                  result,
+                },
+              },
+              tx,
+            );
+          }
         }
       }
-    }
 
-    // Audit the vote itself (no user ID in diff — secret ballot)
-    await logProjectAudit({
-      actorId: ctx.actorId,
-      action: "vote.cast",
-      entity: "vote",
-      entityId: parsedInput.projectId,
-      diff: {
-        projectId: parsedInput.projectId,
-        value: parsedInput.value,
-        resultAfterVote: {
-          totalVoted: result.totalVoted,
-          quorumMet: result.quorumMet,
+      // Audit the vote itself (no user ID in diff — secret ballot)
+      await logProjectAudit(
+        {
+          actorId: ctx.actorId,
+          action: "vote.cast",
+          entity: "vote",
+          entityId: parsedInput.projectId,
+          diff: {
+            projectId: parsedInput.projectId,
+            value: parsedInput.value,
+            resultAfterVote: {
+              totalVoted: result.totalVoted,
+              quorumMet: result.quorumMet,
+            },
+          },
         },
-      },
-    });
+        tx,
+      );
 
-    return { ok: true, result, stageTransitioned };
+      return { ok: true, result, stageTransitioned };
+    });
   });
 
 // ---------------------------------------------------------------------------
@@ -189,49 +214,57 @@ export const triggerPanicButton = superAdminAction
     }),
   )
   .action(async ({ parsedInput, ctx }) => {
-    const project = await getVotingProject(parsedInput.projectId);
+    return db.transaction(async (tx) => {
+      const project = await getVotingProject(tx, parsedInput.projectId);
 
-    const result = await computeVoteResult(parsedInput.projectId);
+      const result = await computeVoteResult(tx, parsedInput.projectId);
 
-    // Force-decide: whichever side has majority among existing votes wins;
-    // tie resolves to reprovado (conservative default).
-    const approved = result.inFavor > result.against;
-    const newStage = approved
-      ? ("homologacao" as const)
-      : ("reprovado" as const);
+      // Force-decide: whichever side has majority among existing votes wins;
+      // tie resolves to reprovado (conservative default).
+      const approved = result.inFavor > result.against;
+      const newStage = approved
+        ? ("homologacao" as const)
+        : ("reprovado" as const);
 
-    const versionNumber = await getNextVersionNumber(parsedInput.projectId);
+      const versionNumber = await getNextVersionNumber(
+        tx,
+        parsedInput.projectId,
+      );
 
-    await db
-      .update(projects)
-      .set({ stage: newStage, updatedAt: new Date() })
-      .where(eq(projects.id, parsedInput.projectId));
+      await tx
+        .update(projects)
+        .set({ stage: newStage, updatedAt: new Date() })
+        .where(eq(projects.id, parsedInput.projectId));
 
-    await db.insert(projectVersions).values({
-      projectId: parsedInput.projectId,
-      versionNumber,
-      stage: newStage,
-      data: {
-        trigger: "panic_button",
-        actorId: ctx.actorId,
-        result,
-        transitionedAt: new Date().toISOString(),
-      },
-      createdBy: ctx.actorId,
+      await tx.insert(projectVersions).values({
+        projectId: parsedInput.projectId,
+        versionNumber,
+        stage: newStage,
+        data: {
+          trigger: "panic_button",
+          actorId: ctx.actorId,
+          result,
+          transitionedAt: new Date().toISOString(),
+        },
+        createdBy: ctx.actorId,
+      });
+
+      await logProjectAudit(
+        {
+          actorId: ctx.actorId,
+          action: "vote.panic",
+          entity: "project",
+          entityId: parsedInput.projectId,
+          diff: {
+            from: project.stage,
+            to: newStage,
+            trigger: "panic_button",
+            result,
+          },
+        },
+        tx,
+      );
+
+      return { ok: true, newStage, result };
     });
-
-    await logProjectAudit({
-      actorId: ctx.actorId,
-      action: "vote.panic",
-      entity: "project",
-      entityId: parsedInput.projectId,
-      diff: {
-        from: project.stage,
-        to: newStage,
-        trigger: "panic_button",
-        result,
-      },
-    });
-
-    return { ok: true, newStage, result };
   });

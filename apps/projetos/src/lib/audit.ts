@@ -1,6 +1,5 @@
-import { db } from "@hebron/db/client";
-import { auditLog } from "@hebron/db/schema";
-import type { NewAuditLog } from "@hebron/db/schema";
+import { logAudit } from "@hebron/db/audit";
+import type { AuditDbHandle } from "@hebron/db/audit";
 
 // ---------------------------------------------------------------------------
 // Project-specific audit action types
@@ -32,25 +31,21 @@ export interface LogProjectAuditParams {
 }
 
 /**
- * Writes a project-module event to admin.audit_log.
- * Wrapped in try/catch so a logging failure never breaks the main operation.
- * The action values are cast because the TS enum predates the projetos module
- * (they exist in the DB — added via ALTER TYPE in P-2.8 migration).
+ * Writes a project-module event to admin.audit_log via @hebron/db/audit.
+ *
+ * Votação é um módulo de governança (decisão F3-Q4): uma falha ao gravar o
+ * audit ABORTA o chamador — antes isso era engolido em um try/catch, o que
+ * permitia um voto ser computado sem nenhuma trilha durável.
+ *
+ * Passe `dbHandle` (um `tx` de `db.transaction(...)`) nos fluxos de votação
+ * que precisam que a mutação e o audit sejam atômicos (ver castVote /
+ * triggerPanicButton).
  */
 export async function logProjectAudit(
   params: LogProjectAuditParams,
+  dbHandle?: AuditDbHandle,
 ): Promise<void> {
-  try {
-    await db.insert(auditLog).values({
-      actorId: params.actorId,
-      action: params.action as unknown as NewAuditLog["action"],
-      entity: params.entity,
-      entityId: params.entityId,
-      diff: params.diff ?? null,
-    });
-  } catch (err) {
-    console.error("[projetos/audit] Failed to write audit log entry:", err);
-  }
+  await logAudit({ ...params, criticality: "critical" }, dbHandle);
 }
 
 /**
