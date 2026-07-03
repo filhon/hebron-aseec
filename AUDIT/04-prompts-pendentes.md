@@ -183,7 +183,7 @@ _Critérios:_ [x] grep `createClient(url, anonKey, { global: { headers: { cookie
 **P-0.9 — CI mínimo**
 _Problema:_ `.github/` não existe (F3-10); CLAUDE.md promete CI que não há; os 3 críticos de runtime sobreviveram porque nada roda sistematicamente.
 _Escopo:_ `.github/workflows/ci.yml`: `pnpm turbo lint typecheck test` + job que sobe Postgres efêmero e roda o runner de migrations do zero (trava o F3-06 para sempre).
-_Critérios:_ [ ] workflow verde em PR; [ ] migration quebrada faz o CI falhar (testado com sabotagem local); [ ] documentado no README.
+_Critérios:_ [ ] workflow verde em PR; [ ] migration quebrada faz o CI falhar (testado com sabotagem local); [x] documentado no README.
 
 **P-0.10 — Decisão B: RLS ativa (grants + fixes + adoção)**
 _Problema:_ decisão do Filipe (Fase 1 Q2) de migrar para `authenticated`+JWT não tem grants (F3-05); policies problemáticas viram exposição real na virada (F3-04 token de convite, F3-15 `WITH CHECK (true)` sem `TO`, F3-18); páginas leem via superuser sem gate (F2-A1/D1/D2/P4).

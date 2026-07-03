@@ -1,0 +1,83 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  NODE_VERSION: "20"
+
+jobs:
+  lint-typecheck:
+    name: Lint & Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm turbo lint typecheck
+
+  test:
+    name: Test (migrations + Supabase local stack)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # Spins up an ephemeral Postgres + Auth (GoTrue) + Storage stack via
+      # Docker (config: supabase/config.toml). This is the "Postgres
+      # efêmero" required by P-0.9: the schema doesn't exist yet, so the
+      # next step (db:migrate) always runs every migration from scratch —
+      # any drift or ordering bug (F3-06) fails the job.
+      - name: Start Supabase local stack
+        run: supabase start
+
+      - name: Export Supabase connection env vars
+        run: |
+          STATUS=$(supabase status -o env)
+          API_URL=$(echo "$STATUS" | grep '^API_URL=' | cut -d'=' -f2- | tr -d '"')
+          DB_URL=$(echo "$STATUS" | grep '^DB_URL=' | cut -d'=' -f2- | tr -d '"')
+          ANON_KEY=$(echo "$STATUS" | grep '^ANON_KEY=' | cut -d'=' -f2- | tr -d '"')
+          SERVICE_ROLE_KEY=$(echo "$STATUS" | grep '^SERVICE_ROLE_KEY=' | cut -d'=' -f2- | tr -d '"')
+          {
+            echo "DATABASE_URL=$DB_URL"
+            echo "SUPABASE_URL=$API_URL"
+            echo "SUPABASE_ANON_KEY=$ANON_KEY"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
+            echo "NEXT_PUBLIC_SUPABASE_URL=$API_URL"
+            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$ANON_KEY"
+            echo "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$ANON_KEY"
+          } >> "$GITHUB_ENV"
+
+      - name: Run migration runner against the fresh database
+        run: pnpm --filter @hebron/db db:migrate
+
+      - run: pnpm turbo test

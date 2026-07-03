@@ -20,62 +20,64 @@
 
 > Atualizar conforme sessoes sao executadas.
 
-| Sessao | Data       | Prompt                                    | Status    |
-| ------ | ---------- | ----------------------------------------- | --------- |
-| S-1    | 2026-05-21 | P-0.1 — Monorepo Setup                    | concluido |
-| S-2    | 2026-05-22 | P-0.1 — Monorepo Setup (complemento)      | concluido |
-| S-3    | 2026-05-22 | P-0.2 — Design System Base                | concluido |
-| S-4    | 2026-05-22 | P-0.3 — Supabase Setup                    | concluido |
-| S-5    | 2026-05-22 | P-0.4 — Autenticação e SSO                | concluido |
-| S-6    | 2026-05-22 | P-0.5 — Layout Compartilhado (AppShell)   | concluido |
-| S-7    | 2026-05-22 | P-0.6 — Sistema de Notificações           | concluido |
-| S-8    | 2026-05-22 | P-1.1 — Schema de Tipos Admin             | concluido |
-| S-9    | 2026-05-22 | P-1.2 — Componentes UI Admin              | concluido |
-| S-10   | 2026-05-22 | P-1.3 — Telas e Páginas Admin             | concluido |
-| S-11   | 2026-05-22 | P-1.4 — Formulários Admin                 | concluido |
-| S-12   | 2026-05-22 | P-1.5 — Estados Admin                     | concluido |
-| S-13   | 2026-05-25 | P-1.6 — Schema do Banco Admin             | concluido |
-| S-14   | 2026-05-25 | P-1.7 — RLS Policies Admin                | concluido |
-| S-15   | 2026-05-25 | P-1.8 — Server Actions Admin              | concluido |
-| S-16   | 2026-05-25 | P-1.9 — Integração UI ↔ Backend Admin     | concluido |
-| S-17   | 2026-05-25 | P-1.10 — Notificações e Emails Admin      | concluido |
-| S-18   | 2026-05-26 | P-1.11 — Impersonation e Audit Avançado   | concluido |
-| S-19   | 2026-05-26 | P-1.12 — Testes Admin                     | concluido |
-| S-20   | 2026-06-13 | P-0.2b — Unificação do Design System      | concluido |
-| S-21   | 2026-06-15 | P-1.12b — Ajustes Menores DS Admin        | concluido |
-| S-22   | 2026-06-15 | P-0.3b — Pipeline de Migrations           | concluido |
-| S-23   | 2026-06-16 | P-1.13 — Schema de Tipos Documentos       | concluido |
-| S-24   | 2026-06-16 | P-1.14 — Componentes UI Documentos        | concluido |
-| S-25   | 2026-06-16 | P-1.15 — Telas e Páginas Documentos       | concluido |
-| S-26   | 2026-06-17 | P-1.16 — Formulários Documentos           | concluido |
-| S-27   | 2026-06-17 | P-1.17 — Estados Documentos               | concluido |
-| S-28   | 2026-06-17 | P-1.18 — Schema do Banco Documentos       | concluido |
-| S-29   | 2026-06-17 | P-1.20 — Server Actions Documentos        | concluido |
-| S-30   | 2026-06-18 | P-1.22 — Notificações e Emails Documentos | concluido |
-| S-31   | 2026-06-18 | P-1.23 — Integração Documentos ↔ Projetos | concluido |
-| S-32   | 2026-06-18 | P-1.24 — Testes Documentos                | concluido |
-| S-33   | 2026-06-20 | P-2.1 — Schema de Tipos Projetos          | concluido |
-| S-34   | 2026-06-20 | P-2.2 — Componentes UI Projetos           | concluido |
-| S-35   | 2026-06-20 | P-2.3 — Telas e Páginas Projetos          | concluido |
-| S-36   | 2026-06-20 | P-2.4 — Formulários Projetos              | concluido |
-| S-37   | 2026-06-22 | P-2.5 — Estados Projetos                  | concluido |
-| S-38   | 2026-06-22 | P-2.6 — Schema do Banco Projetos          | concluido |
-| S-39   | 2026-06-22 | P-2.7 — RLS Policies Projetos             | concluido |
-| S-40   | 2026-06-22 | P-2.8 — Server Actions Projetos           | concluido |
-| S-41   | 2026-06-22 | P-2.9 — Integração UI ↔ Backend Projetos  | concluido |
-| S-42   | 2026-06-23 | P-2.10 — Notificações e Emails Projetos   | concluido |
-| S-43   | 2026-06-23 | P-2.11 — Integrações Cross-App Projetos   | parcial   |
-| S-44   | 2026-06-23 | P-2.9b — Usuário Real no Header Projetos  | concluido |
-| S-45   | 2026-06-23 | Polish — apps/projetos/src/app            | concluido |
-| S-46   | 2026-06-23 | P-3.1 — Schema de Tipos Financeiro        | concluido |
-| S-47   | 2026-06-25 | P-3.2 — Componentes UI Financeiro         | concluido |
-| S-48   | 2026-06-25 | P-3.3 — Telas e Páginas Financeiro        | concluido |
-| S-49   | 2026-06-26 | P-3.4 — Formulários Financeiro            | concluido |
-| S-50   | 2026-06-26 | P-3.5 — Estados Financeiro                | concluido |
-| S-51   | 2026-06-26 | P-3.6 — Schema do Banco Financeiro        | concluido |
-| S-52   | 2026-06-26 | P-3.7 — RLS Policies Financeiro           | concluido |
-| S-53   | 2026-06-26 | P-3.8 — Server Actions Financeiro         | concluido |
-| S-54   | 2026-07-03 | P-0.7 — Resgate do Banco (Onda 0)         | concluido |
+| Sessao | Data       | Prompt                                        | Status                               |
+| ------ | ---------- | --------------------------------------------- | ------------------------------------ |
+| S-1    | 2026-05-21 | P-0.1 — Monorepo Setup                        | concluido                            |
+| S-2    | 2026-05-22 | P-0.1 — Monorepo Setup (complemento)          | concluido                            |
+| S-3    | 2026-05-22 | P-0.2 — Design System Base                    | concluido                            |
+| S-4    | 2026-05-22 | P-0.3 — Supabase Setup                        | concluido                            |
+| S-5    | 2026-05-22 | P-0.4 — Autenticação e SSO                    | concluido                            |
+| S-6    | 2026-05-22 | P-0.5 — Layout Compartilhado (AppShell)       | concluido                            |
+| S-7    | 2026-05-22 | P-0.6 — Sistema de Notificações               | concluido                            |
+| S-8    | 2026-05-22 | P-1.1 — Schema de Tipos Admin                 | concluido                            |
+| S-9    | 2026-05-22 | P-1.2 — Componentes UI Admin                  | concluido                            |
+| S-10   | 2026-05-22 | P-1.3 — Telas e Páginas Admin                 | concluido                            |
+| S-11   | 2026-05-22 | P-1.4 — Formulários Admin                     | concluido                            |
+| S-12   | 2026-05-22 | P-1.5 — Estados Admin                         | concluido                            |
+| S-13   | 2026-05-25 | P-1.6 — Schema do Banco Admin                 | concluido                            |
+| S-14   | 2026-05-25 | P-1.7 — RLS Policies Admin                    | concluido                            |
+| S-15   | 2026-05-25 | P-1.8 — Server Actions Admin                  | concluido                            |
+| S-16   | 2026-05-25 | P-1.9 — Integração UI ↔ Backend Admin         | concluido                            |
+| S-17   | 2026-05-25 | P-1.10 — Notificações e Emails Admin          | concluido                            |
+| S-18   | 2026-05-26 | P-1.11 — Impersonation e Audit Avançado       | concluido                            |
+| S-19   | 2026-05-26 | P-1.12 — Testes Admin                         | concluido                            |
+| S-20   | 2026-06-13 | P-0.2b — Unificação do Design System          | concluido                            |
+| S-21   | 2026-06-15 | P-1.12b — Ajustes Menores DS Admin            | concluido                            |
+| S-22   | 2026-06-15 | P-0.3b — Pipeline de Migrations               | concluido                            |
+| S-23   | 2026-06-16 | P-1.13 — Schema de Tipos Documentos           | concluido                            |
+| S-24   | 2026-06-16 | P-1.14 — Componentes UI Documentos            | concluido                            |
+| S-25   | 2026-06-16 | P-1.15 — Telas e Páginas Documentos           | concluido                            |
+| S-26   | 2026-06-17 | P-1.16 — Formulários Documentos               | concluido                            |
+| S-27   | 2026-06-17 | P-1.17 — Estados Documentos                   | concluido                            |
+| S-28   | 2026-06-17 | P-1.18 — Schema do Banco Documentos           | concluido                            |
+| S-29   | 2026-06-17 | P-1.20 — Server Actions Documentos            | concluido                            |
+| S-30   | 2026-06-18 | P-1.22 — Notificações e Emails Documentos     | concluido                            |
+| S-31   | 2026-06-18 | P-1.23 — Integração Documentos ↔ Projetos     | concluido                            |
+| S-32   | 2026-06-18 | P-1.24 — Testes Documentos                    | concluido                            |
+| S-33   | 2026-06-20 | P-2.1 — Schema de Tipos Projetos              | concluido                            |
+| S-34   | 2026-06-20 | P-2.2 — Componentes UI Projetos               | concluido                            |
+| S-35   | 2026-06-20 | P-2.3 — Telas e Páginas Projetos              | concluido                            |
+| S-36   | 2026-06-20 | P-2.4 — Formulários Projetos                  | concluido                            |
+| S-37   | 2026-06-22 | P-2.5 — Estados Projetos                      | concluido                            |
+| S-38   | 2026-06-22 | P-2.6 — Schema do Banco Projetos              | concluido                            |
+| S-39   | 2026-06-22 | P-2.7 — RLS Policies Projetos                 | concluido                            |
+| S-40   | 2026-06-22 | P-2.8 — Server Actions Projetos               | concluido                            |
+| S-41   | 2026-06-22 | P-2.9 — Integração UI ↔ Backend Projetos      | concluido                            |
+| S-42   | 2026-06-23 | P-2.10 — Notificações e Emails Projetos       | concluido                            |
+| S-43   | 2026-06-23 | P-2.11 — Integrações Cross-App Projetos       | parcial                              |
+| S-44   | 2026-06-23 | P-2.9b — Usuário Real no Header Projetos      | concluido                            |
+| S-45   | 2026-06-23 | Polish — apps/projetos/src/app                | concluido                            |
+| S-46   | 2026-06-23 | P-3.1 — Schema de Tipos Financeiro            | concluido                            |
+| S-47   | 2026-06-25 | P-3.2 — Componentes UI Financeiro             | concluido                            |
+| S-48   | 2026-06-25 | P-3.3 — Telas e Páginas Financeiro            | concluido                            |
+| S-49   | 2026-06-26 | P-3.4 — Formulários Financeiro                | concluido                            |
+| S-50   | 2026-06-26 | P-3.5 — Estados Financeiro                    | concluido                            |
+| S-51   | 2026-06-26 | P-3.6 — Schema do Banco Financeiro            | concluido                            |
+| S-52   | 2026-06-26 | P-3.7 — RLS Policies Financeiro               | concluido                            |
+| S-53   | 2026-06-26 | P-3.8 — Server Actions Financeiro             | concluido                            |
+| S-54   | 2026-07-03 | P-0.7 — Resgate do Banco (Onda 0)             | concluido                            |
+| S-55   | 2026-07-03 | P-0.8 — Kit de Backend Compartilhado (Onda 0) | concluido                            |
+| S-56   | 2026-07-03 | P-0.9 — CI Mínimo (Onda 0)                    | concluido (validação em PR pendente) |
 
 ---
 
@@ -2106,3 +2108,128 @@ Corrigidos os três defeitos de bootstrap/runtime identificados na Fase 4 da aud
 - `packages/db/src/migrations/meta/_journal.json` (modificado — tag `0000_easy_alex_power` → `0000_initial`)
 - `packages/db/src/migrate.ts` (modificado — baseline condicional, limpeza de id órfão, rename idempotente de id)
 - `packages/db/src/schema/admin.ts` (modificado — 20 valores `financeiro.*` adicionados a `auditActionEnum`)
+
+---
+
+### S-55 — 2026-07-03 — P-0.8 Kit de Backend Compartilhado (Onda 0)
+
+**Prompt:** P-0.8 (`AUDIT/04-prompts-pendentes.md` §4)
+**Duracao:** ~3h
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Unificados sessão, audit e notificações num kit compartilhado em `@hebron/auth` e `@hebron/db`, eliminando a resolução de sessão manual quebrada (F3-03/F3-08) e a semântica de audit divergente (4 variantes, decisão F3-Q4). A varredura foi além dos 3 pontos do audit e encontrou **5 cópias** do bug de sessão (não 3): `admin/lib/safe-action.ts`, `financeiro/lib/safe-action.ts`, `projetos/lib/safe-action.ts`, `admin/actions/impersonation.ts` e `admin/app/templates-email/page.tsx` — as duas últimas não estavam listadas no audit. Todas migradas para `resolveSession()` (novo, em `@hebron/auth/server`, usa `createServerClient` de `@supabase/ssr` — o padrão que já funcionava em `documentos`). `logAudit` único em `@hebron/db/audit` com parâmetro `criticality` (`"critical"` por padrão = aborta em falha; financeiro e projetos passaram de swallow-silencioso para abort real). `approveBatch`, `authorizeBatch`, `markPayableAsPaid`, `castVote` e `triggerPanicButton` passaram a rodar dentro de `db.transaction()` junto com o audit, para que uma falha de audit desfaça a mutação de verdade (não apenas reporte erro com dado órfão no banco). `makeNotificationInserter()` único em `@hebron/db/notifications` substitui 3 helpers de insert duplicados. `@supabase/supabase-js`, `drizzle-orm` e `zod` alinhados via `catalog:` do pnpm. `convites/page.tsx` passou a usar o `db` singleton em vez de abrir um pool novo por render (F3-14). Deletado `financeiro-stubs.ts` (schema morto, superado pelo `financeiro.ts` real do P-3.6/P-0.7). Adicionados testes de sessão real (login de verdade via Supabase Auth, sem mock de `@supabase/supabase-js`) nos 4 apps, e testes de rollback de audit em `approveBatch`/`castVote`.
+
+**Criterios de aceite verificados:**
+
+- [x] `grep "createClient(url, anonKey, { global: { headers: { cookie"` → zero em `apps/` (verificado com múltiplas variantes de regex, inclusive nos comentários dos próprios testes que citam o bug)
+- [x] 1 teste de sessão sem mock por app — `admin`, `documentos`, `financeiro`, `projetos`: login real (`signInWithPassword` contra o Supabase de dev) → action gated do kit compartilhado (`adminAction`/`editorAction`/`colaboradorAction`/`submissorAction`) retorna sucesso; único mock é `next/headers` (inevitável fora de um request Next.js real)
+- [x] Falha simulada de audit aborta mutação no financeiro e em votação — `approveBatch` e `castVote`: com `logAudit` mockado para rejeitar, a action retorna `serverError` **e** a linha no banco não é alterada (`approvedBy` continua `null`, voto não é inserido) — rollback real via `db.transaction`, não apenas erro reportado
+- [x] `pnpm ls @supabase/supabase-js` resolve 1 versão (`2.106.1`) em todo o workspace
+- [x] lint/typecheck verdes — `pnpm turbo lint typecheck` sem cache, 17/17 pacotes
+- [x] 172 testes passando nas 4 suítes (admin 46, documentos 40, financeiro 3, projetos 83), rodadas isoladas (execução concorrente contra o Supabase de dev compartilhado causa `CONNECTION_CLOSED`/timeouts — não é falha do código, é limite de conexões do pooler)
+
+**Decisoes tomadas:**
+
+- `resolveSession(cookieStore)` mantém o design "framework-agnostic" já usado em `packages/auth` (`createSupabaseServerActionClient`, `createSupabaseMiddlewareClient`): recebe um `ActionCookieStore` estrutural (`getAll` + `set`) em vez de importar `next/headers` diretamente — cada app injeta seu próprio `await cookies()`
+- `resolveSession` combina auth + busca de roles numa única função (`{ actorId, roles }`), unificando o padrão de `financeiro`/`projetos` (que já faziam isso) com `documentos` (que fazia uma query de roles por gate) — reduz N+1 de queries e é a forma mais próxima do nome `resolveSession` já usado em 2 dos 3 apps antes do prompt
+- `logAudit(params, dbHandle?)` aceita um handle de banco opcional (`db` singleton por padrão, ou um `tx`) para permitir que módulos de governança façam o audit fazer parte da mesma transação da mutação — sem isso, "abortar em falha" só faria a action reportar erro, deixando a mutação já commitada no banco (pior que o bug atual: usuário veria erro mas o dado teria sido alterado)
+- Transação + audit atômicos aplicados apenas aos fluxos de governança de fato (aprovação/autorização de lote, pagamento, voto, botão de pânico) — não a todo CRUD de financeiro/projetos; escopo development trade-off entre corretude e tamanho do diff, dado que o texto do prompt cita literalmente "no financeiro e em votação" como os dois cenários de teste
+- `packages/auth/src/testing.ts` (subpath `@hebron/auth/testing`, não exportado pelo índice principal) faz login real via `createSupabaseServerActionClient` reaproveitado (não reimplementa o formato do cookie de sessão do `@supabase/ssr` na mão) — um client de sessão captura os cookies reais que o `signInWithPassword` produziria, e esses cookies alimentam o `resolveSession` sob teste
+- Descoberto no processo: trigger `on_auth_user_created` já espelha `auth.users` → `public.users` — os testes de sessão real não inserem em `public.users` diretamente (colidiria com a trigger); só inserem `role_assignments`, e o cleanup é só `deleteTestAuthUser` (cascade cuida do resto)
+- `@hebron/db` ganhou dependência de `@hebron/email` (para o tipo `InsertNotificationFn`) — para não puxar `components/layout.tsx` (JSX) para dentro do typecheck de `db` (que não tem `--jsx` configurado), criado um subpath novo `@hebron/email/types` apontando direto para `lib/send.ts` (sem imports de componente)
+- Testes pré-existentes que mockavam `@supabase/supabase-js` diretamente (`admin/actions.test.ts`, `admin/impersonation.test.ts`, `documentos/actions.test.ts`, `documentos/search.test.ts`) foram migrados para mockar `@hebron/auth/server`'s `resolveSession` — mock no nível do contrato público do kit, não da lib de terceiros por baixo
+
+**Debitos tecnicos / pendencias:**
+
+- Atomicidade mutação+audit via `db.transaction` foi aplicada só às 5 mutações de governança citadas acima; o resto das actions de financeiro/projetos (CRUD de categorias, transações, relatórios etc.) tem `criticality: "critical"` (aborta a action) mas não wrapping transacional — uma falha de audit ali impede a resposta de sucesso, mas a linha da mutação principal já foi commitada antes do audit rodar (mesmo padrão de antes, só que agora reportando erro em vez de sucesso silencioso)
+- Suítes de teste devem ser rodadas isoladas (uma por vez), não em paralelo — a rede/pooler do Supabase de desenvolvimento não aguenta 3 suítes de integração simultâneas (visto na prática: `CONNECTION_CLOSED`, `getaddrinfo ENOTFOUND`, um run de ~95min em vez de ~80s); não há CI ainda para formalizar essa restrição (P-0.9)
+- `zod` resolve para `3.25.76` (não `3.24.0` exato) — o catalog pede `^3.24.0`, e o pnpm escolheu a versão mais alta compatível em todo o grafo de resolução; não é uma divergência real (é uma única versão em todo o workspace), só não é o número literal do catalog
+
+**Arquivos criados:**
+
+- `packages/auth/src/testing.ts`
+- `packages/db/src/audit.ts`
+- `packages/db/src/notifications.ts`
+- `apps/admin/src/__tests__/session-real.test.ts`
+- `apps/documentos/src/__tests__/session-real.test.ts`
+- `apps/financeiro/src/__tests__/session-real.test.ts`
+- `apps/financeiro/src/__tests__/audit-abort.test.ts`
+- `apps/financeiro/src/__tests__/setup-env.ts`
+- `apps/financeiro/vitest.config.ts`
+- `apps/projetos/src/__tests__/session-real.test.ts`
+- `apps/projetos/src/__tests__/audit-abort.test.ts`
+
+**Arquivos removidos:**
+
+- `packages/db/src/schema/financeiro-stubs.ts` (schema morto, não importado por ninguém — superado por `financeiro.ts`)
+
+**Arquivos modificados:**
+
+- `packages/auth/src/server.ts` (adicionado `resolveSession` + `ActionCookieStore`/`ActionSession`)
+- `packages/auth/src/index.ts` (re-export de `resolveSession`)
+- `packages/auth/package.json` (dep `@hebron/db`, `drizzle-orm`; export `./testing`; `@supabase/supabase-js`/`drizzle-orm` via `catalog:`)
+- `packages/db/src/schema/index.ts` (comentário de desambiguação entre os dois `notifications.ts`)
+- `packages/db/package.json` (dep `@hebron/email`; exports `./audit`, `./notifications`; `@supabase/supabase-js`/`drizzle-orm` via `catalog:`)
+- `packages/email/package.json` (export `./types` apontando para `lib/send.ts`)
+- `packages/validators/package.json`, `packages/config/package.json` (`zod` via `catalog:`)
+- `pnpm-workspace.yaml` (bloco `catalog:` com `@supabase/supabase-js`, `drizzle-orm`, `zod`)
+- `apps/admin/src/lib/safe-action.ts`, `apps/admin/src/lib/audit.ts`, `apps/admin/src/lib/notifications.ts` (migrados para o kit)
+- `apps/admin/src/actions/impersonation.ts` (4ª cópia do bug de sessão — migrado)
+- `apps/admin/src/app/(dashboard)/templates-email/page.tsx` (5ª cópia do bug de sessão — migrado)
+- `apps/admin/src/app/(dashboard)/convites/page.tsx` (usa `db` singleton em vez de pool por render)
+- `apps/admin/src/__tests__/actions.test.ts`, `apps/admin/src/__tests__/impersonation.test.ts` (mock migrado para `resolveSession`)
+- `apps/documentos/src/lib/safe-action.ts`, `apps/documentos/src/lib/audit.ts` (drop do raw SQL — enum já tem os valores), `apps/documentos/src/lib/notifications.ts`
+- `apps/documentos/src/__tests__/actions.test.ts`, `apps/documentos/src/__tests__/search.test.ts` (mock migrado para `resolveSession`)
+- `apps/financeiro/src/lib/safe-action.ts`, `apps/financeiro/src/lib/audit.ts` (abort por padrão)
+- `apps/financeiro/src/actions/approval.ts` (`approveBatch`/`authorizeBatch`/`markPayableAsPaid` em `db.transaction`)
+- `apps/financeiro/package.json` (scripts `test`/`test:watch`, devDeps `vitest`/`dotenv`)
+- `apps/projetos/src/lib/safe-action.ts`, `apps/projetos/src/lib/audit.ts` (abort por padrão), `apps/projetos/src/lib/notifications.ts`
+- `apps/projetos/src/actions/voting.ts` (`castVote`/`triggerPanicButton` em `db.transaction`)
+- `apps/{admin,documentos,financeiro,projetos}/package.json` (`@supabase/supabase-js`/`drizzle-orm`/`zod` via `catalog:`)
+- `pnpm-lock.yaml` (regenerado)
+
+---
+
+### S-56 — 2026-07-03 — P-0.9 CI Mínimo (Onda 0)
+
+**Prompt:** P-0.9 (`AUDIT/04-prompts-pendentes.md` §4)
+**Duracao:** ~1h
+**Modelo:** claude-sonnet-5
+**Status:** concluido (validação em PR real pendente — ver debitos)
+
+**Resumo:**
+Criado `.github/workflows/ci.yml`: dois jobs, `lint-typecheck` (`pnpm turbo lint typecheck`, sem banco) e `test` (sobe Postgres+Auth+Storage efêmero via `supabase start`, roda o runner de migrations do projeto do zero — `pnpm --filter @hebron/db db:migrate` — e então `pnpm turbo test`). Achado durante a execução: o escopo do audit ("Postgres efêmero") não cobria os testes `session-real.test.ts`/`rls.test.ts`/`voting.test.ts` (adicionados em P-0.8, commit `422af53`), que exigem Auth real (`signInWithPassword`, `auth.admin.createUser`) — um container `postgres:16` puro não fornece isso. Decisão tomada com o Filipe: usar o stack local completo do Supabase CLI (`supabase start`, via Docker) em vez de um projeto remoto dedicado a CI ou de excluir esses testes do gate. `supabase init` criado na raiz do repo (`supabase/config.toml`) com o mecanismo nativo de migrations/seed do CLI desabilitado (o projeto usa `packages/db/src/migrate.ts`, não `supabase/migrations`) e Edge Functions/Analytics desligados (não usados). Criado `README.md` na raiz (não existia) com a seção de CI e passos de reprodução local, atendendo ao critério "documentado no README".
+
+**Criterios de aceite verificados:**
+
+- [ ] workflow verde em PR — **não verificável nesta sessão**: esta máquina não tem Docker instalado (nem no PATH do Git Bash nem do PowerShell), então `supabase start` não pôde ser executado localmente para validar o job `test` de ponta a ponta. Validação real depende de abrir PR e observar a run do GitHub Actions (runners `ubuntu-latest` têm Docker pré-instalado).
+- [ ] migration quebrada faz o CI falhar (testado com sabotagem local) — **não testável nesta sessão** pelo mesmo motivo (sem Docker local); precisa ser feito manualmente (branch descartável com uma migration com erro de sintaxe/ordem, observar o job `test` falhar no step "Run migration runner", depois descartar a branch) antes de considerar este critério fechado.
+- [x] documentado no README — `README.md` criado com seção "CI" descrevendo os dois jobs e os passos de reprodução local.
+- Verificado por proxy: `pnpm turbo lint typecheck` rodado localmente nesta sessão, 34/34 tasks verdes — o job `lint-typecheck` deve reproduzir esse resultado no runner.
+- Verificado por proxy: `.github/workflows/ci.yml` parseado com `js-yaml` (sintaxe válida) e os nomes de variável assumidos para `supabase status -o env` (`API_URL`, `DB_URL`, `ANON_KEY`, `SERVICE_ROLE_KEY`) confirmados contra a documentação oficial do CLI (`supabase status --help` da versão instalada, v2.101.0) — não executados de fato por falta de Docker.
+
+**Decisoes tomadas:**
+
+- Pergunta ao Filipe: como o job de teste deve lidar com os testes que exigem Supabase Auth real. Escolhida a opção "Supabase CLI local stack" — `supabase start` via Docker no runner, sem depender de projeto remoto nem de secrets, e sem excluir cobertura de regressão (CS-1/F3-03/F3-08 são exatamente o que `session-real.test.ts` existe para travar).
+- `supabase/config.toml`: `db.migrations.enabled = false` e `db.seed.enabled = false` — o CLI não deve tentar aplicar `supabase/migrations` (pasta que não existe/não é usada) nem `supabase/seed.sql` (não existe); o schema é populado inteiramente pelo runner próprio do projeto, mantendo um único mecanismo de migration em vez de dois concorrentes.
+- `edge_runtime` e `analytics` desligados no config local — nenhum código do projeto usa Edge Functions ou Analytics ainda (grep confirmou zero uso fora de documentos de planejamento); reduz tempo de boot do stack em CI.
+- Variáveis do Supabase local (`API_URL`/`DB_URL`/`ANON_KEY`/`SERVICE_ROLE_KEY`, saída de `supabase status -o env`) são remapeadas via `grep`+`cut`+`tr -d '"'` para os nomes que o projeto já usa (`DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_*`) antes de ir para `$GITHUB_ENV` — evitado usar a saída bruta de `-o env` diretamente porque vem com aspas literais ao redor do valor (quebraria `DATABASE_URL`).
+- Um só job `test` faz migration-do-zero + suíte inteira, em vez de dois jobs separados (um só para "Postgres efêmero + migration", outro para os testes) — o stack Supabase já precisa subir para os testes de Auth real, então rodar o runner de migrations contra esse mesmo banco recém-criado já satisfaz o critério de migration-do-zero sem duplicar o boot do stack.
+
+**Debitos tecnicos / pendencias:**
+
+- **Bloqueante para fechar os 2 primeiros criterios do prompt:** esta máquina não tem Docker instalado — nem `supabase start` nem o teste de sabotagem de migration puderam ser executados aqui. Próximo passo indicado: instalar Docker Desktop (ou abrir PR e deixar o Actions validar), depois marcar os dois critérios como fechados.
+- `supabase/setup-cli@v1` fixado em `version: latest` — decisão deliberada para reduzir manutenção (vs. pin exato), mas significa que uma quebra futura na CLI (major nova) só aparece quando o CI já estiver rodando; se isso incomodar, trocar para uma versão fixa.
+- O job `test` não cobre `apps/flats`, `apps/intranet`, `apps/plataforma`, `apps/radio`, `apps/tarefas` (ainda sem script `test`/`vitest` — P-3.12/P-4.12/etc. já preveem isso); `pnpm turbo test` simplesmente pula esses pacotes hoje, o que é o comportamento correto até eles ganharem testes.
+
+**Arquivos criados:**
+
+- `.github/workflows/ci.yml`
+- `README.md`
+- `supabase/config.toml`, `supabase/.gitignore` (via `supabase init`)
+
+**Arquivos modificados:**
+
+- `SESSIONS.md` (esta entrada)
