@@ -35,15 +35,18 @@ export const payableStatusEnum = financeiroSchema.enum("payable_status", [
   "cancelado",
 ]);
 
-export const receivableStatusEnum = financeiroSchema.enum(
-  "receivable_status",
-  ["pendente", "recebido", "cancelado"],
-);
+export const receivableStatusEnum = financeiroSchema.enum("receivable_status", [
+  "pendente",
+  "recebido",
+  "cancelado",
+]);
 
-export const receivableSourceEnum = financeiroSchema.enum(
-  "receivable_source",
-  ["farmacia", "aluguel", "doacao", "outro"],
-);
+export const receivableSourceEnum = financeiroSchema.enum("receivable_source", [
+  "farmacia",
+  "aluguel",
+  "doacao",
+  "outro",
+]);
 
 export const transactionTypeEnum = financeiroSchema.enum("transaction_type", [
   "debito",
@@ -377,9 +380,7 @@ export const transactionReversals = financeiroSchema.table(
       .defaultNow(),
   },
   (table) => [
-    index("transaction_reversals_original_idx").on(
-      table.originalTransactionId,
-    ),
+    index("transaction_reversals_original_idx").on(table.originalTransactionId),
     unique("transaction_reversals_original_uniq").on(
       table.originalTransactionId,
     ),

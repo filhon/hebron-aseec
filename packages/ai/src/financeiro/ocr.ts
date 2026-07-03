@@ -6,7 +6,9 @@ import OpenAI from "openai";
 
 export interface NfOcrInput {
   /** Base64-encoded image (PNG/JPEG) or a publicly accessible image URL */
-  imageSource: { type: "base64"; data: string; mimeType: "image/png" | "image/jpeg" } | { type: "url"; url: string };
+  imageSource:
+    | { type: "base64"; data: string; mimeType: "image/png" | "image/jpeg" }
+    | { type: "url"; url: string };
   /** Optional hint for categorization context */
   expectedCategoryHint?: string;
 }
@@ -139,7 +141,8 @@ Formato de saída obrigatório:
   }
 
   // Sanitize CNPJ: keep only digits, validate length
-  const rawCnpj = typeof parsed.cnpj === "string" ? parsed.cnpj.replace(/\D/g, "") : null;
+  const rawCnpj =
+    typeof parsed.cnpj === "string" ? parsed.cnpj.replace(/\D/g, "") : null;
   const cnpj = rawCnpj && rawCnpj.length === 14 ? rawCnpj : null;
 
   // Validate date format
@@ -159,7 +162,8 @@ Formato de saída obrigatório:
     amount,
     cnpj,
     issuedAt,
-    issuerName: typeof parsed.issuerName === "string" ? parsed.issuerName : null,
+    issuerName:
+      typeof parsed.issuerName === "string" ? parsed.issuerName : null,
     nfNumber: typeof parsed.nfNumber === "string" ? parsed.nfNumber : null,
     suggestedCategory:
       typeof parsed.suggestedCategory === "string"

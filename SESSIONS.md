@@ -1979,7 +1979,7 @@ Criada a migration `0009_financeiro_rls.sql` refinando as políticas RLS do sche
 
 **Criterios de aceite verificados:**
 
-- [x] Super_admin: full CRUD em financeiro.* (coberto por policies FOR ALL + novas INSERT/UPDATE)
+- [x] Super_admin: full CRUD em financeiro.\* (coberto por policies FOR ALL + novas INSERT/UPDATE)
 - [x] Diretor gestor: SELECT + UPDATE em batch_approvals (batch_approvals_update_gestor com has_designation('gestor'))
 - [x] Colaborador financeiro: CRUD em transações, payables, receivables (novas policies insert/update)
 - [x] Submissor: SELECT em payment_schedules de projetos da própria instituição (JOIN organization_members)

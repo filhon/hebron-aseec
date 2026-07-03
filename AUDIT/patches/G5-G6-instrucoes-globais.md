@@ -55,7 +55,7 @@ qualquer usuário e 2 módulos com auditoria permanentemente vazia.
 3. **Auditoria:** usar o `logAudit` de package (P-0.8). Em módulos de governança
    (financeiro, votação, aprovações), falha de audit ABORTA a operação. Todo P-X.6
    que crie ações auditáveis DEVE incluir `ALTER TYPE admin.audit_action ADD VALUE
-   IF NOT EXISTS` para os valores novos do módulo — sem isso a auditoria falha em
+IF NOT EXISTS` para os valores novos do módulo — sem isso a auditoria falha em
    runtime (achado F3-02).
 4. **Migrations:** geradas com `drizzle-kit generate` (P-0.11). NÃO citar/criar número
    de migration manualmente; o nome é o que o kit gerar. O runner aplica em ordem.

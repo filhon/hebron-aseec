@@ -23,21 +23,21 @@ A regra geral passa a viver em G6 item 4.
 
 ## Ocorrências
 
-| Prompt | Linha citada hoje | Observação |
-| --- | --- | --- |
-| P-4.6 | `0010_tarefas.sql` | 0010 já é do financeiro |
-| P-4.7 | `0011_tarefas_rls.sql` | 0011 será `financeiro_rls` renomeada (P-0.7) |
-| P-5.6 | `0012_intranet.sql` | |
-| P-5.7 | `0013_intranet_rls.sql` | |
-| P-6.6 | `0014_plataforma.sql` | |
-| P-6.7 | `0015_plataforma_rls.sql` | |
-| P-7.6 | `0016_flats.sql` | |
-| P-7.7 | `0017_flats_rls.sql` | |
-| P-8.6 | `0018_radio.sql` | |
-| P-8.7 | `0019_radio_rls.sql` | |
-| P-9.1 | `0020_rls_fixes.sql (se necessário)` | manter "se necessário", sem número |
-| P-9.2 | `0021_lgpd.sql` | grosso do schema LGPD migra para P-0.13 |
-| P-9.3 | `0022_indexes.sql (se necessário)` | manter "se necessário", sem número |
+| Prompt | Linha citada hoje                    | Observação                                   |
+| ------ | ------------------------------------ | -------------------------------------------- |
+| P-4.6  | `0010_tarefas.sql`                   | 0010 já é do financeiro                      |
+| P-4.7  | `0011_tarefas_rls.sql`               | 0011 será `financeiro_rls` renomeada (P-0.7) |
+| P-5.6  | `0012_intranet.sql`                  |                                              |
+| P-5.7  | `0013_intranet_rls.sql`              |                                              |
+| P-6.6  | `0014_plataforma.sql`                |                                              |
+| P-6.7  | `0015_plataforma_rls.sql`            |                                              |
+| P-7.6  | `0016_flats.sql`                     |                                              |
+| P-7.7  | `0017_flats_rls.sql`                 |                                              |
+| P-8.6  | `0018_radio.sql`                     |                                              |
+| P-8.7  | `0019_radio_rls.sql`                 |                                              |
+| P-9.1  | `0020_rls_fixes.sql (se necessário)` | manter "se necessário", sem número           |
+| P-9.2  | `0021_lgpd.sql`                      | grosso do schema LGPD migra para P-0.13      |
+| P-9.3  | `0022_indexes.sql (se necessário)`   | manter "se necessário", sem número           |
 
 Nota: migrations de **RLS** (P-X.7) são SQL que o kit não gera — para essas, o texto vira:
 "arquivo SQL de policies criado após a migration de schema do módulo, com nome sequencial

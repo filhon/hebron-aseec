@@ -16,12 +16,12 @@ Propostas de alteração em `PROMPTS.md` no formato antes/depois. **Nada foi apl
 
 ## Dependências das decisões
 
-| Patch | Bloqueado por |
-| --- | --- |
-| P-4.4, P-5.4, P-6.4 (editor) | D-1 (editor rich text) |
-| P-8.6/P-8.11 (audiência) | D-3 (semântica de ouvinte) |
+| Patch                         | Bloqueado por                                          |
+| ----------------------------- | ------------------------------------------------------ |
+| P-4.4, P-5.4, P-6.4 (editor)  | D-1 (editor rich text)                                 |
+| P-8.6/P-8.11 (audiência)      | D-3 (semântica de ouvinte)                             |
 | P-7.8/P-7.11/P-7.12 (auxílio) | D-4 (governança do auxílio — recomendação já redigida) |
-| Emendas do BRAIN (via P-0.16) | D-5 (veto ou aprovação das decisões delegadas) |
+| Emendas do BRAIN (via P-0.16) | D-5 (veto ou aprovação das decisões delegadas)         |
 
 Os corretivos P-0.7…P-0.16, P-1.25…P-1.27, P-2.9c, P-3.8b e os novos prompts (P-2.13, P-2.14,
 P-5.13, P-7.13, P-9.0) estão redigidos nas §4–§5 de `AUDIT/04-prompts-pendentes.md`.

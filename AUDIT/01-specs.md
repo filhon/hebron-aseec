@@ -10,12 +10,12 @@
 
 ## Sumário por severidade
 
-| Severidade | Qtd | IDs |
-| --- | --- | --- |
-| CRÍTICO | 3 | S1-01, S1-02, S1-03 |
-| ALTO | 8 | S1-04 … S1-11 |
-| MÉDIO | 14 | S1-12 … S1-25 |
-| BAIXO | 1 (agrupado) | S1-26 |
+| Severidade | Qtd          | IDs                 |
+| ---------- | ------------ | ------------------- |
+| CRÍTICO    | 3            | S1-01, S1-02, S1-03 |
+| ALTO       | 8            | S1-04 … S1-11       |
+| MÉDIO      | 14           | S1-12 … S1-25       |
+| BAIXO      | 1 (agrupado) | S1-26               |
 
 Nota de honestidade: os critérios de aceite dos prompts são, no geral, **bons** — específicos, verificáveis, com listas "SEM" explícitas na Rádio e problema/contexto nos corretivos. Os achados abaixo são as exceções, não a regra. "Nenhum achado" vale para: dependências circulares entre prompts (não encontrei nenhuma).
 
@@ -26,6 +26,7 @@ Nota de honestidade: os critérios de aceite dos prompts são, no geral, **bons*
 ### S1-01 — Orçamento por instituição/ano: contradição BRAIN ↔ PROMPTS com workaround em calcificação `(cat. 1, 2)`
 
 **Evidência:**
+
 - BRAIN §6.2 ("Orçamento e instituições"): "Orçamento definido por instituição, por ano-calendário (jan-dez), **no Financeiro**. Sistema bloqueia submissão se total excede orçamento."
 - P-2.8 (concluído): bloqueio implementado contra `admin.system_settings` com chave `projetos_budget_{orgId}_{year}` — S-40 registra: "quando o módulo Financeiro for construído, substituir pela query `financeiro.organization_budgets`".
 - P-3.6 (concluído): criou `budgets`/`budget_items` **por centro de custo/categoria** — modelo diferente; nenhuma tabela `organization_budgets`.
@@ -41,6 +42,7 @@ Nota de honestidade: os critérios de aceite dos prompts são, no geral, **bons*
 ### S1-02 — Postura RLS × conexão superuser: decisão adiada para o último prompt contradiz princípio inviolável `(cat. 1, 4)`
 
 **Evidência:**
+
 - BRAIN §9 ("Princípios invioláveis"): "**Defense in depth:** RBAC + RLS sempre, nunca apenas um."
 - BRAIN §3 (⚠️ Decisão técnica pendente): admite que hoje as Server Actions conectam via `DATABASE_URL` (superuser), **bypassando RLS** — a camada 3 protege só o canal direto. Decisão (A) vs (B) delegada a P-9.1.
 - P-9.1 é o penúltimo prompt do plano (após Fases 4–8). Todos os Bloco B pendentes (Tarefas, Intranet, Plataforma, Flats, Rádio — ~30 prompts) herdarão o padrão superuser antes da decisão.
@@ -55,6 +57,7 @@ Nota de honestidade: os critérios de aceite dos prompts são, no geral, **bons*
 ### S1-03 — LGPD como retrofit (P-9.2) com coleta de dado sensível especificada antes de qualquer base de consentimento `(cat. 2, 7)`
 
 **Evidência:**
+
 - BRAIN §9 (checklist por prompt): "LGPD compliance (consentimento granular, 'Meus Dados')" — consta como critério de **todo** prompt.
 - Nenhum prompt de cadastro/formulário concluído ou pendente implementa consentimento; a modelagem de consentimento (`packages/db/src/schema/consent.ts`) só existe em **P-9.2**, último bloco do plano.
 - Dados pessoais já especificados/coletados antes disso: `public.users.phone`, `document_cpf` (P-1.6, concluído); Flats P-7.4 (pendente) especifica upload de documento de identidade, CPF e data de nascimento de acompanhantes **e "Saúde: autodeclarada"** (BRAIN §6.8, critério d) — dado de saúde é dado sensível na LGPD (art. 5º, II), mesmo autodeclarado e sem laudo.
@@ -71,6 +74,7 @@ Nota de honestidade: os critérios de aceite dos prompts são, no geral, **bons*
 ### S1-04 — Migrations: numeração duplicada, ordem alfabética inválida e colisões já embutidas nos prompts pendentes `(cat. 1, 4)`
 
 **Evidência (fatos do inventário §1.3/§3.2, confirmados nos arquivos):**
+
 - Contrato do runner (P-0.3b): aplica `.sql` em **ordem alfabética**. Diretório real tem números duplicados (`0005` ×2, `0007` ×2, `0009` ×2) e `0009_financeiro_rls.sql` (refina policies) ordena **antes** de `0010_financeiro.sql` (cria as tabelas) — aplicação do zero falha.
 - Prompts pendentes citam números já ocupados: P-4.6 → `0010_tarefas.sql` (0010 = financeiro), P-5.6 → `0012`, P-6.6 → `0014`, P-7.6 → `0016`, P-8.6 → `0018`, P-9.1/9.2/9.3 → `0020–0022`. Nenhum considera os deslocamentos já ocorridos (documentados em S-28, S-38, S-51: o número do prompt divergiu do arquivo real em 3 dos 4 módulos).
 - Nenhuma spec define a convenção de numeração (prefixo único? sequência global? quem "reserva" o número?). A divergência prompt→arquivo se repetiu 4 vezes sem que PROMPTS.md fosse corrigido.
@@ -84,6 +88,7 @@ Nota de honestidade: os critérios de aceite dos prompts são, no geral, **bons*
 ### S1-05 — Porta de entrada sem prompt: auto-signup com aprovação (O-1) e migração de usuários do legado (O-2) `(cat. 2)`
 
 **Evidência:**
+
 - BRAIN §6.1: "Cadastro unificado com aprovação (auto-signup + aprovação por super_admin)"; §6.2: "Auto-signup com fluxo de aprovação: cria conta → seleciona/cria instituição → super_admin aprova"; §8 (v1 mantido): "Migração de usuários do sistema legado".
 - Nenhum dos 119 prompts implementa qualquer um dos dois. S-5 fixou `shouldCreateUser: false` no magic link ("cadastro é processo separado"); S-16 registrou que o botão de aprovação foi **omitido da UI** porque `pending_approval` não é derivável do schema.
 - Filipe confirmou (Fase 0, pergunta 7): lacuna, não adiamento.
@@ -97,8 +102,9 @@ Nota de honestidade: os critérios de aceite dos prompts são, no geral, **bons*
 ### S1-06 — Infra Inngest: pressuposta por 6+ prompts, criada por nenhum (O-3) `(cat. 2, 4)`
 
 **Evidência:**
+
 - BRAIN §2: "Background jobs: Inngest".
-- Dependem de jobs agendados sem que nenhum prompt monte cliente/deploy/crons: partições futuras de `audit_log` (S-13), `autoCreateMonthlyMeetings` (S-15, "trigger não configurado"), lembrete de edital 7 dias (S-30), homologação "7 dias sem contestação → notificar" (P-2.8 — a *transição* após 7 dias não tem executor), lembretes de relatório (P-2.10, dois critérios [~]), recorrência de tarefas (P-4.8: "job Inngest que cria tarefa na next_run_at"), briefing (P-5.10), snapshot de audiência (P-8.11).
+- Dependem de jobs agendados sem que nenhum prompt monte cliente/deploy/crons: partições futuras de `audit_log` (S-13), `autoCreateMonthlyMeetings` (S-15, "trigger não configurado"), lembrete de edital 7 dias (S-30), homologação "7 dias sem contestação → notificar" (P-2.8 — a _transição_ após 7 dias não tem executor), lembretes de relatório (P-2.10, dois critérios [~]), recorrência de tarefas (P-4.8: "job Inngest que cria tarefa na next_run_at"), briefing (P-5.10), snapshot de audiência (P-8.11).
 - Grep em PROMPTS.md: nenhum prompt tem arquivo `inngest` na lista de permitidos.
 
 **Impacto:** os critérios [~] acumulados nunca fecharão; P-4.8 é inexecutável como escrito (critério de aceite exige job Inngest que não tem onde existir). Cada módulo novo adiciona mais dependência ao vazio.
@@ -110,6 +116,7 @@ Nota de honestidade: os critérios de aceite dos prompts são, no geral, **bons*
 ### S1-07 — MFA "obrigatório" sem enforcement e sem enrollment (O-4) `(cat. 2)`
 
 **Evidência:**
+
 - BRAIN §2: "MFA: TOTP **obrigatório** para super_admin e diretor".
 - P-0.4 (concluído) implementou apenas o challenge para quem **já tem** TOTP enrolled — S-5: "usuários sem fator TOTP enrolled não passam pelo step MFA"; enrollment exige Supabase Dashboard (débito S-5). Nenhum prompt posterior cria tela de enrollment nem enforcement (bloquear sessão aal1 de super_admin/diretor sem fator).
 - "Obrigatório" nunca é definido operacionalmente em nenhuma spec: obrigatório no primeiro login? Com prazo? Bloqueante?
@@ -123,6 +130,7 @@ Nota de honestidade: os critérios de aceite dos prompts são, no geral, **bons*
 ### S1-08 — Camada 1 do modelo de permissões (middleware) sem prompt em 8 dos 9 apps `(cat. 1, 2)`
 
 **Evidência:**
+
 - BRAIN §3: "**Três camadas obrigatórias, nunca apenas uma:** 1. Middleware Next.js — bloqueia rota antes de renderizar; 2. gates; 3. RLS."
 - Único middleware com prompt: `apps/intranet/src/middleware.ts` (P-0.4). Nenhum prompt de nenhum módulo (P-1.x, P-2.x, P-3.x, nem os pendentes P-4–P-8) lista `middleware.ts` nos arquivos permitidos. A proteção que os prompts especificam é via layout Server Component (`getAuthUser()` + redirect — G5/P-2.9b) e gates de action.
 - S-25/S-26 registram "Auth guard é UI-only; middleware real implementado em P-1.18" — mas P-1.18 é prompt de **schema** e não contém middleware. O débito apontou para um prompt que não o cobre; nenhum prompt posterior o recolheu.
@@ -136,9 +144,10 @@ Nota de honestidade: os critérios de aceite dos prompts são, no geral, **bons*
 ### S1-09 — Contrato cross-app indefinido: onde vive a lógica de integração e como um app chama o outro `(cat. 3, 6)`
 
 **Evidência:**
+
 - BRAIN §7 define **o quê** (tabela de integrações) e um mecanismo genérico ("dados via banco, eventos via Realtime + triggers + Inngest") que nenhum prompt implementa (O-18). O padrão real que emergiu (S-43) é outro: chamada direta fire-and-forget dentro do app de origem (`apps/projetos/src/lib/integrations/*.ts`).
 - P-4.11: "Function pública `createAutoTask` que outros módulos chamam" — arquivo em `apps/tarefas/src/lib/integrations/auto-tasks.ts`. P-5.8 manda a Intranet chamar `createAutoTask`. **Apps não podem importar código de outros apps** no monorepo (inversão proibida, citada na Fase 3 do próprio prompt de auditoria); a spec não diz se isso vira package compartilhado, insert cross-schema direto, HTTP, ou trigger.
-- Mesmo problema já materializado: `getProjectParticipationScore` (P-2.11) vive em `apps/projetos/src/lib/integrations/documentos.ts` (nome de arquivo, aliás, incoerente — é integração com *flats*), mas quem precisa dela é o P-7.8/P-7.11 (`apps/flats`). P-7.11 lista `apps/flats/src/lib/integrations/projetos.ts` — o implementador terá que duplicar a lógica ou inventar o contrato.
+- Mesmo problema já materializado: `getProjectParticipationScore` (P-2.11) vive em `apps/projetos/src/lib/integrations/documentos.ts` (nome de arquivo, aliás, incoerente — é integração com _flats_), mas quem precisa dela é o P-7.8/P-7.11 (`apps/flats`). P-7.11 lista `apps/flats/src/lib/integrations/projetos.ts` — o implementador terá que duplicar a lógica ou inventar o contrato.
 - P-5.8 "Busca global cross-app (consulta todos os schemas)": sem contrato de permissão (a busca respeita a visibilidade por papel de cada módulo? via RLS — que as actions bypassam — ou reimplementada?), sem definição do que é indexável.
 
 **Impacto:** ambiguidade de contrato entre apps é exatamente a classe que o prompt de auditoria manda tratar como ALTO. Cada implementador das fases 4–8 decidirá sozinho, e as decisões não vão convergir.
@@ -150,6 +159,7 @@ Nota de honestidade: os critérios de aceite dos prompts são, no geral, **bons*
 ### S1-10 — P-3.9 (próximo prompt) não é executável sem suposição `(cat. 3, 5)`
 
 **Evidência:**
+
 - G5 (Instruções Globais) exige que **todo P-X.9** inclua `(grupo)/layout.tsx` + `shell.tsx` + `actions/auth.ts` nos arquivos permitidos, "a partir de P-3.9". A lista de arquivos permitidos do P-3.9 **não os inclui** (só páginas + remoção do mock) — a regra G5 e o prompt que a motivou não foram reconciliados.
 - `contas-pagar/page.tsx` está fora dos arquivos permitidos do P-3.9, embora seja tela mockada (P-3.3/P-3.4) contendo o fluxo central de governança dual (lote semanal → aprovação). Nenhum outro prompt pendente a integra: P-3.10 é notificações, P-3.11 é cross-app. A tela do fluxo mais crítico do módulo ficaria mockada para sempre.
 - As páginas do Financeiro são todas `"use client"` com `setTimeout` simulando loading (S-48/S-50); o P-3.9 não diz se converte para RSC (padrão dos outros módulos) ou mantém client + actions — decisão arquitetural do módulo deixada ao implementador.
@@ -163,6 +173,7 @@ Nota de honestidade: os critérios de aceite dos prompts são, no geral, **bons*
 ### S1-11 — Bloqueio de pagamentos por inadimplência de relatório: regra sem mecanismo (O-9) `(cat. 2)`
 
 **Evidência:**
+
 - BRAIN §6.2: "Inadimplência bloqueia pagamentos (super_admin pode sobrescrever)".
 - P-2.10 tem critério "[x] Bloqueio por falta de relatório → submissor + super_admins" — mas isso é a **notificação** do bloqueio. Nenhum prompt define o mecanismo: o que muda em `payment_schedules`/`payables` quando um relatório vence? Onde vive o override do super_admin? Quem detecta a inadimplência (job — cai em S1-06)?
 - P-3.11 (pendente) conecta Projetos→Financeiro mas não menciona a regra.
@@ -176,45 +187,59 @@ Nota de honestidade: os critérios de aceite dos prompts são, no geral, **bons*
 ## MÉDIO
 
 ### S1-12 — Contradição interna do BRAIN: detecção de duplicidade via embeddings é v1 (§6.2) e v2+ (§8) ao mesmo tempo `(cat. 1)`
+
 BRAIN §6.2 lista "Detecção de duplicidade via embeddings (pgvector)" sob IA do módulo; §8 defere "Busca semântica / pgvector / embeddings" para v2+. Nenhum prompt implementa (coerente com §8, contradiz §6.2). **Recomendação:** editar §6.2 marcando o item como v2+ (ou promovê-lo com prompt). Pergunta Q2 abaixo.
 
 ### S1-13 — IA prometida no §8 sem prompt: scoring de flats e detecção de renovação `(cat. 1, 2)`
+
 §8 (v1 mantido) lista "IA: scoring de flats (critérios subjetivos)" — mas §6.8 especifica scoring 100% determinístico (tabela de pontos) e P-7.8 o segue; e "detecção de renovação (auto-preenche de projetos anteriores)" — nenhum prompt a implementa (P-2.x concluídos; nenhum pendente a cobre). **Recomendação:** decidir (Q3): ou remover do §8, ou criar prompts. Como estão, o §8 promete duas features de IA que o plano não entrega.
 
 ### S1-14 — P-3.3: escopo lista 4 telas que não estão nos arquivos permitidos nem nos critérios `(cat. 5)`
+
 Escopo do P-3.3 menciona "Contas a receber. … Fluxo de caixa projetado. Centros de custo (por projeto). … Relatórios." — nenhuma tem arquivo permitido (`contas-receber/page.tsx` etc. não existem na lista) nem critério de aceite. O prompt foi dado como concluído sem essas telas e nada registra a decisão de dropá-las. Consequência viva: `receivables` tem actions (P-3.8) e nenhuma tela em nenhum prompt. **Recomendação:** decidir se as 4 telas entram (patch em P-3.9) ou saem (editar escopo do P-3.3 retroativamente + PATCH).
 
 ### S1-15 — Registro histórico do SESSIONS com 5 anomalias estruturais `(cat. 1)`
+
 (i) Índice S-21 ≠ corpo S-21 (rótulo "P-1.13b" não existe no PROMPTS); (ii) sessão real do P-1.12b sem número; (iii) S-45 no índice sem corpo; (iv) P-1.21 no corpo sem número/índice; (v) P-1.19 e P-2.12 marcados [x] sem sessão; (vi) P-2.11 `parcial` no SESSIONS vs todos critérios [x]/[~] no PROMPTS. Filipe já confirmou os fatos (Fase 0, perguntas 1–2). **Impacto:** o log append-only — única memória entre sessões — não é confiável como está. **Recomendação:** entrada retificadora única no SESSIONS (append, sem editar as antigas) normalizando os seis pontos.
 
 ### S1-16 — PATCHES/ vazio com pelo menos 3 mudanças de decisão não registradas `(cat. 1)`
+
 Tipografia Inter→Parkinsans (revogação registrada só como nota no BRAIN §5), escopo da Rádio "drasticamente simplificado" (§6.4), remoções da v1 (§8). Filipe autorizou reconstrução retroativa (Fase 0, pergunta 4). **Recomendação:** criar os PATCHes retroativos numerados antes da retomada.
 
 ### S1-17 — "Validação da diretoria OK" é pré-condição de todo P-X.6 sem critério nem registro `(cat. 5)`
+
 Toda entrada de Bloco B tem pré-condição "validação da diretoria OK"; nenhuma sessão registra essa validação (nem como feita nem como dispensada), e não há definição do que a constitui (Filipe esclareceu na Fase 0: é validação dele, com compartilhamento eventual com um diretor). **Recomendação:** definir formalmente (1 linha no SESSIONS por Bloco A: "validado por Filipe em DATA, ajustes X") — barato e fecha o buraco de auditabilidade.
 
 ### S1-18 — Admin → Todos (push de configurações globais) sem prompt (O-14) `(cat. 2)`
+
 BRAIN §7: "Push de configurações globais (logos, textos, feature flags)". P-1.8 cobre o CRUD no Admin; nenhum prompt especifica como os outros 8 apps **consomem** settings/flags (query direta a `admin.system_settings`? cache? no build?). Cada app da Fase 4+ decidirá sozinho. **Recomendação:** definir o contrato de consumo (provável: helper em `packages/db` + cache) e citar nos P-X.9 pendentes.
 
 ### S1-19 — Sugestão de avaliador por afinidade sem prompt (O-6) `(cat. 2)`
+
 BRAIN §6.2 ("Avaliação"): "Designação: **mix de sugestão do sistema** (afinidade: região, categoria, histórico) + atribuição manual". P-2.8 cobre designar/registrar parecer; a sugestão automática não existe em nenhum prompt. **Recomendação:** decidir se fica para v1.x (registrar em §8) ou criar prompt.
 
 ### S1-20 — Export mensal PDF+XLSX+ZIP (O-10) e Google Calendar (O-11) sem prompt `(cat. 2)`
+
 §6.5: "relatório mensal com recibos exportado como PDF+XLSX+ZIP pelo super_admin" — P-3.10 cobre só o e-mail automático mensal; a ação manual de export com ZIP de recibos não existe. §6.6: "Calendário compartilhado (integração Google Calendar)" — P-5.3/P-5.9 usam apenas `admin.meeting_sessions`. **Recomendação:** decidir escopo (Q6/Q7).
 
 ### S1-21 — Decisões arquiteturais implícitas sem dono na spec `(cat. 6)`
+
 (i) **Representação monetária**: nunca especificada; o implementado é `numeric` em Reais com `parseFloat` para formatação (S-42) — convenção OK, mas viva só em nota de sessão; (ii) **campos de formulário sem coluna → JSONB/notes**: padrão silencioso consolidado (`project_versions.data` em S-40; `notes` com prefixo "Budget: " e CNPJs concatenados em S-53) — dados de negócio consultáveis presos em texto/JSONB sem decisão registrada; (iii) **Supabase Storage**: nenhum prompt cria buckets nem define policies de Storage (débito S-29: bucket `hebron-docs` manual); uploads de vídeo (P-2.4), comprovantes (P-3.4), documentos de identidade (P-7.4) dependem de buckets não especificados. **Recomendação:** 3 parágrafos novos no BRAIN §4/§6.5 + prompt corretivo de Storage (buckets + policies) antes da Fase 7 (documentos de identidade = dado pessoal em storage).
 
 ### S1-22 — Transversais sem padrão: tratamento de erro e acessibilidade `(cat. 7)`
+
 (i) **Erro**: nenhuma spec define padrão (retry? toast? Sentry só em P-9.5); o padrão emergente é fire-and-forget com `.catch(console.error)` para integrações e IA (S-40, S-43) — erro engolido como convenção; (ii) **acessibilidade**: zero requisitos em BRAIN/PROMPTS (só decisões pontuais de sessão, ex. ARIA em S-7) — para um público "em transição tecnológica" e um portal público, é lacuna de requisito, não de código. **Recomendação:** seção curta no BRAIN (padrão de erro por tipo: mutação crítica nunca fire-and-forget; a11y: alvo WCAG AA nos fluxos públicos) + critério de aceite padrão nos prompts de UI pendentes.
 
 ### S1-23 — Scope creep embutido nos prompts pendentes sem ancoragem no BRAIN `(cat. 1, 3)`
+
 Do inventário §4.2, os casos com consequência de modelagem: **quizzes** (P-6.1–P-6.8: tabelas `quizzes`, `quiz_questions`, `quiz_attempts`, `passing_score`) — BRAIN §6.3 define certificação como "concluir trilha = certificado", sem quiz; **certificado com hash de verificação pública** (P-6.x) — não consta no BRAIN; **notas pessoais em timestamp** (NoteWidget, P-6.2/P-6.6); **workspaces "6 fixos + custom"** (P-4.6) vs BRAIN §6.9 "workspaces fixos"; **check-in com checklist de inventário no sistema** (P-7.4/P-7.8) vs BRAIN "check-in presencial na recepção". Nenhum é absurdo, mas cada um cria tabela/fluxo que o BRAIN não pediu — e o método diz que BRAIN vence. **Recomendação:** decidir item a item antes das fases 4/6/7 (Q8) e alinhar BRAIN ou PROMPTS.
 
 ### S1-24 — Semânticas indefinidas em KPIs e Rádio `(cat. 3)`
+
 (i) "Doações do mês" (KPI, P-5.1/P-5.8): o Financeiro não modela "doação" como conceito distinto (receivables/categorias); qual query define o KPI? (ii) Audiência da Rádio (P-8.11): "listener_stats" sem definição do que conta como ouvinte (page view? minutos? sessões?); (iii) Auto DJ (P-8.8): cada ouvinte em ponto diferente + "tocando agora" global informativo — semântica aceita, mas o BRAIN §6.4 descreve como se fosse rádio síncrona; ajustar §6.4 evita expectativa errada da diretoria. **Recomendação:** definir as três semânticas antes dos respectivos prompts.
 
 ### S1-25 — Débito com dono inexistente: prefill do wizard `(cat. 4)`
+
 S-43: wizard não chama `getEditalPrefill`; débito remetido ao "prompt UI do módulo documentos" — que já foi todo executado. Nenhum prompt pendente cobre o wiring; a integração Documentos→Projetos (P-1.23 + P-2.11, marcados concluídos) está funcionalmente aberta. Padrão a observar: débito remetido a prompt futuro que não existe. **Recomendação:** anexar ao patch de P-3.9? Não — é do Projetos; criar micro-corretivo P-2.9c ou incluir num prompt de liquidação de débitos.
 
 ---
@@ -222,6 +247,7 @@ S-43: wizard não chama `getEditalPrefill`; débito remetido ao "prompt UI do m�
 ## BAIXO (agrupado)
 
 ### S1-26 — Higiene de specs `(cat. 1, 5, 7)`
+
 - Cabeçalho do PROMPTS.md: "119 prompts + **3** correções" — são 4 (P-2.9b não somado); Sumário não lista os corretivos.
 - BRAIN §5 e PROMPTS G3 dizem que design-refs existem para "admin, documentos, financeiro" — `design-refs/projetos/` já existe.
 - BRAIN §2 cita "Claude Sonnet 4.6 / Opus 4.6" para geração de código; G1 cita "Sonnet 4.7" — inconsistência cosmética entre specs.
@@ -285,4 +311,4 @@ R. Doações são lançamento do tipo despesa. São os recursos que são enviado
 
 ---
 
-*Próxima fase: **FASE 2 — Verificação spec ↔ código** (54 unidades concluídas, divididas por app: fundação, admin, documentos, projetos, financeiro — inventário §5). Rodar em sessão nova; as respostas às perguntas acima podem vir antes ou durante.*
+_Próxima fase: **FASE 2 — Verificação spec ↔ código** (54 unidades concluídas, divididas por app: fundação, admin, documentos, projetos, financeiro — inventário §5). Rodar em sessão nova; as respostas às perguntas acima podem vir antes ou durante._

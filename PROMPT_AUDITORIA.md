@@ -20,6 +20,7 @@ Regras invioláveis:
 6. **Distinga fato de preferência.** "RLS ausente na tabela X" é fato. "Eu estruturaria este hook diferente" é preferência — registre à parte, em seção de observações, sem severidade.
 
 Escala de severidade:
+
 - **CRÍTICO** — segurança (RLS, auth, exposição de dados, LGPD), perda de dados, ou lacuna de spec que invalida trabalho futuro se não corrigida antes de continuar.
 - **ALTO** — débito técnico que ficará caro (drift schema/migration, duplicação entre apps do que deveria ser package compartilhado, prompt não-executável sem suposição).
 - **MÉDIO** — inconsistência que causará retrabalho localizado ou confusão para o agente implementador.
@@ -50,7 +51,7 @@ Procure especificamente:
 
 1. **Contradições entre BRAIN, SESSIONS e PROMPTS** — decisões que um arquivo afirma e outro contradiz ou ignora (ex.: BRAIN define multi-tenancy por schema, um prompt instrui tabela compartilhada com coluna tenant_id).
 2. **Requisitos órfãos** (do inventário): existem no BRAIN, nenhum prompt os implementa. Para cada um: foi decisão consciente de adiar, ou lacuna?
-3. **Prompts ambíguos**: qualquer prompt em que o agente implementador precisará *decidir sozinho* algo com consequência arquitetural (modelagem de dados, contrato de API entre apps, política de RLS, estratégia de cache/invalidação, fluxo de auth). Ambiguidade em nome de variável é BAIXO; ambiguidade em contrato entre apps é ALTO.
+3. **Prompts ambíguos**: qualquer prompt em que o agente implementador precisará _decidir sozinho_ algo com consequência arquitetural (modelagem de dados, contrato de API entre apps, política de RLS, estratégia de cache/invalidação, fluxo de auth). Ambiguidade em nome de variável é BAIXO; ambiguidade em contrato entre apps é ALTO.
 4. **Ordem e dependências**: prompts que dependem de artefatos produzidos por prompts posteriores; dependências circulares; prompts que assumem estado que nenhum prompt anterior cria.
 5. **Critérios de aceite**: cada prompt tem definição verificável de "pronto"? "Implementar o módulo X" sem critério de aceite = achado. Sem critério verificável, "concluído" no SESSIONS não significa nada.
 6. **Decisões arquiteturais implícitas**: coisas que o BRAIN trata como óbvias mas nunca declara (convenção de nomes de schema, quem é dono de qual tabela, onde vive lógica compartilhada, estratégia de migration no monorepo).

@@ -88,8 +88,6 @@ Semânticos preferenciais em componentes: `--brand`, `--brand-fg`, `--accent`, `
 
 > **Pré-requisito:** os tokens canônicos só existem após **P-0.2b** (unificação do design system). Nenhum prompt de UI de fase ≥ 1 deve ser executado antes de P-0.2b concluído.
 
----
-
 ## G5. Layouts nos prompts de integração (P-X.9)
 
 Todo prompt de integração **P-X.9** de qualquer módulo **deve incluir os arquivos de layout do módulo** (`(grupo)/layout.tsx`) na lista de arquivos permitidos, para:
@@ -102,12 +100,45 @@ Todo prompt de integração **P-X.9** de qualquer módulo **deve incluir os arqu
 **Padrão obrigatório (Server/Client split):**
 
 ```
-(grupo)/layout.tsx   → Server Component: chama getAuthUser(), redireciona se null, renderiza <Shell user={user}>
+(grupo)/layout.tsx   → Server Component: chama getAuthUser(), redireciona se null,
+                       VERIFICA O PAPEL exigido pelo grupo (ex.: (diretoria) exige
+                       diretor|conselheiro|super_admin; (admin) exige super_admin;
+                       área editorial exige editor|super_admin) e redireciona/403 se
+                       o papel não bate. Autenticar ≠ autorizar — o gate de papel no
+                       layout é a camada 1 do BRAIN §3.
 (grupo)/shell.tsx    → "use client": recebe user como prop, usa usePathname, renderiza AppShell
 actions/auth.ts      → logoutAction: signOut + redirect(CANONICAL_LOGIN_URL)
 ```
 
 > **Origem:** lacuna identificada em P-2.9b (registrada em SESSIONS.md). Aplica-se a partir de P-3.9 (Financeiro) em diante.
+
+Além dos arquivos de layout, TODO P-X.9 deve listar entre os arquivos permitidos os componentes e formulários do Bloco A do módulo (P-X.2 e P-X.4). A integração usa e conecta esses componentes — NÃO reescreve as telas inline. Critério padrão de todo P-X.9: "nenhum componente/formulário do Bloco A permanece sem import (verificar por grep)". Origem: padrão PD-2 da auditoria (26+ componentes órfãos nas fases 1–3).
+
+## G6. Kit de backend: use os packages, nunca copie
+
+Vale para todo prompt de Bloco B (P-X.6 a P-X.12). Origem: achados F3-02/F3-03/F3-08
+da auditoria — cópias locais de sessão/audit produziram 3 apps com actions que negam
+qualquer usuário e 2 módulos com auditoria permanentemente vazia.
+
+1. **Sessão/gates:** toda Server Action usa o action-client de `@hebron/auth`
+   (`createSupabaseServerActionClient` / factory de safe-action do package — P-0.8).
+   PROIBIDO criar `safe-action.ts` local com `createClient(url, anonKey, ...cookie...)`.
+2. **Conexão de dados:** leituras e escritas rodam como `authenticated` (decisão B,
+   P-0.10) — o client da sessão, não `DATABASE_URL` superuser. RLS é camada ativa.
+3. **Auditoria:** usar o `logAudit` de package (P-0.8). Em módulos de governança
+   (financeiro, votação, aprovações), falha de audit ABORTA a operação. Todo P-X.6
+   que crie ações auditáveis DEVE incluir `ALTER TYPE admin.audit_action ADD VALUE
+IF NOT EXISTS` para os valores novos do módulo — sem isso a auditoria falha em
+   runtime (achado F3-02).
+4. **Migrations:** geradas com `drizzle-kit generate` (P-0.11). NÃO citar/criar número
+   de migration manualmente; o nome é o que o kit gerar. O runner aplica em ordem.
+5. **Cross-app:** lógica consumida por outro app vive em `packages/integrations`
+   (P-0.15). App NUNCA importa de outro app.
+6. **Jobs:** cron/agendamento via `packages/jobs` (Inngest, P-0.14). Registrar o job
+   no catálogo do package; nunca "fica para depois" sem registro.
+7. **Critérios de integração (P-X.9):** cada fluxo de mutação do módulo deve ter
+   critério próprio "ação X executável a partir da tela Y" — "substituir mocks" não
+   é critério suficiente (padrão PD-1).
 
 ---
 
@@ -2268,27 +2299,45 @@ Server Actions: CRUD de despesas/receitas (criar transação imutável). Estorno
 - Env vars: `DATABASE_URL`, `SUPABASE_URL`
 
 **Escopo:**
-Substituir mocks por dados reais. Dashboard com saldos reais. Tabela de lançamentos com dados do banco. Conciliação com dados de importação. Formulários conectados às actions. Gráficos com dados reais.
+Substituir mocks por dados reais e tornar o módulo OPERÁVEL. Converter páginas de "use client" + setTimeout para o padrão RSC + Suspense dos demais módulos (G5). Dashboard com saldos reais. Lançamentos com filtros server-side. Conciliação import → match → confirmar. Contas a pagar com o fluxo completo de governança (lote semanal → aprovação gestor → autorização → pago). Contas a receber. Fluxo de caixa projetado. Centros de custo.Relatórios. Formulários do Bloco A (P-3.4) conectados às actions reais — NÃO reescrever telas inline; os submits `console.log` viram submits reais. Leituras via client da sessão (G6.2).
 
 **Arquivos permitidos para criação/edição:**
 
+- `apps/financeiro/src/app/(dashboard)/layout.tsx` (G5: Server Component + gate de papel colaborador+)
+- `apps/financeiro/src/app/(dashboard)/shell.tsx` (G5)
+- `apps/financeiro/src/actions/auth.ts` (G5: logoutAction)
 - `apps/financeiro/src/app/(dashboard)/page.tsx`
 - `apps/financeiro/src/app/(dashboard)/lancamentos/page.tsx`
 - `apps/financeiro/src/app/(dashboard)/conciliacao/page.tsx`
 - `apps/financeiro/src/app/(dashboard)/orcamento/page.tsx`
 - `apps/financeiro/src/app/(dashboard)/importacao/page.tsx`
 - `apps/financeiro/src/app/(dashboard)/plano-contas/page.tsx`
+- `apps/financeiro/src/app/(dashboard)/contas-pagar/page.tsx`
+- `apps/financeiro/src/app/(dashboard)/contas-receber/page.tsx` (nova — decisão F1-Q9)
+- `apps/financeiro/src/app/(dashboard)/fluxo-caixa/page.tsx` (nova — decisão F1-Q9)
+- `apps/financeiro/src/app/(dashboard)/centros-custo/page.tsx` (existente fora de fluxo — integrar)
+- `apps/financeiro/src/app/(dashboard)/relatorios/page.tsx` (existente fora de fluxo — integrar)
+- `apps/financeiro/src/components/*.tsx` (conectar forms/tabelas do Bloco A; sem componente novo)
+- `apps/financeiro/src/lib/queries.ts` (novo, padrão dos demais módulos)
 - `apps/financeiro/src/lib/mock-data.ts` (remover)
 
 **Critérios de aceite:**
 
+- [ ] Layout G5: anônimo → redirect login; papel sem acesso ao financeiro → bloqueado (teste)
 - [ ] Saldos reais por conta bancária no dashboard
-- [ ] Transações do banco com filtros server-side
-- [ ] Conciliação funcional: import → match → confirmar
-- [ ] Orçamento: planejado vs executado com dados reais dos centros de custo
+- [ ] Transações com filtros server-side
+- [ ] Lançamento de despesa e de receita CRIÁVEIS pelas telas (expense-form/revenue-form com submit real)
+- [ ] Estorno executável a partir da tela de lançamentos (reversal-form conectado)
+- [ ] Conciliação operável de ponta a ponta na tela: upload → preview → confirmar (import re-parseado — P-3.8b)
+- [ ] Contas a pagar: criar lote semanal, aprovar (gestor), autorizar (autorizador), marcar pago — cada passo executável pela tela por quem tem a designation (batch-approval-form conectado)
+- [ ] Contas a receber: listar e registrar recebimento
+- [ ] Fluxo de caixa projetado com dados reais
+- [ ] Orçamento: planejado vs executado real por centro de custo (budget-form conectado)
+- [ ] Plano de contas: CRUD de categorias operável
+- [ ] Nenhum componente/formulário do Bloco A (P-3.2/P-3.4) sem import (grep)
+- [ ] Nenhum submit `console.log`/`setTimeout` restante no app (grep)
 - [ ] Mock data removido
-- [ ] Lint passa
-- [ ] Types passam
+- [ ] Lint passa · Types passam
 
 ---
 
@@ -2304,7 +2353,7 @@ Substituir mocks por dados reais. Dashboard com saldos reais. Tabela de lançame
 - Env vars: `RESEND_API_KEY`
 
 **Escopo:**
-Notificações: lote semanal para aprovação (email ao diretor gestor com CC autorizador). Lote aprovado (in_app ao super_admin). Pagamento marcado como pago (in_app). Vencimento próximo (3 dias antes). Orçamento >80% executado (in_app + email ao super_admin). Relatório mensal automático por email aos diretores/conselheiros.
+Notificações: lote semanal para aprovação — email ao diretor com designation GESTOR do financeiro, CC ao diretor com designation AUTORIZADOR (resolver destinatários por public.designations, nunca por papel genérico). Lote aprovado (in_app ao super_admin). Pagamento pago (in_app). Vencimento próximo (3 dias antes — cron em packages/jobs). Orçamento >80% executado (in_app + email ao super_admin). Relatório mensal automático por email a diretores conselheiros (cron mensal em packages/jobs; PDF via @react-pdf/renderer + XLSX via exceljs). Export manual: action exportMonthlyReport que gera PDF+XLSX+ZIP contendo os recibos do mês (arquivos do bucket financeiro-recibos), acionável pelo super_admin na tela de relatórios.
 
 **Arquivos permitidos para criação/edição:**
 
@@ -2312,15 +2361,18 @@ Notificações: lote semanal para aprovação (email ao diretor gestor com CC au
 - `packages/email/src/templates/monthly-financial-report.tsx`
 - `packages/email/src/templates/budget-alert.tsx`
 - `apps/financeiro/src/lib/notifications.ts`
+- `apps/financeiro/src/actions/reports.ts` (exportMonthlyReport — PDF+XLSX+ZIP)
+- `packages/jobs/src/crons/financeiro.ts` (lote semanal, vencimentos, relatório mensal)
 
 **Critérios de aceite:**
 
-- [ ] Lote semanal: email ao diretor gestor com lista de pagamentos e total
+- [ ] Lote semanal: email SOMENTE ao diretor gestor (designation), CC autorizador — diretor sem designation não recebe (teste)
 - [ ] Alerta de orçamento >80%: email ao super_admin
-- [ ] Relatório mensal: PDF+XLSX com totais por categoria, enviado por email
-- [ ] Vencimento próximo: notificação in_app 3 dias antes
-- [ ] Lint passa
-- [ ] Types passam
+- [ ] Relatório mensal automático: PDF+XLSX com totais por categoria, por cron mensal registrado
+- [ ] Export manual: super_admin baixa ZIP com PDF+XLSX+recibos do mês pela tela de relatórios
+- [ ] Vencimento próximo: in_app 3 dias antes, por cron registrado
+- [ ] Falha de auditoria em qualquer action nova aborta a operação (G6.3)
+- [ ] Lint passa · Types passam
 
 ---
 
@@ -2336,22 +2388,28 @@ Notificações: lote semanal para aprovação (email ao diretor gestor com CC au
 - Env vars: `DATABASE_URL`
 
 **Escopo:**
-Conectar integrações reais. Projetos → Financeiro: substituir stubs por lógica real (aprovação cria centro de custo + payables). Financeiro → Projetos: query cross-schema executado vs orçado em tempo real. Preparar stubs para: Flats → Financeiro (ajuda de custo cria despesas).
+Conectar integrações reais via packages/integrations (P-0.15 — nada de import app→app). Projetos → Financeiro: aprovação cria centro de custo + payables (substituir stub). Financeiro → Projetos: executado vs orçado em tempo real (query cross-schema no package). Orçamento por instituição: checkBudget de Projetos consome financeiro.organization_budgets (P-3.8b) — remover definitivamente o workaround admin.system_settings (S-40) e registrar PATCH. Bloqueio por inadimplência de relatório (BRAIN §6.2): payable de projeto com relatório vencido entra em estado `bloqueado`; payable bloqueado não entra em lote semanal; action de override auditada, exclusiva de super_admin, com justificativa obrigatória. A detecção de vencimento é um cron em packages/jobs. Preparar stub: Flats → Financeiro (ajuda de custo).
 
 **Arquivos permitidos para criação/edição:**
 
-- `apps/financeiro/src/lib/integrations/projetos.ts`
-- `apps/financeiro/src/lib/integrations/flats-stub.ts`
-- `apps/projetos/src/lib/integrations/financeiro.ts` (atualizar stubs)
+- `packages/integrations/src/financeiro.ts` (funções expostas pelo financeiro)
+- `packages/integrations/src/projetos.ts` (atualizar: checkBudget → organization_budgets)
+- `apps/financeiro/src/actions/payables.ts` (estado bloqueado + overrideBlock auditada)
+- `packages/jobs/src/crons/projetos-inadimplencia.ts` (detecção de relatório vencido)
+- `apps/projetos/src/lib/integrations/*` (apenas remoção/redirecionamento para o package)
 
 **Critérios de aceite:**
 
-- [ ] Aprovação de projeto cria centro de custo e payables reais no financeiro
+- [ ] Aprovação de projeto cria centro de custo e payables reais
 - [ ] Payables de projeto nascem NÃO aprovados
-- [ ] Query cross-schema: executado vs orçado em tempo real
-- [ ] Stub para Flats → Financeiro documentado
-- [ ] Lint passa
-- [ ] Types passam
+- [ ] Executado vs orçado em tempo real (teste cross-schema)
+- [ ] Submissão de projeto bloqueada quando total aprovado excede organization_budgets do ano (teste)
+- [ ] Workaround system_settings removido; PATCH registrado
+- [ ] Relatório vencido → payables do projeto ficam `bloqueado` e não entram em lote (teste)
+- [ ] Override: só super_admin, exige justificativa, gera audit (teste)
+- [ ] Zero imports app→app (verificação do CI)
+- [ ] Stub Flats → Financeiro documentado no package
+- [ ] Lint passa · Types passam
 
 ---
 
@@ -2367,7 +2425,7 @@ Conectar integrações reais. Projetos → Financeiro: substituir stubs por lóg
 - Env vars: `DATABASE_URL`
 
 **Escopo:**
-Testes de integração. RLS (super_admin full, diretor gestor aprova, submissor vê só pagamentos próprios). Imutabilidade de transações (UPDATE/DELETE proibido). Estorno (cria reversal + nova transação). Import OFX/CSV (parse correto). Match automático (encontra correspondência). Governança (aprovação → autorização → pago). Integração Projetos → Financeiro (aprovação cria payables).
+Testes de integração. RLS (super_admin full, diretor gestor aprova, submissor vê só pagamentos próprios). Imutabilidade de transações (UPDATE/DELETE proibido). Estorno (cria reversal + nova transação). Import OFX/CSV (parse correto). Match automático (encontra correspondência). Governança (aprovação → autorização → pago). Integração Projetos → Financeiro (aprovação cria payables). Adicionar script `test` ao package.json do app (hoje inexistente — F3-10).
 
 **Arquivos permitidos para criação/edição:**
 
@@ -2384,6 +2442,11 @@ Testes de integração. RLS (super_admin full, diretor gestor aprova, submissor 
 - [ ] Match: encontra correspondência por valor+data
 - [ ] Governança: fluxo aprovação → autorização → pago funciona
 - [ ] RLS: submissor não vê transações de outros projetos
+- [ ] Designation: diretor sem designation gestor não aprova lote (teste)
+- [ ] Audit: falha simulada de gravação aborta a mutação (teste — G6.3)
+- [ ] Import: linhas adulteradas entre preview e confirmação não persistem (teste — F3-11/P-3.8b)
+- [ ] organization_budgets: submissão acima do teto é bloqueada (teste — S1-01)
+- [ ] Inadimplência: payable bloqueado não entra em lote; override auditado (teste — P-3.11)
 - [ ] Testes passam
 - [ ] Lint passa
 
@@ -2485,7 +2548,7 @@ Ref: BRAIN.md seção 6.9. Referência visual: Xmind para TreeView (diretor gest
 - Env vars: nenhuma
 
 **Escopo:**
-Páginas: "Minhas tarefas" (lista priorizada). Board por workspace (kanban + lista + árvore como toggle). Detalhe da tarefa (descrição rich, anexos, subtarefas, comentários, time entries, log). Calendário de prazos. Tarefas recorrentes (configuração). Templates. Modo foco. Configuração do workspace (colunas customizáveis).
+Páginas: "Minhas tarefas" (lista priorizada). Board por workspace (kanban + lista + árvore como toggle). Detalhe da tarefa (descrição rich, anexos, subtarefas, comentários, time entries, log). Calendário de prazos. Tarefas recorrentes (configuração). Templates. Modo foco. (Sem tela de configuração de workspace: workspaces e colunas são fixos — BRAIN §6.9 e decisão D-5 da auditoria. As colunas do kanban são os 4 status do enum de P-4.1.).
 
 **Arquivos permitidos para criação/edição:**
 
@@ -2525,7 +2588,7 @@ Páginas: "Minhas tarefas" (lista priorizada). Board por workspace (kanban + lis
 - Env vars: nenhuma
 
 **Escopo:**
-Formulários: criar/editar tarefa (título, descrição rich text, workspace, assignee, prioridade, due_date, tags, anexos). Criar subtarefa. Comentário com @menções (autocomplete de usuários). Configurar recorrência (tipo, intervalo, dia). Criar template (nome, lista de tarefas pré-definidas). Pedido de aprovação (selecionar diretor). Time entry manual.
+Formulários: criar/editar tarefa (título, descrição com o editor rich text COMPARTILHADO de packages/ui — decisão D-1; não criar editor próprio do app, workspace, assignee, prioridade, due_date, tags, anexos). Criar subtarefa. Comentário com @menções (autocomplete de usuários). Configurar recorrência (tipo, intervalo, dia). Criar template (nome, lista de tarefas pré-definidas). Pedido de aprovação (selecionar diretor). Time entry manual.
 
 **Arquivos permitidos para criação/edição:**
 
@@ -2600,22 +2663,28 @@ Loading, empty e error states para todas as telas. Skeletons para kanban, lista,
 - Env vars: `DATABASE_URL`
 
 **Escopo:**
-Criar tabelas Drizzle no schema `tarefas`: workspaces (6 fixos + custom), tasks, subtasks, assignees, comments, attachments, time_entries, tags, task_tags, recurrence_rules, task_templates, template_items, approval_requests, task_events (log de mudanças).
+Criar tabelas Drizzle no schema `tarefas`: workspaces (6 FIXOS, seed na migration — sem workspaces custom na v1, BRAIN §6.9), tasks, subtasks, assignees, comments, attachments, time_entries, tags, task_tags, recurrence_rules, task_templates, template_items, approval_requests, task_events (log de mudanças do módulo).
+
+Modelo de acesso (decisão registrada — não deixar ao executor): NÃO existe membership por workspace. Todos os papéis internos (colaborador, diretor, conselheiro, super_admin) enxergam os 6 workspaces; a granularidade de escrita é por tarefa (creator/assignee) — ver P-4.7.
+
+Auditoria central: aprovações de diretor (approval_requests) são mutação crítica → incluir `ALTER TYPE admin.audit_action ADD VALUE IF NOT EXISTS` para os valores do módulo (task.approval_requested, task.approved, task.rejected — G6.3). O log operacional do dia a dia fica em task_events.
 
 **Arquivos permitidos para criação/edição:**
 
 - `packages/db/src/schema/tarefas.ts`
-- `packages/db/src/migrations/0010_tarefas.sql`
+- migration gerada via drizzle-kit generate (nome automático — G6.4)
 
 **Critérios de aceite:**
 
-- [ ] 6 workspaces padrão seed na migration
+- [ ] 6 workspaces fixos seed na migration; nenhuma rota de criação de workspace existe
 - [ ] tasks: title, description, workspace_id, status, priority, due_date, created_by, source (manual/auto), source_ref
 - [ ] subtasks: task_id, title, completed
 - [ ] recurrence_rules: task_template_id, type, interval, day_of_week, day_of_month, next_run_at
 - [ ] approval_requests: task_id, approver_id, status (pendente/aprovado/rejeitado)
 - [ ] time_entries: task_id, user_id, started_at, ended_at, duration_minutes
 - [ ] task_events: task_id, actor_id, event_type, diff (jsonb)
+- [ ] Enum admin.audit_action recebe os valores de aprovação do módulo (ALTER TYPE na migration)
+- [ ] drizzle-kit check limpo após a migration
 - [ ] Migration aplica sem erros
 - [ ] Types passam
 
@@ -2633,19 +2702,27 @@ Criar tabelas Drizzle no schema `tarefas`: workspaces (6 fixos + custom), tasks,
 - Env vars: `DATABASE_URL`
 
 **Escopo:**
-RLS para schema tarefas. Super_admin: full access. Colaborador: CRUD em tarefas dos workspaces que tem acesso; vê apenas tarefas atribuídas a si ou criadas por si. Diretor: SELECT em todos os workspaces (para TreeView de despacho); recebe approval_requests. Demais: sem acesso.
+RLS para schema tarefas (semântica fechada — sem membership por workspace, ver P-4.6):
+
+- Super_admin: full access.
+- Colaborador: SELECT em todas as tarefas dos 6 workspaces (transparência interna — necessário para kanban/lista do workspace); INSERT em qualquer workspace; UPDATE/soft-DELETE apenas em tarefas que criou ou nas quais é assignee.
+- Diretor/conselheiro: SELECT em tudo (TreeView de despacho); UPDATE apenas em approval_requests endereçados a si; NÃO recebem tarefas operacionais (BRAIN §6.9) — sem INSERT de task própria atribuída a diretor.
+- Comentários/anexos/time_entries: seguem a visibilidade da tarefa; escrita do próprio autor.
+- Demais papéis (submissor, aluno, hospede, ouvinte): sem acesso ao schema.
 
 **Arquivos permitidos para criação/edição:**
 
-- `packages/db/src/migrations/0011_tarefas_rls.sql`
+- arquivo SQL de policies com nome sequencial posterior à migration do kit (G6.4)
 
 **Critérios de aceite:**
 
 - [ ] Super_admin: full CRUD
-- [ ] Colaborador: CRUD em tarefas que é assignee ou creator
-- [ ] Diretor: SELECT em todas as tarefas (para visualização árvore)
-- [ ] Diretor: UPDATE em approval_requests (aprovar/rejeitar)
-- [ ] Comentários: visíveis para todos no workspace
+- [ ] Colaborador: SELECT em qualquer tarefa; UPDATE/DELETE só como creator/assignee (teste com 2 usuários)
+- [ ] Colaborador: INSERT em qualquer um dos 6 workspaces
+- [ ] Diretor: SELECT em todas; UPDATE apenas em approval_requests endereçados a si (teste)
+- [ ] Submissor: zero acesso ao schema (teste)
+- [ ] Comentários seguem a visibilidade da tarefa
+- [ ] Policies com USING e WITH CHECK separados, deny-by-default
 - [ ] Types passam
 
 ---
@@ -2659,10 +2736,10 @@ RLS para schema tarefas. Super_admin: full access. Colaborador: CRUD em tarefas 
 
 - Branch: `feat/P-4.8-tarefas-actions`
 - Dependências: P-4.7 concluído
-- Env vars: `DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
+- Env vars: `DATABASE_URL` (migrations), `SUPABASE_URL`, `SUPABASE_ANON_KEY` (actions rodam como authenticated via kit de @hebron/auth — G6.1/G6.2)
 
 **Escopo:**
-Server Actions: CRUD de tarefas. Mover entre colunas (drag-drop). Criar/completar subtarefas (progresso agregado). Comentários com @menções. Upload de anexos. Time tracking (start/stop/manual). Recorrência (criar regra, gerar próxima tarefa via Inngest job). Templates (instanciar template). Approval requests (enviar/aprovar/rejeitar). Tarefas automáticas de outros módulos (receber via function).
+Server Actions: CRUD de tarefas. Mover entre colunas (drag-drop). Criar/completar subtarefas (progresso agregado). Comentários com @menções. Upload de anexos. Time tracking (start/stop/manual). Recorrência: criar/editar regra; a geração da próxima tarefa é um cron registrado em packages/jobs (P-0.14) que lê next_run_at. Templates (instanciar). Approval requests (enviar/aprovar/rejeitar — mutação crítica: audit central com abort em falha, G6.3). Tarefas automáticas de outros módulos: implementar createAutoTask em packages/integrations/src/tarefas.ts (P-0.15) — NÃO em lib do app (apps não importam apps).
 
 **Arquivos permitidos para criação/edição:**
 
@@ -2672,17 +2749,21 @@ Server Actions: CRUD de tarefas. Mover entre colunas (drag-drop). Criar/completa
 - `apps/tarefas/src/actions/recurrence.ts`
 - `apps/tarefas/src/actions/templates.ts`
 - `apps/tarefas/src/actions/approvals.ts`
+- `packages/integrations/src/tarefas.ts` (createAutoTask)
+- `packages/jobs/src/crons/tarefas.ts` (recorrência)
 
 **Critérios de aceite:**
 
-- [ ] CRUD de tarefas com audit log (task_events)
+- [ ] CRUD de tarefas com task_events; aprovações com audit central (admin.audit_log) que aborta a operação em falha (teste)
 - [ ] Mover tarefa entre colunas atualiza status
 - [ ] Subtarefas: progresso agregado (3/5 = 60%)
 - [ ] Comentários com @menções geram notificação ao mencionado
 - [ ] Time tracking: start/stop com cálculo de duração
-- [ ] Recorrência: job Inngest que cria tarefa na next_run_at
+- [ ] Recorrência: cron registrado em packages/jobs cria a tarefa na next_run_at (executado em dev com relógio simulado ou trigger manual — evidência no PR)
 - [ ] Template: instanciar cria todas as tarefas filhas
 - [ ] Approval: enviar notificação ao diretor; aprovar/rejeitar atualiza status
+- [ ] Todas as actions usam o action-client de @hebron/auth (grep: zero createClient manual)
+- [ ] createAutoTask exportada de packages/integrations com tarefa nascendo SEM assignee
 - [ ] Lint passa
 - [ ] Types passam
 
@@ -2704,22 +2785,36 @@ Substituir mocks por dados reais. Kanban, lista e árvore com dados do banco. Fo
 
 **Arquivos permitidos para criação/edição:**
 
+- `apps/tarefas/src/app/(dashboard)/layout.tsx` (G5: RSC + gate de papel interno colaborador+)
+- `apps/tarefas/src/app/(dashboard)/shell.tsx` (G5)
+- `apps/tarefas/src/actions/auth.ts` (G5: logoutAction)
 - `apps/tarefas/src/app/(dashboard)/page.tsx`
 - `apps/tarefas/src/app/(dashboard)/workspace/[slug]/page.tsx`
 - `apps/tarefas/src/app/(dashboard)/tarefa/[id]/page.tsx`
 - `apps/tarefas/src/app/(dashboard)/foco/page.tsx`
 - `apps/tarefas/src/app/(dashboard)/calendario/page.tsx`
+- `apps/tarefas/src/app/(dashboard)/recorrentes/page.tsx`
+- `apps/tarefas/src/app/(dashboard)/templates/page.tsx`
+- `apps/tarefas/src/components/*` (conectar componentes/forms do Bloco A — sem novo)
+- `apps/tarefas/src/lib/queries.ts`
 - `apps/tarefas/src/lib/mock-data.ts` (remover)
 
 **Critérios de aceite:**
 
-- [ ] Kanban com dados reais e drag-drop persistido
+- [ ] Layout G5: anônimo → redirect; papel externo (submissor/hospede) → bloqueado (teste)
+- [ ] Kanban: drag-drop chama moveTask, persiste e sobrevive a reload (não console.log — F2-P2)
+- [ ] Criar tarefa executável de: task-form, Cmd+K e CTA de workspace vazio
+- [ ] Editar/concluir tarefa executável do detalhe; subtarefa criável e completável com progresso
+- [ ] Comentário com @menção publicável pela tela e notifica o mencionado
+- [ ] Time tracking: start/stop operável no detalhe
+- [ ] Recorrência: regra criável pela tela de recorrentes com preview
+- [ ] Template: instanciável pela tela de templates
+- [ ] Pedido de aprovação enviável pela tela; diretor aprova/rejeita pela própria UI
 - [ ] TreeView com dados reais (pessoa → tarefas)
-- [ ] Modo foco com tarefas do dia do banco
-- [ ] Cmd+K busca tarefas reais
+- [ ] Modo foco com tarefas do dia reais
+- [ ] Nenhum componente/formulário do Bloco A (P-4.2/P-4.4) sem import (grep)
 - [ ] Mock data removido
-- [ ] Lint passa
-- [ ] Types passam
+- [ ] Lint passa · Types passam
 
 ---
 
@@ -2735,7 +2830,7 @@ Substituir mocks por dados reais. Kanban, lista e árvore com dados do banco. Fo
 - Env vars: `RESEND_API_KEY`
 
 **Escopo:**
-Notificações: tarefa atribuída (in_app + email). @menção em comentário (in_app). Prazo próximo (1 dia antes, in_app). Prazo vencido (in_app + email). Pedido de aprovação (in_app + email ao diretor). Aprovação/rejeição (in_app ao solicitante).
+Notificações: tarefa atribuída (in_app + email). @menção em comentário (in_app). Prazo próximo (1 dia antes) e prazo vencido: detectados por cron diário registrado em packages/jobs (P-0.14) — adicionar packages/jobs/src/crons/tarefas-prazos.ts aos arquivos permitidos. Pedido de aprovação (in_app + email ao diretor). Aprovação/rejeição (in_app ao solicitante).
 
 **Arquivos permitidos para criação/edição:**
 
@@ -2743,6 +2838,7 @@ Notificações: tarefa atribuída (in_app + email). @menção em comentário (in
 - `packages/email/src/templates/task-overdue.tsx`
 - `packages/email/src/templates/approval-request.tsx`
 - `apps/tarefas/src/lib/notifications.ts`
+- `packages/jobs/src/crons/tarefas-prazos.ts`
 
 **Critérios de aceite:**
 
@@ -2767,21 +2863,23 @@ Notificações: tarefa atribuída (in_app + email). @menção em comentário (in
 - Env vars: `DATABASE_URL`
 
 **Escopo:**
-Conectar integrações. Projetos → Tarefas: submissão cria checklist de análise (substituir stub). Flats → Tarefas: reserva confirmada cria tarefas de limpeza (stub — será conectado na fase 7). Intranet → Tarefas: action items de reunião viram tarefas (stub — fase 5). Function pública `createAutoTask` que outros módulos chamam.
+Conectar integrações via packages/integrations (createAutoTask já criada em P-4.8/P-0.15). Projetos → Tarefas: submissão cria checklist de análise (substituir o stub de apps/projetos/src/lib/integrations/tarefas.ts por chamada real ao package). Flats → Tarefas: stub documentado no package (fase 7). Intranet → Tarefas: stub documentado no package (fase 5). Erros: criação de checklist na submissão é integração de leitura? NÃO — é mutação decorrente de fluxo crítico: falha deve ser logada estruturadamente e sinalizada, não engolida (padrão S1-22/P-0.15).
 
 **Arquivos permitidos para criação/edição:**
 
-- `apps/tarefas/src/lib/integrations/auto-tasks.ts`
-- `apps/tarefas/src/lib/integrations/projetos.ts`
-- `apps/tarefas/src/lib/integrations/flats-stub.ts`
-- `apps/tarefas/src/lib/integrations/intranet-stub.ts`
+- `packages/integrations/src/tarefas.ts` (createAutoTask — consolidar)
+- `packages/integrations/src/projetos.ts` (chamada real na submissão)
+- `packages/integrations/src/flats.ts` (stub documentado)
+- `packages/integrations/src/intranet.ts` (stub documentado)
+- `apps/projetos/src/actions/projects.ts` (apenas o ponto de chamada da integração)
 
 **Critérios de aceite:**
 
-- [ ] `createAutoTask(source, sourceRef, templateId)` function exportada
+- [ ] `createAutoTask(source, sourceRef, templateId)` exportada de packages/integrations; zero imports app→app (verificação do CI)
 - [ ] Submissão de projeto cria tarefas de análise (real)
 - [ ] Tarefas automáticas nascem SEM assignee (super_admin atribui depois)
 - [ ] Stubs documentados para Flats e Intranet
+- [ ] Falha na criação do checklist não é engolida: log estruturado + notificação a super_admin
 - [ ] Lint passa
 - [ ] Types passam
 
@@ -2815,6 +2913,8 @@ Testes: RLS (colaborador vê apenas próprias, diretor vê todas). Recorrência 
 - [ ] Template: instancia todas as sub-tarefas
 - [ ] Subtarefas: completar atualiza progresso do pai
 - [ ] Integração: submissão de projeto cria tarefas
+- [ ] Approval: fluxo enviar → aprovar/rejeitar → status, com audit central abortando em falha
+- [ ] RLS conforme semântica do patch P-4.7: colaborador lê tudo, escreve só creator/assignee
 - [ ] Testes passam
 - [ ] Lint passa
 
@@ -2854,7 +2954,7 @@ Tipos e schemas Zod: Announcement (título, corpo, prioridade: normal/importante
 - [ ] DashboardWidget: tipo (kpi/chart/feed/calendar), posição, config (jsonb)
 - [ ] KPI: nome, valor, unidade, trend (up/down/stable), período
 - [ ] DirectoryMember: nome, foto, papel, email, telefone, bio
-- [ ] Mock KPIs: projetos ativos, alunos na Plataforma, doações do mês, audiência da Rádio
+- [ ] Mock KPIs: projetos ativos, alunos na Plataforma, doações do mês (= soma de despesas da categoria "Doações" do plano de contas — semântica da decisão F1-Q10), audiência da Rádio
 - [ ] Lint passa
 - [ ] Types passam
 
@@ -2948,7 +3048,7 @@ Páginas: Dashboard personalizado (widgets configuráveis por usuário). Feed de
 - Env vars: nenhuma
 
 **Escopo:**
-Formulários: criar anúncio (título, corpo, prioridade). Configurar dashboard (adicionar/remover/reordenar widgets). Registrar decisão de reunião (vinculada a meeting_session, com opção de gerar tarefa). Configurar briefing (opt-in, frequência). Perfil no diretório.
+Formulários: criar anúncio (título, corpo com editor compartilhado de packages/ui — D-1, prioridade). Configurar dashboard (adicionar/remover/reordenar widgets). Registrar decisão de reunião (vinculada a meeting_session, com opção de gerar tarefa). Configurar briefing (opt-in, frequência). Perfil no diretório.
 
 **Arquivos permitidos para criação/edição:**
 
@@ -3019,12 +3119,12 @@ Loading, empty e error states. Skeletons para dashboard (grid de widgets), feed,
 - Env vars: `DATABASE_URL`
 
 **Escopo:**
-Criar tabelas Drizzle no schema `intranet`: announcements, dashboard_configs (user_id, widgets jsonb), meeting_decisions (meeting_session_id, content, task_id), briefing_preferences (user_id, enabled, frequency), kpi_snapshots (para cache de KPIs agregados).
+Criar tabelas Drizzle no schema `intranet`: announcements, dashboard_configs (user_id, widgets jsonb), meeting_decisions (meeting_session_id, content, task_id), briefing_preferences (user_id, enabled, frequency), kpi_snapshots (cache de KPIs agregados — ESCRITO por cron horário registrado em packages/jobs (P-0.14); o dashboard LÊ o snapshot mais recente e cai para query live apenas se não houver snapshot < 2h. Registrar o cron em P-5.8).
 
 **Arquivos permitidos para criação/edição:**
 
 - `packages/db/src/schema/intranet.ts`
-- `packages/db/src/migrations/0012_intranet.sql`
+- migration gerada via drizzle-kit generate (G6.4)
 
 **Critérios de aceite:**
 
@@ -3033,6 +3133,8 @@ Criar tabelas Drizzle no schema `intranet`: announcements, dashboard_configs (us
 - [ ] meeting_decisions: meeting_session_id (FK admin.meeting_sessions), content, task_id (FK tarefas.tasks, nullable)
 - [ ] briefing_preferences: user_id, enabled, frequency (daily/weekly)
 - [ ] kpi_snapshots: metric_name, value, period, captured_at
+- [ ] kpi_snapshots com unique (metric_name, period) e captured_at
+- [ ] drizzle-kit check limpo
 - [ ] Migration aplica sem erros
 - [ ] Types passam
 
@@ -3054,7 +3156,7 @@ RLS para schema intranet. Super_admin: full access. Diretores/conselheiros: SELE
 
 **Arquivos permitidos para criação/edição:**
 
-- `packages/db/src/migrations/0013_intranet_rls.sql`
+- migration gerada via `drizzle-kit generate` a partir de `packages/db/src/schema/<modulo>.ts` (nome automático do kit; NÃO criar arquivo SQL numerado à mão — ver G6.4)
 
 **Critérios de aceite:**
 
@@ -3076,10 +3178,12 @@ RLS para schema intranet. Super_admin: full access. Diretores/conselheiros: SELE
 
 - Branch: `feat/P-5.8-intranet-actions`
 - Dependências: P-5.7 concluído
-- Env vars: `DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
+- Env vars: `DATABASE_URL` (migrations), `SUPABASE_URL`, `SUPABASE_ANON_KEY` (G6.1/G6.2)
 
 **Escopo:**
-Server Actions: CRUD de anúncios. Salvar/carregar config de dashboard. Registrar decisão de reunião (com opção de criar tarefa no módulo Tarefas). KPIs agregados: queries cross-schema (projetos ativos, alunos, transações do mês). Busca global cross-app (consulta todos os schemas). Briefing: job Inngest que gera resumo e envia por email.
+Server Actions: CRUD de anúncios (audit central). Salvar/carregar config de dashboard. Registrar decisão de reunião (criar tarefa via createAutoTask de packages/integrations). KPIs agregados via packages/integrations: projetos ativos (count de projects em stages ativos), alunos (count de enrollments — stub até fase 6), doações do mês (SUM de transactions tipo despesa da categoria "Doações" do plano de contas no mês corrente — decisão F1-Q10; a categoria é criada no seed/plano de contas), tarefas abertas (count). Snapshot de KPIs: cron horário em packages/jobs grava kpi_snapshots (P-5.6).
+
+Busca global cross-app — CONTRATO (fechado nesta auditoria): a busca executa com o client da SESSÃO do usuário (authenticated); a RLS de cada schema filtra o que ele pode ver — nenhuma reimplementação de visibilidade na aplicação. Conjunto indexável v1: projetos.projects (título), documentos.documents (título — respeitando visibility), tarefas.tasks (título), admin meeting_sessions (título/data). Financeiro NÃO entra na busca global v1 (dados sensíveis; acessível só pelo app próprio). Resultados agrupados por módulo.
 
 **Arquivos permitidos para criação/edição:**
 
@@ -3091,13 +3195,15 @@ Server Actions: CRUD de anúncios. Salvar/carregar config de dashboard. Registra
 
 **Critérios de aceite:**
 
-- [ ] CRUD de anúncios com audit log
+- [ ] CRUD de anúncios com audit central
 - [ ] Dashboard config persiste por usuário
-- [ ] Decisão de reunião com criação automática de tarefa (via createAutoTask)
-- [ ] KPIs: projetos ativos (count), alunos (count), doações mês (sum), tarefas abertas (count)
-- [ ] Busca cross-app: retorna resultados de Projetos, Documentos, Tarefas, Financeiro
-- [ ] Lint passa
-- [ ] Types passam
+- [ ] Decisão de reunião cria tarefa via packages/integrations (teste)
+- [ ] KPI doações: SUM de despesas da categoria "Doações" no mês (teste com fixture)
+- [ ] KPIs live + snapshot por cron registrado
+- [ ] Busca roda com o client da sessão; colaborador NÃO recebe resultado restricted de documentos que seu papel não vê (teste de RLS via busca)
+- [ ] Busca retorna resultados de Projetos, Documentos e Tarefas agrupados; Financeiro ausente
+- [ ] Zero createClient manual / zero SERVICE_ROLE em actions (grep)
+- [ ] Lint passa · Types passam
 
 ---
 
@@ -3117,22 +3223,33 @@ Substituir mocks. Dashboard com KPIs reais. Feed de anúncios do banco. Diretór
 
 **Arquivos permitidos para criação/edição:**
 
+- `apps/intranet/src/app/(dashboard)/layout.tsx` (G5: gate de papel interno — submissor/hospede/aluno/ouvinte ficam fora)
+- `apps/intranet/src/app/(dashboard)/shell.tsx` (G5)
+- `apps/intranet/src/actions/auth.ts` (G5)
 - `apps/intranet/src/app/(dashboard)/page.tsx`
 - `apps/intranet/src/app/(dashboard)/anuncios/page.tsx`
 - `apps/intranet/src/app/(dashboard)/diretorio/page.tsx`
+- `apps/intranet/src/app/(dashboard)/calendario/page.tsx`
 - `apps/intranet/src/app/(dashboard)/reunioes/page.tsx`
 - `apps/intranet/src/app/(dashboard)/busca/page.tsx`
+- `apps/intranet/src/components/*` (conectar componentes/forms do Bloco A)
+- `apps/intranet/src/lib/queries.ts`
 - `apps/intranet/src/lib/mock-data.ts` (remover)
 
 **Critérios de aceite:**
 
-- [ ] KPIs com dados reais cross-schema
-- [ ] Diretório com todos os membros do public.users
-- [ ] Calendário com reuniões de admin.meeting_sessions
-- [ ] Busca cross-app retorna resultados reais
+- [ ] Layout G5: papel externo não entra na intranet (teste)
+- [ ] KPIs com dados reais (snapshot + fallback)
+- [ ] Anúncio criável pela tela por diretor/conselheiro (announcement-form conectado); colaborador não vê o botão
+- [ ] Decisão de reunião registrável pela tela, com checkbox "criar tarefa" funcionando de ponta a ponta
+- [ ] Dashboard configurável: adicionar/remover/reordenar widget persiste (widget-config-form conectado)
+- [ ] Briefing: opt-in/frequência configurável pela tela (briefing-config-form conectado)
+- [ ] Diretório: nome, foto, papel e contato INSTITUCIONAL; telefone pessoal só com consentimento (P-0.13) — não despejar public.users inteiro
+- [ ] Calendário com meeting_sessions reais
+- [ ] Busca funcional respeitando RLS (contrato de P-5.8)
+- [ ] Nenhum componente/formulário do Bloco A (P-5.2/P-5.4) sem import (grep)
 - [ ] Mock data removido
-- [ ] Lint passa
-- [ ] Types passam
+- [ ] Lint passa · Types passam
 
 ---
 
@@ -3148,22 +3265,23 @@ Substituir mocks. Dashboard com KPIs reais. Feed de anúncios do banco. Diretór
 - Env vars: `RESEND_API_KEY`
 
 **Escopo:**
-Notificações: anúncio urgente (in_app + email para todos do escopo). Decisão de reunião (in_app para diretores). Briefing (email periódico com resumo agregado: projetos, tarefas, financeiro). Relatório financeiro mensal (email para diretores/conselheiros).
+Notificações: anúncio urgente (in_app + email para todos os papéis internos — comunicação operacional, isenta de opt-in de marketing). Decisão de reunião (in_app para diretores). Briefing: cron em packages/jobs conforme briefing_preferences (diário/semanal), com resumo agregado (projetos, tarefas, financeiro) — só para quem fez opt-in. O relatório financeiro mensal NÃO é deste prompt: é o cron de P-3.10 (não duplicar template nem envio).
 
 **Arquivos permitidos para criação/edição:**
 
 - `packages/email/src/templates/urgent-announcement.tsx`
 - `packages/email/src/templates/briefing.tsx`
 - `apps/intranet/src/lib/notifications.ts`
-- `apps/intranet/src/lib/briefing-job.ts`
+- `packages/jobs/src/crons/briefing.ts` (job vive no package de jobs)
 
 **Critérios de aceite:**
 
-- [ ] Anúncio urgente: notificação imediata para todos os internos
-- [ ] Briefing: job Inngest com frequência configurável (diário/semanal)
-- [ ] Briefing: resumo com KPIs + últimos eventos de cada módulo
-- [ ] Lint passa
-- [ ] Types passam
+- [ ] Anúncio urgente: in_app + email imediato a todos os internos
+- [ ] Anúncio normal/importante: apenas in_app/feed (sem email em massa)
+- [ ] Briefing: cron registrado em packages/jobs respeitando enabled + frequency por usuário (teste)
+- [ ] Briefing: resumo com KPIs + últimos eventos
+- [ ] Nenhum envio de relatório financeiro neste módulo (grep monthly-financial)
+- [ ] Lint passa · Types passam
 
 ---
 
@@ -3179,20 +3297,21 @@ Notificações: anúncio urgente (in_app + email para todos do escopo). Decisão
 - Env vars: `DATABASE_URL`
 
 **Escopo:**
-Conectar integrações reais. Intranet → Tarefas: decisão de reunião cria tarefa (substituir stub). Plataforma → Intranet: KPI de alunos (stub até fase 6). Rádio → Intranet: KPI de audiência (stub até fase 8). Feed: agregar últimos eventos de Projetos, Financeiro, Tarefas.
+Conectar integrações reais via packages/integrations. Intranet → Tarefas: decisão de reunião cria tarefa via createAutoTask (substituir stub do package). Plataforma → Intranet e Rádio → Intranet: stubs documentados no package (fases 6 e 8). Feed: função agregadora no package (packages/integrations/src/feed.ts) que consulta os últimos eventos de Projetos, Financeiro e Tarefas COM o client da sessão (RLS filtra o que o usuário vê — mesmo contrato da busca de P-5.8).
 
 **Arquivos permitidos para criação/edição:**
 
-- `apps/intranet/src/lib/integrations/tarefas.ts`
-- `apps/intranet/src/lib/integrations/plataforma-stub.ts`
-- `apps/intranet/src/lib/integrations/radio-stub.ts`
-- `apps/intranet/src/lib/integrations/feed-aggregator.ts`
+- `packages/integrations/src/tarefas.ts` (consumo: decisão → createAutoTask)
+- `packages/integrations/src/plataforma.ts` (stub documentado)
+- `packages/integrations/src/radio.ts` (stub documentado)
+- `packages/integrations/src/feed.ts` (agregador)
 
 **Critérios de aceite:**
 
-- [ ] Decisão de reunião cria tarefa no módulo Tarefas (real)
-- [ ] Feed agrega eventos reais de Projetos, Financeiro, Tarefas
+- [ ] Decisão de reunião cria tarefa via packages/integrations (teste end-to-end)
+- [ ] Feed agrega eventos reais dos 3 módulos e respeita RLS: colaborador sem acesso a financeiro não vê eventos financeiros no feed (teste)
 - [ ] Stubs para Plataforma e Rádio documentados
+- [ ] Zero imports app→app (verificação do CI)
 - [ ] Lint passa
 - [ ] Types passam
 
@@ -3223,6 +3342,7 @@ Testes: RLS (diretor cria anúncio, colaborador não). KPIs cross-schema retorna
 - [ ] RLS: colaborador não cria anúncios; diretor sim
 - [ ] KPIs: queries cross-schema retornam contagens corretas
 - [ ] Busca: resultados de múltiplos módulos
+- [ ] Busca: usuário sem papel para ver documento restricted não o recebe via busca global (contrato P-5.8)
 - [ ] Testes passam
 - [ ] Lint passa
 
@@ -3248,7 +3368,7 @@ Testes: RLS (diretor cria anúncio, colaborador não). KPIs cross-schema retorna
 - Env vars: nenhuma
 
 **Escopo:**
-Tipos e schemas Zod: Course, Module, Lesson (tipo: video/text/quiz/download), Enrollment, Progress, Quiz, QuizAttempt, Certificate, Discussion, DiscussionPost, Instructor. Trilha sequencial (unlock). Mock data com curso piloto como referência.
+Tipos e schemas Zod: Course, Module, Lesson (tipo: video/text/quiz/download), Enrollment, Progress, Quiz, QuizAttempt, Certificate, Discussion, DiscussionPost, Instructor. Trilha sequencial (unlock). Mock data com curso piloto como referência. Semântica de quiz (decisão D-5): quiz é tipo de aula; a aula-quiz conclui com attempt >= passing_score; tentativas ilimitadas; certificado permanece 'concluir 100% da trilha' (BRAIN §6.3).
 
 **Arquivos permitidos para criação/edição:**
 
@@ -3331,6 +3451,10 @@ Páginas do aluno: Catálogo de cursos (filtros: categoria, dificuldade, instrut
 - `apps/plataforma/src/app/(aluno)/certificados/page.tsx`
 - `apps/plataforma/src/app/(instrutor)/layout.tsx`
 - `apps/plataforma/src/app/(instrutor)/page.tsx`
+- `apps/plataforma/src/app/(instrutor)/curso/novo/page.tsx` (editor de curso)
+- `apps/plataforma/src/app/(instrutor)/curso/[id]/page.tsx` (editor de curso: módulos/aulas drag-drop)
+- `apps/plataforma/src/app/(instrutor)/curso/[id]/aula/[aulaId]/page.tsx` (editor de aula)
+- `apps/plataforma/src/app/(instrutor)/curso/[id]/quiz/[quizId]/page.tsx` (editor de quiz)
 
 **Critérios de aceite:**
 
@@ -3340,6 +3464,7 @@ Páginas do aluno: Catálogo de cursos (filtros: categoria, dificuldade, instrut
 - [ ] "Minha jornada": cursos em andamento com progresso visual
 - [ ] Certificados: lista com download PDF
 - [ ] Editor de curso: drag-drop para ordenar módulos e aulas
+- [ ] Editor de aula e editor de quiz têm página própria e são navegáveis a partir do editor de curso
 - [ ] Responsivo
 - [ ] Lint passa
 - [ ] Types passam
@@ -3370,7 +3495,7 @@ Formulários: criar/editar curso (título, descrição, categoria, instrutor, ca
 
 **Critérios de aceite:**
 
-- [ ] Curso form: título, descrição rich text, capa (upload), categoria, instrutor
+- [ ] Curso form: título, descrição (editor compartilhado — D-1), capa (upload para o bucket plataforma-capas de P-0.12), categoria, instrutor
 - [ ] Lesson form: upload de vídeo (URL Bunny.net) ou conteúdo rich text
 - [ ] Quiz editor: adicionar/remover perguntas, definir respostas corretas
 - [ ] Validação Zod
@@ -3434,7 +3559,7 @@ Criar tabelas no schema `plataforma`: courses, modules, lessons, enrollments, pr
 **Arquivos permitidos para criação/edição:**
 
 - `packages/db/src/schema/plataforma.ts`
-- `packages/db/src/migrations/0014_plataforma.sql`
+- migration gerada via `drizzle-kit generate` a partir de `packages/db/src/schema/<modulo>.ts` (nome automático do kit; NÃO criar arquivo SQL numerado à mão — ver G6.4)
 
 **Critérios de aceite:**
 
@@ -3460,17 +3585,19 @@ Criar tabelas no schema `plataforma`: courses, modules, lessons, enrollments, pr
 - Env vars: `DATABASE_URL`
 
 **Escopo:**
-RLS para schema plataforma. Qualquer usuário autenticado: SELECT em courses publicados, lessons de cursos matriculados. Progresso e notas: apenas próprios. Super_admin e instrutor: CRUD completo. Certificados: SELECT próprio + verificação pública por hash.
+RLS para schema plataforma. Qualquer usuário autenticado: SELECT em courses publicados; lessons de cursos matriculados. Trilha sequencial: criar função helper plataforma.can_access_lesson(user_id, lesson_id) — SECURITY DEFINER STABLE, mesmo padrão de has_role — que retorna true se a aula é a primeira do curso ou se a aula anterior (por module/order) tem progress.completed_at do usuário; a policy de SELECT em lessons usa o helper (evitar subquery correlata inline). Progresso e notas: apenas próprios. Super_admin e instrutor: CRUD completo. Certificados: SELECT próprio; verificação pública por hash via rota que consulta apenas (hash → curso, nome, data) — não abrir SELECT anon na tabela.
 
 **Arquivos permitidos para criação/edição:**
 
-- `packages/db/src/migrations/0015_plataforma_rls.sql`
+- migration gerada via `drizzle-kit generate` a partir de `packages/db/src/schema/<modulo>.ts` (nome automático do kit; NÃO criar arquivo SQL numerado à mão — ver G6.4)
 
 **Critérios de aceite:**
 
 - [ ] Autenticado: vê cursos publicados
 - [ ] Matriculado: vê aulas do curso, registra progresso
-- [ ] Aula locked: não visível se anterior não concluída (trilha sequencial)
+- [ ] Helper can_access_lesson criado (SECURITY DEFINER STABLE) e usado pela policy de lessons
+- [ ] Aula N inacessível com aula N-1 incompleta; acessível após concluir (teste com 2 usuários)
+- [ ] Verificação pública de certificado expõe somente curso/nome/data via hash (teste)
 - [ ] Super_admin/instrutor: CRUD completo em cursos, módulos, aulas
 - [ ] Notas: apenas próprias
 - [ ] Certificados: próprio + verificação pública por hash
@@ -3487,10 +3614,10 @@ RLS para schema plataforma. Qualquer usuário autenticado: SELECT em courses pub
 
 - Branch: `feat/P-6.8-plataforma-actions`
 - Dependências: P-6.7 concluído
-- Env vars: `DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
+- Env vars: `DATABASE_URL` (migrations), `SUPABASE_URL`, `SUPABASE_ANON_KEY`(G6.1/G6.2)
 
 **Escopo:**
-Server Actions: CRUD de cursos, módulos, aulas (instrutor/admin). Matrícula. Registrar progresso (marcar aula como concluída). Submeter quiz. Emissão automática de certificado (ao concluir trilha). CRUD de discussões e posts. Notas pessoais. Busca simples (título, série, categoria).
+Server Actions: CRUD de cursos, módulos, aulas (instrutor/admin). Matrícula. Registrar progresso (marcar aula como concluída). Submeter quiz — SEMÂNTICA (decisão D-5 da auditoria): quiz é tipo de aula; a aula-quiz é considerada concluída quando um attempt atinge score >= passing_score; tentativas ilimitadas; attempts todos registrados. Emissão automática de certificado ao concluir 100% das aulas da trilha (BRAIN §6.3 — a regra de certificação NÃO muda; o quiz só conta como conclusão da própria aula). Certificado: PDF gerado com @react-pdf/renderer (D-6), hash de verificação único. CRUD de discussões e posts. Notas pessoais. Busca simples (título, série, categoria).
 
 **Arquivos permitidos para criação/edição:**
 
@@ -3506,9 +3633,11 @@ Server Actions: CRUD de cursos, módulos, aulas (instrutor/admin). Matrícula. R
 - [ ] CRUD de cursos/módulos/aulas com reordenação
 - [ ] Matrícula: cria enrollment e libera acesso
 - [ ] Progresso: marcar aula como concluída, verificar trilha sequencial
-- [ ] Quiz: submeter respostas, calcular score, registrar attempt
-- [ ] Certificado: emitido automaticamente quando 100% da trilha concluída
-- [ ] Certificado com hash de verificação pública
+- [ ] Quiz: attempt < passing_score NÃO conclui a aula; attempt >= passing_score conclui (teste)
+- [ ] Tentativas ilimitadas, todas registradas
+- [ ] Certificado: emitido automaticamente quando 100% das aulas concluídas — incluindo aulas-quiz (teste)
+- [ ] Certificado em PDF (@react-pdf/renderer) com verification_hash único
+- [ ] Actions via kit de @hebron/auth; publicação de curso e emissão de certificado com audit central (ALTER TYPE com valores do módulo na migration de P-6.6)- [ ] Certificado com hash de verificação pública
 - [ ] Discussões por aula com moderação (super_admin pode deletar)
 - [ ] Lint passa
 - [ ] Types passam
@@ -3531,23 +3660,35 @@ Substituir mocks. Catálogo com cursos reais. Player com vídeo via Bunny.net HL
 
 **Arquivos permitidos para criação/edição:**
 
+- `apps/plataforma/src/app/(aluno)/layout.tsx` (G5: autenticado; qualquer papel — BRAIN §6.3)
+- `apps/plataforma/src/app/(aluno)/shell.tsx`
+- `apps/plataforma/src/app/(instrutor)/layout.tsx` (G5: gate instrutor|super_admin)
+- `apps/plataforma/src/app/(instrutor)/shell.tsx`
+- `apps/plataforma/src/actions/auth.ts` (G5)
 - `apps/plataforma/src/app/(aluno)/page.tsx`
 - `apps/plataforma/src/app/(aluno)/curso/[slug]/page.tsx`
 - `apps/plataforma/src/app/(aluno)/curso/[slug]/aula/[id]/page.tsx`
 - `apps/plataforma/src/app/(aluno)/jornada/page.tsx`
 - `apps/plataforma/src/app/(aluno)/certificados/page.tsx`
-- `apps/plataforma/src/app/(instrutor)/page.tsx`
+- `apps/plataforma/src/app/(instrutor)/**/page.tsx` (incl. editores de P-6.3 patcheado)
+- `apps/plataforma/src/components/*` (conectar componentes/forms do Bloco A)
+- `apps/plataforma/src/lib/queries.ts`
 - `apps/plataforma/src/lib/mock-data.ts` (remover)
 
 **Critérios de aceite:**
 
-- [ ] Catálogo com cursos do banco
-- [ ] Player carrega vídeo via Bunny.net HLS
-- [ ] Trilha sequencial funcional (aula locked até anterior concluída)
-- [ ] Certificado gerado como PDF com hash verificável
+- [ ] (aluno) exige login; (instrutor) exige papel instrutor|super_admin (teste)
+- [ ] Catálogo com cursos do banco; matrícula executável pelo CTA da página do curso
+- [ ] Player Bunny.net HLS funcional; marcar aula como concluída executável do player
+- [ ] Trilha sequencial: aula locked visível como locked e inacessível (UI + RLS)
+- [ ] Quiz respondível pela tela com resultado e retry (quiz-form conectado)
+- [ ] Notas em timestamp criáveis/clicáveis no player (note-widget conectado)
+- [ ] Discussões: post/reply pela tela da aula
+- [ ] Instrutor: criar curso, editar módulos/aulas com drag-drop, editar quiz — tudo pela UI
+- [ ] Certificado baixável em PDF com hash verificável por rota pública
+- [ ] Nenhum componente/formulário do Bloco A (P-6.2/P-6.4) sem import (grep)
 - [ ] Mock data removido
-- [ ] Lint passa
-- [ ] Types passam
+- [ ] Lint passa · Types passam
 
 ---
 
@@ -3563,7 +3704,7 @@ Substituir mocks. Catálogo com cursos reais. Player com vídeo via Bunny.net HL
 - Env vars: `RESEND_API_KEY`
 
 **Escopo:**
-Notificações: matrícula confirmada (email). Novo curso publicado (email para todos os matriculados). Certificado emitido (email + in_app). Resposta no fórum (in_app).
+Notificações: matrícula confirmada (email ao aluno — transacional). Novo curso publicado: email para usuários ativos COM opt-in de novidades (consents de P-0.13, finalidade "newsletter/novidades") — nunca para a base inteira sem consentimento. Certificado emitido (email + in_app — transacional). Resposta no fórum (in_app ao autor do post).
 
 **Arquivos permitidos para criação/edição:**
 
@@ -3575,11 +3716,10 @@ Notificações: matrícula confirmada (email). Novo curso publicado (email para 
 **Critérios de aceite:**
 
 - [ ] Matrícula: email de confirmação com link para o curso
-- [ ] Novo curso: email para todos os usuários ativos
-- [ ] Certificado: email com link de download + in_app
-- [ ] Resposta no fórum: in_app para o autor do post original
-- [ ] Lint passa
-- [ ] Types passam
+- [ ] Novo curso: email SOMENTE a usuários com consentimento de novidades (teste: usuário sem opt-in não recebe)
+- [ ] Certificado: email com link + in_app
+- [ ] Resposta no fórum: in_app ao autor do post original
+- [ ] Lint passa · Types passam
 
 ---
 
@@ -3599,8 +3739,7 @@ Plataforma → Intranet: KPI de alunos (total matriculados, cursos ativos, taxa 
 
 **Arquivos permitidos para criação/edição:**
 
-- `apps/plataforma/src/lib/integrations/intranet.ts`
-- `apps/intranet/src/lib/integrations/plataforma-stub.ts` (substituir por real)
+- `packages/integrations/src/plataforma.ts` (KPI de alunos — substituir stub do package)
 
 **Critérios de aceite:**
 
@@ -3638,6 +3777,8 @@ Testes: RLS (aluno vê apenas cursos publicados e próprio progresso). Trilha se
 - [ ] Certificado: emitido quando todas as aulas marcadas como concluídas
 - [ ] Quiz: score calculado corretamente
 - [ ] RLS: aluno não vê progresso de outro aluno
+- [ ] Quiz: attempt abaixo do passing_score não conclui a aula (semântica P-6.8)
+- [ ] Certificado: curso com aula-quiz só certifica após quiz aprovado
 - [ ] Testes passam
 - [ ] Lint passa
 
@@ -3774,7 +3915,11 @@ Páginas do hóspede: catálogo de flats (fotos, disponibilidade). Formulário d
 - Env vars: nenhuma
 
 **Escopo:**
-Formulários: reserva completa multi-step (dados do responsável com upload de documento → acompanhantes com CPF e data nascimento → veículo → 3 períodos de preferência → critérios de scoring → ajuda de custo opcional → revisão). Aprovação (selecionar período final, observações). Check-in (checklist de inventário).
+Formulários: reserva completa multi-step (CONSENTIMENTO LGPD → dados do responsável com upload de documento para o bucket flats-documentos → acompanhantes com CPF e data de nascimento → veículo → 3 períodos de preferência → critérios de scoring → ajuda de custo opcional → revisão).
+
+Step de consentimento (novo, primeiro step): finalidades granulares — processamento dos dados da reserva (obrigatório para prosseguir), dado de saúde autodeclarado do critério d (consentimento específico e destacado; o campo de saúde só aparece se consentido; sem laudo, sem detalhe clínico — apenas sim/não conforme BRAIN §6.8), comunicação por email sobre a reserva (transacional, informativo). Grava em public.consents (P-0.13).
+
+Aprovação (selecionar período final, observações). Check-in/check-out: registro simples de transição com data/hora e observações — SEM checklist de inventário (decisão D-5; BRAIN §6.8: check-in é presencial na recepção).
 
 **Arquivos permitidos para criação/edição:**
 
@@ -3785,12 +3930,15 @@ Formulários: reserva completa multi-step (dados do responsável com upload de d
 - `apps/flats/src/components/reservation-wizard-steps/step-periods.tsx`
 - `apps/flats/src/components/reservation-wizard-steps/step-scoring.tsx`
 - `apps/flats/src/components/approval-form.tsx`
-- `apps/flats/src/components/checkin-form.tsx`
+- `apps/flats/src/components/checkin-form.tsx` → registro de check-in check-out (status + timestamp + observações), sem inventário
+- `apps/flats/src/components/reservation-wizard-steps/step-consent.tsx`
 
 **Critérios de aceite:**
 
-- [ ] Wizard com 6+ steps e validação Zod por step
-- [ ] Upload de documento de identidade (obrigatório)
+- [ ] Wizard com step inicial de consentimento; sem consentimento de reserva não prossegue
+- [ ] Campo de saúde (critério d) só exibido/persistido com consentimento específico (teste)
+- [ ] Upload de documento de identidade para o bucket flats-documentos com policy restrita (P-0.12)
+- [ ] Check-in form registra transição + timestamp + observações; nenhum checklist de inventário
 - [ ] Acompanhantes: dinâmico (adicionar/remover), max 6+2 menores
 - [ ] 3 períodos de preferência com validação de disponibilidade
 - [ ] Critérios de scoring: inputs por tipo (anos, seleção, boolean, texto)
@@ -3851,7 +3999,12 @@ Loading, empty e error states. Skeletons para catálogo, calendário, fila de ap
 - Env vars: `DATABASE_URL`
 
 **Escopo:**
-Criar tabelas no schema `flats`: units (2 fixas, seed), reservations (status, selected_period, score_total), preferred_periods (reservation_id, start, end), guests (reservation_id, name, cpf, birth_date, is_responsible), vehicles (reservation_id), scoring_responses (reservation_id, criterion, value, points), aid_requests (reservation_id, type, amount), usage_history (para regra de 7 dias/12 meses).
+Criar tabelas no schema `flats`: units (2 fixas, seed), reservations (status, selected_period como daterange, score_total), preferred_periods (reservation_id, period daterange — 3 por reserva), guests (reservation_id, name, cpf, birth_date, is_responsible — PII: acesso restrito a gestor/
+super_admin via RLS), vehicles, scoring_responses (reservation_id, criterion, value, points — o critério d/saúde é dado sensível: coluna própria com acesso restrito e coleta condicionada a consentimento, P-7.4), aid_requests (reservation_id, type, amount), usage_history (user_id, reservation_id, days_used, period — regra 7d/12m), document_files (referência ao bucket flats-documentos).
+
+Double-booking: CREATE EXTENSION IF NOT EXISTS btree_gist; constraint EXCLUDE USING gist (unit_id WITH =, selected_period WITH &&) em reservations, aplicável apenas a status que ocupam o flat (aprovada/confirmada/em_curso — usar WHERE na constraint).
+
+Auditoria central: incluir ALTER TYPE admin.audit_action ADD VALUE IF NOT EXISTS para os valores do módulo (reservation.submitted/approved/rejected/checked_in/checked_out, aid.requested/approved) — G6.3.
 
 **Arquivos permitidos para criação/edição:**
 
@@ -3865,7 +4018,10 @@ Criar tabelas no schema `flats`: units (2 fixas, seed), reservations (status, se
 - [ ] preferred_periods: 3 por reserva (constraint)
 - [ ] scoring_responses: 10 critérios com pontuação calculada
 - [ ] usage_history: user_id, reservation_id, days_used, period (para regra 7d/12m)
-- [ ] Constraint: double-booking prevention por unit+period
+- [ ] EXCLUDE USING gist impede duas reservas ocupantes com períodos sobrepostos no mesmo flat (teste: INSERT sobreposto falha; períodos adjacentes não colidem; reserva rejeitada não bloqueia)
+- [ ] Colunas de PII/saúde identificadas em comentário SQL e cobertas por RLS restrita (P-7.7)
+- [ ] Enum de audit com os valores do módulo
+- [ ] drizzle-kit check limpo
 - [ ] Migration aplica sem erros
 - [ ] Types passam
 
@@ -3883,11 +4039,11 @@ Criar tabelas no schema `flats`: units (2 fixas, seed), reservations (status, se
 - Env vars: `DATABASE_URL`
 
 **Escopo:**
-RLS para schema flats. Hóspede: CRUD apenas nas próprias reservas. Diretor gestor (designation): SELECT + UPDATE para aprovar/rejeitar. Super_admin: full access. Diretores/conselheiros: NÃO podem criar reservas (conflito de interesse).
+RLS para schema flats. Hóspede: CRUD apenas nas próprias reservas. Diretor gestor: usar o helper has_designation já criado em P-3.7 (escopo flats/gestor) — não criar helper novo. SELECT all + UPDATE para aprovar/rejeitar. Super_admin: full access. Diretores/conselheiros: NÃO podem criar reservas (conflito de interesse).
 
 **Arquivos permitidos para criação/edição:**
 
-- `packages/db/src/migrations/0017_flats_rls.sql`
+- migration gerada via `drizzle-kit generate` a partir de `packages/db/src/schema/<modulo>.ts` (nome automático do kit; NÃO criar arquivo SQL numerado à mão — ver G6.4)
 
 **Critérios de aceite:**
 
@@ -3896,6 +4052,7 @@ RLS para schema flats. Hóspede: CRUD apenas nas próprias reservas. Diretor ges
 - [ ] Super_admin: full access
 - [ ] Diretores/conselheiros: sem INSERT em reservations (conflito de interesse)
 - [ ] Units: SELECT para todos os autenticados
+- [ ] guests/scoring_responses (PII/saúde): SELECT restrito a gestor de flats e super_admin (teste)
 - [ ] Types passam
 
 ---
@@ -3909,10 +4066,10 @@ RLS para schema flats. Hóspede: CRUD apenas nas próprias reservas. Diretor ges
 
 - Branch: `feat/P-7.8-flats-actions`
 - Dependências: P-7.7 concluído
-- Env vars: `DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
+- Env vars: `DATABASE_URL` (migrations), `SUPABASE_URL`, `SUPABASE_ANON_KEY` (G6.1/G6.2)
 
 **Escopo:**
-Server Actions: criar reserva (com validação de elegibilidade, limite 7d/12m, disponibilidade). Calcular score automaticamente (10 critérios, auto-calcular b e j do histórico). Aprovar/rejeitar (diretor gestor, selecionar período final). Solicitar ajuda de custo. Confirmar reserva. Check-in/check-out. Desempate (idade → tempo sem descanso → nunca usou → sorteio). Soft-delete com justificativa.
+Server Actions: criar reserva (com validação de elegibilidade, limite 7d/12m, disponibilidade). Calcular score automaticamente (10 critérios; b = frequência de uso calculada de flats.usage_history; j = participação em projetos via getProjectParticipationScore de packages/integrations — NUNCA import de apps/projetos). Aprovar/rejeitar: diretor gestor por designation (has_designation, mesmo helper de P-3.7, escopo flats/gestor). Solicitar ajuda de custo; quando aprovada, as despesas criadas no Financeiro NASCEM NÃO APROVADAS e seguem a governança dual normal (lote semanal → gestor aprova → autorizador autoriza — decisão D-4): a aprovação do auxílio pelo gestor de flats é decisão de mérito, não autorização financeira. Auditoria central com abort em falha (G6.3) em toda mutação. Confirmar reserva. Check-in/check-out. Desempate (idade → tempo sem descanso → nunca usou → sorteio). Soft-delete com justificativa.
 
 **Arquivos permitidos para criação/edição:**
 
@@ -3926,11 +4083,14 @@ Server Actions: criar reserva (com validação de elegibilidade, limite 7d/12m, 
 
 - [ ] Validação de elegibilidade: pastores/missionários (via papel hospede)
 - [ ] Validação: max 7 dias nos últimos 12 meses por indivíduo
-- [ ] Score: 10 critérios calculados, b (frequência) e j (participação em projetos) do banco
+- [ ] Score: 10 critérios; b de usage_history; j via packages/integrations (teste)
+- [ ] Aprovar/rejeitar exige designation gestor de flats — diretor sem designation falha (teste)
+- [ ] Ajuda aprovada cria payables NÃO aprovados no Financeiro, com data = dia anterior ao início (teste cross-schema); payables entram no fluxo de lote normal
+- [ ] Audit central em toda mutação, abortando em falha (teste)
+- [ ] Actions via kit de @hebron/auth (grep)
+- [ ] (demais critérios inalterados: elegibilidade, 7d/12m, desempate, soft-delete)
 - [ ] Desempate: idade → tempo sem descanso → nunca usou → sorteio (nesta ordem)
 - [ ] Aprovação: diretor gestor seleciona 1 dos 3 períodos
-- [ ] Ajuda de custo: cria despesas no Financeiro se aprovada
-- [ ] Audit log em toda mutação
 - [ ] Lint passa
 - [ ] Types passam
 
@@ -3952,22 +4112,34 @@ Substituir mocks. Calendário com reservas reais. Fila de aprovação com score 
 
 **Arquivos permitidos para criação/edição:**
 
+- `apps/flats/src/app/(hospede)/layout.tsx` (G5: papel hospede; diretor/conselheiro BLOQUEADOS — conflito de interesse, BRAIN §6.8)
+- `apps/flats/src/app/(hospede)/shell.tsx`
+- `apps/flats/src/app/(admin)/layout.tsx` (G5: gestor por designation | super_admin)
+- `apps/flats/src/app/(admin)/shell.tsx`
+- `apps/flats/src/actions/auth.ts` (G5)
 - `apps/flats/src/app/(hospede)/page.tsx`
 - `apps/flats/src/app/(hospede)/reservar/page.tsx`
 - `apps/flats/src/app/(hospede)/minhas-reservas/page.tsx`
 - `apps/flats/src/app/(admin)/page.tsx`
 - `apps/flats/src/app/(admin)/aprovacao/page.tsx`
 - `apps/flats/src/app/(admin)/reserva/[id]/page.tsx`
+- `apps/flats/src/components/*` (conectar wizard/forms do Bloco A)
+- `apps/flats/src/lib/queries.ts`
 - `apps/flats/src/lib/mock-data.ts` (remover)
 
 **Critérios de aceite:**
 
-- [ ] Calendário com reservas reais do banco
-- [ ] Score calculado automaticamente ao submeter
-- [ ] Fila de aprovação ordenada por score com desempate
+- [ ] (hospede) exige papel hospede; diretor/conselheiro bloqueados também na UI (teste)
+- [ ] (admin) exige designation gestor de flats ou super_admin (teste)
+- [ ] Reserva SUBMETÍVEL de ponta a ponta pelo wizard do Bloco A (P-7.4) — não reescrever inline
+- [ ] Score calculado ao submeter e visível na fila
+- [ ] Aprovar/rejeitar executável pela fila (approval-form conectado): seleção de período final persiste
+- [ ] Check-in e check-out executáveis pelo detalhe da reserva (checkin-form conectado)
+- [ ] Solicitação de ajuda de custo executável pelo wizard/minhas-reservas
+- [ ] Calendário com reservas reais
+- [ ] Nenhum componente/formulário do Bloco A (P-7.2/P-7.4) sem import (grep)
 - [ ] Mock data removido
-- [ ] Lint passa
-- [ ] Types passam
+- [ ] Lint passa · Types passam
 
 ---
 
@@ -3983,7 +4155,7 @@ Substituir mocks. Calendário com reservas reais. Fila de aprovação com score 
 - Env vars: `RESEND_API_KEY`
 
 **Escopo:**
-Notificações: reserva submetida (in_app ao diretor gestor). Reserva aprovada/rejeitada (email ao hóspede com período selecionado ou motivo). Instruções de check-in (email 3 dias antes com endereço, contato, regras). Lembrete de check-out (email no dia).
+Notificações: reserva submetida (in_app ao diretor gestor). Reserva aprovada/rejeitada (email ao hóspede com período selecionado ou motivo). Instruções de check-in (3 dias antes) e lembrete de check-out (no dia): crons registrados em packages/jobs (P-0.14)
 
 **Arquivos permitidos para criação/edição:**
 
@@ -3991,6 +4163,7 @@ Notificações: reserva submetida (in_app ao diretor gestor). Reserva aprovada/r
 - `packages/email/src/templates/reservation-approved.tsx`
 - `packages/email/src/templates/checkin-instructions.tsx`
 - `apps/flats/src/lib/notifications.ts`
+- `packages/jobs/src/crons/flats.ts`
 
 **Critérios de aceite:**
 
@@ -4016,23 +4189,22 @@ Notificações: reserva submetida (in_app ao diretor gestor). Reserva aprovada/r
 - Env vars: `DATABASE_URL`
 
 **Escopo:**
-Conectar integrações. Flats → Tarefas: reserva confirmada gera tarefas de limpeza (pré e pós-estadia) via createAutoTask (substituir stub). Flats → Financeiro: ajuda de custo aprovada cria despesas (data = dia anterior ao início da reserva). Flats ← Projetos: campo "participação em projetos" auto-calculado para scoring.
+Conectar integrações via packages/integrations. Flats → Tarefas: reserva confirmada gera tarefas de limpeza pré e pós-estadia via createAutoTask, usando os 2 templates de limpeza seedados nesta sessão (seed em tarefas task_templates com slugs estáveis 'limpeza-pre-estadia' e 'limpeza-pos-estadia' — criar aqui, com data da tarefa derivada do período da reserva). Flats → Financeiro: já implementado em P-7.8 (governança D-4) — aqui apenas o teste de integração e a substituição do stub do package. Flats ← Projetos: getProjectParticipationScore já consumida em P-7.8 — validar com teste.
 
 **Arquivos permitidos para criação/edição:**
 
-- `apps/flats/src/lib/integrations/tarefas.ts`
-- `apps/flats/src/lib/integrations/financeiro.ts`
-- `apps/flats/src/lib/integrations/projetos.ts`
-- `apps/tarefas/src/lib/integrations/flats-stub.ts` (substituir por real)
+- `packages/integrations/src/flats.ts` (limpeza + auxílio — substituir stubs)
+- `packages/db/src/seed/tarefas-templates.ts` (2 templates de limpeza, slugs estáveis)
+- `apps/flats/src/actions/*` (apenas pontos de chamada)
 
 **Critérios de aceite:**
 
-- [ ] Reserva confirmada cria tarefa de limpeza pré-estadia + pós-estadia (real)
-- [ ] Ajuda de custo aprovada cria despesa no Financeiro (data = dia anterior à reserva)
-- [ ] Scoring critério j: auto-calculado do histórico de projetos aprovados
-- [ ] Stubs substituídos por integrações reais
-- [ ] Lint passa
-- [ ] Types passam
+- [ ] Templates de limpeza seedados com slugs estáveis; integração os resolve por slug, não por UUID
+- [ ] Reserva confirmada cria as 2 tarefas SEM assignee, com datas derivadas do período (teste)
+- [ ] Ajuda aprovada → payables não aprovados no Financeiro (teste, cobre D-4)
+- [ ] Critério j auto-calculado (teste)
+- [ ] Zero imports app→app (verificação do CI)
+- [ ] Lint passa · Types passam
 
 ---
 
@@ -4064,6 +4236,8 @@ Testes: RLS (hóspede vê apenas próprias, diretor/conselheiro não cria reserv
 - [ ] 7d/12m: reserva que excede limite é bloqueada
 - [ ] Double-booking: duas reservas no mesmo flat/período retorna erro
 - [ ] Fluxo completo funciona end-to-end
+- [ ] Consentimento: reserva sem consentimento de dados não persiste; campo saúde exige consentimento específico (P-7.4)
+- [ ] Auxílio: payables nascem não aprovados e entram na governança dual (D-4)
 - [ ] Testes passam
 - [ ] Lint passa
 
@@ -4218,7 +4392,7 @@ Formulários admin: upload de faixa (título, autor, série, arquivo .mp3). Cria
 
 **Critérios de aceite:**
 
-- [ ] Upload de .mp3 com extração automática de duração
+- [ ] Upload de .mp3 com extração automática de duração (lib `music-metadata` — registrar em SESSIONS; executor não deve escolher outra silenciosamente)
 - [ ] Playlist com drag-drop para reordenar faixas
 - [ ] Material exclusivo com campo de descrição e upload
 - [ ] Validação Zod
@@ -4281,7 +4455,7 @@ Criar tabelas no schema `radio`: tracks, authors, series, playlists, playlist_tr
 **Arquivos permitidos para criação/edição:**
 
 - `packages/db/src/schema/radio.ts`
-- `packages/db/src/migrations/0018_radio.sql`
+- migration gerada via `drizzle-kit generate` a partir de `packages/db/src/schema/<modulo>.ts` (nome automático do kit; NÃO criar arquivo SQL numerado à mão — ver G6.4)
 
 **Critérios de aceite:**
 
@@ -4309,11 +4483,11 @@ Criar tabelas no schema `radio`: tracks, authors, series, playlists, playlist_tr
 - Env vars: `DATABASE_URL`
 
 **Escopo:**
-RLS para schema radio. Anon: SELECT em tracks, authors, series, playlists, now_playing (ouvir sem cadastro). Autenticado com termo aceito: SELECT em exclusive_materials + download via signed URL. Super_admin: full CRUD. Demais: leitura pública.
+RLS para schema radio. Anon: SELECT em tracks, authors, series, playlists, now_playing (ouvir sem cadastro). Autenticado com termo aceito: SELECT em exclusive_materials + download via signed URL. Super_admin: full CRUD. Demais: leitura pública. Grants: o SELECT anônimo exige GRANT USAGE/SELECT para `anon` APENAS nas tabelas públicas da rádio (tracks, authors, series, playlists, now_playing) — alinhar com a migration de grants de P-0.10; exclusive_materials e term_acceptances ficam fora do grant de anon.
 
 **Arquivos permitidos para criação/edição:**
 
-- `packages/db/src/migrations/0019_radio_rls.sql`
+- migration gerada via `drizzle-kit generate` a partir de `packages/db/src/schema/<modulo>.ts` (nome automático do kit; NÃO criar arquivo SQL numerado à mão — ver G6.4)
 
 **Critérios de aceite:**
 
@@ -4334,10 +4508,10 @@ RLS para schema radio. Anon: SELECT em tracks, authors, series, playlists, now_p
 
 - Branch: `feat/P-8.8-radio-actions`
 - Dependências: P-8.7 concluído
-- Env vars: `DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`
+- Env vars: `DATABASE_URL` (migrations), `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET` (G6.1/G6.2)
 
 **Escopo:**
-Server Actions: upload de faixa para Cloudflare R2. CRUD de autores, séries, playlists. Auto DJ: API route server-side que serve áudio do R2 (proxy com playlist ativa). Atualizar "tocando agora" via Supabase Realtime. Aceitar termo (1x por usuário). Download de material exclusivo via signed URL. Configurar PWA (manifest + service worker para background play).
+Server Actions: upload de faixa para Cloudflare R2. CRUD de autores, séries, playlists. Auto DJ: API route server-side que serve áudio do R2 (proxy com playlist ativa). Atualizar "tocando agora" via Supabase Realtime. Aceitar termo (1x por usuário). Download de material exclusivo via signed URL. Configurar PWA: manifest + SERVICE WORKER (arquivo próprio) + Media Session API no player (metadados de faixa, controles na tela de bloqueio). Upload/signed URLs de R2 via client S3-compatible (@aws-sdk/client-s3 com endpoint R2) — registrar a escolha em SESSIONS.
 
 **Arquivos permitidos para criação/edição:**
 
@@ -4347,6 +4521,8 @@ Server Actions: upload de faixa para Cloudflare R2. CRUD de autores, séries, pl
 - `apps/radio/src/actions/terms.ts`
 - `apps/radio/src/app/api/stream/route.ts`
 - `apps/radio/src/app/manifest.ts`
+- `apps/radio/public/sw.js` (service worker — background play/PWA)
+- `apps/radio/src/lib/r2.ts` (client R2 S3-compatible, server-only)
 
 **Critérios de aceite:**
 
@@ -4355,7 +4531,10 @@ Server Actions: upload de faixa para Cloudflare R2. CRUD de autores, séries, pl
 - [ ] "Tocando agora" atualizado via Supabase Realtime (broadcast)
 - [ ] Termo: aceitar 1x, verificar antes de servir material exclusivo
 - [ ] Signed URL para download de material exclusivo (expira em 1h)
-- [ ] PWA manifest com background play habilitado
+- [ ] PWA: manifest + service worker registrado; áudio continua ao trocar de aba/minimizar (verificação manual documentada no PR)
+- [ ] Media Session API: faixa/autor aparecem nos controles do SO
+- [ ] Upload de .mp3 admin-only (gate super_admin via kit — G6.1)
+- [ ] R2 keys usadas apenas server-side (grep em componentes client → zero)
 - [ ] Lint passa
 - [ ] Types passam
 
@@ -4380,23 +4559,30 @@ Substituir mocks. Player tocando áudio real do R2. "Tocando agora" via Supabase
 
 **Arquivos permitidos para criação/edição:**
 
+- `apps/radio/src/app/layout.tsx` (root: shell client com player persistente)
+- `apps/radio/src/app/shell.tsx` (player global entre navegações)
+- `apps/radio/src/app/(admin)/layout.tsx` (G5: gate super_admin server-side)
+- `apps/radio/src/actions/auth.ts` (logout do admin)
 - `apps/radio/src/app/page.tsx`
 - `apps/radio/src/app/autores/page.tsx`
 - `apps/radio/src/app/autores/[slug]/page.tsx`
+- `apps/radio/src/app/series/[slug]/page.tsx`
 - `apps/radio/src/app/materiais/page.tsx`
 - `apps/radio/src/app/(admin)/page.tsx`
+- `apps/radio/src/components/*` (conectar componentes/forms do Bloco A)
 - `apps/radio/src/lib/mock-data.ts` (remover)
 
 **Critérios de aceite:**
 
-- [ ] Player toca áudio real do R2
-- [ ] "Tocando agora" atualiza em tempo real via Supabase Realtime
+- [ ] Player toca áudio real do R2 e PERSISTE entre navegações (não reinicia ao trocar de página)
+- [ ] "Tocando agora" via Supabase Realtime
 - [ ] Catálogos com dados do banco
-- [ ] Material exclusivo: login + termo → download via signed URL
-- [ ] PWA instala e toca em background
+- [ ] Material exclusivo: anônimo → login wall; sem termo → dialog de aceite; com termo → download via signed URL que expira (fluxo completo testável)
+- [ ] Admin: upload de faixa, criação de playlist (drag-drop) e material exclusivo operáveis pela UI (forms de P-8.4 conectados); anônimo/não-admin bloqueado no (admin) (teste)
+- [ ] PWA instala e toca em background (verificação manual documentada)
+- [ ] Nenhum componente/formulário do Bloco A (P-8.2/P-8.4) sem import (grep)
 - [ ] Mock data removido
-- [ ] Lint passa
-- [ ] Types passam
+- [ ] Lint passa · Types passam
 
 ---
 
@@ -4421,7 +4607,7 @@ Notificações mínimas: novo material exclusivo disponível (email para usuári
 
 **Critérios de aceite:**
 
-- [ ] Novo material exclusivo: email para todos com termo aceito
+- [ ] Novo material exclusivo: email para quem tem termo aceito E consentimento de comunicação de novidades (P-0.13) — termo de responsabilidade não é opt-in de email
 - [ ] Template com layout institucional
 - [ ] Lint passa
 - [ ] Types passam
@@ -4440,21 +4626,21 @@ Notificações mínimas: novo material exclusivo disponível (email para usuári
 - Env vars: `DATABASE_URL`
 
 **Escopo:**
-Rádio → Intranet: KPI de audiência (total ouvintes, faixas tocadas). Substituir stub na Intranet. Métricas básicas: listener_stats com snapshots periódicos.
+Rádio → Intranet: KPI de audiência via packages/integrations. SEMÂNTICA (D-3, opção recomendada): o player envia heartbeat anônimo a cada 60s enquanto reproduz (session_id gerado no client, sem PII); "ouvinte" = sessão com >= 2 heartbeats; métricas: sessões únicas/dia e horas ouvidas/dia. Snapshot diário agregado gravado em radio.listener_stats por cron em packages/jobs; heartbeats brutos descartados após agregação (LGPD — sem rastro individual). Substituir stub da Intranet.
 
 **Arquivos permitidos para criação/edição:**
 
-- `apps/radio/src/lib/integrations/intranet.ts`
-- `apps/radio/src/lib/listener-stats.ts`
-- `apps/intranet/src/lib/integrations/radio-stub.ts` (substituir por real)
+- `packages/integrations/src/radio.ts` (KPI de audiência — substituir stub)
+- `apps/radio/src/app/api/heartbeat/route.ts` (ingestão do heartbeat, anônima)
+- `packages/jobs/src/crons/radio-stats.ts` (agregação diária + limpeza dos brutos)
 
 **Critérios de aceite:**
 
-- [ ] KPI de audiência disponível para Intranet
-- [ ] Stub substituído por dados reais
-- [ ] Snapshot de listener_stats periódico (via Inngest)
-- [ ] Lint passa
-- [ ] Types passam
+- [ ] Heartbeat sem PII (payload: session_id efêmero + track_id) — verificado
+- [ ] KPI: sessões únicas/dia e horas ouvidas/dia calculadas corretamente (teste com fixtures)
+- [ ] Cron de agregação registrado em packages/jobs; brutos removidos após agregar (teste)
+- [ ] Stub da Intranet substituído via packages/integrations
+- [ ] Lint passa · Types passam
 
 ---
 
@@ -4483,6 +4669,7 @@ Testes: RLS (anon ouve, autenticado+termo acessa materiais). Upload de faixa par
 - [ ] RLS: anon acessa tracks; sem termo não acessa materials
 - [ ] Playlist: apenas 1 ativa por vez
 - [ ] Termo: duplo aceite retorna erro
+- [ ] Audiência: agregação diária calcula sessões/horas conforme D-3 (fixtures)
 - [ ] Testes passam
 - [ ] Lint passa
 
@@ -4504,22 +4691,24 @@ Testes: RLS (anon ouve, autenticado+termo acessa materiais). Upload de faixa par
 - Env vars: `DATABASE_URL`
 
 **Escopo:**
-Auditoria completa de RLS em todos os schemas. Verificar: DENY-by-default em toda tabela. Cross-schema leaks (submissor não acessa financeiro). Impersonation não bypassa RLS. Conflitos de interesse enforced (diretor não cria reserva). Middleware gates alinhados com RLS. Revisão de signed URLs (expiração, escopo). Verificação de SQL injection em queries dinâmicas. **Decidir e documentar a postura de conexão das Server Actions** (superuser via `DATABASE_URL` vs. `authenticated` + JWT) — ver BRAIN.md §3 "Decisão técnica pendente"; se ficar com superuser, confirmar que TODA action de mutação passa pelo gate de RBAC (nenhuma exceção).
+Auditoria completa de RLS e permissões no estado final (decisão B implementada em P-0.10 — este prompt VERIFICA, não decide). Verificar: DENY-by-default em toda tabela de todos os schemas (inclusive tarefas/intranet/plataforma/flats/radio criados nas fases 4–8). GRANTs por schema alinhados às policies — nenhum GRANT mais largo que a policy correspondente. Nenhuma leitura ou escrita remanescente via DATABASE_URL superuser em páginas actions (grep + teste). Cross-schema leaks (submissor não acessa financeiro; busca global e feed respeitam RLS). Impersonation não bypassa RLS nem confere autoridade (cookie assinado — F3-13, se corrigido; senão, corrigir aqui). Conflitos de interesse enforced em RLS (diretor não cria reserva; diretor≠submissor). Gates de layout (G5) alinhados com RLS. Signed URLs: expiração e escopo (R2, Storage). SQL injection em queries dinâmicas (busca, filtros).
 
 **Arquivos permitidos para criação/edição:**
 
 - `apps/admin/src/__tests__/security-audit.test.ts`
-- `packages/db/src/migrations/0020_rls_fixes.sql` (se necessário)
+- arquivo SQL de fixes de RLS/GRANTs, se necessário (convenção G6.4)
 
 **Critérios de aceite:**
 
-- [ ] Toda tabela com RLS habilitado e DENY-by-default verificado
-- [ ] Nenhum cross-schema leak identificado
-- [ ] Conflitos de interesse enforced em RLS (não apenas middleware)
+- [ ] Toda tabela com RLS habilitado e DENY-by-default (verificação automatizada por introspecção)
+- [ ] Zero conexões superuser em runtime de app (grep + teste)
+- [ ] GRANTs ↔ policies reconciliados schema a schema
+- [ ] Nenhum cross-schema leak (testes por papel)
+- [ ] Conflitos de interesse enforced em RLS
+- [ ] Cookie de impersonação assinado/inforjável (F3-13 fechado)
 - [ ] Signed URLs com expiração adequada
 - [ ] Nenhuma query dinâmica vulnerável a SQL injection
-- [ ] Testes de segurança passam
-- [ ] Relatório de findings documentado
+- [ ] Testes de segurança passam · Relatório de findings documentado
 
 ---
 
@@ -4535,26 +4724,26 @@ Auditoria completa de RLS em todos os schemas. Verificar: DENY-by-default em tod
 - Env vars: nenhuma
 
 **Escopo:**
-Implementar compliance LGPD. Tela "Meus Dados" em cada app: visualizar, exportar (JSON + CSV), solicitar exclusão. Consentimento granular no cadastro (newsletter, marketing, compartilhamento). Política de retenção configurável por tipo de dado. Log de acesso a dados pessoais. Revisão de todos os dados pessoais armazenados (CPF, documentos, fotos) para verificar criptografia e acesso adequado.
+Compliance LGPD — superfícies de titular e revisão final (a fundação — public.consents, fluxo de anonimização, política de PII em audit diffs, retenção — existe desde P-0.13; o consentimento no cadastro existe desde P-1.26/P-7.4; este prompt NÃO recria nada disso).
+
+Tela "Meus Dados" (componente compartilhado em packages/ui, montado em cada app): visualizar dados armazenados e consentimentos, revogar consentimento por finalidade, exportar (JSON + CSV), solicitar exclusão. Solicitação de exclusão: gera ticket para super_admin; a execução usa o fluxo de anonimização de P-0.13 — exclusão/anonimização REAL dos dados pessoais onde a lei exige, preservando registros contábeis/deliberativos pseudonimizados (BRAIN §9 emendado — decisão F1-Q4). Log de acesso a dados pessoais (leituras de CPF/documentos por admin ficam auditadas). Revisão final: varredura de todos os dados pessoais (CPF, documentos de identidade, fotos, saúde autodeclarada dos flats, views de documentos, heartbeats da rádio) confirmando base legal, acesso restrito e retenção configurada.
 
 **Arquivos permitidos para criação/edição:**
 
 - `packages/ui/src/components/my-data-page.tsx`
 - `packages/auth/src/data-export.ts`
-- `packages/auth/src/data-deletion.ts`
-- `packages/db/src/schema/consent.ts`
-- `packages/db/src/migrations/0021_lgpd.sql`
+- `packages/auth/src/data-deletion.ts` (usa o fluxo de anonimização de P-0.13)
+- `apps/*/src/app/**/meus-dados/page.tsx` (montagem por app)
+- ajustes de schema, se necessários (convenção G6.4)
 
 **Critérios de aceite:**
 
-- [ ] "Meus Dados" acessível em cada app com visualização, export e solicitação de exclusão
-- [ ] Consentimento granular no cadastro (opt-in, nunca opt-out)
-- [ ] Export em JSON + CSV funcional
-- [ ] Solicitação de exclusão gera ticket para super_admin
-- [ ] Dados pessoais sensíveis (CPF, documentos) com acesso restrito verificado
-- [ ] Log de acesso a dados pessoais implementado
-- [ ] Lint passa
-- [ ] Types passam
+- [ ] "Meus Dados" em cada app: visualização, consentimentos revogáveis, export JSON+CSV, pedido de exclusão
+- [ ] Exclusão executada anonimiza PII de verdade (teste fim-a-fim com usuário fixture) e preserva registros contábeis pseudonimizados
+- [ ] Consentimento do cadastro é opt-in (verificação — já implementado em P-1.26/P-7.4)
+- [ ] Acesso a CPF/documentos audita leitura (teste)
+- [ ] Varredura final documentada: inventário de dados pessoais × base legal × retenção
+- [ ] Lint passa · Types passam
 
 ---
 
@@ -4574,7 +4763,7 @@ Otimização de performance em todos os apps. Verificar: bundle size (code split
 
 **Arquivos permitidos para criação/edição:**
 
-- `packages/db/src/migrations/0022_indexes.sql` (se necessário)
+- arquivo SQL de indexes, se necessário (convenção G6.4)
 - Qualquer arquivo de página para lazy loading (limitado a imports)
 - `turbo.json` (se ajuste de build necessário)
 
@@ -4617,6 +4806,7 @@ Revisão de toda a microcopy do ecossistema para eliminar "cara de IA". Verifica
 - [ ] Tom institucional consistente em todos os apps
 - [ ] Português correto, sem anglicismos desnecessários
 - [ ] Sem exclamações genéricas ("Vamos lá!", "Incrível!", etc.)
+- [ ] Grep sem ocorrências (case-insensitive) em arquivos .tsx de UI: "vamos lá", "incrível", "awesome", "ops!", "oops", "não se preocupe", "estamos quase lá", "tudo certo!" — e revisão manual de exclamações genéricas restantes
 - [ ] Lint passa
 - [ ] Types passam
 
@@ -4630,14 +4820,14 @@ Ref: BRAIN.md seção 5 (princípios visuais — fugir do "cara de IA"). Públic
 **Fase:** 9
 **Módulo:** fundacao
 **Tipo:** config
-**Pré-condições:**
+**Pré-condições: **
 
 - Branch: `main` (merge de todas as features)
-- Dependências: P-9.4 concluído
+- Dependências: P-9.4 concluído; P-9.0 (migração de usuários do legado) concluído
 - Env vars: todas as env vars de produção configuradas na Vercel
 
 **Escopo:**
-Configurar deploy de produção. Vercel: 9 projetos separados (1 por app) com domínios customizados. DNS Cloudflare: subdomínios apontando para Vercel. Supabase: migration de produção aplicada. GitHub Actions: pipeline CI/CD (lint, typecheck, test em PR; deploy automático em merge na main). Sentry: DSN configurado em cada app. Monitoring: Better Stack com 9 monitores (1 por subdomínio). Seed de dados iniciais (2 super_admins, papéis, workspaces de tarefas, plano de contas padrão).
+Configurar deploy de produção. Vercel: 9 projetos separados (1 por app) com domínios customizados. DNS Cloudflare: subdomínios apontando para Vercel. Supabase: migration de produção aplicada. GitHub Actions: CI já existe (P-0.9) — adicionar apenas o workflow de DEPLOY (deploy automático em merge na main). Inngest: ambiente de produção configurado e crons de packages/jobs registrados (verificar cada cron do catálogo). pg_cron de partições ativo em produção (P-0.7). Sentry: DSN em cada app. Better Stack: 9 monitores. Seed de produção: 2 super_admins, 8 papéis, 6 workspaces de tarefas, plano de contas padrão INCLUINDO a categoria "Doações" (KPI da Intranet — decisão F1-Q10), designations (gestor/autorizador do financeiro; gestor de flats), 2 unidades de flat, 2 templates de limpeza (slugs de P-7.11).
 
 **Arquivos permitidos para criação/edição:**
 
@@ -4650,10 +4840,14 @@ Configurar deploy de produção. Vercel: 9 projetos separados (1 por app) com do
 
 - [ ] 9 apps deployados com subdomínios corretos
 - [ ] SSO funcional entre todos os subdomínios
-- [ ] CI/CD: lint + typecheck + test em PRs; deploy em merge
+- [ ] Deploy automático em merge na main (CI de PR já verde desde P-0.9)
+- [ ] Todos os crons do catálogo de packages/jobs registrados em produção (lista verificada 1 a 1)
+- [ ] pg_cron de partições ativo (INSERT de audit em mês futuro funciona em produção)
+- [ ] Seed: 2 super_admins, 8 papéis, 6 workspaces, plano de contas com categoria "Doações", designations financeiro/flats, 2 unidades de flat, 2 templates de limpeza
+- [ ] Usuários do legado migrados e aptos a logar (P-9.0 verificado em produção)
+- [ ] (demais critérios inalterados: 9 apps, SSO, Sentry, Better Stack, migrations, testes, lint, types)
 - [ ] Sentry capturando erros em todos os apps
 - [ ] Better Stack monitorando uptime de todos os subdomínios
-- [ ] Seed: 2 super_admins, 8 papéis, 6 workspaces, plano de contas padrão, 2 unidades de flat
 - [ ] Migration de produção aplicada sem erros
 - [ ] Todos os testes passam
 - [ ] Lint passa
