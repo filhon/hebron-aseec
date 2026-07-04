@@ -79,6 +79,7 @@
 | S-55   | 2026-07-03 | P-0.8 — Kit de Backend Compartilhado (Onda 0) | concluido                            |
 | S-56   | 2026-07-03 | P-0.9 — CI Mínimo (Onda 0)                    | concluido (validação em PR pendente) |
 | S-57   | 2026-07-03 | P-0.10 — Decisão B: RLS Ativa (Onda 0)        | concluido                            |
+| S-58   | 2026-07-04 | P-0.11 — Drizzle-kit Reconciliado (Onda 0)    | concluido                            |
 
 ---
 
@@ -2286,4 +2287,58 @@ Todas as 4 suítes `rls.test.ts` (admin, documentos, projetos — já existiam; 
 - `apps/admin/src/__tests__/rls.test.ts` (remove GRANT/REVOKE temporário; adiciona testes de `anon` e regressão F2-A1)
 - `apps/documentos/src/__tests__/rls.test.ts` (remove GRANT temporário; adiciona regressão F2-D1/F2-D2)
 - `apps/projetos/src/__tests__/rls.test.ts` (remove GRANT/REVOKE temporário; adiciona testes de `anon` e regressão F2-P4)
+- `SESSIONS.md` (esta entrada)
+
+---
+
+### S-58 — 2026-07-04 — P-0.11 Drizzle-kit Reconciliado (Onda 0)
+
+**Prompt:** P-0.11 (`AUDIT/04-prompts-pendentes.md` §4)
+**Duracao:** ~2h
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+O journal/snapshot do drizzle-kit só conheciam a migration `0000_initial` (F3-07): as outras 16 migrations hand-authored (0001–0014, incluindo duplicatas de número em 0005 e 0007) nunca foram registradas no `meta/`, então `drizzle-kit generate` diria "sem mudanças" mesmo com `schema/index.ts` completamente dessincronizado do banco real — sem verificação de drift alguma. Antes de qualquer correção, foi verificado via `drizzle-kit/api`'s `generateDrizzleJson` + uma query direta em `information_schema.columns`/`pg_enum` contra o banco de produção real: **as 45 tabelas, todas as colunas (nos dois sentidos) e os 22 enums de `schema/index.ts` já batiam exatamente** com o banco — a dessincronização estava só no `meta/` do drizzle-kit, não entre TS e SQL.
+
+Reconciliação: `meta/0000_snapshot.json` (parcial, de antes de RLS/financeiro/documentos/projetos existirem) removido; substituído por `meta/0014_snapshot.json`, gerado via `drizzle-kit generate` contra um `out` de rascunho isolado (schema atual completo, do zero) e copiado para o `meta/` real com `prevId` zerado. `_journal.json` reduzido a uma única entrada (`idx: 14`, tag `0014_grants_authenticated`) — não 15 entradas históricas: só a última precisa ser fiel (é a única que `generate`/`check` de fato leem, confirmado lendo `prepareMigrationFolder`/`preparePrevSnapshot` em `node_modules/drizzle-kit`), e fixar `idx: 14` é o que faz o próximo `generate` cair em `0015`, sem colidir com nenhum arquivo `.sql` existente (CS-3). Validado: `drizzle-kit check` limpo, `drizzle-kit generate` sem mudanças (schema.ts bate com o snapshot reconciliado), e uma migration de teste gerada (`0015`, `ALTER TABLE admin.system_settings ADD COLUMN reconciliation_probe`) aplicada dentro de uma transação com rollback contra o banco real via o mesmo padrão de `rls.test.ts` — confirmando coluna presente durante a tx e ausente depois; arquivo de teste descartado (não é uma migration real).
+
+README atualizado: `drizzle-kit generate` passa a ser o ponto de partida documentado para toda nova migration (mantendo a filosofia de que a _aplicação_ continua sendo o runner custom, não `drizzle-kit migrate` — RLS/partições/`SECURITY DEFINER` continuam exigindo edição manual do SQL gerado antes de aplicar). Novo script `db:check`.
+
+Teste de paridade novo (critério explícito do prompt): `packages/db/src/__tests__/schema-parity.test.ts`, rodando via `pnpm turbo test` (portanto já herdado pelo job de CI de P-0.9, que sobe o Supabase local efêmero e roda `db:migrate` antes de `pnpm turbo test`). Implementado com uma comparação direta contra `information_schema.columns`/`pg_enum` em vez do `pushSchema` programático de `drizzle-kit/api`: esse helper tem um bug real na versão fixada (0.28.1) — seu wrapper interno de `db.query` descarta os parâmetros de queries parametrizadas, quebrando a introspecção de qualquer tabela com chave primária composta (`financeiro.budget_items`, `projetos.organization_members`, etc.) com "there is no parameter $1". `drizzle-kit introspect` (CLI) não tem esse bug (usa um conector próprio), mas comparar dois snapshots completos exigiria normalizar diferenças cosméticas (tabelas de partição do `admin.audit_log`, ordenação, etc.) — trade-off pior que a query direta e explícita.
+
+**Criterios de aceite verificados:**
+
+- [x] `drizzle-kit check` limpo — "Everything's fine 🐶🔥" contra o `meta/` reconciliado.
+- [x] migration nova de teste gerada e aplicada — `0015` gerada, aplicada e revertida (rollback) contra o banco real; não commitada (era só a verificação do critério, não uma migration de produto).
+- [x] teste de paridade no CI — `schema-parity.test.ts` roda via `pnpm turbo test`, já ligado ao job de CI de P-0.9; 2 testes verdes contra o banco de produção real nesta sessão (0 tabelas/colunas/enums fora de paridade).
+- [x] README do db atualizado — seção "Migration flow" reescrita com o fluxo `generate` → revisar → `db:migrate`; nova seção "Schema parity test"; tabela de scripts atualizada.
+- lint/typecheck verdes em `pnpm turbo lint typecheck` (34/34 tasks) após as mudanças.
+
+**Decisoes tomadas:**
+
+- Journal reconciliado com **uma única entrada fiel** (idx 14), não 15 entradas retroativas uma por migration real — lendo o código-fonte do drizzle-kit (`utils.js`/`bin.cjs`) confirmou-se que `generate`/`check` só usam a última entrada para diff e para calcular o próximo índice; fabricar 14 snapshots intermediários "de mentirinha" não teria valor e adicionaria superfície de erro (colisão de `prevId`, versões incompatíveis).
+- Teste de paridade escrito com queries diretas ao invés de `pushSchema`/`introspect` do drizzle-kit, por causa do bug de parâmetros descoberto durante a implementação (ver Resumo). Documentado no cabeçalho do teste para não ser redescoberto do zero numa fase futura.
+- Verificação da migration de teste feita contra o banco de produção real (não um Postgres efêmero local — sem Docker disponível no ambiente desta sessão), mas dentro de uma transação com rollback explícito (`sql.begin` + `throw` + `catch`), o mesmo padrão já usado em `rls.test.ts` — zero risco de persistir a mudança.
+
+**Debitos tecnicos / pendencias:**
+
+- Nenhum entulho retroativo: com 45/45 tabelas, todas as colunas e os 22 enums em paridade total confirmada nesta sessão, não há dívida de dessincronização TS↔SQL herdada das fases 1–3 para registrar aqui.
+- `drizzle-kit` continua fixado em `^0.28.0` (tem o bug de `pushSchema` descrito acima); upgrade para uma versão mais recente não foi avaliado nesta sessão — fora de escopo de P-0.11.
+
+**Arquivos criados:**
+
+- `packages/db/src/migrations/meta/0014_snapshot.json`
+- `packages/db/src/__tests__/schema-parity.test.ts`
+- `packages/db/src/__tests__/setup-env.ts`
+- `packages/db/vitest.config.ts`
+
+**Arquivos modificados:**
+
+- `packages/db/src/migrations/meta/_journal.json` (reconciliado para uma entrada, idx 14)
+- `packages/db/src/migrations/meta/0000_snapshot.json` (removido — substituído por `0014_snapshot.json`)
+- `packages/db/package.json` (scripts `test`, `test:watch`, `db:check`; devDependency `vitest`)
+- `packages/db/tsconfig.json` (inclui `vitest.config.ts`)
+- `packages/db/README.md` (fluxo de migration reescrito; nova seção de teste de paridade)
+- `pnpm-lock.yaml` (entrada `vitest` em `packages/db`)
 - `SESSIONS.md` (esta entrada)

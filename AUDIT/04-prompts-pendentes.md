@@ -193,7 +193,7 @@ _Critérios:_ [x] role `authenticated` consegue exatamente o que as policies per
 **P-0.11 — drizzle-kit reconciliado**
 _Problema:_ journal/snapshot só conhecem a 0000; 14 migrations à mão sem verificação de drift (F3-07) — o F3-02 é o acidente que isso produz. Decisão F3-Q7: voltar ao kit.
 _Escopo:_ regenerar snapshot a partir do estado real; documentar fluxo (`generate` → revisar SQL → runner aplica); teste de paridade schema TS ↔ banco efêmero migrado; convenção: prompts não citam mais número de migration — citam `drizzle-kit generate`.
-_Critérios:_ [ ] `drizzle-kit check` limpo; [ ] migration nova de teste gerada e aplicada; [ ] teste de paridade no CI; [ ] README do db atualizado.
+_Critérios:_ [x] `drizzle-kit check` limpo; [x] migration nova de teste gerada e aplicada; [x] teste de paridade no CI; [x] README do db atualizado.
 
 ### Onda 1 — tornar verdadeiros os módulos "concluídos"
 
