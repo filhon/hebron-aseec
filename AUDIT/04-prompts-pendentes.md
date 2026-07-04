@@ -210,7 +210,7 @@ _Escopo:_ rota `/convite` (intranet): valida token server-side, cria conta Supab
 **P-1.27 — Documentos: visibilidade e área editorial verdadeiras**
 _Problema:_ F2-D1 (anônimo lê `internal` e `restricted` por slug + signed URL), F2-D2 (editorial sem auth), F2-D3 (4 rotas 404), F2-D4 (subscriptions sem UI; notificações sem chamador), F2-D5 (FAQ hardcoded).
 _Escopo:_ páginas públicas consultam com o client da sessão (anon vê `public`; autenticado `internal`; `restricted` por papel — a RLS de P-1.19 finalmente executa); `[slug]` filtra visibility; gate editor/super*admin no layout editorial; remover ou criar as 4 rotas da sidebar; UI de assinatura de categorias (reconectar `subscription-form`); `publishDocument` chama `notifyNewDocument`; lembrete de edital → job registrado em P-0.14; FAQ: persistir (campo no edital) ou remover a seção — decidir pela persistência simples (jsonb no edital).
-\_Critérios:* [ ] anon não vê `internal`/`restricted` nem por slug (teste de regressão); [ ] editorial bloqueado sem papel; [ ] assinar categoria → publicar doc → e-mail chega (teste); [ ] zero rotas 404 na sidebar; [ ] zero componentes do Bloco A órfãos.
+\_Critérios:* [x] anon não vê `internal`/`restricted` nem por slug (teste de regressão); [x] editorial bloqueado sem papel; [x] assinar categoria → publicar doc → e-mail chega (teste); [x] zero rotas 404 na sidebar; [x] zero componentes do Bloco A órfãos.
 
 **P-2.9c — Projetos: operável de ponta a ponta** (nome já acordado — decisão F2-Q3)
 _Problema:_ F2-P1 (3/17 actions com UI), F2-P2 (kanban cosmético), F2-P3 (prefill aberto), F2-P4 (score exposto a submissor), F2-P5 (quórum por atribuição), F2-P6 (votação sem encerramento).

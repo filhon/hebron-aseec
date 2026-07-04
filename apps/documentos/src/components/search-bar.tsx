@@ -13,6 +13,7 @@ export interface SearchFilters {
 export interface SearchBarProps {
   categories: Category[];
   tags: Tag[];
+  initialFilters?: SearchFilters;
   onChange?: (filters: SearchFilters) => void;
   placeholder?: string;
   className?: string;
@@ -27,13 +28,16 @@ const EMPTY_FILTERS: SearchFilters = {
 export function SearchBar({
   categories,
   tags,
+  initialFilters,
   onChange,
   placeholder = "Buscar documentos por título…",
   className = "",
 }: SearchBarProps) {
-  const [query, setQuery] = useState("");
-  const [categoryId, setCategoryId] = useState<string | null>(null);
-  const [tagIds, setTagIds] = useState<string[]>([]);
+  const [query, setQuery] = useState(initialFilters?.query ?? "");
+  const [categoryId, setCategoryId] = useState<string | null>(
+    initialFilters?.categoryId ?? null,
+  );
+  const [tagIds, setTagIds] = useState<string[]>(initialFilters?.tagIds ?? []);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const notify = useCallback(

@@ -10,12 +10,15 @@ import {
   ClipboardList,
 } from "lucide-react";
 import { DocumentosLogo } from "../../components/documentos-logo";
+import { requireEditorSession } from "../../lib/session";
 
-export default function EditorialLayout({
+export default async function EditorialLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  await requireEditorSession();
+
   return (
     <div className="docs-editorial-shell">
       {/* Sidebar */}

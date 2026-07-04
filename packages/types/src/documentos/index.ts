@@ -96,6 +96,8 @@ export interface Edital extends Omit<Document, "type"> {
   projectType: string | null;
   /** Project category pre-filled when submitting via this edital */
   projectCategory: string | null;
+  /** Perguntas frequentes exibidas na página pública do edital */
+  faq: { q: string; a: string }[];
 }
 
 // ─── Subscription ─────────────────────────────────────────────────────────────

@@ -19,7 +19,7 @@ import { PublicNav } from "../../../components/public-nav";
 import { EditalSubmitButton } from "../../../components/edital-submit-button";
 import { DocumentViewer } from "../../../components/document-viewer";
 import { VersionHistory } from "../../../components/version-history";
-import { db } from "@hebron/db/client";
+import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import {
   documents,
   editals,
@@ -28,8 +28,9 @@ import {
   tags,
   documentVersions,
 } from "@hebron/db/schema";
-import { and, or, eq, isNull, isNotNull, desc } from "drizzle-orm";
+import { and, eq, isNull, isNotNull, desc } from "drizzle-orm";
 import type { Edital, DocumentVersion } from "@hebron/types/documentos";
+import { getOptionalActorId } from "../../../lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -133,12 +134,17 @@ export async function generateMetadata({
   params,
 }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const rows = await db
-    .select({ title: documents.title, contentMd: documents.contentMd })
-    .from(editals)
-    .innerJoin(documents, eq(editals.id, documents.id))
-    .where(and(eq(documents.slug, slug), isNull(documents.deletedAt)))
-    .limit(1);
+  const actorId = await getOptionalActorId();
+  const rows = await withAuthenticatedContext(
+    actorId ? { actorId } : null,
+    (tx) =>
+      tx
+        .select({ title: documents.title, contentMd: documents.contentMd })
+        .from(editals)
+        .innerJoin(documents, eq(editals.id, documents.id))
+        .where(and(eq(documents.slug, slug), isNull(documents.deletedAt)))
+        .limit(1),
+  );
 
   const row = rows[0];
   if (!row) return {};
@@ -154,88 +160,74 @@ export async function generateMetadata({
   };
 }
 
-// ─── Static FAQ items ─────────────────────────────────────────────────────────
-// FAQ answers are shared across all editals; project-specific info lives in the
-// edital document body.
-
-const FAQ_ITEMS = [
-  {
-    q: "Quem pode submeter?",
-    a: "Pastores, missionários e instituições religiosas cadastradas e aprovadas pelo super_admin.",
-  },
-  {
-    q: "Posso submeter mais de um projeto?",
-    a: "Sim, desde que respeitando o teto orçamentário anual da instituição vinculada.",
-  },
-  {
-    q: "Como funciona a avaliação?",
-    a: "Avaliadores designados emitem parecer; diretoria e conselho votam de forma secreta; quórum mínimo de 50%.",
-  },
-  {
-    q: "Em quanto tempo recebo a resposta?",
-    a: "A homologação ocorre em até 15 dias após a votação da diretoria e conselho.",
-  },
-];
-
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function EditalDetailPage({ params }: PageProps) {
   const { slug } = await params;
+  const actorId = await getOptionalActorId();
 
-  // Fetch edital
-  const rows = await db
-    .select({
-      id: documents.id,
-      title: documents.title,
-      slug: documents.slug,
-      contentMd: documents.contentMd,
-      fileUrl: documents.fileUrl,
-      visibility: documents.visibility,
-      categoryId: documents.categoryId,
-      categoryName: categories.name,
-      categorySlug: categories.slug,
-      authorId: documents.authorId,
-      publishedAt: documents.publishedAt,
-      deletedAt: documents.deletedAt,
-      createdAt: documents.createdAt,
-      updatedAt: documents.updatedAt,
-      editalOpensAt: editals.opensAt,
-      editalClosesAt: editals.closesAt,
-      editalProjectType: editals.projectType,
-      editalProjectCategoryId: editals.projectCategoryId,
-    })
-    .from(editals)
-    .innerJoin(documents, eq(editals.id, documents.id))
-    .leftJoin(categories, eq(categories.id, documents.categoryId))
-    .where(
-      and(
-        eq(documents.slug, slug),
-        isNull(documents.deletedAt),
-        isNotNull(documents.publishedAt),
-        or(
-          eq(documents.visibility, "public"),
-          eq(documents.visibility, "internal"),
-        ),
-      ),
-    )
-    .limit(1);
+  // Fetch edital + tags + versions in one authenticated context — RLS
+  // filters by visibility for real, including `restricted` for the roles
+  // that are supposed to see it (this route previously hardcoded
+  // public/internal only, so restricted editais never showed even to
+  // super_admin/diretor/conselheiro).
+  const { row, tagRows, versionRows } = await withAuthenticatedContext(
+    actorId ? { actorId } : null,
+    async (tx) => {
+      const rows = await tx
+        .select({
+          id: documents.id,
+          title: documents.title,
+          slug: documents.slug,
+          contentMd: documents.contentMd,
+          fileUrl: documents.fileUrl,
+          visibility: documents.visibility,
+          categoryId: documents.categoryId,
+          categoryName: categories.name,
+          categorySlug: categories.slug,
+          authorId: documents.authorId,
+          publishedAt: documents.publishedAt,
+          deletedAt: documents.deletedAt,
+          createdAt: documents.createdAt,
+          updatedAt: documents.updatedAt,
+          editalOpensAt: editals.opensAt,
+          editalClosesAt: editals.closesAt,
+          editalProjectType: editals.projectType,
+          editalProjectCategoryId: editals.projectCategoryId,
+          editalFaq: editals.faq,
+        })
+        .from(editals)
+        .innerJoin(documents, eq(editals.id, documents.id))
+        .leftJoin(categories, eq(categories.id, documents.categoryId))
+        .where(
+          and(
+            eq(documents.slug, slug),
+            isNull(documents.deletedAt),
+            isNotNull(documents.publishedAt),
+          ),
+        )
+        .limit(1);
 
-  const row = rows[0];
+      const row = rows[0];
+      if (!row) return { row: null, tagRows: [], versionRows: [] };
+
+      const tagRows = await tx
+        .select({ tagId: tags.id, tagName: tags.name, tagSlug: tags.slug })
+        .from(documentTags)
+        .innerJoin(tags, eq(tags.id, documentTags.tagId))
+        .where(eq(documentTags.documentId, row.id));
+
+      const versionRows = await tx
+        .select()
+        .from(documentVersions)
+        .where(eq(documentVersions.documentId, row.id))
+        .orderBy(desc(documentVersions.versionNumber));
+
+      return { row, tagRows, versionRows };
+    },
+  );
+
   if (!row) notFound();
-
-  // Tags
-  const tagRows = await db
-    .select({ tagId: tags.id, tagName: tags.name, tagSlug: tags.slug })
-    .from(documentTags)
-    .innerJoin(tags, eq(tags.id, documentTags.tagId))
-    .where(eq(documentTags.documentId, row.id));
-
-  // Versions
-  const versionRows = await db
-    .select()
-    .from(documentVersions)
-    .where(eq(documentVersions.documentId, row.id))
-    .orderBy(desc(documentVersions.versionNumber));
 
   const versions = versionRows.map(adaptVersion);
   const latestVersion = versions[0] ?? null;
@@ -290,6 +282,7 @@ export default async function EditalDetailPage({ params }: PageProps) {
     closesAt: row.editalClosesAt,
     projectType: row.editalProjectType,
     projectCategory: row.editalProjectCategoryId ?? null,
+    faq: row.editalFaq,
   };
 
   const status = getEditalStatus(edital);
@@ -661,43 +654,45 @@ export default async function EditalDetailPage({ params }: PageProps) {
             </div>
 
             {/* FAQ — native <details>/<summary>, no JavaScript required */}
-            <div
-              className="hb-card"
-              style={{ padding: "24px 28px", marginBottom: 20 }}
-            >
-              <p className="hb-section-label" style={{ marginBottom: 4 }}>
-                Perguntas frequentes
-              </p>
-              <h2
-                style={{
-                  fontFamily: "var(--font-display)",
-                  fontSize: 18,
-                  fontWeight: 700,
-                  margin: "4px 0 18px",
-                  color: "var(--fg)",
-                }}
+            {edital.faq.length > 0 && (
+              <div
+                className="hb-card"
+                style={{ padding: "24px 28px", marginBottom: 20 }}
               >
-                FAQ rápido
-              </h2>
-              {FAQ_ITEMS.map((item) => (
-                <details key={item.q} className="docs-faq-item">
-                  <summary className="docs-faq-trigger">
-                    {item.q}
-                    <Clock
-                      size={13}
-                      aria-hidden="true"
-                      style={{
-                        flexShrink: 0,
-                        color: "var(--fg-muted)",
-                        marginLeft: "auto",
-                      }}
-                      className="docs-faq-chevron"
-                    />
-                  </summary>
-                  <div className="docs-faq-body">{item.a}</div>
-                </details>
-              ))}
-            </div>
+                <p className="hb-section-label" style={{ marginBottom: 4 }}>
+                  Perguntas frequentes
+                </p>
+                <h2
+                  style={{
+                    fontFamily: "var(--font-display)",
+                    fontSize: 18,
+                    fontWeight: 700,
+                    margin: "4px 0 18px",
+                    color: "var(--fg)",
+                  }}
+                >
+                  FAQ rápido
+                </h2>
+                {edital.faq.map((item, i) => (
+                  <details key={i} className="docs-faq-item">
+                    <summary className="docs-faq-trigger">
+                      {item.q}
+                      <Clock
+                        size={13}
+                        aria-hidden="true"
+                        style={{
+                          flexShrink: 0,
+                          color: "var(--fg-muted)",
+                          marginLeft: "auto",
+                        }}
+                        className="docs-faq-chevron"
+                      />
+                    </summary>
+                    <div className="docs-faq-body">{item.a}</div>
+                  </details>
+                ))}
+              </div>
+            )}
 
             {/* Viewer */}
             {(signedUrl ?? row.contentMd) ? (

@@ -16,7 +16,7 @@ import { createClient } from "@supabase/supabase-js";
 import { PublicNav } from "../../components/public-nav";
 import { DocumentViewer } from "../../components/document-viewer";
 import { VersionHistory } from "../../components/version-history";
-import { db } from "@hebron/db/client";
+import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import {
   documents,
   editals,
@@ -27,6 +27,7 @@ import {
 } from "@hebron/db/schema";
 import { and, eq, isNull, isNotNull, desc } from "drizzle-orm";
 import type { Document, DocumentVersion } from "@hebron/types/documentos";
+import { getOptionalActorId } from "../../lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -100,22 +101,27 @@ export async function generateMetadata({
   params,
 }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const rows = await db
-    .select({
-      title: documents.title,
-      contentMd: documents.contentMd,
-      editalId: editals.id,
-    })
-    .from(documents)
-    .leftJoin(editals, eq(editals.id, documents.id))
-    .where(
-      and(
-        eq(documents.slug, slug),
-        isNull(documents.deletedAt),
-        isNull(editals.id),
-      ),
-    )
-    .limit(1);
+  const actorId = await getOptionalActorId();
+  const rows = await withAuthenticatedContext(
+    actorId ? { actorId } : null,
+    (tx) =>
+      tx
+        .select({
+          title: documents.title,
+          contentMd: documents.contentMd,
+          editalId: editals.id,
+        })
+        .from(documents)
+        .leftJoin(editals, eq(editals.id, documents.id))
+        .where(
+          and(
+            eq(documents.slug, slug),
+            isNull(documents.deletedAt),
+            isNull(editals.id),
+          ),
+        )
+        .limit(1),
+  );
 
   const row = rows[0];
   if (!row) return {};
@@ -136,59 +142,70 @@ export async function generateMetadata({
 
 export default async function DocumentPage({ params }: PageProps) {
   const { slug } = await params;
+  const actorId = await getOptionalActorId();
 
-  // Fetch document (exclude editals)
-  const docRows = await db
-    .select({
-      id: documents.id,
-      title: documents.title,
-      slug: documents.slug,
-      contentMd: documents.contentMd,
-      fileUrl: documents.fileUrl,
-      visibility: documents.visibility,
-      categoryId: documents.categoryId,
-      categoryName: categories.name,
-      categorySlug: categories.slug,
-      authorId: documents.authorId,
-      publishedAt: documents.publishedAt,
-      deletedAt: documents.deletedAt,
-      createdAt: documents.createdAt,
-      updatedAt: documents.updatedAt,
-      editalId: editals.id,
-    })
-    .from(documents)
-    .leftJoin(categories, eq(categories.id, documents.categoryId))
-    .leftJoin(editals, eq(editals.id, documents.id))
-    .where(
-      and(
-        eq(documents.slug, slug),
-        isNull(documents.deletedAt),
-        isNotNull(documents.publishedAt),
-        isNull(editals.id),
-      ),
-    )
-    .limit(1);
+  // Fetch document (exclude editals) + tags + versions in one authenticated
+  // context — RLS filters by visibility for real (F2-D1: esta página lia via
+  // client superuser e renderizava documentos `restricted` para qualquer
+  // anônimo que soubesse o slug).
+  const { docRow, tagRows, versionRows } = await withAuthenticatedContext(
+    actorId ? { actorId } : null,
+    async (tx) => {
+      const docRows = await tx
+        .select({
+          id: documents.id,
+          title: documents.title,
+          slug: documents.slug,
+          contentMd: documents.contentMd,
+          fileUrl: documents.fileUrl,
+          visibility: documents.visibility,
+          categoryId: documents.categoryId,
+          categoryName: categories.name,
+          categorySlug: categories.slug,
+          authorId: documents.authorId,
+          publishedAt: documents.publishedAt,
+          deletedAt: documents.deletedAt,
+          createdAt: documents.createdAt,
+          updatedAt: documents.updatedAt,
+          editalId: editals.id,
+        })
+        .from(documents)
+        .leftJoin(categories, eq(categories.id, documents.categoryId))
+        .leftJoin(editals, eq(editals.id, documents.id))
+        .where(
+          and(
+            eq(documents.slug, slug),
+            isNull(documents.deletedAt),
+            isNotNull(documents.publishedAt),
+            isNull(editals.id),
+          ),
+        )
+        .limit(1);
 
-  const docRow = docRows[0];
+      const docRow = docRows[0];
+      if (!docRow) return { docRow: null, tagRows: [], versionRows: [] };
+
+      const tagRows = await tx
+        .select({
+          tagId: tags.id,
+          tagName: tags.name,
+          tagSlug: tags.slug,
+        })
+        .from(documentTags)
+        .innerJoin(tags, eq(tags.id, documentTags.tagId))
+        .where(eq(documentTags.documentId, docRow.id));
+
+      const versionRows = await tx
+        .select()
+        .from(documentVersions)
+        .where(eq(documentVersions.documentId, docRow.id))
+        .orderBy(desc(documentVersions.versionNumber));
+
+      return { docRow, tagRows, versionRows };
+    },
+  );
+
   if (!docRow) notFound();
-
-  // Fetch tags
-  const tagRows = await db
-    .select({
-      tagId: tags.id,
-      tagName: tags.name,
-      tagSlug: tags.slug,
-    })
-    .from(documentTags)
-    .innerJoin(tags, eq(tags.id, documentTags.tagId))
-    .where(eq(documentTags.documentId, docRow.id));
-
-  // Fetch all versions
-  const versionRows = await db
-    .select()
-    .from(documentVersions)
-    .where(eq(documentVersions.documentId, docRow.id))
-    .orderBy(desc(documentVersions.versionNumber));
 
   const versions = versionRows.map(adaptDocVersion);
   const latestVersion = versions[0] ?? null;

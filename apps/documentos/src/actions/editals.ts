@@ -4,11 +4,15 @@ import { z } from "zod";
 import { and, eq, isNull } from "drizzle-orm";
 import crypto from "node:crypto";
 import { db } from "@hebron/db/client";
-import { documents, editals } from "@hebron/db/schema";
+import { documents, documentTags, editals } from "@hebron/db/schema";
 import { adminDocAction } from "../lib/safe-action";
 import { logDocumentAudit } from "../lib/audit";
 
 const visibilityEnum = z.enum(["public", "internal", "restricted"]);
+
+const faqSchema = z
+  .array(z.object({ q: z.string().min(1), a: z.string().min(1) }))
+  .default([]);
 
 function slugify(text: string): string {
   return text
@@ -46,6 +50,8 @@ export const createEdital = adminDocAction
           .optional(),
         projectType: z.string().max(100).nullable().optional(),
         projectCategoryId: z.string().uuid().nullable().optional(),
+        tagIds: z.array(z.string().uuid()).optional(),
+        faq: faqSchema,
       })
       .superRefine(async (data, ctx) => {
         if (data.cycleType === "anual") {
@@ -104,10 +110,20 @@ export const createEdital = adminDocAction
             : null,
           projectType: parsedInput.projectType ?? null,
           projectCategoryId: parsedInput.projectCategoryId ?? null,
+          faq: parsedInput.faq,
         })
         .returning();
 
       if (!edital) throw new Error("Falha ao criar edital");
+
+      if (parsedInput.tagIds?.length) {
+        await tx.insert(documentTags).values(
+          parsedInput.tagIds.map((tagId) => ({
+            documentId: document.id,
+            tagId,
+          })),
+        );
+      }
 
       return { document, edital };
     });
@@ -145,6 +161,10 @@ export const updateEdital = adminDocAction
       closesAt: z.string().datetime().nullable().optional(),
       projectType: z.string().max(100).nullable().optional(),
       projectCategoryId: z.string().uuid().nullable().optional(),
+      tagIds: z.array(z.string().uuid()).optional(),
+      faq: z
+        .array(z.object({ q: z.string().min(1), a: z.string().min(1) }))
+        .optional(),
     }),
   )
   .action(async ({ parsedInput, ctx }) => {
@@ -154,6 +174,8 @@ export const updateEdital = adminDocAction
       closesAt,
       projectType,
       projectCategoryId,
+      tagIds,
+      faq,
       ...docFields
     } = parsedInput;
 
@@ -194,12 +216,22 @@ export const updateEdital = adminDocAction
         editalUpdate.projectType = projectType ?? null;
       if (projectCategoryId !== undefined)
         editalUpdate.projectCategoryId = projectCategoryId ?? null;
+      if (faq !== undefined) editalUpdate.faq = faq;
 
       const [updatedEdital] = await tx
         .update(editals)
         .set(editalUpdate)
         .where(eq(editals.id, id))
         .returning();
+
+      if (tagIds !== undefined) {
+        await tx.delete(documentTags).where(eq(documentTags.documentId, id));
+        if (tagIds.length > 0) {
+          await tx
+            .insert(documentTags)
+            .values(tagIds.map((tagId) => ({ documentId: id, tagId })));
+        }
+      }
 
       return { document: updatedDoc, edital: updatedEdital };
     });

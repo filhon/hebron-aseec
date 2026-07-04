@@ -20,68 +20,69 @@
 
 > Atualizar conforme sessoes sao executadas.
 
-| Sessao | Data       | Prompt                                                       | Status                               |
-| ------ | ---------- | ------------------------------------------------------------ | ------------------------------------ |
-| S-1    | 2026-05-21 | P-0.1 — Monorepo Setup                                       | concluido                            |
-| S-2    | 2026-05-22 | P-0.1 — Monorepo Setup (complemento)                         | concluido                            |
-| S-3    | 2026-05-22 | P-0.2 — Design System Base                                   | concluido                            |
-| S-4    | 2026-05-22 | P-0.3 — Supabase Setup                                       | concluido                            |
-| S-5    | 2026-05-22 | P-0.4 — Autenticação e SSO                                   | concluido                            |
-| S-6    | 2026-05-22 | P-0.5 — Layout Compartilhado (AppShell)                      | concluido                            |
-| S-7    | 2026-05-22 | P-0.6 — Sistema de Notificações                              | concluido                            |
-| S-8    | 2026-05-22 | P-1.1 — Schema de Tipos Admin                                | concluido                            |
-| S-9    | 2026-05-22 | P-1.2 — Componentes UI Admin                                 | concluido                            |
-| S-10   | 2026-05-22 | P-1.3 — Telas e Páginas Admin                                | concluido                            |
-| S-11   | 2026-05-22 | P-1.4 — Formulários Admin                                    | concluido                            |
-| S-12   | 2026-05-22 | P-1.5 — Estados Admin                                        | concluido                            |
-| S-13   | 2026-05-25 | P-1.6 — Schema do Banco Admin                                | concluido                            |
-| S-14   | 2026-05-25 | P-1.7 — RLS Policies Admin                                   | concluido                            |
-| S-15   | 2026-05-25 | P-1.8 — Server Actions Admin                                 | concluido                            |
-| S-16   | 2026-05-25 | P-1.9 — Integração UI ↔ Backend Admin                        | concluido                            |
-| S-17   | 2026-05-25 | P-1.10 — Notificações e Emails Admin                         | concluido                            |
-| S-18   | 2026-05-26 | P-1.11 — Impersonation e Audit Avançado                      | concluido                            |
-| S-19   | 2026-05-26 | P-1.12 — Testes Admin                                        | concluido                            |
-| S-20   | 2026-06-13 | P-0.2b — Unificação do Design System                         | concluido                            |
-| S-21   | 2026-06-15 | P-1.12b — Ajustes Menores DS Admin                           | concluido                            |
-| S-22   | 2026-06-15 | P-0.3b — Pipeline de Migrations                              | concluido                            |
-| S-23   | 2026-06-16 | P-1.13 — Schema de Tipos Documentos                          | concluido                            |
-| S-24   | 2026-06-16 | P-1.14 — Componentes UI Documentos                           | concluido                            |
-| S-25   | 2026-06-16 | P-1.15 — Telas e Páginas Documentos                          | concluido                            |
-| S-26   | 2026-06-17 | P-1.16 — Formulários Documentos                              | concluido                            |
-| S-27   | 2026-06-17 | P-1.17 — Estados Documentos                                  | concluido                            |
-| S-28   | 2026-06-17 | P-1.18 — Schema do Banco Documentos                          | concluido                            |
-| S-29   | 2026-06-17 | P-1.20 — Server Actions Documentos                           | concluido                            |
-| S-30   | 2026-06-18 | P-1.22 — Notificações e Emails Documentos                    | concluido                            |
-| S-31   | 2026-06-18 | P-1.23 — Integração Documentos ↔ Projetos                    | concluido                            |
-| S-32   | 2026-06-18 | P-1.24 — Testes Documentos                                   | concluido                            |
-| S-33   | 2026-06-20 | P-2.1 — Schema de Tipos Projetos                             | concluido                            |
-| S-34   | 2026-06-20 | P-2.2 — Componentes UI Projetos                              | concluido                            |
-| S-35   | 2026-06-20 | P-2.3 — Telas e Páginas Projetos                             | concluido                            |
-| S-36   | 2026-06-20 | P-2.4 — Formulários Projetos                                 | concluido                            |
-| S-37   | 2026-06-22 | P-2.5 — Estados Projetos                                     | concluido                            |
-| S-38   | 2026-06-22 | P-2.6 — Schema do Banco Projetos                             | concluido                            |
-| S-39   | 2026-06-22 | P-2.7 — RLS Policies Projetos                                | concluido                            |
-| S-40   | 2026-06-22 | P-2.8 — Server Actions Projetos                              | concluido                            |
-| S-41   | 2026-06-22 | P-2.9 — Integração UI ↔ Backend Projetos                     | concluido                            |
-| S-42   | 2026-06-23 | P-2.10 — Notificações e Emails Projetos                      | concluido                            |
-| S-43   | 2026-06-23 | P-2.11 — Integrações Cross-App Projetos                      | parcial                              |
-| S-44   | 2026-06-23 | P-2.9b — Usuário Real no Header Projetos                     | concluido                            |
-| S-45   | 2026-06-23 | Polish — apps/projetos/src/app                               | concluido                            |
-| S-46   | 2026-06-23 | P-3.1 — Schema de Tipos Financeiro                           | concluido                            |
-| S-47   | 2026-06-25 | P-3.2 — Componentes UI Financeiro                            | concluido                            |
-| S-48   | 2026-06-25 | P-3.3 — Telas e Páginas Financeiro                           | concluido                            |
-| S-49   | 2026-06-26 | P-3.4 — Formulários Financeiro                               | concluido                            |
-| S-50   | 2026-06-26 | P-3.5 — Estados Financeiro                                   | concluido                            |
-| S-51   | 2026-06-26 | P-3.6 — Schema do Banco Financeiro                           | concluido                            |
-| S-52   | 2026-06-26 | P-3.7 — RLS Policies Financeiro                              | concluido                            |
-| S-53   | 2026-06-26 | P-3.8 — Server Actions Financeiro                            | concluido                            |
-| S-54   | 2026-07-03 | P-0.7 — Resgate do Banco (Onda 0)                            | concluido                            |
-| S-55   | 2026-07-03 | P-0.8 — Kit de Backend Compartilhado (Onda 0)                | concluido                            |
-| S-56   | 2026-07-03 | P-0.9 — CI Mínimo (Onda 0)                                   | concluido (validação em PR pendente) |
-| S-57   | 2026-07-03 | P-0.10 — Decisão B: RLS Ativa (Onda 0)                       | concluido                            |
-| S-58   | 2026-07-04 | P-0.11 — Drizzle-kit Reconciliado (Onda 0)                   | concluido                            |
-| S-59   | 2026-07-04 | P-1.25 — Admin: leitura protegida e fiação completa (Onda 1) | concluido                            |
-| S-60   | 2026-07-04 | P-1.26 — Onboarding: convite, auto-signup e MFA (Onda 1)     | concluido                            |
+| Sessao | Data       | Prompt                                                                  | Status                               |
+| ------ | ---------- | ----------------------------------------------------------------------- | ------------------------------------ |
+| S-1    | 2026-05-21 | P-0.1 — Monorepo Setup                                                  | concluido                            |
+| S-2    | 2026-05-22 | P-0.1 — Monorepo Setup (complemento)                                    | concluido                            |
+| S-3    | 2026-05-22 | P-0.2 — Design System Base                                              | concluido                            |
+| S-4    | 2026-05-22 | P-0.3 — Supabase Setup                                                  | concluido                            |
+| S-5    | 2026-05-22 | P-0.4 — Autenticação e SSO                                              | concluido                            |
+| S-6    | 2026-05-22 | P-0.5 — Layout Compartilhado (AppShell)                                 | concluido                            |
+| S-7    | 2026-05-22 | P-0.6 — Sistema de Notificações                                         | concluido                            |
+| S-8    | 2026-05-22 | P-1.1 — Schema de Tipos Admin                                           | concluido                            |
+| S-9    | 2026-05-22 | P-1.2 — Componentes UI Admin                                            | concluido                            |
+| S-10   | 2026-05-22 | P-1.3 — Telas e Páginas Admin                                           | concluido                            |
+| S-11   | 2026-05-22 | P-1.4 — Formulários Admin                                               | concluido                            |
+| S-12   | 2026-05-22 | P-1.5 — Estados Admin                                                   | concluido                            |
+| S-13   | 2026-05-25 | P-1.6 — Schema do Banco Admin                                           | concluido                            |
+| S-14   | 2026-05-25 | P-1.7 — RLS Policies Admin                                              | concluido                            |
+| S-15   | 2026-05-25 | P-1.8 — Server Actions Admin                                            | concluido                            |
+| S-16   | 2026-05-25 | P-1.9 — Integração UI ↔ Backend Admin                                   | concluido                            |
+| S-17   | 2026-05-25 | P-1.10 — Notificações e Emails Admin                                    | concluido                            |
+| S-18   | 2026-05-26 | P-1.11 — Impersonation e Audit Avançado                                 | concluido                            |
+| S-19   | 2026-05-26 | P-1.12 — Testes Admin                                                   | concluido                            |
+| S-20   | 2026-06-13 | P-0.2b — Unificação do Design System                                    | concluido                            |
+| S-21   | 2026-06-15 | P-1.12b — Ajustes Menores DS Admin                                      | concluido                            |
+| S-22   | 2026-06-15 | P-0.3b — Pipeline de Migrations                                         | concluido                            |
+| S-23   | 2026-06-16 | P-1.13 — Schema de Tipos Documentos                                     | concluido                            |
+| S-24   | 2026-06-16 | P-1.14 — Componentes UI Documentos                                      | concluido                            |
+| S-25   | 2026-06-16 | P-1.15 — Telas e Páginas Documentos                                     | concluido                            |
+| S-26   | 2026-06-17 | P-1.16 — Formulários Documentos                                         | concluido                            |
+| S-27   | 2026-06-17 | P-1.17 — Estados Documentos                                             | concluido                            |
+| S-28   | 2026-06-17 | P-1.18 — Schema do Banco Documentos                                     | concluido                            |
+| S-29   | 2026-06-17 | P-1.20 — Server Actions Documentos                                      | concluido                            |
+| S-30   | 2026-06-18 | P-1.22 — Notificações e Emails Documentos                               | concluido                            |
+| S-31   | 2026-06-18 | P-1.23 — Integração Documentos ↔ Projetos                               | concluido                            |
+| S-32   | 2026-06-18 | P-1.24 — Testes Documentos                                              | concluido                            |
+| S-33   | 2026-06-20 | P-2.1 — Schema de Tipos Projetos                                        | concluido                            |
+| S-34   | 2026-06-20 | P-2.2 — Componentes UI Projetos                                         | concluido                            |
+| S-35   | 2026-06-20 | P-2.3 — Telas e Páginas Projetos                                        | concluido                            |
+| S-36   | 2026-06-20 | P-2.4 — Formulários Projetos                                            | concluido                            |
+| S-37   | 2026-06-22 | P-2.5 — Estados Projetos                                                | concluido                            |
+| S-38   | 2026-06-22 | P-2.6 — Schema do Banco Projetos                                        | concluido                            |
+| S-39   | 2026-06-22 | P-2.7 — RLS Policies Projetos                                           | concluido                            |
+| S-40   | 2026-06-22 | P-2.8 — Server Actions Projetos                                         | concluido                            |
+| S-41   | 2026-06-22 | P-2.9 — Integração UI ↔ Backend Projetos                                | concluido                            |
+| S-42   | 2026-06-23 | P-2.10 — Notificações e Emails Projetos                                 | concluido                            |
+| S-43   | 2026-06-23 | P-2.11 — Integrações Cross-App Projetos                                 | parcial                              |
+| S-44   | 2026-06-23 | P-2.9b — Usuário Real no Header Projetos                                | concluido                            |
+| S-45   | 2026-06-23 | Polish — apps/projetos/src/app                                          | concluido                            |
+| S-46   | 2026-06-23 | P-3.1 — Schema de Tipos Financeiro                                      | concluido                            |
+| S-47   | 2026-06-25 | P-3.2 — Componentes UI Financeiro                                       | concluido                            |
+| S-48   | 2026-06-25 | P-3.3 — Telas e Páginas Financeiro                                      | concluido                            |
+| S-49   | 2026-06-26 | P-3.4 — Formulários Financeiro                                          | concluido                            |
+| S-50   | 2026-06-26 | P-3.5 — Estados Financeiro                                              | concluido                            |
+| S-51   | 2026-06-26 | P-3.6 — Schema do Banco Financeiro                                      | concluido                            |
+| S-52   | 2026-06-26 | P-3.7 — RLS Policies Financeiro                                         | concluido                            |
+| S-53   | 2026-06-26 | P-3.8 — Server Actions Financeiro                                       | concluido                            |
+| S-54   | 2026-07-03 | P-0.7 — Resgate do Banco (Onda 0)                                       | concluido                            |
+| S-55   | 2026-07-03 | P-0.8 — Kit de Backend Compartilhado (Onda 0)                           | concluido                            |
+| S-56   | 2026-07-03 | P-0.9 — CI Mínimo (Onda 0)                                              | concluido (validação em PR pendente) |
+| S-57   | 2026-07-03 | P-0.10 — Decisão B: RLS Ativa (Onda 0)                                  | concluido                            |
+| S-58   | 2026-07-04 | P-0.11 — Drizzle-kit Reconciliado (Onda 0)                              | concluido                            |
+| S-59   | 2026-07-04 | P-1.25 — Admin: leitura protegida e fiação completa (Onda 1)            | concluido                            |
+| S-60   | 2026-07-04 | P-1.26 — Onboarding: convite, auto-signup e MFA (Onda 1)                | concluido                            |
+| S-61   | 2026-07-04 | P-1.27 — Documentos: visibilidade e área editorial verdadeiras (Onda 1) | concluido                            |
 
 ---
 
@@ -2525,3 +2526,78 @@ MFA: `/mfa/enroll` (QR code + verificação, usa os primitivos `enrollTotp`/`ver
 - `apps/projetos/src/actions/auth.ts` (importa `createSupabaseServerActionClient` de `@hebron/auth/server`, não do barrel)
 - `apps/projetos/src/lib/queries.ts` (idem)
 - `pnpm-lock.yaml` (novas deps da intranet)
+
+---
+
+### S-61 — 2026-07-04 — P-1.27 Documentos: visibilidade e área editorial verdadeiras (Onda 1)
+
+**Prompt:** P-1.27 (`AUDIT/04-prompts-pendentes.md` §4)
+**Duracao:** ~4h
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+F2-D1 (a página `/[slug]` não tinha filtro de visibilidade nenhum — um documento `restricted` publicado renderizava por completo, PDF incluso via signed URL de service role, para qualquer anônimo que soubesse o slug) e F2-D2 (a área `/editorial` não tinha nenhuma autenticação — só um texto decorativo "Acesso restrito: super_admin / editor" no layout, sem `redirect` nem checagem — expondo rascunhos e KPIs a anônimos) corrigidos. Todas as páginas públicas (`/`, `/[slug]`, `/editais`, `/editais/[slug]`, `/busca`) passaram a ler via `withAuthenticatedContext` (`@hebron/db/authenticated`, criado em P-0.10 mas nunca antes adotado por nenhuma página do monorepo — só exercitado pelos próprios testes) em vez do client superuser `db`, deixando a RLS já declarada em P-1.19 executar de verdade pela primeira vez em código de produção. `/editorial/layout.tsx` ganhou `requireEditorSession()` (novo `apps/documentos/src/lib/session.ts`, mesmo padrão de `requireAdminSession` do admin), que gateia todas as sub-rotas editoriais de uma vez.
+
+FAQ de edital: existia uma aba "FAQ" completa no formulário de criação/edição desde P-1.16/1.20, mas o array digitado nunca era enviado às actions — a página pública mostrava um `FAQ_ITEMS` estático, idêntico para todo edital. Adicionada coluna `faq` (jsonb) em `documentos.editals` (migration `0017`), `createEdital`/`updateEdital` passaram a persistir, e a página pública passou a ler o FAQ real por edital.
+
+`publishDocument` nunca chamava nenhuma notificação (confirmado pelo próprio teste existente, que chamava `notifyNewDocument` manualmente depois de publicar, nunca através da action) — agora dispara `notifyEditalOpen` ou `notifyNewDocument` automaticamente dependendo de o documento publicado ter uma linha em `editals`. Lembrete de fechamento de edital (7 dias antes) ganhou `apps/documentos/src/jobs/edital-closing-reminders.ts`, documentado como pendente de registro quando `packages/jobs`/P-0.14 (Inngest) existir — essa infra ainda não existe no monorepo.
+
+4 rotas citadas na sidebar editorial (`/editorial/documentos`, `/editorial/editais`, `/editorial/assinaturas`, `/editorial/auditoria`) 404avam — todas criadas. `/assinaturas` (portal público, já referenciada pela home e nunca criada) também: reconecta o `SubscriptionForm` (construído em P-1.16, nunca importado por nenhuma página) às actions `subscribe`/`unsubscribe` já existentes.
+
+**Achado fora do escopo original do prompt, corrigido na mesma sessão por ser exatamente o padrão que a Fase 2 já tinha identificado (PD-1/CS-8):** ao auditar "zero componentes do Bloco A órfãos" depois de fechar o escopo literal do prompt, um grep de uso revelou que `DocumentForm`, `EditalForm` e `SearchBar` (construídos em P-1.14/1.16, completos — tag picker com criação inline, árvore de categorias, editor Markdown com preview, FAQ) nunca tinham sido importados por nenhuma página; `/editorial/novo` e `/editorial/[id]/editar` reimplementavam um subconjunto pior inline (sem suporte a tags, `<select>` plano em vez da árvore). Reescritos os dois para usar `DocumentForm`/`EditalForm` de verdade, e `/busca` para usar `SearchBar` (com filtro por tag agora funcional via `EXISTS` subquery, algo que não existia antes). Isso expôs que a criação de tag "local" no formulário nunca teve backend (nenhuma action de tags existia no app inteiro) — criado `apps/documentos/src/actions/tags.ts` (`createTag`/`listTags`) e um `resolveTagIds` nos wrappers client que troca ids `local-*` por tags reais antes do submit. Também exigiu adicionar `tagIds` a `createEdital`/`updateEdital` (só `createDocument`/`updateDocument` aceitavam) e um flag `hasExistingFile` nos dois formulários para não bloquear a edição de um documento/edital que já tem PDF salvo mas nenhum arquivo novo foi escolhido.
+
+**Criterios de aceite verificados:**
+
+- [x] anon não vê `internal`/`restricted` nem por slug — suíte de regressão pré-existente `rls.test.ts` (bloco "Regressão F2-D1/F2-D2", 4 testes, contra o mesmo padrão de consulta que a página usa) passa.
+- [x] editorial bloqueado sem papel — `apps/documentos/src/__tests__/session-gate.test.ts` (novo, 4 testes, mesmo padrão de `apps/admin/src/__tests__/session-gate.test.ts`): sem sessão → redirect; sessão `hospede` → redirect; `colaborador`/`super_admin` → passa.
+- [x] assinar categoria → publicar doc → e-mail chega — teste existente em `actions.test.ts` reescrito para chamar a action `subscribe()` de verdade (antes inseria a assinatura direto via `db.insert`, sem exercitar a action) e assertar que `publishDocument` sozinho já dispara `createNotification` (antes o teste só validava `notifyNewDocument` chamada manualmente, nunca através do fluxo real de publicação).
+- [x] zero rotas 404 na sidebar — auditado todo `href`/template literal do app; todas resolvem para uma página real.
+- [x] zero componentes do Bloco A órfãos — grep de uso após a correção: todo componente em `apps/documentos/src/components` tem ≥1 consumidor.
+- `pnpm --filter documentos typecheck lint test` verdes (48/48 testes, 5 arquivos) contra o Supabase de dev real.
+
+**Decisoes tomadas:**
+
+- Papel "editor" (BRAIN §6.7: "super_admins ou colaboradores com papel editor") não existe como `DESIGNATION_TYPE` no schema — `requireEditorSession` reusa o mesmo conjunto (`super_admin`, `diretor`, `conselheiro`, `colaborador`) já estabelecido em `lib/safe-action.ts` (`editorAction`) desde P-1.20, em vez de inventar uma modelagem nova fora do escopo deste prompt.
+- FAQ é campo do edital (jsonb em `documentos.editals`), não de `documents` genérico — a aba FAQ some do formulário quando o tipo selecionado é "documento" (só edital tem a coluna).
+- Rotas de assinatura resolvidas em duplicidade intencional: `/assinaturas` (portal público, auto-serviço, qualquer autenticado gerencia as próprias) e `/editorial/assinaturas` (visão agregada só para a equipe editorial — contagem por categoria + lista de assinaturas recentes, sem RLS de leitura própria porque é uma página administrativa).
+- Toggles `onNewVersion`/`onEditalOpen` do `SubscriptionForm` não têm coluna correspondente em `documentos.subscriptions` (a tabela só tem `user_id`+`category_id`, sem diferenciar tipo de evento) — tratados como um único estado combinado no wrapper cliente (qualquer toggle ligado = 1 assinatura), sem alterar o schema, já que ambos os tipos de notificação (`notifyNewDocument`/`notifyEditalOpen`) já consultam a mesma tabela sem distinção.
+- `projectCategory` do `EditalForm` (lista fixa de slugs tipo "evangelizacao") não é enviado a `createEdital`/`updateEdital` — a coluna real `project_category_id` é uma FK uuid para `documentos.categories`, incompatível com os slugs do formulário; enviá-la quebraria a validação Zod `.uuid()`. Pré-existente (a implementação inline anterior também nunca enviava esse campo); fora do escopo deste prompt resolver a modelagem.
+- Migration `0017` numerada manualmente na sequência de arquivo (não via `drizzle-kit generate`) — mesma prática já em uso desde `0015`/`0016` (que também não estão no `_journal.json` do drizzle-kit); o runner de aplicação (`migrate.ts`) não depende do journal, só ordena os arquivos por nome.
+
+**Debitos tecnicos / pendencias:**
+
+- Lembrete de fechamento de edital (`runEditalClosingReminders`) não é chamado por ninguém — não há infra de cron/Inngest no monorepo ainda (P-0.14 não rodou). Função pronta e documentada para quando existir.
+- `projectCategoryId` de edital nunca é preenchido (ver decisão acima) — o botão "submeter projeto" do edital nunca pré-preenche categoria de projeto, só tipo. Pré-existente, não introduzido nesta sessão.
+- Consentimento de e-mail/comunicação (P-0.13, LGPD) ainda não existe — `/assinaturas` e `/editorial/assinaturas` não checam nenhum opt-in de comunicação além da própria ação de assinar a categoria.
+- Sem verificação em navegador real (Playwright/Puppeteer indisponíveis neste ambiente) — verificado via `pnpm typecheck`/`lint`/`test` contra o Supabase de dev real, não por clique em UI.
+
+**Arquivos criados:**
+
+- `packages/db/src/migrations/0017_documentos_editals_faq.sql`
+- `apps/documentos/src/lib/session.ts`
+- `apps/documentos/src/actions/tags.ts`
+- `apps/documentos/src/jobs/edital-closing-reminders.ts`
+- `apps/documentos/src/components/document-row-actions.tsx`
+- `apps/documentos/src/app/editorial/novo/_client.tsx`
+- `apps/documentos/src/app/editorial/documentos/page.tsx`
+- `apps/documentos/src/app/editorial/editais/page.tsx`
+- `apps/documentos/src/app/editorial/assinaturas/page.tsx`
+- `apps/documentos/src/app/editorial/auditoria/page.tsx`
+- `apps/documentos/src/app/assinaturas/page.tsx`
+- `apps/documentos/src/app/assinaturas/_client.tsx`
+- `apps/documentos/src/app/busca/_search-bar-client.tsx`
+- `apps/documentos/src/__tests__/session-gate.test.ts`
+
+**Arquivos modificados:**
+
+- `packages/db/src/schema/documentos.ts` (`faq` jsonb em `editals`)
+- `packages/types/src/documentos/index.ts` (`Edital.faq`)
+- `apps/documentos/src/actions/documents.ts` (`publishDocument` dispara `notifyEditalOpen`/`notifyNewDocument`)
+- `apps/documentos/src/actions/editals.ts` (`faq`, `tagIds` em `createEdital`/`updateEdital`)
+- `apps/documentos/src/app/page.tsx`, `app/busca/page.tsx`, `app/editais/page.tsx`, `app/editais/[slug]/page.tsx`, `app/[slug]/page.tsx` (leitura via `withAuthenticatedContext`)
+- `apps/documentos/src/app/editorial/layout.tsx` (`requireEditorSession`)
+- `apps/documentos/src/app/editorial/novo/page.tsx`, `app/editorial/[id]/editar/page.tsx`, `app/editorial/[id]/editar/_client.tsx` (reescritos para usar `DocumentForm`/`EditalForm`)
+- `apps/documentos/src/components/document-form.tsx`, `components/edital-form.tsx` (`newTags`, `hasExistingFile`)
+- `apps/documentos/src/components/search-bar.tsx` (`initialFilters`)
+- `apps/documentos/src/__tests__/actions.test.ts` (teste de notificação usa `subscribe()` real)

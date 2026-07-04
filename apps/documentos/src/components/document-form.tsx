@@ -38,6 +38,8 @@ export interface DocumentFormValues {
   visibility: Visibility;
   categoryId: string;
   tagIds: string[];
+  /** Tags criadas localmente (ids `local-*` em tagIds) ainda não persistidas. */
+  newTags: Tag[];
   content: string;
   contentMode: ContentMode;
   file: File | null;
@@ -70,7 +72,10 @@ const documentFormSchema = z
     }
   });
 
-function validate(values: DocumentFormValues): FormErrors {
+function validate(
+  values: DocumentFormValues,
+  hasExistingFile: boolean,
+): FormErrors {
   const result = documentFormSchema.safeParse(values);
   const errors: FormErrors = {};
   if (!result.success) {
@@ -79,7 +84,7 @@ function validate(values: DocumentFormValues): FormErrors {
       if (key && !errors[key]) errors[key] = issue.message;
     }
   }
-  if (values.contentMode === "pdf" && !values.file) {
+  if (values.contentMode === "pdf" && !values.file && !hasExistingFile) {
     errors.file = "Selecione um arquivo PDF";
   }
   return errors;
@@ -161,6 +166,8 @@ export interface DocumentFormProps {
   onSubmit: (values: DocumentFormValues) => void;
   onSaveDraft?: (values: Partial<DocumentFormValues>) => void;
   mode?: "create" | "edit";
+  /** Em modo de edição, indica que já existe um PDF salvo (mantém-se se nenhum novo arquivo for enviado). */
+  hasExistingFile?: boolean;
   isLoading?: boolean;
 }
 
@@ -171,6 +178,7 @@ export function DocumentForm({
   onSubmit,
   onSaveDraft,
   mode = "create",
+  hasExistingFile = false,
   isLoading = false,
 }: DocumentFormProps) {
   const titleId = useId();
@@ -185,6 +193,7 @@ export function DocumentForm({
     visibility: initialValues?.visibility ?? "public",
     categoryId: initialValues?.categoryId ?? "",
     tagIds: initialValues?.tagIds ?? [],
+    newTags: [],
     content: initialValues?.content ?? "",
     contentMode: initialValues?.contentMode ?? "markdown",
     file: initialValues?.file ?? null,
@@ -319,10 +328,11 @@ export function DocumentForm({
     setTouched(
       new Set(["title", "description", "categoryId", "content", "file"]),
     );
-    const errs = validate(values);
+    const errs = validate(values, hasExistingFile);
     setErrors(errs);
     if (Object.keys(errs).length === 0) {
-      onSubmit(values);
+      const newTags = localTags.filter((t) => values.tagIds.includes(t.id));
+      onSubmit({ ...values, newTags });
     }
   }
 

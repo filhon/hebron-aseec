@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { PublicNav } from "../../components/public-nav";
 import { EditalCard } from "../../components/edital-card";
-import { db } from "@hebron/db/client";
+import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import {
   documents,
   editals,
@@ -10,8 +10,9 @@ import {
   documentTags,
   tags,
 } from "@hebron/db/schema";
-import { and, or, eq, isNull, isNotNull, desc, inArray } from "drizzle-orm";
+import { and, eq, isNull, isNotNull, desc, inArray } from "drizzle-orm";
 import type { Edital } from "@hebron/types/documentos";
+import { getOptionalActorId } from "../../lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -49,57 +50,61 @@ export default async function EditaisPage({ searchParams }: PageProps) {
     ["all", "open", "permanent", "closed"].includes(status) ? status : "all"
   ) as StatusFilter;
 
-  // Fetch all published public/internal editals
-  const rows = await db
-    .select({
-      id: documents.id,
-      title: documents.title,
-      slug: documents.slug,
-      contentMd: documents.contentMd,
-      fileUrl: documents.fileUrl,
-      visibility: documents.visibility,
-      categoryId: documents.categoryId,
-      categoryName: categories.name,
-      categorySlug: categories.slug,
-      authorId: documents.authorId,
-      publishedAt: documents.publishedAt,
-      deletedAt: documents.deletedAt,
-      createdAt: documents.createdAt,
-      updatedAt: documents.updatedAt,
-      editalOpensAt: editals.opensAt,
-      editalClosesAt: editals.closesAt,
-      editalProjectType: editals.projectType,
-    })
-    .from(editals)
-    .innerJoin(documents, eq(editals.id, documents.id))
-    .leftJoin(categories, eq(categories.id, documents.categoryId))
-    .where(
-      and(
-        isNull(documents.deletedAt),
-        isNotNull(documents.publishedAt),
-        or(
-          eq(documents.visibility, "public"),
-          eq(documents.visibility, "internal"),
-        ),
-      ),
-    )
-    .orderBy(desc(documents.publishedAt));
+  const actorId = await getOptionalActorId();
 
-  // Fetch tags for all editals
-  const editalIds = rows.map((r) => r.id);
-  const tagRows =
-    editalIds.length > 0
-      ? await db
-          .select({
-            documentId: documentTags.documentId,
-            tagId: tags.id,
-            tagName: tags.name,
-            tagSlug: tags.slug,
-          })
-          .from(documentTags)
-          .innerJoin(tags, eq(tags.id, documentTags.tagId))
-          .where(inArray(documentTags.documentId, editalIds))
-      : [];
+  // Fetch all published editals + tags in one authenticated context — RLS
+  // filters by visibility for real (public/internal for anon/authenticated,
+  // restricted for the roles allowed to see it).
+  const { rows, tagRows } = await withAuthenticatedContext(
+    actorId ? { actorId } : null,
+    async (tx) => {
+      const rows = await tx
+        .select({
+          id: documents.id,
+          title: documents.title,
+          slug: documents.slug,
+          contentMd: documents.contentMd,
+          fileUrl: documents.fileUrl,
+          visibility: documents.visibility,
+          categoryId: documents.categoryId,
+          categoryName: categories.name,
+          categorySlug: categories.slug,
+          authorId: documents.authorId,
+          publishedAt: documents.publishedAt,
+          deletedAt: documents.deletedAt,
+          createdAt: documents.createdAt,
+          updatedAt: documents.updatedAt,
+          editalOpensAt: editals.opensAt,
+          editalClosesAt: editals.closesAt,
+          editalProjectType: editals.projectType,
+        })
+        .from(editals)
+        .innerJoin(documents, eq(editals.id, documents.id))
+        .leftJoin(categories, eq(categories.id, documents.categoryId))
+        .where(
+          and(isNull(documents.deletedAt), isNotNull(documents.publishedAt)),
+        )
+        .orderBy(desc(documents.publishedAt));
+
+      // Fetch tags for all editals
+      const editalIds = rows.map((r) => r.id);
+      const tagRows =
+        editalIds.length > 0
+          ? await tx
+              .select({
+                documentId: documentTags.documentId,
+                tagId: tags.id,
+                tagName: tags.name,
+                tagSlug: tags.slug,
+              })
+              .from(documentTags)
+              .innerJoin(tags, eq(tags.id, documentTags.tagId))
+              .where(inArray(documentTags.documentId, editalIds))
+          : [];
+
+      return { rows, tagRows };
+    },
+  );
 
   const tagMap = new Map<
     string,
@@ -155,6 +160,7 @@ export default async function EditaisPage({ searchParams }: PageProps) {
       closesAt: row.editalClosesAt,
       projectType: row.editalProjectType,
       projectCategory: null,
+      faq: [],
     };
   });
 

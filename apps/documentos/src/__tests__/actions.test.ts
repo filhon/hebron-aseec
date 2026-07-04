@@ -431,21 +431,26 @@ describe("categorias — hierarquia", () => {
 describe("notifyNewDocument — fluxo de notificação", () => {
   it("dispara createNotification para cada subscriber da categoria", async () => {
     const { createNotification } = await import("@hebron/email");
+    const { resolveSession } = await import("@hebron/auth/server");
     const { createDocument, publishDocument } =
       await import("../actions/documents");
     const { createCategory } = await import("../actions/categories");
+    const { subscribe } = await import("../actions/subscriptions");
     const { notifyNewDocument } = await import("../lib/notifications");
 
-    // Cria categoria e inscreve subscriber
+    // Cria categoria
     const catResult = await createCategory({ name: "Notif Test Category" });
     const cat = requireDefined(catResult?.data?.category, "cat");
     notifCatId = cat.id;
 
-    const [sub] = await db
-      .insert(subscriptions)
-      .values({ userId: SUBSCRIBER_ID, categoryId: cat.id })
-      .returning();
-    notifSubId = requireDefined(sub, "sub").id;
+    // Subscriber "assina" a categoria via a action real (não db.insert direto)
+    vi.mocked(resolveSession).mockResolvedValueOnce({
+      actorId: SUBSCRIBER_ID,
+      roles: ["hospede"],
+    });
+    const subResult = await subscribe({ categoryId: cat.id });
+    const sub = requireDefined(subResult?.data?.subscription, "sub");
+    notifSubId = sub.id;
 
     // Cria e publica documento na categoria
     const docResult = await createDocument({
@@ -458,10 +463,20 @@ describe("notifyNewDocument — fluxo de notificação", () => {
 
     await publishDocument({ id: doc.id });
 
-    // Limpa spy antes de chamar notifyNewDocument
+    // publishDocument já dispara a notificação sozinho (sem chamada manual)
+    expect(vi.mocked(createNotification)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          userId: SUBSCRIBER_ID,
+          type: "document.published",
+        }),
+      }),
+    );
+
+    // Limpa spy antes de chamar notifyNewDocument manualmente de novo
     vi.mocked(createNotification).mockClear();
 
-    // Dispara a função de notificação
+    // Dispara a função de notificação diretamente também
     await notifyNewDocument(doc.id);
 
     // Verifica que createNotification foi chamado para o subscriber

@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { PublicNav } from "../components/public-nav";
 import { EditalCard } from "../components/edital-card";
-import { db } from "@hebron/db/client";
+import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import {
   documents,
   editals,
@@ -29,7 +29,6 @@ import {
 } from "@hebron/db/schema";
 import {
   and,
-  or,
   eq,
   isNull,
   isNotNull,
@@ -43,6 +42,7 @@ import type {
   Edital,
   DocumentVersion,
 } from "@hebron/types/documentos";
+import { getOptionalActorId } from "../lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -198,192 +198,212 @@ function adaptEdital(
     closesAt: row.editalClosesAt,
     projectType: row.editalProjectType,
     projectCategory: null,
+    faq: [],
   };
 }
 
 // ─── DB queries ───────────────────────────────────────────────────────────────
 
 async function buildPageData() {
-  const [editaisRows, recentDocRows, catRows, certidoesRows, [totalRow]] =
-    await Promise.all([
-      // All published public/internal editals
-      db
-        .select({
-          id: documents.id,
-          title: documents.title,
-          slug: documents.slug,
-          contentMd: documents.contentMd,
-          fileUrl: documents.fileUrl,
-          visibility: documents.visibility,
-          categoryId: documents.categoryId,
-          categoryName: categories.name,
-          categorySlug: categories.slug,
-          authorId: documents.authorId,
-          publishedAt: documents.publishedAt,
-          deletedAt: documents.deletedAt,
-          createdAt: documents.createdAt,
-          updatedAt: documents.updatedAt,
-          editalOpensAt: editals.opensAt,
-          editalClosesAt: editals.closesAt,
-          editalProjectType: editals.projectType,
-        })
-        .from(editals)
-        .innerJoin(documents, eq(editals.id, documents.id))
-        .leftJoin(categories, eq(categories.id, documents.categoryId))
-        .where(
-          and(
-            isNull(documents.deletedAt),
-            isNotNull(documents.publishedAt),
-            or(
-              eq(documents.visibility, "public"),
-              eq(documents.visibility, "internal"),
+  const actorId = await getOptionalActorId();
+
+  const {
+    editaisRows,
+    recentDocRows,
+    catRows,
+    certidoesRows,
+    totalRow,
+    tagMap,
+    editalTagMap,
+    latestVersionMap,
+  } = await withAuthenticatedContext(
+    actorId ? { actorId } : null,
+    async (tx) => {
+      const [editaisRows, recentDocRows, catRows, certidoesRows, [totalRow]] =
+        await Promise.all([
+          // Published editals — RLS filters by visibility (public/internal for
+          // anon/authenticated, restricted for the roles allowed to see it).
+          tx
+            .select({
+              id: documents.id,
+              title: documents.title,
+              slug: documents.slug,
+              contentMd: documents.contentMd,
+              fileUrl: documents.fileUrl,
+              visibility: documents.visibility,
+              categoryId: documents.categoryId,
+              categoryName: categories.name,
+              categorySlug: categories.slug,
+              authorId: documents.authorId,
+              publishedAt: documents.publishedAt,
+              deletedAt: documents.deletedAt,
+              createdAt: documents.createdAt,
+              updatedAt: documents.updatedAt,
+              editalOpensAt: editals.opensAt,
+              editalClosesAt: editals.closesAt,
+              editalProjectType: editals.projectType,
+            })
+            .from(editals)
+            .innerJoin(documents, eq(editals.id, documents.id))
+            .leftJoin(categories, eq(categories.id, documents.categoryId))
+            .where(
+              and(
+                isNull(documents.deletedAt),
+                isNotNull(documents.publishedAt),
+              ),
+            )
+            .orderBy(desc(documents.publishedAt)),
+
+          // Recent non-edital published documents
+          tx
+            .select({
+              id: documents.id,
+              title: documents.title,
+              slug: documents.slug,
+              contentMd: documents.contentMd,
+              fileUrl: documents.fileUrl,
+              visibility: documents.visibility,
+              categoryId: documents.categoryId,
+              categoryName: categories.name,
+              categorySlug: categories.slug,
+              authorId: documents.authorId,
+              publishedAt: documents.publishedAt,
+              deletedAt: documents.deletedAt,
+              createdAt: documents.createdAt,
+              updatedAt: documents.updatedAt,
+              editalId: editals.id,
+            })
+            .from(documents)
+            .leftJoin(categories, eq(categories.id, documents.categoryId))
+            .leftJoin(editals, eq(editals.id, documents.id))
+            .where(
+              and(
+                isNull(documents.deletedAt),
+                isNotNull(documents.publishedAt),
+                isNull(editals.id),
+              ),
+            )
+            .orderBy(desc(documents.updatedAt))
+            .limit(6),
+
+          // All categories for count
+          tx
+            .select({
+              id: categories.id,
+              name: categories.name,
+              slug: categories.slug,
+            })
+            .from(categories),
+
+          // Certidões vigentes (documents in certidoes categories)
+          tx
+            .select({
+              id: documents.id,
+              title: documents.title,
+              slug: documents.slug,
+              categoryName: categories.name,
+              fileUrl: documents.fileUrl,
+              updatedAt: documents.updatedAt,
+            })
+            .from(documents)
+            .innerJoin(categories, eq(categories.id, documents.categoryId))
+            .where(
+              and(
+                isNull(documents.deletedAt),
+                isNotNull(documents.publishedAt),
+                sql`${categories.slug} LIKE 'certidoes%'`,
+              ),
+            )
+            .orderBy(asc(documents.title))
+            .limit(6),
+
+          // Total published documents
+          tx
+            .select({ n: sql<number>`count(*)::int` })
+            .from(documents)
+            .where(
+              and(
+                isNull(documents.deletedAt),
+                isNotNull(documents.publishedAt),
+              ),
             ),
-          ),
-        )
-        .orderBy(desc(documents.publishedAt)),
+        ]);
 
-      // Recent non-edital published documents
-      db
-        .select({
-          id: documents.id,
-          title: documents.title,
-          slug: documents.slug,
-          contentMd: documents.contentMd,
-          fileUrl: documents.fileUrl,
-          visibility: documents.visibility,
-          categoryId: documents.categoryId,
-          categoryName: categories.name,
-          categorySlug: categories.slug,
-          authorId: documents.authorId,
-          publishedAt: documents.publishedAt,
-          deletedAt: documents.deletedAt,
-          createdAt: documents.createdAt,
-          updatedAt: documents.updatedAt,
-          editalId: editals.id,
-        })
-        .from(documents)
-        .leftJoin(categories, eq(categories.id, documents.categoryId))
-        .leftJoin(editals, eq(editals.id, documents.id))
-        .where(
-          and(
-            isNull(documents.deletedAt),
-            isNotNull(documents.publishedAt),
-            isNull(editals.id),
-            or(
-              eq(documents.visibility, "public"),
-              eq(documents.visibility, "internal"),
-            ),
-          ),
-        )
-        .orderBy(desc(documents.updatedAt))
-        .limit(6),
+      // Fetch tags for recent docs
+      const recentDocIds = recentDocRows.map((r) => r.id);
+      const tagRows =
+        recentDocIds.length > 0
+          ? await tx
+              .select({
+                documentId: documentTags.documentId,
+                tagId: tags.id,
+                tagName: tags.name,
+                tagSlug: tags.slug,
+              })
+              .from(documentTags)
+              .innerJoin(tags, eq(tags.id, documentTags.tagId))
+              .where(inArray(documentTags.documentId, recentDocIds))
+          : [];
 
-      // All categories for count
-      db
-        .select({
-          id: categories.id,
-          name: categories.name,
-          slug: categories.slug,
-        })
-        .from(categories),
+      const tagMap = new Map<string, DocTag[]>();
+      for (const t of tagRows) {
+        const arr = tagMap.get(t.documentId) ?? [];
+        arr.push({ id: t.tagId, name: t.tagName, slug: t.tagSlug });
+        tagMap.set(t.documentId, arr);
+      }
 
-      // Certidões vigentes (documents in certidoes categories)
-      db
-        .select({
-          id: documents.id,
-          title: documents.title,
-          slug: documents.slug,
-          categoryName: categories.name,
-          fileUrl: documents.fileUrl,
-          updatedAt: documents.updatedAt,
-        })
-        .from(documents)
-        .innerJoin(categories, eq(categories.id, documents.categoryId))
-        .where(
-          and(
-            isNull(documents.deletedAt),
-            isNotNull(documents.publishedAt),
-            or(
-              eq(documents.visibility, "public"),
-              eq(documents.visibility, "internal"),
-            ),
-            sql`${categories.slug} LIKE 'certidoes%'`,
-          ),
-        )
-        .orderBy(asc(documents.title))
-        .limit(6),
+      // Fetch tags for editals
+      const editalIds = editaisRows.map((r) => r.id);
+      const editalTagRows =
+        editalIds.length > 0
+          ? await tx
+              .select({
+                documentId: documentTags.documentId,
+                tagId: tags.id,
+                tagName: tags.name,
+                tagSlug: tags.slug,
+              })
+              .from(documentTags)
+              .innerJoin(tags, eq(tags.id, documentTags.tagId))
+              .where(inArray(documentTags.documentId, editalIds))
+          : [];
 
-      // Total published documents
-      db
-        .select({ n: sql<number>`count(*)::int` })
-        .from(documents)
-        .where(
-          and(isNull(documents.deletedAt), isNotNull(documents.publishedAt)),
-        ),
-    ]);
+      const editalTagMap = new Map<string, DocTag[]>();
+      for (const t of editalTagRows) {
+        const arr = editalTagMap.get(t.documentId) ?? [];
+        arr.push({ id: t.tagId, name: t.tagName, slug: t.tagSlug });
+        editalTagMap.set(t.documentId, arr);
+      }
 
-  // Fetch tags for recent docs
-  const recentDocIds = recentDocRows.map((r) => r.id);
-  const tagRows =
-    recentDocIds.length > 0
-      ? await db
-          .select({
-            documentId: documentTags.documentId,
-            tagId: tags.id,
-            tagName: tags.name,
-            tagSlug: tags.slug,
-          })
-          .from(documentTags)
-          .innerJoin(tags, eq(tags.id, documentTags.tagId))
-          .where(inArray(documentTags.documentId, recentDocIds))
-      : [];
+      // Fetch latest versions for recent docs
+      const versionRows =
+        recentDocIds.length > 0
+          ? await tx
+              .select()
+              .from(documentVersions)
+              .where(inArray(documentVersions.documentId, recentDocIds))
+              .orderBy(desc(documentVersions.versionNumber))
+          : [];
 
-  const tagMap = new Map<string, DocTag[]>();
-  for (const t of tagRows) {
-    const arr = tagMap.get(t.documentId) ?? [];
-    arr.push({ id: t.tagId, name: t.tagName, slug: t.tagSlug });
-    tagMap.set(t.documentId, arr);
-  }
+      const latestVersionMap = new Map<string, DbVersionRow>();
+      for (const v of versionRows) {
+        if (!latestVersionMap.has(v.documentId)) {
+          latestVersionMap.set(v.documentId, v);
+        }
+      }
 
-  // Fetch tags for editals
-  const editalIds = editaisRows.map((r) => r.id);
-  const editalTagRows =
-    editalIds.length > 0
-      ? await db
-          .select({
-            documentId: documentTags.documentId,
-            tagId: tags.id,
-            tagName: tags.name,
-            tagSlug: tags.slug,
-          })
-          .from(documentTags)
-          .innerJoin(tags, eq(tags.id, documentTags.tagId))
-          .where(inArray(documentTags.documentId, editalIds))
-      : [];
-
-  const editalTagMap = new Map<string, DocTag[]>();
-  for (const t of editalTagRows) {
-    const arr = editalTagMap.get(t.documentId) ?? [];
-    arr.push({ id: t.tagId, name: t.tagName, slug: t.tagSlug });
-    editalTagMap.set(t.documentId, arr);
-  }
-
-  // Fetch latest versions for recent docs
-  const versionRows =
-    recentDocIds.length > 0
-      ? await db
-          .select()
-          .from(documentVersions)
-          .where(inArray(documentVersions.documentId, recentDocIds))
-          .orderBy(desc(documentVersions.versionNumber))
-      : [];
-
-  const latestVersionMap = new Map<string, DbVersionRow>();
-  for (const v of versionRows) {
-    if (!latestVersionMap.has(v.documentId)) {
-      latestVersionMap.set(v.documentId, v);
-    }
-  }
+      return {
+        editaisRows,
+        recentDocRows,
+        catRows,
+        certidoesRows,
+        totalRow,
+        tagMap,
+        editalTagMap,
+        latestVersionMap,
+      };
+    },
+  );
 
   const recentDocs: Document[] = recentDocRows.map((row) =>
     adaptDoc(

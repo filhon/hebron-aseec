@@ -9,10 +9,12 @@ import {
   documents,
   documentTags,
   documentVersions,
+  editals,
   views,
 } from "@hebron/db/schema";
 import { editorAction, authenticatedAction } from "../lib/safe-action";
 import { logDocumentAudit } from "../lib/audit";
+import { notifyNewDocument, notifyEditalOpen } from "../lib/notifications";
 
 const visibilityEnum = z.enum(["public", "internal", "restricted"]);
 
@@ -237,6 +239,18 @@ export const publishDocument = editorAction
       entityId: parsedInput.id,
       diff: { publishedAt: { before: null, after: now } },
     });
+
+    const [editalRow] = await db
+      .select({ id: editals.id })
+      .from(editals)
+      .where(eq(editals.id, parsedInput.id))
+      .limit(1);
+
+    if (editalRow) {
+      await notifyEditalOpen(parsedInput.id);
+    } else {
+      await notifyNewDocument(parsedInput.id);
+    }
 
     return { document: updated };
   });

@@ -1,15 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import {
-  Search,
-  X,
-  ChevronRight,
-  FileText,
-  Scroll,
-  Filter,
-} from "lucide-react";
+import { Search, X, ChevronRight, FileText, Scroll } from "lucide-react";
 import { PublicNav } from "../../components/public-nav";
-import { db } from "@hebron/db/client";
+import { BuscaSearchBar } from "./_search-bar-client";
+import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import {
   documents,
   editals,
@@ -28,6 +22,7 @@ import {
   sql,
   inArray,
 } from "drizzle-orm";
+import { getOptionalActorId } from "../../lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +35,7 @@ interface PageProps {
   searchParams: Promise<{
     q?: string;
     categoria?: string;
+    tags?: string;
     tipo?: string;
   }>;
 }
@@ -117,6 +113,7 @@ export default async function BuscaPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const q = sp.q?.trim() ?? "";
   const catId = sp.categoria ?? null;
+  const tagIds = sp.tags ? sp.tags.split(",").filter(Boolean) : [];
   const tipo = (
     ["all", "edital", "doc"].includes(sp.tipo ?? "all")
       ? (sp.tipo ?? "all")
@@ -124,147 +121,167 @@ export default async function BuscaPage({ searchParams }: PageProps) {
   ) as TipoFilter;
 
   const pattern = `%${q}%`;
+  const actorId = await getOptionalActorId();
 
-  // Load categories in parallel with results
-  const [catRows, editalRows, docRows] = await Promise.all([
-    db
-      .select({
-        id: categories.id,
-        name: categories.name,
-        slug: categories.slug,
-      })
-      .from(categories)
-      .orderBy(categories.name),
+  const tagFilter =
+    tagIds.length > 0
+      ? sql`EXISTS (
+          SELECT 1 FROM ${documentTags}
+          WHERE ${documentTags.documentId} = ${documents.id}
+            AND ${inArray(documentTags.tagId, tagIds)}
+        )`
+      : undefined;
 
-    // Edital results
-    tipo === "doc"
-      ? Promise.resolve([] as ResultRow[])
-      : db
+  // Load categories, tags, results, result-tags and versions in one
+  // authenticated context — RLS filters results by visibility for real
+  // (public/internal for anon/authenticated, restricted for the roles
+  // allowed to see it).
+  const { catRows, allTagRows, allResults, tagMap, versionMap } =
+    await withAuthenticatedContext(actorId ? { actorId } : null, async (tx) => {
+      const [catRows, allTagRows, editalRows, docRows] = await Promise.all([
+        tx
           .select({
-            id: documents.id,
-            title: documents.title,
-            slug: documents.slug,
-            contentMd: documents.contentMd,
-            visibility: documents.visibility,
-            categoryId: documents.categoryId,
-            categoryName: categories.name,
-            publishedAt: documents.publishedAt,
-            updatedAt: documents.updatedAt,
+            id: categories.id,
+            name: categories.name,
+            slug: categories.slug,
           })
-          .from(editals)
-          .innerJoin(documents, eq(editals.id, documents.id))
-          .leftJoin(categories, eq(categories.id, documents.categoryId))
-          .where(
-            and(
-              isNull(documents.deletedAt),
-              isNotNull(documents.publishedAt),
-              or(
-                eq(documents.visibility, "public"),
-                eq(documents.visibility, "internal"),
+          .from(categories)
+          .orderBy(categories.name),
+
+        tx
+          .select({ id: tags.id, name: tags.name, slug: tags.slug })
+          .from(tags)
+          .orderBy(tags.name),
+
+        // Edital results
+        tipo === "doc"
+          ? Promise.resolve([] as ResultRow[])
+          : tx
+              .select({
+                id: documents.id,
+                title: documents.title,
+                slug: documents.slug,
+                contentMd: documents.contentMd,
+                visibility: documents.visibility,
+                categoryId: documents.categoryId,
+                categoryName: categories.name,
+                publishedAt: documents.publishedAt,
+                updatedAt: documents.updatedAt,
+              })
+              .from(editals)
+              .innerJoin(documents, eq(editals.id, documents.id))
+              .leftJoin(categories, eq(categories.id, documents.categoryId))
+              .where(
+                and(
+                  isNull(documents.deletedAt),
+                  isNotNull(documents.publishedAt),
+                  q
+                    ? or(
+                        sql`${documents.title} ILIKE ${pattern}`,
+                        sql`${documents.contentMd} ILIKE ${pattern}`,
+                      )
+                    : undefined,
+                  catId ? eq(documents.categoryId, catId) : undefined,
+                  tagFilter,
+                ),
+              )
+              .orderBy(desc(documents.publishedAt))
+              .limit(tipo === "edital" ? 20 : 10)
+              .then((rows) =>
+                rows.map((r) => ({ ...r, isEdital: true as const })),
               ),
-              q
-                ? or(
-                    sql`${documents.title} ILIKE ${pattern}`,
-                    sql`${documents.contentMd} ILIKE ${pattern}`,
-                  )
-                : undefined,
-              catId ? eq(documents.categoryId, catId) : undefined,
-            ),
-          )
-          .orderBy(desc(documents.publishedAt))
-          .limit(tipo === "edital" ? 20 : 10)
-          .then((rows) => rows.map((r) => ({ ...r, isEdital: true as const }))),
 
-    // Document results (non-editals)
-    tipo === "edital"
-      ? Promise.resolve([] as ResultRow[])
-      : db
-          .select({
-            id: documents.id,
-            title: documents.title,
-            slug: documents.slug,
-            contentMd: documents.contentMd,
-            visibility: documents.visibility,
-            categoryId: documents.categoryId,
-            categoryName: categories.name,
-            publishedAt: documents.publishedAt,
-            updatedAt: documents.updatedAt,
-            editalId: editals.id,
-          })
-          .from(documents)
-          .leftJoin(categories, eq(categories.id, documents.categoryId))
-          .leftJoin(editals, eq(editals.id, documents.id))
-          .where(
-            and(
-              isNull(documents.deletedAt),
-              isNotNull(documents.publishedAt),
-              isNull(editals.id),
-              or(
-                eq(documents.visibility, "public"),
-                eq(documents.visibility, "internal"),
+        // Document results (non-editals)
+        tipo === "edital"
+          ? Promise.resolve([] as ResultRow[])
+          : tx
+              .select({
+                id: documents.id,
+                title: documents.title,
+                slug: documents.slug,
+                contentMd: documents.contentMd,
+                visibility: documents.visibility,
+                categoryId: documents.categoryId,
+                categoryName: categories.name,
+                publishedAt: documents.publishedAt,
+                updatedAt: documents.updatedAt,
+                editalId: editals.id,
+              })
+              .from(documents)
+              .leftJoin(categories, eq(categories.id, documents.categoryId))
+              .leftJoin(editals, eq(editals.id, documents.id))
+              .where(
+                and(
+                  isNull(documents.deletedAt),
+                  isNotNull(documents.publishedAt),
+                  isNull(editals.id),
+                  q
+                    ? or(
+                        sql`${documents.title} ILIKE ${pattern}`,
+                        sql`${documents.contentMd} ILIKE ${pattern}`,
+                      )
+                    : undefined,
+                  catId ? eq(documents.categoryId, catId) : undefined,
+                  tagFilter,
+                ),
+              )
+              .orderBy(desc(documents.updatedAt))
+              .limit(tipo === "doc" ? 20 : 10)
+              .then((rows) =>
+                rows.map((r) => ({ ...r, isEdital: false as const })),
               ),
-              q
-                ? or(
-                    sql`${documents.title} ILIKE ${pattern}`,
-                    sql`${documents.contentMd} ILIKE ${pattern}`,
-                  )
-                : undefined,
-              catId ? eq(documents.categoryId, catId) : undefined,
-            ),
-          )
-          .orderBy(desc(documents.updatedAt))
-          .limit(tipo === "doc" ? 20 : 10)
-          .then((rows) =>
-            rows.map((r) => ({ ...r, isEdital: false as const })),
-          ),
-  ]);
+      ]);
 
-  // Merge and sort all results
-  const allResults: ResultRow[] = [...editalRows, ...docRows].sort(
-    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-  );
+      // Merge and sort all results
+      const allResults: ResultRow[] = [...editalRows, ...docRows].sort(
+        (a, b) =>
+          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+      );
 
-  // Fetch tags for results (N+2 pattern)
-  const resultIds = allResults.map((r) => r.id);
-  const tagRows =
-    resultIds.length > 0
-      ? await db
-          .select({
-            documentId: documentTags.documentId,
-            tagId: tags.id,
-            tagName: tags.name,
-          })
-          .from(documentTags)
-          .innerJoin(tags, eq(tags.id, documentTags.tagId))
-          .where(inArray(documentTags.documentId, resultIds))
-      : [];
+      // Fetch tags for results (N+2 pattern)
+      const resultIds = allResults.map((r) => r.id);
+      const tagRows =
+        resultIds.length > 0
+          ? await tx
+              .select({
+                documentId: documentTags.documentId,
+                tagId: tags.id,
+                tagName: tags.name,
+              })
+              .from(documentTags)
+              .innerJoin(tags, eq(tags.id, documentTags.tagId))
+              .where(inArray(documentTags.documentId, resultIds))
+          : [];
 
-  const tagMap = new Map<string, Array<{ id: string; name: string }>>();
-  for (const t of tagRows) {
-    const arr = tagMap.get(t.documentId) ?? [];
-    arr.push({ id: t.tagId, name: t.tagName });
-    tagMap.set(t.documentId, arr);
-  }
+      const tagMap = new Map<string, Array<{ id: string; name: string }>>();
+      for (const t of tagRows) {
+        const arr = tagMap.get(t.documentId) ?? [];
+        arr.push({ id: t.tagId, name: t.tagName });
+        tagMap.set(t.documentId, arr);
+      }
 
-  // Fetch latest version numbers
-  const versionRows =
-    resultIds.length > 0
-      ? await db
-          .select({
-            documentId: documentVersions.documentId,
-            versionNumber: documentVersions.versionNumber,
-          })
-          .from(documentVersions)
-          .where(inArray(documentVersions.documentId, resultIds))
-          .orderBy(desc(documentVersions.versionNumber))
-      : [];
+      // Fetch latest version numbers
+      const versionRows =
+        resultIds.length > 0
+          ? await tx
+              .select({
+                documentId: documentVersions.documentId,
+                versionNumber: documentVersions.versionNumber,
+              })
+              .from(documentVersions)
+              .where(inArray(documentVersions.documentId, resultIds))
+              .orderBy(desc(documentVersions.versionNumber))
+          : [];
 
-  const versionMap = new Map<string, number>();
-  for (const v of versionRows) {
-    if (!versionMap.has(v.documentId)) {
-      versionMap.set(v.documentId, v.versionNumber);
-    }
-  }
+      const versionMap = new Map<string, number>();
+      for (const v of versionRows) {
+        if (!versionMap.has(v.documentId)) {
+          versionMap.set(v.documentId, v.versionNumber);
+        }
+      }
+
+      return { catRows, allTagRows, allResults, tagMap, versionMap };
+    });
 
   const editalCount = allResults.filter((r) => r.isEdital).length;
   const docCount = allResults.length - editalCount;
@@ -275,6 +292,8 @@ export default async function BuscaPage({ searchParams }: PageProps) {
     if (q && overrides.q !== null) p.set("q", overrides.q ?? q);
     if (catId && overrides.categoria !== null)
       p.set("categoria", overrides.categoria ?? catId);
+    if (tagIds.length > 0 && overrides.tags !== null)
+      p.set("tags", overrides.tags ?? tagIds.join(","));
     if (tipo !== "all" && overrides.tipo !== null)
       p.set("tipo", overrides.tipo ?? tipo);
     for (const [k, v] of Object.entries(overrides)) {
@@ -329,60 +348,24 @@ export default async function BuscaPage({ searchParams }: PageProps) {
           </p>
         </div>
 
-        {/* Search form — GET method triggers page navigation */}
-        <form
-          action="/busca"
-          method="get"
-          role="search"
-          style={{ marginBottom: 16 }}
-        >
-          {catId && <input type="hidden" name="categoria" value={catId} />}
-          {tipo !== "all" && <input type="hidden" name="tipo" value={tipo} />}
-          <div className="hb-field" style={{ fontSize: 15 }}>
-            <Search
-              size={18}
-              style={{ color: "var(--fg-muted)", flexShrink: 0 }}
-              aria-hidden="true"
-            />
-            <input
-              type="search"
-              name="q"
-              defaultValue={q}
-              placeholder="Buscar documentos, editais, políticas…"
-              autoFocus
-              autoComplete="off"
-              style={{
-                flex: 1,
-                background: "transparent",
-                border: "none",
-                outline: "none",
-                fontSize: 15,
-                color: "var(--fg)",
-              }}
-              aria-label="Campo de busca"
-            />
-            {q && (
-              <Link
-                href={buildUrl({ q: null })}
-                style={{
-                  color: "var(--fg-muted)",
-                  display: "flex",
-                  alignItems: "center",
-                }}
-                aria-label="Limpar busca"
-              >
-                <X size={16} aria-hidden="true" />
-              </Link>
-            )}
-            <button
-              type="submit"
-              className="hb-btn hb-btn-primary hb-btn-sm"
-              style={{ flexShrink: 0 }}
-            >
-              Buscar
-            </button>
-          </div>
-        </form>
+        {/* Search bar with category and tag filters */}
+        <div style={{ marginBottom: 16 }}>
+          <BuscaSearchBar
+            categories={catRows.map((c) => ({
+              id: c.id,
+              name: c.name,
+              slug: c.slug,
+              description: null,
+              parentId: null,
+              children: [],
+              documentCount: 0,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            }))}
+            tags={allTagRows.map((t) => ({ ...t, color: null }))}
+            initialFilters={{ query: q, categoryId: catId, tagIds }}
+          />
+        </div>
 
         {/* Suggestions when no query */}
         {!q && (
@@ -447,44 +430,6 @@ export default async function BuscaPage({ searchParams }: PageProps) {
           </div>
         </div>
 
-        {/* Category filter */}
-        <div
-          className="hb-card"
-          style={{ padding: "18px 22px", marginBottom: 20 }}
-        >
-          <p className="hb-section-label" style={{ marginBottom: 10 }}>
-            <Filter
-              size={11}
-              aria-hidden="true"
-              style={{ display: "inline", marginRight: 4 }}
-            />
-            Categoria
-          </p>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            <Link
-              href={buildUrl({ categoria: null })}
-              className={`hb-chip ${!catId ? "active" : ""}`}
-              aria-pressed={!catId}
-            >
-              Todas
-            </Link>
-            {catRows.map((cat) => (
-              <Link
-                key={cat.id}
-                href={
-                  catId === cat.id
-                    ? buildUrl({ categoria: null })
-                    : buildUrl({ categoria: cat.id })
-                }
-                className={`hb-chip ${catId === cat.id ? "active" : ""}`}
-                aria-pressed={catId === cat.id}
-              >
-                {cat.name}
-              </Link>
-            ))}
-          </div>
-        </div>
-
         {/* Results */}
         {allResults.length === 0 ? (
           <div className="hb-empty">
@@ -495,7 +440,7 @@ export default async function BuscaPage({ searchParams }: PageProps) {
             <p className="hb-empty-body">
               Tente reformular a busca ou navegar pelas categorias.
             </p>
-            {(q || catId) && (
+            {(q || catId || tagIds.length > 0) && (
               <Link
                 href="/busca"
                 className="hb-btn hb-btn-secondary"

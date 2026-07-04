@@ -1,6 +1,7 @@
 import {
   index,
   integer,
+  jsonb,
   primaryKey,
   text,
   timestamp,
@@ -157,6 +158,7 @@ export const editals = documentosSchema.table(
       () => categories.id,
       { onDelete: "set null" },
     ),
+    faq: jsonb("faq").$type<{ q: string; a: string }[]>().notNull().default([]),
   },
   (table) => [
     index("editals_opens_at_idx").on(table.opensAt),
