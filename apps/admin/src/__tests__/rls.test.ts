@@ -5,13 +5,18 @@
  * Simula diferentes papéis usando SET LOCAL ROLE authenticated e
  * set_config('request.jwt.claims', ...) dentro de transações.
  *
+ * Os GRANTs para `authenticated`/`anon` no schema admin são permanentes
+ * (0014_grants_authenticated.sql, P-0.10) — este arquivo não precisa mais
+ * concedê-los/revogá-los ao redor da suíte.
+ *
  * Requer: DATABASE_URL (superuser, para seed/cleanup) e esquema migrado.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import postgres from "postgres";
-import { eq } from "drizzle-orm";
+import { eq, sql as drizzleSql } from "drizzle-orm";
 import { db } from "@hebron/db/client";
+import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import {
   users,
   roleAssignments,
@@ -66,6 +71,23 @@ async function queryAs(userId: string, query: string): Promise<postgres.Row[]> {
     }
   }
 
+  return rows;
+}
+
+/** Mesma ideia, mas como `anon` — sem sub/claims (visitante não autenticado). */
+async function queryAsAnon(query: string): Promise<postgres.Row[]> {
+  let rows: postgres.Row[] = [];
+  try {
+    await sql.begin(async (tx) => {
+      await tx`SET LOCAL ROLE anon`;
+      rows = await tx.unsafe(query);
+      throw new Error("__rls_test_rollback__");
+    });
+  } catch (err) {
+    if (err instanceof Error && err.message !== "__rls_test_rollback__") {
+      throw err;
+    }
+  }
   return rows;
 }
 
@@ -130,21 +152,9 @@ beforeAll(async () => {
       diff: { test: true },
     })
     .onConflictDoNothing();
-
-  // Concede acesso ao schema admin para o role authenticated durante os testes.
-  // Necessário para que SET LOCAL ROLE authenticated possa consultar admin.audit_log
-  // e admin.invitations e as políticas RLS sejam avaliadas (não apenas schema-denied).
-  await sql`GRANT USAGE ON SCHEMA admin TO authenticated`;
-  await sql`GRANT SELECT ON admin.audit_log TO authenticated`;
-  await sql`GRANT SELECT ON admin.invitations TO authenticated`;
 });
 
 afterAll(async () => {
-  // Remove grants temporários de teste
-  await sql`REVOKE SELECT ON admin.invitations FROM authenticated`;
-  await sql`REVOKE SELECT ON admin.audit_log FROM authenticated`;
-  await sql`REVOKE USAGE ON SCHEMA admin FROM authenticated`;
-
   // Cleanup na ordem inversa das FKs
   await db.delete(auditLog).where(eq(auditLog.actorId, IDS.superAdmin));
 
@@ -327,5 +337,92 @@ describe("RLS — admin.invitations", () => {
       `SELECT id FROM admin.invitations WHERE token = '${INVITE_TOKEN}'`,
     );
     expect(rows).toHaveLength(0);
+  });
+
+  it("convite NÃO é enumerável por token sem estar autenticado (F3-04)", async () => {
+    // invitations_select_by_token (USING (true)) foi removida em 0003_admin_rls
+    // e anon nunca recebeu GRANT USAGE no schema admin (0014) — a negação
+    // acontece antes mesmo de qualquer policy ser avaliada.
+    await expect(
+      queryAsAnon(
+        `SELECT id FROM admin.invitations WHERE token = '${INVITE_TOKEN}'`,
+      ),
+    ).rejects.toThrow(/permission denied for schema admin/i);
+  });
+});
+
+// ── Testes: anon não lê nada do schema admin ──────────────────────────────────
+// `anon` nunca recebe GRANT USAGE em admin (0014_grants_authenticated.sql):
+// a negação acontece na camada de GRANT, antes de qualquer RLS ser avaliada —
+// mais forte do que "0 linhas".
+
+describe("RLS — anon não lê nada de admin.*", () => {
+  it("anon NÃO lê admin.audit_log (permission denied — sem USAGE no schema)", async () => {
+    await expect(
+      queryAsAnon("SELECT id FROM admin.audit_log LIMIT 10"),
+    ).rejects.toThrow(/permission denied for schema admin/i);
+  });
+
+  it("anon NÃO lê admin.invitations (permission denied — sem USAGE no schema)", async () => {
+    await expect(
+      queryAsAnon("SELECT id FROM admin.invitations LIMIT 10"),
+    ).rejects.toThrow(/permission denied for schema admin/i);
+  });
+
+  it("anon NÃO lê admin.system_settings (permission denied — sem USAGE no schema)", async () => {
+    await expect(
+      queryAsAnon("SELECT id FROM admin.system_settings LIMIT 10"),
+    ).rejects.toThrow(/permission denied for schema admin/i);
+  });
+
+  it("anon NÃO lê public.users (PII: nome, email, CPF, telefone) — RLS retorna 0 linhas", async () => {
+    const rows = await queryAsAnon("SELECT id FROM public.users LIMIT 10");
+    expect(rows).toHaveLength(0);
+  });
+});
+
+// ── Regressão F2-A1 (CRÍTICO) ─────────────────────────────────────────────────
+// "App Admin inteiro sem proteção de leitura: [...] Visitante anônimo lê
+// nome/e-mail/CPF/telefone de todos os usuários, audit log, convites."
+// A causa raiz era a leitura via `db` (conexão superuser, `DATABASE_URL`),
+// que ignora RLS. `withAuthenticatedContext` é o caminho que as páginas
+// devem adotar (P-0.10 escopo) — este teste prova que, através dele, os
+// mesmos dados deixam de vazar.
+
+describe("Regressão F2-A1 — leitura via client autenticado não vaza dados", () => {
+  it("sem sessão (anon) — withAuthenticatedContext(null, ...) não retorna usuários", async () => {
+    const userRows = await withAuthenticatedContext(null, async (tx) =>
+      tx.execute(drizzleSql`SELECT id FROM public.users`),
+    );
+    expect(Array.from(userRows)).toHaveLength(0);
+  });
+
+  it("sem sessão (anon) — withAuthenticatedContext(null, ...) nem chega a acessar admin.* (permission denied)", async () => {
+    await expect(
+      withAuthenticatedContext(null, async (tx) =>
+        tx.execute(drizzleSql`SELECT id FROM admin.audit_log`),
+      ),
+    ).rejects.toThrow(/permission denied for schema admin/i);
+
+    await expect(
+      withAuthenticatedContext(null, async (tx) =>
+        tx.execute(drizzleSql`SELECT id FROM admin.invitations`),
+      ),
+    ).rejects.toThrow(/permission denied for schema admin/i);
+  });
+
+  it("colaborador autenticado — withAuthenticatedContext lê o próprio perfil, mas não o audit_log", async () => {
+    const [userRows, auditRows] = await withAuthenticatedContext(
+      { actorId: IDS.colaborador },
+      async (tx) => {
+        const u = await tx.execute(drizzleSql`SELECT id FROM public.users`);
+        const a = await tx.execute(drizzleSql`SELECT id FROM admin.audit_log`);
+        return [u, a];
+      },
+    );
+
+    const userIds = Array.from(userRows).map((r) => (r as { id: string }).id);
+    expect(userIds).toEqual([IDS.colaborador]);
+    expect(Array.from(auditRows)).toHaveLength(0);
   });
 });

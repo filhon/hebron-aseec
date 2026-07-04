@@ -4,13 +4,18 @@
  * Simula acesso anon e authenticated com diferentes papéis usando
  * SET LOCAL ROLE + request.jwt.claims dentro de transações com ROLLBACK.
  *
+ * Os GRANTs para `authenticated`/`anon` no schema documentos são permanentes
+ * (0014_grants_authenticated.sql, P-0.10) — este arquivo não precisa mais
+ * concedê-los ao redor da suíte.
+ *
  * Requer: DATABASE_URL (superuser) + schema migrado.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import postgres from "postgres";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql as drizzleSql } from "drizzle-orm";
 import { db } from "@hebron/db/client";
+import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import {
   users,
   roleAssignments,
@@ -170,12 +175,6 @@ beforeAll(async () => {
     .insert(subscriptions)
     .values({ id: SUB_ID, userId: IDS.hospede, categoryId: CAT_ID })
     .onConflictDoNothing();
-
-  // Grants necessários para que anon e authenticated possam consultar o schema
-  await sql`GRANT USAGE ON SCHEMA documentos TO anon`;
-  await sql`GRANT USAGE ON SCHEMA documentos TO authenticated`;
-  await sql`GRANT SELECT ON ALL TABLES IN SCHEMA documentos TO anon`;
-  await sql`GRANT SELECT ON ALL TABLES IN SCHEMA documentos TO authenticated`;
 });
 
 afterAll(async () => {
@@ -362,5 +361,54 @@ describe("RLS — documentos.subscriptions", () => {
       `SELECT id FROM documentos.subscriptions WHERE id = '${SUB_ID}'`,
     );
     expect(rows.length).toBe(1);
+  });
+});
+
+// ── Regressão F2-D1 / F2-D2 ───────────────────────────────────────────────────
+// F2-D1: "página `[slug]` não tem filtro de visibility algum — um documento
+// `restricted` publicado é renderizado por completo para qualquer anônimo".
+// F2-D2: "Área editorial sem nenhuma autenticação [...] rascunhos e KPIs
+// renderizados a anônimos". Causa raiz comum: a página lia via `db`
+// (superuser), que ignora RLS. `withAuthenticatedContext` é o caminho que
+// as páginas devem adotar (P-0.10 escopo) — provado aqui pela mesma consulta
+// por slug que a página pública faz.
+
+describe("Regressão F2-D1/F2-D2 — leitura via client autenticado respeita visibilidade", () => {
+  it("anon consultando por slug (como a página [slug] faz) não recebe o documento restricted", async () => {
+    const rows = await withAuthenticatedContext(null, async (tx) => {
+      return tx.execute(
+        drizzleSql`SELECT id, file_url FROM documentos.documents WHERE slug = 'rls-restricted-doc'`,
+      );
+    });
+    expect(Array.from(rows)).toHaveLength(0);
+  });
+
+  it("anon consultando por slug não recebe o documento internal", async () => {
+    const rows = await withAuthenticatedContext(null, async (tx) => {
+      return tx.execute(
+        drizzleSql`SELECT id FROM documentos.documents WHERE slug = 'rls-internal-doc'`,
+      );
+    });
+    expect(Array.from(rows)).toHaveLength(0);
+  });
+
+  it("anon consultando por slug recebe apenas o documento public", async () => {
+    const rows = await withAuthenticatedContext(null, async (tx) => {
+      return tx.execute(
+        drizzleSql`SELECT id FROM documentos.documents WHERE slug = 'rls-public-doc'`,
+      );
+    });
+    expect(Array.from(rows)).toHaveLength(1);
+  });
+
+  it("hóspede autenticado (sem papel editorial) não enxerga documento restricted via client autenticado", async () => {
+    const rows = await withAuthenticatedContext(
+      { actorId: IDS.hospede },
+      async (tx) =>
+        tx.execute(
+          drizzleSql`SELECT id FROM documentos.documents WHERE slug = 'rls-restricted-doc'`,
+        ),
+    );
+    expect(Array.from(rows)).toHaveLength(0);
   });
 });

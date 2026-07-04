@@ -78,6 +78,7 @@
 | S-54   | 2026-07-03 | P-0.7 — Resgate do Banco (Onda 0)             | concluido                            |
 | S-55   | 2026-07-03 | P-0.8 — Kit de Backend Compartilhado (Onda 0) | concluido                            |
 | S-56   | 2026-07-03 | P-0.9 — CI Mínimo (Onda 0)                    | concluido (validação em PR pendente) |
+| S-57   | 2026-07-03 | P-0.10 — Decisão B: RLS Ativa (Onda 0)        | concluido                            |
 
 ---
 
@@ -2232,4 +2233,57 @@ Criado `.github/workflows/ci.yml`: dois jobs, `lint-typecheck` (`pnpm turbo lint
 
 **Arquivos modificados:**
 
+- `SESSIONS.md` (esta entrada)
+
+---
+
+### S-57 — 2026-07-03 — P-0.10 Decisão B: RLS Ativa (Onda 0)
+
+**Prompt:** P-0.10 (`AUDIT/04-prompts-pendentes.md` §4)
+**Duracao:** ~2h
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+A decisão do Filipe (Fase 1 Q2) de migrar para `authenticated`+JWT nunca tinha GRANTs (F3-05): as policies RLS de admin/documentos/projetos/financeiro estavam corretas e testadas (achado da Fase 2), mas cada suíte de teste concedia e revogava GRANTs temporários ao redor de si mesma porque nenhum GRANT permanente existia — em produção, `authenticated`/`anon` recebiam "permission denied for schema" antes mesmo de qualquer policy ser avaliada. Criada `packages/db/src/migrations/0014_grants_authenticated.sql`: `GRANT USAGE` nos 4 schemas de módulo para `authenticated` (+ `documentos` também para `anon`, único schema com conteúdo estritamente público) e GRANTs por tabela cobrindo exatamente os comandos (SELECT/INSERT/UPDATE/DELETE) para os quais existe policy — nunca mais que isso. `financeiro.transactions` não recebe UPDATE/DELETE (nega no GRANT, antes do trigger `forbid_transaction_mutation` disparar).
+
+Fixes de policy no mesmo arquivo: `admin.audit_log_insert_service` e `public.notifications_insert_service` tinham `WITH CHECK (true)` sem `TO` (F3-15) — restringidas a `TO service_role`. `admin.invitations_select_by_token` (F3-04, `USING (true)` público) já tinha sido removida em `0003_admin_rls.sql` antes de qualquer GRANT existir — nada a corrigir, só confirmado via teste de regressão. `public.users_insert_service` documentada via `COMMENT ON POLICY`: o insert real acontece via trigger `SECURITY DEFINER` (`handle_new_user`), que ignora RLS; a policy é só uma rede de segurança.
+
+Criado `packages/db/src/authenticated.ts` (`withAuthenticatedContext`, exportado como `@hebron/db/authenticated`): abre uma transação, faz `SET LOCAL ROLE authenticated` + `set_config('request.jwt.claims', ...)` (ou `SET LOCAL ROLE anon` quando não há sessão) e devolve um `tx` do Drizzle que passa a executar sob RLS de verdade — o mesmo mecanismo que PostgREST faz por requisição, mas sobre a conexão direta `DATABASE_URL` que o projeto já usa (sem depender de expor os schemas de módulo na Data API, que hoje só expõe `public`/`graphql_public`). É o "client autenticado do kit" citado no escopo do prompt — infraestrutura pronta para adoção pelas páginas em P-1.25/P-1.27/P-2.9c/P-3.8b (Onda 1); este prompt não reescreveu as páginas em si (fora do escopo de P-0.10, coberto pelos prompts dedicados de cada app).
+
+Todas as 4 suítes `rls.test.ts` (admin, documentos, projetos — já existiam; financeiro criada nesta sessão, não existia) tiveram os GRANT/REVOKE temporários removidos (redundantes com o GRANT permanente) e ganharam: cobertura de `anon` nos 3 schemas internos (admin/projetos/financeiro — confirmando `permission denied for schema X`, negação na camada de GRANT, mais forte que 0 linhas por RLS) e um bloco "Regressão" por achado crítico da Fase 2 (F2-A1 em admin, F2-D1/F2-D2 em documentos, F2-P4 em projetos) exercitando `withAuthenticatedContext` com os mesmos dados que os achados descreviam como vazados.
+
+**Criterios de aceite verificados:**
+
+- [x] role `authenticated` consegue exatamente o que as policies permitem — 4 suítes `rls.test.ts` (71 testes) rodando pelo papel real (`SET LOCAL ROLE authenticated` + GRANT permanente), sem superuser, verde contra o banco de desenvolvimento real.
+- [x] `anon` não lê nada de admin/projetos/financeiro — `anon` não recebe `GRANT USAGE` em nenhum desses 3 schemas; testado (erro `permission denied for schema`, não apenas 0 linhas).
+- [x] convite não é enumerável por token via RLS — `invitations_select_by_token` já removida (0003); teste de regressão novo confirma.
+- [x] as 4 exposições da Fase 2 (A1, D1, D2, P4) têm teste de regressão — `describe("Regressão F2-A1 ...")` em admin, `describe("Regressão F2-D1/F2-D2 ...")` em documentos, `describe("Regressão F2-P4 ...")` em projetos, todos usando `withAuthenticatedContext`.
+- [x] lint/typecheck verdes — `pnpm turbo lint typecheck` nos 6 pacotes tocados (`@hebron/db`, `@hebron/auth`, `@hebron/admin`, `@hebron/documentos`, `@hebron/projetos`, `@hebron/financeiro`), 24/24 tasks verdes.
+- Verificado além do critério: suíte completa dos 4 apps (`vitest run` sem filtro) rodada de ponta a ponta contra o banco real — 54 (admin) + 44 (documentos) + 89 (projetos) + 14 (financeiro) = 201 testes verdes, confirmando que os fixes de policy (`TO service_role`) não quebraram `logAudit`/notificações (que gravam via `db` superuser, fora do caminho GRANT/RLS).
+
+**Decisoes tomadas:**
+
+- Escopo de "adoção" do client autenticado: o prompt pede que "leituras de páginas passem a usar o client autenticado do kit". Interpretado como construir e provar a infraestrutura (GRANTs + `withAuthenticatedContext` + testes de regressão), não reescrever cada página das 4 apps — esse trabalho tem prompts dedicados e já sequenciados na Onda 1 (P-1.25 admin, P-1.27 documentos, P-2.9c projetos, P-3.8b financeiro), cada um com seus próprios critérios de gate por papel na camada de aplicação. Fazer a reescrita de páginas aqui duplicaria esse trabalho fora de ordem.
+- GRANTs por tabela alinhados comando-a-comando com as policies existentes (não `GRANT ALL`) — mais fiel ao texto do prompt ("grants por tabela alinhados às policies") e falha mais cedo (`permission denied` em vez de silenciosamente 0 linhas) quando um comando não tem policy correspondente.
+- `anon` só recebe GRANT no schema `documentos`, e mesmo assim só nas tabelas com policy pública (`categories`, `tags`, `documents`, `document_tags`, `document_versions`, `editals`) — `subscriptions` e `views` exigem `auth.uid() IS NOT NULL` nas próprias policies e não recebem grant de `anon`.
+- `withAuthenticatedContext` implementado em `packages/db` (não em `packages/auth`) por ser uma preocupação de conexão/transação, não de sessão; consumidores compõem `resolveSession()` (de `@hebron/auth`) com `withAuthenticatedContext({ actorId: session.actorId }, ...)`.
+
+**Debitos tecnicos / pendencias:**
+
+- Adoção de `withAuthenticatedContext` pelas páginas RSC das 4 apps continua pendente — é o escopo de P-1.25/P-1.27/P-2.9c/P-3.8b (Onda 1), não deste prompt.
+- `financeiro.rls.test.ts` cobre apenas `accounts`/`payables`/`transactions` como amostra representativa dos 3 papéis (staff/hóspede/anon) e da imutabilidade; não replica teste-a-teste todas as 14 tabelas do schema (já cobertas indiretamente pelos fluxos de `flow.test.ts`/`audit-abort.test.ts`/os testes de ação existentes).
+
+**Arquivos criados:**
+
+- `packages/db/src/migrations/0014_grants_authenticated.sql`
+- `packages/db/src/authenticated.ts`
+- `apps/financeiro/src/__tests__/rls.test.ts`
+
+**Arquivos modificados:**
+
+- `packages/db/package.json` (export `./authenticated`)
+- `apps/admin/src/__tests__/rls.test.ts` (remove GRANT/REVOKE temporário; adiciona testes de `anon` e regressão F2-A1)
+- `apps/documentos/src/__tests__/rls.test.ts` (remove GRANT temporário; adiciona regressão F2-D1/F2-D2)
+- `apps/projetos/src/__tests__/rls.test.ts` (remove GRANT/REVOKE temporário; adiciona testes de `anon` e regressão F2-P4)
 - `SESSIONS.md` (esta entrada)

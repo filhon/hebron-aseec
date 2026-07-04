@@ -6,6 +6,7 @@
     ".": "./src/index.ts",
     "./schema": "./src/schema/index.ts",
     "./client": "./src/client.ts",
+    "./authenticated": "./src/authenticated.ts",
     "./audit": "./src/audit.ts",
     "./notifications": "./src/notifications.ts"
   },

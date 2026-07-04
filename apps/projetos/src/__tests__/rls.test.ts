@@ -4,6 +4,11 @@
  * Testa via conexão direta (postgres.js) com SET LOCAL ROLE authenticated
  * e request.jwt.claims para simular diferentes usuários.
  *
+ * Os GRANTs para `authenticated` no schema projetos são permanentes
+ * (0014_grants_authenticated.sql, P-0.10) — este arquivo não precisa mais
+ * concedê-los/revogá-los ao redor da suíte. `anon` nunca recebe grant algum
+ * em projetos.* (schema inteiro é interno).
+ *
  * Coberturas:
  *  - projetos.projects: submissor vê apenas org própria; diretor/conselheiro vê votacao+;
  *    super_admin vê tudo
@@ -12,8 +17,9 @@
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import postgres from "postgres";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql as drizzleSql } from "drizzle-orm";
 import { db } from "@hebron/db/client";
+import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import {
   users,
   roleAssignments,
@@ -67,6 +73,22 @@ async function queryAs(userId: string, query: string): Promise<postgres.Row[]> {
     }
   }
 
+  return rows;
+}
+
+async function queryAsAnon(query: string): Promise<postgres.Row[]> {
+  let rows: postgres.Row[] = [];
+  try {
+    await sql.begin(async (tx) => {
+      await tx`SET LOCAL ROLE anon`;
+      rows = await tx.unsafe(query);
+      throw new Error("__rls_test_rollback__");
+    });
+  } catch (err) {
+    if (err instanceof Error && err.message !== "__rls_test_rollback__") {
+      throw err;
+    }
+  }
   return rows;
 }
 
@@ -214,21 +236,9 @@ beforeAll(async () => {
       },
     ])
     .onConflictDoNothing();
-
-  // Grant schema access to authenticated role for RLS evaluation
-  await sql`GRANT USAGE ON SCHEMA projetos TO authenticated`;
-  await sql`GRANT SELECT ON projetos.projects TO authenticated`;
-  await sql`GRANT SELECT ON projetos.votes TO authenticated`;
-  await sql`GRANT SELECT ON projetos.organization_members TO authenticated`;
 });
 
 afterAll(async () => {
-  // Revoke temporary grants
-  await sql`REVOKE SELECT ON projetos.organization_members FROM authenticated`;
-  await sql`REVOKE SELECT ON projetos.votes FROM authenticated`;
-  await sql`REVOKE SELECT ON projetos.projects FROM authenticated`;
-  await sql`REVOKE USAGE ON SCHEMA projetos FROM authenticated`;
-
   // Cleanup in FK-safe order (project cascade deletes votes)
   await db
     .delete(projects)
@@ -370,5 +380,76 @@ describe("RLS — projetos.votes: cédula secreta (apenas super_admin lê)", () 
       `SELECT id FROM projetos.votes WHERE project_id = '${IDS.projects.projectAVotacao}'`,
     );
     expect(rows.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+// ── anon não lê nada de projetos.* ────────────────────────────────────────────
+// `anon` nunca recebe GRANT USAGE em projetos (0014_grants_authenticated.sql):
+// a negação acontece na camada de GRANT, antes de qualquer RLS ser avaliada.
+
+describe("RLS — anon não lê nada de projetos.*", () => {
+  it("anon NÃO lê projetos.projects (permission denied — sem USAGE no schema)", async () => {
+    await expect(
+      queryAsAnon("SELECT id FROM projetos.projects LIMIT 10"),
+    ).rejects.toThrow(/permission denied for schema projetos/i);
+  });
+
+  it("anon NÃO lê projetos.votes (permission denied — sem USAGE no schema)", async () => {
+    await expect(
+      queryAsAnon("SELECT id FROM projetos.votes LIMIT 10"),
+    ).rejects.toThrow(/permission denied for schema projetos/i);
+  });
+
+  it("anon NÃO lê projetos.organizations (permission denied — sem USAGE no schema)", async () => {
+    await expect(
+      queryAsAnon("SELECT id FROM projetos.organizations LIMIT 10"),
+    ).rejects.toThrow(/permission denied for schema projetos/i);
+  });
+});
+
+// ── Regressão F2-P4 ────────────────────────────────────────────────────────────
+// "Área (diretoria) de Projetos exige só login, sem papel [...] submissor
+// autenticado vê score IA, breakdown, versão compacta e votos". A causa raiz
+// (leitura via `db` superuser) é a mesma dos outros achados F2 — este teste
+// prova que, através do client autenticado (P-0.10), um submissor não lê a
+// cédula de votação nem versões compactas destinadas a avaliadores.
+//
+// Nota: score_ai/score_ai_breakdown são colunas, não linhas — RLS não as
+// mascara (ver comentário em 0007_projetos_rls.sql). Esse mascaramento
+// continua sendo responsabilidade da camada de Server Action, no escopo de
+// P-2.9c, não deste prompt.
+
+describe("Regressão F2-P4 — leitura via client autenticado não vaza votos", () => {
+  it("submissor autenticado via withAuthenticatedContext não lê projetos.votes", async () => {
+    const rows = await withAuthenticatedContext(
+      { actorId: IDS.users.submissorA },
+      async (tx) =>
+        tx.execute(
+          drizzleSql`SELECT id FROM projetos.votes WHERE project_id = ${IDS.projects.projectAVotacao}`,
+        ),
+    );
+    expect(Array.from(rows)).toHaveLength(0);
+  });
+
+  it("submissor autenticado via withAuthenticatedContext não lê compact_versions de outra org", async () => {
+    const rows = await withAuthenticatedContext(
+      { actorId: IDS.users.submissorA },
+      async (tx) =>
+        tx.execute(
+          drizzleSql`SELECT id FROM projetos.projects WHERE id = ${IDS.projects.projectBVotacao}`,
+        ),
+    );
+    expect(Array.from(rows)).toHaveLength(0);
+  });
+
+  it("super_admin via withAuthenticatedContext lê projetos.votes normalmente", async () => {
+    const rows = await withAuthenticatedContext(
+      { actorId: IDS.users.superAdmin },
+      async (tx) =>
+        tx.execute(
+          drizzleSql`SELECT id FROM projetos.votes WHERE project_id = ${IDS.projects.projectAVotacao}`,
+        ),
+    );
+    expect(Array.from(rows).length).toBeGreaterThanOrEqual(2);
   });
 });
