@@ -3,8 +3,8 @@ import type { CookieOptions } from "@supabase/ssr";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { eq } from "drizzle-orm";
 import { db } from "@hebron/db/client";
-import { roleAssignments } from "@hebron/db/schema";
-import type { Role } from "@hebron/types/roles";
+import { designations, roleAssignments } from "@hebron/db/schema";
+import type { DesignationType, Role } from "@hebron/types/roles";
 
 export interface ServerCookieHandlers {
   getAll(): Array<{ name: string; value: string }>;
@@ -52,6 +52,7 @@ export interface ActionCookieStore {
 export interface ActionSession {
   actorId: string;
   roles: Role[];
+  designations: DesignationType[];
 }
 
 /**
@@ -95,5 +96,14 @@ export async function resolveSession(
     .from(roleAssignments)
     .where(eq(roleAssignments.userId, user.id));
 
-  return { actorId: user.id, roles: rows.map((r) => r.role) };
+  const designationRows = await db
+    .select({ type: designations.type })
+    .from(designations)
+    .where(eq(designations.userId, user.id));
+
+  return {
+    actorId: user.id,
+    roles: rows.map((r) => r.role),
+    designations: designationRows.map((d) => d.type),
+  };
 }

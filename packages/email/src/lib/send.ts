@@ -35,6 +35,8 @@ export type InsertNotificationFn = (
 export interface SendEmailOptions {
   /** Endereço de email do destinatário */
   to: string;
+  /** Endereço(s) de email em cópia (CC) */
+  cc?: string | string[];
   /**
    * Componente React Email a ser renderizado como corpo do email.
    * Obrigatório quando `html` não é fornecido.
@@ -132,6 +134,7 @@ export async function createNotification({
     const { error } = await resend.emails.send({
       from: email.from ?? "Hebron Aseec <noreply@hebronaseec.com.br>",
       to: email.to,
+      cc: email.cc,
       subject: email.subject ?? data.title,
       html,
     });

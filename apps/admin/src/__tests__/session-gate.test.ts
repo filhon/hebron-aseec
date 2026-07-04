@@ -60,6 +60,7 @@ describe("requireAdminSession", () => {
     vi.mocked(resolveSession).mockResolvedValue({
       actorId: "user-1",
       roles: ["colaborador"],
+      designations: [],
     });
 
     const { requireAdminSession } = await import("../lib/session");
@@ -74,6 +75,7 @@ describe("requireAdminSession", () => {
     vi.mocked(resolveSession).mockResolvedValue({
       actorId: "admin-1",
       roles: ["super_admin"],
+      designations: [],
     });
 
     const { requireAdminSession } = await import("../lib/session");

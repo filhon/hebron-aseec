@@ -57,6 +57,7 @@ describe("requireDiretorSession", () => {
     vi.mocked(resolveSession).mockResolvedValue({
       actorId: "user-1",
       roles: ["submissor"],
+      designations: [],
     });
 
     const { requireDiretorSession } = await import("../lib/session");
@@ -71,6 +72,7 @@ describe("requireDiretorSession", () => {
     vi.mocked(resolveSession).mockResolvedValue({
       actorId: "dir-1",
       roles: ["diretor"],
+      designations: [],
     });
 
     const { requireDiretorSession } = await import("../lib/session");
@@ -85,6 +87,7 @@ describe("requireDiretorSession", () => {
     vi.mocked(resolveSession).mockResolvedValue({
       actorId: "cons-1",
       roles: ["conselheiro"],
+      designations: [],
     });
 
     const { requireDiretorSession } = await import("../lib/session");
@@ -98,6 +101,7 @@ describe("requireDiretorSession", () => {
     vi.mocked(resolveSession).mockResolvedValue({
       actorId: "admin-1",
       roles: ["super_admin"],
+      designations: [],
     });
 
     const { requireDiretorSession } = await import("../lib/session");
@@ -125,6 +129,7 @@ describe("requireSubmissorSession", () => {
     vi.mocked(resolveSession).mockResolvedValue({
       actorId: "dir-1",
       roles: ["diretor"],
+      designations: [],
     });
 
     const { requireSubmissorSession } = await import("../lib/session");
@@ -139,6 +144,7 @@ describe("requireSubmissorSession", () => {
     vi.mocked(resolveSession).mockResolvedValue({
       actorId: "sub-1",
       roles: ["submissor"],
+      designations: [],
     });
 
     const { requireSubmissorSession } = await import("../lib/session");
@@ -153,6 +159,7 @@ describe("requireSubmissorSession", () => {
     vi.mocked(resolveSession).mockResolvedValue({
       actorId: "admin-1",
       roles: ["super_admin"],
+      designations: [],
     });
 
     const { requireSubmissorSession } = await import("../lib/session");

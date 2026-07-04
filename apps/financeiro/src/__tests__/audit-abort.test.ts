@@ -33,6 +33,7 @@ vi.mock("@hebron/auth/server", () => ({
   resolveSession: vi.fn().mockResolvedValue({
     actorId: DIRETOR_ID,
     roles: ["diretor"],
+    designations: ["gestor"],
   }),
 }));
 

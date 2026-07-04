@@ -26,7 +26,9 @@ export type FinanceiroAuditAction =
   | "financeiro.category.deleted"
   | "financeiro.budget.created"
   | "financeiro.budget.updated"
-  | "financeiro.budget.deleted";
+  | "financeiro.budget.deleted"
+  | "financeiro.organization_budget.created"
+  | "financeiro.organization_budget.updated";
 
 export interface LogFinanceiroAuditParams {
   actorId: string;

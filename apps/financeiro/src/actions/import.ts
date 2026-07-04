@@ -54,7 +54,54 @@ function parseOFX(content: string): ParsedImportRow[] {
   return rows;
 }
 
-function parseCSV(content: string): ParsedImportRow[] {
+// Tokeniza uma linha CSV respeitando aspas (campos com vírgula/ponto-e-vírgula
+// dentro de aspas não devem ser quebrados — formato comum de extrato
+// bancário brasileiro: `"PAGTO FORNECEDOR, REF 123"`). F3-19.
+export function splitDelimitedLine(line: string, delimiter: string): string[] {
+  const cols: string[] = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+
+    if (char === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        // Aspas escapadas ("") dentro de um campo entre aspas
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === delimiter && !inQuotes) {
+      cols.push(current.trim());
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  cols.push(current.trim());
+
+  return cols.map((c) => c.replace(/^"|"$/g, ""));
+}
+
+// Detecta o delimitador (`,` ou `;`) contando ocorrências fora de aspas na
+// linha de cabeçalho — bancos brasileiros exportam com `;` frequentemente.
+function detectDelimiter(headerLine: string): "," | ";" {
+  let commaCount = 0;
+  let semicolonCount = 0;
+  let inQuotes = false;
+
+  for (const char of headerLine) {
+    if (char === '"') inQuotes = !inQuotes;
+    else if (!inQuotes && char === ",") commaCount++;
+    else if (!inQuotes && char === ";") semicolonCount++;
+  }
+
+  return semicolonCount > commaCount ? ";" : ",";
+}
+
+export function parseCSV(content: string): ParsedImportRow[] {
   const lines = content
     .split(/\r?\n/)
     .map((l) => l.trim())
@@ -65,9 +112,11 @@ function parseCSV(content: string): ParsedImportRow[] {
   const headerLine = lines[0];
   if (!headerLine) return [];
 
-  const headers = headerLine
-    .split(",")
-    .map((h) => h.toLowerCase().trim().replace(/"/g, ""));
+  const delimiter = detectDelimiter(headerLine);
+
+  const headers = splitDelimitedLine(headerLine, delimiter).map((h) =>
+    h.toLowerCase().trim(),
+  );
 
   const dateIdx = headers.findIndex((h) => h.includes("data") || h === "date");
   const amountIdx = headers.findIndex(
@@ -91,7 +140,7 @@ function parseCSV(content: string): ParsedImportRow[] {
     const line = lines[i];
     if (!line) continue;
 
-    const cols = line.split(",").map((c) => c.trim().replace(/^"|"$/g, ""));
+    const cols = splitDelimitedLine(line, delimiter);
 
     const rawDate = dateIdx >= 0 ? (cols[dateIdx] ?? "") : "";
     const rawAmount = amountIdx >= 0 ? (cols[amountIdx] ?? "") : "";
@@ -124,6 +173,13 @@ function parseCSV(content: string): ParsedImportRow[] {
   return rows;
 }
 
+function parseFileContent(
+  content: string,
+  format: "ofx" | "csv",
+): ParsedImportRow[] {
+  return format === "ofx" ? parseOFX(content) : parseCSV(content);
+}
+
 // ---------------------------------------------------------------------------
 // parseImportFile — parse file content and return preview rows (no DB write)
 // The client sends the file content as a string after reading via FileReader.
@@ -140,10 +196,7 @@ const parseImportFileSchema = z.object({
 export const parseImportFile = colaboradorAction
   .schema(parseImportFileSchema)
   .action(async ({ parsedInput: input }) => {
-    const rows =
-      input.format === "ofx"
-        ? parseOFX(input.content)
-        : parseCSV(input.content);
+    const rows = parseFileContent(input.content, input.format);
 
     if (rows.length === 0) {
       throw new Error(
@@ -157,34 +210,43 @@ export const parseImportFile = colaboradorAction
 // ---------------------------------------------------------------------------
 // confirmImport — persist a parsed import: creates bank_import + rows + auto-match
 // Called after user reviews the preview and clicks "Confirmar importação".
+//
+// F3-11: o cliente costumava reenviar as `rows` já parseadas no preview —
+// adulteráveis entre o preview e a confirmação. Agora o servidor re-parseia
+// `content` do zero; o cliente nunca mais fornece linhas diretamente.
 // ---------------------------------------------------------------------------
-
-const importRowSchema = z.object({
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida"),
-  amount: z.number(),
-  description: z.string().max(500),
-});
 
 const confirmImportSchema = z.object({
   bankAccountId: z.string().uuid("Conta bancária inválida"),
   format: z.enum(["ofx", "csv"]),
-  fileName: z.string().min(1).max(255),
-  rows: z.array(importRowSchema).min(1, "Nenhuma transação para importar"),
+  content: z
+    .string()
+    .min(1, "Conteúdo do arquivo não pode ser vazio")
+    .max(2_000_000, "Arquivo excede 2 MB"),
+  fileUrl: z.string().min(1, "Arquivo não foi enviado ao Storage"),
   runAutoMatch: z.boolean().default(true),
 });
 
 export const confirmImport = colaboradorAction
   .schema(confirmImportSchema)
   .action(async ({ parsedInput: input, ctx }) => {
+    const rows = parseFileContent(input.content, input.format);
+
+    if (rows.length === 0) {
+      throw new Error(
+        "Nenhuma transação encontrada no arquivo. Verifique o formato.",
+      );
+    }
+
     // Create the import record
     const importInserted = await db
       .insert(bankImports)
       .values({
         accountId: input.bankAccountId,
-        fileUrl: input.fileName, // URL stored after Supabase Storage upload; using fileName as placeholder
+        fileUrl: input.fileUrl,
         format: input.format,
         importedBy: ctx.actorId,
-        rowCount: input.rows.length,
+        rowCount: rows.length,
         matchedCount: 0,
       })
       .returning();
@@ -193,7 +255,7 @@ export const confirmImport = colaboradorAction
     if (!bankImport) throw new Error("Falha ao criar registro de import");
 
     // Bulk-insert import rows
-    const rowValues = input.rows.map((row) => ({
+    const rowValues = rows.map((row) => ({
       bankImportId: bankImport.id,
       date: row.date,
       amount: row.amount.toString(),
@@ -257,16 +319,16 @@ export const confirmImport = colaboradorAction
       diff: {
         bankAccountId: input.bankAccountId,
         format: input.format,
-        fileName: input.fileName,
-        rowCount: input.rows.length,
+        fileUrl: input.fileUrl,
+        rowCount: rows.length,
         autoMatchedCount: matchedCount,
       },
     });
 
     return {
       bankImport,
-      totalRows: input.rows.length,
+      totalRows: rows.length,
       matchedCount,
-      unmatchedCount: input.rows.length - matchedCount,
+      unmatchedCount: rows.length - matchedCount,
     };
   });

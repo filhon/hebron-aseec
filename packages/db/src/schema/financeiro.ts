@@ -11,7 +11,7 @@ import {
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { financeiroSchema, users } from "./public";
-import { projects } from "./projetos";
+import { projects, organizations } from "./projetos";
 
 // ---------------------------------------------------------------------------
 // Enums
@@ -526,6 +526,39 @@ export const batchApprovalItems = financeiroSchema.table(
 );
 
 // ---------------------------------------------------------------------------
+// financeiro.organization_budgets — teto de orçamento por instituição/ano
+// (S1-01): fonte de verdade para checkOrganizationBudget (apps/projetos),
+// substituindo o workaround em admin.system_settings.
+// ---------------------------------------------------------------------------
+export const organizationBudgets = financeiroSchema.table(
+  "organization_budgets",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    year: integer("year").notNull(),
+    amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+    createdBy: uuid("created_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("organization_budgets_org_id_idx").on(table.organizationId),
+    unique("organization_budgets_org_year_uniq").on(
+      table.organizationId,
+      table.year,
+    ),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // Inferred types
 // ---------------------------------------------------------------------------
 export type BankAccount = typeof bankAccounts.$inferSelect;
@@ -556,3 +589,5 @@ export type BatchApproval = typeof batchApprovals.$inferSelect;
 export type NewBatchApproval = typeof batchApprovals.$inferInsert;
 export type BatchApprovalItem = typeof batchApprovalItems.$inferSelect;
 export type NewBatchApprovalItem = typeof batchApprovalItems.$inferInsert;
+export type OrganizationBudget = typeof organizationBudgets.$inferSelect;
+export type NewOrganizationBudget = typeof organizationBudgets.$inferInsert;

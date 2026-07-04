@@ -19,6 +19,7 @@ import {
   BookOpen,
   Briefcase,
   CheckCircle,
+  Building2,
 } from "lucide-react";
 import { FinanceiroLogo } from "../../components/financeiro-logo";
 
@@ -76,6 +77,11 @@ const SECTIONS: NavSection[] = [
         label: "Centros de custo",
         href: "/centros-custo",
         icon: FolderOpen,
+      },
+      {
+        label: "Orçamento por instituição",
+        href: "/orcamento-organizacoes",
+        icon: Building2,
       },
     ],
   },

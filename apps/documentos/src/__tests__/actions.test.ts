@@ -447,6 +447,7 @@ describe("notifyNewDocument — fluxo de notificação", () => {
     vi.mocked(resolveSession).mockResolvedValueOnce({
       actorId: SUBSCRIBER_ID,
       roles: ["hospede"],
+      designations: [],
     });
     const subResult = await subscribe({ categoryId: cat.id });
     const sub = requireDefined(subResult?.data?.subscription, "sub");

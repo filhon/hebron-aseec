@@ -5,7 +5,7 @@
  * do contexto Supabase Auth) os invariantes de negócio:
  *
  *  - Ciclo de vida completo: rascunho → concluido
- *  - Bloqueio de orçamento (system_settings + soma de projetos)
+ *  - Bloqueio de orçamento (financeiro.organization_budgets + soma de projetos)
  *  - Limites de contestação (max 2/projeto, 1/pessoa)
  *  - Soft-delete e imutabilidade (audit trail preservado)
  */
@@ -22,7 +22,7 @@ import {
   projectVersions,
   contestations,
   paymentSchedules,
-  systemSettings,
+  organizationBudgets,
   votes,
 } from "@hebron/db/schema";
 
@@ -51,7 +51,6 @@ const DELETE_PROJECT_ID = "cccc0000-0000-0000-0000-000000000005";
 
 // Budget uses year 2027 to avoid interference with the E2E flow project (2026)
 const BUDGET_YEAR = 2027;
-const BUDGET_SETTING_KEY = `projetos_budget_${IDS.orgs.orgFlow}_${BUDGET_YEAR}`;
 const BUDGET_LIMIT = 50000;
 
 // ── Setup / Teardown ──────────────────────────────────────────────────────────
@@ -162,8 +161,13 @@ afterAll(async () => {
   }
 
   await db
-    .delete(systemSettings)
-    .where(eq(systemSettings.key, BUDGET_SETTING_KEY));
+    .delete(organizationBudgets)
+    .where(
+      and(
+        eq(organizationBudgets.organizationId, IDS.orgs.orgFlow),
+        eq(organizationBudgets.year, BUDGET_YEAR),
+      ),
+    );
   await db
     .delete(organizationMembers)
     .where(eq(organizationMembers.organizationId, IDS.orgs.orgFlow));
@@ -400,14 +404,14 @@ describe("Fluxo — Ciclo de vida completo do projeto anual", () => {
 
 describe("Orçamento — Submissão bloqueada ao exceder limite", () => {
   beforeAll(async () => {
-    // Configura limite de orçamento no admin.system_settings
+    // Configura limite de orçamento em financeiro.organization_budgets (S1-01)
     await db
-      .insert(systemSettings)
+      .insert(organizationBudgets)
       .values({
-        key: BUDGET_SETTING_KEY,
-        value: { limit: BUDGET_LIMIT },
-        label: "Budget Test",
-        updatedBy: IDS.users.superAdmin,
+        organizationId: IDS.orgs.orgFlow,
+        year: BUDGET_YEAR,
+        amount: BUDGET_LIMIT.toFixed(2),
+        createdBy: IDS.users.superAdmin,
       })
       .onConflictDoNothing();
 
@@ -429,15 +433,19 @@ describe("Orçamento — Submissão bloqueada ao exceder limite", () => {
       .onConflictDoNothing();
   });
 
-  it("lê limite configurado em system_settings", async () => {
-    const [setting] = await db
-      .select({ value: systemSettings.value })
-      .from(systemSettings)
-      .where(eq(systemSettings.key, BUDGET_SETTING_KEY))
+  it("lê limite configurado em financeiro.organization_budgets", async () => {
+    const [budget] = await db
+      .select({ amount: organizationBudgets.amount })
+      .from(organizationBudgets)
+      .where(
+        and(
+          eq(organizationBudgets.organizationId, IDS.orgs.orgFlow),
+          eq(organizationBudgets.year, BUDGET_YEAR),
+        ),
+      )
       .limit(1);
 
-    const limitValue = setting?.value as { limit?: number } | null;
-    expect(limitValue?.limit).toBe(BUDGET_LIMIT);
+    expect(parseFloat(budget?.amount ?? "0")).toBe(BUDGET_LIMIT);
   });
 
   it("soma correta de projetos ativos para a org + ano", async () => {
@@ -458,13 +466,18 @@ describe("Orçamento — Submissão bloqueada ao exceder limite", () => {
   });
 
   it("novo projeto de 15000 excederia o limite (40000 + 15000 = 55000 > 50000)", async () => {
-    const [setting] = await db
-      .select({ value: systemSettings.value })
-      .from(systemSettings)
-      .where(eq(systemSettings.key, BUDGET_SETTING_KEY))
+    const [budget] = await db
+      .select({ amount: organizationBudgets.amount })
+      .from(organizationBudgets)
+      .where(
+        and(
+          eq(organizationBudgets.organizationId, IDS.orgs.orgFlow),
+          eq(organizationBudgets.year, BUDGET_YEAR),
+        ),
+      )
       .limit(1);
 
-    const limit = (setting?.value as { limit?: number } | null)?.limit ?? 0;
+    const limit = parseFloat(budget?.amount ?? "0");
 
     const [result] = await db
       .select({ total: sum(projects.budgetTotal) })
@@ -486,13 +499,18 @@ describe("Orçamento — Submissão bloqueada ao exceder limite", () => {
   });
 
   it("novo projeto de 5000 cabe dentro do limite (40000 + 5000 = 45000 ≤ 50000)", async () => {
-    const [setting] = await db
-      .select({ value: systemSettings.value })
-      .from(systemSettings)
-      .where(eq(systemSettings.key, BUDGET_SETTING_KEY))
+    const [budget] = await db
+      .select({ amount: organizationBudgets.amount })
+      .from(organizationBudgets)
+      .where(
+        and(
+          eq(organizationBudgets.organizationId, IDS.orgs.orgFlow),
+          eq(organizationBudgets.year, BUDGET_YEAR),
+        ),
+      )
       .limit(1);
 
-    const limit = (setting?.value as { limit?: number } | null)?.limit ?? 0;
+    const limit = parseFloat(budget?.amount ?? "0");
 
     const [result] = await db
       .select({ total: sum(projects.budgetTotal) })

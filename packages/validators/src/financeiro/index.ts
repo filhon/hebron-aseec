@@ -218,6 +218,29 @@ export const createBudgetSchema = z.object({
 
 export type CreateBudgetInput = z.infer<typeof createBudgetSchema>;
 
+// ─── organizationBudgetSchema ─────────────────────────────────────────────────
+// Teto de orçamento por instituição/ano (S1-01) — checkOrganizationBudget
+// (apps/projetos) consulta financeiro.organization_budgets com esses campos.
+
+export const createOrganizationBudgetSchema = z.object({
+  organizationId: z.string().uuid("Selecione uma instituição"),
+  year: z.number().int().min(2020, "Ano inválido").max(2100, "Ano inválido"),
+  amount: positiveAmount,
+});
+
+export type CreateOrganizationBudgetInput = z.infer<
+  typeof createOrganizationBudgetSchema
+>;
+
+export const updateOrganizationBudgetSchema = z.object({
+  organizationBudgetId: z.string().uuid("Orçamento inválido"),
+  amount: positiveAmount,
+});
+
+export type UpdateOrganizationBudgetInput = z.infer<
+  typeof updateOrganizationBudgetSchema
+>;
+
 // ─── bankImportSchema ─────────────────────────────────────────────────────────
 
 export const bankImportSchema = z.object({

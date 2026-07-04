@@ -120,6 +120,7 @@ export {
   bankImportRows,
   batchApprovals,
   batchApprovalItems,
+  organizationBudgets,
 } from "./financeiro";
 
 export type {
@@ -151,6 +152,8 @@ export type {
   NewBatchApproval,
   BatchApprovalItem,
   NewBatchApprovalItem,
+  OrganizationBudget,
+  NewOrganizationBudget,
 } from "./financeiro";
 
 export {

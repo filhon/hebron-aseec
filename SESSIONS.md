@@ -84,6 +84,7 @@
 | S-60   | 2026-07-04 | P-1.26 — Onboarding: convite, auto-signup e MFA (Onda 1)                | concluido                            |
 | S-61   | 2026-07-04 | P-1.27 — Documentos: visibilidade e área editorial verdadeiras (Onda 1) | concluido                            |
 | S-62   | 2026-07-04 | P-2.9c — Projetos: operável de ponta a ponta                            | concluido                            |
+| S-63   | 2026-07-04 | P-3.8b — Financeiro: governança e conciliação verdadeiras               | concluido                            |
 
 ---
 
@@ -2695,3 +2696,87 @@ Adoção de `withAuthenticatedContext` (P-0.10, escopo explícito de P-2.9c): to
 - `apps/projetos/src/components/report-card.tsx`
 - `apps/projetos/src/components/organization-card.tsx`
 - `apps/projetos/src/components/project-card.tsx`
+
+---
+
+### S-63 — 2026-07-04 — P-3.8b Financeiro: governança e conciliação verdadeiras
+
+**Prompt:** P-3.8b (`AUDIT/04-prompts-pendentes.md` §4)
+**Duracao:** ~4h
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+
+F2-F1 (designation não enforçada em nenhuma camada executável): `approveBatch`/`authorizeBatch` checavam apenas papel (`diretorAction`/`superAdminAction`), nunca a `designation` (`gestor`/`autorizador`) do BRAIN §6.5 — pior, `authorizeBatch` exigia `super_admin` **exclusivamente**, o que significava que nenhum diretor com designation `autorizador` conseguia autorizar um lote no sistema, contradizendo o passo 6 do BRAIN ("Diretor autorizador AUTORIZA no banco"). Corrigido: `resolveSession` (`packages/auth/src/server.ts`) passou a carregar `designations` na sessão (`ActionSession` ganhou o campo); novo `diretorWithDesignationAction(designation)` em `apps/financeiro/src/lib/safe-action.ts` (diretor com a designation OU super_admin como bypass — decisão do Filipe nesta sessão, espelhando o formato pré-existente de `approveBatch`); `approveBatch` passou a exigir `gestor`, `authorizeBatch` passou a exigir `autorizador`.
+
+**Achado durante a implementação, não previsto no escopo literal do prompt:** a RLS de `batch_approvals` (migration 0011, P-3.7) já antecipava `has_designation('gestor')` para a policy de UPDATE, mas **nunca teve um branch para `autorizador`** — mesmo corrigindo o Server Action, a policy rejeitaria o UPDATE de um diretor autorizador. Como toda action do módulo financeiro roda com a conexão `db` (superuser, não `withAuthenticatedContext`), essa RLS é hoje defense-in-depth inerte, não o gate real — mas foi corrigida mesmo assim (nova policy `batch_approvals_update_dual_governance`, três branches: super_admin / diretor+gestor / diretor+autorizador) para não deixar uma policy sabidamente incompleta no banco.
+
+F2-F2 (lote para todos os diretores): `createWeeklyBatch` notificava todo `role_assignments` com `role='diretor'`. Corrigido para consultar `designations` (gestor → `to`, autorizador → `cc`) — `packages/email/src/lib/send.ts` ganhou o campo `cc?: string | string[]` em `SendEmailOptions` (mudança aditiva, sem quebrar chamadores existentes). Decisão do Filipe: se nenhuma designation `gestor` estiver configurada, cai de volta para notificar todos os diretores (rede de segurança).
+
+F3-11/F3-19 (importação bancária adulterável + parser ingênuo): `confirmImport` recebia `rows` já parseadas do **cliente** depois do preview — adulterável entre as duas chamadas — e `bankImports.fileUrl` guardava o nome do arquivo como placeholder, nunca uma URL real de Storage. Corrigido: `confirmImportSchema` perdeu o campo `rows` inteiramente e ganhou `content` (mesmo shape de `parseImportFileSchema`) + `fileUrl`; `confirmImport` agora re-parseia `content` do zero via a mesma `parseFileContent` usada pelo preview — o cliente nunca mais tem como injetar uma linha que o servidor não re-derivou. `parseCSV` ganhou detecção de delimitador (`,` vs `;`, contando ocorrências fora de aspas na linha de cabeçalho) e um tokenizador que respeita aspas (`splitDelimitedLine`, função pura, sem nova dependência) — antes quebrava com `;` (comum em extrato de banco brasileiro) e com vírgula dentro de campo entre aspas.
+
+**Decisão desta sessão (confirmada pelo Filipe): bucket `financeiro-extratos` criado agora**, sem esperar o corretivo formal de Storage (P-0.12, que não rodou ainda) — seguindo o mesmo precedente ad hoc já em uso por `project-attachments` (criado via migration hand-authored antes de qualquer consolidação formal de políticas). Novo componente `apps/financeiro/src/components/import-wizard.tsx` substitui o wizard 100% mock de `importacao/page.tsx` por um fluxo real: upload para o bucket (client Supabase, mesmo padrão de `submit-report-form.tsx`) → preview via `parseImportFile` → confirmação via `confirmImport`. `fileUrl` grava o **path** do Storage, não uma signed URL — uma signed URL expiraria antes da retenção legal de 5 anos (F3-Q6); leitura futura deve gerar signed URL sob demanda.
+
+S1-01 (`organization_budgets` inexistente): `apps/projetos` lia um teto de orçamento por instituição/ano de um workaround em `admin.system_settings` (chave `projetos_budget_{orgId}_{year}`), com o próprio comentário no código apontando a dívida. Criada `financeiro.organization_budgets (organization_id, year, amount, created_by)` com UNIQUE(organization_id, year), RLS restrita a staff financeiro (super_admin/diretor/colaborador — leitura por `checkOrganizationBudget` roda via `db` superuser, não via sessão de submissor); CRUD (`createOrganizationBudget`/`updateOrganizationBudget`, sem delete — imutabilidade, corrige-se via UPDATE) em `apps/financeiro/src/actions/organization-budgets.ts`; nova página `apps/financeiro/src/app/(dashboard)/orcamento-organizacoes/page.tsx` (rota nova, deliberadamente distinta de `/orcamento` — essa é orçamento por centro de custo, território do P-3.9) com gate inline via `requireColaboradorSession` (novo `apps/financeiro/src/lib/session.ts`, mesmo padrão de `apps/projetos/src/lib/session.ts` — o shell do Financeiro ainda não tem gate de papel algum, débito de P-3.9, não vale esperar por ele). `checkOrganizationBudget` (`apps/projetos/src/actions/projects.ts`) reescrita para consultar `financeiro.organization_budgets` diretamente (leitura cross-schema dentro do mesmo `@hebron/db`, mesmo padrão já usado para `admin.system_settings` — não precisa de `packages/integrations`), removendo o workaround.
+
+CS-4 (enum de audit): dois novos valores (`financeiro.organization_budget.created`/`.updated`) adicionados ao enum `admin.audit_action` (TS em `packages/db/src/schema/admin.ts` + `ALTER TYPE` em migration) e à union `FinanceiroAuditAction` (`apps/financeiro/src/lib/audit.ts`) — mesmo padrão de `0012_audit_action_modules.sql`, para não repetir o acidente que deixou auditoria de projetos/financeiro gravando ações fora do enum.
+
+Migrations geradas via `drizzle-kit generate` (convenção P-0.11) produziram um arquivo que recriava `user_status`/`editals.faq` (já aplicados em 0015/0017, hand-authored fora do journal do drizzle-kit desde aquela época) — descartado; migrations finais (`0018_organization_budget_audit_actions.sql`, `0019_financeiro_organization_budgets.sql`) hand-authored contendo só as mudanças novas desta sessão, mesma convenção já em uso desde 0015. O drift entre o journal do drizzle-kit e o histórico real de migrations continua existindo (debt pré-existente, fora do escopo deste prompt corrigir de novo).
+
+**Critérios de aceite verificados:**
+
+- [x] diretor sem designation não aprova/autoriza — `designation-governance.test.ts`: diretor sem `gestor` → `approveBatch` rejeita; diretor sem `autorizador` → `authorizeBatch` rejeita.
+- [x] mesma pessoa não aprova e autoriza — teste com diretor tendo `autorizador` mas sendo o mesmo `approvedBy` → `authorizeBatch` rejeita (guard pré-existente, agora testado em conjunto com designation).
+- [x] linhas adulteradas entre preview e confirm não persistem — `confirm-import.test.ts`: `confirmImport` chamado com `content` real + um campo `rows` forjado (ignorado pelo schema); persistido bate exatamente com o re-parse do `content`, nunca com o forjado.
+- [x] extrato armazenado e referenciado — bucket `financeiro-extratos` criado com policies; `import-wizard.tsx` faz upload real; `bankImports.fileUrl` grava o path real (teste em `confirm-import.test.ts`).
+- [x] submissão de projeto bloqueia por `organization_budgets` — `apps/projetos/src/__tests__/flow.test.ts` (bloco "Orçamento", reescrito para semear `financeiro.organization_budgets` em vez de `admin.system_settings`, mesmos 5 casos).
+- [x] PATCH registrado da mudança de modelo de orçamento — registrado nesta entrada (não há PATCH formal ainda; `PATCHES/` segue vazio, reconstrução autorizada só em P-0.16).
+- `pnpm turbo lint typecheck` — 34/34 tasks verdes. `pnpm --filter financeiro test` — 30/30 verdes (6 arquivos, incluindo os 3 novos desta sessão: `designation-governance.test.ts`, `csv-parser.test.ts`, `confirm-import.test.ts`). `pnpm --filter projetos test` — 86/102 verdes; os 16 restantes (todos em `rls.test.ts`, `permission denied for schema projetos`) são o mesmo gap de ambiente já documentado em S-62 (GRANT de `authenticated` ausente nesta instância de dev), não uma regressão desta sessão — confirmado que a contagem (86/102) é idêntica à de S-62.
+
+**Decisoes tomadas (confirmadas pelo Filipe nesta sessão):**
+
+- Bucket `financeiro-extratos` criado agora, antes de P-0.12 rodar formalmente (ver Resumo).
+- `authorizeBatch` mantém super_admin como bypass da designation `autorizador` (mesmo formato de `approveBatch`, escala atual da ONG: 2 super_admins dedicados).
+- `createWeeklyBatch` cai de volta para todos os diretores quando nenhuma designation `gestor` está configurada (rede de segurança).
+
+**Debitos tecnicos / pendencias:**
+
+- RLS de `batch_approvals` continua sendo defense-in-depth inerte (financeiro roda via `db` superuser, não `withAuthenticatedContext`) — migrar as actions do módulo para o padrão autenticado é escopo de um prompt futuro, não deste.
+- `importacao/page.tsx` agora exercita upload+parse+confirm de verdade, mas o restante do dashboard financeiro (`orcamento`, `contas-pagar`, `conciliacao`, `lancamentos`) continua mockado — território do P-3.9.
+- `shell.tsx`/`layout.tsx` do Financeiro ainda não têm gate de papel — `orcamento-organizacoes` e `importacao` checam inline (`requireColaboradorSession`), não esperaram pelo P-3.9.
+- Drift entre o journal do drizzle-kit e as migrations hand-authored (0015 em diante) persiste — `drizzle-kit generate` produz statements duplicados para mudanças já aplicadas fora do journal.
+- 16 testes de `rls.test.ts` (projetos) seguem falhando por gap de ambiente pré-existente (ver S-62); não corrigido aqui, fora do escopo literal de P-3.8b.
+- Sem verificação em navegador real (Playwright/Puppeteer indisponíveis neste ambiente) — wiring de `import-wizard.tsx`/`organization-budgets-manager.tsx` confirmado por `lint`/`typecheck`/revisão de código, não por clique real na UI.
+
+**Arquivos criados:**
+
+- `packages/db/src/migrations/0018_organization_budget_audit_actions.sql`
+- `packages/db/src/migrations/0019_financeiro_organization_budgets.sql`
+- `apps/financeiro/src/lib/session.ts`
+- `apps/financeiro/src/actions/organization-budgets.ts`
+- `apps/financeiro/src/components/import-wizard.tsx`
+- `apps/financeiro/src/components/organization-budgets-manager.tsx`
+- `apps/financeiro/src/app/(dashboard)/orcamento-organizacoes/page.tsx`
+- `apps/financeiro/src/__tests__/designation-governance.test.ts`
+- `apps/financeiro/src/__tests__/csv-parser.test.ts`
+- `apps/financeiro/src/__tests__/confirm-import.test.ts`
+
+**Arquivos modificados:**
+
+- `packages/auth/src/server.ts` (`ActionSession.designations`, `resolveSession` carrega designations)
+- `apps/financeiro/src/lib/safe-action.ts` (`diretorWithDesignationAction`)
+- `apps/financeiro/src/actions/approval.ts` (`approveBatch`/`authorizeBatch` exigem designation; `createWeeklyBatch` notifica gestor+CC autorizador)
+- `apps/financeiro/src/actions/import.ts` (`confirmImport` re-parseia server-side; `parseCSV`/`splitDelimitedLine` exportados e robustos a `;`/aspas)
+- `apps/financeiro/src/app/(dashboard)/importacao/page.tsx` (RSC real: gate + fetch de contas bancárias; delega a `ImportWizard`)
+- `apps/financeiro/src/app/(dashboard)/shell.tsx` (nav: "Orçamento por instituição")
+- `packages/email/src/lib/send.ts` (`SendEmailOptions.cc`)
+- `packages/db/src/schema/financeiro.ts` (`organizationBudgets`)
+- `packages/db/src/schema/admin.ts` (2 valores novos em `auditActionEnum`)
+- `packages/db/src/schema/index.ts` (barrel: `organizationBudgets` + tipos)
+- `apps/financeiro/src/lib/audit.ts` (`FinanceiroAuditAction` +2 valores)
+- `packages/validators/src/financeiro/index.ts` (`createOrganizationBudgetSchema`/`updateOrganizationBudgetSchema`)
+- `apps/projetos/src/actions/projects.ts` (`checkOrganizationBudget` consulta `financeiro.organization_budgets`)
+- `apps/financeiro/src/__tests__/audit-abort.test.ts` (mock de sessão ganha `designations: ["gestor"]`)
+- `apps/projetos/src/__tests__/flow.test.ts` (bloco de orçamento migrado para `organization_budgets`)
+- `apps/projetos/src/__tests__/session-gate.test.ts`, `apps/documentos/src/__tests__/session-gate.test.ts`, `apps/documentos/src/__tests__/actions.test.ts`, `apps/admin/src/__tests__/session-gate.test.ts` (mocks de `ActionSession` ganham `designations: []` — campo novo obrigatório no tipo compartilhado)

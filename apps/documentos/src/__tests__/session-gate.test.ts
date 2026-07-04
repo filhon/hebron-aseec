@@ -63,6 +63,7 @@ describe("requireEditorSession", () => {
     vi.mocked(resolveSession).mockResolvedValue({
       actorId: "user-1",
       roles: ["hospede"],
+      designations: [],
     });
 
     const { requireEditorSession } = await import("../lib/session");
@@ -77,6 +78,7 @@ describe("requireEditorSession", () => {
     vi.mocked(resolveSession).mockResolvedValue({
       actorId: "editor-1",
       roles: ["colaborador"],
+      designations: [],
     });
 
     const { requireEditorSession } = await import("../lib/session");
@@ -92,6 +94,7 @@ describe("requireEditorSession", () => {
     vi.mocked(resolveSession).mockResolvedValue({
       actorId: "admin-1",
       roles: ["super_admin"],
+      designations: [],
     });
 
     const { requireEditorSession } = await import("../lib/session");

@@ -13,6 +13,7 @@ import {
   notifications,
   organizations,
   systemSettings,
+  organizationBudgets,
 } from "@hebron/db/schema";
 import { VALID_STAGE_TRANSITIONS } from "@hebron/db/schema";
 import type { ProjectStage } from "@hebron/db/schema";
@@ -88,29 +89,31 @@ async function createVersionSnapshot(
 }
 
 /**
- * Checks organization budget against admin.system_settings.
- * Key pattern: `projetos_budget_{organizationId}_{year}`
- * If no limit is set the check passes (no cap).
- * When the financeiro module is built this should query financeiro.organization_budgets.
+ * Checks organization budget against financeiro.organization_budgets (S1-01).
+ * If no budget row is configured for organizationId+year, the check passes
+ * (no cap) — same fail-open semantics as the old admin.system_settings
+ * workaround this replaces.
  */
 async function checkOrganizationBudget(
   organizationId: string,
   year: number,
   newProjectBudget: number,
 ): Promise<void> {
-  const settingKey = `projetos_budget_${organizationId}_${year}`;
-
-  const settingRows = await db
-    .select({ value: systemSettings.value })
-    .from(systemSettings)
-    .where(eq(systemSettings.key, settingKey))
+  const budgetRows = await db
+    .select({ amount: organizationBudgets.amount })
+    .from(organizationBudgets)
+    .where(
+      and(
+        eq(organizationBudgets.organizationId, organizationId),
+        eq(organizationBudgets.year, year),
+      ),
+    )
     .limit(1);
 
-  if (!settingRows[0]) return; // No limit configured — no cap
+  if (!budgetRows[0]) return; // No budget configured — no cap
 
-  const limitValue = settingRows[0].value as { limit?: number } | null;
-  const limit = limitValue?.limit;
-  if (!limit) return; // Malformed setting — no cap
+  const limit = parseFloat(budgetRows[0].amount);
+  if (!limit) return;
 
   // Sum budgets of all non-deleted, non-reprovado projects for this org+year
   const existingResult = await db

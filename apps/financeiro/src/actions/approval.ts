@@ -10,11 +10,15 @@ import {
   transactions,
   notifications,
   roleAssignments,
+  designations,
   users,
 } from "@hebron/db/schema";
 import { createNotification } from "@hebron/email";
 import type { InsertNotificationFn } from "@hebron/email";
-import { diretorAction, superAdminAction } from "../lib/safe-action";
+import {
+  diretorWithDesignationAction,
+  superAdminAction,
+} from "../lib/safe-action";
 import { logFinanceiroAudit } from "../lib/audit";
 
 // ---------------------------------------------------------------------------
@@ -126,12 +130,32 @@ export const createWeeklyBatch = superAdminAction
       })),
     );
 
-    // Notify all diretores via email
+    // Governança dual (BRAIN §6.5, passo 2): o lote vai para o(s) diretor(es)
+    // gestor (To), com o(s) autorizador(es) em cópia. Se nenhuma designation
+    // "gestor" estiver configurada ainda, cai de volta para todos os
+    // diretores — rede de segurança para não deixar o lote sem notificados.
+    const gestorRows = await db
+      .select({ userId: designations.userId, email: users.email })
+      .from(designations)
+      .innerJoin(users, eq(users.id, designations.userId))
+      .where(eq(designations.type, "gestor"));
+
+    const autorizadorEmails = (
+      await db
+        .select({ email: users.email })
+        .from(designations)
+        .innerJoin(users, eq(users.id, designations.userId))
+        .where(eq(designations.type, "autorizador"))
+    ).map((r) => r.email);
+
     const diretorRows = await db
       .select({ userId: roleAssignments.userId, email: users.email })
       .from(roleAssignments)
       .innerJoin(users, eq(users.id, roleAssignments.userId))
       .where(eq(roleAssignments.role, "diretor"));
+
+    const usingGestorRecipients = gestorRows.length > 0;
+    const recipients = usingGestorRecipients ? gestorRows : diretorRows;
 
     const totalAmount = pendingPayables
       .reduce((sum, p) => sum + parseFloat(p.amount), 0)
@@ -148,7 +172,7 @@ export const createWeeklyBatch = superAdminAction
 <p style="font-style:italic;color:#666;">Hebron Aseec — Sistema Financeiro</p>
 `.trim();
 
-    for (const d of diretorRows) {
+    for (const d of recipients) {
       await createNotification({
         insert: insertNotification,
         data: {
@@ -163,6 +187,9 @@ export const createWeeklyBatch = superAdminAction
         },
         email: {
           to: d.email,
+          // CC só faz sentido quando o destinatário é de fato o gestor —
+          // o fallback (todos os diretores) já inclui o(s) autorizador(es).
+          cc: usingGestorRecipients ? autorizadorEmails : undefined,
           subject: `[Financeiro] Lote de pagamentos aguarda aprovação — ${weekStart}`,
           html: emailHtml,
         },
@@ -191,7 +218,7 @@ const approveBatchSchema = z.object({
   batchId: z.string().uuid("Lote inválido"),
 });
 
-export const approveBatch = diretorAction
+export const approveBatch = diretorWithDesignationAction("gestor")
   .schema(approveBatchSchema)
   .action(async ({ parsedInput: input, ctx }) => {
     const now = new Date();
@@ -296,7 +323,7 @@ const authorizeBatchSchema = z.object({
   batchId: z.string().uuid("Lote inválido"),
 });
 
-export const authorizeBatch = superAdminAction
+export const authorizeBatch = diretorWithDesignationAction("autorizador")
   .schema(authorizeBatchSchema)
   .action(async ({ parsedInput: input, ctx }) => {
     const now = new Date();
