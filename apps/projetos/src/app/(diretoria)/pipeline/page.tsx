@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Filter, LayoutGrid, X } from "lucide-react";
+import { useAction } from "next-safe-action/hooks";
+import { Filter, LayoutGrid, X, AlertTriangle } from "lucide-react";
 import { getKanbanProjects } from "../../../lib/queries";
+import { transitionProjectStage } from "../../../actions/projects";
 import { ProjectKanban } from "../../../components/project-kanban";
 import { BRL } from "../../../lib/stage-utils";
 import type { CompactProjectView, ProjectStage } from "@hebron/types";
@@ -136,13 +138,32 @@ export default function DiretoriaPipelinePage() {
   const [tipo, setTipo] = useState("");
   const [ano, setAno] = useState("");
   const [showClosed, setShowClosed] = useState(false);
+  const [moveError, setMoveError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const refetch = useCallback(() => {
     void getKanbanProjects().then((ps) => {
       setAllProjects(ps);
       setLoading(false);
     });
   }, []);
+
+  useEffect(() => {
+    refetch();
+  }, [refetch]);
+
+  const { execute: moveProject } = useAction(transitionProjectStage, {
+    onSuccess() {
+      setMoveError(null);
+      refetch();
+    },
+    onError({ error }) {
+      setMoveError(
+        error.serverError ??
+          "Não foi possível mover o projeto para este estágio.",
+      );
+      refetch();
+    },
+  });
 
   const filtered = allProjects.filter((p) => {
     if (categoria && p.categoria !== categoria) return false;
@@ -171,7 +192,11 @@ export default function DiretoriaPipelinePage() {
   }
 
   function handleMove(projectId: string, targetStage: ProjectStage) {
-    console.log("Move", projectId, "→", targetStage);
+    // "cancelado" existe no enum de @hebron/types para a coluna de
+    // encerrados, mas não é um estágio da state machine real (nem droppable
+    // — PIPELINE_STAGES não a lista) — nunca alcançado a partir do drag.
+    if (targetStage === "cancelado") return;
+    moveProject({ projectId, toStage: targetStage });
   }
 
   function handleCardClick(projectId: string) {
@@ -276,6 +301,18 @@ export default function DiretoriaPipelinePage() {
           </button>
         )}
       </div>
+
+      {/* Move error */}
+      {moveError && (
+        <div className="rounded-md border border-(--color-destructive) bg-(--color-destructive-muted) px-4 py-3 flex items-center gap-2.5">
+          <AlertTriangle
+            className="w-4 h-4 shrink-0"
+            style={{ color: "var(--color-destructive)" }}
+            aria-hidden
+          />
+          <p className="text-sm text-(--color-destructive)">{moveError}</p>
+        </div>
+      )}
 
       {/* Kanban / empty states */}
       {filtered.length === 0 ? (

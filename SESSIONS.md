@@ -83,6 +83,7 @@
 | S-59   | 2026-07-04 | P-1.25 — Admin: leitura protegida e fiação completa (Onda 1)            | concluido                            |
 | S-60   | 2026-07-04 | P-1.26 — Onboarding: convite, auto-signup e MFA (Onda 1)                | concluido                            |
 | S-61   | 2026-07-04 | P-1.27 — Documentos: visibilidade e área editorial verdadeiras (Onda 1) | concluido                            |
+| S-62   | 2026-07-04 | P-2.9c — Projetos: operável de ponta a ponta                            | concluido                            |
 
 ---
 
@@ -2601,3 +2602,96 @@ FAQ de edital: existia uma aba "FAQ" completa no formulário de criação/ediç�
 - `apps/documentos/src/components/document-form.tsx`, `components/edital-form.tsx` (`newTags`, `hasExistingFile`)
 - `apps/documentos/src/components/search-bar.tsx` (`initialFilters`)
 - `apps/documentos/src/__tests__/actions.test.ts` (teste de notificação usa `subscribe()` real)
+
+---
+
+### S-62 — 2026-07-04 — P-2.9c Projetos: operável de ponta a ponta
+
+**Prompt:** P-2.9c (`AUDIT/04-prompts-pendentes.md` §4, decisão F2-Q3)
+**Duracao:** ~5h
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+F2-P1 (backend completo, produto inoperante — grep de imports confirmava apenas 3 das 17 actions do módulo com algum caminho de UI: `createAnnualDraft`/`createPunctualDraft` e `castVote`) corrigido fluxo a fluxo: `submitProject` (rascunho→validação) ganhou botão real no detalhe do submissor (`SubmitProjectButton`); `transitionProjectStage` passou a ser chamada de verdade pelo kanban (F2-P2: o handler de drop fazia só `console.log`); `createContestation` ganhou formulário na homologação; `deleteProject` ganhou botão com justificativa obrigatória nos dois detalhes; `assignEvaluator`/`submitEvaluation` ganharam painel de designação e formulário de parecer (o box antigo de "Registrar Avaliação" era decorativo — sempre visível, sem checar designação, sem submeter nada); `createOrganization` ganhou formulário real em `/instituicao` (sem isso, onboarding de submissor era impossível — nem conta, nem instituição, nem projeto); `createReport`/`submitReport`/`reviewReport` ganharam formulários dedicados nas duas pontas (diretor solicita e revisa; submissor envia).
+
+F2-P4 (CRÍTICO): `(diretoria)/layout.tsx` e `(submissor)/layout.tsx` verificavam apenas `getAuthUser() !== null` — nenhuma checagem de papel, herdada de G5 (S1-08) — deixando qualquer autenticado (um submissor, inclusive) navegar para `/pipeline/<id>` e ver score IA, breakdown, versão compacta e contagem de votos de qualquer projeto (`ScoreIndicator` recebia `role="diretor"` hardcoded, sempre). Corrigido com `lib/session.ts` (`requireDiretorSession`/`requireSubmissorSession`, mesmo padrão de `requireAdminSession`/`requireEditorSession` de P-1.25/P-1.27) chamado nos dois layouts, e o papel real do sessão (`super_admin` > `diretor` > `conselheiro`) passado ao `ScoreIndicator` em vez do valor fixo.
+
+F2-P5 (quórum contava atribuições, não pessoas): `countEligibleVoters` (`actions/voting.ts`) e o cálculo espelhado em `getDirectorProjectDetail` (`lib/queries.ts`) usavam `count()` sobre `role_assignments` — um usuário com diretor+conselheiro simultaneamente (permitido pelo BRAIN) contava 2x no denominador do quórum e no `totalEligible` do fechamento automático. Trocado por `countDistinct(roleAssignments.userId)` nos dois lugares.
+
+F2-P6/decisão F2-Q5 (votação sem encerramento no caso comum): com quórum atingido, maioria formada e turnout < 100%, a votação ficava aberta para sempre — o BRAIN só prevê o botão de pânico para o caso "sem quórum", não para esse. Nova action `closeVoting` (`superAdminAction`): exige quórum já atingido (senão rejeita e orienta usar o pânico, sem duplicar a lógica de force-decide de `triggerPanicButton`), fecha com a mesma transição de `homologacao`/`reprovado` da maioria, e audita como `project.stage_transition` com `trigger: "manual_close"` (sem novo valor de enum). UI em `VotingAdminActions`, alternando entre "Encerrar Votação" (quórum atingido) e "Acionar Botão de Pânico" (sem quórum).
+
+F2-P3 (integração edital→wizard aberta): `novo/page.tsx` não lia `edital_id`/`tipo` de `searchParams` nem chamava `getEditalPrefill` — o botão "submeter projeto" do edital (P-1.23, Documentos) não tinha efeito nenhum aqui. Wizard agora lê `?editalId=` via `useSearchParams`, chama `getEditalPrefillForWizard` (novo wrapper `"use server"` em `lib/queries.ts` sobre `lib/integrations/documentos.ts`), pré-preenche `tipo` e exibe um badge "Vinculado ao edital: …", e `editalId` é enviado às duas actions de criação de rascunho (ambas já aceitavam o campo — só nunca era passado). Categoria não é pré-preenchida: `projectCategoryId` do edital referencia `documentos.categories`, não o slug de `projetos.projectCategories` — mapeamento inexistente, já documentado como débito pré-existente no próprio `lib/integrations/documentos.ts`; resolver essa modelagem está fora do escopo deste prompt.
+
+Adoção de `withAuthenticatedContext` (P-0.10, escopo explícito de P-2.9c): todo `lib/queries.ts` migrado de `db` (superuser) para `withAuthenticatedContext({ actorId }, tx => ...)` — RLS de P-2.7 (já testada, mas inerte em produção até este prompt) passa a executar de verdade nas leituras do app. Adicionadas `getEligibleEvaluators`, `getMyPendingEvaluation`, `getDirectorReportsOverview`, `getReportAttachments`, `getEditalPrefillForWizard`.
+
+**Achado fora do escopo literal, corrigido pela mesma verificação "zero componentes do Bloco A órfãos" que já havia pego 26 casos nas Fases 1-2 (PD-2/CS-8):** grep de uso em `apps/projetos/src/components` encontrou 7 órfãos, não só os citados no escopo (`report-form`). `project-wizard.tsx` + os 5 `project-wizard-steps/*.tsx` + `punctual-project-form.tsx`: pré-datavam a reescrita inline do wizard em `novo/page.tsx` (S-41) e tinham submit falso (`setTimeout`); a reimplementação inline já é funcional, testada (fixtures de `flow.test.ts`) e mais completa (upload real para `project-attachments`, leitura de `organizações` reais) — removidos como superados, não reconectados. `report-form.tsx`: campos sem coluna correspondente (`narrativa`, `resultadosAlcancados`, `dificuldades`, `proximosPassos`, `beneficiariosAtingidos` como campos separados — `projetos.reports` só tem `content` único); removido e substituído por `submit-report-form.tsx` novo, casado exatamente com o schema real de `submitReport`. `report-card.tsx`/`organization-card.tsx`: tipos `Report`/`Organization` de `@hebron/types` com campos inteiros sem correspondência na tabela real (`region`, `approvedAt`, `contactName`, `resultadosAlcancados` etc.) — removidos, superados pela renderização inline já existente (mais fiel ao schema real). `project-card.tsx`: nunca teve chamador algum — nem o kanban (usa `KanbanCard` inline) nem o dashboard do submissor (lista inline com progresso de parcelas, que `ProjectCard` não modela) o importavam; removido.
+
+**Criterios de aceite verificados:**
+
+- [x] submissor submete rascunho pela tela `/[id]` e o stage muda de `rascunho` para `validacao` — `SubmitProjectButton` chama `submitProject`; fluxo coberto por `flow.test.ts` (já existente, exercita a action) + revisão de código confirmando o wiring UI→action.
+- [x] drag do kanban persiste e sobrevive a reload — `handleMove` chama `transitionProjectStage` de verdade (antes: `console.log`); `ProjectKanban` ganhou `useEffect` de resync (o estado otimista de posições nunca se realinhava com um novo `projects` vindo de refetch); em erro, o pipeline refaz o fetch e mostra o `serverError`.
+- [x] submissor autenticado não alcança `/pipeline/<id>` (mais forte que "não vê score": nem a rota é renderizada) — `requireDiretorSession` redireciona; `session-gate.test.ts` (9 testes) cobre os 4 papéis × 2 gates (diretor e submissor).
+- [x] votação com quórum é encerrável por super_admin e o resultado aplica transição — `closeVoting` + `VotingAdminActions`; `close-voting.test.ts` cobre fechamento sem quórum (rejeita), com quórum+maioria (fecha para `homologacao`) e reabertura de projeto já fechado (rejeita).
+- [x] zero componentes do Bloco A órfãos — grep de uso em todos os componentes restantes de `apps/projetos/src/components`: todos com ≥1 importador.
+- [x] testes novos cobrem quórum por pessoa e fechamento manual — `close-voting.test.ts` (4 testes nesta sessão) + fix aplicado em `voting.ts`/`queries.ts`.
+- `pnpm --filter projetos lint typecheck test` — lint e typecheck limpos; 86/102 testes verdes (102 = 89 pré-existentes + 13 novos desta sessão: 4 de `close-voting.test.ts`, 9 de `session-gate.test.ts`). Os 16 restantes são pré-existentes e não relacionados a este prompt — ver Débitos abaixo.
+
+**Decisoes tomadas:**
+
+- Escopo de "relatórios (criar/submeter/revisar)": três actions já existentes (`createReport`/`submitReport`/`reviewReport`) sem UI alguma. Modelado como: diretor solicita (`ReportRequestForm`, em `pipeline/[id]` quando `em_execucao`) → submissor envia (`SubmitReportForm`, por linha pendente/em atraso no próprio detalhe — não um botão único genérico como antes, já que pode haver múltiplos relatórios pendentes por projeto) → diretor revisa (`ReportReviewActions`, aprovar/rejeitar). `relatorios-dir` deixou de ser um placeholder estático e virou lista real (`getDirectorReportsOverview`) do portfólio inteiro, mas sem duplicar os botões de ação — cada linha linka para `/pipeline/<id>`, onde a ação de fato acontece (evita duas fontes de verdade para o mesmo estado).
+- `closeVoting` não reaproveita a lógica de `triggerPanicButton` apesar de ambas decidirem por maioria dos votos existentes — mantidas como actions distintas porque o BRAIN as liga a gatilhos semânticos diferentes (pânico = sem quórum; fechamento manual = quórum atingido, turnout incompleto) e a decisão F2-Q5 pediu uma action nova, não uma reescrita de `triggerPanicButton`.
+- `getAuthUser()` (retorna `id`/`fullName`/`email` via Supabase Auth direto) não foi migrado para `withAuthenticatedContext` — é leitura da própria linha pelo id verificado pelo Supabase Auth, não superfície de RLS cross-user; migrar acrescentaria uma transação sem ganho de segurança real.
+- Máscara de score IA para submissor: resolvida só na camada de gate do layout (`requireDiretorSession`), não duplicada como filtro extra em `getDirectorProjectDetail` — uma vez que o gate bloqueia qualquer papel fora de diretor/conselheiro/super_admin, a página nunca roda para um submissor; adicionar uma segunda máscara ali seria validar um cenário que já não pode acontecer (o `rls.test.ts` já tem a suíte "Regressão F2-P4" comprovando isso via `withAuthenticatedContext`, ainda que hoje bloqueada pelo débito de grants abaixo).
+- CNPJ no `CreateOrganizationForm` só é enviado à action quando tem exatamente 14 dígitos (schema exige `/^\d{14}$/`); campo vazio ou incompleto vira `null` silenciosamente em vez de bloquear o submit — CNPJ é opcional no schema real.
+
+**Debitos tecnicos / pendencias:**
+
+- **Achado durante esta sessão, não introduzido por ela:** `rls.test.ts` tem 16 testes falhando com `permission denied for schema projetos` para o role `authenticated` — confirmado via `git stash` que a falha já existe no HEAD anterior a esta sessão (mesmos 16 testes, mesmo erro), ou seja, é um gap do ambiente de desenvolvimento atual, não uma regressão desta sessão. A causa aparente: o `GRANT USAGE ON SCHEMA projetos TO authenticated` de `packages/db/src/migrations/0014_grants_authenticated.sql` (criado em P-0.10/S-57, que relatou 71 testes verdes com esses mesmos GRANTs) não está presente no banco de desenvolvimento usado nesta sessão — possivelmente uma instância efêmera diferente da usada em S-57. `voting.test.ts` continua verde porque nunca foi atualizado para depender do GRANT permanente (ainda faz seu próprio `GRANT`/`REVOKE` temporário ao redor de si mesmo, de antes de P-0.10). Ação sugerida: rodar `pnpm --filter db db:migrate` contra o banco desta sessão para reconciliar — não executado aqui por ser mudança de banco fora do escopo literal de P-2.9c e por potencialmente afetar um ambiente compartilhado; fica para confirmação do Filipe.
+- Categoria do edital não é pré-preenchida no wizard (ver Resumo, F2-P3) — depende de uma modelagem de mapeamento `documentos.categories` ↔ `projetos.project_categories` que nenhum prompt define ainda.
+- `EvaluationForm` só expõe `approved`/`rejected` (mapeados de "Favorável"/"Desfavorável"); `needs_revision` (terceiro valor do enum `evaluation_recommendation`) não tem affordance na UI — simplificação deliberada para não introduzir um terceiro estado sem fluxo de "revisão solicitada" definido em prompt algum.
+- Sem verificação em navegador real (Playwright/Puppeteer indisponíveis neste ambiente) — wiring confirmado por `lint`/`typecheck`/`test` (86/102, ver acima) e revisão de código, não por clique real na UI.
+
+**Arquivos criados:**
+
+- `apps/projetos/src/lib/session.ts`
+- `apps/projetos/src/components/evaluator-panel.tsx`
+- `apps/projetos/src/components/evaluation-form.tsx`
+- `apps/projetos/src/components/contestation-form.tsx`
+- `apps/projetos/src/components/voting-admin-actions.tsx`
+- `apps/projetos/src/components/delete-project-button.tsx`
+- `apps/projetos/src/components/submit-project-button.tsx`
+- `apps/projetos/src/components/submit-report-form.tsx`
+- `apps/projetos/src/components/report-request-form.tsx`
+- `apps/projetos/src/components/report-review-actions.tsx`
+- `apps/projetos/src/components/create-organization-form.tsx`
+- `apps/projetos/src/__tests__/close-voting.test.ts`
+- `apps/projetos/src/__tests__/session-gate.test.ts`
+
+**Arquivos modificados:**
+
+- `apps/projetos/src/actions/voting.ts` (`countEligibleVoters` usa `countDistinct`; nova action `closeVoting`)
+- `apps/projetos/src/app/(diretoria)/layout.tsx` (gate `requireDiretorSession`)
+- `apps/projetos/src/app/(submissor)/layout.tsx` (gate `requireSubmissorSession`)
+- `apps/projetos/src/app/(diretoria)/pipeline/page.tsx` (`handleMove` chama `transitionProjectStage`; banner de erro)
+- `apps/projetos/src/app/(diretoria)/pipeline/[id]/page.tsx` (papel real no `ScoreIndicator`; painel de avaliador; formulário de parecer; contestação; ações de votação; exclusão; seção de relatórios)
+- `apps/projetos/src/app/(diretoria)/relatorios-dir/page.tsx` (reescrita: lista real via `getDirectorReportsOverview`)
+- `apps/projetos/src/app/(submissor)/[id]/page.tsx` (botão de submissão; botão de exclusão; formulário de envio por relatório)
+- `apps/projetos/src/app/(submissor)/instituicao/page.tsx` (`CreateOrganizationForm`)
+- `apps/projetos/src/app/(submissor)/novo/page.tsx` (prefill de edital via `searchParams`)
+- `apps/projetos/src/components/project-kanban.tsx` (`useEffect` de resync de posições)
+- `apps/projetos/src/lib/queries.ts` (migração para `withAuthenticatedContext`; novas queries; fix de quórum por pessoa)
+
+**Arquivos removidos (órfãos superados por implementação já existente):**
+
+- `apps/projetos/src/components/project-wizard.tsx`
+- `apps/projetos/src/components/project-wizard-steps/step-attachments.tsx`
+- `apps/projetos/src/components/project-wizard-steps/step-budget.tsx`
+- `apps/projetos/src/components/project-wizard-steps/step-institution.tsx`
+- `apps/projetos/src/components/project-wizard-steps/step-proposal.tsx`
+- `apps/projetos/src/components/project-wizard-steps/step-review.tsx`
+- `apps/projetos/src/components/punctual-project-form.tsx`
+- `apps/projetos/src/components/report-form.tsx`
+- `apps/projetos/src/components/report-card.tsx`
+- `apps/projetos/src/components/organization-card.tsx`
+- `apps/projetos/src/components/project-card.tsx`

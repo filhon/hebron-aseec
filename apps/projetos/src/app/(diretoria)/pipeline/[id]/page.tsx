@@ -12,10 +12,24 @@ import {
   CheckCircle2,
   XCircle,
   Building2,
+  FileText,
 } from "lucide-react";
-import { getAuthUser, getDirectorProjectDetail } from "../../../../lib/queries";
+import {
+  getAuthUser,
+  getDirectorProjectDetail,
+  getEligibleEvaluators,
+  getMyPendingEvaluation,
+} from "../../../../lib/queries";
+import { requireDiretorSession } from "../../../../lib/session";
 import { ScoreIndicator } from "../../../../components/score-indicator";
 import { EvaluationCard } from "../../../../components/evaluation-card";
+import { EvaluatorPanel } from "../../../../components/evaluator-panel";
+import { EvaluationForm } from "../../../../components/evaluation-form";
+import { ContestationForm } from "../../../../components/contestation-form";
+import { VotingAdminActions } from "../../../../components/voting-admin-actions";
+import { DeleteProjectButton } from "../../../../components/delete-project-button";
+import { ReportRequestForm } from "../../../../components/report-request-form";
+import { ReportReviewActions } from "../../../../components/report-review-actions";
 import { VotePanelWrapper } from "../../../../components/vote-panel-wrapper";
 import { ProjectTimeline } from "../../../../components/project-timeline";
 import {
@@ -31,6 +45,14 @@ import type {
   VoteSummary,
 } from "@hebron/types";
 
+type ScoreRole = "super_admin" | "diretor" | "conselheiro";
+
+function highestScoreRole(roles: string[]): ScoreRole {
+  if (roles.includes("super_admin")) return "super_admin";
+  if (roles.includes("diretor")) return "diretor";
+  return "conselheiro";
+}
+
 export default async function DirectorProjectDetailPage({
   params,
 }: {
@@ -38,11 +60,22 @@ export default async function DirectorProjectDetailPage({
 }) {
   const { id } = await params;
 
+  const session = await requireDiretorSession();
   const authUser = await getAuthUser();
   if (!authUser) redirect(CANONICAL_LOGIN_URL);
 
   const project = await getDirectorProjectDetail(id, authUser.id);
   if (!project) notFound();
+
+  const isSuperAdmin = session.roles.includes("super_admin");
+  const viewerScoreRole = highestScoreRole(session.roles);
+
+  const [eligibleEvaluators, myPendingEvaluation] = await Promise.all([
+    project.stage === "validacao"
+      ? getEligibleEvaluators(project.id)
+      : Promise.resolve([]),
+    getMyPendingEvaluation(project.id, authUser.id),
+  ]);
 
   const stage = getStageBadge(project.stage);
 
@@ -121,7 +154,7 @@ export default async function DirectorProjectDetailPage({
                 <>
                   <ScoreIndicator
                     score={project.scoreAi}
-                    role="diretor"
+                    role={viewerScoreRole}
                     showLabel
                   />
 
@@ -441,6 +474,27 @@ export default async function DirectorProjectDetailPage({
             />
           )}
 
+          {/* Panic / manual close (votacao, super_admin only) */}
+          {project.stage === "votacao" && voteSummary && isSuperAdmin && (
+            <VotingAdminActions
+              projectId={project.id}
+              quorumMet={voteSummary.quorumMet}
+            />
+          )}
+
+          {/* Contestation (homologacao) */}
+          {project.stage === "homologacao" && (
+            <ContestationForm projectId={project.id} />
+          )}
+
+          {/* Evaluator assignment (validacao) */}
+          {project.stage === "validacao" && (
+            <EvaluatorPanel
+              projectId={project.id}
+              evaluators={eligibleEvaluators}
+            />
+          )}
+
           {/* Evaluations */}
           {evaluations.length > 0 && (
             <div>
@@ -455,49 +509,59 @@ export default async function DirectorProjectDetailPage({
             </div>
           )}
 
-          {/* Add evaluation placeholder */}
-          <div className="rounded-md border border-dashed border-(--border) bg-(--surface-alt) px-4 py-4">
-            <p className="text-xs font-bold uppercase tracking-wider text-(--fg-muted) mb-3">
-              Registrar Avaliação
-            </p>
-            <div className="flex flex-col gap-3">
-              <div className="flex gap-2">
-                {(["sim", "nao"] as const).map((rec) => (
-                  <button
-                    key={rec}
-                    type="button"
-                    className="flex-1 rounded-(--radius) border-2 py-2 text-xs font-bold transition-all duration-(--dur-fast)"
-                    style={{
-                      borderColor:
-                        rec === "sim"
-                          ? "var(--hb-green)"
-                          : "var(--color-destructive)",
-                      backgroundColor:
-                        rec === "sim"
-                          ? "var(--hb-green-muted)"
-                          : "var(--color-destructive-muted)",
-                      color:
-                        rec === "sim"
-                          ? "var(--hb-green-fg)"
-                          : "var(--color-destructive)",
-                    }}
+          {/* Registrar avaliação — só para o avaliador designado, com
+              avaliação ainda pendente (F2-P1: o box antigo era decorativo,
+              sempre visível, sem checar designação nem submeter nada). */}
+          {myPendingEvaluation && <EvaluationForm projectId={project.id} />}
+
+          {/* Reports */}
+          <div className="rounded-md border border-(--border) bg-(--surface) px-4 py-4 shadow-(--shadow-xs)">
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <p className="text-xs font-bold uppercase tracking-wider text-(--fg-muted) flex items-center gap-1.5">
+                <FileText className="w-3.5 h-3.5" aria-hidden />
+                Relatórios
+              </p>
+              {project.stage === "em_execucao" && (
+                <ReportRequestForm projectId={project.id} />
+              )}
+            </div>
+            {project.reports.length === 0 ? (
+              <p className="text-xs text-(--fg-muted)">
+                Nenhum relatório solicitado ainda.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {project.reports.map((r) => (
+                  <div
+                    key={r.id}
+                    className="flex items-center justify-between gap-3 rounded-(--radius) border border-(--border) px-3 py-2"
                   >
-                    {rec === "sim" ? "✓ Favorável" : "✗ Desfavorável"}
-                  </button>
+                    <div>
+                      <p className="text-xs font-semibold text-(--fg)">
+                        Período {r.period}
+                      </p>
+                      <p className="text-xs text-(--fg-muted)">
+                        {r.status === "pendente" && "Pendente"}
+                        {r.status === "submitted" && "Aguardando revisão"}
+                        {r.status === "approved" && "Aprovado"}
+                        {r.status === "rejected" && "Rejeitado"}
+                      </p>
+                    </div>
+                    {r.status === "submitted" && (
+                      <ReportReviewActions reportId={r.id} />
+                    )}
+                  </div>
                 ))}
               </div>
-              <textarea
-                rows={3}
-                placeholder="Deixe suas notas e comentários sobre este projeto..."
-                className="w-full rounded-(--radius) border border-(--border) bg-(--surface) px-3 py-2.5 text-sm text-(--fg) placeholder:text-(--fg-subtle) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--brand) resize-none"
-              />
-              <button
-                type="button"
-                className="w-full rounded-(--radius) bg-(--brand) text-(--brand-fg) py-2 text-sm font-semibold hover:bg-(--hb-blue-soft) transition-colors"
-              >
-                Salvar Avaliação
-              </button>
-            </div>
+            )}
+          </div>
+
+          {/* Delete project */}
+          <div className="flex justify-end">
+            <DeleteProjectButton
+              projectId={project.id}
+              redirectTo="/pipeline"
+            />
           </div>
 
           {/* Category + indicators */}

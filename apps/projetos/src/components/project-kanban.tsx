@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import type { CompactProjectView, ProjectStage } from "@hebron/types";
 
 function cn(...cls: (string | undefined | false | null)[]): string {
@@ -320,6 +320,17 @@ export function ProjectKanban({
     for (const p of projects) m.set(p.id, p.stage);
     return m;
   });
+
+  // Resync when the parent refetches `projects` (e.g. after a move is
+  // confirmed or rejected server-side) — otherwise a stale optimistic
+  // position would never reconcile with the real stage.
+  useEffect(() => {
+    setPositions(() => {
+      const m = new Map<string, ProjectStage>();
+      for (const p of projects) m.set(p.id, p.stage);
+      return m;
+    });
+  }, [projects]);
 
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<ProjectStage | null>(null);

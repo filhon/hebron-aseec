@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { getSupabaseBrowserClient } from "@hebron/auth/client";
 import Link from "next/link";
 import {
@@ -16,7 +16,11 @@ import {
   Eye,
 } from "lucide-react";
 import { useAction } from "next-safe-action/hooks";
-import { getMyOrganizations, type OrgOption } from "../../../lib/queries";
+import {
+  getMyOrganizations,
+  getEditalPrefillForWizard,
+  type OrgOption,
+} from "../../../lib/queries";
 import { createAnnualDraft } from "../../../actions/projects";
 import { createPunctualDraft } from "../../../actions/projects";
 
@@ -44,6 +48,9 @@ type AttachmentItem = {
 };
 
 type FormData = {
+  // Edital (prefill via ?editalId=, F2-P3)
+  editalId: string | null;
+  editalTitle: string | null;
   // Step 1
   orgId: string;
   projectType: "anual" | "pontual";
@@ -77,6 +84,8 @@ type FormData = {
 };
 
 const INITIAL: FormData = {
+  editalId: null,
+  editalTitle: null,
   orgId: "",
   projectType: "anual",
   titulo: "",
@@ -1144,6 +1153,7 @@ function Step6({ data, orgs }: { data: FormData; orgs: OrgOption[] }) {
 
 export default function NovoProjetoPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [step, setStep] = useState(1);
   const [data, setData] = useState<FormData>(INITIAL);
   const [orgs, setOrgs] = useState<OrgOption[]>([]);
@@ -1156,6 +1166,26 @@ export default function NovoProjetoPage() {
       setOrgsLoading(false);
     });
   }, []);
+
+  // F2-P3: o wizard nunca lia edital_id/tipo de searchParams nem chamava
+  // getEditalPrefill — o botão "submeter projeto" do edital não tinha efeito
+  // nenhum aqui. A categoria não é pré-preenchida: `projectCategoryId` do
+  // edital referencia `documentos.categories`, não o slug de
+  // `projetos.projectCategories` — mapeamento ainda não existe (débito
+  // pré-existente, documentado em `apps/projetos/src/lib/integrations/documentos.ts`).
+  useEffect(() => {
+    const editalId = searchParams.get("editalId");
+    if (!editalId) return;
+    void getEditalPrefillForWizard(editalId).then((prefill) => {
+      if (!prefill) return;
+      setData((prev) => ({
+        ...prev,
+        editalId: prefill.editalId,
+        editalTitle: prefill.editalTitle,
+        projectType: prefill.tipo ?? prev.projectType,
+      }));
+    });
+  }, [searchParams]);
 
   const { execute: submitAnual, isPending: isSubmittingAnual } = useAction(
     createAnnualDraft,
@@ -1229,6 +1259,7 @@ export default function NovoProjetoPage() {
         numeroParcelas: parseInt(data.numeroParcelas) || 1,
         mesesPagamento: data.mesesSelecionados,
         cofinancimento: data.cofinancimento || null,
+        editalId: data.editalId,
         attachments: data.anexos.map((a) => ({
           fileUrl: a.fileUrl,
           fileName: a.fileName,
@@ -1253,6 +1284,7 @@ export default function NovoProjetoPage() {
           : undefined,
         regiao: data.regiao || undefined,
         pais: data.pais || undefined,
+        editalId: data.editalId,
         attachments: data.anexos.map((a) => ({
           fileUrl: a.fileUrl,
           fileName: a.fileName,
@@ -1284,6 +1316,11 @@ export default function NovoProjetoPage() {
         <p className="text-sm text-(--fg-muted)">
           Preencha as informações abaixo para submeter seu projeto à diretoria.
         </p>
+        {data.editalTitle && (
+          <div className="mt-3 inline-flex items-center gap-2 rounded-full bg-(--brand-muted) px-3 py-1.5 text-xs font-semibold text-(--brand)">
+            Vinculado ao edital: {data.editalTitle}
+          </div>
+        )}
       </div>
 
       {/* Step indicator */}

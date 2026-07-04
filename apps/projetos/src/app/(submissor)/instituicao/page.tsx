@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Building2, ArrowRight, Hash } from "lucide-react";
 import { CANONICAL_LOGIN_URL } from "@hebron/auth";
 import { getAuthUser, getMyOrganizations } from "../../../lib/queries";
+import { CreateOrganizationForm } from "../../../components/create-organization-form";
 
 export default async function InstituicaoPage() {
   const authUser = await getAuthUser();
@@ -38,54 +39,57 @@ export default async function InstituicaoPage() {
       </div>
 
       {!org ? (
-        <div
-          style={{
-            background: "var(--surface)",
-            border: "1px solid var(--border)",
-            borderRadius: "var(--radius-lg)",
-            boxShadow: "var(--shadow-sm)",
-            padding: "64px 32px",
-            textAlign: "center",
-          }}
-        >
-          <Building2
-            width={40}
-            height={40}
-            style={{ color: "var(--fg-subtle)", margin: "0 auto 16px" }}
-            aria-hidden
-          />
-          <p
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          <div
             style={{
-              fontFamily: "var(--font-display)",
-              fontWeight: 700,
-              fontSize: 18,
-              color: "var(--fg)",
-              marginBottom: 6,
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              borderRadius: "var(--radius-lg)",
+              boxShadow: "var(--shadow-sm)",
+              padding: "40px 32px",
+              textAlign: "center",
             }}
           >
-            Nenhuma instituição vinculada
-          </p>
-          <p
-            style={{
-              fontSize: 14,
-              color: "var(--fg-muted)",
-              maxWidth: 400,
-              margin: "0 auto 20px",
-            }}
-          >
-            Você ainda não está associado a nenhuma organização. Entre em
-            contato com o administrador do sistema para solicitar o vínculo.
-          </p>
-          <p
-            style={{
-              fontSize: 13,
-              fontStyle: "italic",
-              color: "var(--fg-subtle)",
-            }}
-          >
-            "Não abandonemos a nossa congregação, como é costume de alguns." —
-            Hb 10:25
-          </p>
+            <Building2
+              width={40}
+              height={40}
+              style={{ color: "var(--fg-subtle)", margin: "0 auto 16px" }}
+              aria-hidden
+            />
+            <p
+              style={{
+                fontFamily: "var(--font-display)",
+                fontWeight: 700,
+                fontSize: 18,
+                color: "var(--fg)",
+                marginBottom: 6,
+              }}
+            >
+              Nenhuma instituição vinculada
+            </p>
+            <p
+              style={{
+                fontSize: 14,
+                color: "var(--fg-muted)",
+                maxWidth: 400,
+                margin: "0 auto 20px",
+              }}
+            >
+              Cadastre sua instituição abaixo para poder submeter projetos.
+            </p>
+            <p
+              style={{
+                fontSize: 13,
+                fontStyle: "italic",
+                color: "var(--fg-subtle)",
+              }}
+            >
+              "Não abandonemos a nossa congregação, como é costume de alguns." —
+              Hb 10:25
+            </p>
+          </div>
+
+          <CreateOrganizationForm />
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
@@ -246,6 +250,25 @@ export default async function InstituicaoPage() {
               <ArrowRight width={15} height={15} aria-hidden />
             </Link>
           </div>
+
+          {/* Cadastrar outra instituição — submissor pode estar vinculado a
+              múltiplas instituições (N:N, BRAIN §6.2). */}
+          <details>
+            <summary
+              style={{
+                cursor: "pointer",
+                fontSize: 14,
+                fontWeight: 600,
+                color: "var(--hb-blue)",
+                userSelect: "none",
+              }}
+            >
+              Cadastrar outra instituição
+            </summary>
+            <div style={{ marginTop: 16 }}>
+              <CreateOrganizationForm />
+            </div>
+          </details>
         </div>
       )}
     </div>

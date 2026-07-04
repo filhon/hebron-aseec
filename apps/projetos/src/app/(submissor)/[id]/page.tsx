@@ -7,11 +7,13 @@ import {
   Calendar,
   DollarSign,
   FileText,
-  Send,
   Building2,
 } from "lucide-react";
 import { getAuthUser, getSubmissorProjectDetail } from "../../../lib/queries";
 import { ProjectTimeline } from "../../../components/project-timeline";
+import { SubmitProjectButton } from "../../../components/submit-project-button";
+import { SubmitReportForm } from "../../../components/submit-report-form";
+import { DeleteProjectButton } from "../../../components/delete-project-button";
 import { BRL, STAGE_LABELS, getStageBadge } from "../../../lib/stage-utils";
 import type { ProjectVersion, ProjectStage } from "@hebron/types";
 
@@ -70,9 +72,6 @@ export default async function ProjectDetailPage({
 
   const stage = getStageBadge(project.stage);
 
-  const canSendReport =
-    project.stage === "em_execucao" || project.stage === "aprovado";
-
   const isAnnual = project.tipo === "anual";
   const snap = project.snapshot;
 
@@ -130,15 +129,8 @@ export default async function ProjectDetailPage({
               </h1>
             </div>
 
-            {canSendReport && (
-              <button
-                type="button"
-                className="flex items-center gap-2 rounded-md px-4 py-2.5 text-sm font-semibold text-white shrink-0 hover:opacity-90 transition-opacity"
-                style={{ backgroundColor: "var(--hb-green)" }}
-              >
-                <Send className="w-4 h-4" aria-hidden />
-                Enviar Relatório
-              </button>
+            {project.stage === "rascunho" && (
+              <SubmitProjectButton projectId={project.id} />
             )}
           </div>
 
@@ -285,10 +277,17 @@ export default async function ProjectDetailPage({
                     <div className="p-4 flex flex-col gap-3">
                       {(r.status === "em_atraso" ||
                         r.status === "pendente") && (
-                        <p className="text-sm text-(--fg-muted)">
-                          {r.status === "em_atraso" ? "Vencido em" : "Vence em"}{" "}
-                          {r.dueAt ? formatDate(r.dueAt) : "—"}
-                        </p>
+                        <div className="flex flex-col gap-2">
+                          <div className="flex items-center justify-between gap-3">
+                            <p className="text-sm text-(--fg-muted)">
+                              {r.status === "em_atraso"
+                                ? "Vencido em"
+                                : "Vence em"}{" "}
+                              {r.dueAt ? formatDate(r.dueAt) : "—"}
+                            </p>
+                            <SubmitReportForm reportId={r.id} />
+                          </div>
+                        </div>
                       )}
                       {r.narrativa && (
                         <p className="text-sm text-(--fg) leading-relaxed line-clamp-3">
@@ -324,6 +323,12 @@ export default async function ProjectDetailPage({
               />
             </div>
           </section>
+
+          {project.stage === "rascunho" && (
+            <div className="flex justify-end">
+              <DeleteProjectButton projectId={project.id} redirectTo="/" />
+            </div>
+          )}
         </div>
       </div>
     </div>

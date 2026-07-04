@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { eq, and, count, inArray } from "drizzle-orm";
+import { eq, and, count, countDistinct, inArray } from "drizzle-orm";
 import { db } from "@hebron/db/client";
 import {
   votes,
@@ -37,9 +37,12 @@ async function getVotingProject(executor: DbExecutor, projectId: string) {
   return project;
 }
 
+// Conta PESSOAS distintas, não atribuições de papel (F2-P5): um usuário com
+// diretor+conselheiro simultaneamente não pode contar duas vezes no quórum
+// nem no total de elegíveis do fechamento automático.
 async function countEligibleVoters(executor: DbExecutor): Promise<number> {
   const result = await executor
-    .select({ count: count() })
+    .select({ count: countDistinct(roleAssignments.userId) })
     .from(roleAssignments)
     .where(inArray(roleAssignments.role, ["diretor", "conselheiro"]));
 
@@ -199,6 +202,81 @@ export const castVote = conselheiroDiretorAction
       );
 
       return { ok: true, result, stageTransitioned };
+    });
+  });
+
+// ---------------------------------------------------------------------------
+// closeVoting — super_admin fecha manualmente uma votação com quórum já
+// atingido (F2-P6, decisão F2-Q5).
+//
+// Diferente de triggerPanicButton (a válvula de escape do BRAIN para "sem
+// quórum"), closeVoting é o caminho comum: quórum atingido e maioria
+// formada, mas turnout < 100% — sem isso a votação ficava aberta para
+// sempre (nenhum job agendado força o fechamento). Exige quórum; se não
+// atingido, orienta o uso do botão de pânico em vez de duplicar sua lógica.
+// ---------------------------------------------------------------------------
+
+export const closeVoting = superAdminAction
+  .schema(
+    z.object({
+      projectId: z.string().uuid("Projeto inválido"),
+    }),
+  )
+  .action(async ({ parsedInput, ctx }) => {
+    return db.transaction(async (tx) => {
+      const project = await getVotingProject(tx, parsedInput.projectId);
+      const result = await computeVoteResult(tx, parsedInput.projectId);
+
+      if (!result.quorumMet) {
+        throw new Error(
+          "Quórum não atingido — use o botão de pânico para forçar o encerramento.",
+        );
+      }
+
+      const newStage = result.approved
+        ? ("homologacao" as const)
+        : ("reprovado" as const);
+
+      const versionNumber = await getNextVersionNumber(
+        tx,
+        parsedInput.projectId,
+      );
+
+      await tx
+        .update(projects)
+        .set({ stage: newStage, updatedAt: new Date() })
+        .where(eq(projects.id, parsedInput.projectId));
+
+      await tx.insert(projectVersions).values({
+        projectId: parsedInput.projectId,
+        versionNumber,
+        stage: newStage,
+        data: {
+          trigger: "manual_close",
+          actorId: ctx.actorId,
+          result,
+          transitionedAt: new Date().toISOString(),
+        },
+        createdBy: ctx.actorId,
+      });
+
+      await logProjectAudit(
+        {
+          actorId: ctx.actorId,
+          action: "project.stage_transition",
+          entity: "project",
+          entityId: parsedInput.projectId,
+          diff: {
+            from: project.stage,
+            to: newStage,
+            trigger: "manual_close",
+            result,
+          },
+        },
+        tx,
+      );
+
+      return { ok: true, newStage, result };
     });
   });
 
