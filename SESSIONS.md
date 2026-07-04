@@ -20,66 +20,67 @@
 
 > Atualizar conforme sessoes sao executadas.
 
-| Sessao | Data       | Prompt                                        | Status                               |
-| ------ | ---------- | --------------------------------------------- | ------------------------------------ |
-| S-1    | 2026-05-21 | P-0.1 — Monorepo Setup                        | concluido                            |
-| S-2    | 2026-05-22 | P-0.1 — Monorepo Setup (complemento)          | concluido                            |
-| S-3    | 2026-05-22 | P-0.2 — Design System Base                    | concluido                            |
-| S-4    | 2026-05-22 | P-0.3 — Supabase Setup                        | concluido                            |
-| S-5    | 2026-05-22 | P-0.4 — Autenticação e SSO                    | concluido                            |
-| S-6    | 2026-05-22 | P-0.5 — Layout Compartilhado (AppShell)       | concluido                            |
-| S-7    | 2026-05-22 | P-0.6 — Sistema de Notificações               | concluido                            |
-| S-8    | 2026-05-22 | P-1.1 — Schema de Tipos Admin                 | concluido                            |
-| S-9    | 2026-05-22 | P-1.2 — Componentes UI Admin                  | concluido                            |
-| S-10   | 2026-05-22 | P-1.3 — Telas e Páginas Admin                 | concluido                            |
-| S-11   | 2026-05-22 | P-1.4 — Formulários Admin                     | concluido                            |
-| S-12   | 2026-05-22 | P-1.5 — Estados Admin                         | concluido                            |
-| S-13   | 2026-05-25 | P-1.6 — Schema do Banco Admin                 | concluido                            |
-| S-14   | 2026-05-25 | P-1.7 — RLS Policies Admin                    | concluido                            |
-| S-15   | 2026-05-25 | P-1.8 — Server Actions Admin                  | concluido                            |
-| S-16   | 2026-05-25 | P-1.9 — Integração UI ↔ Backend Admin         | concluido                            |
-| S-17   | 2026-05-25 | P-1.10 — Notificações e Emails Admin          | concluido                            |
-| S-18   | 2026-05-26 | P-1.11 — Impersonation e Audit Avançado       | concluido                            |
-| S-19   | 2026-05-26 | P-1.12 — Testes Admin                         | concluido                            |
-| S-20   | 2026-06-13 | P-0.2b — Unificação do Design System          | concluido                            |
-| S-21   | 2026-06-15 | P-1.12b — Ajustes Menores DS Admin            | concluido                            |
-| S-22   | 2026-06-15 | P-0.3b — Pipeline de Migrations               | concluido                            |
-| S-23   | 2026-06-16 | P-1.13 — Schema de Tipos Documentos           | concluido                            |
-| S-24   | 2026-06-16 | P-1.14 — Componentes UI Documentos            | concluido                            |
-| S-25   | 2026-06-16 | P-1.15 — Telas e Páginas Documentos           | concluido                            |
-| S-26   | 2026-06-17 | P-1.16 — Formulários Documentos               | concluido                            |
-| S-27   | 2026-06-17 | P-1.17 — Estados Documentos                   | concluido                            |
-| S-28   | 2026-06-17 | P-1.18 — Schema do Banco Documentos           | concluido                            |
-| S-29   | 2026-06-17 | P-1.20 — Server Actions Documentos            | concluido                            |
-| S-30   | 2026-06-18 | P-1.22 — Notificações e Emails Documentos     | concluido                            |
-| S-31   | 2026-06-18 | P-1.23 — Integração Documentos ↔ Projetos     | concluido                            |
-| S-32   | 2026-06-18 | P-1.24 — Testes Documentos                    | concluido                            |
-| S-33   | 2026-06-20 | P-2.1 — Schema de Tipos Projetos              | concluido                            |
-| S-34   | 2026-06-20 | P-2.2 — Componentes UI Projetos               | concluido                            |
-| S-35   | 2026-06-20 | P-2.3 — Telas e Páginas Projetos              | concluido                            |
-| S-36   | 2026-06-20 | P-2.4 — Formulários Projetos                  | concluido                            |
-| S-37   | 2026-06-22 | P-2.5 — Estados Projetos                      | concluido                            |
-| S-38   | 2026-06-22 | P-2.6 — Schema do Banco Projetos              | concluido                            |
-| S-39   | 2026-06-22 | P-2.7 — RLS Policies Projetos                 | concluido                            |
-| S-40   | 2026-06-22 | P-2.8 — Server Actions Projetos               | concluido                            |
-| S-41   | 2026-06-22 | P-2.9 — Integração UI ↔ Backend Projetos      | concluido                            |
-| S-42   | 2026-06-23 | P-2.10 — Notificações e Emails Projetos       | concluido                            |
-| S-43   | 2026-06-23 | P-2.11 — Integrações Cross-App Projetos       | parcial                              |
-| S-44   | 2026-06-23 | P-2.9b — Usuário Real no Header Projetos      | concluido                            |
-| S-45   | 2026-06-23 | Polish — apps/projetos/src/app                | concluido                            |
-| S-46   | 2026-06-23 | P-3.1 — Schema de Tipos Financeiro            | concluido                            |
-| S-47   | 2026-06-25 | P-3.2 — Componentes UI Financeiro             | concluido                            |
-| S-48   | 2026-06-25 | P-3.3 — Telas e Páginas Financeiro            | concluido                            |
-| S-49   | 2026-06-26 | P-3.4 — Formulários Financeiro                | concluido                            |
-| S-50   | 2026-06-26 | P-3.5 — Estados Financeiro                    | concluido                            |
-| S-51   | 2026-06-26 | P-3.6 — Schema do Banco Financeiro            | concluido                            |
-| S-52   | 2026-06-26 | P-3.7 — RLS Policies Financeiro               | concluido                            |
-| S-53   | 2026-06-26 | P-3.8 — Server Actions Financeiro             | concluido                            |
-| S-54   | 2026-07-03 | P-0.7 — Resgate do Banco (Onda 0)             | concluido                            |
-| S-55   | 2026-07-03 | P-0.8 — Kit de Backend Compartilhado (Onda 0) | concluido                            |
-| S-56   | 2026-07-03 | P-0.9 — CI Mínimo (Onda 0)                    | concluido (validação em PR pendente) |
-| S-57   | 2026-07-03 | P-0.10 — Decisão B: RLS Ativa (Onda 0)        | concluido                            |
-| S-58   | 2026-07-04 | P-0.11 — Drizzle-kit Reconciliado (Onda 0)    | concluido                            |
+| Sessao | Data       | Prompt                                                       | Status                               |
+| ------ | ---------- | ------------------------------------------------------------ | ------------------------------------ |
+| S-1    | 2026-05-21 | P-0.1 — Monorepo Setup                                       | concluido                            |
+| S-2    | 2026-05-22 | P-0.1 — Monorepo Setup (complemento)                         | concluido                            |
+| S-3    | 2026-05-22 | P-0.2 — Design System Base                                   | concluido                            |
+| S-4    | 2026-05-22 | P-0.3 — Supabase Setup                                       | concluido                            |
+| S-5    | 2026-05-22 | P-0.4 — Autenticação e SSO                                   | concluido                            |
+| S-6    | 2026-05-22 | P-0.5 — Layout Compartilhado (AppShell)                      | concluido                            |
+| S-7    | 2026-05-22 | P-0.6 — Sistema de Notificações                              | concluido                            |
+| S-8    | 2026-05-22 | P-1.1 — Schema de Tipos Admin                                | concluido                            |
+| S-9    | 2026-05-22 | P-1.2 — Componentes UI Admin                                 | concluido                            |
+| S-10   | 2026-05-22 | P-1.3 — Telas e Páginas Admin                                | concluido                            |
+| S-11   | 2026-05-22 | P-1.4 — Formulários Admin                                    | concluido                            |
+| S-12   | 2026-05-22 | P-1.5 — Estados Admin                                        | concluido                            |
+| S-13   | 2026-05-25 | P-1.6 — Schema do Banco Admin                                | concluido                            |
+| S-14   | 2026-05-25 | P-1.7 — RLS Policies Admin                                   | concluido                            |
+| S-15   | 2026-05-25 | P-1.8 — Server Actions Admin                                 | concluido                            |
+| S-16   | 2026-05-25 | P-1.9 — Integração UI ↔ Backend Admin                        | concluido                            |
+| S-17   | 2026-05-25 | P-1.10 — Notificações e Emails Admin                         | concluido                            |
+| S-18   | 2026-05-26 | P-1.11 — Impersonation e Audit Avançado                      | concluido                            |
+| S-19   | 2026-05-26 | P-1.12 — Testes Admin                                        | concluido                            |
+| S-20   | 2026-06-13 | P-0.2b — Unificação do Design System                         | concluido                            |
+| S-21   | 2026-06-15 | P-1.12b — Ajustes Menores DS Admin                           | concluido                            |
+| S-22   | 2026-06-15 | P-0.3b — Pipeline de Migrations                              | concluido                            |
+| S-23   | 2026-06-16 | P-1.13 — Schema de Tipos Documentos                          | concluido                            |
+| S-24   | 2026-06-16 | P-1.14 — Componentes UI Documentos                           | concluido                            |
+| S-25   | 2026-06-16 | P-1.15 — Telas e Páginas Documentos                          | concluido                            |
+| S-26   | 2026-06-17 | P-1.16 — Formulários Documentos                              | concluido                            |
+| S-27   | 2026-06-17 | P-1.17 — Estados Documentos                                  | concluido                            |
+| S-28   | 2026-06-17 | P-1.18 — Schema do Banco Documentos                          | concluido                            |
+| S-29   | 2026-06-17 | P-1.20 — Server Actions Documentos                           | concluido                            |
+| S-30   | 2026-06-18 | P-1.22 — Notificações e Emails Documentos                    | concluido                            |
+| S-31   | 2026-06-18 | P-1.23 — Integração Documentos ↔ Projetos                    | concluido                            |
+| S-32   | 2026-06-18 | P-1.24 — Testes Documentos                                   | concluido                            |
+| S-33   | 2026-06-20 | P-2.1 — Schema de Tipos Projetos                             | concluido                            |
+| S-34   | 2026-06-20 | P-2.2 — Componentes UI Projetos                              | concluido                            |
+| S-35   | 2026-06-20 | P-2.3 — Telas e Páginas Projetos                             | concluido                            |
+| S-36   | 2026-06-20 | P-2.4 — Formulários Projetos                                 | concluido                            |
+| S-37   | 2026-06-22 | P-2.5 — Estados Projetos                                     | concluido                            |
+| S-38   | 2026-06-22 | P-2.6 — Schema do Banco Projetos                             | concluido                            |
+| S-39   | 2026-06-22 | P-2.7 — RLS Policies Projetos                                | concluido                            |
+| S-40   | 2026-06-22 | P-2.8 — Server Actions Projetos                              | concluido                            |
+| S-41   | 2026-06-22 | P-2.9 — Integração UI ↔ Backend Projetos                     | concluido                            |
+| S-42   | 2026-06-23 | P-2.10 — Notificações e Emails Projetos                      | concluido                            |
+| S-43   | 2026-06-23 | P-2.11 — Integrações Cross-App Projetos                      | parcial                              |
+| S-44   | 2026-06-23 | P-2.9b — Usuário Real no Header Projetos                     | concluido                            |
+| S-45   | 2026-06-23 | Polish — apps/projetos/src/app                               | concluido                            |
+| S-46   | 2026-06-23 | P-3.1 — Schema de Tipos Financeiro                           | concluido                            |
+| S-47   | 2026-06-25 | P-3.2 — Componentes UI Financeiro                            | concluido                            |
+| S-48   | 2026-06-25 | P-3.3 — Telas e Páginas Financeiro                           | concluido                            |
+| S-49   | 2026-06-26 | P-3.4 — Formulários Financeiro                               | concluido                            |
+| S-50   | 2026-06-26 | P-3.5 — Estados Financeiro                                   | concluido                            |
+| S-51   | 2026-06-26 | P-3.6 — Schema do Banco Financeiro                           | concluido                            |
+| S-52   | 2026-06-26 | P-3.7 — RLS Policies Financeiro                              | concluido                            |
+| S-53   | 2026-06-26 | P-3.8 — Server Actions Financeiro                            | concluido                            |
+| S-54   | 2026-07-03 | P-0.7 — Resgate do Banco (Onda 0)                            | concluido                            |
+| S-55   | 2026-07-03 | P-0.8 — Kit de Backend Compartilhado (Onda 0)                | concluido                            |
+| S-56   | 2026-07-03 | P-0.9 — CI Mínimo (Onda 0)                                   | concluido (validação em PR pendente) |
+| S-57   | 2026-07-03 | P-0.10 — Decisão B: RLS Ativa (Onda 0)                       | concluido                            |
+| S-58   | 2026-07-04 | P-0.11 — Drizzle-kit Reconciliado (Onda 0)                   | concluido                            |
+| S-59   | 2026-07-04 | P-1.25 — Admin: leitura protegida e fiação completa (Onda 1) | concluido                            |
 
 ---
 
@@ -2342,3 +2343,82 @@ Teste de paridade novo (critério explícito do prompt): `packages/db/src/__test
 - `packages/db/README.md` (fluxo de migration reescrito; nova seção de teste de paridade)
 - `pnpm-lock.yaml` (entrada `vitest` em `packages/db`)
 - `SESSIONS.md` (esta entrada)
+
+---
+
+### S-59 — 2026-07-04 — P-1.25 Admin: leitura protegida e fiação completa (Onda 1)
+
+**Prompt:** P-1.25 (`AUDIT/04-prompts-pendentes.md` §4)
+**Duracao:** ~3h
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+F2-A1 (app inteiro legível por anônimo — `(dashboard)/layout.tsx` lia direto via `db` superuser, sem checar sessão nem papel), F2-A2 (`resetPassword` gerava o link via `generateLink` mas nunca o enviava a lugar nenhum — no-op do ponto de vista do usuário) e F2-A5 (reuniões com botões `type="button"` sem `action`, incluindo "Nova reunião" e "Editar pauta") corrigidos. `notifyUserSuspended`/`notifyRoleChanged` existiam em `lib/notifications.ts` desde P-1.10 mas nunca eram chamados — ligados a `suspendUser`/`assignRole`/`revokeRole`.
+
+F2-A4 (componentes/forms do Bloco A órfãos) era maior do que o prompt descrevia: um grep de referências (`grep -rl <nome-do-componente>` excluindo o próprio arquivo) nos 19 componentes de `apps/admin/src/components` encontrou **13 órfãos**, não só `user-table`/RHF forms citados no escopo — as páginas reais (`usuarios`, `convites`, `auditoria`, `(dashboard)`) tinham sido reescritas do zero no Bloco B ignorando inteiramente a biblioteca de componentes do Bloco A (mesmo padrão em 4 telas). Reconciliados 7 (`user-table` + `user-table-skeleton` na tela de Usuários, adaptado do tipo mock `User`/`UserStatus` para o schema real; `meeting-form` nas novas rotas `/reunioes/nova` e `/reunioes/[id]/editar`; `invitation-form` na nova rota `/convites/novo`; `role-assignment-form` numa aba "Papéis" nova em Configurações — que também conserta o link "Gerenciar" que já apontava para `?tab=roles` sem essa aba existir; `designation-form` como o formulário de atribuir/revogar ao lado do card read-only já existente; `audit-log-skeleton`/`dashboard-skeleton` como fallback de `Suspense`). Removidos 6 (`user-form` — a criação manual de usuário que ele fazia foi superada pela decisão F2-Q2, convite-primeiro, sem criação manual; `invitation-card`, `user-card`, `audit-log-table`, `feature-flag-toggle`, `status-badge` — todos duplicavam, com pior encaixe, uma implementação já funcionando na página real). Confirmado por grep final: 0 componentes sem import.
+
+**Criterios de aceite verificados:**
+
+- [x] anônimo em qualquer rota → redirect login (teste) — `lib/session.ts` (`requireAdminSession`) chamado no topo do `(dashboard)/layout.tsx`; `session-gate.test.ts` cobre sem-sessão → `redirect(CANONICAL_LOGIN_URL)`.
+- [x] usuário sem papel super_admin → bloqueado (teste) — mesmo gate; segundo teste em `session-gate.test.ts` cobre sessão válida sem `super_admin` → mesmo redirect.
+- [x] reset de senha recebe e-mail em ambiente de teste — `resetPassword` agora usa `data.properties.action_link` do `generateLink` e despacha via `createNotification` (canal `email`, template `PasswordResetEmail`); teste novo em `actions.test.ts` (`resetPassword > envia e-mail...`) confirma a chamada com o e-mail e canal corretos.
+- [x] zero componentes de P-1.2/1.4 sem import (grep no critério) — `for f in components/*.tsx; do grep -rl "$base" ... | grep -v "components/$base.tsx"; done` → todos os 16 componentes restantes com ≥1 referência.
+- [x] botões de reuniões operam — "Nova reunião" e "Editar pauta" ligados a `createMeeting`/`updateMeeting` via `meeting-form` reconectado; "Convocar"/"Reconvocar"/"Ver pauta"/"Baixar PDF" (sem infra de e-mail em massa nem PDF — fora do escopo deste prompt) removidos em vez de deixados mortos.
+- [x] lint/typecheck/testes verdes — `pnpm --filter admin lint|typecheck` limpos; `pnpm --filter admin test` 58/58 (6 arquivos), incluindo os 2 novos testes de gate e o de `resetPassword`.
+- Não verificável nesta sessão: clique real nos botões num navegador — sem servidor de dev rodando neste ambiente; wiring confirmado por revisão de código + typecheck, não por teste end-to-end na UI.
+
+**Decisoes tomadas:**
+
+- Gate único (`requireAdminSession`) redireciona para `CANONICAL_LOGIN_URL` tanto para "sem sessão" quanto para "sessão sem `super_admin`" — não existe hoje uma tela de "acesso negado" distinta em nenhum app do ecossistema; manter os dois casos no mesmo destino evita inventar uma nova convenção de UI fora do escopo do prompt.
+- Ao adaptar `user-table`/`role-assignment-form`/`designation-form`/`meeting-form` do tipo mock `@hebron/types/admin` (`User`, `RoleAssignment`, `Designation` — com `mfaEnabled`, `lastLoginAt`, `revokedAt` etc.) para o schema real: campos sem coluna real (`mfaEnabled`, `lastLoginAt`, `moduleAccess`) foram removidos dos componentes em vez de preenchidos com valor fixo/fabricado. `role_assignments` e `designations` não têm coluna `revokedAt` no schema real (revogar é hard delete, não soft-delete) — os componentes passaram a tratar toda linha recebida como já-ativa, sem filtrar por um campo inexistente.
+- `user-form.tsx` (criação/edição manual de usuário com múltiplos papéis + envio de convite opcional) deletado em vez de reconectado — a decisão já registrada (F2-Q2, Fase 2) foi "convite primeiro, sem criação manual"; forçar esse componente de volta reintroduziria exatamente o fluxo que essa decisão descartou. A tela de aprovação/onboarding real fica para P-1.26.
+- `DesignationForm` mantém o seletor "Escopo" na UI mesmo a tabela `designations` não tendo coluna `scope` — a ação real (`updateDesignation`) descarta esse campo silenciosamente. Documentado aqui como mismatch latente em vez de removido do componente, para não expandir o escopo deste prompt para uma reescrita de UI; ver débito abaixo.
+- Onde o prompt cita "botões de reuniões operam", removidos (em vez de deixados como no-op) os botões sem contraparte de infraestrutura no escopo deste prompt (e-mail de convocação, geração de PDF de ata) — deixar um botão visível sem ação seria reproduzir o mesmo padrão de UI morta que o achado F2-A5 descreve.
+
+**Debitos tecnicos / pendencias:**
+
+- `DesignationForm` expõe um seletor de "Escopo" que a ação real ignora (tabela sem essa coluna) — a UI sugere uma capacidade que o backend não tem. Corrigir exige decidir entre adicionar a coluna (mudança de schema) ou remover o campo do formulário (mudança de `@hebron/validators`); nenhuma das duas está no escopo de P-1.25.
+- Revogação de papel (`revokeRole`) e de designação (`updateDesignation` ação `revoke`) continuam sendo hard delete — pré-existente, não introduzido nem corrigido nesta sessão; a trilha de imutabilidade depende inteiramente do `audit_log`, não da linha da tabela.
+- Sem verificação end-to-end em navegador real (sem servidor de dev disponível neste ambiente) — a operabilidade dos botões de reunião foi confirmada por leitura de código e typecheck, não por clique real.
+
+**Arquivos criados:**
+
+- `apps/admin/src/lib/session.ts`
+- `apps/admin/src/lib/queries.ts`
+- `apps/admin/src/components/role-assignment-panel.tsx`
+- `apps/admin/src/components/designation-panel.tsx`
+- `apps/admin/src/app/(dashboard)/reunioes/nova/page.tsx`
+- `apps/admin/src/app/(dashboard)/reunioes/nova/nova-reuniao-client.tsx`
+- `apps/admin/src/app/(dashboard)/reunioes/[id]/editar/page.tsx`
+- `apps/admin/src/app/(dashboard)/reunioes/[id]/editar/editar-reuniao-client.tsx`
+- `apps/admin/src/app/(dashboard)/convites/novo/page.tsx`
+- `apps/admin/src/app/(dashboard)/convites/novo/novo-convite-client.tsx`
+- `apps/admin/src/__tests__/session-gate.test.ts`
+
+**Arquivos modificados:**
+
+- `apps/admin/src/app/(dashboard)/layout.tsx` (gate `requireAdminSession`)
+- `apps/admin/src/actions/users.ts` (`resetPassword` envia e-mail real; `suspendUser` chama `notifyUserSuspended`)
+- `apps/admin/src/actions/roles.ts` (`assignRole`/`revokeRole` chamam `notifyRoleChanged`)
+- `apps/admin/src/app/(dashboard)/reunioes/page.tsx` (botões ligados às novas rotas; botões sem infra removidos)
+- `apps/admin/src/app/(dashboard)/usuarios/page.tsx` (reconectado a `UserTable` + `Suspense`/`UserTableSkeleton`)
+- `apps/admin/src/components/user-table.tsx` (adaptado do tipo mock para o schema real)
+- `apps/admin/src/components/meeting-form.tsx` (tipos locais em vez de `@hebron/types/admin`)
+- `apps/admin/src/components/role-assignment-form.tsx` (idem; `defaultUserId` novo)
+- `apps/admin/src/components/designation-form.tsx` (idem)
+- `apps/admin/src/app/(dashboard)/configuracoes/page.tsx` (aba "Papéis" nova; `DesignationPanel` ao lado do card read-only)
+- `apps/admin/src/app/(dashboard)/convites/page.tsx` (mensagem de sucesso `?success=enviado`)
+- `apps/admin/src/app/(dashboard)/auditoria/page.tsx` (`AuditLogSkeleton` como fallback do `Suspense`)
+- `apps/admin/src/app/(dashboard)/page.tsx` (`DashboardSkeleton` como fallback do `Suspense`)
+- `apps/admin/src/__tests__/actions.test.ts` (mock de `generateLink` com `action_link`; teste novo de `resetPassword`)
+- `SESSIONS.md` (esta entrada)
+
+**Arquivos removidos (órfãos superados por implementação já existente ou decisão anterior):**
+
+- `apps/admin/src/components/user-form.tsx`
+- `apps/admin/src/components/invitation-card.tsx`
+- `apps/admin/src/components/user-card.tsx`
+- `apps/admin/src/components/audit-log-table.tsx`
+- `apps/admin/src/components/feature-flag-toggle.tsx`
+- `apps/admin/src/components/status-badge.tsx`

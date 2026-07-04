@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@hebron/db/client";
 import { eq, asc } from "drizzle-orm";
-import { users, designations } from "@hebron/db/schema";
+import { users, designations, roleAssignments } from "@hebron/db/schema";
 import {
   featureFlags,
   systemSettings,
@@ -17,17 +17,27 @@ import {
   UserCheck,
   UserCog,
   Eye,
+  Users,
 } from "lucide-react";
 import { toggleFeatureFlag } from "../../../actions/settings";
+import { RoleAssignmentPanel } from "../../../components/role-assignment-panel";
+import { DesignationPanel } from "../../../components/designation-panel";
+import type { RoleAssignmentInput } from "@hebron/validators";
 
 // ─── DB ───────────────────────────────────────────────────────────────────────
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type TabId = "designacoes" | "feature-flags" | "email-templates" | "sistema";
+type TabId =
+  | "designacoes"
+  | "roles"
+  | "feature-flags"
+  | "email-templates"
+  | "sistema";
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
   { id: "designacoes", label: "Designações", icon: <Shield size={14} /> },
+  { id: "roles", label: "Papéis", icon: <Users size={14} /> },
   { id: "feature-flags", label: "Feature flags", icon: <Flag size={14} /> },
   {
     id: "email-templates",
@@ -97,6 +107,7 @@ function renderWithHighlights(text: string) {
 function DesignacoesPanel({
   activeDesignations,
   revokedCount,
+  directors,
 }: {
   activeDesignations: Array<{
     id: string;
@@ -107,6 +118,7 @@ function DesignacoesPanel({
     userName: string | null;
   }>;
   revokedCount: number;
+  directors: { id: string; name: string }[];
 }) {
   return (
     <div>
@@ -198,6 +210,20 @@ function DesignacoesPanel({
           (ver trilha de auditoria).
         </p>
       )}
+
+      <div className="hb-card" style={{ marginTop: 20, padding: 20 }}>
+        <DesignationPanel
+          directors={directors}
+          designations={activeDesignations.map((d) => ({
+            id: d.id,
+            userId: d.userId,
+            directorName: d.userName ?? "—",
+            type: d.type,
+            scope: null,
+            assignedAt: d.assignedAt,
+          }))}
+        />
+      </div>
     </div>
   );
 }
@@ -430,34 +456,71 @@ function SistemaPanel({
 export default async function ConfiguracoesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tab?: string; template?: string }>;
+  searchParams: Promise<{ tab?: string; template?: string; userId?: string }>;
 }) {
   const params = await searchParams;
   const activeTab = (params.tab ?? "designacoes") as TabId;
   const selectedTemplate = params.template ?? "";
 
   // Fetch all data upfront (tabs switch client-side via URL)
-  const [designationRows, flagRows, templateRows, settingRows] =
-    await Promise.all([
-      db
-        .select({
-          id: designations.id,
-          type: designations.type,
-          userId: designations.userId,
-          assignedBy: designations.assignedBy,
-          assignedAt: designations.assignedAt,
-          userName: users.fullName,
-        })
-        .from(designations)
-        .innerJoin(users, eq(designations.userId, users.id))
-        .orderBy(asc(designations.assignedAt)),
+  const [
+    designationRows,
+    flagRows,
+    templateRows,
+    settingRows,
+    allUsers,
+    allRoleAssignments,
+    directorRows,
+  ] = await Promise.all([
+    db
+      .select({
+        id: designations.id,
+        type: designations.type,
+        userId: designations.userId,
+        assignedBy: designations.assignedBy,
+        assignedAt: designations.assignedAt,
+        userName: users.fullName,
+      })
+      .from(designations)
+      .innerJoin(users, eq(designations.userId, users.id))
+      .orderBy(asc(designations.assignedAt)),
 
-      db.select().from(featureFlags).orderBy(asc(featureFlags.key)),
+    db.select().from(featureFlags).orderBy(asc(featureFlags.key)),
 
-      db.select().from(emailTemplates).orderBy(asc(emailTemplates.slug)),
+    db.select().from(emailTemplates).orderBy(asc(emailTemplates.slug)),
 
-      db.select().from(systemSettings).orderBy(asc(systemSettings.key)),
-    ]);
+    db.select().from(systemSettings).orderBy(asc(systemSettings.key)),
+
+    db
+      .select({ id: users.id, fullName: users.fullName, email: users.email })
+      .from(users)
+      .orderBy(asc(users.fullName)),
+
+    db
+      .select({
+        id: roleAssignments.id,
+        userId: roleAssignments.userId,
+        role: roleAssignments.role,
+        scope: roleAssignments.scope,
+        grantedAt: roleAssignments.grantedAt,
+      })
+      .from(roleAssignments),
+
+    db
+      .selectDistinct({
+        id: users.id,
+        fullName: users.fullName,
+        email: users.email,
+      })
+      .from(roleAssignments)
+      .innerJoin(users, eq(roleAssignments.userId, users.id))
+      .where(eq(roleAssignments.role, "diretor")),
+  ]);
+
+  const directors = directorRows.map((d) => ({
+    id: d.id,
+    name: d.fullName ?? d.email,
+  }));
 
   return (
     <div className="hb-page">
@@ -497,6 +560,23 @@ export default async function ConfiguracoesPage({
           <DesignacoesPanel
             activeDesignations={designationRows}
             revokedCount={0}
+            directors={directors}
+          />
+        )}
+        {activeTab === "roles" && (
+          <RoleAssignmentPanel
+            users={allUsers.map((u) => ({
+              id: u.id,
+              name: u.fullName ?? u.email,
+            }))}
+            assignments={allRoleAssignments.map((a) => ({
+              id: a.id,
+              userId: a.userId,
+              role: a.role,
+              scope: a.scope as RoleAssignmentInput["scope"],
+              grantedAt: a.grantedAt,
+            }))}
+            defaultUserId={params.userId}
           />
         )}
         {activeTab === "feature-flags" && (

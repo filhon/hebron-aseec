@@ -1,12 +1,16 @@
 "use server";
 
+import React from "react";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { createClient } from "@supabase/supabase-js";
 import { db } from "@hebron/db/client";
-import { users } from "@hebron/db/schema";
+import { users, notifications } from "@hebron/db/schema";
+import { createNotification } from "@hebron/email";
+import { PasswordResetEmail } from "@hebron/email/templates/password-reset";
 import { adminAction } from "../lib/safe-action";
 import { logAudit, computeDiff } from "../lib/audit";
+import { notifyUserSuspended } from "../lib/notifications";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -179,6 +183,8 @@ export const suspendUser = adminAction
       },
     });
 
+    await notifyUserSuspended(updated.id, updated.suspendedModules);
+
     return { user: updated };
   });
 
@@ -251,12 +257,47 @@ export const resetPassword = adminAction
     const user = userRows[0];
     if (!user) throw new Error("Usuário não encontrado");
 
-    const { error } = await supabase.auth.admin.generateLink({
+    const { data, error } = await supabase.auth.admin.generateLink({
       type: "recovery",
       email: user.email,
     });
 
     if (error) throw new Error(error.message);
+
+    const resetUrl = data.properties?.action_link;
+    if (!resetUrl) throw new Error("Falha ao gerar link de redefinição");
+
+    await createNotification({
+      insert: async (notifData) => {
+        const notifInserted = await db
+          .insert(notifications)
+          .values({
+            userId: user.id,
+            title: notifData.title,
+            body: notifData.body,
+          })
+          .returning();
+        const notif = notifInserted[0];
+        if (!notif) throw new Error("Falha ao inserir notificação");
+        return { id: notif.id };
+      },
+      data: {
+        userId: user.id,
+        channel: "email",
+        type: "user.password_reset",
+        title: "Redefinição de senha",
+        body: "Um link de redefinição de senha foi enviado para seu e-mail.",
+      },
+      email: {
+        to: user.email,
+        subject: "Redefinição de senha — Hebron Aseec",
+        template: React.createElement(PasswordResetEmail, {
+          resetUrl,
+          name: user.fullName ?? undefined,
+        }),
+      },
+      resendApiKey: process.env.RESEND_API_KEY,
+    });
 
     await logAudit({
       actorId: ctx.actorId,

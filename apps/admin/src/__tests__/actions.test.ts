@@ -57,7 +57,12 @@ vi.mock("@supabase/supabase-js", () => ({
           data: { user: { id: TARGET_ID } },
           error: null,
         })),
-        generateLink: vi.fn().mockResolvedValue({ data: {}, error: null }),
+        generateLink: vi.fn().mockResolvedValue({
+          data: {
+            properties: { action_link: "https://example.com/reset?token=mock" },
+          },
+          error: null,
+        }),
         updateUserById: vi.fn().mockResolvedValue({ data: {}, error: null }),
       },
     },
@@ -164,6 +169,33 @@ describe("updateUser", () => {
     const safe = requireDefined(entry, "audit entry");
     expect(safe.entityId).toBe(TARGET_ID);
     expect((safe.diff as Record<string, unknown>)["fullName"]).toBeDefined();
+  });
+});
+
+// ── resetPassword ─────────────────────────────────────────────────────────────
+// Regressão para F2-A2: resetPassword gerava o link via generateLink mas nunca
+// o enviava a lugar nenhum — no-op do ponto de vista do usuário.
+
+describe("resetPassword", () => {
+  it("envia e-mail com o link de redefinição via createNotification", async () => {
+    const { resetPassword } = await getActions();
+    const { createNotification } = await import("@hebron/email");
+
+    const result = await resetPassword({ id: TARGET_ID });
+    expect(result?.serverError).toBeUndefined();
+    expect(result?.data?.ok).toBe(true);
+
+    expect(createNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ channel: "email" }),
+        email: expect.objectContaining({
+          to: TARGET_EMAIL,
+        }),
+      }),
+    );
+
+    const entry = await lastAuditFor(ACTOR_ID, "user.updated");
+    expect(entry).toBeDefined();
   });
 });
 

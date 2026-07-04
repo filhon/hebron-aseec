@@ -211,6 +211,7 @@ export default async function ConvitesPage({
           {params.success === "revogado" && "Convite revogado com sucesso."}
           {params.success === "reenviado" &&
             "Novo convite enviado com sucesso."}
+          {params.success === "enviado" && "Convite enviado com sucesso."}
         </div>
       )}
       {params.error && (

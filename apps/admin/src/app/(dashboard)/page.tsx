@@ -6,6 +6,7 @@ import { users, roleAssignments } from "@hebron/db/schema";
 import { auditLog, invitations, meetingSessions } from "@hebron/db/schema";
 import { Users, Activity, ChevronRight, Plus, RotateCcw } from "lucide-react";
 import { ErrorState, Button } from "@hebron/ui";
+import { DashboardSkeleton } from "../../components/dashboard-skeleton";
 
 // ─── DB ───────────────────────────────────────────────────────────────────────
 
@@ -499,25 +500,7 @@ export default async function DashboardPage({
   }
 
   return (
-    <Suspense
-      fallback={
-        <div className="hb-page">
-          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-            {[...Array(3)].map((_, i) => (
-              <div
-                key={i}
-                style={{
-                  height: 80,
-                  borderRadius: 16,
-                  background: "var(--hb-gray-50)",
-                  animation: "pulse 1.5s ease-in-out infinite",
-                }}
-              />
-            ))}
-          </div>
-        </div>
-      }
-    >
+    <Suspense fallback={<DashboardSkeleton />}>
       <DashboardContent />
     </Suspense>
   );

@@ -1,7 +1,8 @@
+import Link from "next/link";
 import { db } from "@hebron/db/client";
 import { eq, asc, desc, or } from "drizzle-orm";
 import { users, meetingSessions } from "@hebron/db/schema";
-import { Plus, CalendarDays, FileText, Mail, Download } from "lucide-react";
+import { Plus, CalendarDays, FileText } from "lucide-react";
 import { Button } from "@hebron/ui";
 
 // ─── DB ───────────────────────────────────────────────────────────────────────
@@ -117,9 +118,11 @@ export default async function ReunioesPage({
           </p>
         </div>
         <div className="hb-page-header-actions">
-          <Button size="sm" type="button" className="rounded-full">
-            <Plus size={14} aria-hidden="true" />
-            Nova reunião
+          <Button asChild size="sm" className="rounded-full">
+            <Link href="/reunioes/nova">
+              <Plus size={14} aria-hidden="true" />
+              Nova reunião
+            </Link>
           </Button>
         </div>
       </div>
@@ -144,17 +147,15 @@ export default async function ReunioesPage({
           </div>
           <div className="hb-next-meeting-banner-actions">
             <Button
+              asChild
               variant="outline"
               size="sm"
-              type="button"
               className="rounded-full border-(--brand) text-(--brand)"
             >
-              <FileText size={14} aria-hidden="true" />
-              Ver pauta
-            </Button>
-            <Button size="sm" type="button" className="rounded-full">
-              <Mail size={14} aria-hidden="true" />
-              Convocar
+              <Link href={`/reunioes/${nextMeeting.id}/editar`}>
+                <FileText size={14} aria-hidden="true" />
+                Editar pauta
+              </Link>
             </Button>
           </div>
         </div>
@@ -236,46 +237,16 @@ export default async function ReunioesPage({
                   {m.notes && <div className="hb-meeting-note">{m.notes}</div>}
                 </div>
 
-                <div className="hb-meeting-actions">
-                  {isUpcoming ? (
-                    <>
-                      <Button size="sm" type="button" className="rounded-full">
+                {isUpcoming && (
+                  <div className="hb-meeting-actions">
+                    <Button asChild size="sm" className="rounded-full">
+                      <Link href={`/reunioes/${m.id}/editar`}>
                         <FileText size={13} aria-hidden="true" />
                         Editar pauta
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        type="button"
-                        className="rounded-full"
-                      >
-                        <Mail size={13} aria-hidden="true" />
-                        Reconvocar
-                      </Button>
-                    </>
-                  ) : (
-                    <>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        type="button"
-                        className="rounded-full border-(--brand) text-(--brand)"
-                      >
-                        <FileText size={13} aria-hidden="true" />
-                        Ver ata
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        type="button"
-                        className="rounded-full"
-                      >
-                        <Download size={13} aria-hidden="true" />
-                        Baixar PDF
-                      </Button>
-                    </>
-                  )}
-                </div>
+                      </Link>
+                    </Button>
+                  </div>
+                )}
               </div>
             );
           })}

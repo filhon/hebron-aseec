@@ -7,6 +7,7 @@ import { roleAssignments, designations } from "@hebron/db/schema";
 import type { Role } from "@hebron/types/roles";
 import { adminAction } from "../lib/safe-action";
 import { logAudit } from "../lib/audit";
+import { notifyRoleChanged } from "../lib/notifications";
 
 // ─── Conflict of interest ─────────────────────────────────────────────────────
 // Ref: BRAIN.md 6.1 — diretores/conselheiros NÃO podem ser submissores NEM hospedes.
@@ -124,6 +125,8 @@ export const assignRole = adminAction
       },
     });
 
+    await notifyRoleChanged(assignment.userId, assignment.role, "granted");
+
     return { assignment };
   });
 
@@ -157,6 +160,8 @@ export const revokeRole = adminAction
         },
       },
     });
+
+    await notifyRoleChanged(assignment.userId, assignment.role, "revoked");
 
     return { ok: true };
   });

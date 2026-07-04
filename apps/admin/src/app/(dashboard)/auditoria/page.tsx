@@ -21,6 +21,7 @@ import {
   AuditLogExport,
   type AuditLogEntry,
 } from "../../../components/audit-log-export";
+import { AuditLogSkeleton } from "../../../components/audit-log-skeleton";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -405,23 +406,7 @@ export default async function AuditoriaPage({
           }
         />
       ) : (
-        <Suspense
-          fallback={
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {[...Array(5)].map((_, i) => (
-                <div
-                  key={i}
-                  style={{
-                    height: 56,
-                    borderRadius: 14,
-                    background: "#eef0f6",
-                    animation: "pulse 1.5s ease-in-out infinite",
-                  }}
-                />
-              ))}
-            </div>
-          }
-        >
+        <Suspense fallback={<AuditLogSkeleton />}>
           <AuditContent
             actor={actor}
             action={action}

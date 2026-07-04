@@ -9,12 +9,15 @@ import {
   parseImpersonationState,
 } from "@hebron/auth/impersonation";
 import { stopImpersonationAction } from "../../actions/impersonation";
+import { requireAdminSession } from "../../lib/session";
 
 export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  await requireAdminSession();
+
   const cookieStore = await cookies();
   const rawImp = cookieStore.get(IMPERSONATION_COOKIE_NAME)?.value;
   const impersonation = rawImp ? parseImpersonationState(rawImp) : null;

@@ -16,8 +16,22 @@ import {
   roleAssignmentSchema,
   type RoleAssignmentInput,
 } from "@hebron/validators";
-import type { RoleAssignment, User } from "@hebron/types/admin";
 import { ROLES, SCOPES } from "@hebron/types/roles";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface RoleAssignmentFormUser {
+  id: string;
+  name: string;
+}
+
+export interface RoleAssignmentFormAssignment {
+  id: string;
+  userId: string;
+  role: RoleAssignmentInput["role"];
+  scope: RoleAssignmentInput["scope"];
+  grantedAt: Date;
+}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -48,11 +62,13 @@ const SCOPE_LABELS: Record<string, string> = {
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface RoleAssignmentFormProps {
-  users: User[];
-  assignments: RoleAssignment[];
+  users: RoleAssignmentFormUser[];
+  assignments: RoleAssignmentFormAssignment[];
   onAssign: (data: RoleAssignmentInput) => void | Promise<void>;
   onRevoke: (assignmentId: string) => void | Promise<void>;
   isLoading?: boolean;
+  /** Pré-seleciona o usuário (vindo de ?userId= na tela de perfil) */
+  defaultUserId?: string;
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -63,6 +79,7 @@ export function RoleAssignmentForm({
   onAssign,
   onRevoke,
   isLoading,
+  defaultUserId,
 }: RoleAssignmentFormProps) {
   const {
     handleSubmit,
@@ -73,7 +90,7 @@ export function RoleAssignmentForm({
   } = useForm<RoleAssignmentInput>({
     resolver: zodResolver(roleAssignmentSchema),
     defaultValues: {
-      userId: "",
+      userId: defaultUserId ?? "",
       role: "colaborador",
       scope: "global",
     },
@@ -89,8 +106,8 @@ export function RoleAssignmentForm({
     reset();
   }
 
-  // Active assignments only
-  const activeAssignments = assignments.filter((a) => a.revokedAt === null);
+  // Toda atribuição presente já está ativa — revogar apaga a linha (hard delete).
+  const activeAssignments = assignments;
 
   return (
     <div className="flex flex-col gap-8">

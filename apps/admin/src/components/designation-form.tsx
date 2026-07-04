@@ -13,8 +13,23 @@ import {
   SelectItem,
 } from "@hebron/ui";
 import { designationSchema, type DesignationInput } from "@hebron/validators";
-import type { Designation, User } from "@hebron/types/admin";
 import { SCOPES } from "@hebron/types/roles";
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface DesignationFormUser {
+  id: string;
+  name: string;
+}
+
+export interface DesignationFormDesignation {
+  id: string;
+  userId: string;
+  directorName: string;
+  type: DesignationInput["type"];
+  scope: DesignationInput["scope"];
+  assignedAt: Date;
+}
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -40,8 +55,8 @@ const DESIGNATION_TYPE_LABELS = {
 
 interface DesignationFormProps {
   /** Apenas usuários com papel de diretor */
-  directors: User[];
-  designations: Designation[];
+  directors: DesignationFormUser[];
+  designations: DesignationFormDesignation[];
   onAssign: (data: DesignationInput) => void | Promise<void>;
   onRevoke: (designationId: string) => void | Promise<void>;
   isLoading?: boolean;
@@ -81,7 +96,8 @@ export function DesignationForm({
     reset();
   }
 
-  const activeDesignations = designations.filter((d) => d.revokedAt === null);
+  // Toda designação presente já está ativa — revogar apaga a linha (hard delete).
+  const activeDesignations = designations;
 
   return (
     <div className="flex flex-col gap-8">

@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import {
   useReactTable,
   getCoreRowModel,
@@ -11,13 +12,7 @@ import {
   type SortingState,
   type FilterFn,
 } from "@tanstack/react-table";
-import {
-  ChevronUp,
-  ChevronDown,
-  ChevronsUpDown,
-  Search,
-  Shield,
-} from "lucide-react";
+import { ChevronUp, ChevronDown, ChevronsUpDown, Search } from "lucide-react";
 import {
   Button,
   Input,
@@ -27,24 +22,39 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@hebron/ui";
-import type { User, UserStatus, RoleAssignment } from "@hebron/types/admin";
 import type { Role } from "@hebron/types/roles";
 import { ROLES } from "@hebron/types/roles";
 import { RoleBadge } from "./role-badge";
-import { StatusBadge } from "./status-badge";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type UserRow = User & { roles: Role[] };
+export interface AdminUserRow {
+  id: string;
+  email: string;
+  fullName: string | null;
+  avatarUrl: string | null;
+  suspendedModules: string[];
+  createdAt: Date;
+}
+
+export interface AdminRoleAssignmentRow {
+  userId: string;
+  role: Role;
+}
+
+type UserStatus = "active" | "suspended";
+
+type UserRow = AdminUserRow & { roles: Role[]; status: UserStatus };
 
 interface UserTableProps {
-  users: User[];
-  roleAssignments: RoleAssignment[];
+  users: AdminUserRow[];
+  roleAssignments: AdminRoleAssignmentRow[];
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function getInitials(name: string): string {
+function getInitials(name: string | null): string {
+  if (!name) return "?";
   return name
     .split(" ")
     .filter(Boolean)
@@ -54,8 +64,7 @@ function getInitials(name: string): string {
     .toUpperCase();
 }
 
-function formatDate(date: Date | null): string {
-  if (!date) return "—";
+function formatDate(date: Date): string {
   return new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",
     month: "2-digit",
@@ -63,12 +72,24 @@ function formatDate(date: Date | null): string {
   }).format(date);
 }
 
+function getStatus(suspendedModules: string[]): UserStatus {
+  return suspendedModules.includes("global") ? "suspended" : "active";
+}
+
+const STATUS_LABELS: Record<UserStatus, string> = {
+  active: "Ativo",
+  suspended: "Suspenso",
+};
+
+const STATUS_CLASSES: Record<UserStatus, string> = {
+  active: "hb-status-active",
+  suspended: "hb-status-suspended",
+};
+
 const USER_STATUS_OPTIONS: { value: UserStatus | "all"; label: string }[] = [
   { value: "all", label: "Todos os status" },
   { value: "active", label: "Ativo" },
   { value: "suspended", label: "Suspenso" },
-  { value: "pending_approval", label: "Pend. aprovação" },
-  { value: "invited", label: "Convidado" },
 ];
 
 // ─── Custom global filter: searches name + email ──────────────────────────────
@@ -80,7 +101,7 @@ const nameEmailFilter: FilterFn<UserRow> = (
 ) => {
   const q = filterValue.toLowerCase();
   return (
-    row.original.name.toLowerCase().includes(q) ||
+    (row.original.fullName ?? "").toLowerCase().includes(q) ||
     row.original.email.toLowerCase().includes(q)
   );
 };
@@ -91,10 +112,18 @@ function buildColumns(): ColumnDef<UserRow>[] {
   return [
     {
       id: "user",
-      accessorKey: "name",
+      accessorKey: "fullName",
       header: "Usuário",
       cell: ({ row }) => (
-        <div style={{ display: "flex", alignItems: "center", gap: "0.625rem" }}>
+        <Link
+          href={`/usuarios/${row.original.id}`}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.625rem",
+            textDecoration: "none",
+          }}
+        >
           <div
             aria-hidden="true"
             style={{
@@ -119,7 +148,7 @@ function buildColumns(): ColumnDef<UserRow>[] {
                 style={{ width: "100%", height: "100%", objectFit: "cover" }}
               />
             ) : (
-              getInitials(row.original.name)
+              getInitials(row.original.fullName)
             )}
           </div>
           <div>
@@ -130,7 +159,7 @@ function buildColumns(): ColumnDef<UserRow>[] {
                 color: "var(--color-foreground)",
               }}
             >
-              {row.original.name}
+              {row.original.fullName ?? row.original.email}
             </div>
             <div
               style={{
@@ -141,7 +170,7 @@ function buildColumns(): ColumnDef<UserRow>[] {
               {row.original.email}
             </div>
           </div>
-        </div>
+        </Link>
       ),
     },
     {
@@ -172,31 +201,9 @@ function buildColumns(): ColumnDef<UserRow>[] {
       accessorKey: "status",
       header: "Status",
       cell: ({ row }) => (
-        <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
-          <StatusBadge status={row.original.status} size="sm" />
-          {row.original.mfaEnabled && (
-            <Shield
-              size={13}
-              aria-label="MFA ativado"
-              style={{ color: "var(--color-support-sky)" }}
-            />
-          )}
-        </div>
-      ),
-    },
-    {
-      id: "lastLoginAt",
-      accessorKey: "lastLoginAt",
-      header: "Último acesso",
-      sortingFn: "datetime",
-      cell: ({ row }) => (
-        <span
-          style={{
-            fontSize: "var(--text-sm)",
-            color: "var(--color-muted-foreground)",
-          }}
-        >
-          {formatDate(row.original.lastLoginAt)}
+        <span className={`hb-badge ${STATUS_CLASSES[row.original.status]}`}>
+          <span className="hb-badge-dot" />
+          {STATUS_LABELS[row.original.status]}
         </span>
       ),
     },
@@ -228,16 +235,17 @@ export function UserTable({ users, roleAssignments }: UserTableProps) {
     "all",
   );
   const [sorting, setSorting] = React.useState<SortingState>([
-    { id: "lastLoginAt", desc: true },
+    { id: "createdAt", desc: true },
   ]);
 
-  // Join roles into users
+  // Join roles + status into users
   const userRows: UserRow[] = React.useMemo(() => {
     return users.map((u) => ({
       ...u,
       roles: roleAssignments
-        .filter((ra) => ra.userId === u.id && ra.revokedAt === null)
+        .filter((ra) => ra.userId === u.id)
         .map((ra) => ra.role),
+      status: getStatus(u.suspendedModules),
     }));
   }, [users, roleAssignments]);
 
@@ -467,16 +475,6 @@ export function UserTable({ users, roleAssignments }: UserTableProps) {
                         : "none",
                     backgroundColor: "var(--color-background)",
                     transition: "background-color var(--transition-fast)",
-                  }}
-                  onMouseEnter={(e) => {
-                    (
-                      e.currentTarget as HTMLTableRowElement
-                    ).style.backgroundColor = "var(--color-muted)";
-                  }}
-                  onMouseLeave={(e) => {
-                    (
-                      e.currentTarget as HTMLTableRowElement
-                    ).style.backgroundColor = "var(--color-background)";
                   }}
                 >
                   {row.getVisibleCells().map((cell) => (

@@ -13,7 +13,6 @@ import {
   SelectItem,
 } from "@hebron/ui";
 import { meetingSchema, type MeetingInput } from "@hebron/validators";
-import type { MeetingSession, User } from "@hebron/types/admin";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -23,12 +22,26 @@ const MEETING_TYPE_LABELS = {
   extraordinaria: "Extraordinária",
 } as const;
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface MeetingFormDirector {
+  id: string;
+  name: string;
+}
+
+export interface MeetingFormMeeting {
+  date: Date;
+  type: "mensal" | "ordinaria" | "extraordinaria";
+  chairUserId: string | null;
+  notes: string | null;
+}
+
 // ─── Props ────────────────────────────────────────────────────────────────────
 
 interface MeetingFormProps {
   /** Usuários que podem presidir reuniões (diretores) */
-  directors: User[];
-  meeting?: MeetingSession;
+  directors: MeetingFormDirector[];
+  meeting?: MeetingFormMeeting;
   onSubmit: (data: MeetingInput) => void | Promise<void>;
   isLoading?: boolean;
 }
@@ -61,7 +74,7 @@ export function MeetingForm({
       ? {
           date: toDateInputValue(meeting.date),
           type: meeting.type,
-          chairUserId: meeting.chairUserId,
+          chairUserId: meeting.chairUserId ?? "",
           notes: meeting.notes ?? "",
         }
       : {

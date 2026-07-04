@@ -200,7 +200,7 @@ _Critérios:_ [x] `drizzle-kit check` limpo; [x] migration nova de teste gerada 
 **P-1.25 — Admin: leitura protegida e fiação completa**
 _Problema:_ F2-A1 (app inteiro legível por anônimo), F2-A2 (resetPassword no-op), F2-A5 (reuniões com 4 botões mortos), F2-A4 (componentes/forms do Bloco A órfãos — decisão F2-Q6: reconectar).
 _Escopo:_ gate super*admin server-side no `(dashboard)/layout.tsx` (+ redirect canônico); `resetPassword` envia e-mail de verdade (`resetPasswordForEmail` ou `generateLink`+Resend com o template existente); reunioes: reconectar `meeting-form` e ligar `createMeeting`/`updateMeeting`; reconectar `user-table` (TanStack) e forms RHF nas telas de usuários/convites; chamar `notifyUserSuspended`/`notifyRoleChanged` nas actions (F2 P-1.10).
-\_Critérios:* [ ] anônimo em qualquer rota → redirect login (teste); [ ] usuário sem papel super_admin → bloqueado (teste); [ ] reset de senha recebe e-mail em ambiente de teste; [ ] zero componentes de P-1.2/1.4 sem import (grep no critério); [ ] botões de reuniões operam; [ ] lint/typecheck/testes verdes.
+\_Critérios:* [x] anônimo em qualquer rota → redirect login (teste); [x] usuário sem papel super_admin → bloqueado (teste); [x] reset de senha recebe e-mail em ambiente de teste; [x] zero componentes de P-1.2/1.4 sem import (grep no critério); [x] botões de reuniões operam; [x] lint/typecheck/testes verdes.
 
 **P-1.26 — Onboarding: convite, auto-signup com aprovação e MFA**
 _Problema:_ nenhuma pessoa nova consegue entrar (F2-A3 + O-1); e-mail de convite aponta para rota inexistente; `acceptInvitation` não cria conta nem papéis; MFA "obrigatório" não bloqueia nem tem enrollment (S1-07 — decisão F1-Q5: bloquear com tela de enrollment). Decisão F2-Q2: convite primeiro, sem criação manual.
