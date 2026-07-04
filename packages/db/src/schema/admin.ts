@@ -77,6 +77,10 @@ export const auditActionEnum = adminSchema.enum("audit_action", [
   "financeiro.budget.created",
   "financeiro.budget.updated",
   "financeiro.budget.deleted",
+  // Onboarding — added via ALTER TYPE in 0016_onboarding_audit_actions.sql
+  "user.rejected",
+  "user.signup_requested",
+  "mfa.enrolled",
 ]);
 
 export const meetingTypeEnum = adminSchema.enum("meeting_type", [

@@ -117,6 +117,39 @@ export function getSupabaseBrowserClient(): SupabaseClient {
   return _client;
 }
 
+/**
+ * Auto-signup: creates a new Supabase Auth account tagged with
+ * `signup_source: "self"`. The `handle_new_user()` DB trigger reads this
+ * metadata to create the mirrored `public.users` row with
+ * `status = 'pending_approval'` instead of the default `'active'` — see
+ * packages/db/src/migrations/0015_user_status.sql. Convite/admin-created
+ * accounts never set this flag, so they keep the default.
+ */
+export async function signUpWithPassword(
+  email: string,
+  password: string,
+  fullName: string,
+  emailRedirectTo?: string,
+): Promise<SignInResult> {
+  const supabase = getSupabaseBrowserClient();
+  const { error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        full_name: fullName,
+        signup_source: "self",
+        // Consentimento LGPD básico (checkbox obrigatório no formulário de
+        // cadastro) — carimbado no próprio metadata até existir uma tabela
+        // de consentimento granular (P-0.13).
+        lgpd_consent_at: new Date().toISOString(),
+      },
+      emailRedirectTo,
+    },
+  });
+  return { error };
+}
+
 /** Sign in with email and password. */
 export async function signInWithPassword(
   email: string,

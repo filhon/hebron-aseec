@@ -5,9 +5,11 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { createClient } from "@supabase/supabase-js";
 import { db } from "@hebron/db/client";
-import { users, notifications } from "@hebron/db/schema";
+import { users, notifications, roleAssignments } from "@hebron/db/schema";
 import { createNotification } from "@hebron/email";
 import { PasswordResetEmail } from "@hebron/email/templates/password-reset";
+import { WelcomeEmail } from "@hebron/email/templates/welcome";
+import { SignupRejectedEmail } from "@hebron/email/templates/signup-rejected";
 import { adminAction } from "../lib/safe-action";
 import { logAudit, computeDiff } from "../lib/audit";
 import { notifyUserSuspended } from "../lib/notifications";
@@ -335,6 +337,154 @@ export const approveUser = adminAction
       entity: "user",
       entityId: parsedInput.id,
       diff: { approved: { before: false, after: true } },
+    });
+
+    return { ok: true };
+  });
+
+// ─── approveSignup ────────────────────────────────────────────────────────────
+// Aprova um auto-signup pendente (status = pending_approval): confirma o
+// e-mail, atribui o papel submissor e ativa a conta. Distinto de approveUser
+// (que só confirma e-mail de contas criadas manualmente pelo Admin).
+
+export const approveSignup = adminAction
+  .schema(z.object({ id: z.string().uuid() }))
+  .action(async ({ parsedInput, ctx }) => {
+    const userRows = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, parsedInput.id));
+
+    const user = userRows[0];
+    if (!user) throw new Error("Usuário não encontrado");
+    if (user.status !== "pending_approval") {
+      throw new Error("Este cadastro não está aguardando aprovação.");
+    }
+
+    const supabase = getSupabaseAdmin();
+    await supabase.auth.admin.updateUserById(parsedInput.id, {
+      email_confirm: true,
+    });
+
+    await db
+      .update(users)
+      .set({ status: "active", updatedAt: new Date() })
+      .where(eq(users.id, parsedInput.id));
+
+    await db.insert(roleAssignments).values({
+      userId: parsedInput.id,
+      role: "submissor",
+      scope: "global",
+      grantedBy: ctx.actorId,
+    });
+
+    const appUrl =
+      process.env.NEXT_PUBLIC_APP_URL ?? "https://app.hebronaseec.com.br";
+
+    await createNotification({
+      insert: async (data) => {
+        const notifInserted = await db
+          .insert(notifications)
+          .values({
+            userId: user.id,
+            title: data.title,
+            body: data.body,
+          })
+          .returning();
+        const notif = notifInserted[0];
+        if (!notif) throw new Error("Falha ao inserir notificação");
+        return { id: notif.id };
+      },
+      data: {
+        userId: user.id,
+        channel: "email",
+        type: "user.approved",
+        title: "Cadastro aprovado",
+        body: "Seu cadastro na Hebron Aseec foi aprovado.",
+      },
+      email: {
+        to: user.email,
+        subject: "Cadastro aprovado — Hebron Aseec",
+        template: React.createElement(WelcomeEmail, {
+          name: user.fullName ?? user.email,
+          roles: ["submissor"],
+          loginUrl: `${appUrl}/login`,
+        }),
+      },
+      resendApiKey: process.env.RESEND_API_KEY,
+    });
+
+    await logAudit({
+      actorId: ctx.actorId,
+      action: "user.approved",
+      entity: "user",
+      entityId: parsedInput.id,
+      diff: { status: { before: "pending_approval", after: "active" } },
+    });
+
+    return { ok: true };
+  });
+
+// ─── rejectSignup ─────────────────────────────────────────────────────────────
+// Rejeita um auto-signup pendente. Estado soft (status = "rejected") — nunca
+// exclusão: a instituição vinculada e o histórico permanecem para auditoria.
+
+export const rejectSignup = adminAction
+  .schema(z.object({ id: z.string().uuid() }))
+  .action(async ({ parsedInput, ctx }) => {
+    const userRows = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, parsedInput.id));
+
+    const user = userRows[0];
+    if (!user) throw new Error("Usuário não encontrado");
+    if (user.status !== "pending_approval") {
+      throw new Error("Este cadastro não está aguardando aprovação.");
+    }
+
+    await db
+      .update(users)
+      .set({ status: "rejected", updatedAt: new Date() })
+      .where(eq(users.id, parsedInput.id));
+
+    await createNotification({
+      insert: async (data) => {
+        const notifInserted = await db
+          .insert(notifications)
+          .values({
+            userId: user.id,
+            title: data.title,
+            body: data.body,
+          })
+          .returning();
+        const notif = notifInserted[0];
+        if (!notif) throw new Error("Falha ao inserir notificação");
+        return { id: notif.id };
+      },
+      data: {
+        userId: user.id,
+        channel: "email",
+        type: "user.rejected",
+        title: "Cadastro não aprovado",
+        body: "Seu cadastro na Hebron Aseec não foi aprovado.",
+      },
+      email: {
+        to: user.email,
+        subject: "Cadastro — Hebron Aseec",
+        template: React.createElement(SignupRejectedEmail, {
+          name: user.fullName ?? user.email,
+        }),
+      },
+      resendApiKey: process.env.RESEND_API_KEY,
+    });
+
+    await logAudit({
+      actorId: ctx.actorId,
+      action: "user.rejected",
+      entity: "user",
+      entityId: parsedInput.id,
+      diff: { status: { before: "pending_approval", after: "rejected" } },
     });
 
     return { ok: true };

@@ -32,16 +32,21 @@ export async function createTestAuthUser(
   email: string,
   password: string,
   fullName?: string,
+  extraMetadata?: Record<string, unknown>,
 ): Promise<string> {
   const admin = createClient(
     requireEnv("SUPABASE_URL"),
     requireEnv("SUPABASE_SERVICE_ROLE_KEY"),
   );
+  const metadata = {
+    ...(fullName ? { full_name: fullName } : {}),
+    ...extraMetadata,
+  };
   const { data, error } = await admin.auth.admin.createUser({
     email,
     password,
     email_confirm: true,
-    user_metadata: fullName ? { full_name: fullName } : undefined,
+    user_metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
   });
   if (error || !data.user) {
     throw new Error(

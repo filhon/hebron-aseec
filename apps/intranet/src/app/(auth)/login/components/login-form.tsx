@@ -12,6 +12,7 @@ import {
   createTotpChallenge,
   verifyTotpChallenge,
 } from "@hebron/auth";
+import { TotpCodeInput } from "../../../../components/totp-code-input";
 
 // ——————————————————————————————————————————
 // Types
@@ -145,9 +146,8 @@ export function LoginForm({ returnTo }: LoginFormProps) {
     setState((prev) => ({ ...prev, loading: true, error: null }));
 
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "";
-    const redirectTo = returnTo
-      ? `${baseUrl}${decodeURIComponent(returnTo)}`
-      : baseUrl;
+    const next = returnTo ? decodeURIComponent(returnTo) : "/";
+    const redirectTo = `${baseUrl}/auth/callback?next=${encodeURIComponent(next)}`;
 
     const { error } = await signInWithMagicLink(state.email.trim(), redirectTo);
 
@@ -199,8 +199,13 @@ export function LoginForm({ returnTo }: LoginFormProps) {
   }
 
   function redirectAfterLogin() {
+    // Every login path funnels through /post-login, which enforces the
+    // onboarding-approval and MFA-enrollment gates in one place instead of
+    // duplicating both checks here (see app/(auth)/post-login/page.tsx).
     const destination = returnTo ? decodeURIComponent(returnTo) : "/";
-    window.location.replace(destination);
+    window.location.replace(
+      `/post-login?return_to=${encodeURIComponent(destination)}`,
+    );
   }
 
   // ——————————————————————————————————————————
@@ -406,23 +411,11 @@ function MfaStep({
 
       <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
         <FormField id="totp" label="Código TOTP" required>
-          <Input
+          <TotpCodeInput
             id="totp"
-            type="text"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            autoFocus
-            placeholder="000 000"
-            maxLength={7}
             value={totpCode}
-            onChange={(e) => {
-              const raw = e.target.value.replace(/\D/g, "").slice(0, 6);
-              onChange(
-                raw.length > 3 ? `${raw.slice(0, 3)} ${raw.slice(3)}` : raw,
-              );
-            }}
+            onChange={onChange}
             disabled={loading}
-            className="text-center tracking-[0.3em] text-(--text-lg) font-mono"
           />
         </FormField>
 

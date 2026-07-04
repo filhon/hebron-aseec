@@ -75,6 +75,14 @@ export const PUBLIC_RLS_POLICIES = {
   },
 
   /**
+   * public.users.status — não é uma policy RLS separada (a coluna está sob
+   * users_update_own), mas protegida por trigger: users_protect_status
+   * bloqueia qualquer mudança de status por quem não é super_admin, mesmo
+   * que o próprio usuário passe no USING/WITH CHECK de users_update_own.
+   * Ver packages/db/src/migrations/0015_user_status.sql.
+   */
+
+  /**
    * public.role_assignments
    *   próprio usuário → SELECT das próprias atribuições
    *   super_admin / diretor → SELECT em todas

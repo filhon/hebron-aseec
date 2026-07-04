@@ -2,7 +2,7 @@
 
 import { db } from "@hebron/db/client";
 import { cookies } from "next/headers";
-import { createSupabaseServerActionClient } from "@hebron/auth";
+import { createSupabaseServerActionClient } from "@hebron/auth/server";
 import { and, count, eq, inArray, isNull, sql } from "drizzle-orm";
 import {
   compactVersions,

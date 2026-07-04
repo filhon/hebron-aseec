@@ -139,3 +139,18 @@ export async function verifyTotpChallenge(
   });
   return { error };
 }
+
+/**
+ * Returns whether the current session already has a verified TOTP factor.
+ * A role that requires MFA but has no verified factor must be sent to
+ * enrollment, not to a challenge — `getAuthenticatorAssuranceLevel()` alone
+ * cannot tell these two cases apart (its `nextLevel` only reports "aal2" when
+ * a verified factor already exists).
+ */
+export async function hasVerifiedTotpFactor(
+  supabase: SupabaseClient,
+): Promise<boolean> {
+  const { data, error } = await supabase.auth.mfa.listFactors();
+  if (error || !data) return false;
+  return data.totp.some((f: TotpFactor) => f.status === "verified");
+}

@@ -30,6 +30,11 @@ export const designationTypeEnum = pgEnum(
   "designation_type",
   DESIGNATION_TYPES,
 );
+export const userStatusEnum = pgEnum("user_status", [
+  "pending_approval",
+  "active",
+  "rejected",
+]);
 
 // ---------------------------------------------------------------------------
 // public.users — mirror of auth.users, kept in sync via trigger
@@ -41,6 +46,14 @@ export const users = pgTable("users", {
   avatarUrl: text("avatar_url"),
   phone: text("phone"),
   documentCpf: text("document_cpf").unique(),
+  /**
+   * Aprovação de entrada — separada de suspendedModules (que governa acesso
+   * de uma conta já ativa). "active" é o default: cobre convite e criação
+   * manual, já pré-vetados. Auto-signup começa em "pending_approval" — o
+   * trigger public.handle_new_user() decide isso a partir de
+   * raw_user_meta_data->>'signup_source' no momento da criação da conta.
+   */
+  status: userStatusEnum("status").notNull().default("active"),
   suspendedModules: jsonb("suspended_modules")
     .$type<string[]>()
     .notNull()

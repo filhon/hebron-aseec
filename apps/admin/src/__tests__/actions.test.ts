@@ -25,8 +25,12 @@ import {
 // ── IDs fixos ────────────────────────────────────────────────────────────────
 const ACTOR_ID = "d1000000-0000-0000-0000-000000000001";
 const TARGET_ID = "d1000000-0000-0000-0000-000000000002";
+const PENDING_ID = "d1000000-0000-0000-0000-000000000005";
+const PENDING_REJECT_ID = "d1000000-0000-0000-0000-000000000006";
 const ACTOR_EMAIL = "actions-actor@test.hebron";
 const TARGET_EMAIL = "actions-target@test.hebron";
+const PENDING_EMAIL = "actions-pending@test.hebron";
+const PENDING_REJECT_EMAIL = "actions-pending-reject@test.hebron";
 
 // ── Mocks globais ─────────────────────────────────────────────────────────────
 
@@ -44,6 +48,10 @@ vi.mock("@hebron/email/templates/invitation", () => ({
 
 vi.mock("@hebron/email/templates/welcome", () => ({
   WelcomeEmail: vi.fn().mockReturnValue(null),
+}));
+
+vi.mock("@hebron/email/templates/signup-rejected", () => ({
+  SignupRejectedEmail: vi.fn().mockReturnValue(null),
 }));
 
 // Mock Supabase: usado diretamente por actions/users.ts para operações de
@@ -132,6 +140,26 @@ beforeAll(async () => {
     .onConflictDoNothing();
 
   await db
+    .insert(users)
+    .values({
+      id: PENDING_ID,
+      email: PENDING_EMAIL,
+      fullName: "Pending User",
+      status: "pending_approval",
+    })
+    .onConflictDoNothing();
+
+  await db
+    .insert(users)
+    .values({
+      id: PENDING_REJECT_ID,
+      email: PENDING_REJECT_EMAIL,
+      fullName: "Pending Reject User",
+      status: "pending_approval",
+    })
+    .onConflictDoNothing();
+
+  await db
     .insert(roleAssignments)
     .values({ userId: ACTOR_ID, role: "super_admin", grantedBy: ACTOR_ID })
     .onConflictDoNothing();
@@ -145,7 +173,13 @@ afterAll(async () => {
   await db.delete(auditLog).where(eq(auditLog.actorId, ACTOR_ID));
   await db.delete(invitations).where(eq(invitations.invitedBy, ACTOR_ID));
   await db.delete(designations).where(eq(designations.assignedBy, ACTOR_ID));
-  for (const id of [...extraIds, TARGET_ID, ACTOR_ID]) {
+  for (const id of [
+    ...extraIds,
+    TARGET_ID,
+    PENDING_ID,
+    PENDING_REJECT_ID,
+    ACTOR_ID,
+  ]) {
     await db.delete(roleAssignments).where(eq(roleAssignments.userId, id));
     await db.delete(users).where(eq(users.id, id));
   }
@@ -280,85 +314,8 @@ describe("revokeInvitation", () => {
   });
 });
 
-// ── acceptInvitation — fluxo completo ────────────────────────────────────────
-
-describe("acceptInvitation — fluxo completo", () => {
-  it("convite válido é aceito e registra invitation.accepted", async () => {
-    const { sendInvitation } = await getActions();
-    const { acceptInvitation } = await import("../actions/invitations");
-
-    const created = await sendInvitation({
-      email: "aceitar@test.hebron",
-      roles: ["aluno"],
-      expiresInDays: 7,
-    });
-    const token = created?.data?.invitation.token;
-    expect(token).toBeDefined();
-    const safeToken = requireDefined(token, "token");
-
-    const result = await acceptInvitation({
-      token: safeToken,
-      name: "Novo Aluno",
-    });
-    expect(result?.data?.email).toBe("aceitar@test.hebron");
-    expect(result?.data?.roles).toContain("aluno");
-
-    const entry = await lastAuditFor(ACTOR_ID, "invitation.accepted");
-    expect(entry).toBeDefined();
-    expect(requireDefined(entry, "audit entry").diff).toMatchObject({
-      acceptedAt: { before: null },
-    });
-
-    const rows = await db
-      .select()
-      .from(invitations)
-      .where(eq(invitations.token, safeToken));
-    expect(rows[0]?.acceptedAt).toBeDefined();
-  });
-
-  it("convite expirado retorna erro", async () => {
-    const expiredToken = "expired-token-" + Date.now().toString(36);
-    const pastDate = new Date(Date.now() - 1000);
-    await db.insert(invitations).values({
-      email: "expirado@test.hebron",
-      roles: ["aluno"],
-      token: expiredToken,
-      invitedBy: ACTOR_ID,
-      expiresAt: pastDate,
-    });
-
-    const { acceptInvitation } = await import("../actions/invitations");
-    const result = await acceptInvitation({
-      token: expiredToken,
-      name: "Tentativa",
-    });
-    expect(result?.serverError).toBeDefined();
-
-    await db.delete(invitations).where(eq(invitations.token, expiredToken));
-  });
-
-  it("convite revogado retorna erro", async () => {
-    const revokedToken = "revoked-token-" + Date.now().toString(36);
-    const future = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-    await db.insert(invitations).values({
-      email: "revogado@test.hebron",
-      roles: ["aluno"],
-      token: revokedToken,
-      invitedBy: ACTOR_ID,
-      expiresAt: future,
-      revokedAt: new Date(),
-    });
-
-    const { acceptInvitation } = await import("../actions/invitations");
-    const result = await acceptInvitation({
-      token: revokedToken,
-      name: "Tentativa",
-    });
-    expect(result?.serverError).toBeDefined();
-
-    await db.delete(invitations).where(eq(invitations.token, revokedToken));
-  });
-});
+// acceptInvitation moved to apps/intranet (P-1.26) — its integration test
+// lives at apps/intranet/src/__tests__/invitations.test.ts now.
 
 // ── assignRole ────────────────────────────────────────────────────────────────
 
@@ -499,5 +456,66 @@ describe("revokeRole", () => {
     const entry = await lastAuditFor(ACTOR_ID, "role.revoked");
     expect(entry).toBeDefined();
     expect(requireDefined(entry, "audit entry").entityId).toBe(safeId);
+  });
+});
+
+// ── approveSignup / rejectSignup ───────────────────────────────────────────────
+// Regressão para O-1/S1-16: "pending_approval" não era derivável do schema,
+// então o botão de aprovação da fila de auto-signup foi omitido da UI.
+
+describe("approveSignup / rejectSignup", () => {
+  it("approveSignup ativa a conta, atribui submissor e registra user.approved", async () => {
+    const { approveSignup } = await getActions();
+
+    const result = await approveSignup({ id: PENDING_ID });
+    expect(result?.serverError).toBeUndefined();
+    expect(result?.data?.ok).toBe(true);
+
+    const [row] = await db.select().from(users).where(eq(users.id, PENDING_ID));
+    expect(row?.status).toBe("active");
+
+    const roles = await db
+      .select()
+      .from(roleAssignments)
+      .where(eq(roleAssignments.userId, PENDING_ID));
+    expect(roles.map((r) => r.role)).toContain("submissor");
+
+    const entry = await lastAuditFor(ACTOR_ID, "user.approved");
+    expect(entry).toBeDefined();
+    expect(requireDefined(entry, "audit entry").entityId).toBe(PENDING_ID);
+  });
+
+  it("approveSignup rejeita cadastro que não está pending_approval", async () => {
+    const { approveSignup } = await getActions();
+
+    // PENDING_ID já foi aprovado pelo teste anterior — não está mais pending.
+    const result = await approveSignup({ id: PENDING_ID });
+    expect(result?.serverError).toBeDefined();
+  });
+
+  it("rejectSignup marca status=rejected, não atribui papel e registra user.rejected", async () => {
+    const { rejectSignup } = await getActions();
+
+    const result = await rejectSignup({ id: PENDING_REJECT_ID });
+    expect(result?.serverError).toBeUndefined();
+    expect(result?.data?.ok).toBe(true);
+
+    const [row] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, PENDING_REJECT_ID));
+    expect(row?.status).toBe("rejected");
+
+    const roles = await db
+      .select()
+      .from(roleAssignments)
+      .where(eq(roleAssignments.userId, PENDING_REJECT_ID));
+    expect(roles).toHaveLength(0);
+
+    const entry = await lastAuditFor(ACTOR_ID, "user.rejected");
+    expect(entry).toBeDefined();
+    expect(requireDefined(entry, "audit entry").entityId).toBe(
+      PENDING_REJECT_ID,
+    );
   });
 });

@@ -81,6 +81,7 @@
 | S-57   | 2026-07-03 | P-0.10 — Decisão B: RLS Ativa (Onda 0)                       | concluido                            |
 | S-58   | 2026-07-04 | P-0.11 — Drizzle-kit Reconciliado (Onda 0)                   | concluido                            |
 | S-59   | 2026-07-04 | P-1.25 — Admin: leitura protegida e fiação completa (Onda 1) | concluido                            |
+| S-60   | 2026-07-04 | P-1.26 — Onboarding: convite, auto-signup e MFA (Onda 1)     | concluido                            |
 
 ---
 
@@ -2422,3 +2423,105 @@ F2-A4 (componentes/forms do Bloco A órfãos) era maior do que o prompt descrevi
 - `apps/admin/src/components/audit-log-table.tsx`
 - `apps/admin/src/components/feature-flag-toggle.tsx`
 - `apps/admin/src/components/status-badge.tsx`
+
+---
+
+### S-60 — 2026-07-04 — P-1.26 Onboarding: convite, auto-signup e MFA (Onda 1)
+
+**Prompt:** P-1.26 (`AUDIT/04-prompts-pendentes.md` §4)
+**Duracao:** ~5h
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+F2-A3/O-1 (nenhuma pessoa nova conseguia entrar no sistema: e-mail de convite apontava para `/convite`, rota inexistente; `acceptInvitation` marcava o convite como aceito mas nunca criava conta nem atribuía papéis; auto-signup não existia) e S1-07/F2-M1 (MFA "obrigatório" sem enrollment nem enforcement — challenge só ocorria para quem já tinha TOTP configurado via Supabase Dashboard) corrigidos.
+
+`/convite` (intranet) passou a validar o token server-side e, na aceitação, criar a conta via `supabase.auth.admin.createUser` (service role), atribuir os papéis do convite e marcar aceito — a implementação antiga em `apps/admin/src/actions/invitations.ts` foi removida (nunca tinha UI que a chamasse; a rota pública correta é a intranet, login canônico do ecossistema, não o admin). Auto-signup: nova coluna `public.users.status` (`pending_approval` | `active` | `rejected`) — modelagem decidida nesta sessão, não deixada ao executor. `handle_new_user()` (trigger em `auth.users`) lê `raw_user_meta_data->>'signup_source'`: `"self"` nasce `pending_approval`; convite/criação manual (sem essa flag) mantêm o default `active`. Trigger novo `users_protect_status` bloqueia qualquer mudança de status por quem não é `super_admin` — mas só quando `auth.uid() IS NOT NULL` (ou seja, só no caminho PostgREST/supabase-js autenticado de um usuário real); a conexão direta que todo Server Action deste monorepo usa para escrever no banco (`DATABASE_URL` via drizzle/postgres.js, decisão anterior a esta sessão) não passa por esse contexto, então `approveSignup`/`rejectSignup` continuam funcionando sem bypass explícito. Duas funções `SECURITY DEFINER` (`self_signup_join_organization`, `search_organizations_for_signup`) abrem uma janela estreita para o usuário ainda sem papel nenhum montar/selecionar sua instituição — só operam enquanto o próprio `auth.uid()` está `pending_approval`, nunca em nome de terceiros. Wizard: `/cadastro` (conta + consentimento LGPD básico) → `/cadastro/instituicao` (busca ou cria instituição) → `/cadastro/status` (aguardando aprovação). Fila de aprovação nova em `apps/admin` (Usuários) com `approveSignup`/`rejectSignup` — aprova ativa a conta e atribui `submissor`; rejeita marca `rejected` (soft, nunca hard delete).
+
+MFA: `/mfa/enroll` (QR code + verificação, usa os primitivos `enrollTotp`/`verifytotpEnrollment` já existentes desde P-0.4) e `/mfa/challenge` (para sessão retomada com fator já verificado mas ainda `aal1`). Todo login (senha, magic link, convite, confirmação de e-mail) passa por `/post-login`, gate único que decide destino final: status de aprovação → enrollment/challenge de MFA (se o papel exigir) → destino. `middleware.ts` da intranet reforça o mesmo gate a cada navegação (runtime Node — drizzle/postgres precisa de socket TCP, indisponível no Edge) como rede de segurança para sessões retomadas.
+
+**Bugs encontrados e corrigidos durante a verificação em servidor de dev real** (não só typecheck/lint/testes):
+
+1. `packages/auth/src/index.ts` (barrel) reexportava `./server.ts`, que importa `@hebron/db/client` (drizzle + postgres, que precisa de `net`/`tls` do Node). Qualquer "use client" que importasse `@hebron/auth` (o barrel) — inclusive o já existente `login-form.tsx`, de antes desta sessão — quebrava o bundle do cliente com `Module not found: Can't resolve 'net'`. Confirmado pré-existente (reproduzido com `git stash` no código original, antes de qualquer mudança desta sessão), mas as 5 novas páginas client desta sessão dependiam do mesmo barrel — sem o fix, toda a UI de onboarding subiria 500 em produção. Corrigido removendo o reexport de `./server` do barrel (nenhum consumidor real dependia dele — todos já importavam `@hebron/auth/server` diretamente, confirmado por grep) e ajustando os 2 call sites que ainda usavam o barrel para isso (`apps/projetos/src/actions/auth.ts`, `apps/projetos/src/lib/queries.ts`).
+2. O gate de segurança do `middleware.ts` mandava todo usuário `pending_approval` para `/cadastro/status` incondicionalmente, sem checar se ele já tinha vinculado instituição — diferente de `/post-login`, que checa `organization_members` antes de decidir entre `/cadastro/status` e `/cadastro/instituicao`. Um usuário que confirmou e-mail mas nunca completou o passo da instituição, ao acessar qualquer rota diretamente (fora do fluxo imediato de login), ficava preso numa tela sem próxima ação. Reproduzido ao vivo com cookie de sessão real antes do fix (redirecionava para `/cadastro/status`) e depois do fix (redireciona corretamente para `/cadastro/instituicao`).
+
+**Criterios de aceite verificados:**
+
+- [x] fluxo convite→conta→papéis→login funciona end-to-end — `apps/intranet/src/__tests__/invitations.test.ts` (3 testes, sem mock de sessão, contra o Supabase de dev real: convite válido cria conta + papéis + audit; convite expirado e revogado retornam erro sem criar conta).
+- [x] signup→aprovação→login funciona — `apps/intranet/src/__tests__/onboarding.test.ts` (signup com `signup_source=self` nasce `pending_approval`; `self_signup_join_organization` vincula instituição só enquanto pendente; trigger bloqueia auto-aprovação) + `apps/admin/src/__tests__/actions.test.ts` (novo bloco `approveSignup / rejectSignup`, 3 testes: aprova ativa+atribui submissor+audita; rejeita não pode ser aprovado de novo; rejeita marca `rejected`+audita, sem papel). Verificado também ao vivo: cookie de sessão real de usuário pendente → `/post-login` → `/cadastro/instituicao`; após o fix do middleware, `/` direto também.
+- [x] super_admin sem TOTP é forçado a enrolar antes de qualquer app — verificado ao vivo com servidor de dev real: super_admin sem fator TOTP, cookie de sessão real, `GET /` → `307` para `/mfa/enroll`. Também verificado o caso de sessão retomada com fator já verificado mas `aal1` (TOTP real enrolado e verificado via código RFC 6238 calculado a partir do secret) → `307` para `/mfa/challenge`, não `/mfa/enroll` — distinção que `getAuthenticatorAssuranceLevel()` sozinho não faz (por isso o helper novo `hasVerifiedTotpFactor`). Achado colateral, não corrigido (baixa severidade): `/mfa/enroll` acessado direto por esse mesmo usuário retorna 200 (re-renderiza o formulário de enrollment) em vez de redirecionar para `/mfa/challenge` — só checa o papel, não se já existe fator verificado.
+- [x] consentimento LGPD básico no cadastro — checkbox obrigatório no formulário (bloqueia submit se desmarcado) + carimbo `lgpd_consent_at` no metadata da conta. Achado: o carimbo é posto incondicionalmente por `signUpWithPassword()` sempre que a função é chamada — é timestamp de quando a chamada aconteceu, não prova server-side de que o consentimento foi de fato dado (a validação real é só client-side). Aceitável para "básico" (P-0.13, consentimento granular com tabela própria, ainda não rodou), mas registrado aqui para não ser confundido com controle de compliance real.
+- [x] audit em todas as mutações — conferido por grep em todas as Server Actions novas/alteradas: `acceptInvitation`, `completeSignupOrganization`, `confirmMfaEnrollment`, `approveSignup`, `rejectSignup` — todas com exatamente 1 chamada a `logAudit`/`logIntranetAudit`; a única action sem audit (`searchOrganizationsForSignup`) é read-only.
+- lint/typecheck verdes em `pnpm turbo lint typecheck` (34/34 tasks) após os 2 fixes.
+
+**Decisoes tomadas:**
+
+- `status` como coluna nova em `public.users`, separada de `suspended_modules` — `suspended_modules` governa acesso de conta já ativa; `status` governa a entrada no ecossistema. Convite e criação manual (Admin) nascem `active` (pré-vetados por quem convida/cria); só auto-signup nasce `pending_approval`.
+- `handle_new_user()` decide o status pelo metadata (`signup_source`) enviado no `auth.signUp()`, não por uma segunda escrita — evita janela de corrida entre a criação da conta (antes da confirmação de e-mail, quando ainda não há sessão para uma action autenticada rodar) e a marcação como pendente.
+- `self_signup_join_organization`/`search_organizations_for_signup` como funções `SECURITY DEFINER` em vez de um cliente service-role no código do app (padrão já usado por `has_role`/`is_org_member` no schema `projetos`) — mais estreito: só o próprio `auth.uid()` `pending_approval` pode agir, e só sobre a própria membership.
+- `acceptInvitation` movida de `apps/admin` para `apps/intranet` (não é violação de fronteira app→app: cada app já escreve suas próprias Server Actions contra o schema Drizzle compartilhado) — a rota pública `/convite` pertence ao login canônico (`app.hebronaseec.com.br`), não ao admin; a versão antiga em `apps/admin/src/actions/invitations.ts` foi deletada (e seu teste) por nunca ter tido UI que a chamasse.
+- `/post-login` como checkpoint único: toda forma de login (senha, magic link, convite com auto-login, confirmação de e-mail via `/auth/callback`) redireciona para lá antes do destino final, em vez de duplicar a checagem de status/MFA em cada entrypoint. `middleware.ts` reforça o mesmo gate a cada navegação como rede de segurança (não como gate primário) — os dois tiveram que ser mantidos consistentes manualmente, e a inconsistência do achado #2 acima veio exatamente de um lado ter sido atualizado (post-login) e o outro não (middleware), até a verificação ao vivo pegar.
+- `TotpCodeInput`/`AuthCard` extraídos para `apps/intranet/src/components` — a formatação do código de 6 dígitos e o shell de cartão+logo já apareciam em `login-form.tsx` antes desta sessão e se repetiriam em mais 5 páginas novas.
+- Bibliotecas de PDF/XLSX, Inngest, `packages/integrations` etc. citadas no escopo original do prompt (via `AUDIT/04`) para os fluxos "cron"/"cross-app" não se aplicam aqui — nenhum dos 3 fluxos deste prompt precisa deles (nem lembrete agendado, nem chamada cross-app).
+
+**Debitos tecnicos / pendencias:**
+
+- `/mfa/enroll` não verifica se o usuário já tem um fator TOTP verificado antes de renderizar — um usuário nessa situação, ao navegar direto para a página (em vez de ser redirecionado pelo gate), pode enrolar um segundo fator em vez de ser levado a `/mfa/challenge`. Não é falha de segurança (Supabase permite múltiplos fatores; o gate em `/post-login`/`middleware.ts` continua funcionando em qualquer outra rota), só uma lacuna de defesa em profundidade nesta página específica.
+- Consentimento LGPD é só client-side, sem tabela de consentimento granular (aguarda P-0.13) — ver ressalva no critério acima.
+- `apps/intranet` não tem `page.tsx` na raiz (`/`) — pré-existente, não introduzido nem corrigido nesta sessão; um usuário ativo sem exigência de MFA que passa por todos os gates corretamente recebe 404 ao chegar em `/`. Fora do escopo de P-1.26.
+- Sem verificação em navegador real (Playwright/Puppeteer indisponíveis neste ambiente) — a verificação ao vivo foi feita via `curl` com cookies de sessão reais (produzidos pelos helpers de teste em `packages/auth/src/testing.ts`, o mesmo mecanismo de login real usado nos testes automatizados), não por clique em UI.
+
+**Arquivos criados:**
+
+- `packages/db/src/migrations/0015_user_status.sql`
+- `packages/db/src/migrations/0016_onboarding_audit_actions.sql`
+- `packages/email/src/templates/signup-rejected.tsx`
+- `apps/intranet/src/lib/safe-action.ts`
+- `apps/intranet/src/lib/audit.ts`
+- `apps/intranet/src/lib/notifications.ts`
+- `apps/intranet/src/lib/session-client.ts`
+- `apps/intranet/src/actions/invitations.ts`
+- `apps/intranet/src/actions/onboarding.ts`
+- `apps/intranet/src/actions/mfa.ts`
+- `apps/intranet/src/components/auth-card.tsx`
+- `apps/intranet/src/components/totp-code-input.tsx`
+- `apps/intranet/src/app/(auth)/convite/page.tsx`
+- `apps/intranet/src/app/(auth)/convite/components/convite-form.tsx`
+- `apps/intranet/src/app/(auth)/cadastro/page.tsx`
+- `apps/intranet/src/app/(auth)/cadastro/components/cadastro-form.tsx`
+- `apps/intranet/src/app/(auth)/cadastro/instituicao/page.tsx`
+- `apps/intranet/src/app/(auth)/cadastro/instituicao/components/instituicao-form.tsx`
+- `apps/intranet/src/app/(auth)/cadastro/status/page.tsx`
+- `apps/intranet/src/app/(auth)/cadastro/status/components/sign-out-link.tsx`
+- `apps/intranet/src/app/(auth)/auth/callback/route.ts`
+- `apps/intranet/src/app/(auth)/post-login/page.tsx`
+- `apps/intranet/src/app/(auth)/mfa/enroll/page.tsx`
+- `apps/intranet/src/app/(auth)/mfa/enroll/components/mfa-enroll-form.tsx`
+- `apps/intranet/src/app/(auth)/mfa/challenge/page.tsx`
+- `apps/intranet/src/app/(auth)/mfa/challenge/components/mfa-challenge-form.tsx`
+- `apps/intranet/src/__tests__/setup-env.ts`
+- `apps/intranet/src/__tests__/invitations.test.ts`
+- `apps/intranet/src/__tests__/onboarding.test.ts`
+- `apps/intranet/vitest.config.ts`
+
+**Arquivos modificados:**
+
+- `packages/db/src/schema/public.ts` (`userStatusEnum`, coluna `status`)
+- `packages/db/src/schema/admin.ts` (`audit_action`: `user.rejected`, `user.signup_requested`, `mfa.enrolled`)
+- `packages/db/src/schema/index.ts` (exporta `userStatusEnum`)
+- `packages/db/src/rls/admin.ts` (documenta o trigger `users_protect_status`)
+- `packages/auth/src/index.ts` (remove reexport de `./server` — fix do bundle de cliente)
+- `packages/auth/src/mfa.ts` (`hasVerifiedTotpFactor`)
+- `packages/auth/src/client.ts` (`signUpWithPassword`)
+- `packages/auth/src/testing.ts` (`createTestAuthUser` aceita metadata extra)
+- `apps/intranet/package.json` (deps: `@hebron/email`, `@supabase/supabase-js`, `drizzle-orm`, `zod`, `next-safe-action`, `lucide-react`; scripts `test`/`test:watch`)
+- `apps/intranet/src/middleware.ts` (gate de status/MFA, runtime Node; fix da checagem de organization_members)
+- `apps/intranet/src/app/(auth)/login/page.tsx` (usa `AuthCard` compartilhado)
+- `apps/intranet/src/app/(auth)/login/components/login-form.tsx` (redireciona via `/post-login`; usa `TotpCodeInput`)
+- `apps/admin/src/actions/users.ts` (`approveSignup`, `rejectSignup`)
+- `apps/admin/src/actions/invitations.ts` (remove `acceptInvitation`, movida para intranet)
+- `apps/admin/src/app/(dashboard)/usuarios/page.tsx` (fila de cadastros pendentes)
+- `apps/admin/src/__tests__/actions.test.ts` (remove testes de `acceptInvitation`; adiciona bloco `approveSignup / rejectSignup`)
+- `apps/projetos/src/actions/auth.ts` (importa `createSupabaseServerActionClient` de `@hebron/auth/server`, não do barrel)
+- `apps/projetos/src/lib/queries.ts` (idem)
+- `pnpm-lock.yaml` (novas deps da intranet)

@@ -2,10 +2,8 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import {
-  createSupabaseServerActionClient,
-  CANONICAL_LOGIN_URL,
-} from "@hebron/auth";
+import { CANONICAL_LOGIN_URL } from "@hebron/auth";
+import { createSupabaseServerActionClient } from "@hebron/auth/server";
 
 export async function logoutAction(): Promise<void> {
   const cookieStore = await cookies();

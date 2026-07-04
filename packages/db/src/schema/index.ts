@@ -14,6 +14,7 @@ export {
   tarefasSchema,
   roleEnum,
   designationTypeEnum,
+  userStatusEnum,
   users,
   roleAssignments,
   designations,
