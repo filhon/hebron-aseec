@@ -15,9 +15,11 @@ export {
   roleEnum,
   designationTypeEnum,
   userStatusEnum,
+  consentPurposeEnum,
   users,
   roleAssignments,
   designations,
+  consents,
 } from "./public";
 
 export type {
@@ -27,6 +29,9 @@ export type {
   NewRoleAssignment,
   Designation,
   NewDesignation,
+  Consent,
+  NewConsent,
+  ConsentPurpose,
 } from "./public";
 
 // Expanded notifications schema
@@ -73,6 +78,7 @@ export {
   editals,
   subscriptions,
   views,
+  viewsMonthlyAgg,
 } from "./documentos";
 
 export type {
@@ -92,6 +98,8 @@ export type {
   NewSubscription,
   View,
   NewView,
+  ViewsMonthlyAgg,
+  NewViewsMonthlyAgg,
 } from "./documentos";
 
 // Projetos schema

@@ -198,14 +198,14 @@ Múltiplos papéis por usuário permitidos (com verificação de conflito).
 
 Todo bucket é privado (`public = false`); nenhuma leitura acontece por URL direta — sempre signed URL (upload: `createSignedUploadUrl`; leitura: `createSignedUrl`) ou via service role no servidor. `storage.objects` tem RLS própria por bucket, além do controle na Server Action — mesma regra de "nunca uma única camada" do resto do sistema.
 
-| Bucket                 | Conteúdo                                          | Path                          | Quem lê / quem escreve                                                         | Retenção                       |
-| ---------------------- | -------------------------------------------------- | ------------------------------ | -------------------------------------------------------------------------------- | ------------------------------- |
-| `hebron-docs`           | PDF de documentos/editais                         | `documents/{author_id}/{uuid}.{ext}` | Leitura segue a visibilidade do documento pai (`public`/`internal`/`restricted`, igual à RLS de `documentos.documents`); escrita: super_admin/diretor/conselheiro/colaborador | Padrão (segue o documento)      |
-| `project-attachments`   | Anexos de propostas e de relatórios (Projetos)    | `{uploaded_by}/{uuid}.{ext}`   | Dono lê/escreve a própria pasta; super_admin/diretor/conselheiro leem tudo      | Padrão                          |
-| `financeiro-extratos`   | Extrato bancário original (import de conciliação) | `{bank_account_id}/{uuid}.{ext}` | super_admin/diretor/colaborador leem e escrevem; **sem UPDATE/DELETE**            | **5 anos** (decisão F3-Q6)      |
-| `financeiro-recibos`    | NF/comprovantes/recibos anexados a payables/receivables/transactions | `{uploaded_by}/{uuid}.{ext}`   | super_admin/diretor/colaborador leem; super_admin/colaborador escrevem; DELETE só super_admin | **5 anos** (mesma decisão F3-Q6) |
-| `flats-documentos`      | Documento de identidade/comprovantes do hóspede (PII sensível) | `{user_id}/{uuid}.{ext}`     | Dono lê/escreve a própria pasta; super_admin/diretor leem tudo                  | Padrão                          |
-| `plataforma-capas`      | Imagem de capa de curso                           | `{course_id}/{uuid}.{ext}`     | Qualquer autenticado lê; só super_admin escreve                                | Padrão                          |
+| Bucket                | Conteúdo                                                             | Path                                 | Quem lê / quem escreve                                                                                                                                                        | Retenção                         |
+| --------------------- | -------------------------------------------------------------------- | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| `hebron-docs`         | PDF de documentos/editais                                            | `documents/{author_id}/{uuid}.{ext}` | Leitura segue a visibilidade do documento pai (`public`/`internal`/`restricted`, igual à RLS de `documentos.documents`); escrita: super_admin/diretor/conselheiro/colaborador | Padrão (segue o documento)       |
+| `project-attachments` | Anexos de propostas e de relatórios (Projetos)                       | `{uploaded_by}/{uuid}.{ext}`         | Dono lê/escreve a própria pasta; super_admin/diretor/conselheiro leem tudo                                                                                                    | Padrão                           |
+| `financeiro-extratos` | Extrato bancário original (import de conciliação)                    | `{bank_account_id}/{uuid}.{ext}`     | super_admin/diretor/colaborador leem e escrevem; **sem UPDATE/DELETE**                                                                                                        | **5 anos** (decisão F3-Q6)       |
+| `financeiro-recibos`  | NF/comprovantes/recibos anexados a payables/receivables/transactions | `{uploaded_by}/{uuid}.{ext}`         | super_admin/diretor/colaborador leem; super_admin/colaborador escrevem; DELETE só super_admin                                                                                 | **5 anos** (mesma decisão F3-Q6) |
+| `flats-documentos`    | Documento de identidade/comprovantes do hóspede (PII sensível)       | `{user_id}/{uuid}.{ext}`             | Dono lê/escreve a própria pasta; super_admin/diretor leem tudo                                                                                                                | Padrão                           |
+| `plataforma-capas`    | Imagem de capa de curso                                              | `{course_id}/{uuid}.{ext}`           | Qualquer autenticado lê; só super_admin escreve                                                                                                                               | Padrão                           |
 
 Convenção de signed URL: prazo curto para uso imediato (1h, ex. `hebron-docs`), prazo longo apenas quando o link é salvo e reaberto depois (ex. anexos de projeto, 1 ano) — nunca usar signed URL para o que exige retenção legal de 5 anos (expiraria antes; guardar o **path** do Storage e gerar a signed URL sob demanda na leitura, como `financeiro.bank_imports.file_url`/`financeiro.attachments.file_url` já fazem).
 
@@ -551,12 +551,55 @@ a) Tempo de ministério: 1pt/ano, max 10 | b) Frequência de uso: nunca (10), >1
 - [ ] Types passam
 - [ ] Testes verdes (quando aplicável)
 
+### LGPD — fundação (P-0.13)
+
+Resolve o conflito, identificado em auditoria (S1-03/F3-09), entre o
+princípio de imutabilidade abaixo ("nunca hard delete") e o direito de
+exclusão da LGPD (art. 18, VI — decisão F1-Q4: cumprir a lei). **Exclusão
+real não é hard delete de linha — é anonimização de campo**: os dados de
+identificação pessoal são substituídos por um pseudônimo determinístico; a
+linha, as FKs e os registros institucionais vinculados ao usuário
+(transações, votos, pareceres, relatórios) permanecem íntegros e
+auditáveis sob o pseudônimo. Isso cumpre a lei (o titular deixa de ser
+identificável) sem quebrar a auditabilidade dos atos da organização.
+
+- **Consentimento** (`public.consents`, P-0.13): granular por finalidade —
+  `comunicacao`, `newsletter`, `dados_reserva`, `dado_saude` — uma linha
+  por (usuário, finalidade), revogável a qualquer momento pelo próprio
+  titular (revogação é `granted = false`, nunca remoção de linha). Toda
+  coleta de dado sensível (ex.: saúde autodeclarada no Flats, §6.8) exige
+  consentimento específico e destacado antes do envio do formulário —
+  nunca implícito num aceite geral de termos.
+- **PII em audit diffs:** `computeDiff`/`logAudit`
+  (`packages/db/src/audit.ts`) redigem automaticamente os campos da lista
+  `SENSITIVE_AUDIT_FIELDS` (e-mail, nome, telefone, CPF, responsável
+  legal) — o `admin.audit_log` (imutável, particionado até 2027) registra
+  que o campo mudou, nunca o valor antes/depois. Todo prompt que adicionar
+  um campo de PII a qualquer schema deve incluir o nome do campo nessa
+  lista.
+- **Anonimização** (`packages/db/src/anonymization.ts`, função
+  `anonymizeUser`): a primitiva usada pelo fluxo de exclusão "Meus Dados"
+  (P-9.2). Substitui a PII em `public.users` e o `responsavel_legal` das
+  organizações criadas pelo usuário por um pseudônimo; redige os diffs de
+  `admin.audit_log` referentes a esse usuário/organizações que ainda
+  guardem valor bruto; grava uma entrada `user.anonymized` no próprio
+  audit log. Não remove linhas, não revoga papéis/designações, não toca em
+  `auth.users` — desativar o login faz parte do fluxo de exclusão
+  fim-a-fim de P-9.2, não desta primitiva.
+- **Retenção de dado comportamental** (`documentos.views`, F3-21):
+  visualizações individuais (usuário + timestamp) são agregadas
+  mensalmente por documento (`documentos.views_monthly_agg`) e as linhas
+  individuais com mais de 6 meses são apagadas por
+  `documentos.purge_old_views()` (pg_cron mensal) — mantém a contagem de
+  leitura para métricas editoriais sem reter o rastro comportamental
+  pessoal indefinidamente.
+
 ### Princípios invioláveis
 
 - **Sem suposições:** sempre perguntar ao Filipe sobre regras de negócio
 - **Simplicidade:** público-alvo em transição tecnológica — interfaces simples
 - **Não parecer IA:** usar design system, tipografia editorial, microcopy humano
-- **Imutabilidade:** soft-delete e estornos, nunca hard delete; audit trails em tudo
+- **Imutabilidade:** soft-delete e estornos, nunca hard delete; audit trails em tudo. **Exceção legal:** exclusão LGPD é anonimização de PII (ver "LGPD — fundação" acima), nunca hard delete de linha
 - **Governança dual:** aprovação + autorização (duas pessoas, duas camadas) para decisões financeiras
 - **Defense in depth:** RBAC + RLS sempre, nunca apenas um
 - **Frontend-first:** UI com mocks → validação com diretoria → backend

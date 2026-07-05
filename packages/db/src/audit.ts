@@ -52,7 +52,7 @@ export async function logAudit(
       action: params.action,
       entity: params.entity,
       entityId: params.entityId,
-      diff: params.diff ?? null,
+      diff: params.diff ? redactSensitiveFields(params.diff) : null,
       ip: params.ip ?? null,
       userAgent: params.userAgent ?? null,
     });
@@ -65,7 +65,56 @@ export async function logAudit(
   }
 }
 
-/** Returns only the fields that changed between two plain objects. */
+/**
+ * Nomes de campo (em qualquer schema, camelCase como aparecem nos objetos
+ * TS) tratados como PII/dado sensível para fins de audit trail (LGPD,
+ * P-0.13 — S1-03/F3-09). Um prompt que adicionar campo de PII a qualquer
+ * tabela deve incluir o nome aqui.
+ */
+export const SENSITIVE_AUDIT_FIELDS = new Set([
+  "email",
+  "fullName",
+  "phone",
+  "documentCpf",
+  "responsavelLegal",
+  "telefone",
+  "endereco",
+]);
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Substitui, recursivamente, o valor de qualquer chave presente em
+ * `SENSITIVE_AUDIT_FIELDS` por `{ redacted: true }` — o diff registra que o
+ * campo mudou, nunca o valor antes/depois. Usada por `computeDiff` (para
+ * diffs `{ campo: { before, after } }`) e por chamadas que montam o diff à
+ * mão (ex.: `{ after: { email, fullName } }`), já que a varredura é por
+ * nome de chave em qualquer profundidade.
+ */
+export function redactSensitiveFields<T extends Record<string, unknown>>(
+  diff: T,
+): T {
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(diff)) {
+    if (SENSITIVE_AUDIT_FIELDS.has(key)) {
+      result[key] = { redacted: true };
+    } else if (isPlainObject(value)) {
+      result[key] = redactSensitiveFields(value);
+    } else {
+      result[key] = value;
+    }
+  }
+  return result as T;
+}
+
+/**
+ * Returns only the fields that changed between two plain objects. Campos de
+ * PII (`SENSITIVE_AUDIT_FIELDS`) têm o valor redigido antes de retornar —
+ * o audit_log é imutável e particionado até 2027, então nunca deve reter
+ * o valor antes/depois de um campo sensível (P-0.13).
+ */
 export function computeDiff(
   before: Record<string, unknown>,
   after: Record<string, unknown>,
@@ -77,5 +126,5 @@ export function computeDiff(
       diff[key] = { before: before[key], after: after[key] };
     }
   }
-  return diff;
+  return redactSensitiveFields(diff);
 }

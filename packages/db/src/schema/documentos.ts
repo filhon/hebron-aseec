@@ -1,4 +1,5 @@
 import {
+  date,
   index,
   integer,
   jsonb,
@@ -219,6 +220,33 @@ export const views = documentosSchema.table(
 );
 
 // ---------------------------------------------------------------------------
+// documentos.views_monthly_agg — retenção de views (P-0.13, F3-21)
+// documentos.views é dado comportamental pessoal (usuário + timestamp de
+// leitura) e crescia sem limite. Um job mensal (documentos.purge_old_views,
+// ver migration) agrega linhas com mais de 6 meses aqui e as apaga da
+// tabela individual — preserva a métrica editorial sem reter o rastro
+// pessoal indefinidamente. Escrita só pela função SQL (conexão de serviço).
+// ---------------------------------------------------------------------------
+export const viewsMonthlyAgg = documentosSchema.table(
+  "views_monthly_agg",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    documentId: uuid("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    yearMonth: date("year_month", { mode: "date" }).notNull(),
+    viewCount: integer("view_count").notNull().default(0),
+  },
+  (table) => [
+    unique("views_monthly_agg_document_month_uniq").on(
+      table.documentId,
+      table.yearMonth,
+    ),
+    index("views_monthly_agg_document_id_idx").on(table.documentId),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // Inferred types
 // ---------------------------------------------------------------------------
 export type Category = typeof categories.$inferSelect;
@@ -237,3 +265,5 @@ export type Subscription = typeof subscriptions.$inferSelect;
 export type NewSubscription = typeof subscriptions.$inferInsert;
 export type View = typeof views.$inferSelect;
 export type NewView = typeof views.$inferInsert;
+export type ViewsMonthlyAgg = typeof viewsMonthlyAgg.$inferSelect;
+export type NewViewsMonthlyAgg = typeof viewsMonthlyAgg.$inferInsert;

@@ -84,6 +84,10 @@ export const auditActionEnum = adminSchema.enum("audit_action", [
   // Financeiro — organization_budgets (P-3.8b), added via ALTER TYPE
   "financeiro.organization_budget.created",
   "financeiro.organization_budget.updated",
+  // LGPD — fundação (P-0.13), added via ALTER TYPE in 0024_lgpd_audit_actions.sql
+  "consent.granted",
+  "consent.revoked",
+  "user.anonymized",
 ]);
 
 export const meetingTypeEnum = adminSchema.enum("meeting_type", [

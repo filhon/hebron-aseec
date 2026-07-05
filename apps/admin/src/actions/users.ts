@@ -11,6 +11,7 @@ import { PasswordResetEmail } from "@hebron/email/templates/password-reset";
 import { WelcomeEmail } from "@hebron/email/templates/welcome";
 import { SignupRejectedEmail } from "@hebron/email/templates/signup-rejected";
 import { adminAction } from "../lib/safe-action";
+import { redactSensitiveFields } from "@hebron/db/audit";
 import { logAudit, computeDiff } from "../lib/audit";
 import { notifyUserSuspended } from "../lib/notifications";
 
@@ -78,7 +79,12 @@ export const createUser = adminAction
       action: "user.created",
       entity: "user",
       entityId: newUser.id,
-      diff: { after: { email: newUser.email, fullName: newUser.fullName } },
+      diff: {
+        after: redactSensitiveFields({
+          email: newUser.email,
+          fullName: newUser.fullName,
+        }),
+      },
     });
 
     return { user: newUser };

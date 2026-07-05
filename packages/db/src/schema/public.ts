@@ -1,10 +1,13 @@
 import {
+  boolean,
+  index,
   jsonb,
   pgEnum,
   pgSchema,
   pgTable,
   text,
   timestamp,
+  unique,
   uuid,
 } from "drizzle-orm/pg-core";
 import { DESIGNATION_TYPES, ROLES } from "@hebron/types/roles";
@@ -34,6 +37,13 @@ export const userStatusEnum = pgEnum("user_status", [
   "pending_approval",
   "active",
   "rejected",
+]);
+// P-0.13 — LGPD: finalidades granulares de consentimento (S1-03/F3-09).
+export const consentPurposeEnum = pgEnum("consent_purpose", [
+  "comunicacao",
+  "newsletter",
+  "dados_reserva",
+  "dado_saude",
 ]);
 
 // ---------------------------------------------------------------------------
@@ -65,6 +75,14 @@ export const users = pgTable("users", {
     .notNull()
     .defaultNow(),
   suspendedAt: timestamp("suspended_at", { withTimezone: true }),
+  /**
+   * Marcado por `anonymizeUser` (@hebron/db/anonymization, P-0.13) quando o
+   * titular exerce o direito de exclusão (LGPD art. 18, VI). A linha e as
+   * FKs continuam intactas — só os campos de PII abaixo são substituídos
+   * por pseudônimo; isso registra apenas que a substituição já ocorreu
+   * (idempotência) e permite excluir a conta de listagens/buscas.
+   */
+  anonymizedAt: timestamp("anonymized_at", { withTimezone: true }),
 });
 
 // ---------------------------------------------------------------------------
@@ -116,6 +134,37 @@ export const notifications = pgTable("notifications", {
 });
 
 // ---------------------------------------------------------------------------
+// public.consents — LGPD, consentimento granular por finalidade (P-0.13)
+// Uma linha por (usuário, finalidade); revogação é granted=false +
+// revoked_at, nunca remoção de linha (mantém histórico de quando existiu).
+// ---------------------------------------------------------------------------
+export const consents = pgTable(
+  "consents",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    purpose: consentPurposeEnum("purpose").notNull(),
+    granted: boolean("granted").notNull(),
+    grantedAt: timestamp("granted_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    /** Origem da coleta, ex.: "cadastro-flats", "meus-dados" — auditabilidade. */
+    source: text("source"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    unique("consents_user_purpose_uniq").on(table.userId, table.purpose),
+    index("consents_user_id_idx").on(table.userId),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // Inferred types
 // ---------------------------------------------------------------------------
 export type User = typeof users.$inferSelect;
@@ -126,3 +175,6 @@ export type Designation = typeof designations.$inferSelect;
 export type NewDesignation = typeof designations.$inferInsert;
 export type Notification = typeof notifications.$inferSelect;
 export type NewNotification = typeof notifications.$inferInsert;
+export type Consent = typeof consents.$inferSelect;
+export type NewConsent = typeof consents.$inferInsert;
+export type ConsentPurpose = Consent["purpose"];

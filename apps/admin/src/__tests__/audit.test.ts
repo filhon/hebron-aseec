@@ -130,7 +130,7 @@ describe("computeDiff", () => {
 // ── Testes: logAudit → banco ──────────────────────────────────────────────────
 
 describe("logAudit — persistência no banco", () => {
-  it("registra user.created com diff correto", async () => {
+  it("registra user.created com diff correto e redige PII (email)", async () => {
     const entry = await insertAuditEntry({
       action: "user.created",
       entity: "user",
@@ -141,7 +141,8 @@ describe("logAudit — persistência no banco", () => {
     expect(entry.actorId).toBe(ACTOR_ID);
     expect(entry.action).toBe("user.created");
     expect(entry.entity).toBe("user");
-    expect(entry.diff).toMatchObject({ after: { email: ACTOR_EMAIL } });
+    // P-0.13: e-mail é PII — logAudit nunca persiste o valor, só que mudou.
+    expect(entry.diff).toMatchObject({ after: { email: { redacted: true } } });
   });
 
   it("registra role.granted com campos obrigatórios", async () => {

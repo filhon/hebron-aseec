@@ -48,7 +48,8 @@ const INTERNAL_PATH = "documents/internal/storage-test.pdf";
 const PUBLIC_VERSION_PATH = "documents/public-version/storage-test.pdf";
 
 const DATABASE_URL = process.env.DATABASE_URL;
-if (!DATABASE_URL) throw new Error("DATABASE_URL is required for storage RLS tests");
+if (!DATABASE_URL)
+  throw new Error("DATABASE_URL is required for storage RLS tests");
 const sql = postgres(DATABASE_URL, { prepare: false, max: 3 });
 
 /**
@@ -199,7 +200,9 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await db.delete(documentVersions).where(eq(documentVersions.documentId, PUBLIC_VERSION_DOC_ID));
+  await db
+    .delete(documentVersions)
+    .where(eq(documentVersions.documentId, PUBLIC_VERSION_DOC_ID));
   await db.delete(documents).where(eq(documents.id, RESTRICTED_DOC_ID));
   await db.delete(documents).where(eq(documents.id, INTERNAL_DOC_ID));
   await db.delete(documents).where(eq(documents.id, PUBLIC_VERSION_DOC_ID));
@@ -214,7 +217,9 @@ afterAll(async () => {
 
 describe("storage.objects — hebron-docs: visibilidade herdada de documentos.documents", () => {
   it("anon lê arquivo de documento público (via document_versions)", async () => {
-    expect(await canSelectAs(null, "hebron-docs", PUBLIC_VERSION_PATH)).toBe(true);
+    expect(await canSelectAs(null, "hebron-docs", PUBLIC_VERSION_PATH)).toBe(
+      true,
+    );
   });
 
   it("anon NÃO lê arquivo de documento internal", async () => {
@@ -222,26 +227,40 @@ describe("storage.objects — hebron-docs: visibilidade herdada de documentos.do
   });
 
   it("submissor autenticado lê arquivo internal", async () => {
-    expect(await canSelectAs(IDS.submissorA, "hebron-docs", INTERNAL_PATH)).toBe(true);
+    expect(
+      await canSelectAs(IDS.submissorA, "hebron-docs", INTERNAL_PATH),
+    ).toBe(true);
   });
 
   it("submissor autenticado NÃO lê arquivo restricted", async () => {
-    expect(await canSelectAs(IDS.submissorA, "hebron-docs", RESTRICTED_PATH)).toBe(false);
+    expect(
+      await canSelectAs(IDS.submissorA, "hebron-docs", RESTRICTED_PATH),
+    ).toBe(false);
   });
 
   it("diretor lê arquivo restricted", async () => {
-    expect(await canSelectAs(IDS.diretor, "hebron-docs", RESTRICTED_PATH)).toBe(true);
+    expect(await canSelectAs(IDS.diretor, "hebron-docs", RESTRICTED_PATH)).toBe(
+      true,
+    );
   });
 
   it("colaborador insere em hebron-docs", async () => {
     expect(
-      await canInsertAs(IDS.colaborador, "hebron-docs", "documents/new/storage-insert-test.pdf"),
+      await canInsertAs(
+        IDS.colaborador,
+        "hebron-docs",
+        "documents/new/storage-insert-test.pdf",
+      ),
     ).toBe(true);
   });
 
   it("submissor NÃO insere em hebron-docs (não é papel editor)", async () => {
     expect(
-      await canInsertAs(IDS.submissorA, "hebron-docs", "documents/new/storage-insert-denied.pdf"),
+      await canInsertAs(
+        IDS.submissorA,
+        "hebron-docs",
+        "documents/new/storage-insert-denied.pdf",
+      ),
     ).toBe(false);
   });
 });
@@ -249,88 +268,140 @@ describe("storage.objects — hebron-docs: visibilidade herdada de documentos.do
 describe("storage.objects — project-attachments: dono lê/insere a própria pasta", () => {
   it("submissorA insere na própria pasta", async () => {
     expect(
-      await canInsertAs(IDS.submissorA, "project-attachments", `${IDS.submissorA}/own-file.pdf`),
+      await canInsertAs(
+        IDS.submissorA,
+        "project-attachments",
+        `${IDS.submissorA}/own-file.pdf`,
+      ),
     ).toBe(true);
   });
 
   it("submissorB NÃO insere na pasta de submissorA", async () => {
     expect(
-      await canInsertAs(IDS.submissorB, "project-attachments", `${IDS.submissorA}/hijacked.pdf`),
+      await canInsertAs(
+        IDS.submissorB,
+        "project-attachments",
+        `${IDS.submissorA}/hijacked.pdf`,
+      ),
     ).toBe(false);
   });
 
   it("diretor lê a pasta de submissorA, mas submissorB não", async () => {
     const path = `${IDS.submissorA}/own-file.pdf`;
-    const asDiretor = await canSelectAs(IDS.diretor, "project-attachments", path);
+    const asDiretor = await canSelectAs(
+      IDS.diretor,
+      "project-attachments",
+      path,
+    );
     // Reaproveita a mesma linha semeada dentro de uma nova transação — cada
     // chamada de canSelectAs faz seu próprio seed+rollback isolado.
-    const asOtherSubmissor = await canSelectAs(IDS.submissorB, "project-attachments", path);
+    const asOtherSubmissor = await canSelectAs(
+      IDS.submissorB,
+      "project-attachments",
+      path,
+    );
 
     expect(asDiretor).toBe(true);
     expect(asOtherSubmissor).toBe(false);
   });
 
   it("anon NÃO lê project-attachments", async () => {
-    expect(await canSelectAs(null, "project-attachments", "anyone/file.pdf")).toBe(false);
+    expect(
+      await canSelectAs(null, "project-attachments", "anyone/file.pdf"),
+    ).toBe(false);
   });
 });
 
 describe("storage.objects — financeiro-recibos: equipe financeira apenas", () => {
   it("colaborador insere recibo", async () => {
     expect(
-      await canInsertAs(IDS.colaborador, "financeiro-recibos", "ref/recibo.pdf"),
+      await canInsertAs(
+        IDS.colaborador,
+        "financeiro-recibos",
+        "ref/recibo.pdf",
+      ),
     ).toBe(true);
   });
 
   it("hóspede NÃO insere recibo (sem papel financeiro)", async () => {
     expect(
-      await canInsertAs(IDS.hospede, "financeiro-recibos", "ref/recibo-negado.pdf"),
+      await canInsertAs(
+        IDS.hospede,
+        "financeiro-recibos",
+        "ref/recibo-negado.pdf",
+      ),
     ).toBe(false);
   });
 
   it("submissor NÃO lê recibos", async () => {
-    expect(await canSelectAs(IDS.submissorA, "financeiro-recibos", "ref/recibo-select.pdf")).toBe(
-      false,
-    );
+    expect(
+      await canSelectAs(
+        IDS.submissorA,
+        "financeiro-recibos",
+        "ref/recibo-select.pdf",
+      ),
+    ).toBe(false);
   });
 
   it("anon NÃO lê financeiro-recibos", async () => {
-    expect(await canSelectAs(null, "financeiro-recibos", "anyone/recibo.pdf")).toBe(false);
+    expect(
+      await canSelectAs(null, "financeiro-recibos", "anyone/recibo.pdf"),
+    ).toBe(false);
   });
 });
 
 describe("storage.objects — flats-documentos: dono lê/insere a própria pasta", () => {
   it("hóspede insere na própria pasta", async () => {
     expect(
-      await canInsertAs(IDS.hospede, "flats-documentos", `${IDS.hospede}/documento-identidade.pdf`),
+      await canInsertAs(
+        IDS.hospede,
+        "flats-documentos",
+        `${IDS.hospede}/documento-identidade.pdf`,
+      ),
     ).toBe(true);
   });
 
   it("submissor NÃO insere na pasta do hóspede", async () => {
     expect(
-      await canInsertAs(IDS.submissorA, "flats-documentos", `${IDS.hospede}/hijacked.pdf`),
+      await canInsertAs(
+        IDS.submissorA,
+        "flats-documentos",
+        `${IDS.hospede}/hijacked.pdf`,
+      ),
     ).toBe(false);
   });
 
   it("diretor lê a pasta do hóspede", async () => {
     expect(
-      await canSelectAs(IDS.diretor, "flats-documentos", `${IDS.hospede}/documento-identidade.pdf`),
+      await canSelectAs(
+        IDS.diretor,
+        "flats-documentos",
+        `${IDS.hospede}/documento-identidade.pdf`,
+      ),
     ).toBe(true);
   });
 });
 
 describe("storage.objects — plataforma-capas: leitura aberta a autenticados, escrita só super_admin", () => {
   it("aluno lê capas", async () => {
-    expect(await canSelectAs(IDS.aluno, "plataforma-capas", "curso-x/capa.jpg")).toBe(true);
+    expect(
+      await canSelectAs(IDS.aluno, "plataforma-capas", "curso-x/capa.jpg"),
+    ).toBe(true);
   });
 
   it("super_admin insere capa", async () => {
-    expect(await canInsertAs(IDS.superAdmin, "plataforma-capas", "curso-y/capa.jpg")).toBe(true);
+    expect(
+      await canInsertAs(IDS.superAdmin, "plataforma-capas", "curso-y/capa.jpg"),
+    ).toBe(true);
   });
 
   it("aluno NÃO insere capa", async () => {
-    expect(await canInsertAs(IDS.aluno, "plataforma-capas", "curso-z/capa-negada.jpg")).toBe(
-      false,
-    );
+    expect(
+      await canInsertAs(
+        IDS.aluno,
+        "plataforma-capas",
+        "curso-z/capa-negada.jpg",
+      ),
+    ).toBe(false);
   });
 });

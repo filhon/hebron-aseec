@@ -86,6 +86,7 @@
 | S-62   | 2026-07-04 | P-2.9c — Projetos: operável de ponta a ponta                            | concluido                            |
 | S-63   | 2026-07-04 | P-3.8b — Financeiro: governança e conciliação verdadeiras               | concluido                            |
 | S-64   | 2026-07-05 | P-0.12 — Storage: buckets e policies (Onda 2)                           | concluido                            |
+| S-65   | 2026-07-05 | P-0.13 — LGPD: fundação (Onda 2)                                        | concluido                            |
 
 ---
 
@@ -2828,4 +2829,81 @@ Teste novo `packages/db/src/__tests__/storage.test.ts` (21 casos) — mesma téc
 **Arquivos modificados:**
 
 - `BRAIN.md` (§4: nova subseção "Storage")
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+### S-65 — 2026-07-05 — P-0.13 LGPD: fundação (Onda 2)
+
+**Prompt:** P-0.13 (`AUDIT/04-prompts-pendentes.md` §4)
+**Duracao:** ~2h
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+S1-03/F3-09: PII e dado sensível sem consentimento modelado; `admin.audit_log` (imutável, particionado até 2027) guardava e-mail/nome/telefone/CPF em texto puro nos diffs; nenhum caminho de anonimização existia para o direito de exclusão da LGPD (art. 18, VI), que colidia em aparência com o princípio de imutabilidade do BRAIN ("nunca hard delete"); `documentos.views` (F3-21) crescia sem retenção, guardando rastro comportamental pessoal (usuário + timestamp de leitura) indefinidamente.
+
+Investigação no código (antes de qualquer escrita) confirmou o vazamento concreto: `apps/admin/src/actions/users.ts` (`createUser`) gravava `{ after: { email, fullName } }` cru no diff; `updateUser`/`suspendUser` usavam `computeDiff` sobre a row inteira de `public.users`, então qualquer alteração de `phone`/`email`/`fullName` ia parar no diff sem nenhuma redação. `computeDiff`/`logAudit` vivem centralizados em `packages/db/src/audit.ts` desde P-0.8 — um único ponto de correção cobre os quatro apps (admin/projetos/financeiro/documentos) de uma vez.
+
+**Escopo implementado:**
+
+1. **Consentimento granular** (`public.consents`, migration `0022_consents.sql`): enum `consent_purpose` (`comunicacao`, `newsletter`, `dados_reserva`, `dado_saude`); uma linha por (usuário, finalidade), `UNIQUE(user_id, purpose)`; revogação é `granted=false` + `revoked_at`, nunca remoção de linha. RLS: titular gerencia o próprio (`SELECT`/`INSERT`/`UPDATE` com `auth.uid() = user_id`), super_admin/diretor só leem (consentimento não é delegável — sem policy que permita escrever em nome de terceiro). Helper compartilhado `packages/db/src/consents.ts` (`getConsents`/`getConsent`/`setConsent`, upsert idempotente, grava `consent.granted`/`consent.revoked` no audit log só quando o estado de fato muda).
+2. **Redação automática de PII em audit diffs** (`packages/db/src/audit.ts`): `SENSITIVE_AUDIT_FIELDS` (email, fullName, phone, documentCpf, responsavelLegal, telefone, endereco) + `redactSensitiveFields()` — varredura recursiva por nome de chave, substitui o valor por `{ redacted: true }`. Aplicada em dois pontos de defesa: dentro de `computeDiff` (cobre quem monta diff a partir de before/after) e dentro de `logAudit` antes do INSERT (cobre quem monta o diff à mão, ex. `createUser`) — nenhum caminho escapa. Corrigido o vazamento real de `createUser` (agora usa `redactSensitiveFields` explicitamente no `after`).
+3. **Anonimização de usuário** (`packages/db/src/anonymization.ts`, `anonymizeUser`): pseudonimiza `public.users` (email → `anon+{id}@anonimizado.hebronaseec.org`, fullName → "Usuário anonimizado", phone/documentCpf/avatarUrl → null, marca `anonymized_at`); pseudonimiza `responsavel_legal` das organizações (`projetos.organizations`) criadas pelo usuário (endereço/telefone/CNPJ da instituição não são tocados — descrevem a pessoa jurídica, não o usuário); redige diffs legados de `admin.audit_log` (gravados antes desta fundação) ligados ao usuário/organizações; grava `user.anonymized` no próprio audit log. Nunca remove linha, nunca quebra FK (papéis, designações, projetos, votos, transações continuam íntegros sob o pseudônimo); idempotente via `anonymized_at`. Não toca `auth.users` nem revoga papéis — fica para o fluxo de exclusão fim-a-fim de P-9.2, que usa esta primitiva.
+4. **Retenção de `documentos.views`** (F3-21, migration `0023_documentos_views_retention.sql`): nova tabela `documentos.views_monthly_agg` (document_id, year_month, view_count, sem PII); função `documentos.purge_old_views()` agrega por documento/mês linhas com mais de 6 meses e apaga as individuais; agendada mensalmente via `pg_cron` (extensão já habilitada desde `0013_audit_log_partitions.sql`). Dashboard editorial (`apps/documentos/.../editorial/page.tsx`) só consulta "views últimos 30 dias" — confirmado sem dependência de histórico além da janela de retenção.
+5. **3 novos valores de `admin.audit_action`** (`consent.granted`, `consent.revoked`, `user.anonymized`) via `ALTER TYPE` não-transacional (`0024_lgpd_audit_actions.sql`).
+6. **BRAIN.md §9 emendado**: nova subseção "LGPD — fundação (P-0.13)" resolvendo explicitamente o conflito S1-03 (imutabilidade × exclusão): "exclusão real não é hard delete de linha, é anonimização de campo". Princípio "Imutabilidade" ganhou a exceção legal por referência cruzada.
+
+Achado inesperado durante os testes: a primeira versão de `anonymizeUser` filtrava o `UPDATE` de `admin.audit_log` por `(id, created_at)` — a parte `created_at` da PK composta, ao ser reserializada a partir do `Date` já deserializado pelo driver, não batia com o valor armazenado (perda de precisão de sub-milissegundo) e o `UPDATE` virava no-op silencioso (nenhum erro, mas nenhuma linha redigida). Corrigido para filtrar só por `id` (`gen_random_uuid()`, unicidade prática suficiente) — pego pelo teste de integração, não por inspeção de código.
+
+**Critérios de aceite verificados:**
+
+- [x] consentimento consultável por finalidade — `packages/db/src/__tests__/consents.test.ts` (8/8: CRUD, idempotência, audit condicional, RLS por papel, anon sem acesso, não-delegabilidade).
+- [x] anonimizar usuário de teste remove PII de users/orgs/audit diffs e mantém FKs — `packages/db/src/__tests__/anonymization.test.ts` (6/6: PII substituída em `users`, `role_assignments` intacto, `responsavelLegal` da org pseudonimizado com resto intacto, diffs legados redigidos preservando campos não sensíveis, entrada `user.anonymized` sem PII, idempotência).
+- [x] BRAIN emendado — §9, nova subseção "LGPD — fundação (P-0.13)".
+- [x] testes — 6 arquivos novos/atualizados em `packages/db` (46/46) + `apps/admin/src/__tests__/audit.test.ts` atualizado (teste de `user.created` agora afirma redação, não mais o e-mail cru) + suíte completa de `apps/admin` (58/58), `apps/documentos` (48/48) e `apps/financeiro` (30/30) rodadas para confirmar zero regressão na redação compartilhada.
+- lint/typecheck verdes em `@hebron/db` e `@hebron/admin`.
+
+**Decisoes tomadas:**
+
+- Redação de PII por **nome de campo, não por tabela/módulo** — `SENSITIVE_AUDIT_FIELDS` é uma lista plana consultada em qualquer profundidade do diff; qualquer prompt futuro que adicionar campo de PII a um schema deve só adicionar o nome à lista (registrado no BRAIN §9 como convenção).
+- `anonymizeUser` implementada em `packages/db` (não em `packages/auth`, como uma leitura apressada de `AUDIT/04-prompts-pendentes.md` §5 poderia sugerir): `packages/auth` já depende de `@hebron/db`, então colocar a primitiva em `packages/auth` criaria dependência circular no dia em que P-9.2 construir `packages/auth/src/data-deletion.ts`. A referência do AUDIT a esse caminho é do orquestrador de P-9.2 (que vai _usar_ a primitiva), não da primitiva em si.
+- `responsavel_legal` da organização é redigido na anonimização; `endereco`/`telefone`/`cnpj`/`nome` da organização não são — são dados da pessoa jurídica (que continua existindo como instituição), não do usuário anonimizado.
+- Retenção de `documentos.views` fixada em 6 meses (não havia decisão prévia do Filipe sobre o número) — janela documentada no cabeçalho da migration e no BRAIN §9; ajustável numa migration futura se necessário.
+- `anonymizeUser` não desativa o login em `auth.users` nem revoga papéis — escopo desta primitiva é reescrita de dados; a decisão de quando/como desativar acesso pertence ao fluxo de exclusão fim-a-fim (P-9.2), que decide a UX e orquestra a chamada.
+
+**Debitos tecnicos / pendencias:**
+
+- Diffs de PII gravados **antes** desta sessão em `admin.audit_log` para usuários que nunca passarem por `anonymizeUser` continuam com o valor bruto (a redação em `logAudit`/`computeDiff` é prospectiva; a limpeza retroativa só acontece para quem for anonimizado). Aceito: não há pedido de exclusão pendente hoje e um backfill em massa de todo o audit log histórico está fora do escopo de uma fundação.
+
+**Addendum (mesma sessão) — drift de grants em `projetos` corrigido:**
+
+Descoberta colateral durante a verificação (16 testes de `apps/projetos/src/__tests__/rls.test.ts` falhando com "permission denied"), confirmada sem relação com as mudanças de LGPD (`apps/admin`/`apps/documentos`/`apps/financeiro` seguiam 100% verdes) — drift do ambiente, não do código: o schema `projetos` estava sem `GRANT USAGE` para `authenticated` (zero linhas em `information_schema.role_usage_grants`), e 3 tabelas (`projects`, `votes`, `organization_members`) estavam sem `GRANT SELECT`, apesar de `0014_grants_authenticated.sql` já declarar tudo isso e estar marcada como aplicada. A pedido do Filipe, corrigido na mesma sessão com duas migrations mínimas que apenas restauram o que `0014` já documenta (nenhuma policy nova, nenhuma mudança de regra de negócio): `0025_fix_projetos_schema_grant.sql` (`GRANT USAGE ON SCHEMA projetos`) e `0026_fix_projetos_missing_select_grants.sql` (`GRANT SELECT` nas 3 tabelas). `apps/projetos` volta a 102/102 testes verdes.
+
+**Arquivos criados:**
+
+- `packages/db/src/migrations/0021_users_anonymized_at.sql`
+- `packages/db/src/migrations/0022_consents.sql`
+- `packages/db/src/migrations/0023_documentos_views_retention.sql`
+- `packages/db/src/migrations/0024_lgpd_audit_actions.sql`
+- `packages/db/src/migrations/0025_fix_projetos_schema_grant.sql`
+- `packages/db/src/migrations/0026_fix_projetos_missing_select_grants.sql`
+- `packages/db/src/consents.ts`
+- `packages/db/src/anonymization.ts`
+- `packages/db/src/__tests__/audit-pii-redaction.test.ts`
+- `packages/db/src/__tests__/consents.test.ts`
+- `packages/db/src/__tests__/anonymization.test.ts`
+- `packages/db/src/__tests__/documentos-views-retention.test.ts`
+
+**Arquivos modificados:**
+
+- `packages/db/src/schema/public.ts` (`consentPurposeEnum`, tabela `consents`, `users.anonymizedAt`)
+- `packages/db/src/schema/documentos.ts` (tabela `viewsMonthlyAgg`)
+- `packages/db/src/schema/admin.ts` (3 valores novos em `auditActionEnum`)
+- `packages/db/src/schema/index.ts` (barrel: novos símbolos/tipos)
+- `packages/db/src/audit.ts` (`SENSITIVE_AUDIT_FIELDS`, `redactSensitiveFields`, redação em `computeDiff` e `logAudit`)
+- `packages/db/package.json` (exports `./consents`, `./anonymization`)
+- `apps/admin/src/actions/users.ts` (`createUser` usa `redactSensitiveFields` em vez de diff cru)
+- `apps/admin/src/__tests__/audit.test.ts` (assert atualizado para redação em vez de e-mail cru)
+- `BRAIN.md` (§9: nova subseção "LGPD — fundação (P-0.13)"; princípio de imutabilidade ganha exceção legal referenciada)
 - `SESSIONS.md` (esta entrada + linha no índice)

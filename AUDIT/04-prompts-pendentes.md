@@ -232,7 +232,7 @@ _Critérios:_ [x] cada bucket com policy testada (quem pode ler/escrever); [x] d
 **P-0.13 — LGPD: fundação**
 _Problema:_ S1-03/F3-09 — PII e dado sensível sem consentimento modelado; audit imutável guarda PII em diff; imutabilidade × direito de exclusão sem resolução (decisão F1-Q4: cumprir a lei; decisão F3-Q5: fundação antes dos módulos que coletam mais PII).
 _Escopo:_ tabela `public.consents` (finalidade granular: comunicação, newsletter, dados de reserva, dado de saúde); política de PII em audit diffs (campos sensíveis fora do diff ou referenciados); fluxo de anonimização de usuário (apaga PII, preserva registros contábeis/deliberativos com pseudônimo); retenção de `documentos.views` (F3-21); emenda ao BRAIN §9 (exclusão real onde a lei exige).
-_Critérios:_ [ ] consentimento consultável por finalidade; [ ] anonimizar usuário de teste remove PII de users/orgs/audit diffs e mantém FKs; [ ] BRAIN emendado; [ ] testes.
+_Critérios:_ [x] consentimento consultável por finalidade; [x] anonimizar usuário de teste remove PII de users/orgs/audit diffs e mantém FKs; [x] BRAIN emendado; [x] testes.
 
 **P-0.14 — Jobs: Inngest de verdade**
 _Problema:_ S1-06 — 8+ features dependem de jobs sem infra; critérios [~] acumulados nunca fecharão.

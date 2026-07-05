@@ -8,6 +8,8 @@
     "./client": "./src/client.ts",
     "./authenticated": "./src/authenticated.ts",
     "./audit": "./src/audit.ts",
+    "./consents": "./src/consents.ts",
+    "./anonymization": "./src/anonymization.ts",
     "./notifications": "./src/notifications.ts"
   },
   "scripts": {
