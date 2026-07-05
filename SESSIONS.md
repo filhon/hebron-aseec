@@ -85,6 +85,7 @@
 | S-61   | 2026-07-04 | P-1.27 — Documentos: visibilidade e área editorial verdadeiras (Onda 1) | concluido                            |
 | S-62   | 2026-07-04 | P-2.9c — Projetos: operável de ponta a ponta                            | concluido                            |
 | S-63   | 2026-07-04 | P-3.8b — Financeiro: governança e conciliação verdadeiras               | concluido                            |
+| S-64   | 2026-07-05 | P-0.12 — Storage: buckets e policies (Onda 2)                           | concluido                            |
 
 ---
 
@@ -2780,3 +2781,51 @@ Migrations geradas via `drizzle-kit generate` (convenção P-0.11) produziram um
 - `apps/financeiro/src/__tests__/audit-abort.test.ts` (mock de sessão ganha `designations: ["gestor"]`)
 - `apps/projetos/src/__tests__/flow.test.ts` (bloco de orçamento migrado para `organization_budgets`)
 - `apps/projetos/src/__tests__/session-gate.test.ts`, `apps/documentos/src/__tests__/session-gate.test.ts`, `apps/documentos/src/__tests__/actions.test.ts`, `apps/admin/src/__tests__/session-gate.test.ts` (mocks de `ActionSession` ganham `designations: []` — campo novo obrigatório no tipo compartilhado)
+
+---
+
+### S-64 — 2026-07-05 — P-0.12 Storage: buckets e policies (Onda 2)
+
+**Prompt:** P-0.12 (`AUDIT/04-prompts-pendentes.md` §4)
+**Duracao:** ~2h
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+S1-21iii/CS-11: uploads em produção dependiam de buckets que nenhuma migration criava. Levantamento no código confirmou o buraco: `hebron-docs` (apps/documentos) e `project-attachments` (apps/projetos) são referenciados por path literal desde as Fases 1–2, mas `0008_project_attachments.sql` só criou a tabela e a RLS da tabela — nunca o bucket em si nem policies de `storage.objects`; os dois só funcionavam porque alguém os criou manualmente pelo dashboard em algum ambiente, fora de qualquer controle de versão. `financeiro-extratos` já havia sido formalizado ad hoc em `0019_financeiro_organization_budgets.sql` (P-3.8b, S-63), antes deste corretivo rodar — nada a recriar ali, só documentar.
+
+Migration `0020_storage_buckets.sql` cria os 4 buckets que faltavam (`hebron-docs`, `project-attachments`, `financeiro-recibos`, `flats-documentos`, `plataforma-capas` — 5 no total, já que `financeiro-extratos` estava coberto) com `public = false` em todos, `file_size_limit`/`allowed_mime_types` derivados dos `accept` já usados nos formulários de upload existentes (ex. `application/pdf` para `hebron-docs`, que só aceita PDF em `document-form.tsx`/`edital-form.tsx`), e policies em `storage.objects` espelhando exatamente a policy já existente da tabela que referencia cada arquivo:
+
+- `hebron-docs`: SELECT segue a visibilidade herdada de `documentos.documents`/`document_versions` (mesmo `EXISTS` de `0005_documentos_rls.sql`, agora aplicado ao Storage) — join por `file_url = storage.objects.name`; INSERT para papéis editor (super_admin/diretor/conselheiro/colaborador).
+- `project-attachments`: espelha `projetos.project_attachments` (0008) — dono lê/insere a própria pasta (`(storage.foldername(name))[1] = auth.uid()::text`), diretoria lê tudo.
+- `financeiro-recibos`: espelha `financeiro.attachments` (0010) — SELECT staff (super_admin/diretor/colaborador), INSERT super_admin/colaborador, DELETE só super_admin; retenção de 5 anos (mesma decisão F3-Q6 de `financeiro-extratos`), sem UPDATE.
+- `flats-documentos` e `plataforma-capas`: **fundação antecipada** — nenhum schema de app existe ainda (Fases 6/7 pendentes), então usam só os papéis globais já existentes (`hospede` dono da própria pasta + super_admin/diretor leem tudo; qualquer autenticado lê capas de curso, só super_admin escreve), documentado como provisório até P-6.4/P-6.8 e P-7.4/P-7.6 apertarem o controle por curso/reserva.
+
+Teste novo `packages/db/src/__tests__/storage.test.ts` (21 casos) — mesma técnica de `apps/*/src/__tests__/rls.test.ts` (`SET LOCAL ROLE` + `request.jwt.claims`), com uma adaptação: todo seed de linha em `storage.objects` acontece dentro da **mesma transação** revertida ao final, nunca em INSERT/DELETE solto. Descoberto durante a implementação: o projeto Supabase hospedado usado em dev tem um trigger em `storage.objects` que rejeita `DELETE` direto ("Direct deletion from storage tables is not allowed. Use the Storage API instead.") — uma primeira versão do teste, que semeava via INSERT solto e limpava via `DELETE` solto no `afterAll`, deixou linhas de teste presas no banco real (o `DELETE` falhava, abortando a limpeza). As linhas presas tiveram que ser removidas manualmente com `supabase.storage.from(bucket).remove(paths)` (a Storage API, não SQL direto) antes de reescrever o teste. A versão final nunca faz `DELETE` em `storage.objects`: `SET LOCAL ROLE` pode ser reemitido várias vezes na mesma transação para trocar de usuário simulado, e o `ROLLBACK` final desfaz seed+mutação juntos.
+
+**Critérios de aceite verificados:**
+
+- [x] cada bucket com policy testada (quem pode ler/escrever) — `storage.test.ts`, 21/21 verdes: `hebron-docs` (visibilidade public/internal/restricted, INSERT editor-only), `project-attachments` (dono vs. terceiro, diretoria lê tudo, anon nada), `financeiro-recibos` (staff vs. hóspede vs. submissor vs. anon), `flats-documentos` (dono vs. terceiro, diretor lê tudo), `plataforma-capas` (aluno lê, só super_admin escreve).
+- [x] documentado no BRAIN §4 — nova subseção "Storage (Supabase Storage — P-0.12)": tabela dos 6 buckets (path, quem lê/escreve, retenção), convenção de signed URL (prazo curto vs. longo vs. "nunca para o que exige retenção de 5 anos — guardar o path, gerar signed URL sob demanda"), nota de que `flats-documentos`/`plataforma-capas` são fundação antecipada.
+- lint/typecheck verdes em `pnpm --filter @hebron/db lint typecheck`; `pnpm --filter @hebron/db test` (23/23: 21 novos + 2 de `schema-parity.test.ts`, confirmando que buckets/policies de Storage não entram no escopo do teste de paridade TS↔SQL, como esperado — `storage.buckets`/`storage.objects` não são tabelas do Drizzle schema).
+
+**Decisoes tomadas:**
+
+- `flats-documentos` e `plataforma-capas` criados agora, com policies baseadas só em papel global, mesmo sem nenhum consumidor de app ainda — seguindo o próprio racional do prompt (fundação para as Fases 6–7, igual a P-0.10 criar `withAuthenticatedContext` antes de qualquer página adotá-lo). Path convention (`{user_id}/...`, `{course_id}/...`) documentada no cabeçalho da migration para que P-6.4/P-6.8/P-7.4/P-7.6 a sigam.
+- `financeiro-recibos` mapeado 1:1 para `financeiro.attachments` (tabela já existente desde P-3.6, mas sem nenhum consumidor de app ainda — `expense-form.tsx` tem campo de upload mas ainda é mock do Bloco A). Escolhido reaproveitar exatamente as 3 policies já decididas para a tabela (`attachments_select_staff`/`insert_staff`/`delete_admin`) em vez de inventar uma regra nova.
+- Teste de Storage escrito com seed-e-rollback na mesma transação (em vez do padrão INSERT-solto + `afterAll` com DELETE já usado pelos `rls.test.ts` de app) especificamente por causa do trigger anti-DELETE do Storage hospedado — registrado no cabeçalho do teste para não ser redescoberto do zero.
+
+**Debitos tecnicos / pendencias:**
+
+- `flats-documentos`/`plataforma-capas` têm controle só por papel global, não por reserva/curso — aceito como fundação; P-7.4/P-7.6 e P-6.4/P-6.8 devem refinar quando as tabelas de app existirem (mesmo aviso já deixado na migration e no BRAIN §4).
+- `expense-form.tsx` (apps/financeiro) ainda não faz upload real para `financeiro-recibos` — o bucket e as policies existem, mas o formulário continua Bloco A (mock); conectar é escopo do prompt de Financeiro que tratar despesas/auxílio (fora do escopo de P-0.12).
+
+**Arquivos criados:**
+
+- `packages/db/src/migrations/0020_storage_buckets.sql`
+- `packages/db/src/__tests__/storage.test.ts`
+
+**Arquivos modificados:**
+
+- `BRAIN.md` (§4: nova subseção "Storage")
+- `SESSIONS.md` (esta entrada + linha no índice)

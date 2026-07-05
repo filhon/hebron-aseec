@@ -194,6 +194,23 @@ Múltiplos papéis por usuário permitidos (com verificação de conflito).
 - Lint e types devem passar em todo prompt
 - RLS testado por prompt de integração
 
+### Storage (Supabase Storage — P-0.12)
+
+Todo bucket é privado (`public = false`); nenhuma leitura acontece por URL direta — sempre signed URL (upload: `createSignedUploadUrl`; leitura: `createSignedUrl`) ou via service role no servidor. `storage.objects` tem RLS própria por bucket, além do controle na Server Action — mesma regra de "nunca uma única camada" do resto do sistema.
+
+| Bucket                 | Conteúdo                                          | Path                          | Quem lê / quem escreve                                                         | Retenção                       |
+| ---------------------- | -------------------------------------------------- | ------------------------------ | -------------------------------------------------------------------------------- | ------------------------------- |
+| `hebron-docs`           | PDF de documentos/editais                         | `documents/{author_id}/{uuid}.{ext}` | Leitura segue a visibilidade do documento pai (`public`/`internal`/`restricted`, igual à RLS de `documentos.documents`); escrita: super_admin/diretor/conselheiro/colaborador | Padrão (segue o documento)      |
+| `project-attachments`   | Anexos de propostas e de relatórios (Projetos)    | `{uploaded_by}/{uuid}.{ext}`   | Dono lê/escreve a própria pasta; super_admin/diretor/conselheiro leem tudo      | Padrão                          |
+| `financeiro-extratos`   | Extrato bancário original (import de conciliação) | `{bank_account_id}/{uuid}.{ext}` | super_admin/diretor/colaborador leem e escrevem; **sem UPDATE/DELETE**            | **5 anos** (decisão F3-Q6)      |
+| `financeiro-recibos`    | NF/comprovantes/recibos anexados a payables/receivables/transactions | `{uploaded_by}/{uuid}.{ext}`   | super_admin/diretor/colaborador leem; super_admin/colaborador escrevem; DELETE só super_admin | **5 anos** (mesma decisão F3-Q6) |
+| `flats-documentos`      | Documento de identidade/comprovantes do hóspede (PII sensível) | `{user_id}/{uuid}.{ext}`     | Dono lê/escreve a própria pasta; super_admin/diretor leem tudo                  | Padrão                          |
+| `plataforma-capas`      | Imagem de capa de curso                           | `{course_id}/{uuid}.{ext}`     | Qualquer autenticado lê; só super_admin escreve                                | Padrão                          |
+
+Convenção de signed URL: prazo curto para uso imediato (1h, ex. `hebron-docs`), prazo longo apenas quando o link é salvo e reaberto depois (ex. anexos de projeto, 1 ano) — nunca usar signed URL para o que exige retenção legal de 5 anos (expiraria antes; guardar o **path** do Storage e gerar a signed URL sob demanda na leitura, como `financeiro.bank_imports.file_url`/`financeiro.attachments.file_url` já fazem).
+
+`flats-documentos` e `plataforma-capas` são fundação antecipada (Fases 6 e 7 ainda não rodaram): usam apenas os papéis globais já existentes; P-6.4/P-6.8 e P-7.4/P-7.6 devem apertar o controle (por curso/reserva) quando as tabelas de app existirem.
+
 ---
 
 ## 5. Design system

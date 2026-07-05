@@ -227,7 +227,7 @@ _Critérios:_ [x] diretor sem designation não aprova (teste); [x] mesma pessoa 
 **P-0.12 — Storage: buckets e policies**
 _Problema:_ S1-21iii — uploads dependem de buckets manuais/inexistentes; documentos de identidade e extratos são PII/registro contábil sem política.
 _Escopo:_ migration/config declarando buckets (`hebron-docs` formalizado, `project-attachments` formalizado, `financeiro-extratos`, `financeiro-recibos`, `flats-documentos`, `plataforma-capas`) com policies de acesso por papel, convenção de signed URL (expiração padrão) e retenção (extratos/recibos: 5 anos).
-_Critérios:_ [ ] cada bucket com policy testada (quem pode ler/escrever); [ ] documentado no BRAIN §4.
+_Critérios:_ [x] cada bucket com policy testada (quem pode ler/escrever); [x] documentado no BRAIN §4.
 
 **P-0.13 — LGPD: fundação**
 _Problema:_ S1-03/F3-09 — PII e dado sensível sem consentimento modelado; audit imutável guarda PII em diff; imutabilidade × direito de exclusão sem resolução (decisão F1-Q4: cumprir a lei; decisão F3-Q5: fundação antes dos módulos que coletam mais PII).
