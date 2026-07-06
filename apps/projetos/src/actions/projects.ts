@@ -47,7 +47,7 @@ import {
   generatePaymentSchedule,
   onProjectApproved,
 } from "@hebron/db/projetos-approval";
-import { onProjectSubmitted } from "../lib/integrations/tarefas";
+import { onProjectSubmitted } from "@hebron/integrations/projetos-tarefas";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -565,10 +565,14 @@ export const submitProject = submissorAction
       },
     });
 
-    // Cross-app: criar checklist de análise no módulo tarefas (stub)
-    onProjectSubmitted(parsedInput.projectId).catch((err) =>
-      console.error("[projetos/submit] tarefas integration failed:", err),
-    );
+    // Cross-app: criar checklist de análise no módulo tarefas (stub, P-0.15).
+    // Awaited (nunca fire-and-forget, G6.5) — a submissão do projeto já foi
+    // commitada acima, então uma falha aqui é logada e não propagada.
+    try {
+      await onProjectSubmitted(parsedInput.projectId);
+    } catch (err) {
+      console.error("[projetos/submit] tarefas integration failed:", err);
+    }
 
     return { project: submittedProject };
   });

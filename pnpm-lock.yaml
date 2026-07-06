@@ -523,6 +523,9 @@ importers:
       "@hebron/email":
         specifier: workspace:*
         version: link:../../packages/email
+      "@hebron/integrations":
+        specifier: workspace:*
+        version: link:../../packages/integrations
       "@hebron/types":
         specifier: workspace:*
         version: link:../../packages/types
@@ -873,6 +876,31 @@ importers:
       react:
         specifier: ^19.0.0
         version: 19.2.6
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+
+  packages/integrations:
+    dependencies:
+      "@hebron/db":
+        specifier: workspace:*
+        version: link:../db
+      drizzle-orm:
+        specifier: "catalog:"
+        version: 0.36.4(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)(@types/react@19.2.15)(postgres@3.4.9)(react@19.2.6)
+    devDependencies:
+      "@hebron/eslint-config":
+        specifier: workspace:*
+        version: link:../../tooling/eslint-config
+      "@hebron/typescript-config":
+        specifier: workspace:*
+        version: link:../../tooling/typescript-config
+      "@types/node":
+        specifier: ^22.0.0
+        version: 22.19.19
+      eslint:
+        specifier: ^9.13.0
+        version: 9.39.4(jiti@2.7.0)
       typescript:
         specifier: ^5.6.3
         version: 5.9.3

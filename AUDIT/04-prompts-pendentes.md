@@ -242,7 +242,7 @@ _Critérios:_ [x] cada cron listado dispara em ambiente de dev (teste manual doc
 **P-0.15 — `packages/integrations` + contrato de settings**
 _Problema:_ S1-09 (contrato cross-app indefinido; `createAutoTask` num app seria importado por outros apps), S1-18 (consumo de settings/flags sem contrato), S1-22 (erro fire-and-forget como convenção).
 _Escopo:_ criar `packages/integrations` com as funções cross-app tipadas (mover `getEditalPrefill`, `getProjectParticipationScore` — renomeando o arquivo enganoso —, stubs existentes; `createAutoTask` nascerá aqui na Fase 4); helper de consumo de `system_settings`/feature flags em `packages/db` (com cache curto); padrão de erro registrado no BRAIN: mutação crítica nunca fire-and-forget; integração de leitura pode degradar com log estruturado.
-_Critérios:_ [ ] zero imports app→app (verificação no CI); [ ] Projetos/Documentos consomem o package; [ ] BRAIN §7 atualizado com o mecanismo real.
+_Critérios:_ [x] zero imports app→app (verificação no CI); [x] Projetos/Documentos consomem o package; [x] BRAIN §7 atualizado com o mecanismo real.
 
 **P-0.16 — Registro retroativo (PATCHES, SESSIONS, BRAIN, PROMPTS)**
 _Problema:_ S1-15 (6 anomalias no SESSIONS), S1-16 (PATCHES/ vazio — reconstrução autorizada F0-Q4), S1-26 (higiene), decisões desta auditoria sem registro formal.

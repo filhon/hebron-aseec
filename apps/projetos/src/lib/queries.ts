@@ -30,8 +30,8 @@ import {
   votes,
 } from "@hebron/db/schema";
 import type { CompactProjectView, ProjectStage } from "@hebron/types";
-import { getEditalPrefill as getEditalPrefillRaw } from "./integrations/documentos";
-import type { EditalPrefill } from "./integrations/documentos";
+import { getEditalPrefill as getEditalPrefillRaw } from "@hebron/integrations/documentos-projetos";
+import type { EditalPrefill } from "@hebron/integrations/documentos-projetos";
 
 // ---------------------------------------------------------------------------
 // Auth

@@ -1172,19 +1172,26 @@ export default function NovoProjetoPage() {
   // nenhum aqui. A categoria não é pré-preenchida: `projectCategoryId` do
   // edital referencia `documentos.categories`, não o slug de
   // `projetos.projectCategories` — mapeamento ainda não existe (débito
-  // pré-existente, documentado em `apps/projetos/src/lib/integrations/documentos.ts`).
+  // pré-existente, documentado em
+  // `packages/integrations/src/documentos-projetos.ts`).
   useEffect(() => {
     const editalId = searchParams.get("editalId");
     if (!editalId) return;
-    void getEditalPrefillForWizard(editalId).then((prefill) => {
-      if (!prefill) return;
-      setData((prev) => ({
-        ...prev,
-        editalId: prefill.editalId,
-        editalTitle: prefill.editalTitle,
-        projectType: prefill.tipo ?? prev.projectType,
-      }));
-    });
+    // Integração de leitura (G6.5): falha degrada para "sem prefill" — nunca
+    // bloqueia o wizard — mas é logada de forma estruturada, não engolida.
+    void getEditalPrefillForWizard(editalId)
+      .then((prefill) => {
+        if (!prefill) return;
+        setData((prev) => ({
+          ...prev,
+          editalId: prefill.editalId,
+          editalTitle: prefill.editalTitle,
+          projectType: prefill.tipo ?? prev.projectType,
+        }));
+      })
+      .catch((err) => {
+        console.error("[projetos/novo] edital prefill failed:", err);
+      });
   }, [searchParams]);
 
   const { execute: submitAnual, isPending: isSubmittingAnual } = useAction(

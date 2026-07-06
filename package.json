@@ -7,6 +7,7 @@
     "dev": "turbo dev",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
+    "check:cross-app-imports": "node scripts/check-cross-app-imports.mjs",
     "test": "turbo test",
     "format": "prettier --write \"**/*.{ts,tsx,json,md}\""
   },

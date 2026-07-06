@@ -33,6 +33,11 @@ jobs:
 
       - run: pnpm turbo lint typecheck
 
+      # G6.5 / P-0.15: apps nunca importam de outro app — código cross-app
+      # vive em packages/integrations. Falha aqui pega o que o ESLint não
+      # pega (specifiers relativos são estrutura de path, não de pacote).
+      - run: pnpm check:cross-app-imports
+
   test:
     name: Test (migrations + Supabase local stack)
     runs-on: ubuntu-latest

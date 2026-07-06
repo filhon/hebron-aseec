@@ -523,6 +523,42 @@ nome, cron planejado, prompt que os desbloqueia — em vez de uma função
 Inngest vazia. Todo prompt que implementar um desses deve registrar a
 função real em `src/crons/` e remover a entrada correspondente do catálogo.
 
+### Cross-app (`packages/integrations` — P-0.15)
+
+**Regra:** um app (`apps/<nome>`) nunca importa código de outro app —
+nenhum app expõe `exports` em `package.json` para ser consumido como lib
+(confirmado por grep em P-0.14), e um import relativo que atravessa para
+`apps/<outro>/` reproduz o acoplamento que a auditoria (CS-6/S1-09)
+encontrou entre Projetos e os módulos ainda não construídos (Tarefas,
+Flats). Toda função tipada consumida por mais de um app vive em
+`packages/integrations`, nomeada pela relação que implementa
+(`<origem>-<destino>.ts`, ex. `documentos-projetos.ts`,
+`projetos-flats.ts`, `projetos-tarefas.ts`) — nunca dentro de
+`apps/<origem>/src/lib/integrations/`. Verificação: `pnpm
+check:cross-app-imports` (script em `scripts/`, roda no CI) falha o build
+se algum import relativo escapar da própria pasta do app.
+
+Quando o módulo destino ainda não existe (ex. `createAutoTask`, que nasce
+com Tarefas na Fase 4), a função entra como stub documentado em
+`packages/integrations` — mesma convenção do catálogo de jobs: registrar a
+lógica esperada em vez de uma implementação vazia que passaria por pronta.
+
+**Configuração cross-app:** `admin.system_settings`/`admin.feature_flags`
+(escritos pelo Admin, `apps/admin/src/actions/settings.ts`) são lidos por
+qualquer app/job via `@hebron/db/settings` (`getSystemSetting`,
+`getFeatureFlag`, `isFeatureEnabled`) — cache curto em memória por processo
+(TTL 30s) para não virar round-trip ao banco em todo caminho crítico, sem
+atrasar mais que segundos a propagação de uma mudança feita no Admin.
+
+**Padrão de erro (S1-22):** integração de **leitura** (ex. `getEditalPrefill`)
+pode degradar — retorna `null`/vazio e o chamador loga de forma
+estruturada (`console.error("[contexto] ...")`), nunca lança sem contexto.
+Integração de **mutação crítica** (ex. `onProjectSubmitted` quando deixar
+de ser stub) nunca roda fire-and-forget (`.catch(console.error)` solto,
+sem `await`) — o chamador sempre dá `await` e decide explicitamente se o
+erro aborta a operação principal ou só é logado; "fogo e esquece" escondeu
+falhas reais no código pré-auditoria (S-43).
+
 ---
 
 ## 8. Escopo v1 vs v2+

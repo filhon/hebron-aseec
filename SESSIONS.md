@@ -88,6 +88,7 @@
 | S-64   | 2026-07-05 | P-0.12 — Storage: buckets e policies (Onda 2)                           | concluido                            |
 | S-65   | 2026-07-05 | P-0.13 — LGPD: fundação (Onda 2)                                        | concluido                            |
 | S-66   | 2026-07-06 | P-0.14 — Jobs: Inngest de verdade (Onda 2)                              | concluido                            |
+| S-67   | 2026-07-06 | P-0.15 — packages/integrations + contrato de settings (Onda 2)          | concluido                            |
 
 ---
 
@@ -2992,3 +2993,68 @@ S1-06/CS-5: 8+ features prometidas em sessões anteriores dependiam de um schedu
 
 - `apps/documentos/src/jobs/edital-closing-reminders.ts` (pasta `jobs/` removida)
 - `apps/projetos/src/lib/integrations/financeiro.ts`
+
+---
+
+### S-67 — 2026-07-06 — P-0.15 packages/integrations + contrato de settings (Onda 2)
+
+**Prompt:** P-0.15 (`AUDIT/04-prompts-pendentes.md` §4)
+**Duracao:** ~2h
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+S1-09/CS-6: as duas únicas funções cross-app tipadas do monorepo (`getEditalPrefill`, Documentos → Projetos; `getProjectParticipationScore`, Projetos → Flats) e o stub `onProjectSubmitted` (Projetos → Tarefas) viviam dentro de `apps/projetos/src/lib/integrations/`, num arquivo (`documentos.ts`) cujo nome nem batia com metade do conteúdo — achado já registrado em AUDIT/01-specs.md:265. Nada disso era hoje um import app→app de verdade (Tarefas e Flats ainda não existem), mas o próximo módulo a nascer (Tarefas, Fase 4, P-4.11 `createAutoTask`) reproduziria o padrão se o package não existisse antes. S1-18 (consumo de `system_settings`/`feature_flags` sem contrato) e S1-22 (erro fire-and-forget como convenção — `onProjectSubmitted(...).catch(console.error)` sem `await`) completavam o escopo.
+
+**Escopo implementado:**
+
+1. **`packages/integrations`** (novo package): as 3 funções migradas para arquivos nomeados pela relação que implementam — `documentos-projetos.ts` (`getEditalPrefill`), `projetos-flats.ts` (`getProjectParticipationScore`), `projetos-tarefas.ts` (`onProjectSubmitted`, ainda stub — `createAutoTask` de verdade nasce aqui na Fase 4). `src/index.ts` faz o barrel export; `package.json` também expõe subpaths individuais (mesmo padrão de `@hebron/db`/`@hebron/jobs`).
+2. **`apps/projetos` atualizado para consumir o package**: `lib/queries.ts` (`getEditalPrefillForWizard`) e `actions/projects.ts` (`onProjectSubmitted`) importam de `@hebron/integrations/*`; `apps/projetos/src/lib/integrations/` removida inteira. A chamada de `onProjectSubmitted` na submissão deixou de ser fire-and-forge (`.catch` solto) e passou a `await` dentro de `try/catch` — o erro é logado, mas não aborta a submissão já commitada (decisão registrada no comentário do código). A leitura de prefill no wizard (`novo/page.tsx`, client-side) ganhou `.catch` com log estruturado — antes uma rejeição virava unhandled promise silenciosa.
+3. **`@hebron/db/settings`** (novo módulo): `getSystemSetting`, `getFeatureFlag`, `isFeatureEnabled` — cache em memória por processo, TTL 30s, fail-closed para chave/flag inexistente (nunca lança). `isFeatureEnabled` aplica `rolloutPercent` (amostragem por chamada, não sticky por usuário).
+4. **`scripts/check-cross-app-imports.mjs`** + `pnpm check:cross-app-imports`: varre `apps/*/src` por imports relativos cujo caminho resolvido cai dentro de `apps/<outro>/`; roda como step novo em `.github/workflows/ci.yml` (job `lint-typecheck`, depois de `pnpm turbo lint typecheck`). Validado manualmente com uma violação sintética (detectada e removida) antes do commit.
+5. **BRAIN.md §7** — nova subseção "Cross-app (`packages/integrations` — P-0.15)": mecanismo (nomeação `<origem>-<destino>.ts`, stub documentado quando o destino ainda não existe), a configuração cross-app via `@hebron/db/settings`, e o padrão de erro (leitura degrada com log estruturado; mutação crítica nunca fire-and-forget).
+
+**Achado colateral (ambiente, não código):** a suíte de `@hebron/projetos` falhou 16/102 na primeira rodada com "permission denied for schema projetos" — o mesmo drift de GRANTs perdidos já documentado em S-66 (o banco de dev local esquece os GRANTs físicos de `0025_fix_projetos_schema_grant`/`0026_fix_projetos_missing_select_grants` entre sessões mesmo com `public._migrations` marcando as duas como aplicadas). Corrigido do mesmo jeito: apagar as duas linhas de bookkeeping e reaplicar via `pnpm --filter @hebron/db db:migrate`. Causa raiz segue não investigada (ver débito em S-66); se voltar uma terceira vez, vale investigar o motivo em vez de só reaplicar de novo.
+
+**Achado colateral (introduzido e corrigido nesta sessão):** a primeira versão de `packages/db/src/__tests__/settings.test.ts` usava `vi.useFakeTimers()`/`vi.setSystemTime()` para simular a expiração do TTL por cima de uma leitura real do banco. Como `packages/db/vitest.config.ts` roda em `singleFork` (todas as suítes no mesmo processo), instalar fake timers globais travou o `setTimeout` interno do driver `postgres` — a própria query pendurou até o timeout de 30s, e como o `vi.useRealTimers()` de limpeza nunca rodou, os fake timers continuaram ativos para os arquivos de teste seguintes no mesmo fork (`system-actor.test.ts`, `meetings.test.ts`, `documentos-views-retention.test.ts` deram timeout em cascata, todos sem relação nenhuma com a mudança). Corrigido reescrevendo o teste sem fake timers: a suíte cobre cache-hit (mudança no banco não aparece antes de uma nova leitura fora do TTL) e a lógica de `rolloutPercent` sem depender de viagem no tempo — a expiração em si é uma comparação `Date.now()` trivial, não vale o risco de travar o processo de teste inteiro para cobri-la.
+
+**Critérios de aceite verificados:**
+
+- [x] zero imports app→app — `pnpm check:cross-app-imports` verde; script testado manualmente contra uma violação sintética (detectou e reportou corretamente) antes de ser removida.
+- [x] Projetos consome o package — `queries.ts`/`actions/projects.ts` importam de `@hebron/integrations/*`; `apps/projetos/src/lib/integrations/` não existe mais (grep confirma). Documentos não tinha (e continua sem ter) nenhum import cross-app real — a integração Documentos→Projetos é um link `<a href>` para a URL pública do wizard, não uma chamada de código; nada a mover ali.
+- [x] BRAIN §7 atualizado com o mecanismo real — nova subseção "Cross-app (`packages/integrations` — P-0.15)".
+- lint/typecheck verdes em `@hebron/integrations`, `@hebron/db`, `@hebron/projetos`. Testes: `@hebron/projetos` 102/102 (zero regressão da migração), `@hebron/db` 56/56 (50 pré-existentes + 6 novos de `settings.test.ts`).
+
+**Decisoes tomadas:**
+
+- Nomeação dos arquivos do package por relação (`<origem>-<destino>.ts`), não por schema de origem — resolve diretamente o achado "nome de arquivo enganoso" (`documentos.ts` continha uma função de Flats).
+- `onProjectSubmitted` continua stub (Tarefas não existe) mas o call site já foi corrigido para `await` — não faz sentido esperar a Fase 4 para tirar o fire-and-forget de um caminho que a auditoria já sinalizou.
+- `isFeatureEnabled` implementa amostragem por `rolloutPercent` (não sticky por usuário) — o campo já existe no schema desde P-1.6/`toggleFeatureFlag`; ignorá-lo no helper seria deixar metade do contrato sem uso. Sticky por usuário fica para quem precisar (chamador usa `getFeatureFlag` direto).
+- Verificação de fronteira cross-app implementada como script Node (`scripts/check-cross-app-imports.mjs`) em vez de regra de ESLint — apps não expõem `exports` em `package.json` (confirmado em P-0.14), então a única forma de um import cruzar para outro app é um caminho relativo que escapa da pasta do app; isso é mais fácil de verificar resolvendo caminhos com `path.resolve` do que expressando como padrão de `no-restricted-imports`.
+
+**Debitos tecnicos / pendencias:**
+
+- Drift de GRANTs em `projetos` (ver achado colateral acima) — segunda ocorrência desde S-66, causa raiz ainda não investigada.
+- `packages/integrations` não tem suíte de testes própria — as 3 funções migradas já eram exercitadas indiretamente pela suíte de `@hebron/projetos` (nenhuma tinha teste dedicado antes da migração também); considerar testes diretos quando `createAutoTask`/Flats/Tarefas passarem a consumir o package de verdade.
+
+**Arquivos criados:**
+
+- `packages/integrations/package.json`, `tsconfig.json`, `eslint.config.mjs`
+- `packages/integrations/src/index.ts`, `src/documentos-projetos.ts`, `src/projetos-flats.ts`, `src/projetos-tarefas.ts`
+- `packages/db/src/settings.ts`, `src/__tests__/settings.test.ts`
+- `scripts/check-cross-app-imports.mjs`
+
+**Arquivos modificados:**
+
+- `apps/projetos/src/lib/queries.ts`, `src/actions/projects.ts` (imports de `@hebron/integrations/*`; `onProjectSubmitted` awaited)
+- `apps/projetos/src/app/(submissor)/novo/page.tsx` (comentário desatualizado corrigido; `.catch` com log estruturado no prefill)
+- `apps/projetos/package.json` (dependência `@hebron/integrations`)
+- `packages/db/package.json` (export `./settings`)
+- `package.json` (script `check:cross-app-imports`)
+- `.github/workflows/ci.yml` (step novo no job `lint-typecheck`)
+- `BRAIN.md` (§7: nova subseção "Cross-app (`packages/integrations` — P-0.15)")
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+**Arquivos removidos:**
+
+- `apps/projetos/src/lib/integrations/documentos.ts`, `src/lib/integrations/tarefas.ts` (pasta `integrations/` removida)

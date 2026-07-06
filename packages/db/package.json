@@ -11,6 +11,7 @@
     "./consents": "./src/consents.ts",
     "./anonymization": "./src/anonymization.ts",
     "./notifications": "./src/notifications.ts",
+    "./settings": "./src/settings.ts",
     "./system-actor": "./src/system-actor.ts",
     "./meetings": "./src/meetings.ts",
     "./projetos-approval": "./src/projetos-approval.ts"

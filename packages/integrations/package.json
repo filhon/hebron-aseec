@@ -1,0 +1,26 @@
+{
+  "name": "@hebron/integrations",
+  "version": "0.0.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./documentos-projetos": "./src/documentos-projetos.ts",
+    "./projetos-flats": "./src/projetos-flats.ts",
+    "./projetos-tarefas": "./src/projetos-tarefas.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hebron/db": "workspace:*",
+    "drizzle-orm": "catalog:"
+  },
+  "devDependencies": {
+    "@hebron/eslint-config": "workspace:*",
+    "@hebron/typescript-config": "workspace:*",
+    "@types/node": "^22.0.0",
+    "eslint": "^9.13.0",
+    "typescript": "^5.6.3"
+  }
+}
