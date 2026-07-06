@@ -43,7 +43,7 @@ A **Hebron Aseec** (Assistência Social, Educacional, Evangélica e Científica)
 
 - **Provider:** Supabase Auth
 - **Métodos (v1):** Email + senha, Magic Link (sem Google OAuth na v1)
-- **MFA:** TOTP obrigatório para `super_admin` e `diretor`; opcional para demais
+- **MFA:** TOTP obrigatório (bloqueante — enrollment forçado no primeiro login, P-1.26 / PATCH-005) para `super_admin` e `diretor`; opcional para demais
 - **SSO:** Cookies no domínio raiz `.hebronaseec.com.br` — login canônico em `app.hebronaseec.com.br/login`
 - **Autorização:** RBAC (`public.role_assignments`) + RLS em toda tabela (DENY by default)
 
@@ -62,7 +62,7 @@ A **Hebron Aseec** (Assistência Social, Educacional, Evangélica e Científica)
 ### IA
 
 - **Triagem/scoring de projetos:** OpenAI GPT-4.1 (critérios configuráveis no Admin)
-- **Embeddings (v2+):** OpenAI text-embedding-3-small + pgvector
+- **Embeddings:** OpenAI text-embedding-3-small + pgvector — **v1** para detecção de duplicidade de projetos (P-2.14 / PATCH-012); **v2+** para busca semântica (Plataforma/Documentos)
 - **Geração de código:** Claude Sonnet 4.6 (padrão); Opus 4.6 (prompts complexos)
 
 ### Observabilidade
@@ -124,10 +124,7 @@ Três camadas obrigatórias, nunca apenas uma:
 2. **Server Action / Route Handler gates** — valida ação específica
 3. **RLS no Postgres** — última linha de defesa
 
-> ⚠️ **Decisão técnica pendente (RLS x conexão superuser):** hoje as Server Actions conectam via `DATABASE_URL` (superusuário Postgres), o que **bypassa RLS** — o RBAC fica só no gate da action (camadas 1 e 2). Ou seja, a camada 3 (RLS) protege apenas acesso direto/cliente (PostgREST/anon key), não as actions. Há duas posturas possíveis, a decidir com o Filipe (auditar em P-9.1):
->
-> - **(A)** Manter conexão superuser nas actions (mais simples) e ser honesto no modelo de ameaça: RLS protege o canal direto, gates protegem as actions. Documentar e garantir que **nenhuma** action pule o gate de RBAC.
-> - **(B)** Fazer as actions conectarem como `authenticated` propagando o JWT (claims de papel), de modo que a RLS seja de fato a última linha de defesa mesmo nas actions (defense-in-depth real). Mais trabalho; exige repassar o token do usuário ao client Postgres.
+> ✅ **Decisão tomada — opção B (PATCH-004):** as Server Actions conectam como `authenticated`, propagando o JWT do usuário (claims de papel) via o client de sessão do kit compartilhado (`@hebron/auth`, P-0.8) — nunca `DATABASE_URL` superuser. A RLS (camada 3) é, de fato, a última linha de defesa também nas actions (defense-in-depth real). Implementado em P-0.10 (grants por schema + correção de policies problemáticas) e obrigatório para todo prompt de Bloco B via G6 (`PROMPTS.md`).
 
 ### Papéis (independentes, não hierárquicos)
 
@@ -301,9 +298,10 @@ Todo o estilo visual compartilhado vive em **`packages/ui`**. O arquivo **`packa
 - Participantes: diretores + conselheiros
 - Pergunta: "Você sente paz em investir neste projeto?"
 - Voto **SECRETO** (ninguém vê quem votou o quê)
-- Quórum: ≥50% dos diretores + conselheiros
+- Quórum: ≥50% dos diretores + conselheiros (contagem por **pessoa distinta**, não por atribuição — PATCH-007)
 - Aprovação: maioria simples
 - Sem quórum: votação estendida; super_admin pode acionar "botão de pânico" (maioria + 1 dos votos existentes)
+- Encerramento manual: super_admin pode encerrar a votação a qualquer momento, aplicando o resultado apurado até então — mecanismo geral, distinto do "botão de pânico" acima, que só se aplica à falta de quórum (PATCH-007)
 
 **Homologação:**
 
@@ -320,7 +318,7 @@ Todo o estilo visual compartilhado vive em **`packages/ui`**. O arquivo **`packa
 
 **Orçamento e instituições:**
 
-- Orçamento definido por instituição, por ano-calendário (jan-dez), no Financeiro
+- Orçamento definido por instituição, por ano-calendário (jan-dez), no Financeiro (tabela `financeiro.organization_budgets` + UI de gestão — P-3.8b / PATCH-009; substitui o workaround anterior em `admin.system_settings`)
 - Sistema bloqueia submissão se total excede orçamento (mensagem: "Contate o administrador")
 - Instituições sem orçamento: sem teto, mas IA identifica desvios e influencia score
 - Submissor pode estar vinculado a múltiplas instituições (N:N)
@@ -345,8 +343,8 @@ Todo o estilo visual compartilhado vive em **`packages/ui`**. O arquivo **`packa
 - Score visível apenas para super_admin, diretores, conselheiros (nunca para submissor)
 - Versão compacta gerada por IA ao final da submissão (template configurável)
 - Triagem: classificação, score de aderência, resumo executivo
-- Detecção de duplicidade via embeddings (pgvector)
-- Detecção de renovação: auto-preenche campos de projetos anteriores similares
+- Detecção de duplicidade via embeddings (pgvector) — **v1**, P-2.14 (PATCH-012)
+- Detecção de renovação: auto-preenche campos de projetos anteriores similares — **v1**, P-2.13 (PATCH-012)
 
 **Renovação/continuação:** nova entrada vinculada via `parent_project_id`, preserva histórico, estágios resetam
 
@@ -422,7 +420,7 @@ Todo o estilo visual compartilhado vive em **`packages/ui`**. O arquivo **`packa
 ### 6.6. Intranet
 
 - Dashboard executivo consolidando dados de todos os módulos
-- KPIs iniciais: projetos ativos, alunos na Plataforma, doações do mês, audiência da Rádio
+- KPIs iniciais: projetos ativos, alunos na Plataforma, doações do mês (soma das transações de receita lançadas na categoria "Doações" do plano de contas no mês corrente — P-5.1/P-5.8, PATCH-008), audiência da Rádio
 - Produção de conteúdo: diretores/conselheiros fazem anúncios curtos (normal/importante/urgente); presidente de sessão registra decisões; super_admins elaboram conteúdo
 - Relatórios financeiros automáticos mensais por email
 - Diretório de membros (todos: diretores, conselheiros, colaboradores, submissores, parceiros)
@@ -455,6 +453,8 @@ Todo o estilo visual compartilhado vive em **`packages/ui`**. O arquivo **`packa
 
 **Scoring automático (máx. 80 pontos):**
 a) Tempo de ministério: 1pt/ano, max 10 | b) Frequência de uso: nunca (10), >1 ano (5), <12 meses (0) | c) Localização: remota (10), periferia (5), centro (0) | d) Saúde: autodeclarada sim (5), não (0) — sem laudos nem dados confidenciais | e) Situação familiar especial: até 5 | f) Último descanso fora da cidade: >2 anos (10), 1-2 (5), <1 (0) | g) Intensidade ministerial: alta (10), média (5), baixa (0) | h) Carta de recomendação: sim (5), não (0) | i) Tipo de sustento: dependente (5), parcial (3), autossustentado (0) | j) Participação em projetos Hebron: sim (5), não (0) — auto-calculado
+
+**Assistência de IA no scoring (v1, P-7.13 — PATCH-012):** para os critérios subjetivos (d — saúde autodeclarada, g — intensidade ministerial), o sistema sugere uma pontuação a partir do texto livre do formulário; o gestor sempre confirma ou ajusta antes de salvar — a IA nunca decide sozinha, e a pontuação final permanece 100% determinística pela tabela acima.
 
 **Desempate:** 1) Idade (mais velho prioriza), 2) Mais tempo sem descanso fora, 3) Nunca usou flat, 4) Sorteio
 
@@ -568,19 +568,22 @@ falhas reais no código pré-auditoria (S-43).
 - OCR para notas fiscais
 - Conciliação bancária com importação OFX/CSV (PRIORIDADE — dor real)
 - Impersonação auditada (ESSENCIAL — suporte por telefone)
-- IA: scoring, versão compacta, triagem, detecção de renovação
-- IA: scoring de flats (critérios subjetivos)
+- IA: scoring, versão compacta, triagem
+- IA: detecção de renovação de projetos (P-2.13, PATCH-012)
+- IA: detecção de duplicidade de projetos via embeddings/pgvector (P-2.14, PATCH-012) — não confundir com a busca semântica da Plataforma/Documentos, que segue v2+ (ver "Removido da v1" abaixo)
+- IA: assistência de sugestão de pontuação nos critérios subjetivos do scoring de Flats, com confirmação do gestor — nunca decide sozinha (P-7.13, PATCH-012); pontuação final 100% determinística (§6.8)
 - Templates de email editáveis com IA
-- MFA TOTP para super_admin e diretores
-- Migração de usuários do sistema legado
+- MFA TOTP obrigatório (bloqueante, com tela de enrollment no primeiro login) para super_admin e diretores (P-1.26, PATCH-005)
+- Migração de usuários do sistema legado (P-9.0)
 - Modo foco com pomodoro (Tarefas)
 - Time tracking (Tarefas)
 - Fóruns de discussão (Plataforma)
+- Quizzes como tipo de aula, certificado com hash de verificação pública, notas pessoais em timestamp de vídeo (Plataforma) — mantidos, com semântica definida (PATCH-010)
 
-### Removido da v1 (deferido)
+### Removido da v1 (deferido para v2+)
 
 - Doações Pix do público
-- Busca semântica / pgvector / embeddings
+- Busca semântica / pgvector (Plataforma/Documentos) — embeddings para detecção de duplicidade de projetos é caso à parte, promovido a v1 (ver "Mantido na v1" acima, PATCH-012)
 - Transcrição automática Whisper
 - Recomendações personalizadas
 - Modo offline (exceto PWA Rádio)
@@ -591,6 +594,14 @@ falhas reais no código pré-auditoria (S-43).
 - Smart locks / check-in autônomo
 - SMS, push notifications, Google OAuth
 - Operações em lote de usuários
+
+### Descartado (scope creep sem base no BRAIN — decisão D-5, PATCH-011)
+
+Diferente do "removido/deferido" acima, os itens abaixo não ficam para v2+ — foram rejeitados porque contradiziam regra já definida no BRAIN ou exigiam modelagem que nenhum prompt criava:
+
+- Workspaces customizáveis além dos 6 fixos (Tarefas) — contradiz §6.9 ("workspaces fixos"); exigiria modelo de membership/acesso que nenhum prompt cria
+- Colunas customizáveis por workspace (Tarefas) — conflita com os 4 status fixos definidos em §6.9
+- Checklist de inventário no check-in dentro do sistema (Flats) — check-in é presencial na recepção (§6.8); o sistema registra só a transição de status + timestamp
 
 ---
 

@@ -6,7 +6,7 @@ product
 
 ## Product Purpose
 
-Ecossistema de 9 apps Next.js para gestão interna da Hebron ASEEC (ONG cristã evangelística, 40+ anos). Ferramentas operacionais para equipe interna, não produto público.
+Ecossistema de 9 apps Next.js para gestão interna da Hebron ASEEC (ONG cristã evangelística, 40+ anos). Ferramentas operacionais para equipe interna — com duas superfícies deliberadamente públicas e anônimas: o portal de Documentos (conteúdo `public`) e a Rádio (papel `ouvinte`, sem cadastro para ouvir), ambas definidas em BRAIN.md §3.
 
 ## Users
 
@@ -28,7 +28,7 @@ Ecossistema de 9 apps Next.js para gestão interna da Hebron ASEEC (ONG cristã 
 
 - Institucional, humano, sem excessos. Microcopy direto e acolhedor.
 - Sem "vamos lá!", sem pontos de exclamação genéricos
-- Estados vazios usam citações bíblicas pertinentes (curtas, do NT ou Salmos)
+- Estados vazios usam citações bíblicas pertinentes ao contexto institucional (sem restrição de livro — ver BRAIN.md §5)
 - Linguagem em português do Brasil, sem anglicismos desnecessários
 
 ## Anti-references

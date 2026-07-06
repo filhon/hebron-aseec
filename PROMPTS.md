@@ -1,9 +1,9 @@
 # PROMPTS.md — Sequência de Desenvolvimento SDD
 
 > **Referência:** BRAIN.md (fonte da verdade) | SDD-STRUCTURE.md (formato)
-> **Total:** 119 prompts + 3 correções (P-0.2b, P-0.3b, P-1.12b) | Fases 0-9
+> **Total:** 119 prompts + 19 correções (ver tabela "Correções" abaixo) | Fases 0-9
 > **Metodologia:** Bloco A (UI com mocks) → Pausa (validar com diretoria) → Bloco B (Backend + integração)
-> **⚠️ Antes de tudo:** ler a seção **Instruções Globais** (logo abaixo do Sumário). Prompts corretivos `P-0.2b` (design system), `P-0.3b` (migrations) e `P-1.12b` (Admin) devem ser executados na ordem indicada.
+> **⚠️ Antes de tudo:** ler a seção **Instruções Globais** (logo abaixo do Sumário). Prompts corretivos `P-0.2b` (design system), `P-0.3b` (migrations), `P-1.12b` (Admin) e `P-2.9b` (usuário real no header de Projetos) devem ser executados na ordem indicada; as demais correções (Ondas 0–2, ver tabela) são as executadas na retomada pós-auditoria de 2026-07.
 
 ---
 
@@ -22,6 +22,34 @@
 | 7    | Flats      | P-7.1 a P-7.12  | P-7.1–7.5   | P-7.6–7.12  |
 | 8    | Rádio      | P-8.1 a P-8.12  | P-8.1–8.5   | P-8.6–8.12  |
 | 9    | Polimento  | P-9.1 a P-9.5   | —           | —           |
+
+### Correções (S1-26 — cabeçalho antigo dizia "3 correções"; eram 4; hoje são 19)
+
+Corpo integral no próprio arquivo (as 4 originais) ou em `AUDIT/04-prompts-pendentes.md` §4 (as 15 da auditoria de 2026-07 — convenção registrada em cada sessão de SESSIONS.md a partir de S-54; transcrever o texto para dentro deste arquivo é trabalho mecânico à parte, não feito em P-0.16 para não misturar prompts na mesma sessão).
+
+| Corretivo | Motivo                                                      | Corpo do prompt                  | Sessão |
+| --------- | ----------------------------------------------------------- | -------------------------------- | ------ |
+| P-0.2b    | Unificação do design system (tokens `--hb-*`)               | neste arquivo                    | S-20   |
+| P-0.3b    | Pipeline de migrations                                      | neste arquivo                    | S-22   |
+| P-1.12b   | Reconciliação do Admin ao design system unificado           | neste arquivo                    | S-22b¹ |
+| P-2.9b    | Usuário real no header de Projetos                          | neste arquivo                    | S-44   |
+| P-0.7     | Resgate do banco (partições, enum de audit, 0000 duplicada) | AUDIT/04-prompts-pendentes.md §4 | S-54   |
+| P-0.8     | Kit de backend compartilhado (sessão/audit/notificações)    | AUDIT/04-prompts-pendentes.md §4 | S-55   |
+| P-0.9     | CI mínimo                                                   | AUDIT/04-prompts-pendentes.md §4 | S-56   |
+| P-0.10    | Decisão B: RLS ativa (grants + policies + adoção)           | AUDIT/04-prompts-pendentes.md §4 | S-57   |
+| P-0.11    | drizzle-kit reconciliado                                    | AUDIT/04-prompts-pendentes.md §4 | S-58   |
+| P-1.25    | Admin: leitura protegida e fiação completa                  | AUDIT/04-prompts-pendentes.md §4 | S-59   |
+| P-1.26    | Onboarding: convite, auto-signup e MFA bloqueante           | AUDIT/04-prompts-pendentes.md §4 | S-60   |
+| P-1.27    | Documentos: visibilidade e área editorial verdadeiras       | AUDIT/04-prompts-pendentes.md §4 | S-61   |
+| P-2.9c    | Projetos: operável de ponta a ponta                         | AUDIT/04-prompts-pendentes.md §4 | S-62   |
+| P-3.8b    | Financeiro: governança e conciliação verdadeiras            | AUDIT/04-prompts-pendentes.md §4 | S-63   |
+| P-0.12    | Storage: buckets e policies                                 | AUDIT/04-prompts-pendentes.md §4 | S-64   |
+| P-0.13    | LGPD: fundação                                              | AUDIT/04-prompts-pendentes.md §4 | S-65   |
+| P-0.14    | Jobs: Inngest de verdade                                    | AUDIT/04-prompts-pendentes.md §4 | S-66   |
+| P-0.15    | packages/integrations + contrato de settings                | AUDIT/04-prompts-pendentes.md §4 | S-67   |
+| P-0.16    | Registro retroativo (este próprio corretivo)                | AUDIT/04-prompts-pendentes.md §4 | S-68   |
+
+¹ Sessão referenciada retroativamente como S-22b em SESSIONS.md S-68 (ponto 2 da entrada retificadora) — o bloco original nunca recebeu número.
 
 ---
 
@@ -1940,7 +1968,7 @@ Integração Projetos → Financeiro: aprovação cria centro de custo + payment
 - [x] Aprovação de projeto dispara criação de centro de custo (stub ou real)
 - [x] Aprovação cria payment_schedules baseado nas parcelas definidas
 - [x] Submissão dispara criação de checklist de análise (stub)
-- [~] Wizard recebe edital_id e pré-preenche tipo + categoria
+- [x] Wizard recebe edital_id e pré-preenche tipo + categoria (wiring completo em P-2.9c, S-62; ver SESSIONS S-68 ponto 6)
 - [x] Stubs documentados para integração futura
 - [x] Lint passa
 - [x] Types passam

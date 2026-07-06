@@ -89,6 +89,7 @@
 | S-65   | 2026-07-05 | P-0.13 — LGPD: fundação (Onda 2)                                        | concluido                            |
 | S-66   | 2026-07-06 | P-0.14 — Jobs: Inngest de verdade (Onda 2)                              | concluido                            |
 | S-67   | 2026-07-06 | P-0.15 — packages/integrations + contrato de settings (Onda 2)          | concluido                            |
+| S-68   | 2026-07-06 | P-0.16 — Registro retroativo (Onda 2)                                   | concluido                            |
 
 ---
 
@@ -3058,3 +3059,60 @@ S1-09/CS-6: as duas únicas funções cross-app tipadas do monorepo (`getEditalP
 **Arquivos removidos:**
 
 - `apps/projetos/src/lib/integrations/documentos.ts`, `src/lib/integrations/tarefas.ts` (pasta `integrations/` removida)
+
+---
+
+### S-68 — 2026-07-06 — P-0.16 Registro retroativo (Onda 2)
+
+**Prompt:** P-0.16 (`AUDIT/04-prompts-pendentes.md` §4)
+**Duracao:** ~2h
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Última peça da Onda 2. A auditoria (S1-15, S1-16, S1-26) encontrou seis anomalias estruturais no índice/corpo do SESSIONS.md, `PATCHES/` vazio apesar de pelo menos 12 decisões de escopo/arquitetura já efetivas sem registro formal, duas contradições internas do BRAIN (S1-12/S1-13) e problemas de higiene em PROMPTS.md/PRODUCT.md. Esta sessão fecha os três critérios de aceite do prompt: (1) 12 arquivos PATCH criados em `PATCHES/`; (2) esta entrada, que é a "entrada retificadora única" prevista por S1-15 — normaliza os seis pontos por **apêndice**, sem editar nenhuma entrada anterior; (3) BRAIN.md emendado para eliminar as contradições S1-12/S1-13.
+
+**Entrada retificadora do SESSIONS (S1-15 — seis pontos, normalizados aqui sem editar entradas antigas):**
+
+1. **Índice S-21 ≠ corpo S-21.** O índice (linha do S-21) associa a sessão ao prompt "P-1.12b"; o corpo (linha 853) se autointitula "P-1.13b Ajustes Menores — Verificação Design System" e cita `Prompt: P-1.13b`. Nenhum prompt "P-1.13b" existe em `PROMPTS.md`. **Normalização:** o corpo de S-21 é, na prática, uma verificação ad hoc dos critérios do **P-0.2b** (S-20) — não a execução de um prompt numerado próprio. Nem o rótulo do índice ("P-1.12b") nem o do corpo ("P-1.13b") estão corretos; a execução real de P-1.12b é o ponto 2 abaixo.
+2. **Sessão real do P-1.12b sem número.** O bloco "## Sessão P-1.12b — Reconciliação do Admin ao Design System Unificado" (entre S-22 e S-23 no arquivo) documenta a execução de fato do prompt `P-1.12b` (`PROMPTS.md:982`), mas nunca recebeu um identificador `S-NN` — inclusive `PROMPTS.md:1037` refere-se a ele incorretamente como "registrado em S-22" (que é P-0.3b). **Normalização:** este bloco passa a ser referenciado retroativamente como **S-22b** (mesma convenção de sufixo de letra já usada em P-1.12b/P-2.9b), preservando sua posição física no arquivo — não é uma renumeração de entradas existentes, é a atribuição do identificador que nunca existiu.
+3. **S-45 no índice sem corpo.** O índice lista "S-45 | 2026-06-23 | Polish — apps/projetos/src/app | concluido"; não há bloco `### S-45` correspondente em lugar nenhum do arquivo. **Normalização:** o conteúdo não é reconstruível retroativamente com honestidade (não há registro do que foi de fato alterado). Fica marcado aqui como **débito de documentação aceito** — o índice permanece como está (não é editado), e este parágrafo é a nota de que o corpo daquela sessão está definitivamente perdido.
+4. **P-1.21 no corpo sem número/índice.** O bloco "## Sessão P-1.21 — 2026-06-18" (`Prompt: P-1.21 — Integração UI ↔ Backend Documentos`) existe entre os blocos de S-29 (P-1.20, 2026-06-17) e S-30 (P-1.22, 2026-06-18), mas nunca entrou no índice nem recebeu `S-NN`. **Normalização:** referenciado retroativamente como **S-29b**, pela mesma razão e convenção do ponto 2.
+5. **P-1.19 e P-2.12 marcados `[x]` em PROMPTS.md sem sessão correspondente.** Nenhum bloco de SESSIONS.md (numerado ou não) documenta a execução de P-1.19 (RLS Policies Documentos) nem de P-2.12 (Testes Projetos) — os critérios estão marcados `[x]` no PROMPTS.md sem lastro de log. Filipe confirmou os fatos na Fase 0 da auditoria (perguntas 1–2) — não há narrativa a reconstruir sem inventar conteúdo, o que violaria G1 ("nunca preencha lacunas de regra de negócio ou de fato por conta própria"). **Normalização:** fica registrado aqui como débito de documentação aceito; os critérios `[x]` permanecem como estão em `PROMPTS.md` porque o código correspondente existe e passou pelas verificações de sessões posteriores que dependem dele (P-1.19 é pré-requisito ativo de P-1.27/P-0.10; P-2.12 de toda a Fase 3), então a ausência é de log, não de execução.
+6. **P-2.11 "parcial" no SESSIONS vs. critérios no PROMPTS.** S-43 (índice e corpo) registra P-2.11 como `parcial`; `PROMPTS.md` mostrava 6 critérios `[x]` e 1 `[~]` (prefill do wizard via `getEditalPrefill` — o mesmo débito de S1-25). O `[~]` já foi resolvido por **P-2.9c** (S-62: `apps/projetos/src/app/(submissor)/novo/page.tsx` ganhou prefill de edital via `searchParams`) e endurecido em P-0.15 (S-67: import do package + tratamento de erro). **Normalização:** o `[~]` de P-2.11 em `PROMPTS.md` foi corrigido para `[x]` nesta sessão, com nota apontando para S-62/S-67 — S-43 permanece `parcial` sem edição (é o registro histórico correto do estado _daquele momento_).
+
+**Decisões tomadas:**
+
+- 12 PATCHes criados em `PATCHES/` (numeração 001–012), reconstruindo retroativamente 3 decisões pré-existentes nunca registradas (S1-16: tipografia, escopo da Rádio, remoções consolidadas da v1) e formalizando 9 decisões já tomadas ao longo da auditoria/Ondas 0–2 mas nunca escritas como PATCH (decisão B/RLS ativa, MFA bloqueante, exclusão LGPD, votação — quórum por pessoa + encerramento manual, KPI "doações do mês", `organization_budgets`, quizzes/certificado-hash/notas mantidos, workspaces/colunas/checklist descartados, embeddings de duplicidade promovido a v1 + scoring de flats como assistência + renovação). Ver `PATCHES/00N-*.md` para o detalhe de cada um.
+- BRAIN.md emendado em 9 pontos para eliminar as contradições S1-12 (embeddings v1×v2+) e S1-13 (scoring de flats "com IA" vs. tabela determinística de §6.8; detecção de renovação sem prompt) e para resolver a caixa de "decisão técnica pendente" de §3 (já resolvida pela Decisão B/P-0.10, nunca atualizada no texto): §2 (MFA, embeddings), §3 (caixa de decisão RLS), §6.2 (IA de Projetos, orçamento por instituição, votação), §6.6 (KPI doações), §6.8 (assistência de IA no scoring), §8 (reescrita de "Mantido na v1"/"Removido da v1" + nova subseção "Descartado").
+- PROMPTS.md: cabeçalho corrigido (S1-26 — eram 4 correções, não 3; hoje são 19, contando as 15 da Onda de correção da auditoria) e critério `[~]` de P-2.11 corrigido para `[x]` (ver ponto 6 da retificação acima).
+- PRODUCT.md: corrigidas as 2 divergências apontadas por S1-26/RELATORIO §2.4 — "não é produto público" contradizia `ouvinte` (papel anônimo com acesso a Rádio e Documentos públicos, BRAIN §3); a restrição "citações do NT ou Salmos" não existe em BRAIN §5 (que fala apenas em "citações bíblicas pertinentes ao contexto institucional") e foi removida por não ter origem rastreável.
+- Não foram criados PATCHes para D-1 (editor rich text), D-2 (Google Calendar/feed ICS) e D-3 (audiência da Rádio/heartbeat) — essas três decisões só passam a ter efeito quando os prompts que as consomem rodarem (P-4.4/P-5.13/P-8.6, ainda pendentes) e serão registradas como PATCH nesse momento, não retroativamente agora.
+
+**Debitos tecnicos / pendencias:**
+
+- S-45 (ponto 3 da retificação): corpo da sessão irrecuperável; aceito como está.
+- P-1.19/P-2.12 (ponto 5): sem narrativa de sessão; critérios `[x]` mantidos com base em evidência indireta (dependências posteriores), não em log próprio.
+- `PROMPTS.md` ainda não lista o texto integral dos corretivos P-0.7–P-0.16/P-1.25–P-1.27/P-2.9c/P-3.8b como seções `### P-X.Y` — eles são executados a partir de `AUDIT/04-prompts-pendentes.md` §4 (convenção já em uso desde S-54, registrada em cada entrada de sessão). Transcrever o texto integral para dentro de `PROMPTS.md` é trabalho mecânico de escopo próprio, fora do que P-0.16 pediu ("cabeçalho → lista real"); não foi feito aqui para não misturar prompts na mesma sessão.
+
+**Arquivos criados:**
+
+- `PATCHES/001-tipografia-parkinsans-titillium.md`
+- `PATCHES/002-radio-escopo-simplificado.md`
+- `PATCHES/003-remocoes-v1-consolidadas.md`
+- `PATCHES/004-decisao-b-rls-ativa.md`
+- `PATCHES/005-mfa-bloqueante.md`
+- `PATCHES/006-lgpd-exclusao-anonimizacao.md`
+- `PATCHES/007-votacao-quorum-encerramento-manual.md`
+- `PATCHES/008-kpi-doacoes-do-mes.md`
+- `PATCHES/009-organization-budgets.md`
+- `PATCHES/010-quizzes-certificado-hash-notas-mantidos.md`
+- `PATCHES/011-workspaces-colunas-checklist-descartados.md`
+- `PATCHES/012-ia-embeddings-v1-scoring-flats-renovacao.md`
+
+**Arquivos modificados:**
+
+- `BRAIN.md` (§2, §3, §6.2, §6.6, §6.8, §8 — ver PATCHes 004–005, 007–012 para antes/depois de cada trecho)
+- `PROMPTS.md` (cabeçalho e Sumário — contagem/lista de correções; critério de P-2.11 `[~]` → `[x]`)
+- `PRODUCT.md` (2 linhas — escopo público e regra de citações bíblicas)
+- `SESSIONS.md` (esta entrada + linha no índice)
