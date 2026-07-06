@@ -87,6 +87,7 @@
 | S-63   | 2026-07-04 | P-3.8b — Financeiro: governança e conciliação verdadeiras               | concluido                            |
 | S-64   | 2026-07-05 | P-0.12 — Storage: buckets e policies (Onda 2)                           | concluido                            |
 | S-65   | 2026-07-05 | P-0.13 — LGPD: fundação (Onda 2)                                        | concluido                            |
+| S-66   | 2026-07-06 | P-0.14 — Jobs: Inngest de verdade (Onda 2)                              | concluido                            |
 
 ---
 
@@ -2907,3 +2908,87 @@ Descoberta colateral durante a verificação (16 testes de `apps/projetos/src/__
 - `apps/admin/src/__tests__/audit.test.ts` (assert atualizado para redação em vez de e-mail cru)
 - `BRAIN.md` (§9: nova subseção "LGPD — fundação (P-0.13)"; princípio de imutabilidade ganha exceção legal referenciada)
 - `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+### S-66 — 2026-07-06 — P-0.14 Jobs: Inngest de verdade (Onda 2)
+
+**Prompt:** P-0.14 (`AUDIT/04-prompts-pendentes.md` §4)
+**Duracao:** ~3h
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+S1-06/CS-5: 8+ features prometidas em sessões anteriores dependiam de um scheduler que nunca existiu no monorepo — `autoCreateMonthlyMeetings` (S-15/P-1.8), `runEditalClosingReminders` (S-30/P-1.22, implementada em S-61/P-1.27 mas nunca chamada), os 2 lembretes `[~]` de P-2.10 (relatório e avaliador), e a transição automática de homologação após 7 dias sem contestação prometida por `notifyHomologacao` desde P-2.6 mas sem executor algum (AUDIT/01-specs.md:107). Investigação em código (não em documentação) confirmou, para cada um, exatamente qual função já existia pronta e qual não existia nada além da promessa em texto de e-mail.
+
+**Decisão de arquitetura que consumiu a maior parte da sessão:** um cron não tem sessão HTTP — não pode chamar Server Actions (que resolvem `actorId` via `cookies()`) nem reusar funções que vivem dentro de um app (packages nunca importam de apps: confirmado por grep que nenhum pacote hoje depende de `@hebron/{admin,projetos,documentos,...}`, e nenhum app expõe `exports` no `package.json` para ser consumido como lib). Isso forçou duas decisões:
+
+1. **Ator sistema** (`packages/db/src/system-actor.ts`, `getSystemActorId`): `admin.audit_log.actor_id` é `NOT NULL` com FK para `public.users`, e a RLS (decisão B) só autoriza escrita para quem tem papel em `role_assignments` — não existe "ninguém" nesse modelo. Criado um usuário real (`sistema@hebronaseec.org.br`) via Admin API (mesmo padrão de `packages/auth/src/testing.ts::createTestAuthUser`, não INSERT direto em `auth.users`), papel `super_admin`, get-or-create idempotente. Nunca loga (sem uso de senha).
+2. **Lógica compartilhada extraída para `packages/db`, não duplicada:** onde uma action manual e um cron precisam do mesmo núcleo (reunião mensal, aprovação de projeto), o núcleo foi movido para `packages/db` (`meetings.ts::ensureMonthlyMeetings`, `projetos-approval.ts::generatePaymentSchedule`/`onProjectApproved`) e ambos os chamadores (a action e o cron) passaram a consumir de lá. Onde a função já não tinha NENHUM chamador (achado extra desta sessão: `apps/projetos/src/lib/notifications.ts` inteiro — `notifyProjectSubmitted`, `notifyVotingOpen`, etc. — não é importado por nada em `apps/projetos`, nem mesmo por testes; provavelmente um órfão remanescente de P-2.10 que ninguém detectou porque os testes de fluxo já cobrem os mesmos eventos por outro caminho), a função foi movida (não duplicada) para `packages/jobs/src/notify/`, de onde tanto o cron quanto uma futura action de `apps/projetos` (ex. `closeVoting` de P-2.9c) podem importar — apps podem importar de packages, só não de outros apps.
+
+**Escopo implementado:**
+
+1. **`packages/jobs`** (novo package): client Inngest único (`src/client.ts`, `id: "hebron-aseec"`); `src/index.ts` exporta `functions` (array consumido pela rota de serve) e `PLANNED_JOBS`; `inngest@^3.54.0` (não a v4 — peer `typescript >=5.8.0` colidiria com o `^5.6.3` fixado no monorepo; v3 pede só `>=4.7.2`).
+2. **Rota de serve** — `apps/intranet/src/app/api/inngest/route.ts` (`serve({client, functions})` de `inngest/next`). Único app host; a lógica de cada job mora em `packages/jobs`, não na intranet.
+3. **5 crons reais registrados:**
+   - `admin-ensure-monthly-meetings` (mensal, dia 1 06:00 UTC) — chama `ensureMonthlyMeetings` (extraída de `apps/admin/src/actions/meetings.ts`).
+   - `documentos-edital-closing-reminders` (diário 08:00 UTC) — `runEditalClosingReminders`, movida de `apps/documentos/src/jobs/edital-closing-reminders.ts` (arquivo/pasta removidos), junto com `notifyEditalClosing` (movida de `apps/documentos/src/lib/notifications.ts` — `resolveSubmissors` duplicada em `packages/jobs` porque `notifyEditalOpen`, que fica no app, ainda a usa).
+   - `projetos-report-reminders` (diário 08:00 UTC) — fecha o critério `[~]` "Relatório pendente: 3 lembretes" de P-2.10. Varre `reports` em 3 janelas (`dueDate` = hoje+7, hoje, hoje−23) e chama `notifyReportReminder` (movida de `apps/projetos/src/lib/notifications.ts`, zero callers). O terceiro lembrete ("7 dias antes de expirar") pressupõe um prazo final de expiração que não tinha definição prévia do Filipe — fixado em `dueDate + 30 dias` (`REPORT_EXPIRY_GRACE_DAYS`, documentado no código), então o lembrete dispara em `dueDate + 23`.
+   - `projetos-evaluation-reminders` (diário 08:00 UTC) — fecha o segundo critério `[~]` "Lista de projetos designados → avaliador (7d antes da reunião)" de P-2.10. Detecta reunião mensal agendada daqui a 7 dias, agrupa `evaluations` com `submittedAt IS NULL` por avaliador, envia lista de títulos pendentes (`notifyPendingEvaluations`, nova — template novo `packages/email/src/templates/evaluation-reminder.tsx`).
+   - `projetos-homologacao-auto-approve` (diário 03:00 UTC) — o executor que faltava desde P-2.6/P-2.8 (AUDIT/01-specs.md:107). Idade em homologação derivada do primeiro `project_versions` com `stage='homologacao'` (não existe coluna dedicada); elegível = sem `contestations` e snapshot com ≥7 dias. Replica o ramo "aprovado" de `transitionProjectStage`: `generatePaymentSchedule` + `onProjectApproved` (agora em `packages/db/src/projetos-approval.ts`) + `project_versions` + `admin.audit_log` (`project.stage_transition`, ator sistema) + `notifyProjectDecision` (movida, mesmo arquivo de `notify/projetos.ts`).
+4. **`packages/jobs/src/catalog.ts`** (`PLANNED_JOBS`) — registro documentado (nome, cron planejado, prompt-fonte) para os jobs cuja lógica ainda não existe: financeiro lote semanal/relatório mensal/vencimento próximo (P-3.10, ainda não rodou), tarefas recorrência/prazos (P-4.8), intranet briefing/kpi-snapshot (P-5.8/5.10), flats check-in/check-out (P-7.10), rádio snapshot de audiência (P-8.11). Nenhuma função Inngest vazia foi criada para estes — o critério do prompt pede registro, não simulação de implementação.
+5. **Env vars documentadas** em `.env.example`: `INNGEST_SIGNING_KEY`, `INNGEST_EVENT_KEY` (produção/Inngest Cloud; dev local usa `inngest-cli dev` sem chaves).
+6. **BRAIN.md §7** — nova subseção "Jobs (Inngest — P-0.14)" documentando o mecanismo real (antes só uma linha genérica em "Regra geral").
+
+**Achado colateral corrigido (drift de ambiente, não de código):** ao rodar a suíte de `apps/projetos` para validar zero regressão, 16/102 testes falharam com "permission denied for schema projetos" — o mesmo drift já corrigido uma vez em S-65 (addendum) tinha voltado: `public._migrations` registrava `0025_fix_projetos_schema_grant`/`0026_fix_projetos_missing_select_grants` como aplicadas, mas os GRANTs físicos não estavam presentes no banco de desenvolvimento local (ambiente reconstruído/resetado entre sessões sem os grants). Corrigido apagando as duas linhas de bookkeeping e reaplicando via `pnpm --filter @hebron/db db:migrate` — nenhuma mudança de arquivo, só reaplicação. Registrado aqui para não ser re-perdido: se o drift voltar novamente, considerar investigar por que o ambiente de dev perde grants entre sessões (possível reset do stack local) em vez de só reaplicar.
+
+**Critérios de aceite verificados:**
+
+- [x] cada cron listado dispara em ambiente de dev — 5 testes de integração novos em `packages/jobs/src/__tests__/` (sem mock de banco; só `@hebron/email::createNotification` mockado, mesmo padrão de `apps/admin/src/__tests__/actions.test.ts`, para não depender de domínio verificado no Resend) chamam a função exportada de cada cron diretamente (`runReportReminders`, `runEvaluationReminders`, `runHomologacaoAutoApprove`, `runEditalClosingReminders`) e verificam o efeito real no banco/nas chamadas de notificação.
+- [x] os critérios `[~]` de P-2.10 fecham — `projetos-report-reminders.test.ts` e `projetos-evaluation-reminders.test.ts`.
+- [x] env vars documentadas — `.env.example`.
+- lint/typecheck verdes em `@hebron/jobs`, `@hebron/db`, `@hebron/admin`, `@hebron/projetos`, `@hebron/documentos`, `@hebron/intranet`, `@hebron/email`; suítes completas rodadas sem regressão: `@hebron/db` 50/50, `@hebron/admin` 58/58, `@hebron/projetos` 102/102, `@hebron/documentos` 48/48, `@hebron/financeiro` 30/30, `@hebron/jobs` 5/5 (novos).
+
+**Decisoes tomadas:**
+
+- Ator sistema (`sistema@hebronaseec.org.br`, super_admin, via Admin API) para toda mutação/auditoria disparada por cron — necessário porque RLS (decisão B) e a FK de `audit_log` não têm conceito de "ninguém"; alternativa cogitada e descartada (tornar `actor_id` nullable) exigiria migrar 3 páginas de audit log de `innerJoin` para `leftJoin` e mudar semântica de exibição sem ganho claro.
+- `generatePaymentSchedule`/`onProjectApproved` viraram `packages/db/src/projetos-approval.ts` (não `packages/jobs`) porque `apps/projetos/src/actions/projects.ts` ainda os usa na transição manual — um único núcleo evita a divergência que motivou metade dos achados da Fase 2 (CS-1).
+- `apps/projetos/src/lib/notifications.ts` (`notifyProjectDecision`, `notifyReportReminder`) e `apps/documentos/src/jobs/edital-closing-reminders.ts` (`runEditalClosingReminders`) foram **movidas**, não duplicadas, para `packages/jobs` — confirmado por grep que nenhuma tinha caller algum antes desta sessão.
+- Prazo de expiração de relatório (30 dias após `dueDate`) é uma decisão técnica desta sessão, sem confirmação prévia do Filipe — documentada no código (`REPORT_EXPIRY_GRACE_DAYS`) e aqui; ajustável numa migration/constante futura se o número real for diferente.
+- `packages/jobs/src/catalog.ts` registra jobs futuros como dados tipados (não como funções Inngest vazias) — uma função vazia passaria por "implementada" sem estar, reproduzindo exatamente o padrão PD-1 que a Fase 2 da auditoria identificou para critérios de aceite.
+
+**Debitos tecnicos / pendencias:**
+
+- `runHomologacaoAutoApprove` não usa transação única (replica o padrão pré-existente de `transitionProjectStage`, que também não a usa) — uma falha a meio do caminho (ex. `generatePaymentSchedule` falhar por dado inconsistente) deixaria o projeto marcado `aprovado` sem payment schedule. Pré-existente, não introduzido por esta sessão; considerar transação numa futura revisão de ambos os caminhos juntos.
+- `notifyPendingEvaluations`/`notifyReportReminder`/`notifyEditalClosing`/`notifyProjectDecision` ficaram em `packages/jobs/src/notify/`, não em `packages/db` — se uma app precisar delas fora do contexto de um cron (ex. `closeVoting` manual de P-2.9c notificando a decisão), importa de `@hebron/jobs` normalmente (apps podem importar de packages, incluindo `packages/jobs`); só registrando a decisão para não ser redescoberta.
+- Drift de grants em `projetos` (ver achado colateral acima) pode voltar se o ambiente de dev for resetado de novo — sem causa raiz investigada nesta sessão.
+
+**Arquivos criados:**
+
+- `packages/jobs/package.json`, `tsconfig.json`, `eslint.config.mjs`, `vitest.config.ts`
+- `packages/jobs/src/client.ts`, `src/index.ts`, `src/catalog.ts`
+- `packages/jobs/src/lib/templates.ts`
+- `packages/jobs/src/crons/admin.ts`, `src/crons/documentos.ts`, `src/crons/projetos.ts`
+- `packages/jobs/src/notify/documentos.ts`, `src/notify/projetos.ts`
+- `packages/jobs/src/__tests__/setup-env.ts`, `projetos-homologacao.test.ts`, `projetos-report-reminders.test.ts`, `projetos-evaluation-reminders.test.ts`, `documentos-edital-closing.test.ts`
+- `packages/db/src/system-actor.ts`, `src/meetings.ts`, `src/projetos-approval.ts`
+- `packages/db/src/__tests__/system-actor.test.ts`, `meetings.test.ts`
+- `packages/email/src/templates/evaluation-reminder.tsx`
+- `apps/intranet/src/app/api/inngest/route.ts`
+
+**Arquivos modificados:**
+
+- `packages/db/package.json` (exports `./system-actor`, `./meetings`, `./projetos-approval`)
+- `apps/admin/src/actions/meetings.ts` (`autoCreateMonthlyMeetings` delega a `ensureMonthlyMeetings`)
+- `apps/projetos/src/actions/projects.ts` (`generatePaymentSchedule`/`onProjectApproved` importados de `@hebron/db/projetos-approval`, definições locais removidas)
+- `apps/projetos/src/lib/notifications.ts` (`notifyProjectDecision`/`notifyReportReminder` removidas — movidas)
+- `apps/documentos/src/lib/notifications.ts` (`notifyEditalClosing` removida — movida)
+- `apps/intranet/package.json` (deps `@hebron/jobs`, `inngest`)
+- `.env.example` (`INNGEST_SIGNING_KEY`, `INNGEST_EVENT_KEY`)
+- `BRAIN.md` (§7: nova subseção "Jobs (Inngest — P-0.14)")
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+**Arquivos removidos:**
+
+- `apps/documentos/src/jobs/edital-closing-reminders.ts` (pasta `jobs/` removida)
+- `apps/projetos/src/lib/integrations/financeiro.ts`

@@ -1,27 +1,12 @@
 "use server";
 
 import { z } from "zod";
-import { and, eq, gte, lt } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { db } from "@hebron/db/client";
 import { meetingSessions } from "@hebron/db/schema";
+import { ensureMonthlyMeetings } from "@hebron/db/meetings";
 import { adminAction } from "../lib/safe-action";
 import { logAudit, computeDiff } from "../lib/audit";
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-/**
- * Retorna a data da primeira quarta-feira de um dado mês/ano (UTC).
- * Ref: BRAIN.md 6.1 — reunião mensal na 1ª quarta-feira.
- */
-function firstWednesdayOf(year: number, month: number): Date {
-  // month is 0-indexed (January = 0)
-  const date = new Date(Date.UTC(year, month, 1));
-  // getUTCDay(): 0 = Sunday, 3 = Wednesday
-  const dayOfWeek = date.getUTCDay();
-  const daysUntilWednesday = (3 - dayOfWeek + 7) % 7;
-  date.setUTCDate(1 + daysUntilWednesday);
-  return date;
-}
 
 // ─── createMeeting ────────────────────────────────────────────────────────────
 
@@ -128,6 +113,10 @@ export const updateMeeting = adminAction
 // Cria reuniões mensais (1ª quarta-feira) para os próximos N meses,
 // pulando meses em que já existe uma reunião mensal agendada.
 // Ref: BRAIN.md 6.1 — auto-criação mensal.
+//
+// Núcleo extraído para @hebron/db/meetings (P-0.14) — o cron mensal
+// registrado em packages/jobs chama a mesma função com o ator sistema,
+// sem depender de uma sessão HTTP.
 
 export const autoCreateMonthlyMeetings = adminAction
   .schema(
@@ -136,67 +125,6 @@ export const autoCreateMonthlyMeetings = adminAction
       chairUserId: z.string().uuid().optional(),
     }),
   )
-  .action(async ({ parsedInput, ctx }) => {
-    const today = new Date();
-    const created: (typeof meetingSessions.$inferSelect)[] = [];
-
-    for (let i = 0; i < parsedInput.monthsAhead; i++) {
-      const rawMonth = today.getUTCMonth() + i;
-      const year = today.getUTCFullYear() + Math.floor(rawMonth / 12);
-      const month = rawMonth % 12;
-
-      const wednesday = firstWednesdayOf(year, month);
-
-      // Skip dates already past
-      if (wednesday < today) continue;
-
-      const monthStart = new Date(Date.UTC(year, month, 1));
-      const monthEnd = new Date(Date.UTC(year, month + 1, 1));
-
-      // Check if a monthly meeting already exists in this calendar month
-      const existingRows = await db
-        .select({ id: meetingSessions.id })
-        .from(meetingSessions)
-        .where(
-          and(
-            eq(meetingSessions.type, "mensal"),
-            gte(meetingSessions.date, monthStart),
-            lt(meetingSessions.date, monthEnd),
-          ),
-        );
-
-      if (existingRows[0]) continue;
-
-      const inserted = await db
-        .insert(meetingSessions)
-        .values({
-          date: wednesday,
-          type: "mensal",
-          chairUserId: parsedInput.chairUserId ?? null,
-          status: "scheduled",
-        })
-        .returning();
-
-      const meeting = inserted[0];
-      if (!meeting) continue;
-
-      await logAudit({
-        actorId: ctx.actorId,
-        action: "meeting.created",
-        entity: "meeting_session",
-        entityId: meeting.id,
-        diff: {
-          after: {
-            date: meeting.date,
-            type: "mensal",
-            status: "scheduled",
-            autoCreated: true,
-          },
-        },
-      });
-
-      created.push(meeting);
-    }
-
-    return { created, count: created.length };
-  });
+  .action(async ({ parsedInput, ctx }) =>
+    ensureMonthlyMeetings(parsedInput, ctx.actorId),
+  );

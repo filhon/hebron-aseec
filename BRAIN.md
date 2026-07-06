@@ -495,6 +495,34 @@ a) Tempo de ministério: 1pt/ano, max 10 | b) Frequência de uso: nunca (10), >1
 
 **Regra geral:** dados via banco (foreign keys cross-schema), eventos via Supabase Realtime + Postgres triggers + Inngest para reações assíncronas.
 
+### Jobs (Inngest — P-0.14)
+
+`packages/jobs` é o client Inngest único do monorepo (`inngest.createFunction`
+por cron) — a rota de serve vive em `apps/intranet/src/app/api/inngest/route.ts`
+(um único app host; qualquer app poderia expor a rota, a intranet foi
+escolhida por já tocar admin/documentos/projetos). A lógica de cada job vive
+em `packages/jobs/src/crons/<módulo>.ts`, nunca em código de app — jobs
+rodam sem sessão HTTP, então não podem reusar Server Actions (que dependem
+de `cookies()`); a lógica compartilhada com a action manual (quando existe,
+ex. reunião mensal) foi extraída para `packages/db` (`meetings.ts`,
+`projetos-approval.ts`), consumida tanto pela action quanto pelo cron.
+
+**Ator sistema** (`packages/db/src/system-actor.ts`, `getSystemActorId`):
+mutações automáticas (aprovação automática de projeto, criação de reunião)
+ainda precisam de um `actorId` real — `admin.audit_log.actor_id` é
+`NOT NULL` com FK para `public.users`, e a RLS (decisão B, P-0.10) só
+autoriza escrita para quem tem papel em `public.role_assignments`. Um
+usuário real (`sistema@hebronaseec.org.br`, criado via Admin API,
+get-or-create idempotente, papel `super_admin`) representa "o sistema" nesses
+casos — nunca loga (sem uso de senha), existe só para ser referenciado.
+
+**Catálogo** (`packages/jobs/src/catalog.ts`, `PLANNED_JOBS`): jobs cuja
+lógica de negócio ainda não existe (financeiro P-3.10, tarefas P-4.8,
+intranet P-5.8/5.10, flats P-7.10, rádio P-8.11) ficam documentados ali —
+nome, cron planejado, prompt que os desbloqueia — em vez de uma função
+Inngest vazia. Todo prompt que implementar um desses deve registrar a
+função real em `src/crons/` e remover a entrada correspondente do catálogo.
+
 ---
 
 ## 8. Escopo v1 vs v2+

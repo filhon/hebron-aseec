@@ -8,7 +8,6 @@ import {
   projectVersions,
   compactVersions,
   contestations,
-  paymentSchedules,
   projectAttachments,
   notifications,
   organizations,
@@ -44,7 +43,10 @@ import {
   projetosAction,
 } from "../lib/safe-action";
 import { logProjectAudit, computeDiff } from "../lib/audit";
-import { onProjectApproved } from "../lib/integrations/financeiro";
+import {
+  generatePaymentSchedule,
+  onProjectApproved,
+} from "@hebron/db/projetos-approval";
 import { onProjectSubmitted } from "../lib/integrations/tarefas";
 
 // ---------------------------------------------------------------------------
@@ -828,49 +830,10 @@ export const deleteProject = projetosAction
 // ---------------------------------------------------------------------------
 // Side-effect helpers
 // ---------------------------------------------------------------------------
-
-async function generatePaymentSchedule(
-  project: Awaited<ReturnType<typeof getProjectOrThrow>>,
-): Promise<void> {
-  if (!project.parcelas || !project.budgetTotal || !project.evaluationYear)
-    return;
-
-  const amountPerInstallment =
-    parseFloat(project.budgetTotal) / project.parcelas;
-
-  // Create one payment per month in the `meses` count (evenly distributed Jan–meses)
-  // Full months list is in version snapshot; DB stores only count so we distribute evenly
-  const monthCount = project.meses ?? project.parcelas;
-  const paymentRows = Array.from({ length: monthCount }, (_, i) => {
-    const month = ((i % 12) + 1) as
-      | 1
-      | 2
-      | 3
-      | 4
-      | 5
-      | 6
-      | 7
-      | 8
-      | 9
-      | 10
-      | 11
-      | 12;
-    const evalYear = project.evaluationYear;
-    if (!evalYear) throw new Error("Ano de avaliação ausente");
-    const dueDate = new Date(evalYear, month - 1, 1);
-    const dueDateStr = dueDate.toISOString().split("T")[0];
-    if (!dueDateStr) throw new Error("Invalid due date");
-    return {
-      projectId: project.id,
-      amount: amountPerInstallment.toFixed(2),
-      month,
-      dueDate: dueDateStr,
-      status: "pendente" as const,
-    };
-  });
-
-  await db.insert(paymentSchedules).values(paymentRows);
-}
+// generatePaymentSchedule / onProjectApproved movidos para
+// @hebron/db/projetos-approval (P-0.14) — reusados pelo cron de homologação
+// automática em packages/jobs, que não tem sessão HTTP para chamar esta
+// Server Action.
 
 async function notifyHomologacao(
   projectId: string,

@@ -1,0 +1,202 @@
+/**
+ * projetos-homologacao.test.ts — runHomologacaoAutoApprove (P-0.14)
+ *
+ * O executor que faltava para "após 7 dias sem contestação, o projeto será
+ * automaticamente aprovado" (AUDIT/01-specs.md:107). Testa: elegibilidade
+ * por idade do snapshot de homologação (>=7 dias), bloqueio por
+ * contestação, e os efeitos colaterais replicados de
+ * transitionProjectStage (payment schedule + cost center + audit).
+ */
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { eq } from "drizzle-orm";
+
+// Sem verificação de domínio no Resend em ambiente de teste — mesmo padrão
+// já usado em apps/admin/src/__tests__/actions.test.ts.
+vi.mock("@hebron/email", () => ({
+  createNotification: vi.fn().mockResolvedValue({ id: "mock-notif-id" }),
+}));
+import { db } from "@hebron/db/client";
+import {
+  users,
+  roleAssignments,
+  organizations,
+  organizationMembers,
+  projects,
+  projectVersions,
+  contestations,
+  paymentSchedules,
+  costCenters,
+  auditLog,
+} from "@hebron/db/schema";
+import { runHomologacaoAutoApprove } from "../crons/projetos";
+
+const IDS = {
+  submitter: "faaa0000-0000-0000-0000-000000000001",
+  org: "fabb0000-0000-0000-0000-000000000001",
+  eligibleProject: "facc0000-0000-0000-0000-000000000001",
+  contestedProject: "facc0000-0000-0000-0000-000000000002",
+  recentProject: "facc0000-0000-0000-0000-000000000003",
+  contester: "faaa0000-0000-0000-0000-000000000002",
+};
+
+async function insertHomologVersion(projectId: string, createdAt: Date) {
+  await db.insert(projectVersions).values({
+    projectId,
+    versionNumber: 1,
+    stage: "homologacao",
+    data: { _source: "test-fixture" },
+    createdBy: IDS.submitter,
+    createdAt,
+  });
+}
+
+beforeAll(async () => {
+  await db
+    .insert(users)
+    .values([
+      {
+        id: IDS.submitter,
+        email: "homolog-sub@test.hebron",
+        fullName: "Submissor",
+      },
+      {
+        id: IDS.contester,
+        email: "homolog-contest@test.hebron",
+        fullName: "Contestador",
+      },
+    ])
+    .onConflictDoNothing();
+  await db
+    .insert(roleAssignments)
+    .values({ userId: IDS.submitter, role: "submissor" })
+    .onConflictDoNothing();
+  await db
+    .insert(organizations)
+    .values({ id: IDS.org, nome: "Org Homolog Test", createdBy: IDS.submitter })
+    .onConflictDoNothing();
+  await db
+    .insert(organizationMembers)
+    .values({ organizationId: IDS.org, userId: IDS.submitter })
+    .onConflictDoNothing();
+
+  const eightDaysAgo = new Date();
+  eightDaysAgo.setUTCDate(eightDaysAgo.getUTCDate() - 8);
+  const twoDaysAgo = new Date();
+  twoDaysAgo.setUTCDate(twoDaysAgo.getUTCDate() - 2);
+
+  await db.insert(projects).values([
+    {
+      id: IDS.eligibleProject,
+      title: "Projeto elegível para aprovação automática",
+      tipo: "anual",
+      stage: "homologacao",
+      submitterId: IDS.submitter,
+      organizationId: IDS.org,
+      parcelas: 3,
+      meses: 3,
+      budgetTotal: "9000.00",
+      evaluationYear: new Date().getFullYear(),
+    },
+    {
+      id: IDS.contestedProject,
+      title: "Projeto contestado — não deve auto-aprovar",
+      tipo: "anual",
+      stage: "homologacao",
+      submitterId: IDS.submitter,
+      organizationId: IDS.org,
+    },
+    {
+      id: IDS.recentProject,
+      title: "Projeto recente — ainda dentro da janela de 7 dias",
+      tipo: "anual",
+      stage: "homologacao",
+      submitterId: IDS.submitter,
+      organizationId: IDS.org,
+    },
+  ]);
+
+  await insertHomologVersion(IDS.eligibleProject, eightDaysAgo);
+  await insertHomologVersion(IDS.contestedProject, eightDaysAgo);
+  await insertHomologVersion(IDS.recentProject, twoDaysAgo);
+
+  await db.insert(contestations).values({
+    projectId: IDS.contestedProject,
+    userId: IDS.contester,
+    justification: "Justificativa de teste com mais de trinta caracteres.",
+  });
+});
+
+afterAll(async () => {
+  await db
+    .delete(paymentSchedules)
+    .where(eq(paymentSchedules.projectId, IDS.eligibleProject));
+  await db
+    .delete(costCenters)
+    .where(eq(costCenters.projectId, IDS.eligibleProject));
+  await db
+    .delete(contestations)
+    .where(eq(contestations.projectId, IDS.contestedProject));
+  await db
+    .delete(projectVersions)
+    .where(eq(projectVersions.projectId, IDS.eligibleProject));
+  await db
+    .delete(projectVersions)
+    .where(eq(projectVersions.projectId, IDS.contestedProject));
+  await db
+    .delete(projectVersions)
+    .where(eq(projectVersions.projectId, IDS.recentProject));
+  await db.delete(projects).where(eq(projects.id, IDS.eligibleProject));
+  await db.delete(projects).where(eq(projects.id, IDS.contestedProject));
+  await db.delete(projects).where(eq(projects.id, IDS.recentProject));
+  await db
+    .delete(organizationMembers)
+    .where(eq(organizationMembers.organizationId, IDS.org));
+  await db.delete(organizations).where(eq(organizations.id, IDS.org));
+  await db.delete(auditLog).where(eq(auditLog.entityId, IDS.eligibleProject));
+  await db
+    .delete(roleAssignments)
+    .where(eq(roleAssignments.userId, IDS.submitter));
+  await db.delete(users).where(eq(users.id, IDS.submitter));
+  await db.delete(users).where(eq(users.id, IDS.contester));
+});
+
+describe("runHomologacaoAutoApprove", () => {
+  it("aprova projeto elegível (>=7 dias, sem contestação) e gera payment schedule + cost center + audit", async () => {
+    const { approved } = await runHomologacaoAutoApprove();
+    expect(approved).toContain(IDS.eligibleProject);
+    expect(approved).not.toContain(IDS.contestedProject);
+    expect(approved).not.toContain(IDS.recentProject);
+
+    const [project] = await db
+      .select()
+      .from(projects)
+      .where(eq(projects.id, IDS.eligibleProject));
+    expect(project?.stage).toBe("aprovado");
+    expect(project?.approvedAt).toBeTruthy();
+
+    const schedule = await db
+      .select()
+      .from(paymentSchedules)
+      .where(eq(paymentSchedules.projectId, IDS.eligibleProject));
+    expect(schedule.length).toBe(3);
+
+    const [costCenter] = await db
+      .select()
+      .from(costCenters)
+      .where(eq(costCenters.projectId, IDS.eligibleProject));
+    expect(costCenter).toBeTruthy();
+
+    const audit = await db
+      .select()
+      .from(auditLog)
+      .where(eq(auditLog.entityId, IDS.eligibleProject));
+    expect(audit.some((a) => a.action === "project.stage_transition")).toBe(
+      true,
+    );
+  });
+
+  it("é idempotente — segunda execução não aprova de novo (já não está mais em homologacao)", async () => {
+    const { approved } = await runHomologacaoAutoApprove();
+    expect(approved).not.toContain(IDS.eligibleProject);
+  });
+});

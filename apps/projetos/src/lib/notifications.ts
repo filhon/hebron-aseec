@@ -8,16 +8,13 @@ import {
   roleAssignments,
   projects,
   organizations,
-  reports,
   paymentSchedules,
   emailTemplates,
 } from "@hebron/db/schema";
 import { ProjectSubmittedEmail } from "@hebron/email/templates/project-submitted";
 import { ProjectStatusChangeEmail } from "@hebron/email/templates/project-status-change";
-import { ReportReminderEmail } from "@hebron/email/templates/report-reminder";
 import { PaymentConfirmationEmail } from "@hebron/email/templates/payment-confirmation";
 import type { ProjectStatusEvent } from "@hebron/email/templates/project-status-change";
-import type { ReportReminderType } from "@hebron/email/templates/report-reminder";
 
 // ---------------------------------------------------------------------------
 // Template override helpers
@@ -311,173 +308,11 @@ export async function notifyVotingOpen(projectId: string): Promise<void> {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Project approved / rejected → submissor (email only)
-// ---------------------------------------------------------------------------
-
-export async function notifyProjectDecision(
-  projectId: string,
-  approved: boolean,
-): Promise<void> {
-  const [project] = await db
-    .select({
-      title: projects.title,
-      submitterId: projects.submitterId,
-      submitterName: users.fullName,
-      submitterEmail: users.email,
-    })
-    .from(projects)
-    .innerJoin(users, eq(users.id, projects.submitterId))
-    .where(eq(projects.id, projectId))
-    .limit(1);
-
-  if (!project) return;
-
-  const url = buildProjectUrl(projectId);
-  const resendApiKey = process.env.RESEND_API_KEY;
-  const statusEvent: ProjectStatusEvent = approved ? "aprovado" : "reprovado";
-  const displayName = project.submitterName ?? project.submitterEmail;
-  const subject = approved
-    ? `Projeto aprovado: ${project.title}`
-    : `Atualização sobre seu projeto: ${project.title}`;
-  const tpl = await getDbTemplate(
-    approved ? "projetos-approved" : "projetos-rejected",
-  );
-  const emailOpts = tpl
-    ? applyVars(tpl, { nome: displayName, titulo: project.title, link: url })
-    : null;
-
-  await createNotification({
-    insert: makeInsert(),
-    resendApiKey,
-    data: {
-      userId: project.submitterId,
-      channel: "email",
-      type: approved ? "project.approved" : "project.rejected",
-      title: subject,
-      body: approved
-        ? "Seu projeto foi aprovado pela diretoria."
-        : "Seu projeto não foi aprovado neste ciclo.",
-      payload: { projectId, href: `/projetos/${projectId}` },
-    },
-    email: emailOpts
-      ? { to: project.submitterEmail, ...emailOpts }
-      : {
-          to: project.submitterEmail,
-          subject,
-          template: React.createElement(ProjectStatusChangeEmail, {
-            recipientName: displayName,
-            projectTitle: project.title,
-            statusEvent,
-            projectUrl: url,
-          }),
-        },
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Report reminder → submissor (in_app + email)
-// ---------------------------------------------------------------------------
-
-export async function notifyReportReminder(
-  reportId: string,
-  reminderType: ReportReminderType,
-): Promise<void> {
-  const [row] = await db
-    .select({
-      dueDate: reports.dueDate,
-      projectId: reports.projectId,
-      projectTitle: projects.title,
-      submitterId: projects.submitterId,
-      submitterName: users.fullName,
-      submitterEmail: users.email,
-    })
-    .from(reports)
-    .innerJoin(projects, eq(projects.id, reports.projectId))
-    .innerJoin(users, eq(users.id, projects.submitterId))
-    .where(eq(reports.id, reportId))
-    .limit(1);
-
-  if (!row) return;
-
-  const url = buildProjectUrl(row.projectId);
-  const resendApiKey = process.env.RESEND_API_KEY;
-  const dueDate = row.dueDate ? new Date(row.dueDate) : new Date();
-  const displayName = row.submitterName ?? row.submitterEmail;
-
-  const REMINDER_SLUGS: Record<ReportReminderType, string> = {
-    seven_days_before: "report-reminder-7d-before",
-    due_today: "report-reminder-due-today",
-    seven_days_before_expiry: "report-reminder-expiry",
-  };
-  const TITLES: Record<ReportReminderType, string> = {
-    seven_days_before: `Relatório vence em 7 dias: ${row.projectTitle}`,
-    due_today: `Relatório vence hoje: ${row.projectTitle}`,
-    seven_days_before_expiry: `Relatório em atraso: ${row.projectTitle}`,
-  };
-  const title = TITLES[reminderType];
-  const tpl = await getDbTemplate(REMINDER_SLUGS[reminderType]);
-  const dueDateStr = dueDate.toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  });
-  const emailOpts = tpl
-    ? applyVars(tpl, {
-        nome: displayName,
-        titulo: row.projectTitle,
-        prazo: dueDateStr,
-        link: url,
-      })
-    : null;
-
-  await Promise.allSettled([
-    createNotification({
-      insert: makeInsert(),
-      data: {
-        userId: row.submitterId,
-        channel: "in_app",
-        type: `report.reminder.${reminderType}`,
-        title,
-        body: `Verifique o prazo do relatório do projeto ${row.projectTitle}.`,
-        payload: {
-          projectId: row.projectId,
-          reportId,
-          href: `/projetos/${row.projectId}`,
-        },
-      },
-    }),
-    createNotification({
-      insert: makeInsert(),
-      resendApiKey,
-      data: {
-        userId: row.submitterId,
-        channel: "email",
-        type: `report.reminder.${reminderType}`,
-        title,
-        body: `Verifique o prazo do relatório do projeto ${row.projectTitle}.`,
-        payload: {
-          projectId: row.projectId,
-          reportId,
-          href: `/projetos/${row.projectId}`,
-        },
-      },
-      email: emailOpts
-        ? { to: row.submitterEmail, ...emailOpts }
-        : {
-            to: row.submitterEmail,
-            subject: title,
-            template: React.createElement(ReportReminderEmail, {
-              recipientName: displayName,
-              projectTitle: row.projectTitle,
-              reminderType,
-              dueDate,
-              projectUrl: url,
-            }),
-          },
-    }),
-  ]);
-}
+// notifyProjectDecision e notifyReportReminder movidas para
+// packages/jobs/src/notify/projetos.ts (P-0.14) — ambas sem nenhum caller
+// nesta app (todo o módulo Projetos ainda não invoca este arquivo, ver
+// SESSIONS.md desta sessão); agora são a lógica de notificação dos crons de
+// homologação automática e lembrete de relatório, respectivamente.
 
 // ---------------------------------------------------------------------------
 // Payment made → submissor (email only)

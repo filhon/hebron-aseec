@@ -10,7 +10,10 @@
     "./audit": "./src/audit.ts",
     "./consents": "./src/consents.ts",
     "./anonymization": "./src/anonymization.ts",
-    "./notifications": "./src/notifications.ts"
+    "./notifications": "./src/notifications.ts",
+    "./system-actor": "./src/system-actor.ts",
+    "./meetings": "./src/meetings.ts",
+    "./projetos-approval": "./src/projetos-approval.ts"
   },
   "scripts": {
     "lint": "eslint .",

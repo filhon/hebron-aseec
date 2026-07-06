@@ -13,7 +13,6 @@ import { makeNotificationInserter } from "@hebron/db/notifications";
 import { createNotification } from "@hebron/email";
 import { NewDocumentEmail } from "@hebron/email/templates/new-document";
 import { EditalOpenEmail } from "@hebron/email/templates/edital-open";
-import { EditalClosingEmail } from "@hebron/email/templates/edital-closing";
 
 // ──────────────────────────────────────────────────────────────────────────────
 
@@ -155,63 +154,10 @@ export async function notifyEditalOpen(editalId: string): Promise<void> {
   );
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// notifyEditalClosing — lembrete 7 dias antes do fechamento do edital
-// ──────────────────────────────────────────────────────────────────────────────
-
-export async function notifyEditalClosing(
-  editalId: string,
-  daysUntilClose = 7,
-): Promise<void> {
-  const [row] = await db
-    .select({
-      title: documents.title,
-      slug: documents.slug,
-      closesAt: editals.closesAt,
-    })
-    .from(editals)
-    .innerJoin(documents, eq(editals.id, documents.id))
-    .where(and(eq(editals.id, editalId), isNull(documents.deletedAt)))
-    .limit(1);
-
-  const closesAt = row?.closesAt;
-  if (!closesAt) return;
-
-  const submissors = await resolveSubmissors();
-  if (!submissors.length) return;
-
-  const editalUrl = `${BASE_URL}/editais/${row.slug}`;
-  const resendApiKey = process.env.RESEND_API_KEY;
-  const dayLabel = daysUntilClose === 1 ? "1 dia" : `${daysUntilClose} dias`;
-
-  await Promise.all(
-    submissors.map((sub) =>
-      createNotification({
-        insert: makeInsert(),
-        resendApiKey,
-        data: {
-          userId: sub.userId,
-          channel: "email",
-          type: "edital.closing",
-          title: `Prazo em ${dayLabel}: ${row.title}`,
-          body: `O edital encerra em ${dayLabel}`,
-          payload: { editalId, daysUntilClose },
-        },
-        email: {
-          to: sub.email,
-          subject: `Lembrete: edital encerra em ${dayLabel}`,
-          template: React.createElement(EditalClosingEmail, {
-            recipientName: sub.fullName ?? sub.email,
-            editalTitle: row.title,
-            editalUrl,
-            closesAt,
-            daysUntilClose,
-          }),
-        },
-      }),
-    ),
-  );
-}
+// notifyEditalClosing movida para packages/jobs/src/notify/documentos.ts
+// (P-0.14) — único caller (runEditalClosingReminders) foi junto para o cron
+// diário em packages/jobs/src/crons/documentos.ts; nenhuma outra chamada
+// nesta app dependia dela.
 
 // ──────────────────────────────────────────────────────────────────────────────
 // resolveSubmissors — busca todos os usuários ativos com papel submissor

@@ -1,0 +1,115 @@
+/**
+ * Catálogo de jobs planejados cuja lógica de negócio ainda não existe no
+ * código (os prompts que a criam ainda não rodaram) — P-0.14 (AUDIT/04
+ * §4, escopo) pede para "deixar registro documentado" para estes, em vez
+ * de criar uma `inngest.createFunction` vazia que não faria nada real e
+ * passaria por "implementada" sem estar. Quando o prompt-fonte rodar, a
+ * função Inngest real entra em `src/crons/<módulo>.ts` e este registro
+ * deve ser removido da lista (ou movido para o topo do arquivo, marcado
+ * como implementado, se preferir manter o histórico).
+ *
+ * Convenção (G6.6, PROMPTS.md): todo P-X.6/P-X.8/P-X.10 que precisar de um
+ * cron novo deve, ao implementá-lo, registrar aqui a remoção da entrada
+ * correspondente como parte do seu critério de aceite.
+ */
+export interface PlannedJob {
+  /** Mesmo formato do `id` que a função Inngest real vai usar quando existir. */
+  id: string;
+  name: string;
+  /** Expressão cron planejada (sujeita a ajuste quando implementada). */
+  cron: string;
+  /** Prompt que introduz a lógica de negócio necessária. */
+  sourcePrompt: string;
+  description: string;
+}
+
+export const PLANNED_JOBS: PlannedJob[] = [
+  {
+    id: "financeiro-lote-semanal",
+    name: "Financeiro: lote semanal de aprovação de pagamentos",
+    cron: "0 8 * * 1",
+    sourcePrompt: "P-3.10",
+    description:
+      "Agrega pagamentos nascidos não-aprovados na semana e notifica o " +
+      "gestor designado (CC autorizador) para a aprovação em lote " +
+      "(BRAIN §6.5). Aguarda P-3.10 criar as actions de aprovação/lote.",
+  },
+  {
+    id: "financeiro-relatorio-mensal",
+    name: "Financeiro: relatório mensal consolidado",
+    cron: "0 8 1 * *",
+    sourcePrompt: "P-3.10",
+    description:
+      "Gera e envia o relatório financeiro mensal (PDF/XLSX, decisão " +
+      "D-6: @react-pdf/renderer + exceljs) aos diretores. Aguarda P-3.10.",
+  },
+  {
+    id: "financeiro-vencimento-proximo",
+    name: "Financeiro: contas a pagar/receber vencendo em breve",
+    cron: "0 8 * * *",
+    sourcePrompt: "P-3.9/P-3.10",
+    description:
+      "Lembrete de contas a pagar/receber com vencimento próximo. Aguarda " +
+      "P-3.9 criar as telas/queries de contas a pagar e receber.",
+  },
+  {
+    id: "tarefas-recorrencia",
+    name: "Tarefas: recorrência de tarefas",
+    cron: "0 6 * * *",
+    sourcePrompt: "P-4.8",
+    description:
+      "Cria a próxima ocorrência de uma tarefa recorrente quando a atual é " +
+      "concluída/vence. Aguarda P-4.8 (schema de recorrência).",
+  },
+  {
+    id: "tarefas-prazos",
+    name: "Tarefas: prazo próximo e prazo vencido",
+    cron: "0 7 * * *",
+    sourcePrompt: "P-4.8",
+    description:
+      "Notifica prazo próximo (1 dia antes) e prazo vencido de tarefas " +
+      "(PROMPTS.md P-4.8: `packages/jobs/src/crons/tarefas-prazos.ts`).",
+  },
+  {
+    id: "intranet-briefing",
+    name: "Intranet: briefing diário/semanal",
+    cron: "0 7 * * *",
+    sourcePrompt: "P-5.8/P-5.10",
+    description:
+      "Envia o briefing personalizado (preferências em " +
+      "`intranet.briefing_preferences`). Aguarda P-5.8/P-5.10.",
+  },
+  {
+    id: "intranet-kpi-snapshot",
+    name: "Intranet: snapshot horário de KPIs do dashboard",
+    cron: "0 * * * *",
+    sourcePrompt: "P-5.8",
+    description:
+      "Escreve `intranet.kpi_snapshots` a cada hora; o dashboard lê o " +
+      "snapshot mais recente e cai para query live se > 2h. Aguarda P-5.8.",
+  },
+  {
+    id: "flats-checkin-reminder",
+    name: "Flats: instruções de check-in (3 dias antes)",
+    cron: "0 8 * * *",
+    sourcePrompt: "P-7.10",
+    description:
+      "Envia instruções de check-in 3 dias antes da reserva. Aguarda P-7.10.",
+  },
+  {
+    id: "flats-checkout-reminder",
+    name: "Flats: lembrete de check-out (no dia)",
+    cron: "0 6 * * *",
+    sourcePrompt: "P-7.10",
+    description: "Lembrete de check-out no dia da saída. Aguarda P-7.10.",
+  },
+  {
+    id: "radio-audiencia-snapshot",
+    name: "Rádio: snapshot de audiência",
+    cron: "*/15 * * * *",
+    sourcePrompt: "P-8.11",
+    description:
+      "Agrega heartbeats do player (D-3: sessões únicas/dia + horas " +
+      "ouvidas) em `radio.listener_stats`. Aguarda P-8.11.",
+  },
+];

@@ -1,22 +1,18 @@
 import { and, eq, gte, isNotNull, isNull, lte } from "drizzle-orm";
 import { db } from "@hebron/db/client";
 import { documents, editals } from "@hebron/db/schema";
-import { notifyEditalClosing } from "../lib/notifications";
+import { notifyEditalClosing } from "../notify/documentos";
+import { inngest } from "../client";
 
 const REMINDER_DAYS = 7;
 
 /**
- * Envia o lembrete de encerramento (7 dias antes) para os editais anuais
- * publicados cujo `closesAt` cai na janela de 24h em torno de "hoje + 7
- * dias". Pensado para rodar 1x/dia via um scheduler externo — nenhum existe
- * ainda no monorepo (S1-06/CS-5), então esta função não é chamada por
- * ninguém até `packages/jobs` (P-0.14) existir e registrar o cron diário
- * que a invoca.
- *
- * Idempotência: como não há coluna de controle de "já lembrado", rodar esta
- * função mais de uma vez no mesmo dia reenvia o lembrete no mesmo dia (mas
- * não em dias seguintes, pois a janela é de ~24h) — aceitável para um cron
- * diário único; P-0.14 deve garantir que o job rode no máximo 1x/dia.
+ * Movida de `apps/documentos/src/jobs/edital-closing-reminders.ts` (P-0.14,
+ * S-30/S1-06/CS-5) — a função já estava pronta desde P-1.27, só esperando o
+ * cron diário que a invoca. Idempotência: como não há coluna de controle de
+ * "já lembrado", rodar mais de uma vez no mesmo dia reenviaria o lembrete no
+ * mesmo dia (mas não em dias seguintes, pois a janela é de ~24h) — o cron
+ * abaixo garante no máximo 1x/dia.
  */
 export async function runEditalClosingReminders(): Promise<void> {
   const now = new Date();
@@ -43,3 +39,13 @@ export async function runEditalClosingReminders(): Promise<void> {
     await notifyEditalClosing(row.id, REMINDER_DAYS);
   }
 }
+
+export const editalClosingRemindersCron = inngest.createFunction(
+  {
+    id: "documentos-edital-closing-reminders",
+    name: "Documentos: lembrete de encerramento de edital (7 dias)",
+  },
+  { cron: "0 8 * * *" },
+  async ({ step }) =>
+    step.run("run-edital-closing-reminders", runEditalClosingReminders),
+);

@@ -237,7 +237,7 @@ _Critérios:_ [x] consentimento consultável por finalidade; [x] anonimizar usu�
 **P-0.14 — Jobs: Inngest de verdade**
 _Problema:_ S1-06 — 8+ features dependem de jobs sem infra; critérios [~] acumulados nunca fecharão.
 _Escopo:_ `packages/jobs` (client Inngest) + rota de serve num app host (intranet); registrar os crons pendentes das fases 1–3: reunião mensal (S-15), lembrete de edital 7 dias (S-30), homologação 7 dias sem contestação (P-2.8), lembretes de relatório (P-2.10 [~]), lote semanal + relatório mensal do financeiro (P-3.10); deixar registro documentado para os jobs das fases 4–8 (recorrência de tarefas, briefing, prazos, check-in, snapshot de audiência).
-_Critérios:_ [ ] cada cron listado dispara em ambiente de dev (teste manual documentado); [ ] os critérios [~] de P-2.10 fecham; [ ] env vars documentadas.
+_Critérios:_ [x] cada cron listado dispara em ambiente de dev (teste manual documentado); [x] os critérios [~] de P-2.10 fecham; [x] env vars documentadas.
 
 **P-0.15 — `packages/integrations` + contrato de settings**
 _Problema:_ S1-09 (contrato cross-app indefinido; `createAutoTask` num app seria importado por outros apps), S1-18 (consumo de settings/flags sem contrato), S1-22 (erro fire-and-forget como convenção).
