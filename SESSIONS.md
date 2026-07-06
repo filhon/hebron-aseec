@@ -90,6 +90,7 @@
 | S-66   | 2026-07-06 | P-0.14 — Jobs: Inngest de verdade (Onda 2)                              | concluido                            |
 | S-67   | 2026-07-06 | P-0.15 — packages/integrations + contrato de settings (Onda 2)          | concluido                            |
 | S-68   | 2026-07-06 | P-0.16 — Registro retroativo (Onda 2)                                   | concluido                            |
+| S-69   | 2026-07-06 | P-3.9 — Financeiro: Integração UI ↔ Backend                             | concluido                            |
 
 ---
 
@@ -3116,3 +3117,76 @@ S1-09/CS-6: as duas únicas funções cross-app tipadas do monorepo (`getEditalP
 - `PROMPTS.md` (cabeçalho e Sumário — contagem/lista de correções; critério de P-2.11 `[~]` → `[x]`)
 - `PRODUCT.md` (2 linhas — escopo público e regra de citações bíblicas)
 - `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+### S-69 — 2026-07-06 — P-3.9 Financeiro: Integração UI ↔ Backend
+
+**Prompt:** P-3.9 (`PROMPTS.md:2318`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Substituiu `lib/mock-data.ts` por dados reais em todo o módulo Financeiro e aplicou o padrão G5 (Server/Client split) ao `layout.tsx`/`shell.tsx`. Backend (P-3.6/P-3.7/P-3.8/P-3.8b) já existia quase por completo; o trabalho desta sessão foi de integração: `lib/queries.ts` novo com os mapeamentos DB → tipos de UI (`@hebron/types/financeiro`), conexão dos formulários do Bloco A (`expense-form`, `revenue-form`, `reversal-form`, `bank-account-form`, `budget-form`, `batch-approval-form`) às actions reais via `useAction`, e criação das duas telas novas de decisão F1-Q9 (`contas-receber`, `fluxo-caixa`).
+
+**Suposições registradas (G1 — ambiguidade resolvida pela opção mais simples):**
+
+- **Filtros de lançamentos são client-side**, não server-side por query param. `TransactionTable` já filtra em memória sobre o array completo; reescrever para paginação/filtro via URL search params seria uma reescrita de tela fora do escopo de "conectar, não reescrever". Volume de lançamentos da ONG é baixo (dezenas/centenas), então o impacto prático é nulo.
+- **`bank-account-form` não tinha action correspondente** (débito de P-3.6/P-3.8). Criada `actions/accounts.ts` (`createBankAccount`). `financeiro.accounts` só tem uma coluna de identificação (`bank_name`) — os campos "nome/apelido" e "banco" do formulário gravam no mesmo campo.
+- **`BatchApprovalForm` foi redesenhado**: o mock original tinha checkboxes de seleção por payable e um fluxo "aprovar/rejeitar" com motivo. O backend real (`approveBatch`/`authorizeBatch`) opera no lote inteiro, não em subconjuntos, e não tem ação de "rejeitar" um lote — apenas `cancelPayable` por conta individual. O formulário agora recebe `batch` + `stage` ("aprovar" | "autorizar") e cada estágio chama a action correspondente sem seleção parcial.
+- **"Marcar todos como pagos" não existe no backend** — `markPayableAsPaid` é por payable individual (precisa de `bankAccountId`). A aba "autorizado" de Contas a Pagar usa `PayableCard` (órfão desde o Bloco A) com um diálogo simples de escolha de conta bancária por pagamento.
+- **Conciliação manual "vincular a uma transação arbitrária" não existe no backend** (`reconcileRow` só suporta `vincular_payable`/`vincular_receivable`/`ignorar`/`criar_novo`; não há "unmatch"). `ConciliationView` foi ajustado para rodar `autoMatchImport` (sugestões reais) e usar essas 4 ações reais por linha — a antiga interação de clique-para-casar contra qualquer lançamento do sistema foi removida.
+- **`cancellationReason`/`cancelledBy` de payables não são persistidos** por `cancelPayable` (só vão ao audit log) — a query mapeia esses campos como `null`.
+- **`month` de `budget_items` não é persistido** por `createBudget` (gap do Bloco B) — a query retorna sempre `null`; registrado aqui, não corrigido (fora do escopo de um prompt de integração).
+- **Centros de custo administrativos (sem projeto) ainda não existem** — `financeiro.cost_centers.project_id` é `NOT NULL` (1:1 com projeto aprovado); a tela `centros-custo` fica vazia até P-3.11 criar o fluxo cross-app Projetos → Financeiro.
+
+**Débito de infraestrutura (G1 — arquivos óbvios fora da lista original, registrados aqui):**
+
+- `apps/financeiro/src/lib/queries.ts` — explicitamente previsto no prompt.
+- `apps/financeiro/src/lib/cashflow.ts` — `buildCashFlowData` extraída para ser compartilhada entre o painel e a nova tela de fluxo de caixa (evitar duplicação).
+- `apps/financeiro/src/lib/import-parsers.ts` — **bug pré-existente destravado por esta sessão**: `actions/import.ts` (`"use server"`) exportava `parseCSV`/`splitDelimitedLine` como funções síncronas; `next build` rejeita isso ("Server Actions must be async functions"), embora `dev`/testes nunca acusassem. Extraídas as funções puras (parse OFX/CSV) para este módulo sem `"use server"`; `actions/import.ts` e `__tests__/csv-parser.test.ts` foram atualizados para importar de lá. Não é do escopo de P-3.9, mas bloqueava a verificação de build da própria integração.
+- `apps/financeiro/src/actions/accounts.ts` — `createBankAccount`, ver suposição acima.
+- `apps/financeiro/src/components/dashboard-quick-actions.tsx`, `contas-pagar-view.tsx`, `receivables-view.tsx`, `relatorios-view.tsx` — wrappers Client Component para estado de UI (menus, abas, diálogos) que não cabe dentro de um único componente do Bloco A, seguindo o mesmo precedente de `shell.tsx` (G5): a página vira Server Component (fetch direto), a interatividade fica isolada num Client Component filho.
+- Migration `0027_financeiro_account_audit_action.sql` + `admin.audit_action` (`financeiro.account.created`) para a nova action de conta bancária.
+- Removidos `components/import-form.tsx` e `components/transaction-table-skeleton.tsx` — órfãos do Bloco A (P-3.2) sem nenhum import em lugar nenhum, substituídos por `import-wizard.tsx` (já conectado desde P-3.8b) e por render direto sem skeleton artificial, respectivamente.
+
+**Critérios de aceite verificados:**
+
+- [x] Layout G5: `requireColaboradorSession` redireciona anônimo/papel sem acesso
+- [x] Saldos reais por conta bancária no dashboard (ledger agregado)
+- [x] Transações com filtros (client-side sobre dado real — ver suposição)
+- [x] Despesa/receita criáveis pelas telas (actions reais)
+- [x] Estorno executável a partir de lançamentos
+- [x] Conciliação ponta a ponta: upload → preview → confirmar → auto-match/reconcile
+- [x] Contas a pagar: criar lote, aprovar, autorizar, marcar pago — cada passo real
+- [x] Contas a receber: listar e registrar recebimento (tela nova)
+- [x] Fluxo de caixa projetado com dados reais (tela nova)
+- [x] Orçamento: planejado vs executado por centro de custo
+- [x] Plano de contas: CRUD operável (criar/editar/excluir categoria)
+- [x] Nenhum componente do Bloco A sem import (grep) — 2 órfãos genuínos removidos, resto conectado
+- [x] Nenhum `console.log`/`setTimeout` restante (grep)
+- [x] Mock data removido
+- [x] Lint passa · Types passam · `next build` passa · 30 testes existentes continuam verdes
+
+**Arquivos criados:**
+
+- `apps/financeiro/src/lib/queries.ts`, `src/lib/cashflow.ts`, `src/lib/import-parsers.ts`
+- `apps/financeiro/src/actions/accounts.ts`, `src/actions/auth.ts`
+- `apps/financeiro/src/components/dashboard-quick-actions.tsx`, `contas-pagar-view.tsx`, `receivables-view.tsx`, `relatorios-view.tsx`
+- `apps/financeiro/src/app/(dashboard)/contas-receber/page.tsx`, `(dashboard)/fluxo-caixa/page.tsx`
+- `packages/db/src/migrations/0027_financeiro_account_audit_action.sql`
+
+**Arquivos modificados:**
+
+- `apps/financeiro/src/app/(dashboard)/layout.tsx`, `shell.tsx` (G5)
+- `apps/financeiro/src/app/(dashboard)/page.tsx`, `lancamentos/`, `conciliacao/`, `orcamento/`, `plano-contas/`, `contas-pagar/`, `centros-custo/`, `relatorios/` (RSC)
+- `apps/financeiro/src/components/expense-form.tsx`, `revenue-form.tsx`, `reversal-form.tsx`, `bank-account-form.tsx`, `budget-form.tsx`, `batch-approval-form.tsx`, `budget-comparison.tsx`, `category-tree.tsx`, `transaction-table.tsx`, `conciliation-view.tsx` (dados reais + actions reais)
+- `apps/financeiro/src/actions/import.ts` (parsers extraídos)
+- `apps/financeiro/src/lib/audit.ts` (novo valor `financeiro.account.created`)
+- `packages/db/src/schema/admin.ts` (enum `audit_action`)
+- `packages/types/src/financeiro/index.ts` (`AccountCategory.isSystem`)
+
+**Arquivos removidos:**
+
+- `apps/financeiro/src/lib/mock-data.ts`
+- `apps/financeiro/src/components/import-form.tsx`, `transaction-table-skeleton.tsx`

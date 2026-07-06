@@ -1,20 +1,13 @@
-﻿"use client";
-
-import { useState } from "react";
-import { Plus, Info, ArrowUp, ArrowDown, ChevronDown } from "lucide-react";
+import { Info, ArrowUp, ArrowDown } from "lucide-react";
 import {
-  mockTransactions,
-  mockCategories,
-  mockBankAccounts,
-  mockCostCenters,
-} from "../../../lib/mock-data";
+  getTransactions,
+  getCategories,
+  getBankAccounts,
+  getCostCenterOptions,
+} from "../../../lib/queries";
 import { TransactionTable } from "../../../components/transaction-table";
-import { ExpenseForm } from "../../../components/expense-form";
-import { RevenueForm } from "../../../components/revenue-form";
-import { ReversalForm } from "../../../components/reversal-form";
 
-const REF = new Date("2026-06-01T00:00:00Z");
-const LAST_30 = new Date(REF.getTime() - 30 * 86_400_000);
+const DAY = 86_400_000;
 
 function fmtBRL(n: number): string {
   return new Intl.NumberFormat("pt-BR", {
@@ -22,23 +15,6 @@ function fmtBRL(n: number): string {
     currency: "BRL",
   }).format(n);
 }
-
-// KPI computation
-const allIn = mockTransactions
-  .filter((t) => t.type === "credito")
-  .reduce((s, t) => s + t.amount, 0);
-const allOut = mockTransactions
-  .filter((t) => t.type === "debito")
-  .reduce((s, t) => s + t.amount, 0);
-const result = allIn - allOut;
-
-const recent30 = mockTransactions.filter((t) => t.occurredAt >= LAST_30);
-const recentIn = recent30
-  .filter((t) => t.type === "credito")
-  .reduce((s, t) => s + t.amount, 0);
-const recentOut = recent30
-  .filter((t) => t.type === "debito")
-  .reduce((s, t) => s + t.amount, 0);
 
 interface KpiCardProps {
   label: string;
@@ -93,11 +69,31 @@ function KpiCard({ label, value, sub, accent, dir }: KpiCardProps) {
   );
 }
 
-type FormMode = null | "despesa" | "receita" | "estorno";
+export default async function LancamentosPage() {
+  const [transactions, categories, accounts, costCenters] = await Promise.all([
+    getTransactions(),
+    getCategories(),
+    getBankAccounts(),
+    getCostCenterOptions(),
+  ]);
 
-export default function LancamentosPage() {
-  const [formMode, setFormMode] = useState<FormMode>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
+  const LAST_30 = new Date(Date.now() - 30 * DAY);
+
+  const allIn = transactions
+    .filter((t) => t.type === "credito")
+    .reduce((s, t) => s + t.amount, 0);
+  const allOut = transactions
+    .filter((t) => t.type === "debito")
+    .reduce((s, t) => s + t.amount, 0);
+  const result = allIn - allOut;
+
+  const recent30 = transactions.filter((t) => t.occurredAt >= LAST_30);
+  const recentIn = recent30
+    .filter((t) => t.type === "credito")
+    .reduce((s, t) => s + t.amount, 0);
+  const recentOut = recent30
+    .filter((t) => t.type === "debito")
+    .reduce((s, t) => s + t.amount, 0);
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg-alt)" }}>
@@ -106,65 +102,19 @@ export default function LancamentosPage() {
         className="sticky top-14 z-10 border-b px-6 py-3.5"
         style={{ background: "var(--bg)", borderColor: "var(--border)" }}
       >
-        <div className="flex items-center gap-4">
-          <div>
-            <p
-              className="text-[10px] font-bold uppercase tracking-[0.14em]"
-              style={{ color: "var(--fg-muted)" }}
-            >
-              Financeiro
-            </p>
-            <p
-              className="text-xl font-bold"
-              style={{ fontFamily: "var(--font-display)", color: "var(--fg)" }}
-            >
-              Lançamentos
-            </p>
-          </div>
-          <div className="ml-auto relative">
-            <button
-              onClick={() => setMenuOpen((v) => !v)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-(--radius) text-xs font-semibold"
-              style={{
-                background: "var(--hb-blue)",
-                color: "var(--fg-invert)",
-              }}
-            >
-              <Plus className="h-3 w-3" />
-              Novo lançamento
-              <ChevronDown className="h-3 w-3" />
-            </button>
-            {menuOpen && (
-              <div
-                className="absolute right-0 top-full mt-1 w-44 rounded-(--radius) border py-1 z-20"
-                style={{
-                  background: "var(--bg)",
-                  borderColor: "var(--border)",
-                  boxShadow: "0 4px 20px rgba(0,0,0,0.12)",
-                }}
-              >
-                {(
-                  [
-                    { key: "despesa", label: "Nova despesa" },
-                    { key: "receita", label: "Nova receita" },
-                    { key: "estorno", label: "Estornar transação" },
-                  ] as const
-                ).map((item) => (
-                  <button
-                    key={item.key}
-                    onClick={() => {
-                      setFormMode(item.key);
-                      setMenuOpen(false);
-                    }}
-                    className="w-full text-left px-4 py-2.5 text-sm font-semibold transition-colors"
-                    style={{ color: "var(--fg)" }}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+        <div>
+          <p
+            className="text-[10px] font-bold uppercase tracking-[0.14em]"
+            style={{ color: "var(--fg-muted)" }}
+          >
+            Financeiro
+          </p>
+          <p
+            className="text-xl font-bold"
+            style={{ fontFamily: "var(--font-display)", color: "var(--fg)" }}
+          >
+            Lançamentos
+          </p>
         </div>
       </div>
 
@@ -173,23 +123,23 @@ export default function LancamentosPage() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <KpiCard
             label="Total de lançamentos"
-            value={`${mockTransactions.length}`}
+            value={`${transactions.length}`}
             sub={`${recent30.length} nos últimos 30 dias`}
           />
           <KpiCard
-            label="Entradas (acumulado)"
+            label="Entradas (30 dias)"
             value={fmtBRL(recentIn)}
-            sub="+R$ 12.300 vs mês anterior"
+            sub="Créditos no período"
             dir="up"
           />
           <KpiCard
-            label="Saídas (acumulado)"
+            label="Saídas (30 dias)"
             value={fmtBRL(recentOut)}
-            sub="−4,1% vs mês anterior"
-            dir="up"
+            sub="Débitos no período"
+            dir="down"
           />
           <KpiCard
-            label="Resultado"
+            label="Resultado acumulado"
             value={fmtBRL(allIn - allOut)}
             sub={result > 0 ? "Superávit acumulado" : "Déficit acumulado"}
             dir={result > 0 ? "up" : "down"}
@@ -220,24 +170,12 @@ export default function LancamentosPage() {
 
         {/* Table */}
         <TransactionTable
-          transactions={mockTransactions}
-          categories={mockCategories}
-          accounts={mockBankAccounts}
-          costCenters={mockCostCenters}
-          onNew={() => setFormMode("despesa")}
+          transactions={transactions}
+          categories={categories}
+          accounts={accounts}
+          costCenters={costCenters}
         />
       </div>
-
-      {/* Forms */}
-      {formMode === "despesa" && (
-        <ExpenseForm onClose={() => setFormMode(null)} />
-      )}
-      {formMode === "receita" && (
-        <RevenueForm onClose={() => setFormMode(null)} />
-      )}
-      {formMode === "estorno" && (
-        <ReversalForm onClose={() => setFormMode(null)} />
-      )}
     </div>
   );
 }

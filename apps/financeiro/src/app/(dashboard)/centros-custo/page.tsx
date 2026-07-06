@@ -1,12 +1,10 @@
-"use client";
-
 import { FolderOpen, ArrowRight, Dot } from "lucide-react";
 import {
-  mockCostCenters,
-  mockTransactions,
-  mockBudgets,
-  mockPayables,
-} from "../../../lib/mock-data";
+  getCostCenterOptions,
+  getTransactions,
+  getBudgets,
+  getPayables,
+} from "../../../lib/queries";
 
 function fmtBRL(n: number): string {
   return new Intl.NumberFormat("pt-BR", {
@@ -14,37 +12,6 @@ function fmtBRL(n: number): string {
     currency: "BRL",
   }).format(n);
 }
-
-// Compute spent and budgeted per cost center
-const rows = mockCostCenters.map((cc) => {
-  const spent = mockTransactions
-    .filter((t) => t.type === "debito" && t.costCenterId === cc.id)
-    .reduce((s, t) => s + t.amount, 0);
-
-  const budget = mockBudgets.find((b) => b.costCenterId === cc.id);
-  const budgeted = budget?.totalAmount ?? null;
-
-  const paidPayables = mockPayables.filter(
-    (p) => p.costCenterId === cc.id && p.status === "pago",
-  ).length;
-
-  const pendingPayables = mockPayables.filter(
-    (p) =>
-      p.costCenterId === cc.id &&
-      (p.status === "pendente" ||
-        p.status === "aprovado" ||
-        p.status === "autorizado"),
-  ).length;
-
-  const pct = budgeted && budgeted > 0 ? (spent / budgeted) * 100 : null;
-
-  return { cc, spent, budgeted, pct, paidPayables, pendingPayables };
-});
-
-const totalSpent = rows.reduce((s, r) => s + r.spent, 0);
-const totalBudgeted = rows
-  .filter((r) => r.budgeted !== null)
-  .reduce((s, r) => s + (r.budgeted ?? 0), 0);
 
 function PctBar({ pct }: { pct: number | null }) {
   if (pct === null) {
@@ -88,9 +55,7 @@ function StatusDot({ hasProject }: { hasProject: boolean }) {
     <span
       className="inline-flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full"
       style={{
-        background: hasProject
-          ? "var(--hb-cyan-muted, rgba(7,180,231,0.10))"
-          : "var(--surface-alt)",
+        background: hasProject ? "rgba(7,180,231,0.10)" : "var(--surface-alt)",
         color: hasProject ? "var(--hb-cyan)" : "var(--fg-muted)",
       }}
     >
@@ -100,7 +65,40 @@ function StatusDot({ hasProject }: { hasProject: boolean }) {
   );
 }
 
-export default function CentrosCustoPage() {
+export default async function CentrosCustoPage() {
+  const [costCenters, transactions, budgets, payables] = await Promise.all([
+    getCostCenterOptions(),
+    getTransactions(),
+    getBudgets(),
+    getPayables(),
+  ]);
+
+  const rows = costCenters.map((cc) => {
+    const spent = transactions
+      .filter((t) => t.type === "debito" && t.costCenterId === cc.id)
+      .reduce((s, t) => s + t.amount, 0);
+
+    const budget = budgets.find((b) => b.costCenterId === cc.id);
+    const budgeted = budget?.totalAmount ?? null;
+
+    const pendingPayables = payables.filter(
+      (p) =>
+        p.costCenterId === cc.id &&
+        (p.status === "pendente" ||
+          p.status === "aprovado" ||
+          p.status === "autorizado"),
+    ).length;
+
+    const pct = budgeted && budgeted > 0 ? (spent / budgeted) * 100 : null;
+
+    return { cc, spent, budgeted, pct, pendingPayables };
+  });
+
+  const totalSpent = rows.reduce((s, r) => s + r.spent, 0);
+  const totalBudgeted = rows
+    .filter((r) => r.budgeted !== null)
+    .reduce((s, r) => s + (r.budgeted ?? 0), 0);
+
   return (
     <div className="min-h-screen" style={{ background: "var(--bg-alt)" }}>
       {/* Topbar */}
@@ -186,7 +184,7 @@ export default function CentrosCustoPage() {
               className="text-[10px] font-bold uppercase tracking-[0.14em] mb-2"
               style={{ color: "var(--fg-muted)" }}
             >
-              Centros ativos
+              Centros cadastrados
             </p>
             <p
               className="text-2xl font-bold tabular-nums"
@@ -195,7 +193,7 @@ export default function CentrosCustoPage() {
                 color: "var(--fg)",
               }}
             >
-              {mockCostCenters.filter((c) => c.isActive).length}
+              {costCenters.length}
             </p>
           </div>
         </div>
@@ -227,108 +225,117 @@ export default function CentrosCustoPage() {
             </span>
           </div>
 
-          <div className="overflow-x-auto">
-            <table
-              className="w-full text-sm"
-              style={{ borderCollapse: "separate", borderSpacing: 0 }}
-            >
-              <thead>
-                <tr>
-                  {[
-                    "Código",
-                    "Nome",
-                    "Tipo",
-                    "Executado",
-                    "Orçamento",
-                    "Uso",
-                    "Pendentes",
-                    "",
-                  ].map((h, i) => (
-                    <th
-                      key={h + i}
-                      className="border-b px-4 py-2.5 text-left"
-                      style={{
-                        background: "var(--bg)",
-                        borderColor: "var(--border)",
-                        color: "var(--fg-muted)",
-                        fontSize: "10px",
-                        fontWeight: 700,
-                        textTransform: "uppercase",
-                        letterSpacing: "0.14em",
-                      }}
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map(({ cc, spent, budgeted, pct, pendingPayables }) => (
-                  <tr
-                    key={cc.id}
-                    style={{ borderBottom: "1px solid var(--divider)" }}
-                  >
-                    <td
-                      className="px-4 py-3.5 font-mono text-xs font-bold"
-                      style={{ color: "var(--hb-blue)" }}
-                    >
-                      {cc.code}
-                    </td>
-                    <td
-                      className="px-4 py-3.5 font-semibold max-w-56 truncate"
-                      style={{ color: "var(--fg)" }}
-                    >
-                      {cc.name}
-                    </td>
-                    <td className="px-4 py-3.5">
-                      <StatusDot hasProject={cc.projectId !== null} />
-                    </td>
-                    <td
-                      className="px-4 py-3.5 tabular-nums font-semibold"
-                      style={{ color: "var(--fg)" }}
-                    >
-                      {fmtBRL(spent)}
-                    </td>
-                    <td
-                      className="px-4 py-3.5 tabular-nums"
-                      style={{ color: "var(--fg-muted)" }}
-                    >
-                      {budgeted !== null ? fmtBRL(budgeted) : "—"}
-                    </td>
-                    <td className="px-4 py-3.5 min-w-40">
-                      <PctBar pct={pct} />
-                    </td>
-                    <td className="px-4 py-3.5 text-center">
-                      {pendingPayables > 0 ? (
-                        <span
-                          className="inline-flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-bold"
-                          style={{
-                            background: "var(--hb-orange)",
-                            color: "#fff",
-                          }}
-                        >
-                          {pendingPayables}
-                        </span>
-                      ) : (
-                        <span style={{ color: "var(--fg-muted)" }}>—</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3.5">
-                      {cc.projectId && (
-                        <a
-                          href={`https://projetos.hebronaseec.com.br/projeto/${cc.projectId}`}
-                          className="flex items-center gap-1 text-xs font-semibold whitespace-nowrap"
-                          style={{ color: "var(--hb-blue)" }}
-                        >
-                          Ver projeto <ArrowRight className="h-3 w-3" />
-                        </a>
-                      )}
-                    </td>
+          {rows.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <p className="text-sm" style={{ color: "var(--fg-muted)" }}>
+                Nenhum centro de custo cadastrado ainda. Centros são criados
+                automaticamente quando um projeto é aprovado.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table
+                className="w-full text-sm"
+                style={{ borderCollapse: "separate", borderSpacing: 0 }}
+              >
+                <thead>
+                  <tr>
+                    {[
+                      "Código",
+                      "Nome",
+                      "Tipo",
+                      "Executado",
+                      "Orçamento",
+                      "Uso",
+                      "Pendentes",
+                      "",
+                    ].map((h, i) => (
+                      <th
+                        key={h + i}
+                        className="border-b px-4 py-2.5 text-left"
+                        style={{
+                          background: "var(--bg)",
+                          borderColor: "var(--border)",
+                          color: "var(--fg-muted)",
+                          fontSize: "10px",
+                          fontWeight: 700,
+                          textTransform: "uppercase",
+                          letterSpacing: "0.14em",
+                        }}
+                      >
+                        {h}
+                      </th>
+                    ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody>
+                  {rows.map(({ cc, spent, budgeted, pct, pendingPayables }) => (
+                    <tr
+                      key={cc.id}
+                      style={{ borderBottom: "1px solid var(--divider)" }}
+                    >
+                      <td
+                        className="px-4 py-3.5 font-mono text-xs font-bold"
+                        style={{ color: "var(--hb-blue)" }}
+                      >
+                        {cc.code}
+                      </td>
+                      <td
+                        className="px-4 py-3.5 font-semibold max-w-56 truncate"
+                        style={{ color: "var(--fg)" }}
+                      >
+                        {cc.name}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <StatusDot hasProject={cc.projectId !== null} />
+                      </td>
+                      <td
+                        className="px-4 py-3.5 tabular-nums font-semibold"
+                        style={{ color: "var(--fg)" }}
+                      >
+                        {fmtBRL(spent)}
+                      </td>
+                      <td
+                        className="px-4 py-3.5 tabular-nums"
+                        style={{ color: "var(--fg-muted)" }}
+                      >
+                        {budgeted !== null ? fmtBRL(budgeted) : "—"}
+                      </td>
+                      <td className="px-4 py-3.5 min-w-40">
+                        <PctBar pct={pct} />
+                      </td>
+                      <td className="px-4 py-3.5 text-center">
+                        {pendingPayables > 0 ? (
+                          <span
+                            className="inline-flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-bold"
+                            style={{
+                              background: "var(--hb-orange)",
+                              color: "#fff",
+                            }}
+                          >
+                            {pendingPayables}
+                          </span>
+                        ) : (
+                          <span style={{ color: "var(--fg-muted)" }}>—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        {cc.projectId && (
+                          <a
+                            href={`https://projetos.hebronaseec.com.br/projeto/${cc.projectId}`}
+                            className="flex items-center gap-1 text-xs font-semibold whitespace-nowrap"
+                            style={{ color: "var(--hb-blue)" }}
+                          >
+                            Ver projeto <ArrowRight className="h-3 w-3" />
+                          </a>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           {/* Footer total */}
           <div

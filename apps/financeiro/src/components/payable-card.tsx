@@ -227,7 +227,7 @@ export function PayableCard({ payable, onAction }: PayableCardProps) {
         {/* Cancelled state */}
         {payable.status === "cancelado" && (
           <div className="rounded-lg border border-(--color-destructive-muted) bg-(--color-destructive-muted) px-3 py-2.5 mb-3">
-            <p className="text-xs font-bold text-(--color-destructive) uppercase tracking-[0.1em]">
+            <p className="text-xs font-bold text-(--color-destructive) uppercase tracking-widest">
               Cancelado
             </p>
             {payable.cancellationReason && (

@@ -1,6 +1,8 @@
 ﻿"use client";
 
 import { useState, useMemo, useCallback } from "react";
+import { useAction } from "next-safe-action/hooks";
+import { useRouter } from "next/navigation";
 import {
   ChevronRight,
   Plus,
@@ -13,15 +15,19 @@ import {
   Link,
   BarChart3,
   GripVertical,
+  X,
+  Trash2,
+  AlertCircle,
 } from "lucide-react";
+import {
+  createCategory,
+  updateCategory,
+  deleteCategory,
+} from "../actions/categories";
 import type { AccountCategory } from "@hebron/types/financeiro";
 
 interface CategoryTreeProps {
   categories: AccountCategory[];
-  onAddChild?: (parentId: string) => void;
-  onAddRoot?: () => void;
-  onEdit?: (id: string) => void;
-  onExport?: () => void;
 }
 
 interface TreeNode extends AccountCategory {
@@ -330,13 +336,115 @@ function TreeNodeRow({
   );
 }
 
-export function CategoryTree({
-  categories,
-  onAddChild,
-  onAddRoot,
-  onEdit,
-  onExport,
-}: CategoryTreeProps) {
+type ModalState =
+  | { mode: "create-root" }
+  | { mode: "create-child"; parentId: string; type: "receita" | "despesa" }
+  | { mode: "edit"; category: AccountCategory }
+  | null;
+
+function suggestNextCode(
+  categories: AccountCategory[],
+  parentId: string | null,
+): string {
+  const siblings = categories.filter((c) => c.parentId === parentId);
+  if (siblings.length === 0) {
+    if (parentId === null) return "1";
+    const parent = categories.find((c) => c.id === parentId);
+    return parent ? `${parent.code}.1` : "1";
+  }
+  const lastSegments = siblings.map((c) => {
+    const parts = c.code.split(".");
+    return parseInt(parts[parts.length - 1] ?? "0", 10) || 0;
+  });
+  const next = Math.max(...lastSegments) + 1;
+  if (parentId === null) return String(next);
+  const parent = categories.find((c) => c.id === parentId);
+  return parent ? `${parent.code}.${next}` : String(next);
+}
+
+function exportCategoriesCsv(categories: AccountCategory[]) {
+  const header = "Código,Nome,Tipo,Nível";
+  const body = categories
+    .sort((a, b) => a.code.localeCompare(b.code))
+    .map(
+      (c) => `${c.code},"${c.name.replace(/"/g, '""')}",${c.type},${c.level}`,
+    )
+    .join("\n");
+  const blob = new Blob(["﻿" + header + "\n" + body], {
+    type: "text/csv;charset=utf-8;",
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "plano-de-contas.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+export function CategoryTree({ categories }: CategoryTreeProps) {
+  const router = useRouter();
+  const [modal, setModal] = useState<ModalState>(null);
+  const [code, setCode] = useState("");
+  const [name, setName] = useState("");
+  const [type, setType] = useState<"receita" | "despesa">("despesa");
+
+  const {
+    execute: create,
+    isPending: isCreating,
+    result: createResult,
+  } = useAction(createCategory, {
+    onSuccess() {
+      router.refresh();
+      setModal(null);
+    },
+  });
+  const {
+    execute: update,
+    isPending: isUpdating,
+    result: updateResult,
+  } = useAction(updateCategory, {
+    onSuccess() {
+      router.refresh();
+      setModal(null);
+    },
+  });
+  const {
+    execute: destroy,
+    isPending: isDeleting,
+    result: deleteResult,
+  } = useAction(deleteCategory, {
+    onSuccess() {
+      router.refresh();
+      setModal(null);
+    },
+  });
+
+  function openCreateRoot() {
+    setCode(suggestNextCode(categories, null));
+    setName("");
+    setType("despesa");
+    setModal({ mode: "create-root" });
+  }
+
+  function openCreateChild(parentId: string) {
+    const parent = categories.find((c) => c.id === parentId);
+    setCode(suggestNextCode(categories, parentId));
+    setName("");
+    setType(parent?.type ?? "despesa");
+    setModal({
+      mode: "create-child",
+      parentId,
+      type: parent?.type ?? "despesa",
+    });
+  }
+
+  function openEdit(id: string) {
+    const category = categories.find((c) => c.id === id);
+    if (!category) return;
+    setName(category.name);
+    setModal({ mode: "edit", category });
+  }
+
   const baseTree = useMemo(() => buildTree(categories), [categories]);
 
   const [expanded, setExpanded] = useState<Set<string>>(
@@ -408,165 +516,311 @@ export function CategoryTree({
   const rootCount = orderedTree.length;
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
-      {/* Tree panel */}
-      <div className="rounded-(--radius) border border-(--border) bg-(--surface) overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-(--border)">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-(--fg-muted)">
-              Plano de contas · {new Date().getFullYear()}
-            </p>
-            <p className="font-semibold text-(--fg) text-sm mt-0.5">
-              Estrutura hierárquica
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={onExport}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-(--border) text-xs font-semibold text-(--fg-muted) hover:border-(--border-strong) hover:text-(--fg) transition-colors"
-            >
-              <Download className="h-3 w-3" />
-              Exportar
-            </button>
-            {onAddRoot && (
+    <>
+      <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr]">
+        {/* Tree panel */}
+        <div className="rounded-(--radius) border border-(--border) bg-(--surface) overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-(--border)">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-(--fg-muted)">
+                Plano de contas · {new Date().getFullYear()}
+              </p>
+              <p className="font-semibold text-(--fg) text-sm mt-0.5">
+                Estrutura hierárquica
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
               <button
-                onClick={onAddRoot}
+                onClick={() => exportCategoriesCsv(categories)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-(--border) text-xs font-semibold text-(--fg-muted) hover:border-(--border-strong) hover:text-(--fg) transition-colors"
+              >
+                <Download className="h-3 w-3" />
+                Exportar
+              </button>
+              <button
+                onClick={openCreateRoot}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-(--hb-blue) text-(--fg-invert) text-xs font-semibold hover:bg-(--hb-blue-soft) transition-colors"
               >
                 <Plus className="h-3 w-3" />
                 Nova categoria
               </button>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 px-4 py-2 border-b border-(--divider) bg-(--bg-alt)">
+            <button
+              onClick={expandAll}
+              className="text-xs text-(--hb-blue) font-semibold hover:underline"
+            >
+              Expandir tudo
+            </button>
+            <span className="text-(--divider)">·</span>
+            <button
+              onClick={collapseAll}
+              className="text-xs text-(--fg-muted) font-semibold hover:underline"
+            >
+              Recolher
+            </button>
+            <span className="ml-auto flex items-center gap-1 text-[10px] text-(--fg-muted) font-medium">
+              <GripVertical className="h-3 w-3" />
+              Arraste para reordenar
+            </span>
+          </div>
+
+          <div
+            className="px-2 py-2"
+            style={{ maxHeight: 520, overflowY: "auto" }}
+          >
+            {orderedTree.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 gap-3 text-(--fg-muted)">
+                <FileText className="h-8 w-8 opacity-30" />
+                <p className="text-sm">Nenhuma categoria cadastrada.</p>
+              </div>
+            ) : (
+              orderedTree.map((root) => (
+                <TreeNodeRow
+                  key={root.id}
+                  node={root}
+                  depth={0}
+                  expanded={expanded}
+                  onToggle={toggle}
+                  onAddChild={openCreateChild}
+                  onEdit={openEdit}
+                  onReorder={handleReorder}
+                  dragState={dragState}
+                  setDragState={setDragState}
+                  dropTargetId={dropTargetId}
+                  setDropTargetId={setDropTargetId}
+                />
+              ))
             )}
           </div>
         </div>
 
-        <div className="flex items-center gap-3 px-4 py-2 border-b border-(--divider) bg-(--bg-alt)">
-          <button
-            onClick={expandAll}
-            className="text-xs text-(--hb-blue) font-semibold hover:underline"
-          >
-            Expandir tudo
-          </button>
-          <span className="text-(--divider)">·</span>
-          <button
-            onClick={collapseAll}
-            className="text-xs text-(--fg-muted) font-semibold hover:underline"
-          >
-            Recolher
-          </button>
-          <span className="ml-auto flex items-center gap-1 text-[10px] text-(--fg-muted) font-medium">
-            <GripVertical className="h-3 w-3" />
-            Arraste para reordenar
-          </span>
-        </div>
-
-        <div
-          className="px-2 py-2"
-          style={{ maxHeight: 520, overflowY: "auto" }}
-        >
-          {orderedTree.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-16 gap-3 text-(--fg-muted)">
-              <FileText className="h-8 w-8 opacity-30" />
-              <p className="text-sm">Nenhuma categoria cadastrada.</p>
+        {/* Side panel */}
+        <div className="flex flex-col gap-4">
+          <div className="rounded-(--radius) border border-(--border) bg-(--surface) px-5 py-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-(--fg-muted) mb-3">
+              Estrutura atual
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase px-2.5 py-1 rounded-full bg-(--hb-green-muted) text-(--hb-green-deep)">
+                <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                {rootCount} categorias-raiz
+              </span>
+              <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase px-2.5 py-1 rounded-full bg-[rgba(32,44,133,0.10)] text-(--hb-blue)">
+                <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                {groupCount} grupos
+              </span>
+              <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase px-2.5 py-1 rounded-full bg-(--surface-alt) text-(--fg-muted)">
+                <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                {leafCount} contas folha
+              </span>
             </div>
-          ) : (
-            orderedTree.map((root) => (
-              <TreeNodeRow
-                key={root.id}
-                node={root}
-                depth={0}
-                expanded={expanded}
-                onToggle={toggle}
-                onAddChild={onAddChild}
-                onEdit={onEdit}
-                onReorder={handleReorder}
-                dragState={dragState}
-                setDragState={setDragState}
-                dropTargetId={dropTargetId}
-                setDropTargetId={setDropTargetId}
-              />
-            ))
-          )}
+            <p className="text-sm text-(--fg-muted) leading-relaxed mt-3">
+              O plano começa com a estrutura sugerida — quatro grupos: receitas,
+              despesas operacionais, missionárias e tributos. Tudo pode ser
+              editado e expandido conforme a operação cresce.
+            </p>
+          </div>
+
+          <div className="rounded-(--radius) border border-(--border) bg-(--surface) px-5 py-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-(--fg-muted) mb-3">
+              Operações comuns
+            </p>
+            <div className="flex flex-col gap-2">
+              {[
+                {
+                  label: "Importar plano padrão CFC",
+                  icon: <Download className="h-3.5 w-3.5" />,
+                },
+                {
+                  label: "Vincular a centros de custo",
+                  icon: <Link className="h-3.5 w-3.5" />,
+                },
+                {
+                  label: "Gerar DRE preliminar",
+                  icon: <BarChart3 className="h-3.5 w-3.5" />,
+                },
+                {
+                  label: "Exportar para contabilidade",
+                  icon: <FileText className="h-3.5 w-3.5" />,
+                },
+              ].map((action) => (
+                <button
+                  key={action.label}
+                  className="flex items-center gap-3 px-4 py-3 rounded-(--radius) border border-(--border) bg-(--bg) text-sm font-medium text-(--fg) text-left hover:border-(--border-strong) hover:bg-(--bg-alt) transition-colors"
+                >
+                  <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-(--surface-alt) text-(--hb-blue) shrink-0">
+                    {action.icon}
+                  </span>
+                  <span className="flex-1">{action.label}</span>
+                  <ChevronRight className="h-3.5 w-3.5 text-(--fg-muted)" />
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-(--radius) bg-(--hb-blue) text-(--fg-invert) px-5 py-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-(--hb-cyan) mb-2">
+              Boa prática
+            </p>
+            <p
+              className="text-sm leading-relaxed"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              Use níveis de detalhe apenas onde houver decisão a ser tomada.
+              Categoria demais cria ruído na DRE.
+            </p>
+          </div>
         </div>
       </div>
 
-      {/* Side panel */}
-      <div className="flex flex-col gap-4">
-        <div className="rounded-(--radius) border border-(--border) bg-(--surface) px-5 py-4">
-          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-(--fg-muted) mb-3">
-            Estrutura atual
-          </p>
-          <div className="flex flex-wrap gap-2">
-            <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase px-2.5 py-1 rounded-full bg-(--hb-green-muted) text-(--hb-green-deep)">
-              <span className="h-1.5 w-1.5 rounded-full bg-current" />
-              {rootCount} categorias-raiz
-            </span>
-            <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase px-2.5 py-1 rounded-full bg-[rgba(32,44,133,0.10)] text-(--hb-blue)">
-              <span className="h-1.5 w-1.5 rounded-full bg-current" />
-              {groupCount} grupos
-            </span>
-            <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase px-2.5 py-1 rounded-full bg-(--surface-alt) text-(--fg-muted)">
-              <span className="h-1.5 w-1.5 rounded-full bg-current" />
-              {leafCount} contas folha
-            </span>
-          </div>
-          <p className="text-sm text-(--fg-muted) leading-relaxed mt-3">
-            O plano começa com a estrutura sugerida — quatro grupos: receitas,
-            despesas operacionais, missionárias e tributos. Tudo pode ser
-            editado e expandido conforme a operação cresce.
-          </p>
-        </div>
-
-        <div className="rounded-(--radius) border border-(--border) bg-(--surface) px-5 py-4">
-          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-(--fg-muted) mb-3">
-            Operações comuns
-          </p>
-          <div className="flex flex-col gap-2">
-            {[
-              {
-                label: "Importar plano padrão CFC",
-                icon: <Download className="h-3.5 w-3.5" />,
-              },
-              {
-                label: "Vincular a centros de custo",
-                icon: <Link className="h-3.5 w-3.5" />,
-              },
-              {
-                label: "Gerar DRE preliminar",
-                icon: <BarChart3 className="h-3.5 w-3.5" />,
-              },
-              {
-                label: "Exportar para contabilidade",
-                icon: <FileText className="h-3.5 w-3.5" />,
-              },
-            ].map((action) => (
-              <button
-                key={action.label}
-                className="flex items-center gap-3 px-4 py-3 rounded-(--radius) border border-(--border) bg-(--bg) text-sm font-medium text-(--fg) text-left hover:border-(--border-strong) hover:bg-(--bg-alt) transition-colors"
-              >
-                <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-(--surface-alt) text-(--hb-blue) shrink-0">
-                  {action.icon}
-                </span>
-                <span className="flex-1">{action.label}</span>
-                <ChevronRight className="h-3.5 w-3.5 text-(--fg-muted)" />
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="rounded-(--radius) bg-(--hb-blue) text-(--fg-invert) px-5 py-4">
-          <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-(--hb-cyan) mb-2">
-            Boa prática
-          </p>
-          <p
-            className="text-sm leading-relaxed"
-            style={{ fontFamily: "var(--font-display)" }}
+      {modal && (
+        <div
+          className="fixed inset-0 z-(--z-overlay) flex justify-end"
+          style={{ background: "rgba(19,23,55,0.42)" }}
+          onClick={() => setModal(null)}
+        >
+          <div
+            className="w-120 max-w-full flex flex-col h-full"
+            style={{
+              background: "var(--bg)",
+              animation: "slide-in 220ms var(--ease-out)",
+            }}
+            onClick={(e) => e.stopPropagation()}
           >
-            Use níveis de detalhe apenas onde houver decisão a ser tomada.
-            Categoria demais cria ruído na DRE.
-          </p>
+            <div
+              className="flex items-center gap-3 px-6 py-5 border-b"
+              style={{ borderColor: "var(--border)" }}
+            >
+              <p
+                className="text-xl font-bold flex-1"
+                style={{
+                  fontFamily: "var(--font-display)",
+                  color: "var(--fg)",
+                }}
+              >
+                {modal.mode === "edit" ? "Editar categoria" : "Nova categoria"}
+              </p>
+              <button
+                onClick={() => setModal(null)}
+                className="flex items-center justify-center w-9 h-9 rounded-(--radius)"
+                style={{ color: "var(--fg-muted)" }}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+              {modal.mode !== "edit" && (
+                <>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-[0.14em] mb-1.5 text-(--fg-muted)">
+                      Código
+                    </label>
+                    <input
+                      value={code}
+                      onChange={(e) => setCode(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-(--radius) border text-sm outline-none border-(--border) bg-(--bg) text-(--fg)"
+                      placeholder="Ex: 1.1.4"
+                    />
+                  </div>
+                  {modal.mode === "create-root" && (
+                    <div>
+                      <label className="block text-[10px] font-bold uppercase tracking-[0.14em] mb-1.5 text-(--fg-muted)">
+                        Tipo
+                      </label>
+                      <select
+                        value={type}
+                        onChange={(e) =>
+                          setType(e.target.value as "receita" | "despesa")
+                        }
+                        className="w-full px-3 py-2.5 rounded-(--radius) border text-sm outline-none border-(--border) bg-(--bg) text-(--fg)"
+                      >
+                        <option value="despesa">Despesa</option>
+                        <option value="receita">Receita</option>
+                      </select>
+                    </div>
+                  )}
+                </>
+              )}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-[0.14em] mb-1.5 text-(--fg-muted)">
+                  Nome
+                </label>
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-(--radius) border text-sm outline-none border-(--border) bg-(--bg) text-(--fg)"
+                  placeholder="Nome da categoria"
+                />
+              </div>
+
+              {(createResult.serverError ||
+                updateResult.serverError ||
+                deleteResult.serverError) && (
+                <p className="flex items-center gap-1 text-xs font-medium text-(--hb-orange-deep)">
+                  <AlertCircle className="h-3 w-3 shrink-0" />
+                  {createResult.serverError ??
+                    updateResult.serverError ??
+                    deleteResult.serverError}
+                </p>
+              )}
+            </div>
+
+            <div
+              className="flex items-center justify-between gap-3 px-6 py-4 border-t"
+              style={{ borderColor: "var(--border)" }}
+            >
+              {modal.mode === "edit" && !modal.category.isSystem ? (
+                <button
+                  onClick={() => destroy({ categoryId: modal.category.id })}
+                  disabled={isDeleting}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-(--color-destructive) disabled:opacity-50"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Excluir
+                </button>
+              ) : (
+                <span />
+              )}
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setModal(null)}
+                  className="px-4 py-2.5 rounded-(--radius) border text-sm font-semibold border-(--border) text-(--fg)"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => {
+                    if (modal.mode === "edit") {
+                      update({ categoryId: modal.category.id, name });
+                    } else if (modal.mode === "create-child") {
+                      create({
+                        code,
+                        name,
+                        type: modal.type,
+                        parentId: modal.parentId,
+                      });
+                    } else {
+                      create({ code, name, type, parentId: null });
+                    }
+                  }}
+                  disabled={isCreating || isUpdating || !name}
+                  className="px-5 py-2.5 rounded-(--radius) text-sm font-semibold disabled:opacity-60"
+                  style={{
+                    background: "var(--hb-blue)",
+                    color: "var(--fg-invert)",
+                  }}
+                >
+                  {isCreating || isUpdating ? "Salvando…" : "Salvar"}
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
+      )}
+    </>
   );
 }

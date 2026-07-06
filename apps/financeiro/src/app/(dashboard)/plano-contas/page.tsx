@@ -1,9 +1,9 @@
-"use client";
-
-import { mockCategories } from "../../../lib/mock-data";
+import { getCategories } from "../../../lib/queries";
 import { CategoryTree } from "../../../components/category-tree";
 
-export default function PlanoContasPage() {
+export default async function PlanoContasPage() {
+  const categories = await getCategories();
+
   return (
     <div className="min-h-screen" style={{ background: "var(--bg-alt)" }}>
       {/* Topbar */}
@@ -28,13 +28,7 @@ export default function PlanoContasPage() {
       </div>
 
       <div className="p-6">
-        <CategoryTree
-          categories={mockCategories}
-          onAddChild={() => {}}
-          onAddRoot={() => {}}
-          onEdit={() => {}}
-          onExport={() => {}}
-        />
+        <CategoryTree categories={categories} />
       </div>
     </div>
   );

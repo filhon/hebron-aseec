@@ -2,12 +2,19 @@
 
 import { useState, useMemo } from "react";
 import { Download, Plus, TrendingUp } from "lucide-react";
-import type { Budget, Transaction } from "@hebron/types/financeiro";
+import type {
+  AccountCategory,
+  Budget,
+  Transaction,
+} from "@hebron/types/financeiro";
+import type { CostCenterOption } from "../lib/queries";
+import { BudgetForm } from "./budget-form";
 
 interface BudgetComparisonProps {
   budgets: Budget[];
   transactions: Transaction[];
-  onNew?: () => void;
+  categories: AccountCategory[];
+  costCenters: CostCenterOption[];
 }
 
 function fmtBRL(n: number): string {
@@ -35,9 +42,11 @@ interface BudgetRow {
 export function BudgetComparison({
   budgets,
   transactions,
-  onNew,
+  categories,
+  costCenters,
 }: BudgetComparisonProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("categorias");
+  const [formOpen, setFormOpen] = useState(false);
 
   // Sum executed amount per categoryId from transactions
   const executedByCategory = useMemo(() => {
@@ -130,218 +139,226 @@ export function BudgetComparison({
   };
 
   return (
-    <div className="rounded-(--radius) border border-(--border) bg-(--surface) overflow-hidden">
-      {/* KPI summary */}
-      <div className="grid grid-cols-3 divide-x divide-(--border) border-b border-(--border)">
-        {[
-          {
-            label: "Orçamento total",
-            value: fmtBRL(totalPlanned),
-            hint: "Ano-calendário",
-            accent: true,
-          },
-          {
-            label: "Executado",
-            value: fmtBRL(totalExecuted),
-            hint: `${overallPct}% do total`,
-            accent: false,
-          },
-          {
-            label: "Disponível",
-            value: fmtBRL(Math.max(0, totalPlanned - totalExecuted)),
-            hint: `${100 - overallPct}% restantes`,
-            accent: false,
-          },
-        ].map((kpi, i) => (
-          <div
-            key={i}
-            className={clsx(
-              "px-5 py-4",
-              kpi.accent && "bg-(--hb-blue) text-(--fg-invert)",
-            )}
-          >
-            <p
+    <>
+      <div className="rounded-(--radius) border border-(--border) bg-(--surface) overflow-hidden">
+        {/* KPI summary */}
+        <div className="grid grid-cols-3 divide-x divide-(--border) border-b border-(--border)">
+          {[
+            {
+              label: "Orçamento total",
+              value: fmtBRL(totalPlanned),
+              hint: "Ano-calendário",
+              accent: true,
+            },
+            {
+              label: "Executado",
+              value: fmtBRL(totalExecuted),
+              hint: `${overallPct}% do total`,
+              accent: false,
+            },
+            {
+              label: "Disponível",
+              value: fmtBRL(Math.max(0, totalPlanned - totalExecuted)),
+              hint: `${100 - overallPct}% restantes`,
+              accent: false,
+            },
+          ].map((kpi, i) => (
+            <div
+              key={i}
               className={clsx(
-                "text-[10px] font-bold uppercase tracking-[0.14em] mb-1",
-                kpi.accent ? "text-(--fg-invert-muted)" : "text-(--fg-muted)",
+                "px-5 py-4",
+                kpi.accent && "bg-(--hb-blue) text-(--fg-invert)",
               )}
             >
-              {kpi.label}
-            </p>
-            <p
-              className="text-xl font-bold tabular-nums"
-              style={{ fontFamily: "var(--font-display)" }}
-            >
-              {kpi.value}
-            </p>
-            <p
-              className={clsx(
-                "text-xs mt-0.5",
-                kpi.accent ? "text-(--fg-invert-muted)" : "text-(--fg-muted)",
-              )}
-            >
-              {kpi.hint}
-            </p>
-          </div>
-        ))}
-      </div>
-
-      {/* Toolbar */}
-      <div className="flex items-center gap-3 px-5 py-3 border-b border-(--border)">
-        <div className="flex bg-(--bg-alt) border border-(--border) p-1 rounded-(--radius) gap-1">
-          {(
-            [
-              { id: "categorias" as ViewMode, label: "Por categoria" },
-              { id: "projetos" as ViewMode, label: "Por projeto / CC" },
-            ] as const
-          ).map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setViewMode(tab.id)}
-              className={clsx(
-                "px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors",
-                viewMode === tab.id
-                  ? "bg-(--hb-blue) text-(--fg-invert)"
-                  : "text-(--fg-muted) hover:text-(--fg)",
-              )}
-            >
-              {tab.label}
-            </button>
+              <p
+                className={clsx(
+                  "text-[10px] font-bold uppercase tracking-[0.14em] mb-1",
+                  kpi.accent ? "text-(--fg-invert-muted)" : "text-(--fg-muted)",
+                )}
+              >
+                {kpi.label}
+              </p>
+              <p
+                className="text-xl font-bold tabular-nums"
+                style={{ fontFamily: "var(--font-display)" }}
+              >
+                {kpi.value}
+              </p>
+              <p
+                className={clsx(
+                  "text-xs mt-0.5",
+                  kpi.accent ? "text-(--fg-invert-muted)" : "text-(--fg-muted)",
+                )}
+              >
+                {kpi.hint}
+              </p>
+            </div>
           ))}
         </div>
 
-        <div className="ml-auto flex gap-2">
-          <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-(--border) text-xs font-semibold text-(--fg-muted) hover:border-(--border-strong) hover:text-(--fg) transition-colors">
-            <Download className="h-3 w-3" />
-            Exportar
-          </button>
-          {onNew && (
+        {/* Toolbar */}
+        <div className="flex items-center gap-3 px-5 py-3 border-b border-(--border)">
+          <div className="flex bg-(--bg-alt) border border-(--border) p-1 rounded-(--radius) gap-1">
+            {(
+              [
+                { id: "categorias" as ViewMode, label: "Por categoria" },
+                { id: "projetos" as ViewMode, label: "Por projeto / CC" },
+              ] as const
+            ).map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setViewMode(tab.id)}
+                className={clsx(
+                  "px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors",
+                  viewMode === tab.id
+                    ? "bg-(--hb-blue) text-(--fg-invert)"
+                    : "text-(--fg-muted) hover:text-(--fg)",
+                )}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="ml-auto flex gap-2">
+            <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-(--border) text-xs font-semibold text-(--fg-muted) hover:border-(--border-strong) hover:text-(--fg) transition-colors">
+              <Download className="h-3 w-3" />
+              Exportar
+            </button>
             <button
-              onClick={onNew}
+              onClick={() => setFormOpen(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-(--hb-blue) text-(--fg-invert) text-xs font-semibold hover:bg-(--hb-blue-soft) transition-colors"
             >
               <Plus className="h-3 w-3" />
               Novo orçamento
             </button>
-          )}
+          </div>
         </div>
-      </div>
 
-      {/* Table header */}
-      <div
-        className="grid gap-3 px-5 py-2.5 bg-(--bg-alt) border-b border-(--border) text-[10px] font-bold uppercase tracking-[0.14em] text-(--fg-muted)"
-        style={{
-          gridTemplateColumns: "1fr 120px 120px 80px minmax(140px,1fr)",
-        }}
-      >
-        <span>{viewMode === "categorias" ? "Categoria" : "Orçamento"}</span>
-        <span className="text-right">Planejado</span>
-        <span className="text-right">Executado</span>
-        <span className="text-right">% exec.</span>
-        <span>Andamento</span>
-      </div>
-
-      {/* Rows */}
-      <div className="divide-y divide-(--divider)">
-        {rows.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-16 gap-3 text-(--fg-muted)">
-            <TrendingUp className="h-8 w-8 opacity-30" />
-            <p className="text-sm">Nenhum orçamento configurado.</p>
-          </div>
-        )}
-
-        {rows.map((row) => (
-          <div
-            key={row.key}
-            className="grid items-center gap-3 px-5 py-4 hover:bg-(--bg-alt)/60 transition-colors"
-            style={{
-              gridTemplateColumns: "1fr 120px 120px 80px minmax(140px,1fr)",
-            }}
-          >
-            <div className="min-w-0">
-              <p className="text-sm font-semibold text-(--fg) truncate">
-                {row.label}
-              </p>
-              {row.sublabel && (
-                <p className="text-xs text-(--fg-muted) truncate">
-                  {row.sublabel}
-                </p>
-              )}
-            </div>
-
-            <p className="text-sm font-semibold tabular-nums text-right text-(--fg)">
-              {fmtBRL(row.plannedAmount)}
-            </p>
-
-            <p className="text-sm tabular-nums text-right text-(--fg-muted)">
-              {fmtBRL(row.executedAmount)}
-            </p>
-
-            <p
-              className={clsx(
-                "text-sm font-bold tabular-nums text-right",
-                pctColor(row.pct),
-              )}
-            >
-              {row.pct}%
-            </p>
-
-            <div className="flex items-center gap-2">
-              <div className="flex-1 h-1.5 bg-(--surface-alt) rounded-full overflow-hidden">
-                <div
-                  className={clsx(
-                    "h-full rounded-full transition-all",
-                    barColor(row.pct),
-                  )}
-                  style={{ width: `${Math.min(row.pct, 100)}%` }}
-                />
-              </div>
-              {row.pct >= 95 && (
-                <span className="text-[10px] font-bold text-(--color-destructive) shrink-0">
-                  ATENÇÃO
-                </span>
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Total row */}
-      {rows.length > 0 && (
+        {/* Table header */}
         <div
-          className="grid items-center gap-3 px-5 py-3.5 border-t border-(--border) bg-(--bg-alt)"
+          className="grid gap-3 px-5 py-2.5 bg-(--bg-alt) border-b border-(--border) text-[10px] font-bold uppercase tracking-[0.14em] text-(--fg-muted)"
           style={{
             gridTemplateColumns: "1fr 120px 120px 80px minmax(140px,1fr)",
           }}
         >
-          <p className="text-xs font-bold uppercase tracking-[0.1em] text-(--fg-muted)">
-            Total
-          </p>
-          <p className="text-sm font-bold tabular-nums text-right text-(--fg)">
-            {fmtBRL(totalPlanned)}
-          </p>
-          <p className="text-sm tabular-nums text-right text-(--fg-muted)">
-            {fmtBRL(totalExecuted)}
-          </p>
-          <p
-            className={clsx(
-              "text-sm font-bold tabular-nums text-right",
-              pctColor(overallPct),
-            )}
-          >
-            {overallPct}%
-          </p>
-          <div className="flex-1 h-2 bg-(--surface-alt) rounded-full overflow-hidden">
-            <div
-              className={clsx(
-                "h-full rounded-full transition-all",
-                barColor(overallPct),
-              )}
-              style={{ width: `${Math.min(overallPct, 100)}%` }}
-            />
-          </div>
+          <span>{viewMode === "categorias" ? "Categoria" : "Orçamento"}</span>
+          <span className="text-right">Planejado</span>
+          <span className="text-right">Executado</span>
+          <span className="text-right">% exec.</span>
+          <span>Andamento</span>
         </div>
+
+        {/* Rows */}
+        <div className="divide-y divide-(--divider)">
+          {rows.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-16 gap-3 text-(--fg-muted)">
+              <TrendingUp className="h-8 w-8 opacity-30" />
+              <p className="text-sm">Nenhum orçamento configurado.</p>
+            </div>
+          )}
+
+          {rows.map((row) => (
+            <div
+              key={row.key}
+              className="grid items-center gap-3 px-5 py-4 hover:bg-(--bg-alt)/60 transition-colors"
+              style={{
+                gridTemplateColumns: "1fr 120px 120px 80px minmax(140px,1fr)",
+              }}
+            >
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-(--fg) truncate">
+                  {row.label}
+                </p>
+                {row.sublabel && (
+                  <p className="text-xs text-(--fg-muted) truncate">
+                    {row.sublabel}
+                  </p>
+                )}
+              </div>
+
+              <p className="text-sm font-semibold tabular-nums text-right text-(--fg)">
+                {fmtBRL(row.plannedAmount)}
+              </p>
+
+              <p className="text-sm tabular-nums text-right text-(--fg-muted)">
+                {fmtBRL(row.executedAmount)}
+              </p>
+
+              <p
+                className={clsx(
+                  "text-sm font-bold tabular-nums text-right",
+                  pctColor(row.pct),
+                )}
+              >
+                {row.pct}%
+              </p>
+
+              <div className="flex items-center gap-2">
+                <div className="flex-1 h-1.5 bg-(--surface-alt) rounded-full overflow-hidden">
+                  <div
+                    className={clsx(
+                      "h-full rounded-full transition-all",
+                      barColor(row.pct),
+                    )}
+                    style={{ width: `${Math.min(row.pct, 100)}%` }}
+                  />
+                </div>
+                {row.pct >= 95 && (
+                  <span className="text-[10px] font-bold text-(--color-destructive) shrink-0">
+                    ATENÇÃO
+                  </span>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Total row */}
+        {rows.length > 0 && (
+          <div
+            className="grid items-center gap-3 px-5 py-3.5 border-t border-(--border) bg-(--bg-alt)"
+            style={{
+              gridTemplateColumns: "1fr 120px 120px 80px minmax(140px,1fr)",
+            }}
+          >
+            <p className="text-xs font-bold uppercase tracking-widest text-(--fg-muted)">
+              Total
+            </p>
+            <p className="text-sm font-bold tabular-nums text-right text-(--fg)">
+              {fmtBRL(totalPlanned)}
+            </p>
+            <p className="text-sm tabular-nums text-right text-(--fg-muted)">
+              {fmtBRL(totalExecuted)}
+            </p>
+            <p
+              className={clsx(
+                "text-sm font-bold tabular-nums text-right",
+                pctColor(overallPct),
+              )}
+            >
+              {overallPct}%
+            </p>
+            <div className="flex-1 h-2 bg-(--surface-alt) rounded-full overflow-hidden">
+              <div
+                className={clsx(
+                  "h-full rounded-full transition-all",
+                  barColor(overallPct),
+                )}
+                style={{ width: `${Math.min(overallPct, 100)}%` }}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {formOpen && (
+        <BudgetForm
+          categories={categories}
+          costCenters={costCenters}
+          onClose={() => setFormOpen(false)}
+        />
       )}
-    </div>
+    </>
   );
 }

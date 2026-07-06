@@ -55,6 +55,8 @@ export interface AccountCategory {
   /** 1 = root, 2 = group, 3 = account (leaf) */
   level: 1 | 2 | 3;
   isActive: boolean;
+  /** Seed category from the migration — cannot be deleted (BRAIN §6) */
+  isSystem: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

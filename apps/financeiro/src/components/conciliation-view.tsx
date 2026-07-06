@@ -1,10 +1,20 @@
-﻿"use client";
+"use client";
 
-import { useState, useMemo } from "react";
-import { Check, Sparkles, X, Plus, Upload } from "lucide-react";
+import { useState } from "react";
+import { useAction } from "next-safe-action/hooks";
+import { useRouter } from "next/navigation";
+import {
+  Check,
+  Sparkles,
+  X,
+  Plus,
+  Upload,
+  AlertCircle,
+  Loader2,
+} from "lucide-react";
+import { autoMatchImport, reconcileRow } from "../actions/conciliation";
 import type {
   BankImport,
-  BankImportItem,
   Transaction,
   BankAccount,
 } from "@hebron/types/financeiro";
@@ -13,10 +23,6 @@ interface ConciliationViewProps {
   bankAccount: BankAccount;
   bankImport: BankImport;
   transactions: Transaction[];
-  onMatch?: (bankItemId: string, transactionId: string) => void;
-  onUnmatch?: (bankItemId: string) => void;
-  onCreateTransaction?: (item: BankImportItem) => void;
-  onReimport?: () => void;
 }
 
 function fmtBRL(n: number): string {
@@ -38,106 +44,69 @@ function clsx(...cls: (string | false | null | undefined)[]): string {
   return cls.filter(Boolean).join(" ");
 }
 
-function dateDiffDays(a: Date, b: Date): number {
-  return Math.abs(a.getTime() - b.getTime()) / 86_400_000;
-}
-
-function suggestMatch(
-  item: BankImportItem,
-  transactions: Transaction[],
-  matched: Set<string>,
-): Transaction | null {
-  return (
-    transactions.find(
-      (t) =>
-        !matched.has(t.id) &&
-        Math.abs(t.amount - item.amount) < 0.01 &&
-        dateDiffDays(t.occurredAt, item.occurredAt) <= 5,
-    ) ?? null
-  );
+interface Suggestion {
+  rowId: string;
+  suggestedPayableId: string | null;
+  suggestedReceivableId: string | null;
+  confidence: "high" | "medium" | "low";
 }
 
 export function ConciliationView({
   bankAccount,
   bankImport,
   transactions,
-  onMatch,
-  onUnmatch,
-  onCreateTransaction,
-  onReimport,
 }: ConciliationViewProps) {
-  // Local match state: bankItemId → transactionId
-  const [matches, setMatches] = useState<Record<string, string>>(() => {
-    const m: Record<string, string> = {};
-    for (const item of bankImport.items) {
-      if (item.transactionId) {
-        m[item.id] = item.transactionId;
-      }
-    }
-    return m;
-  });
-
-  const [selectedBankItemId, setSelectedBankItemId] = useState<string | null>(
-    null,
+  const router = useRouter();
+  const [suggestions, setSuggestions] = useState<Map<string, Suggestion>>(
+    new Map(),
   );
-
-  const matchedTransactionIds = useMemo(
-    () => new Set(Object.values(matches)),
-    [matches],
-  );
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
 
   const items = bankImport.items;
-  const matchedCount = Object.keys(matches).length;
+  const matchedCount = items.filter(
+    (i) => i.matchStatus === "vinculado",
+  ).length;
+  const ignoredCount = items.filter((i) => i.matchStatus === "ignorado").length;
   const total = items.length;
   const pct = total > 0 ? Math.round((matchedCount / total) * 100) : 0;
-  const unmatched = items.filter((i) => !matches[i.id]);
+  const unmatched = items.filter((i) => i.matchStatus === "pendente");
 
-  const selectedItem = selectedBankItemId
-    ? items.find((i) => i.id === selectedBankItemId)
+  const { execute: runAutoMatch, isPending: isMatching } = useAction(
+    autoMatchImport,
+    {
+      onSuccess({ data }) {
+        if (!data) return;
+        const next = new Map<string, Suggestion>();
+        for (const s of data.suggestions) {
+          next.set(s.rowId, s);
+        }
+        setSuggestions(next);
+        router.refresh();
+      },
+    },
+  );
+
+  const { execute: runReconcile, isPending: isReconciling } = useAction(
+    reconcileRow,
+    {
+      onSuccess() {
+        router.refresh();
+      },
+    },
+  );
+
+  const selectedItem = selectedItemId
+    ? items.find((i) => i.id === selectedItemId)
     : null;
-
-  const suggestion = useMemo((): Transaction | null => {
-    if (!selectedItem || matches[selectedItem.id]) return null;
-    return suggestMatch(selectedItem, transactions, matchedTransactionIds);
-  }, [selectedItem, matches, transactions, matchedTransactionIds]);
-
-  const handleMatch = (bankItemId: string, txId: string) => {
-    setMatches((prev) => ({ ...prev, [bankItemId]: txId }));
-    setSelectedBankItemId(null);
-    onMatch?.(bankItemId, txId);
-  };
-
-  const handleUnmatch = (bankItemId: string) => {
-    setMatches((prev) => {
-      const { [bankItemId]: _removed, ...rest } = prev;
-      return rest;
-    });
-    onUnmatch?.(bankItemId);
-  };
-
-  const acceptAllSuggestions = () => {
-    const next = { ...matches };
-    for (const item of unmatched) {
-      const match = suggestMatch(
-        item,
-        transactions,
-        new Set(Object.values(next)),
-      );
-      if (match) {
-        next[item.id] = match.id;
-        onMatch?.(item.id, match.id);
-      }
-    }
-    setMatches(next);
-    setSelectedBankItemId(null);
-  };
+  const selectedSuggestion = selectedItemId
+    ? suggestions.get(selectedItemId)
+    : undefined;
 
   return (
     <div className="flex flex-col gap-4">
       {/* Info card */}
       <div className="rounded-(--radius) border border-(--border) bg-(--surface) px-5 py-4">
         <div className="flex flex-wrap items-center gap-5">
-          {/* Account info */}
           <div className="flex items-center gap-3">
             <div
               className="w-11 h-11 rounded-(--radius) flex items-center justify-center text-sm font-bold text-(--fg-invert) shrink-0"
@@ -193,7 +162,6 @@ export function ConciliationView({
             </p>
           </div>
 
-          {/* Circular progress */}
           <div className="relative w-14 h-14 shrink-0">
             <svg width="56" height="56" viewBox="0 0 56 56">
               <circle
@@ -231,20 +199,27 @@ export function ConciliationView({
         </div>
       </div>
 
-      {/* Auto-match hint */}
+      {/* Auto-match action */}
       {unmatched.length > 0 && (
         <div className="flex items-center gap-3 rounded-(--radius) border border-(--hb-cyan-muted) bg-(--hb-cyan-muted) px-4 py-3">
           <Sparkles className="h-4 w-4 text-(--hb-cyan-deep) shrink-0" />
           <p className="text-sm text-(--fg) flex-1">
-            <strong>Sugestões automáticas</strong> · {unmatched.length}{" "}
+            <strong>Conciliação automática</strong> · {unmatched.length}{" "}
             {unmatched.length === 1 ? "linha pendente" : "linhas pendentes"}. O
-            sistema casa valor + data com lançamentos já registrados.
+            sistema casa valor + data + descrição com lançamentos, contas a
+            pagar e a receber já registrados.
           </p>
           <button
-            onClick={acceptAllSuggestions}
-            className="px-3 py-1.5 rounded-lg border border-(--border) bg-(--surface) text-xs font-semibold text-(--fg-muted) hover:border-(--border-strong) hover:text-(--fg) transition-colors shrink-0"
+            onClick={() => runAutoMatch({ bankImportId: bankImport.id })}
+            disabled={isMatching}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-(--border) bg-(--surface) text-xs font-semibold text-(--fg-muted) hover:border-(--border-strong) hover:text-(--fg) transition-colors shrink-0 disabled:opacity-50"
           >
-            Aceitar todas
+            {isMatching ? (
+              <Loader2 className="h-3 w-3 animate-spin" />
+            ) : (
+              <Sparkles className="h-3 w-3" />
+            )}
+            Rodar auto-match
           </button>
         </div>
       )}
@@ -262,29 +237,34 @@ export function ConciliationView({
                 {total} linhas importadas
               </p>
             </div>
-            <button
-              onClick={onReimport}
+            <a
+              href="/importacao"
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-(--border) text-xs font-semibold text-(--fg-muted) hover:border-(--border-strong) hover:text-(--fg) transition-colors"
             >
               <Upload className="h-3 w-3" />
-              Re-importar
-            </button>
+              Novo extrato
+            </a>
           </div>
 
           <div style={{ maxHeight: 520, overflowY: "auto" }}>
             {items.map((item) => {
-              const isMatched = !!matches[item.id];
-              const isSelected = selectedBankItemId === item.id;
+              const isMatched = item.matchStatus === "vinculado";
+              const isIgnored = item.matchStatus === "ignorado";
+              const isSelected = selectedItemId === item.id;
               return (
                 <div
                   key={item.id}
                   onClick={() =>
-                    setSelectedBankItemId(isSelected ? null : item.id)
+                    !isMatched &&
+                    !isIgnored &&
+                    setSelectedItemId(isSelected ? null : item.id)
                   }
                   className={clsx(
-                    "grid gap-2.5 px-4 py-3 border-b border-(--divider) cursor-pointer transition-colors text-sm",
-                    "hover:bg-(--bg-alt)",
-                    isMatched && "opacity-50",
+                    "grid gap-2.5 px-4 py-3 border-b border-(--divider) transition-colors text-sm",
+                    !isMatched &&
+                      !isIgnored &&
+                      "cursor-pointer hover:bg-(--bg-alt)",
+                    (isMatched || isIgnored) && "opacity-50",
                     isSelected &&
                       "bg-(--hb-cyan-muted) border-l-4 border-l-(--hb-cyan) pl-3",
                   )}
@@ -303,6 +283,10 @@ export function ConciliationView({
                           <Check className="h-3 w-3" />
                           Conciliado
                         </span>
+                      ) : isIgnored ? (
+                        <span className="text-(--fg-muted) font-semibold">
+                          Ignorado
+                        </span>
                       ) : (
                         <span className="text-(--hb-orange-deep) font-semibold">
                           Pendente
@@ -310,158 +294,158 @@ export function ConciliationView({
                       )}
                     </p>
                   </div>
-                  <div className="flex items-center justify-between gap-1">
-                    <span
-                      className={clsx(
-                        "text-right font-bold tabular-nums text-sm",
-                        item.type === "credito"
-                          ? "text-(--hb-green-deep)"
-                          : "text-(--hb-orange-deep)",
-                      )}
-                    >
-                      {item.type === "credito" ? "+" : "−"}{" "}
-                      {fmtBRL(item.amount)}
-                    </span>
-                    {isMatched && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleUnmatch(item.id);
-                        }}
-                        className="h-5 w-5 flex items-center justify-center rounded text-(--fg-muted) hover:text-(--color-destructive) transition-colors"
-                        title="Desfazer conciliação"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* ── Lançamentos do sistema ───────────────────────────────────────────── */}
-        <div className="rounded-(--radius) border border-(--border) bg-(--surface) overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-(--border)">
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-(--fg-muted)">
-                Lançamentos do sistema
-              </p>
-              <p className="font-semibold text-(--fg) text-sm mt-0.5">
-                {transactions.length} no período
-              </p>
-            </div>
-            {onCreateTransaction &&
-              selectedItem &&
-              !matches[selectedItem.id] && (
-                <button
-                  onClick={() => onCreateTransaction(selectedItem)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-(--hb-blue) text-(--fg-invert) text-xs font-semibold hover:bg-(--hb-blue-soft) transition-colors"
-                >
-                  <Plus className="h-3 w-3" />
-                  Criar lançamento
-                </button>
-              )}
-          </div>
-
-          {/* Suggestion panel */}
-          {selectedItem && !matches[selectedItem.id] && suggestion && (
-            <div className="px-4 py-3 border-b border-(--divider) bg-(--hb-green-muted)">
-              <div className="flex items-start justify-between gap-3 mb-2">
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-widest text-(--hb-green-deep) flex items-center gap-1 mb-1">
-                    <Sparkles className="h-3 w-3" />
-                    Sugestão para "{selectedItem.description}"
-                  </p>
-                  <p className="text-sm font-semibold text-(--fg)">
-                    {suggestion.description}
-                  </p>
-                  <p className="text-xs text-(--fg-muted) mt-0.5">
-                    {suggestion.categoryId ?? "Sem categoria"} ·{" "}
-                    {fmtDate(suggestion.occurredAt)} ·{" "}
-                    {fmtBRL(suggestion.amount)}
-                  </p>
-                </div>
-                <div className="flex gap-2 shrink-0">
-                  <button
-                    onClick={() => setSelectedBankItemId(null)}
-                    className="h-8 w-8 flex items-center justify-center rounded-lg border border-(--border) bg-(--surface) text-(--fg-muted) hover:text-(--fg) transition-colors"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                  <button
-                    onClick={() => handleMatch(selectedItem.id, suggestion.id)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-(--hb-green) text-(--hb-blue) text-xs font-bold hover:bg-(--hb-green-deep) transition-colors"
-                  >
-                    <Check className="h-3 w-3" />
-                    Casar
-                  </button>
-                </div>
-              </div>
-              <p className="text-[10px] text-(--fg-muted)">
-                Confiança: valor idêntico, data próxima
-              </p>
-            </div>
-          )}
-
-          <div style={{ maxHeight: 520, overflowY: "auto" }}>
-            {transactions.map((t) => {
-              const isMatched = matchedTransactionIds.has(t.id);
-              const isHighlighted =
-                selectedItem &&
-                !matches[selectedItem.id] &&
-                suggestion?.id === t.id;
-
-              return (
-                <div
-                  key={t.id}
-                  onClick={() => {
-                    if (
-                      selectedItem &&
-                      !matches[selectedItem.id] &&
-                      !isMatched
-                    ) {
-                      handleMatch(selectedItem.id, t.id);
-                    }
-                  }}
-                  className={clsx(
-                    "grid gap-2.5 px-4 py-3 border-b border-(--divider) text-sm transition-colors",
-                    selectedItem && !matches[selectedItem.id] && !isMatched
-                      ? "cursor-pointer hover:bg-(--bg-alt)"
-                      : "",
-                    isMatched && "opacity-50",
-                    isHighlighted && "bg-(--hb-green-muted)",
-                  )}
-                  style={{ gridTemplateColumns: "88px 1fr 110px" }}
-                >
-                  <span className="text-xs text-(--fg-muted) tabular-nums self-center">
-                    {fmtDate(t.occurredAt)}
-                  </span>
-                  <div className="min-w-0">
-                    <p className="font-semibold text-(--fg) truncate">
-                      {t.description}
-                    </p>
-                    <p className="text-xs text-(--fg-muted) mt-0.5 truncate">
-                      {t.categoryId ? t.categoryId : "Sem categoria"}
-                    </p>
-                  </div>
                   <span
                     className={clsx(
-                      "self-center text-right font-bold tabular-nums",
-                      t.type === "credito"
+                      "self-center text-right font-bold tabular-nums text-sm",
+                      item.type === "credito"
                         ? "text-(--hb-green-deep)"
                         : "text-(--hb-orange-deep)",
                     )}
                   >
-                    {t.type === "credito" ? "+" : "−"} {fmtBRL(t.amount)}
+                    {item.type === "credito" ? "+" : "−"} {fmtBRL(item.amount)}
                   </span>
                 </div>
               );
             })}
           </div>
         </div>
+
+        {/* ── Ações de conciliação ─────────────────────────────────────────────── */}
+        <div className="rounded-(--radius) border border-(--border) bg-(--surface) overflow-hidden">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-(--border)">
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-(--fg-muted)">
+                Ações de conciliação
+              </p>
+              <p className="font-semibold text-(--fg) text-sm mt-0.5">
+                {transactions.length} lançamentos no período
+              </p>
+            </div>
+          </div>
+
+          {!selectedItem && (
+            <div className="flex flex-col items-center justify-center py-16 gap-3 text-center px-6">
+              <Sparkles className="h-8 w-8 text-(--fg-muted) opacity-30" />
+              <p className="text-sm text-(--fg-muted)">
+                Selecione uma linha pendente do extrato para vincular, criar ou
+                ignorar o lançamento.
+              </p>
+            </div>
+          )}
+
+          {selectedItem && (
+            <div className="px-4 py-4 space-y-3">
+              <div className="rounded-lg border border-(--border) bg-(--bg-alt) px-3 py-2.5">
+                <p className="text-sm font-semibold text-(--fg)">
+                  {selectedItem.description}
+                </p>
+                <p className="text-xs text-(--fg-muted) mt-0.5">
+                  {fmtDate(selectedItem.occurredAt)} ·{" "}
+                  {fmtBRL(selectedItem.amount)}
+                </p>
+              </div>
+
+              {selectedSuggestion &&
+                (selectedSuggestion.suggestedPayableId ||
+                  selectedSuggestion.suggestedReceivableId) && (
+                  <div className="rounded-lg border border-(--hb-green-muted) bg-(--hb-green-muted) px-3 py-3">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-(--hb-green-deep) flex items-center gap-1 mb-2">
+                      <Sparkles className="h-3 w-3" />
+                      Sugestão automática — confiança{" "}
+                      {selectedSuggestion.confidence}
+                    </p>
+                    <button
+                      onClick={() =>
+                        runReconcile({
+                          bankImportItemId: selectedItem.id,
+                          action: selectedSuggestion.suggestedPayableId
+                            ? "vincular_payable"
+                            : "vincular_receivable",
+                          payableId: selectedSuggestion.suggestedPayableId,
+                          receivableId:
+                            selectedSuggestion.suggestedReceivableId,
+                        })
+                      }
+                      disabled={isReconciling}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-(--hb-green) text-(--hb-blue) text-xs font-bold hover:bg-(--hb-green-deep) transition-colors disabled:opacity-50"
+                    >
+                      <Check className="h-3 w-3" />
+                      Vincular sugestão
+                    </button>
+                  </div>
+                )}
+
+              <div className="flex gap-2">
+                <button
+                  onClick={() =>
+                    runReconcile({
+                      bankImportItemId: selectedItem.id,
+                      action: "criar_novo",
+                    })
+                  }
+                  disabled={isReconciling}
+                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-(--hb-blue) text-(--fg-invert) text-xs font-semibold hover:bg-(--hb-blue-soft) transition-colors disabled:opacity-50"
+                >
+                  <Plus className="h-3 w-3" />
+                  Criar lançamento
+                </button>
+                <button
+                  onClick={() =>
+                    runReconcile({
+                      bankImportItemId: selectedItem.id,
+                      action: "ignorar",
+                    })
+                  }
+                  disabled={isReconciling}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-(--border) text-xs font-semibold text-(--fg-muted) hover:text-(--fg) transition-colors disabled:opacity-50"
+                >
+                  <X className="h-3 w-3" />
+                  Ignorar
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div
+            className="border-t border-(--border)"
+            style={{ maxHeight: 320, overflowY: "auto" }}
+          >
+            {transactions.slice(0, 30).map((t) => (
+              <div
+                key={t.id}
+                className="grid gap-2.5 px-4 py-3 border-b border-(--divider) text-sm"
+                style={{ gridTemplateColumns: "88px 1fr 110px" }}
+              >
+                <span className="text-xs text-(--fg-muted) tabular-nums self-center">
+                  {fmtDate(t.occurredAt)}
+                </span>
+                <p className="font-semibold text-(--fg) truncate self-center">
+                  {t.description}
+                </p>
+                <span
+                  className={clsx(
+                    "self-center text-right font-bold tabular-nums",
+                    t.type === "credito"
+                      ? "text-(--hb-green-deep)"
+                      : "text-(--hb-orange-deep)",
+                  )}
+                >
+                  {t.type === "credito" ? "+" : "−"} {fmtBRL(t.amount)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
+
+      {ignoredCount > 0 && (
+        <p className="flex items-center gap-1.5 text-xs text-(--fg-muted)">
+          <AlertCircle className="h-3.5 w-3.5" />
+          {ignoredCount}{" "}
+          {ignoredCount === 1 ? "linha ignorada" : "linhas ignoradas"} nesta
+          importação.
+        </p>
+      )}
 
       {/* Complete state */}
       {unmatched.length === 0 && total > 0 && (

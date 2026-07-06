@@ -2,9 +2,12 @@
 
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useAction } from "next-safe-action/hooks";
+import { useRouter } from "next/navigation";
 import { X, Building2, AlertCircle, Info, ChevronDown } from "lucide-react";
 import { createBankAccountSchema } from "@hebron/validators";
 import type { CreateBankAccountInput } from "@hebron/validators";
+import { createBankAccount } from "../actions/accounts";
 
 interface BankAccountFormProps {
   onClose: () => void;
@@ -62,6 +65,8 @@ const ACCOUNT_TYPES = [
 ] as const;
 
 export function BankAccountForm({ onClose, onSuccess }: BankAccountFormProps) {
+  const router = useRouter();
+
   const {
     register,
     handleSubmit,
@@ -73,11 +78,16 @@ export function BankAccountForm({ onClose, onSuccess }: BankAccountFormProps) {
     },
   });
 
+  const { execute, isPending, result } = useAction(createBankAccount, {
+    onSuccess() {
+      router.refresh();
+      onSuccess?.();
+      onClose();
+    },
+  });
+
   function onSubmit(data: CreateBankAccountInput) {
-    // Bloco A: mock submit
-    console.log("Nova conta bancária:", data);
-    onSuccess?.();
-    onClose();
+    execute(data);
   }
 
   return (
@@ -219,6 +229,16 @@ export function BankAccountForm({ onClose, onSuccess }: BankAccountFormProps) {
                 ou registre transações manualmente para refletir o saldo real.
               </p>
             </div>
+
+            {result.serverError && (
+              <p
+                className="flex items-center gap-1 text-xs font-medium"
+                style={{ color: "var(--hb-orange-deep)" }}
+              >
+                <AlertCircle className="h-3 w-3 shrink-0" />
+                {result.serverError}
+              </p>
+            )}
           </form>
         </div>
 
@@ -238,11 +258,11 @@ export function BankAccountForm({ onClose, onSuccess }: BankAccountFormProps) {
           <button
             type="submit"
             form="bank-account-form"
-            disabled={isSubmitting}
+            disabled={isSubmitting || isPending}
             className="px-5 py-2.5 rounded-(--radius) text-sm font-semibold transition-colors disabled:opacity-60"
             style={{ background: "var(--hb-blue)", color: "var(--fg-invert)" }}
           >
-            {isSubmitting ? "Salvando…" : "Cadastrar conta"}
+            {isSubmitting || isPending ? "Salvando…" : "Cadastrar conta"}
           </button>
         </div>
       </div>

@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useAction } from "next-safe-action/hooks";
+import { useRouter } from "next/navigation";
 import {
   X,
   Plus,
@@ -12,10 +14,14 @@ import {
   Grid3x3,
   List,
 } from "lucide-react";
-import { createBudgetSchema } from "@hebron/validators";
-import { mockCategories, mockCostCenters } from "../lib/mock-data";
+import { createBudgetSchema, type CreateBudgetInput } from "@hebron/validators";
+import { createBudget } from "../actions/categories";
+import type { AccountCategory } from "@hebron/types/financeiro";
+import type { CostCenterOption } from "../lib/queries";
 
 interface BudgetFormProps {
+  categories: AccountCategory[];
+  costCenters: CostCenterOption[];
   onClose: () => void;
   onSuccess?: () => void;
 }
@@ -42,10 +48,6 @@ const MONTH_OPTIONS = [
     label: `${String(i + 1).padStart(2, "0")} — ${m}`,
   })),
 ];
-
-const expenseLeafCategories = mockCategories.filter(
-  (c) => c.type === "despesa" && c.level === 3,
-);
 
 function fmtBRL(n: number): string {
   return new Intl.NumberFormat("pt-BR", {
@@ -100,8 +102,18 @@ const selectCls = inputCls + " appearance-none cursor-pointer pr-8";
 
 type ViewMode = "lista" | "matriz";
 
-export function BudgetForm({ onClose, onSuccess }: BudgetFormProps) {
+export function BudgetForm({
+  categories,
+  costCenters,
+  onClose,
+  onSuccess,
+}: BudgetFormProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("lista");
+  const router = useRouter();
+
+  const expenseLeafCategories = categories.filter(
+    (c) => c.type === "despesa" && c.level === 3,
+  );
 
   const {
     register,
@@ -151,10 +163,16 @@ export function BudgetForm({ onClose, onSuccess }: BudgetFormProps) {
     return { cat, monthlyAmounts, annual };
   });
 
-  function onSubmit(data: unknown) {
-    console.log("Novo orçamento:", data);
-    onSuccess?.();
-    onClose();
+  const { execute, isPending, result } = useAction(createBudget, {
+    onSuccess() {
+      router.refresh();
+      onSuccess?.();
+      onClose();
+    },
+  });
+
+  function onSubmit(data: CreateBudgetInput) {
+    execute(data);
   }
 
   return (
@@ -277,7 +295,7 @@ export function BudgetForm({ onClose, onSuccess }: BudgetFormProps) {
                   <Label>Centro de custo</Label>
                   <select {...register("costCenterId")} className={selectCls}>
                     <option value="">Sem centro de custo</option>
-                    {mockCostCenters.map((cc) => (
+                    {costCenters.map((cc) => (
                       <option key={cc.id} value={cc.id}>
                         {cc.code} — {cc.name}
                       </option>
@@ -698,6 +716,14 @@ export function BudgetForm({ onClose, onSuccess }: BudgetFormProps) {
             <strong style={{ color: "var(--fg)" }}>
               {fmtBRL(totalPlanned)}
             </strong>
+            {result.serverError && (
+              <span
+                className="block mt-1 text-xs font-medium"
+                style={{ color: "var(--hb-orange-deep)" }}
+              >
+                {result.serverError}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-3">
             <button
@@ -711,14 +737,14 @@ export function BudgetForm({ onClose, onSuccess }: BudgetFormProps) {
             <button
               type="submit"
               form="budget-form"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isPending}
               className="px-5 py-2.5 rounded-(--radius) text-sm font-semibold transition-colors disabled:opacity-60"
               style={{
                 background: "var(--hb-blue)",
                 color: "var(--fg-invert)",
               }}
             >
-              {isSubmitting ? "Salvando…" : "Criar orçamento"}
+              {isSubmitting || isPending ? "Salvando…" : "Criar orçamento"}
             </button>
           </div>
         </div>

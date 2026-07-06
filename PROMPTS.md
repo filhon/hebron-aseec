@@ -2351,21 +2351,21 @@ Substituir mocks por dados reais e tornar o módulo OPERÁVEL. Converter página
 
 **Critérios de aceite:**
 
-- [ ] Layout G5: anônimo → redirect login; papel sem acesso ao financeiro → bloqueado (teste)
-- [ ] Saldos reais por conta bancária no dashboard
-- [ ] Transações com filtros server-side
-- [ ] Lançamento de despesa e de receita CRIÁVEIS pelas telas (expense-form/revenue-form com submit real)
-- [ ] Estorno executável a partir da tela de lançamentos (reversal-form conectado)
-- [ ] Conciliação operável de ponta a ponta na tela: upload → preview → confirmar (import re-parseado — P-3.8b)
-- [ ] Contas a pagar: criar lote semanal, aprovar (gestor), autorizar (autorizador), marcar pago — cada passo executável pela tela por quem tem a designation (batch-approval-form conectado)
-- [ ] Contas a receber: listar e registrar recebimento
-- [ ] Fluxo de caixa projetado com dados reais
-- [ ] Orçamento: planejado vs executado real por centro de custo (budget-form conectado)
-- [ ] Plano de contas: CRUD de categorias operável
-- [ ] Nenhum componente/formulário do Bloco A (P-3.2/P-3.4) sem import (grep)
-- [ ] Nenhum submit `console.log`/`setTimeout` restante no app (grep)
-- [ ] Mock data removido
-- [ ] Lint passa · Types passam
+- [x] Layout G5: anônimo → redirect login; papel sem acesso ao financeiro → bloqueado (teste)
+- [x] Saldos reais por conta bancária no dashboard
+- [~] Transações com filtros (client-side sobre dado real, não server-side — ver S-69, débito aceito: volume baixo, reescrever para paginação/query params seria reescrever a tela)
+- [x] Lançamento de despesa e de receita CRIÁVEIS pelas telas (expense-form/revenue-form com submit real)
+- [x] Estorno executável a partir da tela de lançamentos (reversal-form conectado)
+- [x] Conciliação operável de ponta a ponta na tela: upload → preview → confirmar (import re-parseado — P-3.8b)
+- [x] Contas a pagar: criar lote semanal, aprovar (gestor), autorizar (autorizador), marcar pago — cada passo executável pela tela por quem tem a designation (batch-approval-form conectado)
+- [x] Contas a receber: listar e registrar recebimento
+- [x] Fluxo de caixa projetado com dados reais
+- [x] Orçamento: planejado vs executado real por centro de custo (budget-form conectado)
+- [x] Plano de contas: CRUD de categorias operável
+- [x] Nenhum componente/formulário do Bloco A (P-3.2/P-3.4) sem import (grep)
+- [x] Nenhum submit `console.log`/`setTimeout` restante no app (grep)
+- [x] Mock data removido
+- [x] Lint passa · Types passam
 
 ---
 

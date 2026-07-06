@@ -7,7 +7,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { parseCSV, splitDelimitedLine } from "../actions/import";
+import { parseCSV, splitDelimitedLine } from "../lib/import-parsers";
 
 describe("splitDelimitedLine", () => {
   it("separa por vírgula fora de aspas", () => {

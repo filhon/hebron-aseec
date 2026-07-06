@@ -331,7 +331,7 @@ export function CashFlowChart({
             className="absolute top-4 left-16 bg-(--surface) border border-(--border) rounded-lg px-3 py-2 shadow-sm pointer-events-none"
             style={{ minWidth: 140 }}
           >
-            <p className="text-[10px] text-(--fg-muted) uppercase tracking-[0.1em] font-bold">
+            <p className="text-[10px] text-(--fg-muted) uppercase tracking-widest font-bold">
               D+{hoveredPoint.day}
             </p>
             <p

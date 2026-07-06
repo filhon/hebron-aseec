@@ -1,18 +1,11 @@
-﻿"use client";
-
-import { useState, useEffect } from "react";
-import { Upload, CheckCircle2, RefreshCw, AlertCircle } from "lucide-react";
+import { Suspense } from "react";
+import { Upload, CheckCircle2 } from "lucide-react";
 import {
-  mockBankAccounts,
-  mockBankImports,
-  mockTransactions,
-} from "../../../lib/mock-data";
+  getLatestBankImport,
+  getTransactionsForAccount,
+} from "../../../lib/queries";
 import { ConciliationView } from "../../../components/conciliation-view";
 import { ConciliationSkeleton } from "../../../components/conciliation-skeleton";
-
-// Use the second import (import-002: partial June, has pending items)
-const bankImport = mockBankImports[1] ?? null;
-const bankAccount = mockBankAccounts[0];
 
 function EmptyNoImport() {
   return (
@@ -62,7 +55,7 @@ function EmptyNoImport() {
             color: "var(--fg-invert)",
           }}
         >
-          "Sede fiéis no pouco, e sereis fiéis no muito."
+          &quot;Sede fiéis no pouco, e sereis fiéis no muito.&quot;
         </p>
         <p
           className="text-[11px] font-bold uppercase tracking-[0.12em] mt-2"
@@ -122,8 +115,8 @@ function EmptyAllConciliated() {
             color: "var(--fg-invert)",
           }}
         >
-          "Onde não há bois, o celeiro está vazio; mas pela força do boi há
-          abundância nas colheitas."
+          &quot;Onde não há bois, o celeiro está vazio; mas pela força do boi há
+          abundância nas colheitas.&quot;
         </p>
         <p
           className="text-[11px] font-bold uppercase tracking-[0.12em] mt-2"
@@ -136,58 +129,27 @@ function EmptyAllConciliated() {
   );
 }
 
-function ErrorState({ onRetry }: { onRetry: () => void }) {
+async function ConciliationContent() {
+  const result = await getLatestBankImport();
+
+  if (!result) return <EmptyNoImport />;
+
+  const { bankImport, bankAccount } = result;
+
+  if (bankImport.pendingItems === 0) return <EmptyAllConciliated />;
+
+  const transactions = await getTransactionsForAccount(bankAccount.id);
+
   return (
-    <div
-      className="flex flex-col items-center text-center rounded-(--radius) border py-20 px-8"
-      style={{ background: "var(--surface)", borderColor: "var(--border)" }}
-    >
-      <div
-        className="flex h-14 w-14 items-center justify-center rounded-(--radius) mb-5"
-        style={{ background: "rgba(234,90,6,0.10)" }}
-      >
-        <AlertCircle
-          className="h-7 w-7"
-          style={{ color: "var(--hb-orange-deep)" }}
-        />
-      </div>
-      <p
-        className="text-xl font-bold mb-2"
-        style={{ fontFamily: "var(--font-display)", color: "var(--fg)" }}
-      >
-        Erro ao carregar conciliação
-      </p>
-      <p className="text-sm mb-6" style={{ color: "var(--fg-muted)" }}>
-        Não foi possível buscar os dados do extrato. Verifique sua conexão e
-        tente novamente.
-      </p>
-      <button
-        onClick={onRetry}
-        className="flex items-center gap-2 px-5 py-2.5 rounded-(--radius) text-sm font-semibold"
-        style={{ background: "var(--hb-blue)", color: "var(--fg-invert)" }}
-      >
-        <RefreshCw className="h-4 w-4" />
-        Tentar novamente
-      </button>
-    </div>
+    <ConciliationView
+      bankAccount={bankAccount}
+      bankImport={bankImport}
+      transactions={transactions}
+    />
   );
 }
 
 export default function ConciliacaoPage() {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-
-  useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 1200);
-    return () => clearTimeout(t);
-  }, []);
-
-  function handleRetry() {
-    setError(false);
-    setLoading(true);
-    setTimeout(() => setLoading(false), 1200);
-  }
-
   return (
     <div className="min-h-screen" style={{ background: "var(--bg-alt)" }}>
       {/* Topbar */}
@@ -212,25 +174,9 @@ export default function ConciliacaoPage() {
       </div>
 
       <div className="p-6">
-        {loading ? (
-          <ConciliationSkeleton />
-        ) : error ? (
-          <ErrorState onRetry={handleRetry} />
-        ) : !bankImport || !bankAccount ? (
-          <EmptyNoImport />
-        ) : bankImport.pendingItems === 0 ? (
-          <EmptyAllConciliated />
-        ) : (
-          <ConciliationView
-            bankAccount={bankAccount}
-            bankImport={bankImport}
-            transactions={mockTransactions}
-            onMatch={() => {}}
-            onUnmatch={() => {}}
-            onCreateTransaction={() => {}}
-            onReimport={() => {}}
-          />
-        )}
+        <Suspense fallback={<ConciliationSkeleton />}>
+          <ConciliationContent />
+        </Suspense>
       </div>
     </div>
   );

@@ -88,6 +88,8 @@ export const auditActionEnum = adminSchema.enum("audit_action", [
   "consent.granted",
   "consent.revoked",
   "user.anonymized",
+  // Financeiro — bank-account-form (P-3.9), added via ALTER TYPE
+  "financeiro.account.created",
 ]);
 
 export const meetingTypeEnum = adminSchema.enum("meeting_type", [

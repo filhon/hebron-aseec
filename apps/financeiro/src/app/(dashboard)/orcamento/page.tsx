@@ -1,10 +1,11 @@
-﻿"use client";
-
-import { useState } from "react";
-import { Plus, ArrowUp, ArrowDown } from "lucide-react";
-import { mockBudgets, mockTransactions } from "../../../lib/mock-data";
+import { ArrowUp, ArrowDown } from "lucide-react";
+import {
+  getBudgets,
+  getTransactions,
+  getCategories,
+  getCostCenterOptions,
+} from "../../../lib/queries";
 import { BudgetComparison } from "../../../components/budget-comparison";
-import { BudgetForm } from "../../../components/budget-form";
 
 function fmtBRL(n: number): string {
   return new Intl.NumberFormat("pt-BR", {
@@ -12,22 +13,6 @@ function fmtBRL(n: number): string {
     currency: "BRL",
   }).format(n);
 }
-
-// KPI computation
-const totalApproved = mockBudgets.reduce((s, b) => s + b.totalAmount, 0);
-const totalUsed = mockBudgets.reduce((s, b) => {
-  const used = mockTransactions
-    .filter(
-      (t) =>
-        t.type === "debito" &&
-        t.costCenterId &&
-        t.costCenterId === b.costCenterId,
-    )
-    .reduce((acc, t) => acc + t.amount, 0);
-  return s + used;
-}, 0);
-const pctUsed = totalApproved > 0 ? (totalUsed / totalApproved) * 100 : 0;
-const remaining = totalApproved - totalUsed;
 
 interface KpiCardProps {
   label: string;
@@ -82,8 +67,28 @@ function KpiCard({ label, value, sub, accent, dir }: KpiCardProps) {
   );
 }
 
-export default function OrcamentoPage() {
-  const [budgetFormOpen, setBudgetFormOpen] = useState(false);
+export default async function OrcamentoPage() {
+  const [budgets, transactions, categories, costCenters] = await Promise.all([
+    getBudgets(),
+    getTransactions(),
+    getCategories(),
+    getCostCenterOptions(),
+  ]);
+
+  const totalApproved = budgets.reduce((s, b) => s + b.totalAmount, 0);
+  const totalUsed = budgets.reduce((s, b) => {
+    const used = transactions
+      .filter(
+        (t) =>
+          t.type === "debito" &&
+          t.costCenterId &&
+          t.costCenterId === b.costCenterId,
+      )
+      .reduce((acc, t) => acc + t.amount, 0);
+    return s + used;
+  }, 0);
+  const pctUsed = totalApproved > 0 ? (totalUsed / totalApproved) * 100 : 0;
+  const remaining = totalApproved - totalUsed;
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg-alt)" }}>
@@ -92,29 +97,19 @@ export default function OrcamentoPage() {
         className="sticky top-14 z-10 border-b px-6 py-3.5"
         style={{ background: "var(--bg)", borderColor: "var(--border)" }}
       >
-        <div className="flex items-center gap-4">
-          <div>
-            <p
-              className="text-[10px] font-bold uppercase tracking-[0.14em]"
-              style={{ color: "var(--fg-muted)" }}
-            >
-              Financeiro
-            </p>
-            <p
-              className="text-xl font-bold"
-              style={{ fontFamily: "var(--font-display)", color: "var(--fg)" }}
-            >
-              Orçamento anual
-            </p>
-          </div>
-          <button
-            onClick={() => setBudgetFormOpen(true)}
-            className="ml-auto flex items-center gap-1.5 px-3 py-2 rounded-(--radius) text-xs font-semibold"
-            style={{ background: "var(--hb-blue)", color: "var(--fg-invert)" }}
+        <div>
+          <p
+            className="text-[10px] font-bold uppercase tracking-[0.14em]"
+            style={{ color: "var(--fg-muted)" }}
           >
-            <Plus className="h-3 w-3" />
-            Novo orçamento
-          </button>
+            Financeiro
+          </p>
+          <p
+            className="text-xl font-bold"
+            style={{ fontFamily: "var(--font-display)", color: "var(--fg)" }}
+          >
+            Orçamento anual
+          </p>
         </div>
       </div>
 
@@ -123,8 +118,8 @@ export default function OrcamentoPage() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <KpiCard
             label="Orçamentos ativos"
-            value={`${mockBudgets.length}`}
-            sub={`Exercício ${mockBudgets[0]?.year ?? 2026}`}
+            value={`${budgets.length}`}
+            sub={`Exercício ${budgets[0]?.year ?? new Date().getFullYear()}`}
           />
           <KpiCard
             label="Total aprovado"
@@ -146,17 +141,13 @@ export default function OrcamentoPage() {
           />
         </div>
 
-        {/* BudgetComparison component */}
         <BudgetComparison
-          budgets={mockBudgets}
-          transactions={mockTransactions}
-          onNew={() => setBudgetFormOpen(true)}
+          budgets={budgets}
+          transactions={transactions}
+          categories={categories}
+          costCenters={costCenters}
         />
       </div>
-
-      {budgetFormOpen && (
-        <BudgetForm onClose={() => setBudgetFormOpen(false)} />
-      )}
     </div>
   );
 }

@@ -3,14 +3,18 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useAction } from "next-safe-action/hooks";
+import { useRouter } from "next/navigation";
 import { X, AlertTriangle, AlertCircle, RotateCcw } from "lucide-react";
 import {
   createReversalSchema,
   type CreateReversalInput,
 } from "@hebron/validators";
-import { mockTransactions } from "../lib/mock-data";
+import { createReversal } from "../actions/transactions";
+import type { Transaction } from "@hebron/types/financeiro";
 
 interface ReversalFormProps {
+  transactions: Transaction[];
   /** Pre-select a transaction ID (e.g. when opened from a transaction row) */
   preselectedTransactionId?: string;
   onClose: () => void;
@@ -74,16 +78,19 @@ const inputCls = [
   "focus:border-(--hb-blue) focus:ring-2 focus:ring-(--hb-blue)/10",
 ].join(" ");
 
-// Only non-reversed, non-reversal transactions can be reversed
-const reversibleTransactions = mockTransactions.filter(
-  (t) => !t.isReversed && t.reversalOf === null,
-);
-
 export function ReversalForm({
+  transactions,
   preselectedTransactionId,
   onClose,
   onSuccess,
 }: ReversalFormProps) {
+  const router = useRouter();
+
+  // Only non-reversed, non-reversal transactions can be reversed
+  const reversibleTransactions = transactions.filter(
+    (t) => !t.isReversed && t.reversalOf === null,
+  );
+
   const [selectedTxId, setSelectedTxId] = useState(
     preselectedTransactionId ?? "",
   );
@@ -102,10 +109,16 @@ export function ReversalForm({
     },
   });
 
+  const { execute, isPending, result } = useAction(createReversal, {
+    onSuccess() {
+      router.refresh();
+      onSuccess?.();
+      onClose();
+    },
+  });
+
   function onSubmit(data: CreateReversalInput) {
-    console.log("Estorno:", data);
-    onSuccess?.();
-    onClose();
+    execute(data);
   }
 
   return (
@@ -347,6 +360,16 @@ export function ReversalForm({
                 Obrigatório · mínimo 10 caracteres · registrado no audit trail.
               </p>
             </div>
+
+            {result.serverError && (
+              <p
+                className="flex items-center gap-1 text-xs font-medium"
+                style={{ color: "var(--hb-orange-deep)" }}
+              >
+                <AlertCircle className="h-3 w-3 shrink-0" />
+                {result.serverError}
+              </p>
+            )}
           </form>
         </div>
 
@@ -366,14 +389,14 @@ export function ReversalForm({
           <button
             type="submit"
             form="reversal-form"
-            disabled={isSubmitting || !selectedTx}
+            disabled={isSubmitting || isPending || !selectedTx}
             className="px-5 py-2.5 rounded-(--radius) text-sm font-semibold transition-colors disabled:opacity-60"
             style={{
               background: "var(--hb-orange)",
               color: "var(--fg-invert)",
             }}
           >
-            {isSubmitting ? "Processando…" : "Confirmar estorno"}
+            {isSubmitting || isPending ? "Processando…" : "Confirmar estorno"}
           </button>
         </div>
       </div>

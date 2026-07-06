@@ -3,12 +3,20 @@
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
+import { useAction } from "next-safe-action/hooks";
+import { useRouter } from "next/navigation";
 import { X, Paperclip, Upload, ChevronDown, AlertCircle } from "lucide-react";
-import { createPayableSchema } from "@hebron/validators";
-import { mockCategories, mockCostCenters } from "../lib/mock-data";
+import {
+  createPayableSchema,
+  type CreatePayableInput,
+} from "@hebron/validators";
+import { createPayable } from "../actions/transactions";
 import type { AccountCategory } from "@hebron/types/financeiro";
+import type { CostCenterOption } from "../lib/queries";
 
 interface ExpenseFormProps {
+  categories: AccountCategory[];
+  costCenters: CostCenterOption[];
   onClose: () => void;
   onSuccess?: () => void;
 }
@@ -100,10 +108,16 @@ const inputCls = [
 
 const selectCls = inputCls + " appearance-none cursor-pointer pr-8";
 
-export function ExpenseForm({ onClose, onSuccess }: ExpenseFormProps) {
+export function ExpenseForm({
+  categories,
+  costCenters,
+  onClose,
+  onSuccess,
+}: ExpenseFormProps) {
   const [attachmentName, setAttachmentName] = useState<string | null>(null);
+  const router = useRouter();
 
-  const categoryOptions = buildCategoryOptions(mockCategories, "despesa");
+  const categoryOptions = buildCategoryOptions(categories, "despesa");
 
   const {
     register,
@@ -119,11 +133,16 @@ export function ExpenseForm({ onClose, onSuccess }: ExpenseFormProps) {
     },
   });
 
-  function onSubmit(data: unknown) {
-    // Bloco A: mock submit
-    console.log("Nova despesa:", data);
-    onSuccess?.();
-    onClose();
+  const { execute, isPending, result } = useAction(createPayable, {
+    onSuccess() {
+      router.refresh();
+      onSuccess?.();
+      onClose();
+    },
+  });
+
+  function onSubmit(data: CreatePayableInput) {
+    execute(data);
   }
 
   return (
@@ -249,7 +268,7 @@ export function ExpenseForm({ onClose, onSuccess }: ExpenseFormProps) {
               <Label>Centro de custo</Label>
               <select {...register("costCenterId")} className={selectCls}>
                 <option value="">Sem centro de custo</option>
-                {mockCostCenters.map((cc) => (
+                {costCenters.map((cc) => (
                   <option key={cc.id} value={cc.id}>
                     {cc.code} — {cc.name}
                   </option>
@@ -327,6 +346,16 @@ export function ExpenseForm({ onClose, onSuccess }: ExpenseFormProps) {
                 placeholder="Notas internas sobre este pagamento…"
               />
             </div>
+
+            {result.serverError && (
+              <p
+                className="flex items-center gap-1 text-xs font-medium mt-4"
+                style={{ color: "var(--hb-orange-deep)" }}
+              >
+                <AlertCircle className="h-3 w-3 shrink-0" />
+                {result.serverError}
+              </p>
+            )}
           </form>
         </div>
 
@@ -346,11 +375,11 @@ export function ExpenseForm({ onClose, onSuccess }: ExpenseFormProps) {
           <button
             type="submit"
             form="expense-form"
-            disabled={isSubmitting}
+            disabled={isSubmitting || isPending}
             className="px-5 py-2.5 rounded-(--radius) text-sm font-semibold transition-colors disabled:opacity-60"
             style={{ background: "var(--hb-blue)", color: "var(--fg-invert)" }}
           >
-            {isSubmitting ? "Salvando…" : "Registrar despesa"}
+            {isSubmitting || isPending ? "Salvando…" : "Registrar despesa"}
           </button>
         </div>
       </div>

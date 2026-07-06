@@ -1,39 +1,26 @@
-﻿"use client";
-
-import { useState, useEffect } from "react";
+import { Suspense } from "react";
+import { ArrowUp, ArrowDown, Info, ArrowRight } from "lucide-react";
 import {
-  ArrowUp,
-  ArrowDown,
-  AlertCircle,
-  Check,
-  ArrowRight,
-  Plus,
-  Info,
-  RefreshCw,
-  ChevronDown,
-  Download,
-} from "lucide-react";
-import {
-  mockBankAccounts,
-  mockTransactions,
-  mockPayables,
-  mockBatchApprovals,
-  mockReceivables,
-} from "../../lib/mock-data";
+  getBankAccounts,
+  getTransactions,
+  getPayables,
+  getReceivables,
+  getBatchApprovals,
+  getCategories,
+  getCostCenterOptions,
+  getLatestBankImport,
+} from "../../lib/queries";
+import { buildCashFlowData } from "../../lib/cashflow";
 import { CashFlowChart } from "../../components/cash-flow-chart";
 import { DashboardSkeleton } from "../../components/dashboard-skeleton";
-import { ExpenseForm } from "../../components/expense-form";
-import { RevenueForm } from "../../components/revenue-form";
-import { BankAccountForm } from "../../components/bank-account-form";
-import type {
-  CashFlowDataPoint,
-  CashFlowEvent,
-} from "../../components/cash-flow-chart";
+import {
+  NewEntryMenu,
+  NewBankAccountButton,
+  ExportDashboardCsvButton,
+} from "../../components/dashboard-quick-actions";
+import type { CashFlowEvent } from "../../components/cash-flow-chart";
 
-// Mock data is anchored to 2026-06-01; use it as reference "today"
-const REF = new Date("2026-06-01T00:00:00Z");
-const LAST_30 = new Date(REF.getTime() - 30 * 86_400_000);
-const NEXT_7 = new Date(REF.getTime() + 7 * 86_400_000);
+const DAY = 86_400_000;
 
 function fmtBRL(n: number): string {
   return new Intl.NumberFormat("pt-BR", {
@@ -46,75 +33,38 @@ function fmtDate(d: Date): string {
   return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
 }
 
-function buildCashFlowData(startBalance: number): CashFlowDataPoint[] {
-  const eventsByDay = new Map<number, number>();
-
-  for (const r of mockReceivables) {
-    if (r.status === "pendente" && r.expectedAt > REF) {
-      const day = Math.round(
-        (r.expectedAt.getTime() - REF.getTime()) / 86_400_000,
-      );
-      if (day <= 30)
-        eventsByDay.set(day, (eventsByDay.get(day) ?? 0) + r.amount);
-    }
-  }
-
-  for (const p of mockPayables) {
-    if (p.status !== "pago" && p.status !== "cancelado" && p.dueAt > REF) {
-      const day = Math.round((p.dueAt.getTime() - REF.getTime()) / 86_400_000);
-      if (day <= 30)
-        eventsByDay.set(day, (eventsByDay.get(day) ?? 0) - p.amount);
-    }
-  }
-
-  const points: CashFlowDataPoint[] = [];
-  let balance = startBalance;
-  for (let day = 0; day <= 30; day++) {
-    balance += eventsByDay.get(day) ?? 0;
-    points.push({ day, projectedBalance: Math.max(balance, 0) });
-  }
-  return points;
+function fmtDeltaBRL(n: number): string {
+  const sign = n >= 0 ? "+" : "−";
+  return `${sign} ${fmtBRL(Math.abs(n))} vs período anterior`;
 }
 
-// KPI computation
-const totalBalance = mockBankAccounts.reduce((s, a) => s + a.currentBalance, 0);
+function buildSparkline(
+  transactions: Awaited<ReturnType<typeof getTransactions>>,
+  filter: (t: Awaited<ReturnType<typeof getTransactions>>[number]) => boolean,
+): number[] {
+  const now = Date.now();
+  const buckets = new Array(12).fill(0);
+  for (const t of transactions) {
+    if (!filter(t)) continue;
+    const daysAgo = Math.floor((now - t.occurredAt.getTime()) / DAY);
+    const bucket = 11 - Math.min(11, Math.floor(daysAgo / 5));
+    if (bucket >= 0) buckets[bucket] += t.amount;
+  }
+  // cumulative so the sparkline reads as a trend rather than noisy daily bars
+  let acc = 0;
+  return buckets.map((v) => (acc += v));
+}
 
-const recentTx = mockTransactions.filter((t) => t.occurredAt >= LAST_30);
-const monthIn = recentTx
-  .filter((t) => t.type === "credito")
-  .reduce((s, t) => s + t.amount, 0);
-const monthOut = recentTx
-  .filter((t) => t.type === "debito")
-  .reduce((s, t) => s + t.amount, 0);
+interface KpiCardProps {
+  label: string;
+  value: string;
+  delta?: string;
+  deltaDir?: "up" | "down" | "neutral";
+  accent?: boolean;
+  sparkPts?: number[];
+  sparkColor?: string;
+}
 
-const proxPagar = mockPayables
-  .filter(
-    (p) =>
-      (p.status === "autorizado" || p.status === "aprovado") &&
-      p.dueAt > REF &&
-      p.dueAt <= NEXT_7,
-  )
-  .reduce((s, p) => s + p.amount, 0);
-
-const cashFlowData = buildCashFlowData(totalBalance);
-
-const cashFlowEvents: CashFlowEvent[] = [
-  { day: 10, label: "Repasse Hebron Farmacêutica", type: "income" },
-  { day: 5, label: "Apoios missionários", type: "expense" },
-  { day: 15, label: "Passagem Moçambique", type: "expense" },
-];
-
-const sortedTx = [...mockTransactions]
-  .sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())
-  .slice(0, 6);
-
-const pendingBatch = mockBatchApprovals.find((b) => b.status === "pendente");
-
-const latestImport = { total: 11, matched: 9 };
-const reconPct = Math.round((latestImport.matched / latestImport.total) * 100);
-const circumference = 2 * Math.PI * 32; // r=32
-
-// Sparkline helper
 function Sparkline({ pts, color }: { pts: number[]; color: string }) {
   const w = 72,
     h = 24;
@@ -143,22 +93,11 @@ function Sparkline({ pts, color }: { pts: number[]; color: string }) {
   );
 }
 
-// KPI Card
-interface KpiCardProps {
-  label: string;
-  value: string;
-  delta: string;
-  deltaDir?: "up" | "down" | "neutral";
-  accent?: boolean;
-  sparkPts?: number[];
-  sparkColor?: string;
-}
-
 function KpiCard({
   label,
   value,
   delta,
-  deltaDir = "up",
+  deltaDir = "neutral",
   accent,
   sparkPts,
   sparkColor,
@@ -194,13 +133,15 @@ function KpiCard({
       >
         {value}
       </p>
-      <div
-        className={`flex items-center gap-1 mt-2.5 text-xs font-semibold ${deltaCls}`}
-      >
-        {deltaDir === "up" && <ArrowUp className="h-3 w-3" />}
-        {deltaDir === "down" && <ArrowDown className="h-3 w-3" />}
-        <span>{delta}</span>
-      </div>
+      {delta && (
+        <div
+          className={`flex items-center gap-1 mt-2.5 text-xs font-semibold ${deltaCls}`}
+        >
+          {deltaDir === "up" && <ArrowUp className="h-3 w-3" />}
+          {deltaDir === "down" && <ArrowDown className="h-3 w-3" />}
+          <span>{delta}</span>
+        </div>
+      )}
       {sparkPts && (
         <Sparkline pts={sparkPts} color={sparkColor ?? "var(--hb-cyan)"} />
       )}
@@ -208,87 +149,123 @@ function KpiCard({
   );
 }
 
-type FormMode = null | "despesa" | "receita" | "conta";
+async function DashboardContent() {
+  const [
+    bankAccounts,
+    transactions,
+    payables,
+    receivables,
+    batchApprovals,
+    categories,
+    costCenters,
+    conciliation,
+  ] = await Promise.all([
+    getBankAccounts(),
+    getTransactions(),
+    getPayables(),
+    getReceivables(),
+    getBatchApprovals(),
+    getCategories(),
+    getCostCenterOptions(),
+    getLatestBankImport(),
+  ]);
 
-function exportDashboardCSV() {
-  const rows = [
-    ["Data", "Descrição", "Conta", "Tipo", "Valor"],
-    ...sortedTx.map((t) => {
-      const acct = mockBankAccounts.find((a) => a.id === t.bankAccountId);
-      return [
-        fmtDate(t.occurredAt),
-        t.description,
-        acct?.bank ?? "",
-        t.type === "credito" ? "Receita" : "Despesa",
-        (t.type === "credito" ? "+" : "-") + t.amount.toFixed(2),
-      ];
-    }),
+  const now = Date.now();
+  const LAST_30 = new Date(now - 30 * DAY);
+  const PREV_30 = new Date(now - 60 * DAY);
+  const NEXT_7 = new Date(now + 7 * DAY);
+
+  const totalBalance = bankAccounts.reduce((s, a) => s + a.currentBalance, 0);
+
+  const recentTx = transactions.filter((t) => t.occurredAt >= LAST_30);
+  const prevTx = transactions.filter(
+    (t) => t.occurredAt >= PREV_30 && t.occurredAt < LAST_30,
+  );
+
+  const monthIn = recentTx
+    .filter((t) => t.type === "credito")
+    .reduce((s, t) => s + t.amount, 0);
+  const prevIn = prevTx
+    .filter((t) => t.type === "credito")
+    .reduce((s, t) => s + t.amount, 0);
+
+  const monthOut = recentTx
+    .filter((t) => t.type === "debito")
+    .reduce((s, t) => s + t.amount, 0);
+  const prevOut = prevTx
+    .filter((t) => t.type === "debito")
+    .reduce((s, t) => s + t.amount, 0);
+
+  const proxPagar = payables
+    .filter(
+      (p) =>
+        (p.status === "autorizado" || p.status === "aprovado") &&
+        p.dueAt > new Date(now) &&
+        p.dueAt <= NEXT_7,
+    )
+    .reduce((s, p) => s + p.amount, 0);
+
+  const cashFlowData = buildCashFlowData(
+    totalBalance,
+    receivables,
+    payables,
+    90,
+  );
+
+  const upcomingReceivables = receivables.filter(
+    (r): r is typeof r & { expectedAt: Date } =>
+      r.status === "pendente" &&
+      r.expectedAt !== null &&
+      r.expectedAt.getTime() > now,
+  );
+
+  const cashFlowEvents: CashFlowEvent[] = [
+    ...upcomingReceivables.slice(0, 2).map((r) => ({
+      day: Math.round((r.expectedAt.getTime() - now) / DAY),
+      label: r.description,
+      type: "income" as const,
+    })),
+    ...payables
+      .filter(
+        (p) =>
+          p.status !== "pago" &&
+          p.status !== "cancelado" &&
+          p.dueAt > new Date(now),
+      )
+      .slice(0, 2)
+      .map((p) => ({
+        day: Math.round((p.dueAt.getTime() - now) / DAY),
+        label: p.description,
+        type: "expense" as const,
+      })),
   ];
-  const csv = rows.map((r) => r.map((c) => `"${c}"`).join(";")).join("\n");
-  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "financeiro-painel.csv";
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
-export default function DashboardPage() {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-  const [formMode, setFormMode] = useState<FormMode>(null);
-  const [lancMenuOpen, setLancMenuOpen] = useState(false);
+  const sortedTx = [...transactions]
+    .sort((a, b) => b.occurredAt.getTime() - a.occurredAt.getTime())
+    .slice(0, 6);
 
-  useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 1200);
-    return () => clearTimeout(t);
-  }, []);
+  const pendingBatch = batchApprovals.find((b) => b.status === "pendente");
 
-  if (loading) return <DashboardSkeleton />;
+  const reconPct =
+    conciliation && conciliation.bankImport.totalItems > 0
+      ? Math.round(
+          (conciliation.bankImport.matchedItems /
+            conciliation.bankImport.totalItems) *
+            100,
+        )
+      : 100;
+  const circumference = 2 * Math.PI * 32;
 
-  if (error) {
-    return (
-      <div
-        className="min-h-screen flex items-center justify-center"
-        style={{ background: "var(--bg-alt)" }}
-      >
-        <div className="flex flex-col items-center text-center max-w-sm px-6 py-16">
-          <div
-            className="flex h-14 w-14 items-center justify-center rounded-sm mb-5"
-            style={{ background: "rgba(234,90,6,0.10)" }}
-          >
-            <AlertCircle
-              className="h-7 w-7"
-              style={{ color: "var(--hb-orange-deep)" }}
-            />
-          </div>
-          <p
-            className="text-xl font-bold mb-2"
-            style={{ fontFamily: "var(--font-display)", color: "var(--fg)" }}
-          >
-            Erro ao carregar painel
-          </p>
-          <p className="text-sm mb-6" style={{ color: "var(--fg-muted)" }}>
-            Não foi possível buscar os dados financeiros. Verifique sua conexão
-            e tente novamente.
-          </p>
-          <button
-            onClick={() => {
-              setError(false);
-              setLoading(true);
-              setTimeout(() => setLoading(false), 1200);
-            }}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-(--radius) text-sm font-semibold"
-            style={{ background: "var(--hb-blue)", color: "var(--fg-invert)" }}
-          >
-            <RefreshCw className="h-4 w-4" />
-            Tentar novamente
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const csvRows = sortedTx.map((t) => {
+    const acct = bankAccounts.find((a) => a.id === t.bankAccountId);
+    return {
+      date: fmtDate(t.occurredAt),
+      description: t.description,
+      account: acct?.bank ?? "",
+      isCredit: t.type === "credito",
+      amount: t.amount,
+    };
+  });
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg-alt)" }}>
@@ -313,57 +290,12 @@ export default function DashboardPage() {
             </p>
           </div>
           <div className="ml-auto flex items-center gap-2">
-            <button
-              onClick={exportDashboardCSV}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-(--radius) border text-xs font-semibold transition-colors"
-              style={{ borderColor: "var(--border)", color: "var(--fg-muted)" }}
-            >
-              <Download className="h-3 w-3" />
-              Exportar
-            </button>
-            <div className="relative">
-              <button
-                onClick={() => setLancMenuOpen((v) => !v)}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-(--radius) text-xs font-semibold transition-colors"
-                style={{
-                  background: "var(--hb-blue)",
-                  color: "var(--fg-invert)",
-                }}
-              >
-                <Plus className="h-3 w-3" />
-                Novo lançamento
-                <ChevronDown className="h-3 w-3" />
-              </button>
-              {lancMenuOpen && (
-                <div
-                  className="absolute right-0 top-full mt-1 w-44 rounded-(--radius) border py-1 z-20"
-                  style={{
-                    background: "var(--bg)",
-                    borderColor: "var(--border)",
-                    boxShadow: "0 4px 20px rgba(0,0,0,0.12)",
-                  }}
-                >
-                  {(
-                    [
-                      { key: "despesa", label: "Nova despesa" },
-                      { key: "receita", label: "Nova receita" },
-                    ] as const
-                  ).map((item) => (
-                    <button
-                      key={item.key}
-                      onClick={() => {
-                        setFormMode(item.key);
-                        setLancMenuOpen(false);
-                      }}
-                      className="w-full text-left px-4 py-2.5 text-sm font-semibold transition-colors"
-                      style={{ color: "var(--fg)" }}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+            <ExportDashboardCsvButton rows={csvRows} />
+            <NewEntryMenu
+              categories={categories}
+              costCenters={costCenters}
+              bankAccounts={bankAccounts}
+            />
           </div>
         </div>
       </div>
@@ -374,36 +306,34 @@ export default function DashboardPage() {
           <KpiCard
             label="Saldo consolidado"
             value={fmtBRL(totalBalance)}
-            delta="+8,4% no mês"
-            deltaDir="up"
+            delta={`${bankAccounts.length} contas ativas`}
+            deltaDir="neutral"
             accent
-            sparkPts={[
-              118, 122, 126, 130, 135, 140, 147, 154, 158, 161, 165, 168,
-            ]}
+            sparkPts={buildSparkline(transactions, () => true)}
             sparkColor="var(--hb-cyan)"
           />
           <KpiCard
             label="Receitas no mês"
             value={fmtBRL(monthIn)}
-            delta="+R$ 12.300 vs mai"
-            deltaDir="up"
-            sparkPts={[78, 82, 86, 90, 92, 96, 100, 103, 107, 110, 113, 115]}
+            delta={fmtDeltaBRL(monthIn - prevIn)}
+            deltaDir={monthIn - prevIn >= 0 ? "up" : "down"}
+            sparkPts={buildSparkline(transactions, (t) => t.type === "credito")}
             sparkColor="var(--hb-green)"
           />
           <KpiCard
             label="Despesas no mês"
             value={fmtBRL(monthOut)}
-            delta="−R$ 3.800 vs mai"
-            deltaDir="up"
-            sparkPts={[90, 94, 97, 94, 90, 87, 85, 88, 90, 88, 86, 83]}
+            delta={fmtDeltaBRL(monthOut - prevOut)}
+            deltaDir={monthOut - prevOut <= 0 ? "up" : "down"}
+            sparkPts={buildSparkline(transactions, (t) => t.type === "debito")}
             sparkColor="var(--hb-orange)"
           />
           <KpiCard
             label="A pagar (7 dias)"
             value={fmtBRL(proxPagar)}
-            delta="3 lotes em fluxo"
-            deltaDir="down"
-            sparkPts={[10, 18, 30, 26, 34, 42, 50, 46, 54, 58, 56, 62]}
+            delta={`${payables.filter((p) => p.batchApprovalId).length} em fluxo de aprovação`}
+            deltaDir="neutral"
+            sparkPts={buildSparkline(transactions, (t) => t.type === "debito")}
             sparkColor="var(--hb-blue)"
           />
         </div>
@@ -412,7 +342,6 @@ export default function DashboardPage() {
         <div className="grid grid-cols-1 xl:grid-cols-[1.6fr_1fr] gap-5">
           {/* Left column */}
           <div className="space-y-5">
-            {/* Cash flow chart */}
             <CashFlowChart
               currentBalance={totalBalance}
               dataPoints={cashFlowData}
@@ -427,7 +356,7 @@ export default function DashboardPage() {
                     className="text-[10px] font-bold uppercase tracking-[0.14em] mb-0.5"
                     style={{ color: "var(--fg-muted)" }}
                   >
-                    {mockBankAccounts.length} contas ativas
+                    {bankAccounts.length} contas ativas
                   </p>
                   <p
                     className="text-base font-bold"
@@ -439,20 +368,10 @@ export default function DashboardPage() {
                     Saldo por conta bancária
                   </p>
                 </div>
-                <button
-                  onClick={() => setFormMode("conta")}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors"
-                  style={{
-                    borderColor: "var(--border)",
-                    color: "var(--fg-muted)",
-                  }}
-                >
-                  <Plus className="h-3 w-3" />
-                  Nova conta
-                </button>
+                <NewBankAccountButton />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {mockBankAccounts.map((acc, i) => {
+                {bankAccounts.map((acc, i) => {
                   const bands = [
                     "var(--hb-blue)",
                     "var(--hb-cyan)",
@@ -471,12 +390,12 @@ export default function DashboardPage() {
                     >
                       <div
                         className="absolute left-0 top-0 h-full w-1"
-                        style={{ background: bands[i] ?? "var(--hb-blue)" }}
+                        style={{ background: bands[i % bands.length] }}
                       />
                       <div className="flex items-center gap-2 mb-3">
                         <span
                           className="flex h-6 w-6 items-center justify-center rounded-md text-[11px] font-bold text-white shrink-0"
-                          style={{ background: logos[i] ?? "#202C85" }}
+                          style={{ background: logos[i % logos.length] }}
                         >
                           {short}
                         </span>
@@ -510,6 +429,14 @@ export default function DashboardPage() {
                     </div>
                   );
                 })}
+                {bankAccounts.length === 0 && (
+                  <p
+                    className="text-sm col-span-3"
+                    style={{ color: "var(--fg-muted)" }}
+                  >
+                    Nenhuma conta bancária cadastrada ainda.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -574,7 +501,7 @@ export default function DashboardPage() {
                   <tbody>
                     {sortedTx.map((t) => {
                       const isCredit = t.type === "credito";
-                      const acct = mockBankAccounts.find(
+                      const acct = bankAccounts.find(
                         (a) => a.id === t.bankAccountId,
                       );
                       return (
@@ -639,19 +566,22 @@ export default function DashboardPage() {
                         </tr>
                       );
                     })}
+                    {sortedTx.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={5}
+                          className="px-4 py-10 text-center text-sm"
+                          style={{ color: "var(--fg-muted)" }}
+                        >
+                          Nenhum lançamento registrado ainda.
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
             </div>
           </div>
-
-          {/* Click-away for lançamento menu */}
-          {lancMenuOpen && (
-            <div
-              className="fixed inset-0 z-10"
-              onClick={() => setLancMenuOpen(false)}
-            />
-          )}
 
           {/* Right column */}
           <div className="space-y-5">
@@ -666,39 +596,17 @@ export default function DashboardPage() {
                 }}
               >
                 <div className="flex items-start gap-3 px-5 py-4">
-                  <span
-                    className="flex h-8 w-8 items-center justify-center rounded-full text-white shrink-0"
-                    style={{ background: "var(--hb-orange)" }}
+                  <p
+                    className="text-sm mt-1"
+                    style={{ color: "var(--fg-muted)" }}
                   >
-                    <AlertCircle className="h-4 w-4" />
-                  </span>
-                  <div className="flex-1">
-                    <p
-                      className="text-[10px] font-bold uppercase tracking-[0.14em] mb-0.5"
-                      style={{ color: "var(--hb-orange-deep)" }}
-                    >
-                      Aguardando aprovação
-                    </p>
-                    <p
-                      className="text-sm font-bold"
-                      style={{
-                        fontFamily: "var(--font-display)",
-                        color: "var(--fg)",
-                      }}
-                    >
-                      Semana de {fmtDate(pendingBatch.weekStart)}
-                    </p>
-                    <p
-                      className="text-xs mt-1"
-                      style={{ color: "var(--fg-muted)" }}
-                    >
-                      {pendingBatch.payables.length} pagamentos totalizando{" "}
-                      <strong style={{ color: "var(--fg)" }}>
-                        {fmtBRL(pendingBatch.totalAmount)}
-                      </strong>{" "}
-                      aguardam aprovação do Diretor Gestor.
-                    </p>
-                  </div>
+                    Semana de {fmtDate(pendingBatch.weekStart)} ·{" "}
+                    {pendingBatch.payables.length} pagamentos totalizando{" "}
+                    <strong style={{ color: "var(--fg)" }}>
+                      {fmtBRL(pendingBatch.totalAmount)}
+                    </strong>{" "}
+                    aguardam aprovação do Diretor Gestor.
+                  </p>
                 </div>
                 <div className="flex gap-2 px-5 pb-4">
                   <a
@@ -711,15 +619,6 @@ export default function DashboardPage() {
                   >
                     Revisar lote
                   </a>
-                  <button
-                    className="px-4 py-2 rounded-lg border text-xs font-semibold transition-colors"
-                    style={{
-                      borderColor: "var(--border)",
-                      color: "var(--fg-muted)",
-                    }}
-                  >
-                    Adiar
-                  </button>
                 </div>
               </div>
             )}
@@ -761,30 +660,10 @@ export default function DashboardPage() {
                 }
               >
                 {[
-                  {
-                    label: "Criação",
-                    sub: "Sistema agrupou",
-                    done: true,
-                    current: false,
-                  },
-                  {
-                    label: "Aprovação",
-                    sub: "Dir. Gestor",
-                    done: false,
-                    current: true,
-                  },
-                  {
-                    label: "Autorização",
-                    sub: "Dir. Autorizador",
-                    done: false,
-                    current: false,
-                  },
-                  {
-                    label: "Pagamento",
-                    sub: "Super admin",
-                    done: false,
-                    current: false,
-                  },
+                  { label: "Criação", sub: "Sistema agrupou" },
+                  { label: "Aprovação", sub: "Dir. Gestor" },
+                  { label: "Autorização", sub: "Dir. Autorizador" },
+                  { label: "Pagamento", sub: "Super admin" },
                 ].map((step, i) => (
                   <div
                     key={i}
@@ -794,28 +673,15 @@ export default function DashboardPage() {
                     <span
                       className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
                       style={{
-                        background: step.done
-                          ? "var(--hb-green)"
-                          : step.current
-                            ? "var(--hb-orange)"
-                            : "var(--surface-alt)",
-                        color: step.done
-                          ? "var(--hb-blue)"
-                          : step.current
-                            ? "#fff"
-                            : "var(--fg-muted)",
+                        background: "var(--surface-alt)",
+                        color: "var(--fg-muted)",
                       }}
                     >
-                      {step.done ? <Check className="h-3 w-3" /> : i + 1}
+                      {i + 1}
                     </span>
                     <p
                       className="text-[10px] font-bold uppercase tracking-[0.08em] mt-1"
-                      style={{
-                        color:
-                          step.done || step.current
-                            ? "var(--fg)"
-                            : "var(--fg-muted)",
-                      }}
+                      style={{ color: "var(--fg)" }}
                     >
                       {step.label}
                     </p>
@@ -863,7 +729,7 @@ export default function DashboardPage() {
                     className="text-[10px] font-bold uppercase tracking-[0.14em] mb-0.5"
                     style={{ color: "var(--fg-muted)" }}
                   >
-                    Bradesco · Conta principal
+                    {conciliation?.bankAccount.bank ?? "Nenhuma conta"}
                   </p>
                   <p
                     className="font-bold"
@@ -898,13 +764,14 @@ export default function DashboardPage() {
                       color: "var(--fg)",
                     }}
                   >
-                    {latestImport.total - latestImport.matched}
+                    {conciliation?.bankImport.pendingItems ?? 0}
                   </p>
                   <p
                     className="text-xs mt-0.5"
                     style={{ color: "var(--fg-muted)" }}
                   >
-                    de {latestImport.total} linhas importadas
+                    de {conciliation?.bankImport.totalItems ?? 0} linhas
+                    importadas
                   </p>
                 </div>
                 <svg
@@ -928,7 +795,7 @@ export default function DashboardPage() {
                     fill="none"
                     stroke="var(--hb-green)"
                     strokeWidth="8"
-                    strokeDasharray={`${(latestImport.matched / latestImport.total) * circumference} ${circumference}`}
+                    strokeDasharray={`${(reconPct / 100) * circumference} ${circumference}`}
                     strokeLinecap="round"
                     transform="rotate(-90 40 40)"
                   />
@@ -966,8 +833,8 @@ export default function DashboardPage() {
                   color: "var(--fg-invert)",
                 }}
               >
-                "Cada um administre aos outros o dom como o recebeu, como bons
-                despenseiros da multiforme graça de Deus."
+                &quot;Cada um administre aos outros o dom como o recebeu, como
+                bons despenseiros da multiforme graça de Deus.&quot;
               </p>
               <p
                 className="text-[11px] font-bold uppercase tracking-[0.12em] mt-3"
@@ -979,17 +846,14 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
-
-      {/* Slide-in forms */}
-      {formMode === "despesa" && (
-        <ExpenseForm onClose={() => setFormMode(null)} />
-      )}
-      {formMode === "receita" && (
-        <RevenueForm onClose={() => setFormMode(null)} />
-      )}
-      {formMode === "conta" && (
-        <BankAccountForm onClose={() => setFormMode(null)} />
-      )}
     </div>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={<DashboardSkeleton />}>
+      <DashboardContent />
+    </Suspense>
   );
 }

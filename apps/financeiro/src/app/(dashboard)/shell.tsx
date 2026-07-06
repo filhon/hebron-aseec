@@ -20,8 +20,11 @@ import {
   Briefcase,
   CheckCircle,
   Building2,
+  Wallet,
+  LineChart,
 } from "lucide-react";
 import { FinanceiroLogo } from "../../components/financeiro-logo";
+import { logoutAction } from "../../actions/auth";
 
 const SECTIONS: NavSection[] = [
   {
@@ -41,13 +44,16 @@ const SECTIONS: NavSection[] = [
         label: "Contas a pagar",
         href: "/contas-pagar",
         icon: Receipt,
-        badge: 4,
+      },
+      {
+        label: "Contas a receber",
+        href: "/contas-receber",
+        icon: Wallet,
       },
       {
         label: "Conciliação",
         href: "/conciliacao",
         icon: RefreshCcw,
-        badge: 2,
       },
       {
         label: "Orçamento",
@@ -68,6 +74,11 @@ const SECTIONS: NavSection[] = [
   },
   {
     items: [
+      {
+        label: "Fluxo de caixa",
+        href: "/fluxo-caixa",
+        icon: LineChart,
+      },
       {
         label: "Demonstrativos",
         href: "/relatorios",
@@ -133,10 +144,11 @@ const APPS: AppShortcut[] = [
 ];
 
 type ShellProps = {
+  user: { fullName: string | null; email: string | null };
   children: React.ReactNode;
 };
 
-export default function FinanceiroShell({ children }: ShellProps) {
+export default function FinanceiroShell({ user, children }: ShellProps) {
   const path = usePathname();
 
   return (
@@ -144,11 +156,11 @@ export default function FinanceiroShell({ children }: ShellProps) {
       sections={SECTIONS}
       apps={APPS}
       user={{
-        name: "Filipe Honório",
-        email: "fcbfilipesantos@gmail.com",
+        name: user.fullName ?? user.email ?? "",
+        email: user.email ?? "",
       }}
       profileHref="/configuracoes"
-      onLogout={() => {}}
+      onLogout={() => void logoutAction()}
       currentPath={path}
       appName="Financeiro"
       logo={<FinanceiroLogo />}
