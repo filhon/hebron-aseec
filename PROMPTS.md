@@ -2744,14 +2744,14 @@ RLS para schema tarefas (semântica fechada — sem membership por workspace, ve
 
 **Critérios de aceite:**
 
-- [ ] Super_admin: full CRUD
-- [ ] Colaborador: SELECT em qualquer tarefa; UPDATE/DELETE só como creator/assignee (teste com 2 usuários)
-- [ ] Colaborador: INSERT em qualquer um dos 6 workspaces
-- [ ] Diretor: SELECT em todas; UPDATE apenas em approval_requests endereçados a si (teste)
-- [ ] Submissor: zero acesso ao schema (teste)
-- [ ] Comentários seguem a visibilidade da tarefa
-- [ ] Policies com USING e WITH CHECK separados, deny-by-default
-- [ ] Types passam
+- [x] Super_admin: full CRUD
+- [x] Colaborador: SELECT em qualquer tarefa; UPDATE/DELETE só como creator/assignee (teste com 2 usuários)
+- [x] Colaborador: INSERT em qualquer um dos 6 workspaces
+- [x] Diretor: SELECT em todas; UPDATE apenas em approval_requests endereçados a si (teste)
+- [x] Submissor: zero acesso ao schema (teste)
+- [x] Comentários seguem a visibilidade da tarefa
+- [x] Policies com USING e WITH CHECK separados, deny-by-default
+- [x] Types passam
 
 ---
 

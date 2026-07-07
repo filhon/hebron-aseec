@@ -99,6 +99,7 @@
 | S-75   | 2026-07-07 | P-4.3 — Telas e Páginas Tarefas                                         | concluido                            |
 | S-76   | 2026-07-07 | P-4.4 — Formulários Tarefas                                             | concluido                            |
 | S-77   | 2026-07-07 | P-4.5 — Estados Tarefas                                                 | concluido                            |
+| S-79   | 2026-07-07 | P-4.7 — RLS Policies Tarefas                                            | concluido                            |
 
 ---
 
@@ -3692,3 +3693,38 @@ packages/apps do monorepo.
 - `packages/db/src/schema/admin.ts` (3 valores novos em `auditActionEnum`)
 - `packages/db/src/schema/index.ts` (exporta o schema `tarefas`)
 - `packages/db/src/migrations/meta/_journal.json` (gerado por `drizzle-kit generate`)
+
+---
+
+### S-79 — 2026-07-07 — P-4.7 — RLS Policies Tarefas
+
+**Prompt:** P-4.7 (`PROMPTS.md:2721`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Criada a migration `packages/db/src/migrations/0033_tarefas_rls.sql` com RLS deny-by-default nas 14 tabelas do schema `tarefas` (habilitado em 0031 mas sem nenhuma policy). Como o schema nasceu depois de `0014_grants_authenticated.sql` (o retrofit que corrigiu admin/documentos/projetos/financeiro), este arquivo já inclui os `GRANT`s — sem eles as policies ficariam corretas e mesmo assim inertes em produção (mesmo achado F3-05 de 0014). Três helpers `SECURITY DEFINER STABLE` foram criados em `tarefas.*` (`task_visible`, `can_manage_task`, `attachment_task_id`) para evitar repetir a mesma subquery em cada policy e evitar recursão de RLS quando uma tabela filha consulta `tarefas.tasks`/`tarefas.assignees` durante a própria avaliação da policy — mesmo padrão de `public.has_role`/`public.has_designation` já usado no restante do banco.
+
+**Suposições registradas (G1 — ambiguidade resolvida pela opção mais simples):**
+
+- **Tabelas não citadas no escopo do prompt** (`workspaces`, `tags`, `task_templates`, `template_items`, `recurrence_rules`, `subtasks`, `assignees`, `task_tags`, `task_events`) precisaram de policy própria mesmo assim — P-4.7 é o único prompt de RLS deste módulo na sequência (não há um P-4.7b/refinamento posterior como houve para financeiro em `0011_financeiro_rls.sql`), e P-4.8/P-4.9 (Server Actions/integração) dependem de todas as 14 tabelas estarem acessíveis, não só as citadas explicitamente. Critério aplicado: tabelas de taxonomia/configuração compartilhada (`tags`, `task_templates`, `template_items`, `recurrence_rules`) seguem o mesmo padrão de `documentos.tags`/`documentos.categories` (SELECT para todo staff, escrita `FOR ALL` para colaborador+super_admin, sem restrição de dono); tabelas que são estado mutável da própria tarefa (`subtasks`, `assignees`, `task_tags`) herdam a regra de `tasks_update_own_or_assignee` (escreve quem criou ou é assignee da tarefa-mãe); `task_events` é INSERT-only pelo próprio ator (log operacional, não é o `admin.audit_log`).
+- **`workspaces` não recebe nenhuma policy de escrita, nem para super_admin.** `0031_tarefas.sql` documenta explicitamente "nenhum papel pode inserir linha nesta tabela em runtime" — interpretado ao pé da letra: mesmo a bullet "Super_admin: full access" do prompt não cria uma rota de escrita que a própria migration de schema já descartou. Único jeito de alterar os 6 workspaces fixos continua sendo uma nova migration.
+- **`tasks`/`comments`/`approval_requests`/`task_events` nunca recebem `GRANT DELETE`, nem para super_admin.** A policy `tasks_mutate_admin` (`FOR ALL`) tecnicamente permitiria, mas o `GRANT` de role é o teto — e ficou deliberadamente abaixo do que a policy permite nessas 4 tabelas para manter "nunca hard delete" (princípio inviolável do CLAUDE.md) mesmo para super_admin: soft-delete via `UPDATE deleted_at` em `tasks`; as outras 3 não têm `deleted_at` — são registros imutáveis por design (mesmo padrão de `financeiro.transactions`). `attachments` é a exceção: recebe `GRANT DELETE` restrito a super_admin, espelhando `financeiro.attachments` em `0014_grants_authenticated.sql` (remoção de upload indevido).
+- **`attachments` tem visibilidade resolvida via função (`tarefas.attachment_task_id`)** por ser polimórfico (`parent_type` = `task` | `comment`) — a policy de SELECT precisa navegar até a tarefa raiz em ambos os casos para reutilizar `tarefas.task_visible`.
+
+**Critérios de aceite verificados (testado contra o banco real via MCP Supabase, transação com `ROLLBACK` — sem resíduo):**
+
+- [x] Super_admin: full CRUD — `<tabela>_mutate_admin FOR ALL` em todas as 14 tabelas
+- [x] Colaborador: SELECT em qualquer tarefa; UPDATE/DELETE só como creator/assignee — testado com 2 usuários reais (`colabA` criador, `colabB` assignee): `colabA` vê as 2 tarefas de teste (uma própria, uma alheia), consegue `UPDATE` a própria, **não** consegue `UPDATE` a alheia (0 linhas afetadas); `colabB` (assignee, não criador) consegue `UPDATE` a tarefa de `colabA`
+- [x] Colaborador: INSERT em qualquer um dos 6 workspaces — `colabB` insere tarefa em workspace que não é seu (não há membership)
+- [x] Diretor: SELECT em todas; UPDATE apenas em approval_requests endereçados a si — diretor vê as 2 tarefas de teste, **não** consegue inserir tarefa (bloqueado pela RLS: "new row violates row-level security policy"), **não** consegue `UPDATE` tarefa alheia (0 linhas), consegue `UPDATE` (aprovar) o `approval_request` endereçado a ele (`approver_id = auth.uid()`)
+- [x] Submissor: zero acesso ao schema — `SELECT` em `tasks`/`workspaces` retorna 0 linhas, `INSERT` em `tasks` bloqueado pela RLS
+- [x] Comentários seguem a visibilidade da tarefa — `colabA` comenta na própria tarefa (visível) com sucesso; policy de SELECT usa `tarefas.task_visible`
+- [x] Policies com USING e WITH CHECK separados, deny-by-default — todas as policies `FOR ALL`/`UPDATE`/`INSERT` têm as duas cláusulas; nenhuma tabela do schema tem policy sem `TO authenticated` + `has_role`/dono explícito
+- [x] Types passam (`pnpm turbo typecheck` — 38/38 pacotes)
+- [x] Lint passa (`pnpm turbo lint` — 38/38 pacotes)
+- [x] `mcp__supabase__get_advisors(security)` sem nenhum erro novo (`rls_disabled_in_public`) nas 14 tabelas de `tarefas`; os únicos avisos novos são `function_search_path_mutable` nos 3 helpers — mesmo padrão pré-existente de `public.has_role`/`public.has_designation`, não é regressão introduzida aqui
+
+**Arquivos criados:**
+
+- `packages/db/src/migrations/0033_tarefas_rls.sql`
