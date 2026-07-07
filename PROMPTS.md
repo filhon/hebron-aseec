@@ -2464,19 +2464,19 @@ Testes de integração. RLS (super_admin full, diretor gestor aprova, submissor 
 
 **Critérios de aceite:**
 
-- [ ] Transação: UPDATE/DELETE retorna erro
-- [ ] Estorno: cria reversal corretamente
-- [ ] Import OFX: parse correto dos campos
-- [ ] Match: encontra correspondência por valor+data
-- [ ] Governança: fluxo aprovação → autorização → pago funciona
-- [ ] RLS: submissor não vê transações de outros projetos
-- [ ] Designation: diretor sem designation gestor não aprova lote (teste)
-- [ ] Audit: falha simulada de gravação aborta a mutação (teste — G6.3)
-- [ ] Import: linhas adulteradas entre preview e confirmação não persistem (teste — F3-11/P-3.8b)
-- [ ] organization_budgets: submissão acima do teto é bloqueada (teste — S1-01)
-- [ ] Inadimplência: payable bloqueado não entra em lote; override auditado (teste — P-3.11)
-- [ ] Testes passam
-- [ ] Lint passa
+- [x] Transação: UPDATE/DELETE retorna erro
+- [x] Estorno: cria reversal corretamente
+- [x] Import OFX: parse correto dos campos
+- [x] Match: encontra correspondência por valor+data
+- [x] Governança: fluxo aprovação → autorização → pago funciona
+- [x] RLS: submissor não vê transações de outros projetos
+- [x] Designation: diretor sem designation gestor não aprova lote (teste)
+- [x] Audit: falha simulada de gravação aborta a mutação (teste — G6.3)
+- [x] Import: linhas adulteradas entre preview e confirmação não persistem (teste — F3-11/P-3.8b)
+- [x] organization_budgets: submissão acima do teto é bloqueada (teste — S1-01)
+- [x] Inadimplência: payable bloqueado não entra em lote; override auditado (teste — P-3.11)
+- [x] Testes passam
+- [x] Lint passa
 
 ---
 

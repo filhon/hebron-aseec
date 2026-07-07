@@ -93,6 +93,7 @@
 | S-69   | 2026-07-06 | P-3.9 — Financeiro: Integração UI ↔ Backend                             | concluido                            |
 | S-70   | 2026-07-07 | P-3.10 — Financeiro: Notificações e Emails                              | concluido                            |
 | S-71   | 2026-07-07 | P-3.11 — Financeiro: Integrações Cross-App                              | concluido                            |
+| S-72   | 2026-07-07 | P-3.12 — Testes Financeiro                                              | concluido                            |
 
 ---
 
@@ -3314,3 +3315,45 @@ Conectou as integrações reais Projetos ↔ Financeiro via `packages/integratio
 - `packages/jobs/src/__tests__/projetos-homologacao.test.ts` (`afterAll` — ordem de limpeza por causa da FK nova)
 - `apps/financeiro/src/lib/audit.ts` (2 `FinanceiroAuditAction` novas)
 - `packages/types/src/financeiro/index.ts` (`PayableStatus` ganha `"bloqueado"`)
+
+### S-72 — 2026-07-07 — P-3.12 — Testes Financeiro
+
+**Prompt:** P-3.12 (`PROMPTS.md:2444`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Fechou os critérios de aceite de P-3.12 ainda sem cobertura. Boa parte já estava coberta por testes de prompts anteriores (P-3.9 a P-3.11): `designation-governance.test.ts` (designation gestor/autorizador), `audit-abort.test.ts` (G6.3 — falha de audit aborta a mutação), `confirm-import.test.ts` (F3-11 — linhas adulteradas não persistem), `csv-parser.test.ts` (parse CSV), `payables-override-block.test.ts` (override auditado). O script `test` no `package.json` do app (F3-10) também já existia. Este prompt adicionou o que faltava: `transactions.test.ts` (imutabilidade do trigger de DB para UPDATE/DELETE + `createReversal` cria contrapartida/registro/audit sem alterar o original), `conciliation.test.ts` (parse de OFX — só CSV tinha teste — e `autoMatchImport` casando por valor+data), `governance.test.ts` (fluxo completo aprovação → autorização → **pago**, que nenhum teste cobria fim a fim, e `createWeeklyBatch` nunca incluir um payable "bloqueado"), e uma extensão em `rls.test.ts` com o papel `submissor`.
+
+**Suposições registradas (G1 — ambiguidade resolvida pela opção mais simples):**
+
+- **"RLS: submissor não vê transações de outros projetos"** — as policies de SELECT do schema `financeiro` (`payables`/`transactions`/etc., `0010_financeiro.sql`/`0011_financeiro_rls.sql`) checam apenas `has_role('super_admin', 'diretor', 'colaborador')`; `submissor` nunca está nessa lista e não existe nenhuma coluna de escopo por projeto em `financeiro.transactions`. Não há, portanto, nenhuma variante "vê só as próprias" a testar dentro do schema financeiro — a garantia real é bloqueio total de acesso ao schema. O teste adicionado em `rls.test.ts` verifica isso (submissor não lê `payables` nem `transactions`, mesma família dos testes de hóspede já existentes). O acesso de submissor por projeto realmente escopado (`projetos.payment_schedules`, por organização) já pertence a `apps/projetos` — fora da lista de arquivos permitidos deste prompt, não recriado aqui.
+- **Imutabilidade do ledger em teste** — `financeiro.transactions` tem um trigger `BEFORE DELETE`/`BEFORE UPDATE` que dispara mesmo para a conexão `db` (dona das tabelas, super_admin de fato — bypassa GRANT/RLS mas não o trigger). Isso significa que uma transação de teste real (seedada diretamente ou criada por `createReversal`/`markPayableAsPaid`) **nunca pode ser apagada em `afterAll`** — nem pelos próprios testes. `transactions.test.ts`, `conciliation.test.ts` e `governance.test.ts` foram ajustados para nunca tentar `DELETE FROM financeiro.transactions`; a conta bancária e o usuário referenciados via `account_id`/`created_by` (FK `RESTRICT`) permanecem como fixtures permanentes reaproveitadas entre execuções (`onConflictDoNothing`), e qualquer id que vira `reference_id` de uma transação real é gerado pelo banco (não fixo), para que reexecuções nunca colidam com uma transação/estorno remanescente de uma rodada anterior. Descoberto por tentativa e erro (a 1ª versão destes 3 arquivos quebrava o `afterAll` com `PostgresError: transactions são imutáveis`); nenhum teste anterior no repo tinha criado uma `financeiro.transactions` real dentro do próprio teste, então não havia precedente a seguir.
+- **`createWeeklyBatch` excluir "bloqueado"** já estava _documentado_ como consequência do filtro `status = "pendente"` no comentário do cron `projetos-inadimplencia.ts` ("Isso também é o suficiente para satisfazer 'payable bloqueado não entra em lote semanal'..."), mas nenhum teste realmente exercitava esse caminho — `governance.test.ts` adiciona a verificação.
+
+**Critérios de aceite verificados:**
+
+- [x] Transação: UPDATE/DELETE retorna erro (`transactions.test.ts`, trigger de DB)
+- [x] Estorno: cria reversal corretamente (`transactions.test.ts`)
+- [x] Import OFX: parse correto dos campos (`conciliation.test.ts`)
+- [x] Match: encontra correspondência por valor+data (`conciliation.test.ts`)
+- [x] Governança: fluxo aprovação → autorização → pago funciona (`governance.test.ts`)
+- [x] RLS: submissor não vê transações de outros projetos (`rls.test.ts`)
+- [x] Designation: diretor sem designation gestor não aprova lote (já coberto por `designation-governance.test.ts`, P-3.8b)
+- [x] Audit: falha simulada de gravação aborta a mutação (já coberto por `audit-abort.test.ts`, G6.3)
+- [x] Import: linhas adulteradas entre preview e confirmação não persistem (já coberto por `confirm-import.test.ts`, F3-11)
+- [x] organization_budgets: submissão acima do teto é bloqueada (já coberto por `apps/projetos/src/__tests__/integrations-projetos-budget.test.ts`, P-3.11)
+- [x] Inadimplência: payable bloqueado não entra em lote (`governance.test.ts`); override auditado (já coberto por `payables-override-block.test.ts`, P-3.11)
+- [x] Testes passam (46/46, `pnpm vitest run` — 2 execuções consecutivas, sem colisão de fixtures)
+- [x] Lint passa
+- [x] Script `test` no `package.json` (F3-10) — já existia, confirmado presente
+
+**Arquivos criados:**
+
+- `apps/financeiro/src/__tests__/transactions.test.ts`
+- `apps/financeiro/src/__tests__/conciliation.test.ts`
+- `apps/financeiro/src/__tests__/governance.test.ts`
+
+**Arquivos modificados:**
+
+- `apps/financeiro/src/__tests__/rls.test.ts` (papel `submissor` — accounts/payables/transactions)

@@ -27,6 +27,7 @@ const IDS = {
   diretor: "e1000000-0000-0000-0000-000000000002",
   colaborador: "e1000000-0000-0000-0000-000000000003",
   hospede: "e1000000-0000-0000-0000-000000000004",
+  submissor: "e1000000-0000-0000-0000-000000000005",
 } as const;
 
 const ACCOUNT_ID = "e1000000-0000-0000-0000-000000000010";
@@ -92,6 +93,11 @@ beforeAll(async () => {
       email: "rls-fin-hospede@test.hebron",
       fullName: "RLS Fin Hóspede",
     },
+    {
+      id: IDS.submissor,
+      email: "rls-fin-submissor@test.hebron",
+      fullName: "RLS Fin Submissor",
+    },
   ];
   for (const u of userFixtures) {
     await db.insert(users).values(u).onConflictDoNothing();
@@ -116,6 +122,11 @@ beforeAll(async () => {
     {
       userId: IDS.hospede,
       role: "hospede" as const,
+      grantedBy: IDS.superAdmin,
+    },
+    {
+      userId: IDS.submissor,
+      role: "submissor" as const,
       grantedBy: IDS.superAdmin,
     },
   ];
@@ -201,6 +212,34 @@ describe("RLS — financeiro.accounts / payables: staff vê, hóspede não", () 
       `SELECT id FROM financeiro.payables WHERE id = '${PAYABLE_ID}'`,
     );
     expect(pay).toHaveLength(0);
+  });
+});
+
+// ── submissor: sem papel financeiro, sem exceção por projeto ─────────────────
+// As policies de SELECT do schema financeiro (payables/transactions/etc.)
+// checam apenas has_role('super_admin', 'diretor', 'colaborador') — submissor
+// nunca está nessa lista (0010_financeiro.sql / 0011_financeiro_rls.sql).
+// Não há coluna "dono"/projeto em financeiro.transactions para escopar por
+// projeto: a garantia de "não vê transações de outros projetos" vem do
+// bloqueio total de acesso ao schema — submissor não vê NENHUMA transação,
+// própria ou alheia (o acesso de submissor a dados de projeto fica em
+// projetos.payment_schedules, escopado por organização — RLS testado em
+// apps/projetos).
+describe("RLS — financeiro.transactions: submissor não vê transações de outros projetos", () => {
+  it("submissor NÃO lê financeiro.payables (sem papel financeiro)", async () => {
+    const pay = await queryAs(
+      IDS.submissor,
+      `SELECT id FROM financeiro.payables WHERE id = '${PAYABLE_ID}'`,
+    );
+    expect(pay).toHaveLength(0);
+  });
+
+  it("submissor NÃO lê financeiro.transactions (sem papel financeiro)", async () => {
+    const tx = await queryAs(
+      IDS.submissor,
+      "SELECT id FROM financeiro.transactions LIMIT 10",
+    );
+    expect(tx).toHaveLength(0);
   });
 });
 
