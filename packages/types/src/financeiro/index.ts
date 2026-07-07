@@ -64,13 +64,16 @@ export interface AccountCategory {
 // ─── PayableStatus ────────────────────────────────────────────────────────────
 // Linear lifecycle: pendente → aprovado → autorizado → pago
 // cancelado can be reached from any state before pago.
+// bloqueado: report-delinquency block (BRAIN §6.2, P-3.11) — only reachable
+// from pendente; returns to pendente via super_admin override.
 
 export type PayableStatus =
   | "pendente"
   | "aprovado"
   | "autorizado"
   | "pago"
-  | "cancelado";
+  | "cancelado"
+  | "bloqueado";
 
 // ─── Attachment ───────────────────────────────────────────────────────────────
 

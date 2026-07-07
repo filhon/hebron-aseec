@@ -92,6 +92,7 @@
 | S-68   | 2026-07-06 | P-0.16 — Registro retroativo (Onda 2)                                   | concluido                            |
 | S-69   | 2026-07-06 | P-3.9 — Financeiro: Integração UI ↔ Backend                             | concluido                            |
 | S-70   | 2026-07-07 | P-3.10 — Financeiro: Notificações e Emails                              | concluido                            |
+| S-71   | 2026-07-07 | P-3.11 — Financeiro: Integrações Cross-App                              | concluido                            |
 
 ---
 
@@ -3245,3 +3246,71 @@ Fechou os 6 gatilhos de notificação do módulo Financeiro que faltavam após P
 - `packages/jobs/src/index.ts`, `src/catalog.ts`
 - `packages/db/src/schema/admin.ts` (enum `audit_action`)
 - `apps/financeiro/package.json`, `packages/jobs/package.json`, `packages/email/package.json` (dependências)
+
+### S-71 — 2026-07-07 — P-3.11 — Financeiro: Integrações Cross-App
+
+**Prompt:** P-3.11 (`PROMPTS.md:2407`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Conectou as integrações reais Projetos ↔ Financeiro via `packages/integrations` (P-0.15). `onProjectApproved` (packages/db/src/projetos-approval.ts) deixou de ser um stub que só criava centro de custo — agora também cria um `financeiro.payables` por parcela de `payment_schedules`, em status "pendente" (nunca pré-aprovado), auditado, idempotente via `payment_schedule_id` único. `packages/integrations/src/financeiro.ts` (novo) expõe `getProjectBudgetExecution` (executado vs orçado em tempo real, somando débitos do centro de custo do projeto) e o stub documentado `onFlatsAssistanceApproved`. `packages/integrations/src/projetos.ts` (novo) recebe `checkOrganizationBudget`, movida de dentro de `apps/projetos` — fecha a peça arquitetural do workaround `admin.system_settings` (S-40), já que a camada de dados tinha sido resolvida em P-3.8b/PATCH-009 (ver PATCH-013). Bloqueio por inadimplência de relatório (BRAIN §6.2): novo cron `projetos-inadimplencia` (packages/jobs) bloqueia payables "pendente" de projetos com relatório vencido (status "bloqueado" novo no enum `payable_status`); `overrideBlock` (apps/financeiro/src/actions/payables.ts, novo) permite a um super_admin liberar o bloqueio com justificativa obrigatória, auditado.
+
+**Suposições registradas (G1 — ambiguidade resolvida pela opção mais simples):**
+
+- **`drizzle-kit generate` está com o snapshot desatualizado** desde `idx 14` (`meta/_journal.json`) — as migrations 0015 a 0028 foram aplicadas fora do fluxo do kit (drift pré-existente, não introduzido nesta sessão). Rodar `drizzle-kit generate` reproduziu justamente esse problema: gerou um diff reincluindo as 14 migrations não rastreadas, sem `IF NOT EXISTS`/guards de idempotência — aplicar esse arquivo quebraria qualquer banco onde elas já rodaram (`ALTER TABLE ADD COLUMN` sem guard falha se a coluna já existe). Descartado; as migrations 0029/0030 foram escritas à mão, seguindo exatamente o estilo idempotente já padrão no repo desde 0016+ (`ADD VALUE IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`, `DO $$ ... EXCEPTION WHEN duplicate_object`). O `_journal.json` foi revertido ao estado original (não reconciliado) — reconciliar o snapshot inteiro é trabalho no espírito de P-0.11, fora do escopo deste prompt; registrado como débito.
+- **"Relatório vencido" (gatilho do bloqueio)** = `due_date` já passada + `status = "pendente"`, sem período de carência. BRAIN §6.2 não especifica um número de dias e não havia decisão prévia do Filipe — diferente de propósito do `REPORT_EXPIRY_GRACE_DAYS` (30 dias) já usado em `crons/projetos.ts` para o 3º lembrete, que é sobre notificação, não bloqueio; os dois foram mantidos independentes, documentado no cabeçalho do cron novo.
+- **Bloqueio só age sobre payables ainda "pendente"** (antes de entrar na governança dual) — um payable já "aprovado"/"autorizado" não é retroativamente bloqueado; o cron não tem mandato para desfazer uma decisão já tomada por um diretor/autorizador. Isso já é suficiente para o critério "payable bloqueado não entra em lote semanal", porque o lote (`runWeeklyBatchCreation`) só seleciona status "pendente".
+- **Vínculo payable↔projeto é indireto**, via `payables.cost_center_id → cost_centers.project_id` (não foi criada uma FK direta `payables.project_id` — seria redundante). O vínculo direto novo, `payables.payment_schedule_id` (único), existe para permitir a criação idempotente automática, não para navegação geral.
+- **Nomes dos arquivos `packages/integrations/src/financeiro.ts` / `projetos.ts`** seguem literalmente a lista de arquivos permitidos do prompt, divergindo da convenção `<origem>-<destino>.ts` documentada em BRAIN.md (ex.: `documentos-projetos.ts`, `projetos-flats.ts`). A lista explícita do prompt venceu; registrado aqui para uma eventual revisão de convenção.
+- **`onProjectApproved` passou a auditar também a criação do centro de custo** (usava `getSystemActorId`/`logAudit` só implicitamente antes — na verdade não auditava nada). Não era estritamente pedido pelo prompt, mas manter a criação de payables auditada e a de centro de custo silenciosa dentro da mesma função seria inconsistente com G6.3.
+
+**Débito de infraestrutura (G1 — arquivos óbvios fora da lista original, registrados aqui):**
+
+- `packages/db/src/schema/financeiro.ts` (novo status `bloqueado` + colunas de bloqueio/override em `payables`) e `packages/db/src/schema/admin.ts` (2 novos valores em `audit_action`) — não estavam na lista, mas sem eles não existe onde gravar o estado nem a auditoria que o prompt pede.
+- `packages/db/src/projetos-approval.ts` — `onProjectApproved` foi estendida no lugar (não movida para `packages/integrations/src/financeiro.ts`, que só estava na lista de arquivos permitidos): a função já era o "efeito colateral de projeto aprovado" compartilhado entre a action manual (`apps/projetos/actions/projects.ts`) e o cron de homologação automática (`packages/jobs/crons/projetos.ts`) — movê-la duplicaria a criação de centro de custo já existente ali e obrigaria a editar os dois call-sites (nenhum dos dois está na lista permitida). Estender no lugar manteve os dois call-sites intocados.
+- `apps/projetos/src/actions/projects.ts` — editado para importar `checkOrganizationBudget` do package em vez de defini-la localmente. A lista previa `apps/projetos/src/lib/integrations/* (apenas remoção/redirecionamento)`, mas esse diretório nunca existiu — a implementação real sempre viveu inline em `actions/projects.ts` (confirmado por exploração antes de codar), não num arquivo `lib/integrations/*` dedicado. Redirecionado no lugar real, em vez de inventar um diretório vazio só para satisfazer a letra da lista.
+- `packages/jobs/src/index.ts` — registro obrigatório do cron novo no barrel `functions` (G6.6); nenhum cron novo funciona sem isso.
+- `apps/financeiro/src/lib/audit.ts` — extensão do union type `FinanceiroAuditAction` com os 2 novos valores (`financeiro.payable.blocked`, `financeiro.payable.block_overridden`), exigida por G6.3.
+- 5 arquivos de teste novos (`packages/db/src/__tests__/projetos-approval.test.ts`, `apps/projetos/src/__tests__/integrations-projetos-budget.test.ts` e `integrations-financeiro-execution.test.ts`, `packages/jobs/src/__tests__/projetos-inadimplencia.test.ts`, `apps/financeiro/src/__tests__/payables-override-block.test.ts`) — a lista de arquivos permitidos não incluía nenhum teste, mas os critérios de aceite pedem "(teste)" explicitamente em 3 pontos. Colocados no app/package mais próximo de onde a função testada é consumida/definida, seguindo o padrão já usado em `flow.test.ts`/`projetos-homologacao.test.ts` (DB real via `DATABASE_URL`, sem mocks de banco).
+- `packages/jobs/src/__tests__/projetos-homologacao.test.ts` — `afterAll` ajustado: a nova FK `payables.payment_schedule_id` (RESTRICT) passou a bloquear a ordem de limpeza existente, já que `runHomologacaoAutoApprove` também aciona `onProjectApproved` (agora cria payables). Sem o ajuste, a suíte de `packages/jobs` quebrava por completo.
+- `packages/types/src/financeiro/index.ts` — `PayableStatus` ganhou `"bloqueado"`; sem isso `apps/financeiro/src/lib/queries.ts` (fora da lista permitida, não tocado) já não typecheckava contra o novo valor do enum do banco.
+
+**Observação de verificação (não é regressão desta sessão):** `apps/projetos/src/__tests__/rls.test.ts` já falhava (16/19 testes, "permission denied for schema projetos") antes de qualquer mudança deste prompt — confirmado rodando a suíte com `git stash` (código revertido) e obtendo exatamente as mesmas falhas. Ambiente/grants do banco de dev, não código; fora do escopo de P-3.11, registrado aqui para não ser re-descoberto do zero numa sessão futura. `packages/db/src/__tests__/storage.test.ts` também apresentou 2 falhas ao rodar `pnpm test` na raiz (todas as suítes em paralelo), mas passou 21/21 ao rodar isolado duas vezes — flakiness de concorrência/rate-limit contra o mesmo projeto Supabase compartilhado sob carga, não uma regressão (não toca em storage/buckets neste prompt).
+
+**Critérios de aceite verificados:**
+
+- [x] Aprovação de projeto cria centro de custo e payables reais
+- [x] Payables de projeto nascem NÃO aprovados
+- [x] Executado vs orçado em tempo real (teste cross-schema)
+- [x] Submissão de projeto bloqueada quando total aprovado excede organization_budgets do ano (teste)
+- [x] Workaround `system_settings` removido; PATCH registrado (PATCH-013 — a camada de dados já tinha sido removida em PATCH-009/P-3.8b; este fecha a camada arquitetural, movendo `checkOrganizationBudget` para o package)
+- [x] Relatório vencido → payables do projeto ficam `bloqueado` e não entram em lote (teste)
+- [x] Override: só super_admin, exige justificativa, gera audit (teste)
+- [x] Stub Flats → Financeiro documentado no package (`onFlatsAssistanceApproved`, `packages/integrations/src/financeiro.ts`)
+- [x] Zero imports app→app (verificação do CI — `pnpm check:cross-app-imports`)
+- [x] Lint passa · Types passam · testes novos verdes
+
+**Arquivos criados:**
+
+- `packages/integrations/src/financeiro.ts`, `src/projetos.ts`
+- `packages/jobs/src/crons/projetos-inadimplencia.ts`
+- `apps/financeiro/src/actions/payables.ts`
+- `packages/db/src/migrations/0029_financeiro_payable_bloqueio_audit_actions.sql`, `0030_financeiro_payables_bloqueio_columns.sql`
+- `packages/db/src/__tests__/projetos-approval.test.ts`
+- `apps/projetos/src/__tests__/integrations-projetos-budget.test.ts`, `integrations-financeiro-execution.test.ts`
+- `packages/jobs/src/__tests__/projetos-inadimplencia.test.ts`
+- `apps/financeiro/src/__tests__/payables-override-block.test.ts`
+- `PATCHES/013-checkorganizationbudget-package-relocation.md`
+
+**Arquivos modificados:**
+
+- `packages/db/src/schema/financeiro.ts` (status `bloqueado`, colunas de bloqueio/override, `payment_schedule_id`)
+- `packages/db/src/schema/admin.ts` (enum `audit_action`)
+- `packages/db/src/projetos-approval.ts` (`onProjectApproved` cria payables + audita)
+- `packages/integrations/src/index.ts`, `package.json` (exports novos)
+- `apps/projetos/src/actions/projects.ts` (`checkOrganizationBudget` → package)
+- `packages/jobs/src/index.ts` (registro do cron novo)
+- `packages/jobs/src/__tests__/projetos-homologacao.test.ts` (`afterAll` — ordem de limpeza por causa da FK nova)
+- `apps/financeiro/src/lib/audit.ts` (2 `FinanceiroAuditAction` novas)
+- `packages/types/src/financeiro/index.ts` (`PayableStatus` ganha `"bloqueado"`)

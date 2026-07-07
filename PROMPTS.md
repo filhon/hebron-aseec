@@ -2428,16 +2428,16 @@ Conectar integrações reais via packages/integrations (P-0.15 — nada de impor
 
 **Critérios de aceite:**
 
-- [ ] Aprovação de projeto cria centro de custo e payables reais
-- [ ] Payables de projeto nascem NÃO aprovados
-- [ ] Executado vs orçado em tempo real (teste cross-schema)
-- [ ] Submissão de projeto bloqueada quando total aprovado excede organization_budgets do ano (teste)
-- [ ] Workaround system_settings removido; PATCH registrado
-- [ ] Relatório vencido → payables do projeto ficam `bloqueado` e não entram em lote (teste)
-- [ ] Override: só super_admin, exige justificativa, gera audit (teste)
-- [ ] Zero imports app→app (verificação do CI)
-- [ ] Stub Flats → Financeiro documentado no package
-- [ ] Lint passa · Types passam
+- [x] Aprovação de projeto cria centro de custo e payables reais
+- [x] Payables de projeto nascem NÃO aprovados
+- [x] Executado vs orçado em tempo real (teste cross-schema)
+- [x] Submissão de projeto bloqueada quando total aprovado excede organization_budgets do ano (teste)
+- [x] Workaround system_settings removido; PATCH registrado
+- [x] Relatório vencido → payables do projeto ficam `bloqueado` e não entram em lote (teste)
+- [x] Override: só super_admin, exige justificativa, gera audit (teste)
+- [x] Zero imports app→app (verificação do CI)
+- [x] Stub Flats → Financeiro documentado no package
+- [x] Lint passa · Types passam
 
 ---
 

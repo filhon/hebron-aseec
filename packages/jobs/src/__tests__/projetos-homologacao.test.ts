@@ -26,6 +26,7 @@ import {
   contestations,
   paymentSchedules,
   costCenters,
+  payables,
   auditLog,
 } from "@hebron/db/schema";
 import { runHomologacaoAutoApprove } from "../crons/projetos";
@@ -127,6 +128,23 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  // P-3.11: onProjectApproved agora também cria financeiro.payables (FK
+  // RESTRICT para payment_schedules e cost_centers) — precisam ser
+  // removidos antes das linhas que referenciam, na ordem inversa da criação.
+  const [costCenter] = await db
+    .select({ id: costCenters.id })
+    .from(costCenters)
+    .where(eq(costCenters.projectId, IDS.eligibleProject));
+  if (costCenter) {
+    const createdPayables = await db
+      .select({ id: payables.id })
+      .from(payables)
+      .where(eq(payables.costCenterId, costCenter.id));
+    for (const p of createdPayables) {
+      await db.delete(auditLog).where(eq(auditLog.entityId, p.id));
+    }
+    await db.delete(payables).where(eq(payables.costCenterId, costCenter.id));
+  }
   await db
     .delete(paymentSchedules)
     .where(eq(paymentSchedules.projectId, IDS.eligibleProject));

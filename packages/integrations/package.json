@@ -6,7 +6,9 @@
     ".": "./src/index.ts",
     "./documentos-projetos": "./src/documentos-projetos.ts",
     "./projetos-flats": "./src/projetos-flats.ts",
-    "./projetos-tarefas": "./src/projetos-tarefas.ts"
+    "./projetos-tarefas": "./src/projetos-tarefas.ts",
+    "./financeiro": "./src/financeiro.ts",
+    "./projetos": "./src/projetos.ts"
   },
   "scripts": {
     "lint": "eslint .",

@@ -30,7 +30,9 @@ export type FinanceiroAuditAction =
   | "financeiro.organization_budget.created"
   | "financeiro.organization_budget.updated"
   | "financeiro.account.created"
-  | "financeiro.report.exported";
+  | "financeiro.report.exported"
+  | "financeiro.payable.blocked"
+  | "financeiro.payable.block_overridden";
 
 export interface LogFinanceiroAuditParams {
   actorId: string;

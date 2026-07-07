@@ -11,7 +11,7 @@ import {
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { financeiroSchema, users } from "./public";
-import { projects, organizations } from "./projetos";
+import { projects, organizations, paymentSchedules } from "./projetos";
 
 // ---------------------------------------------------------------------------
 // Enums
@@ -33,6 +33,8 @@ export const payableStatusEnum = financeiroSchema.enum("payable_status", [
   "autorizado",
   "pago",
   "cancelado",
+  // P-3.11 — bloqueio por inadimplência de relatório de projeto (BRAIN §6.2)
+  "bloqueado",
 ]);
 
 export const receivableStatusEnum = financeiroSchema.enum("receivable_status", [
@@ -240,6 +242,12 @@ export const payables = financeiroSchema.table(
     categoryId: uuid("category_id").references(() => financialCategories.id, {
       onDelete: "restrict",
     }),
+    // Cross-schema FK: liga o payable à parcela de projeto que o originou
+    // (P-3.11 — aprovação de projeto cria payables reais). UNIQUE garante
+    // no máximo 1 payable por parcela (idempotência da criação automática).
+    paymentScheduleId: uuid("payment_schedule_id")
+      .unique()
+      .references(() => paymentSchedules.id, { onDelete: "restrict" }),
     status: payableStatusEnum("status").notNull().default("pendente"),
     approvedBy: uuid("approved_by").references(() => users.id),
     approvedAt: timestamp("approved_at", { withTimezone: true }),
@@ -247,6 +255,13 @@ export const payables = financeiroSchema.table(
     authorizedAt: timestamp("authorized_at", { withTimezone: true }),
     paidBy: uuid("paid_by").references(() => users.id),
     paidAt: timestamp("paid_at", { withTimezone: true }),
+    // Bloqueio por inadimplência de relatório (P-3.11, BRAIN §6.2) e override
+    // exclusivo de super_admin, com justificativa obrigatória.
+    blockedAt: timestamp("blocked_at", { withTimezone: true }),
+    blockReason: text("block_reason"),
+    overriddenBy: uuid("overridden_by").references(() => users.id),
+    overriddenAt: timestamp("overridden_at", { withTimezone: true }),
+    overrideJustification: text("override_justification"),
     createdBy: uuid("created_by")
       .notNull()
       .references(() => users.id),

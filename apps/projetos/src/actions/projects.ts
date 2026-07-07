@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { eq, and, isNull, not, sum, count } from "drizzle-orm";
+import { eq, and, isNull, count } from "drizzle-orm";
 import { db } from "@hebron/db/client";
 import {
   projects,
@@ -12,7 +12,6 @@ import {
   notifications,
   organizations,
   systemSettings,
-  organizationBudgets,
 } from "@hebron/db/schema";
 import { VALID_STAGE_TRANSITIONS } from "@hebron/db/schema";
 import type { ProjectStage } from "@hebron/db/schema";
@@ -48,6 +47,7 @@ import {
   onProjectApproved,
 } from "@hebron/db/projetos-approval";
 import { onProjectSubmitted } from "@hebron/integrations/projetos-tarefas";
+import { checkOrganizationBudget } from "@hebron/integrations/projetos";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -88,55 +88,6 @@ async function createVersionSnapshot(
     data,
     createdBy,
   });
-}
-
-/**
- * Checks organization budget against financeiro.organization_budgets (S1-01).
- * If no budget row is configured for organizationId+year, the check passes
- * (no cap) — same fail-open semantics as the old admin.system_settings
- * workaround this replaces.
- */
-async function checkOrganizationBudget(
-  organizationId: string,
-  year: number,
-  newProjectBudget: number,
-): Promise<void> {
-  const budgetRows = await db
-    .select({ amount: organizationBudgets.amount })
-    .from(organizationBudgets)
-    .where(
-      and(
-        eq(organizationBudgets.organizationId, organizationId),
-        eq(organizationBudgets.year, year),
-      ),
-    )
-    .limit(1);
-
-  if (!budgetRows[0]) return; // No budget configured — no cap
-
-  const limit = parseFloat(budgetRows[0].amount);
-  if (!limit) return;
-
-  // Sum budgets of all non-deleted, non-reprovado projects for this org+year
-  const existingResult = await db
-    .select({ total: sum(projects.budgetTotal) })
-    .from(projects)
-    .where(
-      and(
-        eq(projects.organizationId, organizationId),
-        eq(projects.evaluationYear, year),
-        isNull(projects.deletedAt),
-        not(eq(projects.stage, "reprovado")),
-      ),
-    );
-
-  const totalExisting = parseFloat(existingResult[0]?.total ?? "0");
-
-  if (totalExisting + newProjectBudget > limit) {
-    throw new Error(
-      `Orçamento da instituição excedido para ${year}. Contate o administrador.`,
-    );
-  }
 }
 
 async function lookupCategoryId(slug: string): Promise<string | null> {

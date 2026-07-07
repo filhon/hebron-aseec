@@ -93,6 +93,10 @@ export const auditActionEnum = adminSchema.enum("audit_action", [
   // Financeiro — export manual de relatório mensal (P-3.10), added via
   // ALTER TYPE in 0028_financeiro_report_audit_action.sql
   "financeiro.report.exported",
+  // Financeiro — bloqueio por inadimplência de relatório de projeto e
+  // override exclusivo de super_admin (P-3.11), added via ALTER TYPE
+  "financeiro.payable.blocked",
+  "financeiro.payable.block_overridden",
 ]);
 
 export const meetingTypeEnum = adminSchema.enum("meeting_type", [

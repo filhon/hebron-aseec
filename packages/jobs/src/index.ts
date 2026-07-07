@@ -12,6 +12,7 @@ import {
   homologacaoAutoApproveCron,
   reportRemindersCron,
 } from "./crons/projetos";
+import { projetosInadimplenciaCron } from "./crons/projetos-inadimplencia";
 
 /**
  * Todas as funções Inngest registradas — consumidas pela rota de serve
@@ -24,6 +25,7 @@ export const functions = [
   reportRemindersCron,
   evaluationRemindersCron,
   homologacaoAutoApproveCron,
+  projetosInadimplenciaCron,
   weeklyBatchCreationCron,
   dueDateRemindersCron,
   monthlyReportCron,
