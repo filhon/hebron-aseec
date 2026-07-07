@@ -18,6 +18,7 @@ import {
 } from "@hebron/validators/financeiro";
 import { colaboradorAction, superAdminAction } from "../lib/safe-action";
 import { logFinanceiroAudit } from "../lib/audit";
+import { checkBudgetAlert } from "../lib/notifications";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -321,6 +322,16 @@ export const createManualTransaction = colaboradorAction
         referenceId,
       },
     });
+
+    // Alerta de orçamento (P-3.10) — best-effort, só para débitos com centro
+    // de custo vinculado (é o que consome orçamento).
+    if (tx.type === "debito" && tx.costCenterId) {
+      await checkBudgetAlert({
+        costCenterId: tx.costCenterId,
+        transactionDate: tx.date,
+        newTransactionAmount: parseFloat(tx.amount),
+      });
+    }
 
     return { transaction: tx };
   });

@@ -1,3 +1,5 @@
+import { cookies } from "next/headers";
+import { resolveSession } from "@hebron/auth/server";
 import {
   getTransactions,
   getCategories,
@@ -11,6 +13,10 @@ export default async function RelatoriosPage() {
     getCategories(),
     getBankAccounts(),
   ]);
+
+  const cookieStore = await cookies();
+  const session = await resolveSession(cookieStore);
+  const canExport = session.roles.includes("super_admin");
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg-alt)" }}>
@@ -36,6 +42,7 @@ export default async function RelatoriosPage() {
         transactions={transactions}
         categories={categories}
         bankAccounts={bankAccounts}
+        canExport={canExport}
       />
     </div>
   );

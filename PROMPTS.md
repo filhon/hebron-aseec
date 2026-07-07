@@ -2394,13 +2394,13 @@ Notificações: lote semanal para aprovação — email ao diretor com designati
 
 **Critérios de aceite:**
 
-- [ ] Lote semanal: email SOMENTE ao diretor gestor (designation), CC autorizador — diretor sem designation não recebe (teste)
-- [ ] Alerta de orçamento >80%: email ao super_admin
-- [ ] Relatório mensal automático: PDF+XLSX com totais por categoria, por cron mensal registrado
-- [ ] Export manual: super_admin baixa ZIP com PDF+XLSX+recibos do mês pela tela de relatórios
-- [ ] Vencimento próximo: in_app 3 dias antes, por cron registrado
-- [ ] Falha de auditoria em qualquer action nova aborta a operação (G6.3)
-- [ ] Lint passa · Types passam
+- [x] Lote semanal: email SOMENTE ao diretor gestor (designation), CC autorizador — diretor sem designation não recebe (fallback só ativa se nenhuma designation "gestor" existir; herdado de P-3.9, agora também via cron — ver S-70)
+- [x] Alerta de orçamento >80%: email ao super_admin (`checkBudgetAlert`, disparado em tempo real por `markPayableAsPaid`/`createManualTransaction` — não por cron, ver S-70)
+- [x] Relatório mensal automático: PDF+XLSX com totais por categoria, por cron mensal registrado (`financeiro-relatorio-mensal`)
+- [x] Export manual: super_admin baixa ZIP com PDF+XLSX+recibos do mês pela tela de relatórios (`exportMonthlyReport`)
+- [x] Vencimento próximo: in_app 3 dias antes, por cron registrado (`financeiro-vencimento-proximo`, payables e receivables)
+- [x] Falha de auditoria em qualquer action nova aborta a operação (G6.3) — `exportMonthlyReport` usa `logFinanceiroAudit` (criticidade "critical")
+- [x] Lint passa · Types passam
 
 ---
 

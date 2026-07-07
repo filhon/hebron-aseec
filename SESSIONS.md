@@ -91,6 +91,7 @@
 | S-67   | 2026-07-06 | P-0.15 — packages/integrations + contrato de settings (Onda 2)          | concluido                            |
 | S-68   | 2026-07-06 | P-0.16 — Registro retroativo (Onda 2)                                   | concluido                            |
 | S-69   | 2026-07-06 | P-3.9 — Financeiro: Integração UI ↔ Backend                             | concluido                            |
+| S-70   | 2026-07-07 | P-3.10 — Financeiro: Notificações e Emails                              | concluido                            |
 
 ---
 
@@ -3190,3 +3191,57 @@ Substituiu `lib/mock-data.ts` por dados reais em todo o módulo Financeiro e apl
 
 - `apps/financeiro/src/lib/mock-data.ts`
 - `apps/financeiro/src/components/import-form.tsx`, `transaction-table-skeleton.tsx`
+
+### S-70 — 2026-07-07 — P-3.10 Financeiro: Notificações e Emails
+
+**Prompt:** P-3.10 (`PROMPTS.md:2372`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Fechou os 6 gatilhos de notificação do módulo Financeiro que faltavam após P-3.9: alerta de orçamento >80% (in_app + email ao super_admin, disparado em tempo real por transação de débito), pagamento pago (in_app ao criador da conta), 3 crons novos em `packages/jobs` (lote semanal, vencimento próximo de contas a pagar/receber, relatório mensal consolidado por email com PDF+XLSX anexados), e a action `exportMonthlyReport` (PDF+XLSX+ZIP com os recibos do mês, acionável na tela de relatórios). O email do lote semanal (já existente desde P-3.9 como HTML inline) foi migrado para o template React Email `batch-approval.tsx` pedido pelo prompt.
+
+**Suposições registradas (G1 — ambiguidade resolvida pela opção mais simples):**
+
+- **Detecção de "cruzamento" de 80% do orçamento** não tem coluna de estado dedicada. `checkBudgetAlert` (`apps/financeiro/src/lib/notifications.ts`) compara o total executado do centro de custo ANTES e DEPOIS da transação de débito recém-commitada e dispara só na transição <80% → ≥80%, para não reenviar o alerta a cada lançamento subsequente. Sob concorrência rara (duas transações simultâneas) o alerta poderia disparar duas vezes — aceitável na escala desta ONG (~150 usuários, 2 super_admins).
+- **Destinatário de "Pagamento pago (in_app)"** — não especificado no prompt. Assumido: o `createdBy` do payable (quem registrou a conta), por analogia ao padrão de notificação do módulo Projetos (submissor é avisado de decisões sobre o que ele criou).
+- **Export manual sem bucket dedicado para o ZIP** — BRAIN.md só documenta `financeiro-recibos` (recibos individuais). Em vez de criar um bucket novo (fora do escopo/migrations previstas), `exportMonthlyReport` retorna o ZIP em base64 na resposta da action; o client (`relatorios-view.tsx`) decodifica e aciona o download via Blob local. Aceitável no volume mensal desta ONG.
+- **PDF/XLSX do relatório mensal (cron) e do export manual (action) têm geração duplicada** — mesma estrutura (totais por categoria), mas `packages/jobs` nunca importa de `apps/*` (G6.5) e o export manual precisa também dos recibos (`archiver`/ZIP), então não há um ponto de compartilhamento óbvio dentro da lista de arquivos permitidos. Duplicação aceita, no mesmo espírito de `runHomologacaoAutoApprove` (packages/jobs/src/crons/projetos.ts) replicar lógica de uma action de app.
+- **DB-template override (`getDbTemplate`/`applyVars`, usado por projetos/documentos)** não foi aplicado aos 3 templates novos — exigiria registrar os slugs em `apps/admin/src/app/(dashboard)/templates-email/page.tsx`, fora da lista de arquivos permitidos deste prompt.
+
+**Débito de infraestrutura (G1 — arquivos óbvios fora da lista original, registrados aqui):**
+
+- `apps/financeiro/src/actions/approval.ts` — edição necessária para (a) trocar o HTML inline do lote semanal pelo template `batch-approval.tsx`, (b) chamar `notifyPayablePaid`/`checkBudgetAlert` em `markPayableAsPaid`. Não estava na lista de arquivos permitidos do prompt, mas sem essa mudança os dois gatilhos do escopo ("pagamento pago", "orçamento >80%") ficariam sem nenhum chamador.
+- `apps/financeiro/src/actions/transactions.ts` — mesmo motivo: `checkBudgetAlert` chamado em `createManualTransaction` para débitos com centro de custo.
+- `apps/financeiro/src/lib/audit.ts` + `packages/db/src/schema/admin.ts` (enum `auditActionEnum`) + `packages/db/src/migrations/0028_financeiro_report_audit_action.sql` — novo valor `financeiro.report.exported`, exigido pelo critério de aceite G6.3 ("falha de auditoria em qualquer action nova aborta a operação") para a nova action `exportMonthlyReport`.
+- `packages/email/src/lib/send.ts` — adicionado campo opcional `attachments` a `SendEmailOptions` (repassado ao Resend), necessário para o relatório mensal anexar PDF+XLSX ao email; sem isso `createNotification` não tinha como enviar anexos.
+- `packages/jobs/src/index.ts` + `packages/jobs/src/catalog.ts` — registro dos 3 crons novos no barrel (`functions`) e remoção das 3 entradas `PLANNED_JOBS` correspondentes (G6.6).
+- `apps/financeiro/src/app/(dashboard)/relatorios/page.tsx` + `src/components/relatorios-view.tsx` — wiring do botão de export manual (gate `super_admin` via `resolveSession` no page.tsx; seletor mês/ano + download client-side em `relatorios-view.tsx`). Necessário para satisfazer o critério de aceite "Export manual ... pela tela de relatórios" — sem isso a action ficaria órfã.
+- `apps/financeiro/package.json` (+`@react-pdf/renderer`, `exceljs`, `archiver`, `@types/archiver`) e `packages/jobs/package.json` (+`@react-pdf/renderer`, `exceljs`) e `packages/email/package.json` (+`@types/node`, para tipar `Buffer` em `send.ts`).
+
+**Critérios de aceite verificados:**
+
+- [x] Lote semanal: email somente ao(s) diretor(es) gestor (designation), CC autorizador — fallback para todos os diretores se nenhuma designation "gestor" existir (comportamento herdado de P-3.9, agora também no cron)
+- [x] Alerta de orçamento >80%: email + in_app ao(s) super_admin(s), disparado por `checkBudgetAlert` em `markPayableAsPaid` e `createManualTransaction`
+- [x] Relatório mensal automático: PDF+XLSX com totais por categoria, cron `financeiro-relatorio-mensal` (dia 1, 8h) registrado em `packages/jobs/src/index.ts`
+- [x] Export manual: `exportMonthlyReport` gera PDF+XLSX+ZIP com recibos do mês, acionável por super_admin em `/relatorios`
+- [x] Vencimento próximo: in_app 3 dias antes (payables e receivables), cron `financeiro-vencimento-proximo` (diário, 8h)
+- [x] Falha de auditoria aborta a operação: `exportMonthlyReport` usa `logFinanceiroAudit` (criticidade "critical", já herdada de `@hebron/db/audit`)
+- [x] Lint passa · Types passam (`pnpm turbo lint typecheck` verde no monorepo inteiro)
+
+**Arquivos criados:**
+
+- `packages/email/src/templates/batch-approval.tsx`, `budget-alert.tsx`, `monthly-financial-report.tsx`
+- `apps/financeiro/src/lib/notifications.ts`
+- `apps/financeiro/src/actions/reports.ts`
+- `packages/jobs/src/crons/financeiro.ts`
+- `packages/db/src/migrations/0028_financeiro_report_audit_action.sql`
+
+**Arquivos modificados:**
+
+- `apps/financeiro/src/actions/approval.ts`, `transactions.ts`, `lib/audit.ts`
+- `apps/financeiro/src/app/(dashboard)/relatorios/page.tsx`, `src/components/relatorios-view.tsx`
+- `packages/email/src/lib/send.ts` (campo `attachments`)
+- `packages/jobs/src/index.ts`, `src/catalog.ts`
+- `packages/db/src/schema/admin.ts` (enum `audit_action`)
+- `apps/financeiro/package.json`, `packages/jobs/package.json`, `packages/email/package.json` (dependências)

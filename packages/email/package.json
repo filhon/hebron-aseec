@@ -21,6 +21,7 @@
   "devDependencies": {
     "@hebron/eslint-config": "workspace:*",
     "@hebron/typescript-config": "workspace:*",
+    "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "eslint": "^9.13.0",
     "react": "^19.0.0",

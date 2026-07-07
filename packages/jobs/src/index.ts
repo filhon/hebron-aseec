@@ -3,6 +3,11 @@ export { inngest } from "./client";
 import { ensureMonthlyMeetingsCron } from "./crons/admin";
 import { editalClosingRemindersCron } from "./crons/documentos";
 import {
+  dueDateRemindersCron,
+  monthlyReportCron,
+  weeklyBatchCreationCron,
+} from "./crons/financeiro";
+import {
   evaluationRemindersCron,
   homologacaoAutoApproveCron,
   reportRemindersCron,
@@ -19,6 +24,9 @@ export const functions = [
   reportRemindersCron,
   evaluationRemindersCron,
   homologacaoAutoApproveCron,
+  weeklyBatchCreationCron,
+  dueDateRemindersCron,
+  monthlyReportCron,
 ];
 
 export { PLANNED_JOBS } from "./catalog";

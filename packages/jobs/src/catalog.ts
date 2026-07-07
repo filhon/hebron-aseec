@@ -25,34 +25,6 @@ export interface PlannedJob {
 
 export const PLANNED_JOBS: PlannedJob[] = [
   {
-    id: "financeiro-lote-semanal",
-    name: "Financeiro: lote semanal de aprovação de pagamentos",
-    cron: "0 8 * * 1",
-    sourcePrompt: "P-3.10",
-    description:
-      "Agrega pagamentos nascidos não-aprovados na semana e notifica o " +
-      "gestor designado (CC autorizador) para a aprovação em lote " +
-      "(BRAIN §6.5). Aguarda P-3.10 criar as actions de aprovação/lote.",
-  },
-  {
-    id: "financeiro-relatorio-mensal",
-    name: "Financeiro: relatório mensal consolidado",
-    cron: "0 8 1 * *",
-    sourcePrompt: "P-3.10",
-    description:
-      "Gera e envia o relatório financeiro mensal (PDF/XLSX, decisão " +
-      "D-6: @react-pdf/renderer + exceljs) aos diretores. Aguarda P-3.10.",
-  },
-  {
-    id: "financeiro-vencimento-proximo",
-    name: "Financeiro: contas a pagar/receber vencendo em breve",
-    cron: "0 8 * * *",
-    sourcePrompt: "P-3.9/P-3.10",
-    description:
-      "Lembrete de contas a pagar/receber com vencimento próximo. Aguarda " +
-      "P-3.9 criar as telas/queries de contas a pagar e receber.",
-  },
-  {
     id: "tarefas-recorrencia",
     name: "Tarefas: recorrência de tarefas",
     cron: "0 6 * * *",

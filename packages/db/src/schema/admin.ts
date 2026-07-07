@@ -90,6 +90,9 @@ export const auditActionEnum = adminSchema.enum("audit_action", [
   "user.anonymized",
   // Financeiro — bank-account-form (P-3.9), added via ALTER TYPE
   "financeiro.account.created",
+  // Financeiro — export manual de relatório mensal (P-3.10), added via
+  // ALTER TYPE in 0028_financeiro_report_audit_action.sql
+  "financeiro.report.exported",
 ]);
 
 export const meetingTypeEnum = adminSchema.enum("meeting_type", [

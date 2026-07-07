@@ -1,12 +1,20 @@
 "use client";
 
 import { useState } from "react";
-import { TrendingUp, TrendingDown, ArrowUp, ArrowDown } from "lucide-react";
+import { useAction } from "next-safe-action/hooks";
+import {
+  Download,
+  TrendingUp,
+  TrendingDown,
+  ArrowUp,
+  ArrowDown,
+} from "lucide-react";
 import type {
   AccountCategory,
   BankAccount,
   Transaction,
 } from "@hebron/types/financeiro";
+import { exportMonthlyReport } from "../actions/reports";
 
 function fmtBRL(n: number): string {
   return new Intl.NumberFormat("pt-BR", {
@@ -106,14 +114,38 @@ interface RelatoriosViewProps {
   transactions: Transaction[];
   categories: AccountCategory[];
   bankAccounts: BankAccount[];
+  canExport: boolean;
+}
+
+function downloadBase64Zip(fileName: string, base64: string): void {
+  const byteChars = atob(base64);
+  const bytes = new Uint8Array(byteChars.length);
+  for (let i = 0; i < byteChars.length; i++) bytes[i] = byteChars.charCodeAt(i);
+  const blob = new Blob([bytes], { type: "application/zip" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = fileName;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 export function RelatoriosView({
   transactions,
   categories,
   bankAccounts,
+  canExport,
 }: RelatoriosViewProps) {
   const [tab, setTab] = useState<Tab>("DRE");
+  const now = new Date();
+  const [exportMonth, setExportMonth] = useState(now.getMonth() + 1);
+  const [exportYear, setExportYear] = useState(now.getFullYear());
+
+  const exportAction = useAction(exportMonthlyReport, {
+    onSuccess({ data }) {
+      if (data) downloadBase64Zip(data.fileName, data.base64);
+    },
+  });
 
   const totalIn = transactions
     .filter((t) => t.type === "credito")
@@ -194,6 +226,71 @@ export function RelatoriosView({
           ))}
         </div>
       </div>
+
+      {canExport && (
+        <div
+          className="flex flex-wrap items-center gap-3 px-6 py-3 border-b"
+          style={{ background: "var(--surface)", borderColor: "var(--border)" }}
+        >
+          <span
+            className="text-[10px] font-bold uppercase tracking-[0.14em]"
+            style={{ color: "var(--fg-muted)" }}
+          >
+            Exportar relatório mensal
+          </span>
+          <select
+            value={exportMonth}
+            onChange={(e) => setExportMonth(Number(e.target.value))}
+            className="rounded-(--radius) border px-2 py-1.5 text-xs font-semibold"
+            style={{ borderColor: "var(--border)", color: "var(--fg)" }}
+            aria-label="Mês do relatório"
+          >
+            {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+              <option key={m} value={m}>
+                {String(m).padStart(2, "0")}
+              </option>
+            ))}
+          </select>
+          <select
+            value={exportYear}
+            onChange={(e) => setExportYear(Number(e.target.value))}
+            className="rounded-(--radius) border px-2 py-1.5 text-xs font-semibold"
+            style={{ borderColor: "var(--border)", color: "var(--fg)" }}
+            aria-label="Ano do relatório"
+          >
+            {[
+              now.getFullYear(),
+              now.getFullYear() - 1,
+              now.getFullYear() - 2,
+            ].map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
+          </select>
+          <button
+            onClick={() =>
+              exportAction.execute({ year: exportYear, month: exportMonth })
+            }
+            disabled={exportAction.isPending}
+            className="flex items-center gap-1.5 rounded-(--radius) px-3 py-1.5 text-xs font-bold text-white disabled:opacity-60"
+            style={{ background: "var(--hb-blue)" }}
+          >
+            <Download className="h-3.5 w-3.5" />
+            {exportAction.isPending
+              ? "Gerando…"
+              : "Baixar PDF + XLSX + recibos (.zip)"}
+          </button>
+          {exportAction.result.serverError && (
+            <span
+              className="text-xs"
+              style={{ color: "var(--hb-orange-deep)" }}
+            >
+              {exportAction.result.serverError}
+            </span>
+          )}
+        </div>
+      )}
 
       <div className="p-6 space-y-5">
         {tab === "DRE" && (

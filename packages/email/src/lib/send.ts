@@ -52,6 +52,12 @@ export interface SendEmailOptions {
   subject?: string;
   /** Endereço "De" (padrão: noreply@hebronaseec.com.br) */
   from?: string;
+  /**
+   * Anexos (ex.: PDF/XLSX do relatório mensal — P-3.10). Repassado
+   * diretamente à API do Resend, que aceita `content` como Buffer ou string
+   * base64.
+   */
+  attachments?: { filename: string; content: Buffer | string }[];
 }
 
 export interface CreateNotificationOptions {
@@ -137,6 +143,7 @@ export async function createNotification({
       cc: email.cc,
       subject: email.subject ?? data.title,
       html,
+      attachments: email.attachments,
     });
 
     if (error) {

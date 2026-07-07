@@ -1,5 +1,6 @@
 "use server";
 
+import * as React from "react";
 import { z } from "zod";
 import { eq, and, isNull, inArray, sql } from "drizzle-orm";
 import { db } from "@hebron/db/client";
@@ -13,35 +14,25 @@ import {
   designations,
   users,
 } from "@hebron/db/schema";
+import { makeNotificationInserter } from "@hebron/db/notifications";
 import { createNotification } from "@hebron/email";
-import type { InsertNotificationFn } from "@hebron/email";
+import { BatchApprovalEmail } from "@hebron/email/templates/batch-approval";
 import {
   diretorWithDesignationAction,
   superAdminAction,
 } from "../lib/safe-action";
 import { logFinanceiroAudit } from "../lib/audit";
+import { checkBudgetAlert, notifyPayablePaid } from "../lib/notifications";
+
+const FINANCEIRO_BASE_URL =
+  process.env.NEXT_PUBLIC_FINANCEIRO_URL ??
+  "https://financeiro.hebronaseec.com.br";
 
 // ---------------------------------------------------------------------------
 // Shared insert helper for createNotification
 // ---------------------------------------------------------------------------
 
-const insertNotification: InsertNotificationFn = async (data) => {
-  const inserted = await db
-    .insert(notifications)
-    .values({
-      userId: data.userId,
-      channel: data.channel as "in_app" | "email",
-      type: data.type,
-      title: data.title,
-      body: data.body ?? null,
-      payload: data.payload ?? null,
-      sentAt: data.sentAt ? new Date(data.sentAt) : null,
-    })
-    .returning({ id: notifications.id });
-  const row = inserted[0];
-  if (!row) throw new Error("Falha ao inserir notificação");
-  return { id: row.id };
-};
+const insertNotification = makeNotificationInserter();
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -135,7 +126,11 @@ export const createWeeklyBatch = superAdminAction
     // "gestor" estiver configurada ainda, cai de volta para todos os
     // diretores — rede de segurança para não deixar o lote sem notificados.
     const gestorRows = await db
-      .select({ userId: designations.userId, email: users.email })
+      .select({
+        userId: designations.userId,
+        email: users.email,
+        fullName: users.fullName,
+      })
       .from(designations)
       .innerJoin(users, eq(users.id, designations.userId))
       .where(eq(designations.type, "gestor"));
@@ -149,7 +144,11 @@ export const createWeeklyBatch = superAdminAction
     ).map((r) => r.email);
 
     const diretorRows = await db
-      .select({ userId: roleAssignments.userId, email: users.email })
+      .select({
+        userId: roleAssignments.userId,
+        email: users.email,
+        fullName: users.fullName,
+      })
       .from(roleAssignments)
       .innerJoin(users, eq(users.id, roleAssignments.userId))
       .where(eq(roleAssignments.role, "diretor"));
@@ -157,22 +156,13 @@ export const createWeeklyBatch = superAdminAction
     const usingGestorRecipients = gestorRows.length > 0;
     const recipients = usingGestorRecipients ? gestorRows : diretorRows;
 
-    const totalAmount = pendingPayables
-      .reduce((sum, p) => sum + parseFloat(p.amount), 0)
-      .toFixed(2);
-
-    const emailHtml = `
-<p>Olá,</p>
-<p>Um lote de pagamentos foi criado para a semana de <strong>${weekStart}</strong> a <strong>${weekEnd}</strong> e aguarda sua aprovação.</p>
-<ul>
-  <li>Contas a pagar: <strong>${pendingPayables.length}</strong></li>
-  <li>Valor total: <strong>R$ ${totalAmount}</strong></li>
-</ul>
-<p>Acesse o módulo financeiro para aprovar o lote.</p>
-<p style="font-style:italic;color:#666;">Hebron Aseec — Sistema Financeiro</p>
-`.trim();
+    const totalAmount = pendingPayables.reduce(
+      (sum, p) => sum + parseFloat(p.amount),
+      0,
+    );
 
     for (const d of recipients) {
+      const displayName = d.fullName ?? d.email;
       await createNotification({
         insert: insertNotification,
         data: {
@@ -181,8 +171,9 @@ export const createWeeklyBatch = superAdminAction
           type: "financeiro.batch.created",
           title: `Lote de pagamentos aguarda aprovação (${weekStart})`,
           body:
-            `${pendingPayables.length} conta(s) totalizando R$ ${totalAmount} ` +
-            `aguardam aprovação — semana ${weekStart} a ${weekEnd}.`,
+            `${pendingPayables.length} conta(s) totalizando ` +
+            `R$ ${totalAmount.toFixed(2)} aguardam aprovação — semana ` +
+            `${weekStart} a ${weekEnd}.`,
           payload: { batchId: batch.id, weekStart, weekEnd },
         },
         email: {
@@ -191,7 +182,14 @@ export const createWeeklyBatch = superAdminAction
           // o fallback (todos os diretores) já inclui o(s) autorizador(es).
           cc: usingGestorRecipients ? autorizadorEmails : undefined,
           subject: `[Financeiro] Lote de pagamentos aguarda aprovação — ${weekStart}`,
-          html: emailHtml,
+          template: React.createElement(BatchApprovalEmail, {
+            recipientName: displayName,
+            weekStart,
+            weekEnd,
+            payableCount: pendingPayables.length,
+            totalAmount,
+            financeiroUrl: FINANCEIRO_BASE_URL,
+          }),
         },
         resendApiKey: process.env.RESEND_API_KEY,
       });
@@ -491,11 +489,22 @@ export const markPayableAsPaid = superAdminAction
         dbTx,
       );
 
-      return ledgerTx;
+      return { ledgerTx, costCenterId: payable.costCenterId };
     });
+
+    // Notificações (P-3.10) — best-effort, fora da transação de governança:
+    // a falha de um email/in_app não deve desfazer um pagamento já auditado.
+    await notifyPayablePaid(input.payableId);
+    if (paymentTx.costCenterId) {
+      await checkBudgetAlert({
+        costCenterId: paymentTx.costCenterId,
+        transactionDate: paymentTx.ledgerTx.date,
+        newTransactionAmount: parseFloat(paymentTx.ledgerTx.amount),
+      });
+    }
 
     return {
       payable: { id: input.payableId, status: "pago" },
-      transaction: paymentTx,
+      transaction: paymentTx.ledgerTx,
     };
   });
