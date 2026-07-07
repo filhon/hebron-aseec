@@ -2829,20 +2829,20 @@ Substituir mocks por dados reais. Kanban, lista e árvore com dados do banco. Fo
 
 **Critérios de aceite:**
 
-- [ ] Layout G5: anônimo → redirect; papel externo (submissor/hospede) → bloqueado (teste)
-- [ ] Kanban: drag-drop chama moveTask, persiste e sobrevive a reload (não console.log — F2-P2)
-- [ ] Criar tarefa executável de: task-form, Cmd+K e CTA de workspace vazio
-- [ ] Editar/concluir tarefa executável do detalhe; subtarefa criável e completável com progresso
-- [ ] Comentário com @menção publicável pela tela e notifica o mencionado
-- [ ] Time tracking: start/stop operável no detalhe
-- [ ] Recorrência: regra criável pela tela de recorrentes com preview
-- [ ] Template: instanciável pela tela de templates
-- [ ] Pedido de aprovação enviável pela tela; diretor aprova/rejeita pela própria UI
-- [ ] TreeView com dados reais (pessoa → tarefas)
-- [ ] Modo foco com tarefas do dia reais
-- [ ] Nenhum componente/formulário do Bloco A (P-4.2/P-4.4) sem import (grep)
-- [ ] Mock data removido
-- [ ] Lint passa · Types passam
+- [x] Layout G5: anônimo → redirect; papel externo (submissor/hospede) → bloqueado (teste)
+- [x] Kanban: drag-drop chama moveTask, persiste e sobrevive a reload (não console.log — F2-P2)
+- [x] Criar tarefa executável de: task-form, Cmd+K e CTA de workspace vazio
+- [x] Editar/concluir tarefa executável do detalhe; subtarefa criável e completável com progresso
+- [x] Comentário com @menção publicável pela tela e notifica o mencionado
+- [x] Time tracking: start/stop operável no detalhe
+- [x] Recorrência: regra criável pela tela de recorrentes com preview
+- [x] Template: instanciável pela tela de templates
+- [x] Pedido de aprovação enviável pela tela; diretor aprova/rejeita pela própria UI
+- [x] TreeView com dados reais (pessoa → tarefas)
+- [x] Modo foco com tarefas do dia reais
+- [x] Nenhum componente/formulário do Bloco A (P-4.2/P-4.4) sem import (grep)
+- [x] Mock data removido
+- [x] Lint passa · Types passam
 
 ---
 

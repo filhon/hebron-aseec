@@ -2,12 +2,24 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import type { Task, TaskStatus, Workspace } from "@hebron/types/tarefas";
-import { PageHeader } from "@hebron/ui";
-import { GitBranch, LayoutGrid, Rows3 } from "lucide-react";
+import { useAction } from "next-safe-action/hooks";
+import type { Tag, Task, TaskStatus, Workspace } from "@hebron/types/tarefas";
+import {
+  Button,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  EmptyState,
+  PageHeader,
+} from "@hebron/ui";
+import { GitBranch, LayoutGrid, ListTodo, Plus, Rows3 } from "lucide-react";
+import { createTask, updateTaskStatus } from "../../../../actions/tasks";
+import type { Person } from "../../../../lib/queries";
 import { KanbanBoard } from "../../../../components/kanban-board";
 import { TaskList } from "../../../../components/task-list";
 import { TreeView } from "../../../../components/tree-view";
+import { TaskForm } from "../../../../components/task-form";
 
 function cn(...cls: (string | false | null | undefined)[]): string {
   return cls.filter(Boolean).join(" ");
@@ -33,26 +45,44 @@ const VIEW_CFG: Record<BoardView, { label: string; icon: typeof LayoutGrid }> =
 
 export interface WorkspaceBoardClientProps {
   workspace: Workspace;
-  initialTasks: Task[];
+  tasks: Task[];
+  assignableUsers: Person[];
+  tags: Tag[];
 }
 
 export function WorkspaceBoardClient({
   workspace,
-  initialTasks,
+  tasks,
+  assignableUsers,
+  tags,
 }: WorkspaceBoardClientProps) {
   const router = useRouter();
   const [view, setView] = useState<BoardView>("kanban");
-  const [tasks, setTasks] = useState<Task[]>(initialTasks);
+  const [creating, setCreating] = useState(false);
 
   const openCount = useMemo(
     () => tasks.filter((t) => t.status !== "concluido").length,
     [tasks],
   );
 
+  const { execute: moveTask } = useAction(updateTaskStatus, {
+    onSuccess() {
+      router.refresh();
+    },
+  });
+
+  const { execute: submitCreateTask, isPending: isCreating } = useAction(
+    createTask,
+    {
+      onSuccess() {
+        setCreating(false);
+        router.refresh();
+      },
+    },
+  );
+
   function handleMove(taskId: string, targetStatus: TaskStatus) {
-    setTasks((prev) =>
-      prev.map((t) => (t.id === taskId ? { ...t, status: targetStatus } : t)),
-    );
+    moveTask({ taskId, status: targetStatus });
   }
 
   function goToTask(id: string) {
@@ -65,36 +95,82 @@ export function WorkspaceBoardClient({
         title={WORKSPACE_LABEL[workspace]}
         description={`${openCount} tarefa${openCount === 1 ? "" : "s"} em aberto neste módulo.`}
         actions={
-          <div className="flex items-center gap-1 rounded-full border border-(--border) bg-(--surface-alt) p-1">
-            {(Object.keys(VIEW_CFG) as BoardView[]).map((key) => {
-              const cfg = VIEW_CFG[key];
-              const Icon = cfg.icon;
-              const active = view === key;
-              return (
-                <button
-                  key={key}
-                  onClick={() => setView(key)}
-                  className={cn(
-                    "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors",
-                    active
-                      ? "bg-(--surface) text-(--hb-blue) shadow-(--shadow-xs)"
-                      : "text-(--fg-muted) hover:text-(--fg)",
-                  )}
-                >
-                  <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-                  {cfg.label}
-                </button>
-              );
-            })}
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1 rounded-full border border-(--border) bg-(--surface-alt) p-1">
+              {(Object.keys(VIEW_CFG) as BoardView[]).map((key) => {
+                const cfg = VIEW_CFG[key];
+                const Icon = cfg.icon;
+                const active = view === key;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => setView(key)}
+                    className={cn(
+                      "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors",
+                      active
+                        ? "bg-(--surface) text-(--hb-blue) shadow-(--shadow-xs)"
+                        : "text-(--fg-muted) hover:text-(--fg)",
+                    )}
+                  >
+                    <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+                    {cfg.label}
+                  </button>
+                );
+              })}
+            </div>
+            <Button onClick={() => setCreating(true)}>
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              Criar tarefa
+            </Button>
           </div>
         }
       />
 
-      {view === "kanban" && (
-        <KanbanBoard tasks={tasks} onMove={handleMove} onCardClick={goToTask} />
+      {tasks.length === 0 ? (
+        <EmptyState
+          icon={ListTodo}
+          title="Nenhuma tarefa neste módulo"
+          description="Assim que uma tarefa for criada, ela aparece aqui."
+          action={
+            <Button onClick={() => setCreating(true)}>
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              Criar tarefa
+            </Button>
+          }
+        />
+      ) : (
+        <>
+          {view === "kanban" && (
+            <KanbanBoard
+              tasks={tasks}
+              onMove={handleMove}
+              onCardClick={goToTask}
+            />
+          )}
+          {view === "lista" && (
+            <TaskList tasks={tasks} onTaskClick={goToTask} />
+          )}
+          {view === "arvore" && (
+            <TreeView tasks={tasks} onTaskClick={goToTask} />
+          )}
+        </>
       )}
-      {view === "lista" && <TaskList tasks={tasks} onTaskClick={goToTask} />}
-      {view === "arvore" && <TreeView tasks={tasks} onTaskClick={goToTask} />}
+
+      <Dialog open={creating} onOpenChange={setCreating}>
+        <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Nova tarefa</DialogTitle>
+          </DialogHeader>
+          <TaskForm
+            initialValues={{ workspace }}
+            assignableUsers={assignableUsers}
+            availableTags={tags}
+            onSubmit={(values) => submitCreateTask(values)}
+            onCancel={() => setCreating(false)}
+            isLoading={isCreating}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

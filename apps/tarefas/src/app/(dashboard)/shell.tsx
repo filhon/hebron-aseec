@@ -1,6 +1,8 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
+import { useAction } from "next-safe-action/hooks";
+import type { Task } from "@hebron/types/tarefas";
 import { AppShell, type NavSection, type AppShortcut } from "@hebron/ui";
 import {
   CheckCircle,
@@ -22,7 +24,8 @@ import {
   Megaphone,
   Cpu,
 } from "lucide-react";
-import { mockTasks } from "../../lib/mock-data";
+import { createTask } from "../../actions/tasks";
+import { logoutAction } from "../../actions/auth";
 import { CommandMenu } from "../../components/command-menu";
 
 const SECTIONS: NavSection[] = [
@@ -145,23 +148,32 @@ const APPS: AppShortcut[] = [
 ];
 
 interface ShellProps {
+  user: { fullName: string | null; email: string | null };
+  tasks: Task[];
   children: React.ReactNode;
 }
 
-export default function TarefasShell({ children }: ShellProps) {
+export default function TarefasShell({ user, tasks, children }: ShellProps) {
   const path = usePathname();
   const router = useRouter();
+
+  const { execute: quickCreateTask } = useAction(createTask, {
+    onSuccess({ data }) {
+      if (data?.task) router.push(`/tarefa/${data.task.id}`);
+      router.refresh();
+    },
+  });
 
   return (
     <AppShell
       sections={SECTIONS}
       apps={APPS}
       user={{
-        name: "Filipe Honório",
-        email: "fcbfilipesantos@gmail.com",
+        name: user.fullName ?? user.email ?? "",
+        email: user.email ?? "",
       }}
       profileHref="/configuracoes"
-      onLogout={() => {}}
+      onLogout={() => void logoutAction()}
       currentPath={path}
       appName="Tarefas"
       logo={
@@ -174,9 +186,20 @@ export default function TarefasShell({ children }: ShellProps) {
     >
       {children}
       <CommandMenu
-        tasks={mockTasks}
+        tasks={tasks}
         onSelectTask={(id) => router.push(`/tarefa/${id}`)}
-        onCreateTask={() => router.push("/")}
+        onCreateTask={(title) =>
+          quickCreateTask({
+            title,
+            description: null,
+            workspace: "administrativo",
+            priority: "media",
+            dueDate: null,
+            assigneeIds: [],
+            tagIds: [],
+            recurrenceRule: null,
+          })
+        }
       />
     </AppShell>
   );

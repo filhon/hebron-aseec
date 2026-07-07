@@ -22,7 +22,7 @@ interface RulePattern {
   dayOfMonth: number | null;
 }
 
-export function computeNextRun(rule: RulePattern, from: Date): Date {
+function computeNextRun(rule: RulePattern, from: Date): Date {
   const next = new Date(from);
   switch (rule.type) {
     case "diaria":

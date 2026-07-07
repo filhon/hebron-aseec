@@ -1,28 +1,64 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useAction } from "next-safe-action/hooks";
 import type {
-  Comment,
+  Tag,
   Task,
   TaskPriority,
   TaskStatus,
-  TimeEntry,
   Workspace,
 } from "@hebron/types/tarefas";
-import { Avatar } from "@hebron/ui";
+import {
+  Avatar,
+  Button,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@hebron/ui";
 import {
   Check,
   ChevronLeft,
   Clock3,
   Paperclip,
+  Pencil,
+  Plus,
   RefreshCw,
   ShieldCheck,
+  ThumbsDown,
+  ThumbsUp,
   UserX,
 } from "lucide-react";
-import { mockTasks } from "../../../../lib/mock-data";
+import {
+  createSubtask,
+  toggleSubtask,
+  updateTask,
+  updateTaskStatus,
+} from "../../../../actions/tasks";
+import { createComment } from "../../../../actions/comments";
+import {
+  startTimeEntry,
+  stopTimeEntry,
+} from "../../../../actions/time-tracking";
+import {
+  requestApproval,
+  resolveApprovalRequest,
+} from "../../../../actions/approvals";
+import type { Person } from "../../../../lib/queries";
+import { CommentForm } from "../../../../components/comment-form";
 import { CommentThread } from "../../../../components/comment-thread";
 import { TimeTracker } from "../../../../components/time-tracker";
+import { TaskForm } from "../../../../components/task-form";
+import { SubtaskForm } from "../../../../components/subtask-form";
+import { ApprovalRequestForm } from "../../../../components/approval-request-form";
 
 function cn(...cls: (string | false | null | undefined)[]): string {
   return cls.filter(Boolean).join(" ");
@@ -117,79 +153,104 @@ function fileSizeLabel(bytes: number): string {
 
 export interface TaskDetailClientProps {
   initialTask: Task;
+  currentUserId: string;
+  isApprover: boolean;
+  isSuperAdmin: boolean;
+  assignableUsers: Person[];
+  approvers: Person[];
+  tags: Tag[];
 }
 
-export function TaskDetailClient({ initialTask }: TaskDetailClientProps) {
-  const [task, setTask] = useState<Task>(initialTask);
+export function TaskDetailClient({
+  initialTask: task,
+  currentUserId,
+  isApprover,
+  isSuperAdmin,
+  assignableUsers,
+  approvers,
+  tags,
+}: TaskDetailClientProps) {
+  const router = useRouter();
+  const [editing, setEditing] = useState(false);
+  const [addingSubtask, setAddingSubtask] = useState(false);
+  const [requestingApproval, setRequestingApproval] = useState(false);
 
-  const directory = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const t of mockTasks) {
-      map.set(t.createdBy, t.createdByName);
-      for (const a of t.assignees) map.set(a.userId, a.userName);
-    }
-    return [...map.entries()].map(([id, name]) => ({ id, name }));
-  }, []);
+  function refresh() {
+    router.refresh();
+  }
 
-  function toggleSubtask(subtaskId: string) {
-    setTask((prev) => {
-      const subtasks = prev.subtasks.map((s) =>
-        s.id === subtaskId
-          ? {
-              ...s,
-              isDone: !s.isDone,
-              completedAt: !s.isDone ? new Date() : null,
-            }
-          : s,
-      );
-      const done = subtasks.filter((s) => s.isDone).length;
-      return {
-        ...prev,
-        subtasks,
-        subtaskProgress:
-          subtasks.length > 0 ? { done, total: subtasks.length } : null,
-      };
+  const { execute: submitUpdateTask, isPending: isSavingTask } = useAction(
+    updateTask,
+    {
+      onSuccess() {
+        setEditing(false);
+        refresh();
+      },
+    },
+  );
+
+  const { execute: submitStatusChange } = useAction(updateTaskStatus, {
+    onSuccess: refresh,
+  });
+
+  const { execute: submitCreateSubtask, isPending: isCreatingSubtask } =
+    useAction(createSubtask, {
+      onSuccess() {
+        setAddingSubtask(false);
+        refresh();
+      },
     });
-  }
 
-  function addComment(content: string, mentions: string[]) {
-    const newComment: Comment = {
-      id: `comment-${task.id}-${Date.now()}`,
-      taskId: task.id,
-      authorId: "user-current",
-      authorName: "Filipe Honório",
-      content,
-      mentions,
-      createdAt: new Date(),
-      updatedAt: null,
-    };
-    setTask((prev) => ({ ...prev, comments: [...prev.comments, newComment] }));
-  }
+  const { execute: submitToggleSubtask } = useAction(toggleSubtask, {
+    onSuccess: refresh,
+  });
 
-  function handleStartTimer() {
-    const entry: TimeEntry = {
-      id: `time-${task.id}-${Date.now()}`,
-      taskId: task.id,
-      userId: "user-current",
-      userName: "Filipe Honório",
-      startedAt: new Date(),
-      endedAt: null,
-      durationMinutes: null,
-      notes: null,
-    };
-    setTask((prev) => ({ ...prev, timeEntries: [...prev.timeEntries, entry] }));
-  }
+  const { execute: submitComment, isPending: isSendingComment } = useAction(
+    createComment,
+    { onSuccess: refresh },
+  );
 
-  function handleStopTimer(elapsedMinutes: number) {
-    setTask((prev) => ({
-      ...prev,
-      timeEntries: prev.timeEntries.map((e) =>
-        e.endedAt === null
-          ? { ...e, endedAt: new Date(), durationMinutes: elapsedMinutes }
-          : e,
-      ),
-    }));
-  }
+  const { execute: submitStartTimer } = useAction(startTimeEntry, {
+    onSuccess: refresh,
+  });
+  const { execute: submitStopTimer } = useAction(stopTimeEntry, {
+    onSuccess: refresh,
+  });
+
+  const { execute: submitRequestApproval, isPending: isRequestingApproval } =
+    useAction(requestApproval, {
+      onSuccess() {
+        setRequestingApproval(false);
+        refresh();
+      },
+    });
+
+  const { execute: submitResolveApproval } = useAction(resolveApprovalRequest, {
+    onSuccess: refresh,
+  });
+
+  const directory = [
+    { id: task.createdBy, name: task.createdByName },
+    ...task.assignees.map((a) => ({ id: a.userId, name: a.userName })),
+    ...assignableUsers,
+  ].filter((p, i, arr) => arr.findIndex((x) => x.id === p.id) === i);
+
+  const approvalRequest = task.approvalRequest;
+
+  const canManage =
+    isSuperAdmin ||
+    task.createdBy === currentUserId ||
+    task.assignees.some((a) => a.userId === currentUserId);
+
+  const canRequestApproval =
+    canManage && approvalRequest?.status !== "pendente";
+
+  const canResolveApproval =
+    approvalRequest?.status === "pendente" &&
+    (isSuperAdmin ||
+      (isApprover && approvalRequest.approverId === currentUserId));
+
+  const runningTimeEntry = task.timeEntries.find((e) => e.endedAt === null);
 
   const statusCfg = STATUS_CFG[task.status];
   const priorityCfg = PRIORITY_CFG[task.priority];
@@ -218,21 +279,58 @@ export function TaskDetailClient({ initialTask }: TaskDetailClientProps) {
               >
                 {priorityCfg.label}
               </span>
-              <span
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase",
-                  statusCfg.bg,
-                  statusCfg.fg,
-                )}
-              >
-                <span className="h-1.5 w-1.5 rounded-full bg-current" />
-                {statusCfg.label}
-              </span>
+
+              {canManage ? (
+                <Select
+                  value={task.status}
+                  onValueChange={(v) =>
+                    submitStatusChange({
+                      taskId: task.id,
+                      status: v as TaskStatus,
+                    })
+                  }
+                >
+                  <SelectTrigger className="h-7 w-auto rounded-full border-none px-2.5 py-1 text-[10px] font-bold uppercase">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(STATUS_CFG) as TaskStatus[]).map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {STATUS_CFG[s].label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase",
+                    statusCfg.bg,
+                    statusCfg.fg,
+                  )}
+                >
+                  <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                  {statusCfg.label}
+                </span>
+              )}
+
               {task.needsManualAssignment && (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-(--color-destructive-muted) px-2.5 py-1 text-[10px] font-bold uppercase text-(--color-destructive)">
                   <UserX className="h-3 w-3" aria-hidden="true" />
                   Sem responsável
                 </span>
+              )}
+
+              {canManage && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="ml-auto"
+                  onClick={() => setEditing(true)}
+                >
+                  <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                  Editar
+                </Button>
               )}
             </div>
             <h1 className="font-(--font-editorial) text-(--text-2xl) leading-(--leading-tight) text-(--fg)">
@@ -255,19 +353,31 @@ export function TaskDetailClient({ initialTask }: TaskDetailClientProps) {
             )}
           </div>
 
-          {task.subtasks.length > 0 && (
-            <div className="rounded-(--radius-md) border border-(--border) bg-(--surface) px-5 py-5">
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-xs font-bold uppercase tracking-wide text-(--fg-muted)">
-                  Subtarefas
-                </h2>
+          <div className="rounded-(--radius-md) border border-(--border) bg-(--surface) px-5 py-5">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-xs font-bold uppercase tracking-wide text-(--fg-muted)">
+                Subtarefas
+              </h2>
+              <div className="flex items-center gap-2">
                 {task.subtaskProgress && (
                   <span className="text-xs font-semibold tabular-nums text-(--fg-muted)">
                     {task.subtaskProgress.done}/{task.subtaskProgress.total}
                   </span>
                 )}
+                {canManage && !addingSubtask && (
+                  <button
+                    onClick={() => setAddingSubtask(true)}
+                    className="flex items-center gap-1 text-xs font-semibold text-(--hb-blue) hover:underline"
+                  >
+                    <Plus className="h-3 w-3" aria-hidden="true" />
+                    Adicionar
+                  </button>
+                )}
               </div>
-              <ul className="flex flex-col gap-1.5">
+            </div>
+
+            {task.subtasks.length > 0 && (
+              <ul className="mb-3 flex flex-col gap-1.5">
                 {task.subtasks
                   .slice()
                   .sort((a, b) => a.order - b.order)
@@ -277,7 +387,12 @@ export function TaskDetailClient({ initialTask }: TaskDetailClientProps) {
                       className="flex items-center gap-2.5 rounded-(--radius-sm) px-2 py-1.5 transition-colors hover:bg-(--surface-alt)"
                     >
                       <button
-                        onClick={() => toggleSubtask(s.id)}
+                        onClick={() =>
+                          submitToggleSubtask({
+                            subtaskId: s.id,
+                            isDone: !s.isDone,
+                          })
+                        }
                         aria-label={
                           s.isDone
                             ? "Marcar como pendente"
@@ -312,8 +427,18 @@ export function TaskDetailClient({ initialTask }: TaskDetailClientProps) {
                     </li>
                   ))}
               </ul>
-            </div>
-          )}
+            )}
+
+            {addingSubtask && (
+              <SubtaskForm
+                taskId={task.id}
+                assignableUsers={assignableUsers}
+                onSubmit={(values) => submitCreateSubtask(values)}
+                onCancel={() => setAddingSubtask(false)}
+                isLoading={isCreatingSubtask}
+              />
+            )}
+          </div>
 
           {task.attachments.length > 0 && (
             <div className="rounded-(--radius-md) border border-(--border) bg-(--surface) px-5 py-5">
@@ -344,19 +469,25 @@ export function TaskDetailClient({ initialTask }: TaskDetailClientProps) {
 
           <TimeTracker
             timeEntries={task.timeEntries}
-            onStart={handleStartTimer}
-            onStop={handleStopTimer}
+            onStart={() => submitStartTimer({ taskId: task.id })}
+            onStop={() => {
+              if (runningTimeEntry) {
+                submitStopTimer({ timeEntryId: runningTimeEntry.id });
+              }
+            }}
           />
 
           <div className="rounded-(--radius-md) border border-(--border) bg-(--surface) px-5 py-5">
             <h2 className="mb-3 text-xs font-bold uppercase tracking-wide text-(--fg-muted)">
               Comentários
             </h2>
-            <CommentThread
-              comments={task.comments}
+            <CommentThread comments={task.comments} people={directory} />
+            <CommentForm
+              taskId={task.id}
               people={directory}
-              currentUserName="Filipe Honório"
-              onSubmit={addComment}
+              onSubmit={(values) => submitComment(values)}
+              isLoading={isSendingComment}
+              className="mt-4 border-t border-(--divider) pt-4"
             />
           </div>
         </div>
@@ -434,28 +565,69 @@ export function TaskDetailClient({ initialTask }: TaskDetailClientProps) {
             </div>
           )}
 
-          {task.approvalRequest && (
+          {approvalRequest && (
             <div className="rounded-(--radius-md) border border-(--hb-blue) bg-(--brand-muted) px-4 py-4">
               <h2 className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-(--hb-blue)">
                 <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
                 Aprovação da diretoria
               </h2>
               <p className="text-sm text-(--fg)">
-                Solicitado a {task.approvalRequest.approverName} —{" "}
+                Solicitado a {approvalRequest.approverName} —{" "}
                 <span className="font-semibold">
-                  {task.approvalRequest.status === "pendente"
+                  {approvalRequest.status === "pendente"
                     ? "Pendente"
-                    : task.approvalRequest.status === "aprovado"
+                    : approvalRequest.status === "aprovado"
                       ? "Aprovado"
                       : "Rejeitado"}
                 </span>
               </p>
-              {task.approvalRequest.notes && (
+              {approvalRequest.notes && (
                 <p className="mt-1.5 text-xs text-(--fg-muted)">
-                  {task.approvalRequest.notes}
+                  {approvalRequest.notes}
                 </p>
               )}
+              {canResolveApproval && (
+                <div className="mt-3 flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() =>
+                      submitResolveApproval({
+                        approvalRequestId: approvalRequest.id,
+                        decision: "aprovado",
+                        notes: null,
+                      })
+                    }
+                  >
+                    <ThumbsUp className="h-3.5 w-3.5" aria-hidden="true" />
+                    Aprovar
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      submitResolveApproval({
+                        approvalRequestId: approvalRequest.id,
+                        decision: "rejeitado",
+                        notes: null,
+                      })
+                    }
+                  >
+                    <ThumbsDown className="h-3.5 w-3.5" aria-hidden="true" />
+                    Rejeitar
+                  </Button>
+                </div>
+              )}
             </div>
+          )}
+
+          {canRequestApproval && (
+            <Button
+              variant="outline"
+              onClick={() => setRequestingApproval(true)}
+            >
+              <ShieldCheck className="h-4 w-4" aria-hidden="true" />
+              Pedir aprovação da diretoria
+            </Button>
           )}
 
           {task.sourceModule && (
@@ -493,6 +665,57 @@ export function TaskDetailClient({ initialTask }: TaskDetailClientProps) {
           </div>
         </div>
       </div>
+
+      <Dialog open={editing} onOpenChange={setEditing}>
+        <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Editar tarefa</DialogTitle>
+          </DialogHeader>
+          <TaskForm
+            mode="edit"
+            initialValues={{
+              title: task.title,
+              description: task.description,
+              workspace: task.workspace,
+              priority: task.priority,
+              dueDate: task.dueDate,
+              assigneeIds: task.assignees.map((a) => a.userId),
+              tagIds: task.tags.map((t) => t.id),
+            }}
+            assignableUsers={assignableUsers}
+            availableTags={tags}
+            onSubmit={(values) =>
+              submitUpdateTask({
+                taskId: task.id,
+                title: values.title,
+                description: values.description,
+                priority: values.priority,
+                dueDate: values.dueDate,
+                assigneeIds: values.assigneeIds,
+                tagIds: values.tagIds,
+              })
+            }
+            onCancel={() => setEditing(false)}
+            isLoading={isSavingTask}
+          />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={requestingApproval} onOpenChange={setRequestingApproval}>
+        <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Pedir aprovação da diretoria</DialogTitle>
+          </DialogHeader>
+          <ApprovalRequestForm
+            taskId={task.id}
+            currentStatus={task.status}
+            approvers={approvers}
+            onSubmit={(values) => submitRequestApproval(values)}
+            onCancel={() => setRequestingApproval(false)}
+            isLoading={isRequestingApproval}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,6 +1,10 @@
 import { notFound } from "next/navigation";
 import type { Workspace } from "@hebron/types/tarefas";
-import { mockTasks } from "../../../../lib/mock-data";
+import {
+  getAssignableUsers,
+  getTags,
+  getTasksByWorkspace,
+} from "../../../../lib/queries";
 import { WorkspaceBoardClient } from "./board-client";
 
 const WORKSPACES: Workspace[] = [
@@ -23,9 +27,19 @@ export default async function WorkspaceBoardPage({
     notFound();
   }
   const workspace = slug as Workspace;
-  const initialTasks = mockTasks.filter((t) => t.workspace === workspace);
+
+  const [tasks, assignableUsers, tags] = await Promise.all([
+    getTasksByWorkspace(workspace),
+    getAssignableUsers(),
+    getTags(),
+  ]);
 
   return (
-    <WorkspaceBoardClient workspace={workspace} initialTasks={initialTasks} />
+    <WorkspaceBoardClient
+      workspace={workspace}
+      tasks={tasks}
+      assignableUsers={assignableUsers}
+      tags={tags}
+    />
   );
 }

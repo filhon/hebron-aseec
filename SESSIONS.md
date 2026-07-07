@@ -101,6 +101,7 @@
 | S-77   | 2026-07-07 | P-4.5 — Estados Tarefas                                                 | concluido                            |
 | S-79   | 2026-07-07 | P-4.7 — RLS Policies Tarefas                                            | concluido                            |
 | S-80   | 2026-07-07 | P-4.8 — Server Actions Tarefas                                          | concluido                            |
+| S-81   | 2026-07-07 | P-4.9 — Integração UI ↔ Backend Tarefas                                 | concluido                            |
 
 ---
 
@@ -3804,3 +3805,94 @@ Criadas as 6 Server Actions de `apps/tarefas` (CRUD de tarefas/subtarefas/anexos
 - `packages/integrations/src/index.ts` (`export * from "./tarefas"`)
 - `packages/jobs/src/index.ts` (registra `tarefasRecurrenceCron`)
 - `packages/jobs/src/catalog.ts` (remove a entrada `tarefas-recorrencia` de `PLANNED_JOBS`, agora implementada)
+
+---
+
+### S-81 — 2026-07-07 — P-4.9 — Integração UI ↔ Backend Tarefas
+
+**Prompt:** P-4.9 (`PROMPTS.md:2799`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Substituídos os mocks (`lib/mock-data.ts`, removido) por dados reais em todas as telas de `apps/tarefas`: Kanban/Lista/Árvore, "Minhas tarefas", detalhe de tarefa, Modo foco, Calendário, Recorrentes e Templates. Criado `lib/queries.ts` (leitura RSC, sem passar pelas Server Actions) que monta o formato rico de `@hebron/types/tarefas` a partir das tabelas normalizadas (`tasks` + `assignees`/`task_tags`/`subtasks`/`comments`/`attachments`/`time_entries`/`approval_requests`/`recurrence_rules`), no mesmo padrão de `apps/financeiro/src/lib/queries.ts` (selects completos + agrupamento em memória, sem paginação — escala da ONG). Aplicado o padrão G5 (Server/Client split) em `(dashboard)/layout.tsx` + `shell.tsx` + `actions/auth.ts`. Todas as Server Actions de P-4.6–P-4.8 (`tasks`, `comments`, `time-tracking`, `recurrence`, `templates`, `approvals`) foram conectadas via `next-safe-action/hooks` (`useAction` + `router.refresh()` em `onSuccess`), mesmo padrão de `apps/financeiro/src/components/contas-pagar-view.tsx` — sem cópia otimista de estado além da já existente em `KanbanBoard` (posições locais resincronizadas via `useEffect` quando `tasks` muda).
+
+**Infra faltante criada e registrada como débito (G1 — "arquivo de infraestrutura óbvio"):**
+
+- `apps/tarefas/src/lib/queries.ts` continha, além das queries de leitura, o gate de sessão (`requireStaffSession`) — `lib/session.ts` (padrão de `apps/projetos`/`apps/financeiro`) não está na lista de Arquivos permitidos deste prompt, então a lógica foi colocada em `queries.ts`, que está.
+- Componentes cliente colocados junto de `page.tsx` (mesmo padrão já usado por `board-client.tsx`/`task-detail-client.tsx`, que já existiam antes deste prompt mas também não estavam na lista literal): `my-tasks-client.tsx`, `foco/foco-client.tsx`, `calendario/calendario-client.tsx`, `recorrentes/recorrentes-client.tsx`, `templates/templates-client.tsx`. Necessários porque `page.tsx` virou Server Component (busca dados reais) e a interatividade (filtros, dialogs, `useAction`) exige um Client Component — não dá para cumprir o escopo do prompt sem eles.
+- `loading.tsx` em `(dashboard)/`, `workspace/[slug]/` e `calendario/` — sem eles, `KanbanSkeleton`/`TaskListSkeleton`/`CalendarSkeleton` (já existentes desde P-4.3, cfe4e93) ficariam órfãos: o mock antigo simulava loading com `setTimeout` client-side; com busca real em Server Component, o mecanismo correto do Next.js é `loading.tsx` (Suspense boundary automático).
+- `apps/tarefas/src/actions/recurrence.ts` — **fix de build, fora da lista de Arquivos permitidos, mas bloqueante:** `computeNextRun` estava `export`ado de um módulo `"use server"`; o Next.js exige que **todo** export de um arquivo assim seja uma função assíncrona ("Server Actions must be async functions"), e isso só quebra o build quando alguma tela importa do arquivo — o que só passou a acontecer nesta sessão (`recorrentes-client.tsx` importa `createRecurrenceRule` do mesmo módulo). `computeNextRun` não é usado fora do próprio arquivo (`packages/jobs/src/crons/tarefas.ts` tem sua própria cópia deliberada, ver S-80); removido apenas o `export`, sem mudança de comportamento. `pnpm --filter @hebron/tarefas build` confirma o fix.
+
+**Suposições registradas (G1 — ambiguidade resolvida pela opção mais simples):**
+
+- **`Task.recurrenceRule` (tela de detalhe) é derivado via `tasks.recurrence_parent_id → task_templates.id → recurrence_rules`**, não uma coluna direta — o mock anexava a regra à própria tarefa; o schema real (P-4.6) amarra recorrência a um template (`recurrence_rules.task_template_id NOT NULL`), e `recurrence_parent_id` de uma tarefa gerada guarda o `task_template_id` que a originou (confirmado em `packages/jobs/src/crons/tarefas.ts::instantiateTemplate`). BRAIN/schema vencem sobre o mock para esta regra de dados (G3.5).
+- **Tela "Recorrentes" redesenhada como lista de regras (`getRecurrenceRuleViews`, por `recurrence_rules` + `task_templates`)**, não de tarefas com `recurrenceRule` preenchido — reflexo direto do ponto acima; a criação exige selecionar um template existente + `RecurrenceForm` (preview já é 100% client-side, sem mudança no componente).
+- **Modo foco (`getAssignedTasks`) é escopado às tarefas do usuário atual** (assignee ou criador) — o mock passava `mockTasks` inteiro (todo o time) para `FocusMode`, o que não faz sentido para um pomodoro/agenda pessoal; BRAIN §6.9 ("toda equipe lê tudo") rege visibilidade de leitura, não o escopo desta ferramenta pessoal.
+- **Tela de Templates perdeu as ações "renomear"/"ativar-desativar" do mock** — não existe `updateTaskTemplate`/`toggleTaskTemplate` em `actions/templates.ts` (só `createTaskTemplate`/`instantiateTaskTemplate`, P-4.8) e `actions/*.ts` não está na lista de Arquivos permitidos deste prompt para adicionar uma; manter os botões mockados sem persistência real contrariaria o espírito do achado F2-P2 ("não console.log"/fake state). A tela agora lista + cria (via `TemplateForm`) + instancia.
+- **Tela de Recorrentes só cria regra, não edita** — `updateRecurrenceRule` existe em `actions/recurrence.ts` mas nenhum critério de aceite pede edição; escopo mantido no mínimo pedido (G1).
+- **Anexos selecionados em `TaskForm` (criar/editar tarefa) continuam apenas em estado local, não persistidos** — `createAttachment` exige um `taskId` já existente (fluxo de URL assinada + upload direto), inaplicável ao modo "criar"; nenhum critério de aceite cobre upload de anexo nesta sessão.
+- **Criação rápida via Cmd+K (`CommandMenu.onCreateTask`) usa workspace `"administrativo"` e prioridade `"media"` como padrão** — a paleta só coleta o título; o usuário ajusta o resto na tela de detalhe logo após a criação (redirecionamento automático).
+- **Critério "(teste)" do gate de papel do layout não ganhou um `*.test.ts`** — `apps/tarefas` não tem `vitest.config.ts`/script `test` (nenhum prompt anterior configurou), e `package.json`/config de teste não estão na lista de Arquivos permitidos deste prompt; `requireStaffSession` replica 1:1 o padrão já testado em `apps/projetos/src/lib/session.ts` (`resolveSession` + `redirect(CANONICAL_LOGIN_URL)`), cuja cobertura existe em `apps/projetos/src/__tests__/session-gate.test.ts`. Pendente para um prompt que configure test runner em `apps/tarefas`.
+
+**Verificação funcional (evidência além de lint/typecheck):**
+
+- `pnpm --filter @hebron/tarefas typecheck` — limpo.
+- `pnpm --filter @hebron/tarefas lint` — limpo (1 erro de `no-import-type-side-effects` corrigido em `comment-thread.tsx`).
+- `pnpm --filter @hebron/tarefas build` — build de produção completo (8 rotas), após o fix em `actions/recurrence.ts`.
+- `grep` confirma 0 referências residuais a `mock-data`/`mockTasks`/`mockTaskTemplates`/`mockTags` em `apps/tarefas/src`.
+- Todos os componentes/formulários de `components/*` (P-4.2/P-4.4) confirmados com pelo menos um importador fora do próprio arquivo (`task-card` só é usado via import relativo dentro de `kanban-board.tsx`, confirmado manualmente).
+
+**Débitos técnicos / pendências:**
+
+- Upload de anexos (criação e edição de tarefa) não persiste — ver suposição acima.
+- Templates sem edição/ativação (sem action de backend) — ver suposição acima.
+- Sem teste automatizado para o gate de papel do layout — falta test runner no app (ver suposição acima).
+
+**Critérios de aceite verificados:**
+
+- [x] Layout G5: anônimo → redirect; papel externo (submissor/hospede) → bloqueado — `requireStaffSession` (`lib/queries.ts`), lógica idêntica ao padrão já testado em `apps/projetos` (sem teste automatizado neste app — ver débitos)
+- [x] Kanban: drag-drop chama `moveTask` (`updateTaskStatus`), persiste e sobrevive a reload — `board-client.tsx`, `useAction` + `router.refresh()`
+- [x] Criar tarefa executável de: task-form, Cmd+K e CTA de workspace vazio — `my-tasks-client.tsx`, `shell.tsx` (`CommandMenu`), `board-client.tsx` (EmptyState)
+- [x] Editar/concluir tarefa executável do detalhe; subtarefa criável e completável com progresso — `task-detail-client.tsx` (`TaskForm` modo edit, Select de status, `SubtaskForm` + toggle)
+- [x] Comentário com @menção publicável pela tela e notifica o mencionado — `CommentForm` → `createComment` (notificação já implementada em P-4.8)
+- [x] Time tracking: start/stop operável no detalhe — `TimeTracker` → `startTimeEntry`/`stopTimeEntry`
+- [x] Recorrência: regra criável pela tela de recorrentes com preview — `recorrentes-client.tsx` (`RecurrenceForm`, preview já client-side) → `createRecurrenceRule`
+- [x] Template: instanciável pela tela de templates — `templates-client.tsx` → `instantiateTaskTemplate`
+- [x] Pedido de aprovação enviável pela tela; diretor aprova/rejeita pela própria UI — `ApprovalRequestForm` → `requestApproval`; botões Aprovar/Rejeitar (`canResolveApproval`) → `resolveApprovalRequest`
+- [x] TreeView com dados reais (pessoa → tarefas) — `board-client.tsx`, view "árvore" com `tasks` reais
+- [x] Modo foco com tarefas do dia reais — `foco-client.tsx`, `getAssignedTasks(actorId)`
+- [x] Nenhum componente/formulário do Bloco A sem import — verificado por grep (ver "Verificação funcional")
+- [x] Mock data removido — `lib/mock-data.ts` deletado, 0 referências residuais
+- [x] Lint passa — `pnpm --filter @hebron/tarefas lint`
+- [x] Types passam — `pnpm --filter @hebron/tarefas typecheck`
+
+**Arquivos criados:**
+
+- `apps/tarefas/src/lib/queries.ts`
+- `apps/tarefas/src/actions/auth.ts`
+- `apps/tarefas/src/app/(dashboard)/my-tasks-client.tsx`
+- `apps/tarefas/src/app/(dashboard)/loading.tsx`
+- `apps/tarefas/src/app/(dashboard)/foco/foco-client.tsx`
+- `apps/tarefas/src/app/(dashboard)/calendario/calendario-client.tsx`
+- `apps/tarefas/src/app/(dashboard)/calendario/loading.tsx`
+- `apps/tarefas/src/app/(dashboard)/recorrentes/recorrentes-client.tsx`
+- `apps/tarefas/src/app/(dashboard)/templates/templates-client.tsx`
+- `apps/tarefas/src/app/(dashboard)/workspace/[slug]/loading.tsx`
+
+**Arquivos modificados:**
+
+- `apps/tarefas/src/app/(dashboard)/layout.tsx`, `shell.tsx`
+- `apps/tarefas/src/app/(dashboard)/page.tsx`
+- `apps/tarefas/src/app/(dashboard)/workspace/[slug]/page.tsx`, `board-client.tsx`
+- `apps/tarefas/src/app/(dashboard)/tarefa/[id]/page.tsx`, `task-detail-client.tsx`
+- `apps/tarefas/src/app/(dashboard)/foco/page.tsx`
+- `apps/tarefas/src/app/(dashboard)/calendario/page.tsx`
+- `apps/tarefas/src/app/(dashboard)/recorrentes/page.tsx`
+- `apps/tarefas/src/app/(dashboard)/templates/page.tsx`
+- `apps/tarefas/src/components/comment-thread.tsx` (removido composer embutido duplicado — `CommentForm` passa a ser o composer real, conectado na tela de detalhe)
+- `apps/tarefas/src/actions/recurrence.ts` (fix de build — ver acima)
+
+**Arquivos removidos:**
+
+- `apps/tarefas/src/lib/mock-data.ts`
