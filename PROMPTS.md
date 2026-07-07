@@ -2591,16 +2591,16 @@ Páginas: "Minhas tarefas" (lista priorizada). Board por workspace (kanban + lis
 
 **Critérios de aceite:**
 
-- [ ] "Minhas tarefas" com filtros: workspace, prioridade, status, assignee
-- [ ] Board com toggle Kanban/Lista/Árvore
-- [ ] Detalhe: sidebar com metadados, corpo com descrição + comentários
-- [ ] Calendário: visualização mensal/semanal com tarefas por data
-- [ ] Recorrentes: lista de regras com preview da próxima execução
-- [ ] Modo foco: página limpa com tarefas do dia + pomodoro
-- [ ] Templates: lista editável com preview
-- [ ] Responsivo
-- [ ] Lint passa
-- [ ] Types passam
+- [x] "Minhas tarefas" com filtros: workspace, prioridade, status, assignee
+- [x] Board com toggle Kanban/Lista/Árvore
+- [x] Detalhe: sidebar com metadados, corpo com descrição + comentários
+- [x] Calendário: visualização mensal/semanal com tarefas por data
+- [x] Recorrentes: lista de regras com preview da próxima execução
+- [x] Modo foco: página limpa com tarefas do dia + pomodoro
+- [x] Templates: lista editável com preview
+- [x] Responsivo
+- [x] Lint passa
+- [x] Types passam
 
 ---
 

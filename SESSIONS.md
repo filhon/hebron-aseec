@@ -96,6 +96,7 @@
 | S-72   | 2026-07-07 | P-3.12 — Testes Financeiro                                              | concluido                            |
 | S-73   | 2026-07-07 | P-4.1 — Schema de Tipos Tarefas                                         | concluido                            |
 | S-74   | 2026-07-07 | P-4.2 — Componentes UI Tarefas                                          | concluido                            |
+| S-75   | 2026-07-07 | P-4.3 — Telas e Páginas Tarefas                                         | concluido                            |
 
 ---
 
@@ -3441,3 +3442,61 @@ Implementou os 8 componentes de UI do módulo Tarefas listados no escopo, todos 
 **Arquivos modificados:**
 
 - `apps/tarefas/package.json` (dependência `lucide-react`)
+
+### S-75 — 2026-07-07 — P-4.3 — Telas e Páginas Tarefas
+
+**Prompt:** P-4.3 (`PROMPTS.md:2567`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Implementou as 7 telas do módulo Tarefas listadas no escopo, todas consumindo os componentes de P-4.2 e os tipos/mock data de P-4.1: "Minhas tarefas" (lista priorizada, `TaskList` + filtro de responsável na própria página), Board por workspace (`/workspace/[slug]`, toggle Kanban/Lista/Árvore sobre `KanbanBoard`/`TaskList`/`TreeView`), Detalhe da tarefa (`/tarefa/[id]`, sidebar de metadados + corpo com descrição/subtarefas/anexos/`TimeTracker`/`CommentThread`), Calendário (`/calendario`, grade mensal + agenda semanal), Recorrentes (`/recorrentes`, lista das tarefas com `recurrenceRule` + preview da próxima execução), Modo foco (`/foco`, wrapper de `FocusMode`) e Templates (`/templates`, lista com preview das tarefas pré-definidas, toggle ativo/inativo e edição via `Dialog`). `CommandMenu` (P-4.2) conectado globalmente no shell do dashboard (Cmd/Ctrl+K em qualquer tela).
+
+**Sem `design-refs/tarefas`:** confirmado novamente ausente (mesma situação já registrada em S-74). Seguido BRAIN.md §5 + linguagem visual já estabelecida pelos próprios componentes de P-4.2.
+
+**Suposições registradas (G1 — ambiguidade resolvida pela opção mais simples):**
+
+- **App `tarefas` não tinha nenhum arquivo de `src/app/`** — nem `layout.tsx` raiz, nem `globals.css`, nem `postcss.config.mjs` (P-4.1/P-4.2 só criaram `lib/` e `components/`). Criados como infraestrutura óbvia faltante (G1), replicando exatamente o padrão de `apps/financeiro` (fontes Parkinsans/Titillium via `next/font`, import de `packages/ui/src/tokens.css` + `patterns.css`, `@source` para Tailwind v4).
+- **`(dashboard)/shell.tsx` e `(dashboard)/layout.tsx`** não estão na lista de "Arquivos permitidos" do prompt (que lista só as páginas), mas sem eles nenhuma página renderiza dentro do `AppShell`. Replicado o padrão exato do primeiro commit Bloco A de `financeiro` (`1034d0f`, antes da integração de auth em P-3.9): `layout.tsx` sem `getAuthUser`/redirect, `shell.tsx` client component com usuário hardcoded (`Filipe Honório`) e `onLogout` vazio — mesmo racional do G5 (layout real com sessão só entra em P-4.9).
+- **`eslint.config.mjs` do app não ignorava `next-env.d.ts`** — causava falha de lint (`@typescript-eslint/triple-slash-reference`) no arquivo autogerado pelo Next, que nenhum prompt anterior tocou porque o app nunca tinha sido buildado. Corrigido para incluir `{ ignores: ["next-env.d.ts", ".next/**"] }`, idêntico ao `eslint.config.mjs` de `financeiro`/demais apps — bug de infraestrutura, não invenção de regra.
+- **Client Component com `use(params)` quebrava o build** — a primeira versão de `workspace/[slug]/page.tsx` e `tarefa/[id]/page.tsx` usava `"use client"` + `use(params)` (padrão válido em React 19) para poder chamar `notFound()`/estado local no mesmo arquivo. Isso fazia o `next build` falhar ao gerar a página `/404` (`<Html> should not be imported outside of pages/_document`) — bug conhecido do Next 15 quando a geração estática de uma rota dinâmica lança durante o build. Corrigido migrando para o padrão já usado em todo o resto do monorepo (`admin/usuarios/[id]`, `projetos/pipeline/[id]`, `documentos/[slug]`): `page.tsx` como Server Component `async` que resolve `params`/chama `notFound()`, delegando a interatividade a um Client Component colocado no mesmo diretório (`board-client.tsx`, `task-detail-client.tsx`) — nenhum desses dois arquivos estava na lista de "Arquivos permitidos", mas são infraestrutura obrigatória para o build passar (G1).
+- **Filtro de responsável em "Minhas tarefas"** — `TaskList` (P-4.2, fora da lista de arquivos permitidos deste prompt) já filtra por módulo/prioridade/status mas não por responsável. Em vez de editar o componente, o filtro de responsável foi implementado na própria página (pré-filtra o array de tarefas antes de passar para `TaskList`), preservando P-4.2 intocado.
+- **"Minhas tarefas" sem sessão real** — como não existe autenticação nesta fase (Bloco A), a tela não filtra por "usuário logado" automaticamente; em vez disso oferece um seletor de responsável (padrão "Toda a equipe") como substituto temporário, e KPIs (em aberto/atrasadas/vencem hoje/concluídas na semana) recalculados sobre o escopo selecionado.
+- **Recorrentes — preview da próxima execução** — o mock de cada regra de recorrência é uma única instância de tarefa (não uma série). A "próxima execução" foi calculada somando o intervalo da regra (`RecurrenceRule.interval` + `type`) à `dueDate` (se a tarefa ainda está pendente) ou à `completedAt` (se já concluída) — simplificação registrada, não é geração real de série recorrente (isso é decisão de Bloco B).
+- **Templates "editável"** — sem Server Actions nesta fase, a edição de nome/descrição e o toggle ativo/inativo alteram só o estado local do componente (não persistem entre reloads). Usado o `Dialog` de `@hebron/ui` no modal de edição — primeiro consumidor desse primitivo no monorepo (S-74 havia registrado que nenhum app o usava até então); é exatamente o caso de uso para o qual o componente existe, então não foi construído um overlay customizado alternativo.
+- **`CommandMenu.onCreateTask`** — sem backend, a criação rápida por texto livre redireciona para "Minhas tarefas" (`/`) em vez de efetivamente criar uma tarefa. Registrado para P-4.6+ (Bloco B) não presumir que a criação já está funcional.
+
+**Critérios de aceite verificados:**
+
+- [x] "Minhas tarefas" com filtros: workspace, prioridade, status, assignee
+- [x] Board com toggle Kanban/Lista/Árvore
+- [x] Detalhe: sidebar com metadados, corpo com descrição + comentários
+- [x] Calendário: visualização mensal/semanal com tarefas por data
+- [x] Recorrentes: lista de regras com preview da próxima execução
+- [x] Modo foco: página limpa com tarefas do dia + pomodoro
+- [x] Templates: lista editável com preview
+- [x] Responsivo (grid/flex com breakpoints `sm:`/`lg:`, overflow-x em tabelas/calendário)
+- [x] Lint passa (`pnpm turbo lint --filter=@hebron/tarefas`)
+- [x] Types passam (`pnpm turbo typecheck --filter=@hebron/tarefas`, após `next build` gerar `.next/types`)
+- [x] Build (`next build`) e smoke test via `curl` em todas as rotas (200, exceto `/workspace/invalido` → 404) — verificação visual em browser real não foi possível neste ambiente (Windows, sem `chromium-cli`/Playwright configurado)
+
+**Arquivos criados:**
+
+- `apps/tarefas/postcss.config.mjs`
+- `apps/tarefas/src/app/layout.tsx`
+- `apps/tarefas/src/app/globals.css`
+- `apps/tarefas/src/app/(dashboard)/layout.tsx`
+- `apps/tarefas/src/app/(dashboard)/shell.tsx`
+- `apps/tarefas/src/app/(dashboard)/page.tsx`
+- `apps/tarefas/src/app/(dashboard)/workspace/[slug]/page.tsx`
+- `apps/tarefas/src/app/(dashboard)/workspace/[slug]/board-client.tsx`
+- `apps/tarefas/src/app/(dashboard)/tarefa/[id]/page.tsx`
+- `apps/tarefas/src/app/(dashboard)/tarefa/[id]/task-detail-client.tsx`
+- `apps/tarefas/src/app/(dashboard)/calendario/page.tsx`
+- `apps/tarefas/src/app/(dashboard)/recorrentes/page.tsx`
+- `apps/tarefas/src/app/(dashboard)/foco/page.tsx`
+- `apps/tarefas/src/app/(dashboard)/templates/page.tsx`
+
+**Arquivos modificados:**
+
+- `apps/tarefas/eslint.config.mjs` (ignora `next-env.d.ts` e `.next/**`)
