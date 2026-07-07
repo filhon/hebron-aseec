@@ -2548,16 +2548,16 @@ Componentes: TaskCard (título, assignee, prioridade, due_date, subtask progress
 
 **Critérios de aceite:**
 
-- [ ] KanbanBoard com drag-drop entre colunas (a fazer → em progresso → concluído)
-- [ ] TreeView estilo Xmind: pessoa → tarefas (para despacho do diretor gestor)
-- [ ] TaskCard com badge de prioridade, avatar do assignee, barra de subtarefas
-- [ ] FocusMode: lista de tarefas do dia + pomodoro (25min trabalho, 5min pausa)
-- [ ] CommandMenu (Cmd+K) com busca e criação rápida
-- [ ] TimeTracker com start/stop e total acumulado
-- [ ] 3 views coexistentes: Kanban, Lista, Árvore (toggle no header)
-- [ ] Responsivo
-- [ ] Lint passa
-- [ ] Types passam
+- [x] KanbanBoard com drag-drop entre colunas (a fazer → em progresso → concluído)
+- [x] TreeView estilo Xmind: pessoa → tarefas (para despacho do diretor gestor)
+- [x] TaskCard com badge de prioridade, avatar do assignee, barra de subtarefas
+- [x] FocusMode: lista de tarefas do dia + pomodoro (25min trabalho, 5min pausa)
+- [x] CommandMenu (Cmd+K) com busca e criação rápida
+- [x] TimeTracker com start/stop e total acumulado
+- [x] 3 views coexistentes: Kanban, Lista, Árvore (toggle no header)
+- [x] Responsivo
+- [x] Lint passa
+- [x] Types passam
 
 **Notas:**
 Ref: BRAIN.md seção 6.9. Referência visual: Xmind para TreeView (diretor gestor usa no dia a dia).

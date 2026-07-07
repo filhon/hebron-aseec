@@ -95,6 +95,7 @@
 | S-71   | 2026-07-07 | P-3.11 — Financeiro: Integrações Cross-App                              | concluido                            |
 | S-72   | 2026-07-07 | P-3.12 — Testes Financeiro                                              | concluido                            |
 | S-73   | 2026-07-07 | P-4.1 — Schema de Tipos Tarefas                                         | concluido                            |
+| S-74   | 2026-07-07 | P-4.2 — Componentes UI Tarefas                                          | concluido                            |
 
 ---
 
@@ -3395,3 +3396,48 @@ Primeiro prompt do módulo Tarefas (Fase 4). Definiu os tipos (`packages/types/s
 
 - `packages/types/package.json` (export `"./tarefas"`)
 - `packages/validators/package.json` (export `"./tarefas"`)
+
+### S-74 — 2026-07-07 — P-4.2 — Componentes UI Tarefas
+
+**Prompt:** P-4.2 (`PROMPTS.md:2524`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Implementou os 8 componentes de UI do módulo Tarefas listados no escopo, todos puramente apresentacionais (props + callbacks, sem Server Actions — P-4.2 é Bloco A/mock). Seguiu a convenção já estabelecida em `apps/financeiro`/`apps/projetos` para peças equivalentes: drag-and-drop nativo via HTML5 DnD (sem lib externa, mesmo padrão de `project-kanban.tsx`), tabelas/filtros manuais com `useState`/`useMemo` (sem TanStack Table — não é dependência do app), e modais/paletas como `<div>` `fixed` customizados em vez do `Dialog` de `@hebron/ui` (nenhum app do monorepo usa o `Dialog` primitivo hoje; todos constroem overlay próprio). `TaskCard` (badge de prioridade, avatares, barra de subtarefas, indicador de aprovação pendente e prazo vencido). `KanbanBoard` (4 colunas fixas de `TaskStatus`, drag-drop entre colunas, posições otimistas). `TaskList` (busca + filtros de módulo/prioridade/status + ordenação + paginação). `TreeView` (estilo Xmind: nó raiz "Equipe" → branch colorida por pessoa → tarefas; branch "A atribuir" em destaque vermelho para tarefas sem responsável, sinalizada para o despacho do diretor gestor). `CommentThread` (@menções com autocomplete e realce no conteúdo renderizado, resolvido via `comment.mentions` + lista de pessoas). `FocusMode` (agenda do dia + pomodoro 25/5 com anel de progresso SVG). `TimeTracker` (start/stop derivado de `timeEntries` sem `endedAt`, total acumulado ao vivo). `CommandMenu` (Cmd/Ctrl+K, navegação por teclado, criação rápida por texto livre).
+
+**Sem `design-refs/tarefas`:** não existe pasta de referência visual para este módulo (G3.1 — só `admin`, `documentos`, `financeiro` têm hoje). Implementado seguindo BRAIN.md §5 (tokens `--hb-*`) e replicando a linguagem visual dos componentes equivalentes já existentes em `financeiro`/`projetos` (tabelas, kanban, árvore de categorias), sem inventar padrões novos.
+
+**Suposições registradas (G1 — ambiguidade resolvida pela opção mais simples):**
+
+- **`lucide-react` ausente de `apps/tarefas/package.json`** — todos os 8 componentes usam ícones (`lucide-react`), mas o app só depende de `@hebron/ui` (que declara `lucide-react` internamente, não reexportado). Os 5 apps anteriores (`admin`, `documentos`, `financeiro`, `projetos`, `intranet`/demais) declaram `lucide-react` diretamente como dependência própria — mesmo padrão replicado aqui (`^0.460.0`, idêntica versão dos demais apps) como infraestrutura óbvia faltante (G1), já que sem isso nenhum componente compila. `pnpm install` rodado para religar o lockfile.
+- **Agenda do dia (`FocusMode`)** — o prompt não define o critério exato de "tarefas do dia". Escolhida a opção mais simples e literal ao objetivo do modo foco: tarefas não concluídas com `status === "em_progresso"` OU `dueDate` vencido/igual a hoje. Filtro aplicado dentro do próprio componente (recebe a lista completa de tarefas via prop, não uma lista pré-filtrada), para o componente ser utilizável de forma autocontida.
+- **`TreeView` — tarefas com múltiplos responsáveis** aparecem em mais de uma branch (uma por pessoa), já que o modelo de dados permite `assignees: Assignee[]`. Tarefas sem nenhum assignee (incluindo as com `needsManualAssignment`) vão para a branch "A atribuir", independente da flag — o ponto da árvore para o diretor gestor é ver todo mundo sem tarefa nenhuma, não só as automáticas.
+
+**Critérios de aceite verificados:**
+
+- [x] KanbanBoard com drag-drop entre colunas (a fazer → em progresso → em revisão → concluído)
+- [x] TreeView estilo Xmind: pessoa → tarefas (branch "A atribuir" para despacho do diretor gestor)
+- [x] TaskCard com badge de prioridade, avatar do assignee, barra de subtarefas
+- [x] FocusMode: lista de tarefas do dia + pomodoro (25min trabalho, 5min pausa)
+- [x] CommandMenu (Cmd+K) com busca e criação rápida
+- [x] TimeTracker com start/stop e total acumulado
+- [x] 3 views coexistentes: Kanban, Lista, Árvore — cada componente é standalone; o toggle entre elas fica para a página de integração (P-4.9), fora do escopo de arquivos permitidos deste prompt
+- [x] Responsivo (grid/flex com breakpoints `lg:`, overflow-x em tabelas/kanban/árvore)
+- [x] Lint passa (`pnpm turbo lint` — 38/38 tasks)
+- [x] Types passam (`pnpm turbo typecheck` — 38/38 tasks)
+
+**Arquivos criados:**
+
+- `apps/tarefas/src/components/task-card.tsx`
+- `apps/tarefas/src/components/kanban-board.tsx`
+- `apps/tarefas/src/components/task-list.tsx`
+- `apps/tarefas/src/components/tree-view.tsx`
+- `apps/tarefas/src/components/comment-thread.tsx`
+- `apps/tarefas/src/components/focus-mode.tsx`
+- `apps/tarefas/src/components/time-tracker.tsx`
+- `apps/tarefas/src/components/command-menu.tsx`
+
+**Arquivos modificados:**
+
+- `apps/tarefas/package.json` (dependência `lucide-react`)
