@@ -2663,11 +2663,11 @@ Loading, empty e error states para todas as telas. Skeletons para kanban, lista,
 
 **Critérios de aceite:**
 
-- [ ] Skeletons por view (kanban, lista, árvore, calendário)
-- [ ] Modo foco vazio: "Nenhuma tarefa para hoje. Bom descanso!"
-- [ ] Workspace vazio: mensagem contextual + CTA criar tarefa
-- [ ] Lint passa
-- [ ] Types passam
+- [x] Skeletons por view (kanban, lista, árvore, calendário)
+- [x] Modo foco vazio: "Nenhuma tarefa para hoje. Bom descanso!"
+- [x] Workspace vazio: mensagem contextual + CTA criar tarefa
+- [x] Lint passa
+- [x] Types passam
 
 ---
 

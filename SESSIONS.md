@@ -98,6 +98,7 @@
 | S-74   | 2026-07-07 | P-4.2 — Componentes UI Tarefas                                          | concluido                            |
 | S-75   | 2026-07-07 | P-4.3 — Telas e Páginas Tarefas                                         | concluido                            |
 | S-76   | 2026-07-07 | P-4.4 — Formulários Tarefas                                             | concluido                            |
+| S-77   | 2026-07-07 | P-4.5 — Estados Tarefas                                                 | concluido                            |
 
 ---
 
@@ -3553,3 +3554,44 @@ O escopo exige "descrição com o editor rich text COMPARTILHADO de packages/ui 
 - `packages/ui/src/index.ts` (exporta `RichTextEditor`)
 - `apps/tarefas/package.json` (adiciona `zod: catalog:`)
 - `pnpm-lock.yaml`
+
+---
+
+### S-77 — 2026-07-07 — P-4.5 — Estados Tarefas
+
+**Prompt:** P-4.5 (`PROMPTS.md:2642`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Criados os 3 skeletons listados no escopo (`KanbanSkeleton`, `TaskListSkeleton`, `CalendarSkeleton`), mais os estados vazio/loading das duas páginas permitidas (`(dashboard)/page.tsx` — "Minhas tarefas" — e `(dashboard)/foco/page.tsx`).
+
+**Suposições registradas (G1 — ambiguidade resolvida pela opção mais simples):**
+
+- **Skeleton de árvore sem arquivo próprio.** O escopo pede "Skeletons para kanban, lista, árvore, calendário", mas a lista de Arquivos permitidos só define 3 arquivos de skeleton (kanban/lista/calendário — sem árvore). Seguindo G1 ao pé da letra ("não crie arquivos fora da lista"), `TreeViewSkeleton` foi adicionado como segundo export dentro de `task-list-skeleton.tsx` (mesmo arquivo de `TaskListSkeleton`), em vez de criar `tree-view-skeleton.tsx`.
+- **Skeletons kanban/calendário ainda não estão wireados em tela nenhuma.** `KanbanSkeleton` e `CalendarSkeleton` foram construídos fielmente à estrutura visual de `kanban-board.tsx`/`calendario/page.tsx`, mas os arquivos onde fariam sentido como fallback de loading (`workspace/[slug]/board-client.tsx`, `(dashboard)/calendario/page.tsx`) não estão na lista de Arquivos permitidos deste prompt. Ficam como componentes prontos para consumo em P-4.9 (mesmo padrão de componentes órfãos já registrado em P-4.4 para os formulários — G5).
+- **"Estado vazio por workspace" interpretado como workspace genuinamente vazio (zero tarefas), não como filtro sem resultado.** `TaskList` (P-4.2) já tem seu próprio `EmptyState` interno para quando um filtro não retorna nada ("Nenhuma tarefa encontrada"). O empty state novo em `(dashboard)/page.tsx` cobre o caso diferente — zero tarefas no workspace inteiro — com CTA "Criar tarefa" funcional: abre um `Dialog` (`@hebron/ui`, mesmo padrão já usado por `templates/page.tsx`) com o `TaskForm` de P-4.4 (primeiro consumidor real desse componente, antes órfão) e adiciona a tarefa criada ao estado local da página (`useState<Task[]>(mockTasks)` em vez do import direto — sem isso o CTA seria decorativo, o que o system prompt veda explicitamente como "half-finished implementation"). `createdBy`/`createdByName` usam o mesmo mock de usuário atual já estabelecido em `task-detail-client.tsx` (`"user-current"` / `"Filipe Honório"`).
+- **Loading simulado via `setTimeout`, não `loading.tsx` de rota.** Ambas as páginas são Client Components com dado mockado estático (sem fronteira assíncrona real) — o `loading.tsx` automático do App Router só dispara em Suspense de Server Component, então não produziria efeito visual aqui. Usado `useState(true)` + `useEffect(setTimeout(..., 500))` para demonstrar os skeletons, mesmo padrão que será substituído por Suspense real quando a integração com backend (P-4.9) trocar os mocks por Server Actions/RSC.
+- **Modo foco: mensagem exata do critério de aceite não está disponível no `FocusMode` existente** (`components/focus-mode.tsx`, que já tem seu próprio empty state interno com copy diferente — "Nada pendente para hoje" — e não está na lista de Arquivos permitidos deste prompt). `foco/page.tsx` agora replica o mesmo filtro de agenda do dia usado internamente por `FocusMode` para decidir, antes de montá-lo, se renderiza a página inteira em estado vazio com a copy literal do critério de aceite ("Nenhuma tarefa para hoje. Bom descanso!") em vez do pomodoro.
+- **Sem `design-refs/tarefas`** (mesma situação já registrada em S-74/S-75/S-76). Seguido BRAIN.md §5 + linguagem visual já estabelecida pelos skeletons de `financeiro` (`dashboard-skeleton.tsx`, `conciliation-skeleton.tsx` — bones com `animate-pulse` sobre `var(--surface-alt)`).
+
+**Verificação visual:** Diferente das sessões anteriores de Tarefas (S-74/S-75/S-76, que registraram não ter sido possível verificar em browser real neste ambiente Windows), esta sessão instalou Playwright + Chromium sob demanda (`npm install playwright` + `playwright install chromium` num diretório fora do monorepo) e capturou screenshots reais dos 3 estados (loading/preenchido/vazio) nas duas páginas, incluindo o fluxo completo de criar uma tarefa pelo diálogo do estado vazio. Nenhuma dependência foi adicionada ao monorepo para isso.
+
+**Critérios de aceite verificados:**
+
+- [x] Skeletons por view (kanban, lista, árvore, calendário) — árvore como segundo export de `task-list-skeleton.tsx`, ver suposição acima
+- [x] Modo foco vazio: "Nenhuma tarefa para hoje. Bom descanso!"
+- [x] Workspace vazio: mensagem contextual + CTA criar tarefa (funcional, cria tarefa via `TaskForm` em `Dialog`)
+- [x] Lint passa (`pnpm turbo lint --filter=@hebron/tarefas`)
+- [x] Types passam (`pnpm turbo typecheck --filter=@hebron/tarefas`)
+
+**Arquivos criados:**
+
+- `apps/tarefas/src/components/kanban-skeleton.tsx`
+- `apps/tarefas/src/components/task-list-skeleton.tsx`
+- `apps/tarefas/src/components/calendar-skeleton.tsx`
+
+**Arquivos modificados:**
+
+- `apps/tarefas/src/app/(dashboard)/page.tsx`
+- `apps/tarefas/src/app/(dashboard)/foco/page.tsx`

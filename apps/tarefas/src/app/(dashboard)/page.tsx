@@ -1,16 +1,30 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { PageHeader } from "@hebron/ui";
+import type { Task } from "@hebron/types/tarefas";
+import type { CreateTaskInput } from "@hebron/validators/tarefas";
+import {
+  Button,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  EmptyState,
+  PageHeader,
+} from "@hebron/ui";
 import {
   AlarmClockOff,
   CalendarClock,
   CheckCircle2,
   ListChecks,
+  ListTodo,
+  Plus,
 } from "lucide-react";
-import { mockTasks } from "../../lib/mock-data";
+import { mockTags, mockTasks } from "../../lib/mock-data";
 import { TaskList } from "../../components/task-list";
+import { TaskListSkeleton } from "../../components/task-list-skeleton";
+import { TaskForm } from "../../components/task-form";
 
 function cn(...cls: (string | false | null | undefined)[]): string {
   return cls.filter(Boolean).join(" ");
@@ -74,24 +88,32 @@ function KpiCard({ label, value, icon: Icon, tone }: KpiCardProps) {
 
 export default function MinhasTarefasPage() {
   const router = useRouter();
+  const [tasks, setTasks] = useState<Task[]>(mockTasks);
   const [assigneeFilter, setAssigneeFilter] = useState("all");
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 500);
+    return () => clearTimeout(timer);
+  }, []);
 
   const assignees = useMemo(() => {
     const map = new Map<string, string>();
-    for (const task of mockTasks) {
+    for (const task of tasks) {
       for (const a of task.assignees) map.set(a.userId, a.userName);
     }
     return [...map.entries()]
       .map(([id, name]) => ({ id, name }))
       .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
-  }, []);
+  }, [tasks]);
 
   const scopedTasks = useMemo(() => {
-    if (assigneeFilter === "all") return mockTasks;
-    return mockTasks.filter((t) =>
+    if (assigneeFilter === "all") return tasks;
+    return tasks.filter((t) =>
       t.assignees.some((a) => a.userId === assigneeFilter),
     );
-  }, [assigneeFilter]);
+  }, [tasks, assigneeFilter]);
 
   const kpis = useMemo(() => {
     const today = new Date();
@@ -108,6 +130,89 @@ export default function MinhasTarefasPage() {
     ).length;
     return { total: open.length, overdue, dueToday, doneThisWeek };
   }, [scopedTasks]);
+
+  function handleCreateTask(values: CreateTaskInput) {
+    const now = new Date();
+    const newTask: Task = {
+      id: `task-${now.getTime()}`,
+      title: values.title,
+      description: values.description,
+      workspace: values.workspace,
+      priority: values.priority,
+      status: "a_fazer",
+      dueDate: values.dueDate,
+      assignees: assignees
+        .filter((a) => values.assigneeIds.includes(a.id))
+        .map((a) => ({ userId: a.id, userName: a.name, assignedAt: now })),
+      tags: mockTags.filter((t) => values.tagIds.includes(t.id)),
+      subtasks: [],
+      subtaskProgress: null,
+      comments: [],
+      attachments: [],
+      timeEntries: [],
+      recurrenceRule: values.recurrenceRule,
+      recurrenceParentId: null,
+      sourceModule: null,
+      sourceId: null,
+      needsManualAssignment: false,
+      approvalRequest: null,
+      createdBy: "user-current",
+      createdByName: "Filipe Honório",
+      createdAt: now,
+      updatedAt: now,
+      completedAt: null,
+      deletedAt: null,
+    };
+    setTasks((prev) => [newTask, ...prev]);
+    setCreating(false);
+  }
+
+  if (loading) {
+    return (
+      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
+        <PageHeader
+          title="Minhas tarefas"
+          description="Lista priorizada por urgência — do que precisa de atenção agora ao que pode esperar."
+        />
+        <TaskListSkeleton />
+      </div>
+    );
+  }
+
+  if (tasks.length === 0) {
+    return (
+      <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
+        <PageHeader
+          title="Minhas tarefas"
+          description="Lista priorizada por urgência — do que precisa de atenção agora ao que pode esperar."
+        />
+        <EmptyState
+          icon={ListTodo}
+          title="Nenhuma tarefa neste workspace"
+          description="Assim que uma tarefa for criada, ela aparece aqui."
+          action={
+            <Button onClick={() => setCreating(true)}>
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              Criar tarefa
+            </Button>
+          }
+        />
+        <Dialog open={creating} onOpenChange={setCreating}>
+          <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Nova tarefa</DialogTitle>
+            </DialogHeader>
+            <TaskForm
+              assignableUsers={assignees}
+              availableTags={mockTags}
+              onSubmit={handleCreateTask}
+              onCancel={() => setCreating(false)}
+            />
+          </DialogContent>
+        </Dialog>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
