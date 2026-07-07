@@ -94,6 +94,7 @@
 | S-70   | 2026-07-07 | P-3.10 — Financeiro: Notificações e Emails                              | concluido                            |
 | S-71   | 2026-07-07 | P-3.11 — Financeiro: Integrações Cross-App                              | concluido                            |
 | S-72   | 2026-07-07 | P-3.12 — Testes Financeiro                                              | concluido                            |
+| S-73   | 2026-07-07 | P-4.1 — Schema de Tipos Tarefas                                         | concluido                            |
 
 ---
 
@@ -3357,3 +3358,40 @@ Fechou os critérios de aceite de P-3.12 ainda sem cobertura. Boa parte já esta
 **Arquivos modificados:**
 
 - `apps/financeiro/src/__tests__/rls.test.ts` (papel `submissor` — accounts/payables/transactions)
+
+### S-73 — 2026-07-07 — P-4.1 — Schema de Tipos Tarefas
+
+**Prompt:** P-4.1 (`PROMPTS.md:2491`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Primeiro prompt do módulo Tarefas (Fase 4). Definiu os tipos (`packages/types/src/tarefas/index.ts`) e schemas Zod (`packages/validators/src/tarefas/index.ts`) para Workspace (6 fixos, BRAIN §6.9), Task, Subtask, Assignee, Comment, Attachment, TimeEntry, Tag, RecurrenceRule, TaskTemplate e ApprovalRequest, seguindo o mesmo padrão estrutural de `financeiro`/`projetos` (enums em snake_case português, campos em camelCase inglês, `Compact*View` para listas). Mock data (`apps/tarefas/src/lib/mock-data.ts`) com 34 tarefas (6 recorrentes cobrindo os cenários citados em BRAIN §6.9 — conta de energia/água mensal, IPTU anual, limpeza do flat semanal, convite Capelowski mensal, fechamento contábil mensal; 3 automáticas com `needsManualAssignment: true` e `sourceModule`/`sourceId` de flats/projetos/intranet; e tarefas ricas com subtarefas, comentários com @menção, anexo e time entry) e 4 templates (limpeza do flat, análise de projeto, action items de reunião — todos com `trigger` cross-module — e onboarding de colaborador, sem trigger).
+
+**Suposições registradas (G1 — ambiguidade resolvida pela opção mais simples):**
+
+- **`TimeEntry` vs. BRAIN "Fora de escopo v1"** — BRAIN §"Removido/Deferido" lista "Time tracking (Tarefas)" como deferido para v2+, mas o escopo do prompt pede explicitamente o tipo `TimeEntry`. Interpretado como: o _tipo_ pode existir agora (é só shape de dado, não implica UI/feature ativa); a feature de time tracking em si (cronômetro, relatórios) continua deferida e não foi implementada em nenhuma tela. Registrado aqui para o backend/UI de P-4.2+ não assumir que time tracking é v1.
+- **`RecurrenceRule` para tipo "anual"** — o prompt lista só 4 campos (tipo, intervalo, dia_da_semana, dia_do_mes), sem campo de mês do ano. Isso significa que uma recorrência anual (ex: IPTU) só guarda o dia do mês, não o mês — modelagem imprecisa mas literal ao que foi pedido; não adicionei campo `month` não solicitado.
+- **Exports de `package.json`** — `packages/types/package.json` e `packages/validators/package.json` não estavam na lista de arquivos permitidos, mas sem a entrada `"./tarefas"` no mapa de `exports` o import `@hebron/types/tarefas` não resolve (mesmo padrão obrigatório em todo módulo anterior — confirmado via `git log` no commit que introduziu `"./financeiro"`). Editados como infraestrutura óbvia faltante (G1).
+
+**Critérios de aceite verificados:**
+
+- [x] 6 workspaces fixos como enum (`Workspace`)
+- [x] Task com título, descrição, prioridade, status, workspace, dueDate, recurrenceRule
+- [x] RecurrenceRule: tipo, intervalo, dayOfWeek, dayOfMonth
+- [x] TaskTemplate: nome, tasks pré-definidas, trigger (evento de outro módulo)
+- [x] ApprovalRequest: taskId, approverId (diretor), status
+- [x] Mock data: 34 tarefas, 6 recorrentes, 4 templates
+- [x] Lint passa (`pnpm turbo lint` — 38/38 tasks)
+- [x] Types passam (`pnpm turbo typecheck` — 38/38 tasks)
+
+**Arquivos criados:**
+
+- `packages/types/src/tarefas/index.ts`
+- `packages/validators/src/tarefas/index.ts`
+- `apps/tarefas/src/lib/mock-data.ts`
+
+**Arquivos modificados:**
+
+- `packages/types/package.json` (export `"./tarefas"`)
+- `packages/validators/package.json` (export `"./tarefas"`)

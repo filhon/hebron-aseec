@@ -2510,14 +2510,14 @@ Definir tipos e schemas Zod. Tipos: Workspace (6 fixos: Administrativo, Financei
 
 **Critérios de aceite:**
 
-- [ ] 6 workspaces fixos como enum
-- [ ] Task com: título, descrição, prioridade (baixa/média/alta/urgente), status (a fazer/em progresso/em revisão/concluído), workspace, due_date, recurrence_rule
-- [ ] RecurrenceRule: tipo (diária/semanal/mensal/anual), intervalo, dia_da_semana, dia_do_mes
-- [ ] TaskTemplate: nome, tasks pré-definidas, trigger (evento de outro módulo)
-- [ ] ApprovalRequest: task_id, approver_id (diretor), status
-- [ ] Mock data: 30+ tarefas, 5+ recorrentes, 3+ templates
-- [ ] Lint passa
-- [ ] Types passam
+- [x] 6 workspaces fixos como enum
+- [x] Task com: título, descrição, prioridade (baixa/média/alta/urgente), status (a fazer/em progresso/em revisão/concluído), workspace, due_date, recurrence_rule
+- [x] RecurrenceRule: tipo (diária/semanal/mensal/anual), intervalo, dia_da_semana, dia_do_mes
+- [x] TaskTemplate: nome, tasks pré-definidas, trigger (evento de outro módulo)
+- [x] ApprovalRequest: task_id, approver_id (diretor), status
+- [x] Mock data: 30+ tarefas, 5+ recorrentes, 3+ templates
+- [x] Lint passa
+- [x] Types passam
 
 ---
 
