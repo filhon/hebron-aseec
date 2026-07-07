@@ -3595,3 +3595,100 @@ Criados os 3 skeletons listados no escopo (`KanbanSkeleton`, `TaskListSkeleton`,
 
 - `apps/tarefas/src/app/(dashboard)/page.tsx`
 - `apps/tarefas/src/app/(dashboard)/foco/page.tsx`
+
+---
+
+### S-78 — 2026-07-07 — P-4.6 — Schema do Banco Tarefas
+
+**Prompt:** P-4.6 (`PROMPTS.md:2681`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Criado o schema Drizzle `packages/db/src/schema/tarefas.ts` com as 14 tabelas do
+escopo (`workspaces`, `tags`, `tasks`, `subtasks`, `assignees`, `comments`,
+`attachments`, `time_entries`, `task_tags`, `task_templates`,
+`template_items`, `recurrence_rules`, `approval_requests`, `task_events`) e 8
+enums novos no schema `tarefas`. `admin.audit_action` recebeu 3 valores novos
+(`task.approval_requested`, `task.approved`, `task.rejected` — G6.3).
+Migration aplicada com sucesso contra o banco real (`db:migrate`), schema
+parity test verde (58/58 testes) e `pnpm turbo lint typecheck` verde nos 38
+packages/apps do monorepo.
+
+**Suposições registradas (G1 — ambiguidade resolvida pela opção mais simples):**
+
+- **Drift pré-existente de `drizzle-kit generate` (mesmo achado de S-72/P-3.11,
+  documentado em `0029_financeiro_payable_bloqueio_audit_actions.sql`):** o
+  snapshot de `src/migrations/meta` estava parado em `0014` — migrations
+  `0015`-`0030` foram aplicadas sem rodar `db:generate` depois. Rodar
+  `db:generate --name tarefas` (para obter o nome automático, G6.4) produziu
+  um SQL que reincluía essas 16 migrations já aplicadas sem idempotência
+  (`ADD COLUMN`/`CREATE TYPE` sem guarda), o que quebraria qualquer banco já
+  migrado. O comando foi usado só para nomear o arquivo e resincronizar
+  `meta/0015_snapshot.json` (agora em paridade com `schema/index.ts` —
+  `db:check` reporta "Everything's fine"); o SQL de `src/migrations/0031_tarefas.sql`
+  foi escrito à mão, contendo apenas o que é novo neste prompt. Seguindo o
+  mesmo precedente, o `ALTER TYPE admin.audit_action` foi isolado em um
+  segundo arquivo dedicado (`0032_tarefas_audit_actions.sql`, não-transacional),
+  igual ao padrão já usado por `0016`/`0018`/`0027`/`0028`/`0029`.
+- **`workspaces` é tabela real, não só enum.** O tipo `Workspace` em
+  `@hebron/types/tarefas` (P-4.1) é uma union de strings, mas o critério de
+  aceite pede `tasks.workspace_id` — logo `tasks`/`task_templates` referenciam
+  `tarefas.workspaces.id` (FK), e a union vira o enum `workspace_slug` usado
+  na coluna `slug` da tabela. As 6 linhas são seed fixas com UUIDs
+  determinísticos (`00000000-0000-0000-0007-00000000000N`, mesmo padrão do
+  plano de contas de `financeiro` em `0010_financeiro.sql`) — nenhuma rota de
+  criação existe.
+- **`tasks.source`/`source_ref` consolidam os dois campos do front-end em um
+  só.** `Task.sourceModule`/`Task.sourceId` (front-end, P-4.1) viram uma única
+  coluna `jsonb` `source_ref: { sourceModule, sourceId }` ao lado de `source`
+  (`manual`/`auto`) — o critério de aceite lista literalmente "source
+  (manual/auto), source_ref" (singular), não dois campos separados.
+- **`recurrence_rules.task_template_id`, não `task_id`.** O critério de aceite
+  lista literalmente `recurrence_rules: task_template_id, ...`, embora o mock
+  de Bloco A (P-4.1) associe `recurrenceRule` diretamente a tarefas avulsas
+  (contas de consumo, IPTU, etc. — BRAIN §6.9). Modelado como: recorrência
+  pertence a um `task_template` (mesmo de 1 item só) — o job ainda não escrito
+  (catálogo `PLANNED_JOBS`, P-4.8) lê `next_run_at` e gera novas instâncias de
+  tarefa a partir do template. Cada `recurring_task` do mock corresponde, no
+  backend, a um `task_template` de um item com sua `recurrence_rule` — divergência
+  registrada aqui para quem escrever P-4.8/P-4.9.
+- **`assignees` não duplica `userName`.** O tipo `Assignee` do front-end
+  guarda `userName` para exibição sem join; a tabela real guarda só
+  `user_id`/`assigned_at` — nome vem de `public.users` via join, evitando
+  duplicação que ficaria desatualizada se o usuário mudasse o nome.
+- **Exports em `schema/index.ts` com alias para evitar colisão.** `tags`
+  (tabela de etiquetas de tarefas) colidia com `tags`/`Tag`/`NewTag` já
+  exportados por `documentos` — reexportados como `taskTagLabels`/
+  `TaskTagLabel`/`NewTaskTagLabel`. `attachments` (tabela) e `Attachment`/
+  `NewAttachment` (tipos) reexportados como `taskAttachments`/`TaskAttachment`/
+  `NewTaskAttachment` por precaução, mesmo sem colisão real hoje.
+
+**Critérios de aceite verificados:**
+
+- [x] 6 workspaces fixos seed na migration; nenhuma rota de criação de workspace existe
+- [x] tasks: title, description, workspace_id, status, priority, due_date, created_by, source (manual/auto), source_ref
+- [x] subtasks: task_id, title, completed
+- [x] recurrence_rules: task_template_id, type, interval, day_of_week, day_of_month, next_run_at
+- [x] approval_requests: task_id, approver_id, status (pendente/aprovado/rejeitado)
+- [x] time_entries: task_id, user_id, started_at, ended_at, duration_minutes
+- [x] task_events: task_id, actor_id, event_type, diff (jsonb)
+- [x] Enum admin.audit_action recebe os valores de aprovação do módulo (ALTER TYPE na migration `0032_tarefas_audit_actions.sql`)
+- [x] drizzle-kit check limpo após a migration (`db:check` → "Everything's fine")
+- [x] Migration aplica sem erros (`db:migrate` → "Applied 2 migration(s)")
+- [x] Types passam (`pnpm turbo typecheck` — 38/38 packages)
+- [x] Lint passa (`pnpm turbo lint` — 38/38 packages)
+- [x] Schema parity test verde (`pnpm --filter @hebron/db test` — 58/58 testes, incluindo TS ⟺ DB nos dois sentidos)
+
+**Arquivos criados:**
+
+- `packages/db/src/schema/tarefas.ts`
+- `packages/db/src/migrations/0031_tarefas.sql`
+- `packages/db/src/migrations/0032_tarefas_audit_actions.sql`
+- `packages/db/src/migrations/meta/0015_snapshot.json` (gerado por `drizzle-kit generate`, ressincroniza o drift pré-existente)
+
+**Arquivos modificados:**
+
+- `packages/db/src/schema/admin.ts` (3 valores novos em `auditActionEnum`)
+- `packages/db/src/schema/index.ts` (exporta o schema `tarefas`)
+- `packages/db/src/migrations/meta/_journal.json` (gerado por `drizzle-kit generate`)

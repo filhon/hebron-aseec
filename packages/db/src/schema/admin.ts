@@ -97,6 +97,10 @@ export const auditActionEnum = adminSchema.enum("audit_action", [
   // override exclusivo de super_admin (P-3.11), added via ALTER TYPE
   "financeiro.payable.blocked",
   "financeiro.payable.block_overridden",
+  // Tarefas — pedidos de aprovação de diretor (P-4.6), added via ALTER TYPE
+  "task.approval_requested",
+  "task.approved",
+  "task.rejected",
 ]);
 
 export const meetingTypeEnum = adminSchema.enum("meeting_type", [

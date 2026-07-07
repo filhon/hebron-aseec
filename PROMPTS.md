@@ -2704,17 +2704,17 @@ Auditoria central: aprovações de diretor (approval_requests) são mutação cr
 
 **Critérios de aceite:**
 
-- [ ] 6 workspaces fixos seed na migration; nenhuma rota de criação de workspace existe
-- [ ] tasks: title, description, workspace_id, status, priority, due_date, created_by, source (manual/auto), source_ref
-- [ ] subtasks: task_id, title, completed
-- [ ] recurrence_rules: task_template_id, type, interval, day_of_week, day_of_month, next_run_at
-- [ ] approval_requests: task_id, approver_id, status (pendente/aprovado/rejeitado)
-- [ ] time_entries: task_id, user_id, started_at, ended_at, duration_minutes
-- [ ] task_events: task_id, actor_id, event_type, diff (jsonb)
-- [ ] Enum admin.audit_action recebe os valores de aprovação do módulo (ALTER TYPE na migration)
-- [ ] drizzle-kit check limpo após a migration
-- [ ] Migration aplica sem erros
-- [ ] Types passam
+- [x] 6 workspaces fixos seed na migration; nenhuma rota de criação de workspace existe
+- [x] tasks: title, description, workspace_id, status, priority, due_date, created_by, source (manual/auto), source_ref
+- [x] subtasks: task_id, title, completed
+- [x] recurrence_rules: task_template_id, type, interval, day_of_week, day_of_month, next_run_at
+- [x] approval_requests: task_id, approver_id, status (pendente/aprovado/rejeitado)
+- [x] time_entries: task_id, user_id, started_at, ended_at, duration_minutes
+- [x] task_events: task_id, actor_id, event_type, diff (jsonb)
+- [x] Enum admin.audit_action recebe os valores de aprovação do módulo (ALTER TYPE na migration)
+- [x] drizzle-kit check limpo após a migration
+- [x] Migration aplica sem erros
+- [x] Types passam
 
 ---
 
