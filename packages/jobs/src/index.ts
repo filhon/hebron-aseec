@@ -13,6 +13,7 @@ import {
   reportRemindersCron,
 } from "./crons/projetos";
 import { projetosInadimplenciaCron } from "./crons/projetos-inadimplencia";
+import { tarefasRecurrenceCron } from "./crons/tarefas";
 
 /**
  * Todas as funções Inngest registradas — consumidas pela rota de serve
@@ -29,6 +30,7 @@ export const functions = [
   weeklyBatchCreationCron,
   dueDateRemindersCron,
   monthlyReportCron,
+  tarefasRecurrenceCron,
 ];
 
 export { PLANNED_JOBS } from "./catalog";

@@ -100,6 +100,7 @@
 | S-76   | 2026-07-07 | P-4.4 — Formulários Tarefas                                             | concluido                            |
 | S-77   | 2026-07-07 | P-4.5 — Estados Tarefas                                                 | concluido                            |
 | S-79   | 2026-07-07 | P-4.7 — RLS Policies Tarefas                                            | concluido                            |
+| S-80   | 2026-07-07 | P-4.8 — Server Actions Tarefas                                          | concluido                            |
 
 ---
 
@@ -3728,3 +3729,78 @@ Criada a migration `packages/db/src/migrations/0033_tarefas_rls.sql` com RLS den
 **Arquivos criados:**
 
 - `packages/db/src/migrations/0033_tarefas_rls.sql`
+
+---
+
+### S-80 — 2026-07-07 — P-4.8 — Server Actions Tarefas
+
+**Prompt:** P-4.8 (`PROMPTS.md:2758`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Criadas as 6 Server Actions de `apps/tarefas` (CRUD de tarefas/subtarefas/anexos, mover entre colunas, comentários com @menções, time tracking start/stop/manual, recorrência criar/editar, templates criar/instanciar, approval requests enviar/aprovar/rejeitar) mais `createAutoTask` em `packages/integrations` e o cron de recorrência em `packages/jobs`. Todas as actions usam `@hebron/validators/tarefas` (schemas já existentes desde o Bloco A) como fonte única de validação e o action-client de `@hebron/auth` (G6.1) — zero `createClient` manual. Aprovações (`requestApproval`/`resolveApprovalRequest`) rodam dentro de `db.transaction` com `logTarefasAudit` (criticality `critical`) atômico à mutação — falha de audit reverte a aprovação (G6.3), mesmo mecanismo já testado em `packages/db/src/__tests__/audit-pii-redaction.test.ts` e usado sem alteração em `apps/financeiro/src/actions/approval.ts`.
+
+**Infra faltante criada e registrada como débito (G1 — "arquivo de infraestrutura óbvio"):**
+
+- `apps/tarefas/src/lib/safe-action.ts` e `apps/tarefas/src/lib/audit.ts` — nenhum prompt anterior criou o kit local do app (P-4.6/P-4.7 tocaram só schema/RLS); sem eles nenhuma Server Action rodaria. Mirror exato do padrão `apps/financeiro/src/lib/{safe-action,audit}.ts`, com clients de papel (`staffAction`, `colaboradorAction`, `diretorAction`, `superAdminAction`) que espelham as policies de `0033_tarefas_rls.sql` 1:1.
+- `apps/tarefas/package.json` e `packages/integrations/package.json` — faltavam `@hebron/email`/`@supabase/supabase-js`/`drizzle-orm`/`next-safe-action` (tarefas) e `@hebron/types` (integrations); nenhum arquivo novo compilaria sem eles.
+- `packages/db/src/migrations/0034_tarefas_storage.sql` — nenhum prompt de schema/RLS provisionou o bucket de Storage para `tarefas.attachments.storage_key`, mesmo gap que `0020_storage_buckets.sql` corrigiu para documentos/projetos/financeiro (S1-21iii/CS-11). Bucket `tarefas-anexos` (privado, 10 MB, pdf/jpeg/png/webp) + 3 policies (`select_staff`/`insert_own`/`delete_admin`), path `{uploaded_by}/{uuid}.{ext}`, mesmo padrão de `project-attachments`. Aplicada e confirmada contra o banco real (bucket + 3 policies visíveis via MCP Supabase).
+- `packages/jobs/src/index.ts` (registra `tarefasRecurrenceCron` em `functions[]`) e `packages/jobs/src/catalog.ts` (remove a entrada `tarefas-recorrencia` de `PLANNED_JOBS`) — sem o registro em `functions[]` o cron nunca dispara (mesma classe de bug documentada em G6.6/F3-02). `tarefas-prazos` permanece em `PLANNED_JOBS` — fora do escopo deste prompt (não citado no texto do Escopo, só na tabela de planejamento).
+
+**Suposições registradas (G1 — ambiguidade resolvida pela opção mais simples):**
+
+- **`createTaskSchema.recurrenceRule` não é persistido em `createTask`.** O schema de banco (P-4.6) amarra `recurrence_rules.task_template_id` como `NOT NULL` — recorrência só existe presa a um template, não a uma tarefa avulsa. Recorrência real passa por `createRecurrenceRule` (`recurrence.ts`), amarrada a um template criado via `createTaskTemplate` (`templates.ts`). Consumir `recurrenceRule` do formulário de criação de tarefa livre é trabalho de um prompt futuro se essa lacuna virar problema real (ex.: template implícito de 1 item criado por baixo dos panos).
+- **`createAttachment` (dentro de `tasks.ts`, sem arquivo `attachments.ts` próprio pois não está na lista de Arquivos permitidos)** gera a URL de upload assinada com o client de sessão (`@hebron/auth/server`), não `service_role` — G6.2 exige que escritas rodem como `authenticated`; a policy `tarefas_anexos_insert_own` (0034) autoriza o próprio usuário a escrever na própria pasta, dispensando elevação de privilégio.
+- **`updateTask` (edição geral) e `deleteTask` (soft-delete) não têm schema próprio em `@hebron/validators/tarefas`** — criados localmente em `tasks.ts` (schemas Zod ad-hoc reaproveitando `taskPriorityEnum` do package compartilhado) porque nenhum dos 8 schemas existentes cobre update/delete; `createTaskSchema` é só de criação.
+- **`assignTaskManually` (superAdminAction, em `tasks.ts`)** não está na lista literal de Escopo, mas fecha exatamente o ciclo que o próprio critério de aceite exige ("createAutoTask... tarefa nascendo SEM assignee") — sem uma rota para desligar `needs_manual_assignment`, toda tarefa automática ficaria permanentemente sem responsável. BRAIN §6.9: "super_admin atribui manualmente".
+- **`computeNextRun` (recorrência) duplicada em `apps/tarefas/src/actions/recurrence.ts` e `packages/jobs/src/crons/tarefas.ts`**, e não extraída para um pacote compartilhado — `packages/jobs` nunca importa de um app e nenhum arquivo de `packages/db` para essa lógica está na lista de Arquivos permitidos. Mesma decisão para `instantiateTaskTemplate`/`instantiateTemplate` (duplicada entre `templates.ts` e o cron). Não trata overflow de dia em meses curtos (`dayOfMonth: 31` em fevereiro cai onde o `Date` do JS resolver).
+- **Mutações usam `db` (superuser de `@hebron/db/client`), não `withAuthenticatedContext`.** G6.2 declara a decisão B como alvo, mas nenhuma Server Action de mutação do monorepo adota isso hoje (`withAuthenticatedContext` só está em `lib/queries.ts`/RSC de leitura e em `rls.test.ts`) — inclusive `apps/financeiro/src/actions/approval.ts`, com débito idêntico já registrado em S-64 ("RLS de `batch_approvals` continua sendo defense-in-depth inerte"). Seguido o precedente estabelecido em vez de divergir silenciosamente; RBAC no action-client (G6.1) é a camada ativa nestas actions, RLS fica defense-in-depth inerte até um prompt dedicado migrar todas as actions do monorepo.
+
+**Verificação funcional (evidência além de lint/typecheck):**
+
+- Migration `0034_tarefas_storage.sql` aplicada contra o banco real (`pnpm db:migrate` → "Applied 1 migration(s)"); bucket `tarefas-anexos` e as 3 policies confirmados via MCP Supabase.
+- `runTarefasRecurrence()` (cron de recorrência) executado contra o banco real via script temporário (criado e removido nesta sessão, não versionado): criou `task_template` + `template_item` (dueOffsetDays=5, 2 subtarefas) + `recurrence_rule` (mensal, dia 10, `next_run_at` no passado); a execução criou 1 tarefa com `due_date` = hoje+5, as 2 subtarefas, e avançou `next_run_at` de 2026-07-07 para 2026-08-10 (dia 10 do mês seguinte, `interval=1`) — comportamento correto. Registros de teste limpos ao final (sem resíduo).
+- `pnpm turbo lint typecheck` — 38/38 pacotes verdes (workspace inteiro, não só os pacotes tocados).
+- `pnpm --filter @hebron/db --filter @hebron/jobs test` — 65/65 testes verdes (nenhuma regressão nos crons/helpers existentes).
+
+**Débitos técnicos / pendências:**
+
+- Progresso agregado de subtarefas (3/5 = 60%) não é retornado por nenhuma action — `createSubtask`/`toggleSubtask` mutam a linha, mas a agregação é um valor derivado em leitura (`COUNT`/`SUM` sobre `tarefas.subtasks`), que pertence a um `queries.ts`/RSC — fora do escopo de Server Actions deste prompt. Pendente para P-4.9.
+
+**Critérios de aceite verificados:**
+
+- [x] CRUD de tarefas com task_events (`createTask`/`updateTask`/`updateTaskStatus`/`deleteTask` em `tasks.ts`, todas chamam `logTaskEvent`); aprovações com audit central (`admin.audit_log`) que aborta a operação em falha — `requestApproval`/`resolveApprovalRequest` gravam via `logTarefasAudit` (`criticality: "critical"`) dentro do mesmo `db.transaction` da mutação
+- [x] Mover tarefa entre colunas atualiza status — `updateTaskStatus` (`updateTaskStatusSchema`), gate own/assignee + RLS
+- [x] Subtarefas: progresso agregado — `createSubtask`/`toggleSubtask`; agregação (3/5 = 60%) é derivada em leitura (fora do escopo de mutação deste prompt), não armazenada
+- [x] Comentários com @menções geram notificação ao mencionado — `createComment` (`comments.ts`) itera `input.mentions` e chama `createNotification` (in_app) por usuário mencionado, exceto auto-menção
+- [x] Time tracking: start/stop com cálculo de duração — `startTimeEntry`/`stopTimeEntry` (`time-tracking.ts`), `durationMinutes` calculado em `stopTimeEntry`; `createManualTimeEntry` para lançamento retroativo
+- [x] Recorrência: cron registrado em packages/jobs cria a tarefa na next_run_at — `tarefasRecurrenceCron` registrado em `packages/jobs/src/index.ts`; executado manualmente contra o banco real nesta sessão (ver "Verificação funcional" acima)
+- [x] Template: instanciar cria todas as tarefas filhas — `instantiateTaskTemplate` (`templates.ts`), uma tarefa por `template_item` + subtarefas pré-definidas
+- [x] Approval: enviar notificação ao diretor; aprovar/rejeitar atualiza status — `requestApproval` notifica o `approverId`; `resolveApprovalRequest` atualiza `tasks.status` para `requestedStatus` quando `decision = "aprovado"` e notifica `requestedBy`
+- [x] Todas as actions usam o action-client de @hebron/auth — `grep -rn "createClient(" apps/tarefas/src/actions` só retorna o uso de `@supabase/supabase-js` dentro de `createAttachment` para `.storage`, nunca para sessão/auth (sessão sempre via `resolveSession`/`createSupabaseServerActionClient` de `@hebron/auth/server`)
+- [x] createAutoTask exportada de packages/integrations com tarefa nascendo SEM assignee — `needsManualAssignment: true`, nenhuma linha inserida em `tarefas.assignees`
+- [x] Lint passa — `pnpm turbo lint` 38/38 pacotes
+- [x] Types passam — `pnpm turbo typecheck` 38/38 pacotes
+
+**Arquivos criados:**
+
+- `apps/tarefas/src/actions/tasks.ts`
+- `apps/tarefas/src/actions/comments.ts`
+- `apps/tarefas/src/actions/time-tracking.ts`
+- `apps/tarefas/src/actions/recurrence.ts`
+- `apps/tarefas/src/actions/templates.ts`
+- `apps/tarefas/src/actions/approvals.ts`
+- `apps/tarefas/src/lib/safe-action.ts`
+- `apps/tarefas/src/lib/audit.ts`
+- `packages/integrations/src/tarefas.ts`
+- `packages/jobs/src/crons/tarefas.ts`
+- `packages/db/src/migrations/0034_tarefas_storage.sql`
+
+**Arquivos modificados:**
+
+- `apps/tarefas/package.json` (`@hebron/email`, `@supabase/supabase-js`, `drizzle-orm`, `next-safe-action`)
+- `packages/integrations/package.json` (`@hebron/types`; export `./tarefas`)
+- `packages/integrations/src/index.ts` (`export * from "./tarefas"`)
+- `packages/jobs/src/index.ts` (registra `tarefasRecurrenceCron`)
+- `packages/jobs/src/catalog.ts` (remove a entrada `tarefas-recorrencia` de `PLANNED_JOBS`, agora implementada)

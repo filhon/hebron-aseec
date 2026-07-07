@@ -25,15 +25,6 @@ export interface PlannedJob {
 
 export const PLANNED_JOBS: PlannedJob[] = [
   {
-    id: "tarefas-recorrencia",
-    name: "Tarefas: recorrência de tarefas",
-    cron: "0 6 * * *",
-    sourcePrompt: "P-4.8",
-    description:
-      "Cria a próxima ocorrência de uma tarefa recorrente quando a atual é " +
-      "concluída/vence. Aguarda P-4.8 (schema de recorrência).",
-  },
-  {
     id: "tarefas-prazos",
     name: "Tarefas: prazo próximo e prazo vencido",
     cron: "0 7 * * *",

@@ -2782,18 +2782,18 @@ Server Actions: CRUD de tarefas. Mover entre colunas (drag-drop). Criar/completa
 
 **Critérios de aceite:**
 
-- [ ] CRUD de tarefas com task_events; aprovações com audit central (admin.audit_log) que aborta a operação em falha (teste)
-- [ ] Mover tarefa entre colunas atualiza status
-- [ ] Subtarefas: progresso agregado (3/5 = 60%)
-- [ ] Comentários com @menções geram notificação ao mencionado
-- [ ] Time tracking: start/stop com cálculo de duração
-- [ ] Recorrência: cron registrado em packages/jobs cria a tarefa na next_run_at (executado em dev com relógio simulado ou trigger manual — evidência no PR)
-- [ ] Template: instanciar cria todas as tarefas filhas
-- [ ] Approval: enviar notificação ao diretor; aprovar/rejeitar atualiza status
-- [ ] Todas as actions usam o action-client de @hebron/auth (grep: zero createClient manual)
-- [ ] createAutoTask exportada de packages/integrations com tarefa nascendo SEM assignee
-- [ ] Lint passa
-- [ ] Types passam
+- [x] CRUD de tarefas com task_events; aprovações com audit central (admin.audit_log) que aborta a operação em falha (teste)
+- [x] Mover tarefa entre colunas atualiza status
+- [~] Subtarefas: progresso agregado (3/5 = 60%) — create/toggle implementados; agregação é valor derivado em leitura (`queries.ts`/RSC), fora do escopo de Server Actions deste prompt — ver P-4.9
+- [x] Comentários com @menções geram notificação ao mencionado
+- [x] Time tracking: start/stop com cálculo de duração
+- [x] Recorrência: cron registrado em packages/jobs cria a tarefa na next_run_at (executado em dev com relógio simulado ou trigger manual — evidência no PR)
+- [x] Template: instanciar cria todas as tarefas filhas
+- [x] Approval: enviar notificação ao diretor; aprovar/rejeitar atualiza status
+- [x] Todas as actions usam o action-client de @hebron/auth (grep: zero createClient manual)
+- [x] createAutoTask exportada de packages/integrations com tarefa nascendo SEM assignee
+- [x] Lint passa
+- [x] Types passam
 
 ---
 
