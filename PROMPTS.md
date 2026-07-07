@@ -2629,13 +2629,13 @@ Formulários: criar/editar tarefa (título, descrição com o editor rich text C
 
 **Critérios de aceite:**
 
-- [ ] Task form com editor rich text para descrição
-- [ ] @menções com autocomplete de usuários do workspace
-- [ ] Recurrence form com preview visual (ex: "Toda segunda-feira às 9h")
-- [ ] Template form com lista de tarefas editável (drag-drop para reordenar)
-- [ ] Validação Zod em todos os formulários
-- [ ] Lint passa
-- [ ] Types passam
+- [x] Task form com editor rich text para descrição
+- [x] @menções com autocomplete de usuários do workspace
+- [~] Recurrence form com preview visual (ex: "Toda segunda-feira às 9h") — preview sem horário de dia; `RecurrenceRule` não tem esse campo (ver S-76)
+- [x] Template form com lista de tarefas editável (drag-drop para reordenar)
+- [x] Validação Zod em todos os formulários
+- [x] Lint passa
+- [x] Types passam
 
 ---
 

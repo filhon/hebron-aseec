@@ -65,6 +65,9 @@ export type { ToastProps, ToastActionElement } from "./components/toast";
 export { FormField, Label } from "./components/form-field";
 export type { FormFieldProps } from "./components/form-field";
 
+export { RichTextEditor } from "./components/rich-text-editor";
+export type { RichTextEditorProps } from "./components/rich-text-editor";
+
 // Layout
 export { AppShell } from "./components/app-shell";
 export type { AppShellProps } from "./components/app-shell";

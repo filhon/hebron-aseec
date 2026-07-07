@@ -97,6 +97,7 @@
 | S-73   | 2026-07-07 | P-4.1 — Schema de Tipos Tarefas                                         | concluido                            |
 | S-74   | 2026-07-07 | P-4.2 — Componentes UI Tarefas                                          | concluido                            |
 | S-75   | 2026-07-07 | P-4.3 — Telas e Páginas Tarefas                                         | concluido                            |
+| S-76   | 2026-07-07 | P-4.4 — Formulários Tarefas                                             | concluido                            |
 
 ---
 
@@ -3500,3 +3501,55 @@ Implementou as 7 telas do módulo Tarefas listadas no escopo, todas consumindo o
 **Arquivos modificados:**
 
 - `apps/tarefas/eslint.config.mjs` (ignora `next-env.d.ts` e `.next/**`)
+
+---
+
+### S-76 — 2026-07-07 — P-4.4 — Formulários Tarefas
+
+**Prompt:** P-4.4 (`PROMPTS.md:2607`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Implementou os 6 formulários listados no escopo, todos consumindo os tipos de P-4.1 e (onde não colide com o gap de UUID abaixo) os schemas Zod já existentes em `packages/validators/src/tarefas`: `TaskForm` (título, descrição, módulo, prioridade, prazo, responsáveis, tags, anexos — `createTaskSchema`), `SubtaskForm` (título + responsável), `CommentForm` (conteúdo com autocomplete de `@menções`), `RecurrenceForm` (tipo/intervalo/dia com pré-visualização textual — `recurrenceRuleSchema` usado sem alteração, sem campos com UUID), `TemplateForm` (nome/descrição/módulo + lista de tarefas pré-definidas com reordenação via drag-and-drop nativo — `createTaskTemplateSchema` usado sem alteração) e `ApprovalRequestForm` (status alvo + diretor aprovador + notas). Nenhum destes arquivos está ligado a página alguma ainda — isso é trabalho de P-4.9 (G5), consistente com o padrão já usado em Documentos/Financeiro (formulário do Bloco A primeiro, integração depois).
+
+**Decisão D-1 formalizada nesta sessão (ver `PATCHES/014-editor-rich-text-compartilhado-d1.md`):**
+O escopo exige "descrição com o editor rich text COMPARTILHADO de packages/ui — decisão D-1; não criar editor próprio do app". O componente nunca tinha sido criado (S-68 havia deixado essa decisão explicitamente pendente até o primeiro prompt que a consumisse). Criado `packages/ui/src/components/rich-text-editor.tsx` (`RichTextEditor`, exportado por `@hebron/ui`) — `contentEditable` + `document.execCommand`, sem dependência nova, toolbar mínima (negrito/itálico/sublinhado/listas/link), tokens canônicos. É infraestrutura óbvia faltante para cumprir uma instrução literal do prompt (G1) — sem ela seria impossível não "criar editor próprio do app".
+
+**Suposições registradas (G1 — ambiguidade resolvida pela opção mais simples):**
+
+- **Ids de mock não são UUID.** `createTaskSchema` (`assigneeIds`/`tagIds`), `createSubtaskSchema` (`assigneeId`), `createCommentSchema` (`mentions`) e `requestApprovalSchema` (`approverId`) validam esses campos com `.uuid()` — mas os ids do mock atual (`mock-data.ts`) são strings legíveis (`"user-colab-01"`, `"user-diretor-01"`), não UUIDs reais (que só existirão a partir do backend de P-4.6+). Usar os schemas compartilhados sem alteração faria qualquer seleção de responsável/menção/aprovador falhar a validação sempre. Cada formulário afetado usa um schema Zod **local** que espelha exatamente as mesmas mensagens/limites do schema compartilhado, mas com `z.string().min(1)` no lugar de `.uuid()` nesses campos específicos — os demais campos (enums, tamanhos, obrigatoriedade) continuam vindo de `@hebron/validators/tarefas` (`workspaceEnum`, `taskPriorityEnum`, `taskStatusEnum`) para não duplicar a fonte da verdade. `taskId` (sempre um prop externo, nunca digitado pelo usuário) não passa por validação Zod alguma — é mesclado direto no payload de saída. Mesmo padrão já usado por `apps/documentos/src/components/document-form.tsx` (`categoryId`/`tagIds` como `z.string()`, não `.uuid()`). `recurrenceRuleSchema` e `createTaskTemplateSchema` não têm nenhum campo de id e foram usados **sem modificação**. Débito registrado para P-4.9: quando o backend gerar UUIDs reais, os schemas locais destes 4 formulários devem ser substituídos pelos schemas compartilhados originais (com `.uuid()`).
+- **`zod` não era dependência direta de `apps/tarefas`** (só chegava transitivamente via `@hebron/validators`, insuficiente para `import { z } from "zod"` sob resolução estrita do pnpm). Adicionado `"zod": "catalog:"` ao `package.json` do app — mesma versão já pinada no catálogo do workspace (`pnpm-workspace.yaml`), idêntico ao que `apps/documentos`/`apps/admin`/`apps/financeiro` já tinham. Infraestrutura óbvia faltante para cumprir o critério de aceite "Validação Zod em todos os formulários" (G1); `pnpm install` rodado para atualizar o lockfile.
+- **Sem `react-hook-form`/`@hookform/resolvers` em `apps/tarefas`** (ao contrário de `admin`/`financeiro`, que já os usam em formulários Bloco B). Como este prompt é Bloco A (sem Server Actions ainda) e adicionar essas duas dependências não é estritamente necessário para nenhum critério de aceite, os 6 formulários usam `useState` + `schema.safeParse` no submit — o mesmo padrão já estabelecido por `DocumentForm`/`TemplatesPage` (Bloco A não integrado). Ficará a critério de P-4.9 migrar para RHF se fizer sentido junto da integração com `next-safe-action`.
+- **"Time entry manual" não tem arquivo próprio.** O texto de escopo lista 7 formulários ("... Pedido de aprovação (selecionar diretor). Time entry manual.") mas a lista de "Arquivos permitidos" só define 6 arquivos — nenhum deles é um lugar natural para um formulário de lançamento manual de horas (`createTimeEntrySchema` já existe em `packages/validators`, sem consumidor). `apps/tarefas/src/components/time-tracker.tsx` (P-4.2/P-4.3, cronômetro iniciar/parar) seria o lar óbvio dessa função, mas não está nesta lista de arquivos permitidos. Seguindo G1 ao pé da letra ("não crie arquivos fora da lista"), nenhum arquivo novo foi criado para isso — fica registrado aqui como débito de escopo do próprio PROMPTS.md, a resolver quando `time-tracker.tsx` for tocado novamente (P-4.5 ou P-4.9).
+- **Sem `design-refs/tarefas`** (mesma situação já registrada em S-74/S-75). Seguido BRAIN.md §5 + linguagem visual dos componentes de P-4.2/P-4.3 (classes Tailwind v4 com tokens `--hb-*`/semânticos, não o padrão `style={{}}` mais antigo de Documentos).
+- **`RecurrenceForm` — pré-visualização sem horário.** O critério de aceite cita como exemplo "Toda segunda-feira às 9h", mas `RecurrenceRule` (`packages/types/src/tarefas`) não tem nenhum campo de hora do dia, e `recurrenceRuleSchema` não o exige. Adicionar um campo de horário exigiria alterar `packages/types`/`packages/validators` (fora da lista de arquivos permitidos) e inventar uma regra de negócio não pedida em nenhum outro lugar (BRAIN §6.9 não menciona horário de recorrência). A pré-visualização descreve o padrão sem horário (ex.: "Toda segunda-feira").
+- **`Select` do Radix não aceita `value=""`.** Onde um campo opcional (`assigneeId` em `SubtaskForm`) precisa representar "nenhum", usa-se o sentinel `"none"` convertido para `null` no submit — padrão necessário porque `SelectItem` não aceita `value` vazio.
+
+**Critérios de aceite verificados:**
+
+- [x] Task form com editor rich text para descrição
+- [x] @menções com autocomplete de usuários do workspace
+- [x] Recurrence form com preview visual (sem horário — ver suposição acima)
+- [x] Template form com lista de tarefas editável (drag-drop para reordenar)
+- [x] Validação Zod em todos os formulários
+- [x] Lint passa (`pnpm turbo lint --filter=@hebron/tarefas --filter=@hebron/ui`)
+- [x] Types passam (`pnpm turbo typecheck --filter=@hebron/tarefas --filter=@hebron/ui`)
+- [x] Build (`next build`) — verificação visual em browser real não foi possível neste ambiente (mesma limitação já registrada em S-75)
+
+**Arquivos criados:**
+
+- `packages/ui/src/components/rich-text-editor.tsx`
+- `apps/tarefas/src/components/task-form.tsx`
+- `apps/tarefas/src/components/subtask-form.tsx`
+- `apps/tarefas/src/components/comment-form.tsx`
+- `apps/tarefas/src/components/recurrence-form.tsx`
+- `apps/tarefas/src/components/template-form.tsx`
+- `apps/tarefas/src/components/approval-request-form.tsx`
+- `PATCHES/014-editor-rich-text-compartilhado-d1.md`
+
+**Arquivos modificados:**
+
+- `packages/ui/src/index.ts` (exporta `RichTextEditor`)
+- `apps/tarefas/package.json` (adiciona `zod: catalog:`)
+- `pnpm-lock.yaml`
