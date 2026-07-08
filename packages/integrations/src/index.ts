@@ -4,3 +4,5 @@ export * from "./projetos-tarefas";
 export * from "./financeiro";
 export * from "./projetos";
 export * from "./tarefas";
+export * from "./flats";
+export * from "./intranet";

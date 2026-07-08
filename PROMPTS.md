@@ -2903,13 +2903,13 @@ Conectar integrações via packages/integrations (createAutoTask já criada em P
 
 **Critérios de aceite:**
 
-- [ ] `createAutoTask(source, sourceRef, templateId)` exportada de packages/integrations; zero imports app→app (verificação do CI)
-- [ ] Submissão de projeto cria tarefas de análise (real)
-- [ ] Tarefas automáticas nascem SEM assignee (super_admin atribui depois)
-- [ ] Stubs documentados para Flats e Intranet
-- [ ] Falha na criação do checklist não é engolida: log estruturado + notificação a super_admin
-- [ ] Lint passa
-- [ ] Types passam
+- [x] `createAutoTask(source, sourceRef, templateId)` exportada de packages/integrations; zero imports app→app (verificação do CI)
+- [x] Submissão de projeto cria tarefas de análise (real)
+- [x] Tarefas automáticas nascem SEM assignee (super_admin atribui depois)
+- [x] Stubs documentados para Flats e Intranet
+- [x] Falha na criação do checklist não é engolida: log estruturado + notificação a super_admin
+- [x] Lint passa
+- [x] Types passam
 
 ---
 

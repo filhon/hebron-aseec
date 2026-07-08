@@ -516,13 +516,25 @@ export const submitProject = submissorAction
       },
     });
 
-    // Cross-app: criar checklist de análise no módulo tarefas (stub, P-0.15).
-    // Awaited (nunca fire-and-forget, G6.5) — a submissão do projeto já foi
-    // commitada acima, então uma falha aqui é logada e não propagada.
+    // Cross-app: criar checklist de análise no módulo tarefas (real,
+    // packages/integrations/src/projetos-tarefas.ts, P-4.11). Awaited (nunca
+    // fire-and-forget, G6.5) — a submissão do projeto já foi commitada
+    // acima, então a falha é decidida aqui: não propagamos para o
+    // submissor (a submissão já aconteceu), só logamos. A função chamada já
+    // loga estruturado e notifica todo super_admin antes de relançar —
+    // este catch é a segunda camada, para o caso raro de ela mesma falhar.
     try {
       await onProjectSubmitted(parsedInput.projectId);
     } catch (err) {
-      console.error("[projetos/submit] tarefas integration failed:", err);
+      console.error(
+        JSON.stringify({
+          event: "cross_app_integration_failure",
+          integration: "projetos-tarefas.onProjectSubmitted",
+          caller: "projetos/actions/projects.ts::submitProject",
+          projectId: parsedInput.projectId,
+          message: err instanceof Error ? err.message : String(err),
+        }),
+      );
     }
 
     return { project: submittedProject };

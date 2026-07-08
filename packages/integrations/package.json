@@ -9,7 +9,9 @@
     "./projetos-tarefas": "./src/projetos-tarefas.ts",
     "./financeiro": "./src/financeiro.ts",
     "./projetos": "./src/projetos.ts",
-    "./tarefas": "./src/tarefas.ts"
+    "./tarefas": "./src/tarefas.ts",
+    "./flats": "./src/flats.ts",
+    "./intranet": "./src/intranet.ts"
   },
   "scripts": {
     "lint": "eslint .",

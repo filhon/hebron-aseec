@@ -1,6 +1,12 @@
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { db } from "@hebron/db/client";
-import { tasks, workspaces } from "@hebron/db/schema";
+import {
+  subtasks,
+  taskTemplates,
+  tasks,
+  templateItems,
+  workspaces,
+} from "@hebron/db/schema";
 import { getSystemActorId } from "@hebron/db/system-actor";
 import type { TaskPriority, Workspace } from "@hebron/types/tarefas";
 
@@ -69,4 +75,115 @@ export async function createAutoTask(
   if (!task) throw new Error("Falha ao criar tarefa automática");
 
   return { taskId: task.id };
+}
+
+// ---------------------------------------------------------------------------
+// createAutoTaskChecklist — Projetos/Flats → Tarefas (checklist a partir de
+// um template, ex. "submissão de projeto cria checklist de análise",
+// "reserva confirmada cria tarefas de limpeza pré/pós-estadia").
+//
+// Consolida com createAutoTask acima: mesmo contrato de "tarefa automática"
+// (source "auto", sourceRef ligando de volta ao registro de origem,
+// needsManualAssignment sempre true — BRAIN §6.9), aplicado a cada
+// tarefa pré-definida (`tarefas.template_items`) do template em vez de um
+// único título/descrição avulsos. `dueOffsetDays` do item vira `dueDate`
+// relativo a "agora" (mesma regra de apps/tarefas/src/actions/templates.ts
+// ::instantiateTaskTemplate e packages/jobs/src/crons/tarefas.ts
+// ::instantiateTemplate — duplicada aqui pela mesma razão documentada
+// nesses dois: packages/integrations não pode importar de um app nem de
+// packages/jobs).
+// ---------------------------------------------------------------------------
+
+export interface CreateAutoTaskChecklistParams {
+  templateId: string;
+  /** Módulo de origem, ex.: "projetos", "flats". */
+  sourceModule: string;
+  /** ID do registro que originou o checklist no módulo de origem. */
+  sourceId: string;
+}
+
+export interface CreateAutoTaskChecklistResult {
+  taskIds: string[];
+}
+
+function addDays(base: Date, days: number): Date {
+  const d = new Date(base);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d;
+}
+
+export async function createAutoTaskChecklist(
+  params: CreateAutoTaskChecklistParams,
+): Promise<CreateAutoTaskChecklistResult> {
+  const [template] = await db
+    .select()
+    .from(taskTemplates)
+    .where(eq(taskTemplates.id, params.templateId))
+    .limit(1);
+  if (!template)
+    throw new Error(`Template não encontrado: ${params.templateId}`);
+  if (!template.isActive)
+    throw new Error(`Template está inativo: ${params.templateId}`);
+
+  const items = await db
+    .select()
+    .from(templateItems)
+    .where(eq(templateItems.taskTemplateId, template.id))
+    .orderBy(asc(templateItems.order));
+  if (items.length === 0) {
+    throw new Error(
+      `Template não possui tarefas definidas: ${params.templateId}`,
+    );
+  }
+
+  const systemActorId = await getSystemActorId();
+  const now = new Date();
+  const sourceRef = {
+    sourceModule: params.sourceModule,
+    sourceId: params.sourceId,
+  };
+
+  const taskIds = await db.transaction(async (tx) => {
+    const ids: string[] = [];
+    for (const item of items) {
+      const dueDate =
+        item.dueOffsetDays !== null ? addDays(now, item.dueOffsetDays) : null;
+
+      const [task] = await tx
+        .insert(tasks)
+        .values({
+          title: item.title,
+          description: item.description,
+          workspaceId: template.workspaceId,
+          priority: item.priority,
+          dueDate,
+          source: "auto",
+          sourceRef,
+          needsManualAssignment: true,
+          createdBy: systemActorId,
+        })
+        .returning({ id: tasks.id });
+      if (!task) continue;
+      ids.push(task.id);
+
+      if (item.subtasks.length > 0) {
+        await tx.insert(subtasks).values(
+          item.subtasks.map((title, index) => ({
+            taskId: task.id,
+            title,
+            order: index,
+          })),
+        );
+      }
+    }
+    return ids;
+  });
+
+  if (taskIds.length === 0) {
+    throw new Error(
+      `Falha ao criar tarefas do checklist a partir do template: ${params.templateId}`,
+    );
+  }
+
+  return { taskIds };
 }

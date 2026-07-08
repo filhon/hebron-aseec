@@ -103,6 +103,7 @@
 | S-80   | 2026-07-07 | P-4.8 — Server Actions Tarefas                                          | concluido                            |
 | S-81   | 2026-07-07 | P-4.9 — Integração UI ↔ Backend Tarefas                                 | concluido                            |
 | S-82   | 2026-07-08 | P-4.10 — Notificações e Emails Tarefas                                  | concluido                            |
+| S-83   | 2026-07-08 | P-4.11 — Integrações Cross-App Tarefas                                  | concluido                            |
 
 ---
 
@@ -3979,3 +3980,97 @@ aceite):**
 - `apps/tarefas/src/actions/approvals.ts` (chamada a `notifyApprovalRequested`)
 - `packages/jobs/src/index.ts` (registro de `tarefasPrazosCron`)
 - `packages/jobs/src/catalog.ts` (remoção da entrada `tarefas-prazos` de `PLANNED_JOBS`)
+
+### S-83 — 2026-07-08 — P-4.11 — Integrações Cross-App Tarefas
+
+**Prompt:** P-4.11 (`PROMPTS.md:2882`)
+
+Conectou a integração real Projetos → Tarefas: `onProjectSubmitted`
+(`packages/integrations/src/projetos-tarefas.ts`) deixou de ser stub e agora cria o
+checklist de análise via `createAutoTaskChecklist` (nova função, `tarefas.ts`), que
+instancia todas as `tarefas.template_items` de um `tarefas.task_templates` configurável
+pelo Admin em `admin.system_settings` (chave `projetos_analysis_checklist_template`,
+lida via `getSystemSetting`) — mesmo contrato de "tarefa automática" de `createAutoTask`
+(`source: "auto"`, `sourceRef` apontando de volta ao projeto, `needsManualAssignment:
+true`, ator sistema como `createdBy`), aplicado por item de template em vez de um único
+título avulso. A lógica de instanciar template duplica (deliberadamente, mesma razão já
+documentada em `packages/jobs/src/crons/tarefas.ts` e
+`apps/tarefas/src/actions/templates.ts`: `packages/integrations` não importa de um app
+nem de `packages/jobs`) o padrão de `instantiateTaskTemplate`/`instantiateTemplate`.
+Erros (BRAIN §7, padrão S1-22 — mutação crítica nunca fire-and-forget): falha ao criar o
+checklist (template não configurado, template inativo/vazio, erro de banco) é logada em
+JSON estruturado e notifica in-app todo usuário com papel `super_admin`
+(`makeNotificationInserter`, sem email — ver suposição abaixo) antes de relançar; o
+chamador (`submitProject`, `apps/projetos/src/actions/projects.ts`) já dava `await` +
+`try/catch` desde o stub e decide não abortar a submissão (o projeto já foi commitado),
+só re-logando estruturado como segunda camada. Criados os stubs documentados
+`packages/integrations/src/flats.ts` (`onFlatsReservationConfirmed`, fase 7 — P-7.11 já
+existe como patch e especifica 2 templates seedados por slug, referenciado no
+comentário) e `src/intranet.ts` (`onMeetingActionItemDecided`, fase 5 — P-5.11).
+
+**Suposições registradas (G1 — divergências entre a lista literal do prompt e o estado
+real do repositório):**
+
+- **Editado `packages/integrations/src/projetos-tarefas.ts`, não `src/projetos.ts`**
+  (este último está na lista de "Arquivos permitidos" do prompt). `projetos.ts` já existe
+  desde P-3.11 e contém `checkOrganizationBudget` (Projetos → Financeiro, assunto não
+  relacionado); o stub de `onProjectSubmitted` já vivia em `projetos-tarefas.ts` desde
+  P-0.15 (S-67), e BRAIN.md §7 cita literalmente `projetos-tarefas.ts` como exemplo da
+  convenção `<origem>-<destino>.ts` ("documentos-projetos.ts, projetos-flats.ts,
+  projetos-tarefas.ts"). Mover a função para `projetos.ts` misturaria dois assuntos não
+  relacionados no mesmo arquivo e contradiria BRAIN.md (fonte da verdade) só para bater
+  com um nome desatualizado na lista do prompt. Diferente do precedente de P-3.11
+  (SESSIONS.md linha ~3275, "lista explícita do prompt venceu" para `financeiro.ts`/
+  `projetos.ts`) — lá os arquivos citados pelo prompt ainda não existiam com outro
+  conteúdo; aqui `projetos-tarefas.ts` já existe, é a "fonte da verdade" documentada em
+  BRAIN.md, e já está importado por `apps/projetos/src/actions/projects.ts`.
+- **`packages/integrations/src/index.ts` e `package.json` editados** (fora da lista) para
+  adicionar os subpaths/exports de `flats.ts` e `intranet.ts` — sem isso os dois stubs
+  novos não seriam consumíveis por nenhum app (`@hebron/integrations/flats` não
+  resolveria). Infra óbvia faltante (G1), não lógica de negócio nova.
+- **Notificação a super_admin é só in-app** (sem email): `packages/integrations` não
+  dependia de `@hebron/email` antes deste prompt, e o prompt não lista `package.json`
+  como arquivo permitido para adicionar a dependência; `makeNotificationInserter`
+  (`@hebron/db/notifications`, já dependência existente) é suficiente para o critério
+  "notificação a super_admin" sem abrir essa frente. Revisar se o padrão de
+  `apps/tarefas/src/lib/notifications.ts` (in_app + email) deveria se estender para cá
+  quando um prompt futuro tocar essa dependência.
+- **Chave de `admin.system_settings` (`projetos_analysis_checklist_template`) e o
+  `tarefas.task_templates` que ela aponta não foram seedados** — não há prompt/arquivo
+  de seed na lista permitida deste prompt, e `updateSystemSetting`
+  (`apps/admin/src/actions/settings.ts`) só atualiza chave já existente (sem `create`).
+  Na prática, a primeira submissão de projeto após este prompt vai falhar (template não
+  configurado) até que alguém insira a chave + o template com os itens do checklist —
+  isso é esperado e é exatamente o cenário que a notificação a super_admin cobre
+  ("configure isto"), mas fica registrado como débito para um prompt de seed/admin.
+
+**Critérios de aceite verificados:**
+
+- [x] `createAutoTask(source, sourceRef, templateId)` — implementado como duas funções
+      complementares em `packages/integrations/src/tarefas.ts`: `createAutoTask` (tarefa
+      avulsa, já existia de P-4.8) e `createAutoTaskChecklist` (nova, aceita
+      `templateId` + `sourceModule`/`sourceId`, para o caso de checklist/múltiplas
+      tarefas) — zero imports app→app (`node scripts/check-cross-app-imports.mjs`: "no
+      app→app imports found")
+- [x] Submissão de projeto cria tarefas de análise (real) — `onProjectSubmitted` chama
+      `createAutoTaskChecklist`
+- [x] Tarefas automáticas nascem SEM assignee — `needsManualAssignment: true`, mesmo
+      contrato de `createAutoTask` (P-4.8)
+- [x] Stubs documentados para Flats e Intranet — `src/flats.ts`, `src/intranet.ts`
+- [x] Falha na criação do checklist não é engolida: log estruturado + notificação a
+      super_admin — `notifyChecklistCreationFailure` em `projetos-tarefas.ts`
+- [x] Lint passa
+- [x] Types passam
+
+**Arquivos criados:**
+
+- `packages/integrations/src/flats.ts`
+- `packages/integrations/src/intranet.ts`
+
+**Arquivos modificados:**
+
+- `packages/integrations/src/tarefas.ts` (`createAutoTaskChecklist`)
+- `packages/integrations/src/projetos-tarefas.ts` (`onProjectSubmitted` real +
+  `notifyChecklistCreationFailure`)
+- `packages/integrations/src/index.ts`, `package.json` (exports novos)
+- `apps/projetos/src/actions/projects.ts` (log estruturado no ponto de chamada)
