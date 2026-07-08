@@ -107,6 +107,7 @@
 | S-84   | 2026-07-08 | P-4.12 — Testes Tarefas                                                 | concluido                            |
 | S-85   | 2026-07-08 | P-5.1 — Schema de Tipos Intranet                                        | concluido                            |
 | S-86   | 2026-07-08 | P-5.2 — Componentes UI Intranet                                         | concluido                            |
+| S-87   | 2026-07-08 | P-5.3 — Telas e Páginas Intranet                                        | concluido                            |
 
 ---
 
@@ -4217,7 +4218,7 @@ compartilhados com os `CalendarEvent` do tipo "reuniao").
 - [x] Mock KPIs: projetos ativos, alunos na Plataforma, doações do mês (semântica
       F1-Q10), audiência da Rádio
 - [x] Lint passa (`pnpm turbo lint --filter=@hebron/types --filter=@hebron/validators
-  --filter=@hebron/intranet`)
+--filter=@hebron/intranet`)
 - [x] Types passam (mesmo filtro — 18/18 tasks)
 
 **Arquivos criados:**
@@ -4304,3 +4305,107 @@ Tailwind solto — nenhum CSS novo foi criado, nenhuma cor em hex.
 - `apps/intranet/src/components/feed-widget.tsx`
 - `apps/intranet/src/components/app-launcher.tsx`
 - `apps/intranet/src/components/search-global.tsx`
+
+### S-87 — 2026-07-08 — P-5.3 — Telas e Páginas Intranet
+
+**Prompt:** P-5.3 (`PROMPTS.md:3029`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Criadas as 7 páginas do grupo `(dashboard)` da Intranet, consumindo os componentes de
+P-5.2 e os mocks de P-5.1 — nenhum componente ficou órfão (grep confirma import de
+`KPICard`, `AnnouncementCard`, `WidgetGrid`, `DirectoryCard`, `CalendarWidget`,
+`FeedWidget`, `AppLauncher` e `SearchGlobal`). `apps/intranet` não tem `design-refs/`
+(G3.1) — segui a linguagem visual já estabelecida em `admin`/`financeiro`/`tarefas`
+(classes de `patterns.css`: `.hb-page`, `.hb-welcome-card`, `.hb-grid`, `.hb-card`,
+`.hb-chip`, `.hb-filter-row`, `.hb-meeting-list`).
+
+- **Dashboard (`page.tsx`)**: cartão de boas-vindas (`.hb-welcome-card`) + `WidgetGrid`
+  renderizando os 6 widgets mock de `mockDashboardWidgets` (ordenados por `position`),
+  despachados por `type` para `KPICard`/`FeedWidget`/`CalendarWidget`; `AppLauncher`
+  fixo abaixo (não é um tipo de widget do enum `DashboardWidgetType`, então não entra
+  no grid arrastável). O feed cross-módulo é derivado combinando anúncios publicados +
+  decisões de reunião + eventos do tipo "evento" (não existe endpoint de atividade
+  agregada real antes de P-5.9/P-5.11 — mesma decisão já registrada em S-86 para o
+  `FeedWidget`).
+- **Anúncios**: `AnnouncementCard` em grid 2 colunas, filtro de prioridade via
+  `.hb-chip-row` (Todos/Urgente/Importante/Aviso).
+- **Diretório**: busca por nome/e-mail (`Input`) + filtro por papel (`Select`). O
+  escopo do prompt cita categorias amplas ("diretores, conselheiros, colaboradores,
+  submissores, parceiros"), mas `DirectoryMember` (P-5.1) só tem `role: string` livre
+  (cargo, ex. "Diretor Presidente", "Coordenadora Administrativa") — sem campo de
+  categoria. Resolvido pela opção mais simples (G1): filtro por valores distintos de
+  `role` presentes nos dados, não pelas 5 categorias do escopo. Registrado como
+  suposição — se a diretoria quiser as 5 categorias fixas, `DirectoryMember` precisa de
+  um campo novo em P-5.1 (débito).
+- **Calendário**: lista completa da agenda (todos os tipos, não só reunião/prazo, para
+  não esconder dados do mock) + `CalendarWidget` (mini calendário mensal) lado a lado
+  em `.hb-grid-stat`.
+- **Reuniões**: eventos do tipo "reuniao" com decisões vinculadas via
+  `meetingSessionId` (`.hb-meeting-list`/`.hb-meeting-date-block`), badge de status por
+  decisão com paleta local (pendente=laranja, em_andamento=ciano, concluida=verde — os
+  mesmos tons semânticos de `patterns.css`, mas `hb-status-em_andamento`/
+  `hb-status-concluida` não existem como classes prontas, então usei `style` inline
+  como o `AnnouncementCard` já faz para prioridade).
+- **Busca**: `SearchGlobal` com itens combinados de anúncios, diretório, calendário e
+  decisões de reunião (módulo = label da página de origem, agrupamento nativo do
+  componente).
+- Widget tipo `"chart"` (enum `DashboardWidgetType`) não tem componente próprio — P-5.2
+  só entregou `KPICard`/`FeedWidget`/`CalendarWidget`/`AppLauncher`/`SearchGlobal`, e
+  não estava na lista de arquivos permitidos deste prompt criar um novo. Reaproveitei
+  `KPICard` (já tem sparkline) para o widget mock `widget-05` (tipo chart).
+- Escopo do prompt cita "Notificações centralizadas", mas não há arquivo de página
+  nem critério de aceite correspondente na lista de arquivos permitidos — não criei
+  nada para isso (G1: implementar exatamente o que está listado). Fica para um prompt
+  futuro do módulo.
+
+**Infraestrutura criada (G1 — débito já previsto em S-86):**
+
+- `apps/intranet/postcss.config.mjs` e `apps/intranet/src/app/globals.css` (mesmo
+  padrão de `financeiro`/`tarefas`) — não existiam porque P-5.1/P-5.2 só tocaram
+  tipos/componentes isolados.
+- `(dashboard)/layout.tsx` define `<html>`/`<body>` próprios (fontes Parkinsans +
+  Titillium via `next/font`) em vez de importar um `app/layout.tsx` raiz compartilhado,
+  porque `(auth)/layout.tsx` (de P-0.4) já faz o mesmo — não estava na lista de
+  arquivos permitidos deste prompt para eu unificar num layout raiz único. Isso segue o
+  padrão oficial do Next.js de "multiple root layouts" por grupo de rotas; os dois
+  grupos não compartilham layout, mas também não têm hoje nenhum elemento visual em
+  comum que dependesse disso. Registrado como débito: `(auth)/layout.tsx` continua sem
+  fontes/tokens carregados (gap de P-0.4, fora do escopo de arquivos permitidos aqui).
+
+**Build (débito pré-existente, não introduzido por este prompt):**
+`next build` falha em "Collecting page data" com `PageNotFoundError` — confirmado via
+`git stash` que o mesmo erro (rota diferente: `/auth/callback`) já ocorre no branch
+antes das mudanças deste prompt. `pnpm turbo lint typecheck` passa (18/18 tasks,
+inclusive com as mudanças pendentes de `packages/ui` já presentes na branch antes desta
+sessão). Não investiguei mais a fundo por estar fora da lista de arquivos permitidos de
+P-5.3.
+
+**Critérios de aceite verificados:**
+
+- [x] Dashboard com widgets configuráveis (cada usuário monta o seu — `WidgetGrid` com
+      drag-drop reordenando os 6 widgets mock)
+- [x] Feed de anúncios com filtro de prioridade
+- [x] Diretório completo com busca e filtro por papel (papel = cargo livre do mock —
+      ver suposição acima)
+- [x] Calendário com eventos de reuniões e prazos (e também evento/outro, presentes no
+      mock)
+- [x] Reuniões: lista com atas e decisões vinculadas
+- [x] Busca cross-app com resultados agrupados
+- [x] Responsivo (grids `.hb-grid`/`.hb-grid-stat` com breakpoints já definidos em
+      `patterns.css`)
+- [x] Lint passa (`pnpm turbo lint typecheck --filter=@hebron/intranet` — 18/18 tasks)
+- [x] Types passam (mesmo comando)
+
+**Arquivos criados:**
+
+- `apps/intranet/postcss.config.mjs`
+- `apps/intranet/src/app/globals.css`
+- `apps/intranet/src/app/(dashboard)/layout.tsx`
+- `apps/intranet/src/app/(dashboard)/page.tsx`
+- `apps/intranet/src/app/(dashboard)/anuncios/page.tsx`
+- `apps/intranet/src/app/(dashboard)/diretorio/page.tsx`
+- `apps/intranet/src/app/(dashboard)/calendario/page.tsx`
+- `apps/intranet/src/app/(dashboard)/reunioes/page.tsx`
+- `apps/intranet/src/app/(dashboard)/busca/page.tsx`

@@ -3052,15 +3052,15 @@ Páginas: Dashboard personalizado (widgets configuráveis por usuário). Feed de
 
 **Critérios de aceite:**
 
-- [ ] Dashboard com widgets configuráveis (cada usuário monta o seu)
-- [ ] Feed de anúncios com filtro de prioridade
-- [ ] Diretório completo com busca e filtro por papel
-- [ ] Calendário com eventos de reuniões e prazos
-- [ ] Reuniões: lista com atas e decisões vinculadas
-- [ ] Busca cross-app com resultados agrupados
-- [ ] Responsivo
-- [ ] Lint passa
-- [ ] Types passam
+- [x] Dashboard com widgets configuráveis (cada usuário monta o seu)
+- [x] Feed de anúncios com filtro de prioridade
+- [x] Diretório completo com busca e filtro por papel
+- [x] Calendário com eventos de reuniões e prazos
+- [x] Reuniões: lista com atas e decisões vinculadas
+- [x] Busca cross-app com resultados agrupados
+- [x] Responsivo
+- [x] Lint passa
+- [x] Types passam
 
 ---
 

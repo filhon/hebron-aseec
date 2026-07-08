@@ -43,6 +43,7 @@ interface SidebarBrandProps {
   orgName?: string;
   collapsed: boolean;
   dark?: boolean;
+  className?: string;
 }
 
 function SidebarBrand({
@@ -51,6 +52,7 @@ function SidebarBrand({
   orgName = "Hebron Aseec",
   collapsed,
   dark,
+  className,
 }: SidebarBrandProps) {
   return (
     <div
@@ -58,6 +60,7 @@ function SidebarBrand({
         "flex h-14 shrink-0 items-center border-b",
         dark ? "border-white/10" : "border-(--border)",
         collapsed ? "justify-center px-2" : "gap-3 px-4 pr-10",
+        className,
       )}
     >
       {/* Logo mark */}
@@ -68,20 +71,20 @@ function SidebarBrand({
         <div className="flex min-w-0 flex-1 flex-col gap-0 leading-none">
           <span
             className={cn(
-              "truncate font-(--font-display) font-(--font-weight-semibold) uppercase",
-              dark ? "text-white/45" : "text-(--fg-muted)",
+              "truncate text-(--text-xs) font-(--font-display) font-(--font-weight-semibold)",
+              "uppercase tracking-widest",
+              dark ? "text-(--fg-invert-muted)" : "text-(--fg-muted)",
             )}
-            style={{ fontSize: "9.5px", letterSpacing: "0.1em" }}
           >
             {orgName}
           </span>
           {appName && (
             <span
               className={cn(
-                "truncate font-(--font-display) font-(--font-weight-bold)",
-                dark ? "text-white" : "text-(--fg)",
+                "truncate text-(--text-sm) font-(--font-display) font-(--font-weight-bold)",
+                dark ? "text-(--fg-invert)" : "text-(--fg)",
               )}
-              style={{ fontSize: "15px", letterSpacing: "-0.01em" }}
+              style={{ letterSpacing: "-0.01em" }}
             >
               {appName}
             </span>
@@ -151,38 +154,14 @@ function MobileSidebar({
 
           {/* Brand row in mobile drawer (no collapse button) */}
           {(logo ?? appName) && (
-            <div
-              className={cn(
-                "flex h-14 items-center gap-3 border-b px-4",
-                dark ? "border-white/10" : "border-(--border)",
-              )}
-            >
-              {logo && <span className="shrink-0">{logo}</span>}
-              {appName && (
-                <div className="flex min-w-0 flex-1 flex-col gap-0 leading-none">
-                  {orgName && (
-                    <span
-                      className={cn(
-                        "truncate font-(--font-display) font-(--font-weight-semibold) uppercase",
-                        dark ? "text-white/45" : "text-(--fg-muted)",
-                      )}
-                      style={{ fontSize: "9.5px", letterSpacing: "0.1em" }}
-                    >
-                      {orgName ?? "Hebron Aseec"}
-                    </span>
-                  )}
-                  <span
-                    className={cn(
-                      "truncate font-(--font-display) font-(--font-weight-bold)",
-                      dark ? "text-white" : "text-(--fg)",
-                    )}
-                    style={{ fontSize: "15px", letterSpacing: "-0.01em" }}
-                  >
-                    {appName}
-                  </span>
-                </div>
-              )}
-            </div>
+            <SidebarBrand
+              logo={logo}
+              appName={appName}
+              orgName={orgName}
+              collapsed={false}
+              dark={dark}
+              className="pr-4"
+            />
           )}
 
           <NavigationSidebar
@@ -232,7 +211,7 @@ export function AppShell({
           sidebarDark
             ? "border-r border-white/10 bg-(--hb-blue)"
             : "border-r border-(--border) bg-(--bg)",
-          "transition-[width] duration-(--transition-medium)",
+          "transition-[width] duration-(--transition-medium) will-change-[width]",
           desktopCollapsed ? "w-16" : "w-64",
         )}
         aria-label="Barra lateral de navegação"
@@ -252,10 +231,13 @@ export function AppShell({
           className={cn(
             "absolute right-0 top-0 flex h-14 w-8 items-center justify-center",
             sidebarDark
-              ? "text-white/35 hover:text-white/70"
+              ? "text-(--fg-invert-muted) hover:text-(--fg-invert)"
               : "text-(--fg-muted) hover:text-(--fg)",
             "transition-colors duration-(--transition-fast)",
-            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--brand)",
+            "focus-visible:outline-none focus-visible:ring-2",
+            sidebarDark
+              ? "focus-visible:ring-(--fg-invert)"
+              : "focus-visible:ring-(--brand)",
           )}
         >
           {desktopCollapsed ? (
@@ -297,7 +279,7 @@ export function AppShell({
           "fixed right-0 top-0 z-(--z-sticky) h-14",
           "flex items-center gap-3 border-b border-(--border)",
           "bg-(--bg)/95 px-4 backdrop-blur-sm",
-          "transition-[left] duration-(--transition-medium)",
+          "transition-[left] duration-(--transition-medium) will-change-[left]",
           "left-0",
           desktopCollapsed ? "lg:left-16" : "lg:left-64",
         )}
@@ -305,7 +287,7 @@ export function AppShell({
         {/* Mobile: hamburger + brand */}
         <button
           className={cn(
-            "flex h-8 w-8 items-center justify-center rounded-(--radius) lg:hidden",
+            "flex h-11 w-11 items-center justify-center rounded-(--radius) lg:hidden",
             "text-(--fg) transition-colors duration-(--transition-fast)",
             "hover:bg-(--surface-alt)",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--brand)",
@@ -330,7 +312,7 @@ export function AppShell({
       {/* ── Content ── */}
       <main
         className={cn(
-          "pt-14 transition-[margin-left] duration-(--transition-medium)",
+          "pt-14 transition-[margin-left] duration-(--transition-medium) will-change-[margin-left]",
           "ml-0",
           desktopCollapsed ? "lg:ml-16" : "lg:ml-64",
         )}

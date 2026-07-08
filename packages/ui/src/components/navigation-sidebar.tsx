@@ -128,36 +128,57 @@ function NavItemButton({
         href={item.href}
         onClick={onClick}
         aria-current={active ? "page" : undefined}
+        aria-label={
+          collapsed
+            ? item.badge !== undefined
+              ? `${item.label}, ${item.badge}`
+              : item.label
+            : undefined
+        }
         className={cn(
-          "group flex items-center gap-2.5 rounded-(--radius) px-2.5 py-2",
-          "text-(--text-sm) transition-all duration-(--transition-fast)",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--brand)",
+          "group flex items-center gap-2.5 rounded-(--radius) px-2.5 py-2.5",
+          "text-(--text-sm) transition-colors duration-(--transition-fast)",
+          "focus-visible:outline-none focus-visible:ring-2",
+          dark
+            ? "focus-visible:ring-(--fg-invert)"
+            : "focus-visible:ring-(--brand)",
           active
             ? dark
-              ? "bg-white/20 font-(--font-weight-semibold) text-white"
+              ? "bg-white/20 font-(--font-weight-semibold) text-(--fg-invert)"
               : "bg-(--brand-muted) font-(--font-weight-semibold) text-(--brand)"
             : dark
-              ? "text-white/55 hover:bg-white/[8%] hover:text-white"
+              ? "text-(--fg-invert-muted) hover:bg-white/[8%] hover:text-(--fg-invert)"
               : "text-(--fg-muted) hover:bg-(--surface-alt) hover:text-(--fg)",
           collapsed && "justify-center px-2",
         )}
       >
-        <Icon
-          className={cn(
-            "h-4 w-4 shrink-0 transition-colors duration-(--transition-fast)",
-            active
-              ? dark
-                ? "text-white"
-                : "text-(--brand)"
-              : dark
-                ? "text-white/55 group-hover:text-white"
-                : "text-(--fg-muted) group-hover:text-(--fg)",
+        <span className="relative shrink-0">
+          <Icon
+            className={cn(
+              "h-4 w-4 transition-colors duration-(--transition-fast)",
+              active
+                ? dark
+                  ? "text-(--fg-invert)"
+                  : "text-(--brand)"
+                : dark
+                  ? "text-(--fg-invert-muted) group-hover:text-(--fg-invert)"
+                  : "text-(--fg-muted) group-hover:text-(--fg)",
+            )}
+            aria-hidden="true"
+          />
+          {collapsed && item.badge !== undefined && (
+            <span
+              className={cn(
+                "absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full",
+                dark ? "bg-(--fg-invert)" : "bg-(--accent)",
+              )}
+              aria-hidden="true"
+            />
           )}
-          aria-hidden="true"
-        />
+        </span>
         {!collapsed && (
           <>
-            <span className="flex-1 truncate">{item.label}</span>
+            <span className="flex-1 truncate">{item.label}</span>{" "}
             {item.badge !== undefined && (
               <span
                 className={cn(
@@ -165,10 +186,10 @@ function NavItemButton({
                   "rounded-full px-1.5 text-(--text-xs) font-(--font-weight-medium)",
                   active
                     ? dark
-                      ? "bg-white/25 text-white"
+                      ? "bg-white/25 text-(--fg-invert)"
                       : "bg-(--brand) text-(--brand-fg)"
                     : dark
-                      ? "bg-white/10 text-white/55"
+                      ? "bg-white/10 text-(--fg-invert-muted)"
                       : "bg-(--hb-gray-100) text-(--fg-muted)",
                 )}
               >
@@ -202,22 +223,22 @@ function AppShortcutTile({
         aria-label={app.label}
         className={cn(
           "group flex flex-col items-center gap-1 rounded-(--radius-xs) p-2",
-          "transition-all duration-(--transition-fast)",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--brand)",
+          "transition-colors duration-(--transition-fast)",
+          "focus-visible:outline-none focus-visible:ring-2",
+          dark
+            ? "focus-visible:ring-(--fg-invert)"
+            : "focus-visible:ring-(--brand)",
           app.active
             ? dark
-              ? "bg-white/15 text-white"
+              ? "bg-white/15 text-(--fg-invert)"
               : "bg-(--brand-muted) text-(--brand)"
             : dark
-              ? "text-white/45 hover:bg-white/10 hover:text-white/80"
+              ? "text-(--fg-invert-muted) hover:bg-white/10 hover:text-(--fg-invert)"
               : "text-(--fg-muted) hover:bg-(--surface-alt) hover:text-(--fg)",
         )}
       >
         <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-        <span
-          className="w-full truncate text-center leading-none"
-          style={{ fontSize: "9.5px" }}
-        >
+        <span className="w-full truncate text-center text-(--text-xs) leading-none">
           {app.label}
         </span>
       </Link>
@@ -260,7 +281,7 @@ export function NavigationSidebar({
                   className={cn(
                     "mb-1.5 mt-1 px-3 text-(--text-xs) font-(--font-weight-semibold)",
                     "uppercase tracking-wider",
-                    dark ? "text-white/35" : "text-(--fg-muted)",
+                    dark ? "text-(--fg-invert-muted)" : "text-(--fg-muted)",
                   )}
                 >
                   {section.title}

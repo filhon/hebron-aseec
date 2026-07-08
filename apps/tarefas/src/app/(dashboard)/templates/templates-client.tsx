@@ -88,7 +88,7 @@ export function TemplatesClient({ templates }: TemplatesClientProps) {
           {templates.map((template) => (
             <li
               key={template.id}
-              className="rounded-(--radius-md) border border-(--border) bg-(--surface) px-4 py-4"
+              className="rounded-md border border-(--border) bg-(--surface) px-4 py-4"
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="flex min-w-0 items-start gap-3">

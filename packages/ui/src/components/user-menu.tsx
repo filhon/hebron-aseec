@@ -122,7 +122,7 @@ export function UserMenu({
             name={user.name}
             avatarUrl={user.avatarUrl}
             size="sm"
-            className="h-6 w-6 text-[10px]"
+            className="h-6 w-6"
           />
           <span className="hidden max-w-28 truncate leading-none sm:block">
             {getFirstName(user.name)}
@@ -150,6 +150,7 @@ export function UserMenu({
             "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
             "data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
             "data-[side=bottom]:slide-in-from-top-2",
+            "motion-reduce:animate-none",
           )}
         >
           {/* Identity header — tinted, no avatar (already visible in trigger) */}
@@ -166,16 +167,19 @@ export function UserMenu({
             <DropdownMenuPrimitive.Item asChild>
               <a
                 href={profileHref}
-                style={{ outline: "none" }}
                 className={cn(
-                  "mx-1 flex cursor-pointer items-center gap-2.5 rounded-(--radius-sm)",
-                  "px-2.5 py-2 text-(--text-sm) text-(--fg)",
+                  "group mx-1 flex cursor-pointer items-center gap-2.5 rounded-(--radius-sm)",
+                  "px-2.5 py-2 text-(--text-sm) text-(--fg) outline-hidden",
                   "transition-colors duration-(--transition-fast)",
-                  "data-[highlighted]:bg-(--surface-alt)",
+                  "data-[highlighted]:bg-(--surface-alt) data-[highlighted]:text-(--brand)",
                 )}
               >
                 <User
-                  className="h-3.5 w-3.5 shrink-0 text-(--fg-muted)"
+                  className={cn(
+                    "h-3.5 w-3.5 shrink-0 text-(--fg-muted)",
+                    "transition-colors duration-(--transition-fast)",
+                    "group-data-[highlighted]:text-(--brand)",
+                  )}
                   aria-hidden="true"
                 />
                 Meu perfil
@@ -188,13 +192,13 @@ export function UserMenu({
           <div className="py-1">
             <DropdownMenuPrimitive.Item
               onSelect={onLogout}
-              style={{ outline: "none" }}
               className={cn(
                 "mx-1 flex cursor-pointer items-center gap-2.5 rounded-(--radius-sm)",
-                "px-2.5 py-2 text-(--text-sm)",
+                "px-2.5 py-2 text-(--text-sm) outline-hidden",
                 "text-(--color-destructive)",
                 "transition-colors duration-(--transition-fast)",
                 "data-[highlighted]:bg-(--color-destructive-muted)",
+                "data-[highlighted]:text-(--color-destructive-hover)",
               )}
             >
               <LogOut className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
