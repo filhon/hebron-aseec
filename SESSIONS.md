@@ -105,6 +105,7 @@
 | S-82   | 2026-07-08 | P-4.10 — Notificações e Emails Tarefas                                  | concluido                            |
 | S-83   | 2026-07-08 | P-4.11 — Integrações Cross-App Tarefas                                  | concluido                            |
 | S-84   | 2026-07-08 | P-4.12 — Testes Tarefas                                                 | concluido                            |
+| S-85   | 2026-07-08 | P-5.1 — Schema de Tipos Intranet                                        | concluido                            |
 
 ---
 
@@ -4165,3 +4166,66 @@ a integração Projetos → Tarefas (`onProjectSubmitted`, sucesso e falha não 
 
 - `apps/tarefas/package.json` (scripts de teste, devDependencies, dependency
   `@hebron/integrations`)
+
+### S-85 — 2026-07-08 — P-5.1 — Schema de Tipos Intranet
+
+**Prompt:** P-5.1 (`PROMPTS.md:2959`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Primeiro prompt do módulo Intranet (Fase 5). Definiu os tipos
+(`packages/types/src/intranet/index.ts`) e schemas Zod
+(`packages/validators/src/intranet/index.ts`) para Announcement, DashboardWidget, KPI,
+DirectoryMember, CalendarEvent e MeetingDecision, seguindo o mesmo padrão estrutural de
+`tarefas`/`financeiro` (enums em snake_case português, campos em camelCase inglês).
+`MeetingDecision.meetingSessionId` referencia `admin.MeetingSession` (já existente em
+`@hebron/types/admin`, criado em P-1.1) por ID, sem reimportar o tipo. Mock data
+(`apps/intranet/src/lib/mock-data.ts`) com 5 anúncios (prioridades variadas, 1 rascunho
+não publicado), os 4 KPIs pedidos no critério de aceite, 6 widgets de dashboard
+configurados para um usuário de exemplo, 6 membros do diretório, 6 eventos de
+calendário e 3 decisões de reunião (vinculadas a `meetingSessionId` mock,
+compartilhados com os `CalendarEvent` do tipo "reuniao").
+
+**Suposições registradas (G1 — ambiguidade resolvida pela opção mais simples):**
+
+- **KPI "Doações do mês" — decisão F1-Q10 já aplicada no texto do prompt** (confirmada
+  em `AUDIT/patches/patches-leves.md` e `AUDIT/04-prompts-pendentes.md`: "soma de
+  despesas da categoria 'Doações' do plano de contas", não a receita). O mock não
+  referencia uma `AccountCategory` real (o `mock-data.ts` de financeiro que tinha essa
+  categoria como "receita" já foi removido em P-3.9, substituído por queries reais) —
+  apenas registra o valor agregado com comentário explicando a semântica, já que P-5.1
+  é só tipos/mock, sem integração cross-schema.
+- **`DirectoryMember.role`** modelado como `string` livre (cargo/função de exibição, ex.
+  "Diretor Financeiro"), não o enum `Role` de RBAC (`@hebron/types/roles`) — o diretório
+  é uma lista de contato/bio, não uma view de permissões, e cargos como "Conselheira"
+  não mapeiam 1:1 para os 8 papéis fixos do sistema.
+- **Exports de `package.json`** — `packages/types/package.json` e
+  `packages/validators/package.json` não estavam na lista de arquivos permitidos, mas
+  sem a entrada `"./intranet"` no mapa de `exports` o import `@hebron/types/intranet`
+  não resolve (mesmo padrão de todo módulo anterior, ver S-73/P-4.1). Editados como
+  infraestrutura óbvia faltante (G1).
+
+**Critérios de aceite verificados:**
+
+- [x] Announcement com prioridade e corpo rich text (`body: string` HTML, produzido
+      pelo editor compartilhado de `packages/ui` — D-1)
+- [x] DashboardWidget: tipo (kpi/chart/feed/calendar), posição, config (jsonb)
+- [x] KPI: nome, valor, unidade, trend (up/down/stable), período
+- [x] DirectoryMember: nome, foto, papel, email, telefone, bio
+- [x] Mock KPIs: projetos ativos, alunos na Plataforma, doações do mês (semântica
+      F1-Q10), audiência da Rádio
+- [x] Lint passa (`pnpm turbo lint --filter=@hebron/types --filter=@hebron/validators
+    --filter=@hebron/intranet`)
+- [x] Types passam (mesmo filtro — 18/18 tasks)
+
+**Arquivos criados:**
+
+- `packages/types/src/intranet/index.ts`
+- `packages/validators/src/intranet/index.ts`
+- `apps/intranet/src/lib/mock-data.ts`
+
+**Arquivos modificados:**
+
+- `packages/types/package.json` (export `"./intranet"`)
+- `packages/validators/package.json` (export `"./intranet"`)

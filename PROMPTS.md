@@ -2978,13 +2978,13 @@ Tipos e schemas Zod: Announcement (título, corpo, prioridade: normal/importante
 
 **Critérios de aceite:**
 
-- [ ] Announcement com prioridade e corpo rich text
-- [ ] DashboardWidget: tipo (kpi/chart/feed/calendar), posição, config (jsonb)
-- [ ] KPI: nome, valor, unidade, trend (up/down/stable), período
-- [ ] DirectoryMember: nome, foto, papel, email, telefone, bio
-- [ ] Mock KPIs: projetos ativos, alunos na Plataforma, doações do mês (= soma de despesas da categoria "Doações" do plano de contas — semântica da decisão F1-Q10), audiência da Rádio
-- [ ] Lint passa
-- [ ] Types passam
+- [x] Announcement com prioridade e corpo rich text
+- [x] DashboardWidget: tipo (kpi/chart/feed/calendar), posição, config (jsonb)
+- [x] KPI: nome, valor, unidade, trend (up/down/stable), período
+- [x] DirectoryMember: nome, foto, papel, email, telefone, bio
+- [x] Mock KPIs: projetos ativos, alunos na Plataforma, doações do mês (= soma de despesas da categoria "Doações" do plano de contas — semântica da decisão F1-Q10), audiência da Rádio
+- [x] Lint passa
+- [x] Types passam
 
 ---
 

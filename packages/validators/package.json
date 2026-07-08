@@ -6,6 +6,7 @@
     ".": "./src/index.ts",
     "./documentos": "./src/documentos/index.ts",
     "./financeiro": "./src/financeiro/index.ts",
+    "./intranet": "./src/intranet/index.ts",
     "./projetos": "./src/projetos/index.ts",
     "./tarefas": "./src/tarefas/index.ts",
     "./*": "./src/*.ts"
