@@ -138,7 +138,7 @@ export function NotificationBell({
                   aria-hidden="true"
                 />
                 <p className="text-(--text-sm)">Nenhuma notificação</p>
-                <p className="text-(--text-xs) opacity-70">
+                <p className="text-(--text-xs) text-(--fg-muted)">
                   "Espera pelo Senhor; tem bom ânimo."
                 </p>
               </div>
@@ -181,7 +181,7 @@ export function NotificationBell({
                                 {n.body}
                               </p>
                             )}
-                            <p className="mt-1 text-(--text-xs) opacity-70">
+                            <p className="mt-1 text-(--text-xs) text-(--fg-muted)">
                               {formatRelativeTime(n.createdAt)}
                             </p>
                           </div>

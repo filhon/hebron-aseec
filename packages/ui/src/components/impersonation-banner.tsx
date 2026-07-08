@@ -1,8 +1,13 @@
 "use client";
 
 import * as React from "react";
+import { ShieldAlert, X } from "lucide-react";
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
 
 export interface ImpersonationBannerProps {
   impersonatedName: string;
@@ -11,8 +16,6 @@ export interface ImpersonationBannerProps {
   /** Server action (FormData) — called when the user clicks "Sair da impersonação" */
   onStop: (_fd: FormData) => Promise<void> | void;
 }
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatTime(iso: string): string {
   try {
@@ -47,8 +50,6 @@ function useElapsed(startedAt: string): string {
   return elapsed;
 }
 
-// ─── Component ────────────────────────────────────────────────────────────────
-
 export function ImpersonationBanner({
   impersonatedName,
   actorName,
@@ -62,81 +63,33 @@ export function ImpersonationBanner({
     <div
       role="alert"
       aria-live="polite"
-      style={{
-        position: "sticky",
-        top: 0,
-        zIndex: 9999,
-        width: "100%",
-        background:
-          "linear-gradient(90deg, #7f1d1d 0%, #991b1b 50%, #7f1d1d 100%)",
-        borderBottom: "2px solid #ef4444",
-        boxShadow: "0 2px 12px rgba(220,38,38,0.35)",
-        display: "flex",
-        alignItems: "center",
-        gap: 0,
-        padding: "0 20px",
-        minHeight: 44,
-        fontFamily: "var(--font-titillium, var(--font-sans, system-ui))",
-      }}
+      className={cn(
+        "sticky top-0 z-[9999] flex min-h-11 items-center gap-2.5 px-5",
+        "bg-[linear-gradient(90deg,#7f1d1d_0%,#991b1b_50%,#7f1d1d_100%)]",
+        "border-b-2 border-[#ef4444] shadow-[0_2px_12px_rgba(220,38,38,0.35)]",
+      )}
     >
-      {/* Pulsing indicator */}
       <span
         aria-hidden="true"
-        style={{
-          display: "inline-block",
-          width: 8,
-          height: 8,
-          borderRadius: "50%",
-          background: "#fca5a5",
-          marginRight: 12,
-          flexShrink: 0,
-          animation: "hb-imp-pulse 1.8s ease-in-out infinite",
-        }}
+        className="h-2 w-2 shrink-0 animate-[hb-imp-pulse_1.8s_ease-in-out_infinite] rounded-full bg-[#fca5a5]"
       />
 
-      {/* Shield icon (inline SVG — no dependency) */}
-      <svg
+      <ShieldAlert
+        className="h-3.5 w-3.5 shrink-0 text-[#fca5a5]"
         aria-hidden="true"
-        width="14"
-        height="14"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="#fca5a5"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        style={{ flexShrink: 0, marginRight: 10 }}
-      >
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-      </svg>
+      />
 
-      {/* Text */}
-      <span
-        style={{
-          fontSize: 13,
-          fontWeight: 600,
-          color: "#fee2e2",
-          flex: 1,
-          letterSpacing: "0.01em",
-        }}
-      >
+      <span className="flex-1 text-(--text-sm) font-(--font-weight-semibold) tracking-[0.01em] text-[#fee2e2]">
         Operando como{" "}
-        <strong style={{ color: "#fef2f2", fontWeight: 700 }}>
+        <strong className="font-(--font-weight-bold) text-[#fef2f2]">
           {impersonatedName}
         </strong>
-        <span
-          style={{
-            fontWeight: 400,
-            color: "#fca5a5",
-            marginLeft: 8,
-          }}
-        >
+        <span className="ml-2 font-(--font-weight-normal) text-[#fca5a5]">
           · {actorName} · desde {formatTime(startedAt)}
           {elapsed ? ` · ${elapsed}` : ""}
         </span>
       </span>
 
-      {/* Stop button */}
       <form
         action={onStop}
         onSubmit={(e) => {
@@ -146,65 +99,24 @@ export function ImpersonationBanner({
             void Promise.resolve(onStop(fd));
           });
         }}
-        style={{ flexShrink: 0, marginLeft: 16 }}
+        className="shrink-0"
       >
         <button
           type="submit"
           disabled={pending}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "5px 14px",
-            borderRadius: 6,
-            border: "1.5px solid rgba(252,165,165,0.5)",
-            background: "rgba(255,255,255,0.1)",
-            color: "#fee2e2",
-            fontSize: 12.5,
-            fontWeight: 600,
-            cursor: pending ? "not-allowed" : "pointer",
-            opacity: pending ? 0.7 : 1,
-            transition: "background 0.15s, opacity 0.15s",
-            letterSpacing: "0.01em",
-            fontFamily: "inherit",
-            whiteSpace: "nowrap",
-          }}
-          onMouseEnter={(e) => {
-            if (!pending) {
-              (e.currentTarget as HTMLButtonElement).style.background =
-                "rgba(255,255,255,0.18)";
-            }
-          }}
-          onMouseLeave={(e) => {
-            (e.currentTarget as HTMLButtonElement).style.background =
-              "rgba(255,255,255,0.1)";
-          }}
+          className={cn(
+            "flex items-center gap-1.5 rounded-(--radius-sm) px-3.5 py-1.5",
+            "border-[1.5px] border-[rgba(252,165,165,0.5)] bg-white/10",
+            "text-(--text-xs) font-(--font-weight-semibold) tracking-[0.01em] text-[#fee2e2]",
+            "transition-colors duration-(--transition-fast) hover:bg-white/[0.18]",
+            "disabled:cursor-not-allowed disabled:opacity-70",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50",
+          )}
         >
-          {/* X icon */}
-          <svg
-            aria-hidden="true"
-            width="12"
-            height="12"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <line x1="18" y1="6" x2="6" y2="18" />
-            <line x1="6" y1="6" x2="18" y2="18" />
-          </svg>
+          <X className="h-3 w-3" aria-hidden="true" strokeWidth={2.5} />
           {pending ? "Saindo…" : "Sair da impersonação"}
         </button>
       </form>
-
-      <style>{`
-        @keyframes hb-imp-pulse {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.5; transform: scale(0.85); }
-        }
-      `}</style>
     </div>
   );
 }

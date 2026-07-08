@@ -42,16 +42,16 @@ export function EmptyState({
   return (
     <div
       className={cn(
-        "flex flex-col items-center justify-center gap-6 py-16 text-center",
+        "flex flex-col items-center justify-center gap-5 py-16 text-center",
         className,
       )}
     >
-      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-(--surface-alt)">
-        <Icon className="h-8 w-8 text-(--fg-muted)" aria-hidden="true" />
+      <div className="flex h-14 w-14 items-center justify-center rounded-full border border-(--border) bg-(--surface-alt)">
+        <Icon className="h-6 w-6 text-(--brand)" aria-hidden="true" />
       </div>
 
-      <div className="max-w-sm space-y-2">
-        <h3 className="text-(--text-lg) font-(--font-weight-semibold)">
+      <div className="max-w-sm space-y-1.5">
+        <h3 className="font-(--font-display) text-(--text-lg) font-(--font-weight-semibold)">
           {title}
         </h3>
         {description && <p className="text-(--text-sm)">{description}</p>}
@@ -60,9 +60,11 @@ export function EmptyState({
       {action && <div>{action}</div>}
 
       {!hideQuote && (
-        <blockquote className="max-w-xs border-l-2 border-(--border) pl-4 text-left">
-          <p className="italic text-(--fg-muted)">"{displayQuote.text}"</p>
-          <cite className="mt-1 block font-(--font-weight-medium) text-(--fg-muted) not-italic">
+        <blockquote className="mt-1 max-w-xs">
+          <p className="text-(--text-xs) italic leading-relaxed text-(--fg-muted)">
+            "{displayQuote.text}"
+          </p>
+          <cite className="mt-1.5 block text-(--text-xs) font-(--font-weight-semibold) not-italic text-(--brand)">
             — {displayQuote.reference}
           </cite>
         </blockquote>

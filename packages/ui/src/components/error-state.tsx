@@ -41,7 +41,7 @@ export function ErrorState({
       </div>
 
       <div className="max-w-sm space-y-1">
-        <h3 className="text-(--text-base) font-(--font-weight-semibold)">
+        <h3 className="font-(--font-display) text-(--text-base) font-(--font-weight-semibold)">
           {title}
         </h3>
         {displayDescription && (
