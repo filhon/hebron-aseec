@@ -11,6 +11,7 @@ import {
 } from "@hebron/validators/tarefas";
 import { colaboradorAction, diretorAction } from "../lib/safe-action";
 import { logTarefasAudit } from "../lib/audit";
+import { notifyApprovalRequested } from "../lib/notifications";
 
 const insertNotification = makeNotificationInserter();
 
@@ -70,18 +71,9 @@ export const requestApproval = colaboradorAction
     });
 
     // Notificação best-effort, fora da transação de governança — falha em
-    // notificar não deve desfazer um pedido já auditado.
-    await createNotification({
-      insert: insertNotification,
-      data: {
-        userId: approver.id,
-        channel: "in_app",
-        type: "task.approval_requested",
-        title: `Pedido de aprovação: ${task.title}`,
-        body: `Avançar para "${input.requestedStatus}"`,
-        payload: { taskId: task.id, approvalRequestId: request.id },
-      },
-    });
+    // notificar não deve desfazer um pedido já auditado. In_app + email ao
+    // diretor (P-4.10).
+    await notifyApprovalRequested(request.id);
 
     return { request };
   });

@@ -266,7 +266,7 @@ export function TaskForm({
             className="flex min-h-10 w-full flex-wrap items-center gap-1.5 rounded-(--radius) border border-(--border) bg-(--bg-alt) px-3 py-2 text-left transition-colors hover:border-(--brand)/50"
           >
             {selectedAssignees.length === 0 ? (
-              <span className="inline-flex items-center gap-1.5 text-(--text-sm) text-(--fg-muted)">
+              <span className="inline-flex items-center gap-1.5 text-(--text-sm)">
                 <UserPlus className="h-3.5 w-3.5" aria-hidden="true" />
                 Selecionar responsáveis
               </span>
@@ -274,7 +274,7 @@ export function TaskForm({
               selectedAssignees.map((u) => (
                 <span
                   key={u.id}
-                  className="rounded-full bg-(--surface-alt) px-2 py-0.5 text-(--text-xs) font-medium text-(--fg)"
+                  className="rounded-full bg-(--surface-alt) px-2 py-0.5 text-(--text-xs) font-medium"
                 >
                   {u.name}
                 </span>
@@ -284,7 +284,7 @@ export function TaskForm({
           {assigneePickerOpen && (
             <div className="absolute z-(--z-dropdown) mt-1 max-h-56 w-full overflow-y-auto rounded-(--radius) border border-(--border) bg-(--bg) p-1 shadow-(--shadow-md)">
               {assignableUsers.length === 0 ? (
-                <p className="px-3 py-2 text-(--text-xs) text-(--fg-muted)">
+                <p className="px-3 py-2 text-(--text-xs)">
                   Nenhum colaborador disponível.
                 </p>
               ) : (
@@ -296,7 +296,7 @@ export function TaskForm({
                       type="button"
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => toggleAssignee(u.id)}
-                      className="flex w-full items-center gap-2 rounded-(--radius-sm) px-2.5 py-1.5 text-left text-(--text-sm) text-(--fg) transition-colors hover:bg-(--surface-alt)"
+                      className="flex w-full items-center gap-2 rounded-sm px-2.5 py-1.5 text-left text-(--text-sm) transition-colors hover:bg-(--surface-alt)"
                     >
                       <span
                         className={cn(
@@ -328,14 +328,12 @@ export function TaskForm({
             className="flex min-h-10 w-full flex-wrap items-center gap-1.5 rounded-(--radius) border border-(--border) bg-(--bg-alt) px-3 py-2 text-left transition-colors hover:border-(--brand)/50"
           >
             {selectedTags.length === 0 ? (
-              <span className="text-(--text-sm) text-(--fg-muted)">
-                Selecionar tags
-              </span>
+              <span className="text-(--text-sm)">Selecionar tags</span>
             ) : (
               selectedTags.map((t) => (
                 <span
                   key={t.id}
-                  className="rounded-full bg-(--surface-alt) px-2 py-0.5 text-(--text-xs) font-medium text-(--fg-muted)"
+                  className="rounded-full bg-(--surface-alt) px-2 py-0.5 text-(--text-xs) font-medium"
                 >
                   {t.name}
                 </span>
@@ -345,7 +343,7 @@ export function TaskForm({
           {tagPickerOpen && (
             <div className="absolute z-(--z-dropdown) mt-1 max-h-56 w-full overflow-y-auto rounded-(--radius) border border-(--border) bg-(--bg) p-1 shadow-(--shadow-md)">
               {availableTags.length === 0 ? (
-                <p className="px-3 py-2 text-(--text-xs) text-(--fg-muted)">
+                <p className="px-3 py-2 text-(--text-xs)">
                   Nenhuma tag cadastrada.
                 </p>
               ) : (
@@ -357,7 +355,7 @@ export function TaskForm({
                       type="button"
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => toggleTag(t.id)}
-                      className="flex w-full items-center gap-2 rounded-(--radius-sm) px-2.5 py-1.5 text-left text-(--text-sm) text-(--fg) transition-colors hover:bg-(--surface-alt)"
+                      className="flex w-full items-center gap-2 rounded-sm px-2.5 py-1.5 text-left text-(--text-sm) transition-colors hover:bg-(--surface-alt)"
                     >
                       <span
                         className={cn(
@@ -382,9 +380,7 @@ export function TaskForm({
       <FormField label="Anexos">
         <label className="flex cursor-pointer items-center justify-center gap-2 rounded-(--radius) border-2 border-dashed border-(--border) bg-(--bg-alt) px-4 py-5 text-center transition-colors hover:border-(--brand)">
           <Paperclip className="h-4 w-4 text-(--fg-muted)" aria-hidden="true" />
-          <span className="text-(--text-sm) text-(--fg-muted)">
-            Clique para anexar arquivos
-          </span>
+          <span className="text-(--text-sm)">Clique para anexar arquivos</span>
           <input
             type="file"
             multiple
@@ -397,7 +393,7 @@ export function TaskForm({
             {attachments.map((file, index) => (
               <li
                 key={`${file.name}-${index}`}
-                className="flex items-center justify-between gap-2 rounded-(--radius-sm) border border-(--border) px-3 py-1.5 text-(--text-xs)"
+                className="flex items-center justify-between gap-2 rounded-sm border border-(--border) px-3 py-1.5 text-(--text-xs)"
               >
                 <span className="min-w-0 flex-1 truncate text-(--fg)">
                   {file.name}

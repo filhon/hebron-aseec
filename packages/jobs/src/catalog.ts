@@ -25,15 +25,6 @@ export interface PlannedJob {
 
 export const PLANNED_JOBS: PlannedJob[] = [
   {
-    id: "tarefas-prazos",
-    name: "Tarefas: prazo próximo e prazo vencido",
-    cron: "0 7 * * *",
-    sourcePrompt: "P-4.8",
-    description:
-      "Notifica prazo próximo (1 dia antes) e prazo vencido de tarefas " +
-      "(PROMPTS.md P-4.8: `packages/jobs/src/crons/tarefas-prazos.ts`).",
-  },
-  {
     id: "intranet-briefing",
     name: "Intranet: briefing diário/semanal",
     cron: "0 7 * * *",

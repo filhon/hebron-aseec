@@ -2870,12 +2870,12 @@ Notificações: tarefa atribuída (in_app + email). @menção em comentário (in
 
 **Critérios de aceite:**
 
-- [ ] Atribuição: in_app + email ao assignee
-- [ ] @menção: in_app ao mencionado
-- [ ] Prazo: 1 dia antes (in_app); vencido (in_app + email)
-- [ ] Aprovação: in_app + email ao diretor
-- [ ] Lint passa
-- [ ] Types passam
+- [x] Atribuição: in_app + email ao assignee
+- [x] @menção: in_app ao mencionado
+- [x] Prazo: 1 dia antes (in_app); vencido (in_app + email)
+- [x] Aprovação: in_app + email ao diretor
+- [x] Lint passa
+- [x] Types passam
 
 ---
 

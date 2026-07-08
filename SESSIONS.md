@@ -102,6 +102,7 @@
 | S-79   | 2026-07-07 | P-4.7 — RLS Policies Tarefas                                            | concluido                            |
 | S-80   | 2026-07-07 | P-4.8 — Server Actions Tarefas                                          | concluido                            |
 | S-81   | 2026-07-07 | P-4.9 — Integração UI ↔ Backend Tarefas                                 | concluido                            |
+| S-82   | 2026-07-08 | P-4.10 — Notificações e Emails Tarefas                                  | concluido                            |
 
 ---
 
@@ -3896,3 +3897,85 @@ Substituídos os mocks (`lib/mock-data.ts`, removido) por dados reais em todas a
 **Arquivos removidos:**
 
 - `apps/tarefas/src/lib/mock-data.ts`
+
+---
+
+### S-82 — 2026-07-08 — P-4.10 — Notificações e Emails Tarefas
+
+**Prompt:** P-4.10 (`PROMPTS.md:2849`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Criados os 3 templates de email pedidos (`packages/email/src/templates/task-assigned.tsx`,
+`task-overdue.tsx`, `approval-request.tsx`), seguindo à risca o padrão visual já
+estabelecido nos 15 templates existentes (`EmailLayout`/`emailColors`/`emailFontFamily`
+compartilhados, "info card" com borda lateral colorida, botão CTA, `Hr` + rodapé) — sem
+introduzir cores/fontes novas (G4). Criado `apps/tarefas/src/lib/notifications.ts` com
+`notifyTaskAssigned` (in_app + email, requery por `taskId`, `Promise.allSettled`
+best-effort) e `notifyApprovalRequested` (in_app + email ao diretor/conselheiro
+designado, requery por `approvalRequestId`). Criado o cron diário
+`packages/jobs/src/crons/tarefas-prazos.ts` (`runTarefasPrazos`, 07:00 UTC): prazo
+próximo (tarefa vence amanhã, janela de ~24h) dispara só in_app; prazo vencido (venceu
+ontem, mesma janela) dispara in_app + email com `TaskOverdueEmail` — mesmo padrão de
+idempotência sem coluna de controle já usado em `runEditalClosingReminders`
+(`crons/documentos.ts`). Cron registrado em `packages/jobs/src/index.ts` (`functions`) e
+a entrada `tarefas-prazos` removida de `PLANNED_JOBS` (`catalog.ts`), conforme G6.6.
+
+**Suposição registrada (G1 — arquivos fora da lista, mas bloqueantes para o critério de
+aceite):**
+
+- **`apps/tarefas/src/actions/tasks.ts` e `apps/tarefas/src/actions/approvals.ts` foram
+  editados**, apesar de não estarem na lista de "Arquivos permitidos" do prompt. Sem um
+  call-site, `notifyTaskAssigned`/`notifyApprovalRequested` nunca seriam invocados e os
+  critérios "Atribuição: in_app + email ao assignee" e "Aprovação: in_app + email ao
+  diretor" ficariam inatingíveis — não é criação de arquivo novo fora da lista (proibido
+  por G1), é o mínimo de fiação necessário no código já existente. Em `tasks.ts`:
+  `createTask` notifica todos os `assigneeIds`; `updateTask` notifica só os
+  responsáveis **novos** (diff contra a lista anterior, para não renotificar a cada
+  edição quem já era responsável); `assignTaskManually` notifica todos os
+  `assigneeIds` (fecha o ciclo de `createAutoTask`, BRAIN §6.9). Em `approvals.ts`, o
+  `createNotification` inline de `requestApproval` (só in_app, de P-4.8) foi substituído
+  pela chamada a `notifyApprovalRequested` (in_app + email); `resolveApprovalRequest`
+  não foi tocado — seu critério ("in_app ao solicitante") já estava atendido e não pede
+  email.
+- **Destinatário do prazo próximo/vencido é `assignees`; sem responsável, cai para
+  `createdBy`** — tarefas com `needsManualAssignment: true` (criadas via
+  `createAutoTask`) não têm assignee até a atribuição manual; notificar o criador evita
+  que um prazo vencido passe em silêncio.
+- **`@menção` (in_app) e "Aprovação/rejeição → in_app ao solicitante" já estavam
+  implementados desde P-4.8** (`comments.ts`, `resolveApprovalRequest`) — nenhuma
+  mudança nestes dois pontos, apenas confirmados como já atendendo o critério deste
+  prompt.
+
+**Verificação funcional (evidência além de lint/typecheck):**
+
+- `pnpm turbo lint typecheck` no monorepo inteiro — 38/38 pacotes/apps verdes (inclui
+  `@hebron/email`, `@hebron/jobs`, `@hebron/tarefas`).
+
+**Critérios de aceite verificados:**
+
+- [x] Atribuição: in_app + email ao assignee — `notifyTaskAssigned`, chamado em
+      `createTask`/`updateTask`/`assignTaskManually`
+- [x] @menção: in_app ao mencionado — já implementado em P-4.8 (`comments.ts`)
+- [x] Prazo: 1 dia antes (in_app); vencido (in_app + email) — `runTarefasPrazos`
+      (`crons/tarefas-prazos.ts`)
+- [x] Aprovação: in_app + email ao diretor — `notifyApprovalRequested`, chamado em
+      `requestApproval`
+- [x] Lint passa
+- [x] Types passam
+
+**Arquivos criados:**
+
+- `packages/email/src/templates/task-assigned.tsx`
+- `packages/email/src/templates/task-overdue.tsx`
+- `packages/email/src/templates/approval-request.tsx`
+- `apps/tarefas/src/lib/notifications.ts`
+- `packages/jobs/src/crons/tarefas-prazos.ts`
+
+**Arquivos modificados:**
+
+- `apps/tarefas/src/actions/tasks.ts` (chamadas a `notifyTaskAssigned`)
+- `apps/tarefas/src/actions/approvals.ts` (chamada a `notifyApprovalRequested`)
+- `packages/jobs/src/index.ts` (registro de `tarefasPrazosCron`)
+- `packages/jobs/src/catalog.ts` (remoção da entrada `tarefas-prazos` de `PLANNED_JOBS`)

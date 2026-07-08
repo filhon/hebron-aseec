@@ -30,6 +30,7 @@ import {
   staffAction,
   superAdminAction,
 } from "../lib/safe-action";
+import { notifyTaskAssigned } from "../lib/notifications";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -142,6 +143,12 @@ export const createTask = colaboradorAction
       return row;
     });
 
+    // Notificação best-effort, fora da transação — falha em notificar não
+    // deve desfazer a tarefa já criada (P-4.10).
+    if (input.assigneeIds.length > 0) {
+      await notifyTaskAssigned(task.id, input.assigneeIds, ctx.actorId);
+    }
+
     return { task };
   });
 
@@ -178,6 +185,8 @@ export const updateTask = colaboradorAction
     if (input.priority !== undefined) patch.priority = input.priority;
     if (input.dueDate !== undefined) patch.dueDate = input.dueDate;
 
+    let newAssigneeIds: string[] = [];
+
     const task = await db.transaction(async (tx) => {
       const [row] = await tx
         .update(tasks)
@@ -187,6 +196,15 @@ export const updateTask = colaboradorAction
       if (!row) throw new Error("Tarefa não encontrada");
 
       if (input.assigneeIds !== undefined) {
+        const previousAssignees = await tx
+          .select({ userId: assignees.userId })
+          .from(assignees)
+          .where(eq(assignees.taskId, input.taskId));
+        const previousIds = new Set(previousAssignees.map((a) => a.userId));
+        newAssigneeIds = input.assigneeIds.filter(
+          (userId) => !previousIds.has(userId),
+        );
+
         await tx.delete(assignees).where(eq(assignees.taskId, input.taskId));
         if (input.assigneeIds.length > 0) {
           await tx.insert(assignees).values(
@@ -220,6 +238,12 @@ export const updateTask = colaboradorAction
 
       return row;
     });
+
+    // Notificação best-effort, só para responsáveis novos (evita renotificar
+    // a cada edição quem já era responsável) — P-4.10.
+    if (newAssigneeIds.length > 0) {
+      await notifyTaskAssigned(task.id, newAssigneeIds, ctx.actorId);
+    }
 
     return { task };
   });
@@ -348,6 +372,9 @@ export const assignTaskManually = superAdminAction
 
       return row;
     });
+
+    // Notificação best-effort — fecha o ciclo de createAutoTask (P-4.10).
+    await notifyTaskAssigned(input.taskId, input.assigneeIds, ctx.actorId);
 
     return { task };
   });
