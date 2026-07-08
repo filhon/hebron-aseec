@@ -2936,15 +2936,15 @@ Testes: RLS (colaborador vê apenas próprias, diretor vê todas). Recorrência 
 
 **Critérios de aceite:**
 
-- [ ] RLS: colaborador não vê tarefas de outro colaborador (a menos que esteja no mesmo workspace)
-- [ ] Recorrência: gera tarefa no próximo período
-- [ ] Template: instancia todas as sub-tarefas
-- [ ] Subtarefas: completar atualiza progresso do pai
-- [ ] Integração: submissão de projeto cria tarefas
-- [ ] Approval: fluxo enviar → aprovar/rejeitar → status, com audit central abortando em falha
-- [ ] RLS conforme semântica do patch P-4.7: colaborador lê tudo, escreve só creator/assignee
-- [ ] Testes passam
-- [ ] Lint passa
+- [x] RLS: colaborador não vê tarefas de outro colaborador (a menos que esteja no mesmo workspace)
+- [x] Recorrência: gera tarefa no próximo período
+- [x] Template: instancia todas as sub-tarefas
+- [x] Subtarefas: completar atualiza progresso do pai
+- [x] Integração: submissão de projeto cria tarefas
+- [x] Approval: fluxo enviar → aprovar/rejeitar → status, com audit central abortando em falha
+- [x] RLS conforme semântica do patch P-4.7: colaborador lê tudo, escreve só creator/assignee
+- [x] Testes passam
+- [x] Lint passa
 
 ---
 

@@ -104,6 +104,7 @@
 | S-81   | 2026-07-07 | P-4.9 — Integração UI ↔ Backend Tarefas                                 | concluido                            |
 | S-82   | 2026-07-08 | P-4.10 — Notificações e Emails Tarefas                                  | concluido                            |
 | S-83   | 2026-07-08 | P-4.11 — Integrações Cross-App Tarefas                                  | concluido                            |
+| S-84   | 2026-07-08 | P-4.12 — Testes Tarefas                                                 | concluido                            |
 
 ---
 
@@ -4074,3 +4075,93 @@ real do repositório):**
   `notifyChecklistCreationFailure`)
 - `packages/integrations/src/index.ts`, `package.json` (exports novos)
 - `apps/projetos/src/actions/projects.ts` (log estruturado no ponto de chamada)
+
+### S-84 — 2026-07-08 — P-4.12 — Testes Tarefas
+
+**Prompt:** P-4.12 (`PROMPTS.md:2916`)
+
+Escreveu os 4 arquivos de teste do módulo tarefas: RLS (transparência do colaborador +
+escrita restrita a creator/assignee, papel de diretor em `approval_requests`, zero
+acesso de submissor, visibilidade de comentários, `anon` sem `USAGE`), recorrência
+(cálculo de `next_run_at` por tipo via `createRecurrenceRule`/`updateRecurrenceRule`),
+templates (`createTaskTemplate`/`instantiateTaskTemplate` com subtarefas pré-definidas) e
+um arquivo de integrações cobrindo os 3 critérios sem arquivo dedicado próprio:
+progresso agregado de subtarefas (`getTaskById`), fluxo de aprovação com audit central
+abortando em falha (mesmo padrão de `apps/projetos/src/__tests__/audit-abort.test.ts`) e
+a integração Projetos → Tarefas (`onProjectSubmitted`, sucesso e falha não engolida).
+
+**Suposições/débitos registrados (G1):**
+
+- **Infra de teste criada do zero para `apps/tarefas`** (fora da lista literal de
+  "arquivos permitidos", que só cita os 4 `.test.ts`): `vitest.config.ts`,
+  `src/__tests__/setup-env.ts` e, em `package.json`, os scripts `test`/`test:watch` +
+  devDependencies `vitest`/`dotenv`/`postgres` + dependency `@hebron/integrations`
+  (usada só pelo teste de integração Projetos → Tarefas). O app não tinha nenhuma
+  infraestrutura de teste antes deste prompt (nenhum outro prompt de tarefas a criou) —
+  mesmo padrão de débito já registrado em P-4.3 ("New app scaffold gap").
+- **`packages/jobs/src/__tests__/tarefas-recurrence.test.ts` criado fora da lista de
+  arquivos permitidos.** O critério "Recorrência: gera tarefa no próximo período" só é
+  satisfeito de verdade testando `runTarefasRecurrence`
+  (`packages/jobs/src/crons/tarefas.ts`) — a lógica real de instanciar a próxima tarefa
+  a partir de `next_run_at` vive inteiramente nesse cron (P-4.8), não em
+  `apps/tarefas/src/actions/recurrence.ts` (que só cria/edita a regra e calcula
+  `next_run_at`, sem instanciar nada). `packages/jobs/package.json` não expõe um subpath
+  de `exports` para `./crons/tarefas`, então não dava para importar a função real a
+  partir de um arquivo em `apps/tarefas` sem alterar esse mapa (também fora do escopo).
+  Testar no próprio pacote, no mesmo padrão de
+  `projetos-evaluation-reminders.test.ts`, fecha a lacuna sem exigir essa mudança.
+  `apps/tarefas/src/__tests__/recurrence.test.ts` cobre o cálculo de `next_run_at`
+  (fundação); o pacote `jobs` cobre a geração real da tarefa + reagendamento.
+- **Bug de RLS descoberto e corrigido, fora da lista de arquivos permitidos (autorizado
+  por Filipe, ver PATCH-015):** `apps/tarefas/src/__tests__/rls.test.ts` revelou que
+  nenhum colaborador conseguia fazer soft-delete da própria tarefa —
+  `tasks_select_staff` (SELECT, exige `deleted_at IS NULL`) é aplicada pelo Postgres como
+  checagem implícita sobre a _nova_ linha de um `UPDATE`, além do `WITH CHECK` explícito
+  de `tasks_update_own_or_assignee`; isolado experimentalmente (relaxar só a policy de
+  UPDATE não resolvia, só relaxar `tasks_select_staff` resolvia). Nova migration
+  `packages/db/src/migrations/0035_tarefas_rls_soft_delete_fix.sql` corrige
+  `tasks_select_staff` para o criador/assignee reter visibilidade da própria tarefa após
+  o soft-delete (app já filtra `deleted_at IS NULL` na leitura — RLS continua sendo
+  camada extra, não a única). Aplicada ao banco (`pnpm --filter @hebron/db db:migrate`).
+- **RLS: bullet inicial do escopo do prompt ("colaborador não vê tarefas de outro
+  colaborador a menos que esteja no mesmo workspace") não seguido** — contradiz o
+  próprio critério de aceite mais específico listado no mesmo prompt ("RLS conforme
+  semântica do patch P-4.7: colaborador lê tudo, escreve só creator/assignee") e a
+  migration real (`0033_tarefas_rls.sql`, P-4.7/PATCH aplicado): sem membership por
+  workspace, transparência total de leitura entre colaboradores. Os testes seguem a
+  semântica vigente (P-4.7), não o texto desatualizado do escopo.
+
+**Critérios de aceite verificados:**
+
+- [x] RLS: colaborador não vê tarefas de outro colaborador (a menos que esteja no mesmo
+      workspace) — superado pela semântica vigente do patch P-4.7 (ver suposições)
+- [x] Recorrência: gera tarefa no próximo período —
+      `packages/jobs/src/__tests__/tarefas-recurrence.test.ts`
+- [x] Template: instancia todas as sub-tarefas — `templates.test.ts`
+- [x] Subtarefas: completar atualiza progresso do pai — `integrations.test.ts`
+- [x] Integração: submissão de projeto cria tarefas — `integrations.test.ts`
+- [x] Approval: fluxo enviar → aprovar/rejeitar → status, com audit central abortando em
+      falha — `integrations.test.ts`
+- [x] RLS conforme semântica do patch P-4.7: colaborador lê tudo, escreve só
+      creator/assignee — `rls.test.ts`
+- [x] Testes passam (40 em `apps/tarefas` + 3 novos em `packages/jobs`, suíte completa
+      de `packages/jobs` sem regressão — 10/10)
+- [x] Lint passa (`apps/tarefas`, `packages/jobs`, `packages/db`)
+
+**Arquivos criados:**
+
+- `apps/tarefas/src/__tests__/rls.test.ts`
+- `apps/tarefas/src/__tests__/recurrence.test.ts`
+- `apps/tarefas/src/__tests__/templates.test.ts`
+- `apps/tarefas/src/__tests__/integrations.test.ts`
+- `apps/tarefas/vitest.config.ts`, `apps/tarefas/src/__tests__/setup-env.ts` (débito de
+  infra, ver suposições)
+- `packages/jobs/src/__tests__/tarefas-recurrence.test.ts` (débito de escopo, ver
+  suposições)
+- `packages/db/src/migrations/0035_tarefas_rls_soft_delete_fix.sql` (PATCH-015)
+- `PATCHES/015-tarefas-rls-soft-delete-fix.md`
+
+**Arquivos modificados:**
+
+- `apps/tarefas/package.json` (scripts de teste, devDependencies, dependency
+  `@hebron/integrations`)
