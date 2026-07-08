@@ -3015,14 +3015,14 @@ Componentes: KPICard (valor, trend, sparkline). AnnouncementCard (com badge de p
 
 **Critérios de aceite:**
 
-- [ ] KPICard com valor formatado, seta de trend e sparkline
-- [ ] WidgetGrid com drag-drop para reorganizar widgets
-- [ ] AppLauncher com ícones e links para os 8 módulos
-- [ ] SearchGlobal com resultados agrupados por módulo
-- [ ] FeedWidget com últimas ações (novo projeto, pagamento, tarefa concluída)
-- [ ] Responsivo (widgets empilham no mobile)
-- [ ] Lint passa
-- [ ] Types passam
+- [x] KPICard com valor formatado, seta de trend e sparkline
+- [x] WidgetGrid com drag-drop para reorganizar widgets
+- [x] AppLauncher com ícones e links para os 8 módulos
+- [x] SearchGlobal com resultados agrupados por módulo
+- [x] FeedWidget com últimas ações (novo projeto, pagamento, tarefa concluída)
+- [x] Responsivo (widgets empilham no mobile)
+- [x] Lint passa
+- [x] Types passam
 
 ---
 

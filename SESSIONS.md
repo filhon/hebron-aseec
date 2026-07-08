@@ -106,6 +106,7 @@
 | S-83   | 2026-07-08 | P-4.11 — Integrações Cross-App Tarefas                                  | concluido                            |
 | S-84   | 2026-07-08 | P-4.12 — Testes Tarefas                                                 | concluido                            |
 | S-85   | 2026-07-08 | P-5.1 — Schema de Tipos Intranet                                        | concluido                            |
+| S-86   | 2026-07-08 | P-5.2 — Componentes UI Intranet                                         | concluido                            |
 
 ---
 
@@ -4216,7 +4217,7 @@ compartilhados com os `CalendarEvent` do tipo "reuniao").
 - [x] Mock KPIs: projetos ativos, alunos na Plataforma, doações do mês (semântica
       F1-Q10), audiência da Rádio
 - [x] Lint passa (`pnpm turbo lint --filter=@hebron/types --filter=@hebron/validators
-    --filter=@hebron/intranet`)
+  --filter=@hebron/intranet`)
 - [x] Types passam (mesmo filtro — 18/18 tasks)
 
 **Arquivos criados:**
@@ -4229,3 +4230,77 @@ compartilhados com os `CalendarEvent` do tipo "reuniao").
 
 - `packages/types/package.json` (export `"./intranet"`)
 - `packages/validators/package.json` (export `"./intranet"`)
+
+### S-86 — 2026-07-08 — P-5.2 — Componentes UI Intranet
+
+**Prompt:** P-5.2 (`PROMPTS.md:2991`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Criados os 8 componentes de UI do módulo Intranet, consumindo os tipos de
+`@hebron/types/intranet` (P-5.1). `apps/intranet` não tem `design-refs/` (G3.1) — os
+componentes seguem a linguagem visual de `admin` (que tem referência), reutilizando as
+classes canônicas de `packages/ui/src/styles/patterns.css` (`.hb-stat`, `.hb-card`,
+`.hb-timeline`, `.hb-badge`, `.hb-section-label`) em vez de recriar componentes com
+Tailwind solto — nenhum CSS novo foi criado, nenhuma cor em hex.
+
+- `KPICard`: usa `.hb-stat`; sparkline é derivado deterministicamente do `id`+`trend`
+  do KPI (não existe série histórica no tipo `KPI` — chega em P-5.9); cor do dot mapeada
+  por `sourceModule`.
+- `AnnouncementCard`: badge de prioridade com cores via tokens (`--hb-red`/`--hb-orange`
+  via `color-mix`, igual ao padrão já usado em `patterns.css`); badge extra "Rascunho"
+  quando `publishedAt === null`; corpo HTML (rich text) truncado com `line-clamp-3`.
+- `WidgetGrid`: drag-drop implementado com a API nativa HTML5 (`draggable`/
+  `onDragStart`/`onDrop`) — não há biblioteca de DnD no monorepo (confirmado por busca em
+  todos os `package.json`); evitei adicionar uma dependência nova para um único widget.
+  Grid `grid-cols-1 sm:grid-cols-2 xl:grid-cols-3` (empilha no mobile).
+- `DirectoryCard`: usa `Avatar` de `@hebron/ui`.
+- `CalendarWidget`: mini calendário mensal (grid 7 colunas) com indicador de evento por
+  dia + lista dos 3 próximos eventos (`.hb-timeline`). Não implementa navegação de mês
+  (não pedido no prompt — G1).
+- `FeedWidget`: define e exporta `FeedItem` (tipo local ao componente — não existe
+  `ActivityFeedItem`/`FeedItem` em `@hebron/types`; a agregação cross-app real depende de
+  P-5.9/P-5.11, então o componente recebe os itens já prontos via prop).
+- `AppLauncher`: lista fixa dos 8 outros módulos (admin, projetos, plataforma, rádio,
+  financeiro, documentos, **flats**, tarefas) — reconstruída a partir do padrão já usado
+  em `admin-shell.tsx`/`financeiro`/`tarefas` (cada shell duplica seu próprio `APPS[]`);
+  incluí `flats`, que faltava nas listas dos outros shells.
+- `SearchGlobal`: campo de busca (`Input` de `@hebron/ui`) + resultados agrupados por
+  módulo (`Map<module, results[]>`) via prop `items` — sem index de busca real ainda
+  (Bloco B).
+
+**Suposições registradas (G1 — ambiguidade resolvida pela opção mais simples):**
+
+- Nenhum arquivo de infraestrutura (`layout.tsx`, `globals.css`) foi criado — o app
+  ainda não tem `src/app/(dashboard)` nem `globals.css` (só as rotas de `(auth)` de
+  P-0.4). Isso é esperado: P-5.2 cria só componentes isolados, sem página que os
+  importe; o scaffold do dashboard é o próprio objetivo de **P-5.3 — Telas e Páginas
+  Intranet**, o próximo prompt da sequência. Não registrado como débito porque não há
+  gap — é a ordem natural do Bloco A.
+- Não criei um `Card`/`Badge` reutilizável em `packages/ui` (não estava na lista de
+  arquivos permitidos) — usei as classes de `patterns.css` já existentes, que já
+  cobrem os casos necessários.
+
+**Critérios de aceite verificados:**
+
+- [x] KPICard com valor formatado (`Intl.NumberFormat` pt-BR, `R$` como moeda), seta de
+      trend e sparkline (SVG)
+- [x] WidgetGrid com drag-drop (HTML5 nativo) para reorganizar widgets
+- [x] AppLauncher com ícones e links para os 8 módulos
+- [x] SearchGlobal com resultados agrupados por módulo
+- [x] FeedWidget com últimas ações (tipo `FeedItem` genérico — módulo/título/descrição)
+- [x] Responsivo (grids com breakpoints `sm`/`xl`, empilham no mobile)
+- [x] Lint passa (`pnpm turbo lint typecheck` — 38/38 tasks, todo o monorepo)
+- [x] Types passam (mesmo comando)
+
+**Arquivos criados:**
+
+- `apps/intranet/src/components/kpi-card.tsx`
+- `apps/intranet/src/components/announcement-card.tsx`
+- `apps/intranet/src/components/widget-grid.tsx`
+- `apps/intranet/src/components/directory-card.tsx`
+- `apps/intranet/src/components/calendar-widget.tsx`
+- `apps/intranet/src/components/feed-widget.tsx`
+- `apps/intranet/src/components/app-launcher.tsx`
+- `apps/intranet/src/components/search-global.tsx`
