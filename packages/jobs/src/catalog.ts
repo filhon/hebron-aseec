@@ -34,15 +34,6 @@ export const PLANNED_JOBS: PlannedJob[] = [
       "`intranet.briefing_preferences`). Aguarda P-5.8/P-5.10.",
   },
   {
-    id: "intranet-kpi-snapshot",
-    name: "Intranet: snapshot horário de KPIs do dashboard",
-    cron: "0 * * * *",
-    sourcePrompt: "P-5.8",
-    description:
-      "Escreve `intranet.kpi_snapshots` a cada hora; o dashboard lê o " +
-      "snapshot mais recente e cai para query live se > 2h. Aguarda P-5.8.",
-  },
-  {
     id: "flats-checkin-reminder",
     name: "Flats: instruções de check-in (3 dias antes)",
     cron: "0 8 * * *",

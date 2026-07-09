@@ -13,6 +13,7 @@ import {
   reportRemindersCron,
 } from "./crons/projetos";
 import { projetosInadimplenciaCron } from "./crons/projetos-inadimplencia";
+import { kpiSnapshotCron } from "./crons/intranet";
 import { tarefasRecurrenceCron } from "./crons/tarefas";
 import { tarefasPrazosCron } from "./crons/tarefas-prazos";
 
@@ -33,6 +34,7 @@ export const functions = [
   monthlyReportCron,
   tarefasRecurrenceCron,
   tarefasPrazosCron,
+  kpiSnapshotCron,
 ];
 
 export { PLANNED_JOBS } from "./catalog";

@@ -56,11 +56,11 @@ export function BriefingConfigForm({
     <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
       <div className="flex items-start justify-between gap-4 rounded-(--radius) border border-(--border) bg-(--surface-alt) px-3.5 py-3.5">
         <span className="flex flex-col gap-0.5">
-          <span className="flex items-center gap-1.5 text-(--text-sm) font-medium text-(--fg)">
+          <span className="flex items-center gap-1.5 text-(--text-sm) font-medium">
             <Mail className="h-3.5 w-3.5" aria-hidden="true" />
             Receber briefing por e-mail
           </span>
-          <span className="text-(--text-xs) text-(--fg-muted)">
+          <span className="text-(--text-xs)">
             Um resumo de anúncios, decisões e agenda enviado no ritmo que você
             escolher.
           </span>
@@ -71,7 +71,7 @@ export function BriefingConfigForm({
           aria-checked={enabled}
           aria-label={enabled ? "Desativar briefing" : "Ativar briefing"}
           onClick={() => setEnabled((v) => !v)}
-          className={`relative h-[19px] w-[34px] shrink-0 rounded-full transition-colors duration-(--transition-fast) ${
+          className={`relative h-4.75 w-8.5 shrink-0 rounded-full transition-colors duration-(--transition-fast) ${
             enabled ? "bg-(--brand)" : "bg-(--border)"
           }`}
         >

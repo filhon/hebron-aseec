@@ -386,6 +386,9 @@ importers:
       "@hebron/email":
         specifier: workspace:*
         version: link:../../packages/email
+      "@hebron/integrations":
+        specifier: workspace:*
+        version: link:../../packages/integrations
       "@hebron/jobs":
         specifier: workspace:*
         version: link:../../packages/jobs

@@ -16,6 +16,7 @@
     "@hebron/config": "workspace:*",
     "@hebron/db": "workspace:*",
     "@hebron/email": "workspace:*",
+    "@hebron/integrations": "workspace:*",
     "@hebron/jobs": "workspace:*",
     "@hebron/types": "workspace:*",
     "@hebron/ui": "workspace:*",

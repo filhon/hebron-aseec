@@ -29,6 +29,22 @@ export const createAnnouncementSchema = z.object({
 
 export type CreateAnnouncementInput = z.infer<typeof createAnnouncementSchema>;
 
+// ─── updateAnnouncementSchema ─────────────────────────────────────────────────
+
+export const updateAnnouncementSchema = z.object({
+  announcementId: z.string().uuid(),
+  title: z
+    .string()
+    .min(3, "Título deve ter pelo menos 3 caracteres")
+    .max(200, "Título deve ter no máximo 200 caracteres"),
+  body: z
+    .string()
+    .min(10, "Corpo do anúncio deve ter pelo menos 10 caracteres"),
+  priority: announcementPriorityEnum,
+});
+
+export type UpdateAnnouncementInput = z.infer<typeof updateAnnouncementSchema>;
+
 // ─── updateDashboardWidgetsSchema ─────────────────────────────────────────────
 // Salva o arranjo completo de widgets do usuário (reordenar/adicionar/remover).
 

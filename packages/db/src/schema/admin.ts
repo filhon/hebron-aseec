@@ -101,6 +101,12 @@ export const auditActionEnum = adminSchema.enum("audit_action", [
   "task.approval_requested",
   "task.approved",
   "task.rejected",
+  // Intranet — anúncios, decisões de reunião e configuração de dashboard
+  // (P-5.8), added via ALTER TYPE in 0038_intranet_audit_actions.sql
+  "announcement.created",
+  "announcement.updated",
+  "meeting_decision.created",
+  "dashboard_config.updated",
 ]);
 
 export const meetingTypeEnum = adminSchema.enum("meeting_type", [

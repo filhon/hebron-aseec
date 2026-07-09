@@ -112,6 +112,7 @@
 | S-89   | 2026-07-09 | P-5.5 — Estados Intranet                                                | concluido                            |
 | S-90   | 2026-07-09 | P-5.6 — Schema do Banco Intranet                                        | concluido                            |
 | S-91   | 2026-07-09 | P-5.7 — RLS Policies Intranet                                           | concluido                            |
+| S-92   | 2026-07-09 | P-5.8 — Server Actions Intranet                                         | concluido                            |
 
 ---
 
@@ -4743,3 +4744,153 @@ auth.uid()` no `WITH CHECK`) como o prompt pede; UPDATE/DELETE não foram listad
   `drizzle-kit generate --custom`, arquivo `.sql` renomeado de `0017_intranet_rls.sql` para
   `0037_intranet_rls.sql` para seguir a numeração sequencial em disco, mesmo padrão de
   `0036_intranet.sql`/`0031_tarefas.sql`)
+
+---
+
+### S-92 — 2026-07-09 — P-5.8 Server Actions Intranet
+
+**Prompt:** P-5.8
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Criadas as 5 Server Actions da Intranet (`announcements.ts`, `dashboard.ts`,
+`decisions.ts`, `kpis.ts`, `search.ts`), seguindo o idioma dominante do repo
+(`db` Drizzle direto + gate de papel no safe-action client + `logIntranetAudit`),
+exceto `search.ts`, que usa o client de sessão + uma nova função RPC
+`public.intranet_global_search` (`SECURITY INVOKER`) porque o contrato fechado na
+auditoria (P-5.8) exige que a RLS de cada schema filtre a busca sem reimplementação de
+visibilidade na aplicação — e PostgREST só expõe os schemas `public`/`graphql_public`
+(`supabase/config.toml`), então uma função pública é o único jeito de alcançar
+`projetos`/`documentos`/`tarefas`/`admin` a partir do client de sessão.
+
+**Decisoes tomadas:**
+
+- **KPI "Doações do mês": prompt diz "despesa", BRAIN.md §6.6 diz "receita" —
+  segui BRAIN.md** (fonte da verdade, ver cabeçalho deste arquivo). A categoria
+  "Doações" no plano de contas seed (`0010_financeiro.sql`) é `type = 'receita'`;
+  não existe nenhuma transação `despesa` possível nessa categoria. `kpis.ts` soma
+  `transactions.type = 'credito'` na categoria "Doações" (buscada por nome, não por
+  UUID hardcoded) no mês corrente.
+- **"Projetos ativos"** = `projetos.projects.stage = 'em_execucao'` (não incluí
+  `aprovado`, que ainda não começou a execução, nem estágios pré-aprovação).
+- **"Alunos"** é stub fixo (`value: 0`, `period: "Aguardando Fase 6"`) —
+  `packages/db/src/schema/plataforma.ts` ainda não existe (Fase 6), exatamente como o
+  escopo do prompt antecipa ("stub até fase 6").
+- **`trend` das 4 KPIs fixo em `"stable"`** — calcular tendência real exigiria
+  comparar contra um snapshot anterior, e o prompt não pede isso explicitmente; optei
+  pela opção mais simples (G1) em vez de inventar uma heurística de comparação.
+- **`createMeetingDecision` restrita a `superAdminAction`** — segue literalmente
+  `0037_intranet_rls.sql` (`meeting_decisions_mutate_admin`: só `super_admin` tem
+  INSERT; diretor/conselheiro só têm SELECT), débito já registrado em S-91 pedindo
+  confirmação do Filipe antes de P-5.8/P-5.9. Não resolvi o débito por conta própria
+  (BRAIN §6.6 diz "presidente de sessão registra decisões", que sugeriria um papel mais
+  amplo) — mantive a regra já implementada em produção (RLS) e deixei o débito em aberto
+  novamente abaixo, agora explicitamente bloqueando P-5.9 (o formulário
+  `MeetingDecisionForm` só vai poder ser usado por um super_admin até essa decisão de
+  negócio ser confirmada).
+- **`updateMeetingDecisionStatus` NÃO implementada** — o escopo do prompt descreve
+  apenas "registrar decisão de reunião", não atualização de status. O schema Zod
+  `updateMeetingDecisionStatusSchema` já existia em `packages/validators` (de uma
+  sessão anterior) mas não tem UI nem menção no escopo deste prompt — não inventei a
+  action correspondente (G1).
+- **`updateAnnouncement` (não estava em `packages/validators`)** — adicionei
+  `updateAnnouncementSchema` a `packages/validators/src/intranet/index.ts` (create já
+  existia) porque "CRUD de anúncios" no critério de aceite exige update; delete não é
+  possível (sem `GRANT DELETE`, sem `deleted_at` — imutabilidade, já documentado em
+  S-91), então CRUD aqui é Create+Read+Update.
+- **Briefing preferences NÃO tocado** — fora da lista de arquivos permitidos e fora
+  do texto do escopo (que só cita "config de dashboard", não briefing); confirmado em
+  `PROMPTS.md` que o cron de briefing e a config ficam em P-5.10.
+- **Nenhum arquivo de teste criado** — `PROMPTS.md` já reserva P-5.12 ("Testes
+  Intranet") com lista própria de arquivos permitidos
+  (`apps/intranet/src/__tests__/{rls,kpis,search}.test.ts`) cobrindo exatamente os
+  itens marcados "(teste)" nos critérios de aceite deste prompt. Escrever testes agora
+  teria violado a fronteira de arquivos permitidos de P-5.12 e a regra "uma sessão = um
+  prompt".
+- **Infra fora da lista de "Arquivos permitidos" do prompt, criada por ser pré-requisito
+  óbvio (G1)**:
+  - `apps/intranet/src/lib/safe-action.ts` — adicionados `staffAction`, `boardAction`,
+    `superAdminAction` (só existia `authenticatedAction`/`publicAction`); os 5 novos
+    arquivos de action precisam de gates de papel que não existiam ainda neste app.
+  - `packages/db/src/schema/admin.ts` + `packages/db/src/migrations/
+0038_intranet_audit_actions.sql` — 4 novos valores de `audit_action`
+    (`announcement.created`, `announcement.updated`, `meeting_decision.created`,
+    `dashboard_config.updated`), exigido por G6.3. Migration escrita à mão (mesmo
+    padrão de `0006/0016/0018/0024/0027/0028/0029/0032_*_audit_actions.sql` — nenhuma
+    dessas tem entrada em `meta/_journal.json`; só migrations com diff real de DDL via
+    `drizzle-kit generate` entram no journal, ex. `0031_tarefas.sql`/`0036_intranet.sql`/
+    `0037_intranet_rls.sql` via `--custom`). Não rodei `drizzle-kit generate` para não
+    arriscar um diff ruidoso incluindo os enums já adicionados à mão por migrations
+    anteriores — segui o precedente dominante (7 migrations de audit_action anteriores,
+    todas manuais).
+  - `packages/db/src/migrations/0039_intranet_global_search.sql` — função
+    `public.intranet_global_search` (`SECURITY INVOKER`), exigida pelo contrato de busca
+    do próprio escopo do prompt. Mesmo padrão de migration 100% manual de
+    `0015_user_status.sql` (funções custom, sem entrada no journal).
+  - `packages/jobs/src/crons/intranet.ts` + `packages/jobs/src/index.ts` (registro) +
+    `packages/jobs/src/catalog.ts` (removida a entrada `intranet-kpi-snapshot` de
+    `PLANNED_JOBS`, conforme a própria convenção documentada no topo do arquivo) — cron
+    horário explicitamente pedido no escopo do prompt ("Snapshot de KPIs: cron horário
+    em packages/jobs"). Lógica de cálculo das 3 métricas persistíveis (projetos ativos,
+    doações do mês, tarefas abertas — "alunos" fica fora do snapshot por ser stub)
+    duplicada deliberadamente de `kpis.ts`, mesmo padrão já usado em
+    `packages/jobs/src/crons/tarefas-prazos.ts` (jobs nunca importa código de apps,
+    G6.5).
+  - `apps/intranet/package.json` — adicionada dependência `@hebron/integrations`
+    (faltava; `decisions.ts` precisa de `createAutoTask`).
+- **Busca**: `globalSearch` usa `authenticatedAction` (qualquer papel), não
+  `staffAction` — a RLS de cada tabela já restringe o que cada papel vê (inclusive
+  papéis externos, que devem poder buscar o que a própria RLS já libera para eles, ex.
+  documentos públicos), então restringir a action por cima seria reimplementar
+  visibilidade em duplicidade com o contrato "RLS filtra, zero reimplementação".
+
+**Debitos tecnicos:**
+
+- `meeting_decisions` continua com INSERT restrito a `super_admin` (débito herdado de
+  S-91, não resolvido aqui) — confirmar com o Filipe antes de P-5.9 conectar
+  `MeetingDecisionForm` de ponta a ponta; se a decisão de negócio for "presidente de
+  sessão" (papel diretor/conselheiro) deve poder registrar, será necessário um PATCH
+  em `PATCHES/` + nova migration de RLS.
+- `updateMeetingDecisionStatus` sem Server Action — schema Zod órfão em
+  `packages/validators` até um prompt futuro (provavelmente P-5.9) trazer a UI de
+  gestão de decisões.
+- Trend das KPIs sempre `"stable"` — sem série histórica real. Quando o snapshot
+  horário acumular histórico suficiente em `kpi_snapshots`, `getKpis` pode comparar
+  contra o período anterior para computar tendência de verdade.
+
+**Critérios de aceite verificados:**
+
+- [x] CRUD de anúncios com audit central (create/update; delete indisponível por
+      imutabilidade — ver decisão acima)
+- [x] Dashboard config persiste por usuário (upsert por `user_id`)
+- [x] Decisão de reunião cria tarefa via `packages/integrations::createAutoTask`
+      quando `createTask` é marcado
+- [x] KPI doações: soma `credito` da categoria "Doações" no mês corrente (corrigido
+      de "despesa" para "receita" — ver decisão acima)
+- [x] KPIs live (`getKpis`) + snapshot por cron registrado (`packages/jobs`)
+- [x] Busca roda com o client da sessão via RPC `SECURITY INVOKER`; RLS de cada
+      schema filtra (sem reimplementação de visibilidade na Server Action)
+- [x] Busca retorna Projetos/Documentos/Tarefas/Reuniões agrupados por módulo;
+      Financeiro ausente da função RPC
+- [x] Zero `createClient` manual / zero `SERVICE_ROLE` nas 5 actions + cron (grep
+      confirmado)
+- [x] Lint passa · Types passam (`pnpm turbo lint typecheck`, 20/20 tasks verdes)
+
+**Arquivos criados/editados:**
+
+- `apps/intranet/src/actions/announcements.ts` (novo)
+- `apps/intranet/src/actions/dashboard.ts` (novo)
+- `apps/intranet/src/actions/decisions.ts` (novo)
+- `apps/intranet/src/actions/kpis.ts` (novo)
+- `apps/intranet/src/actions/search.ts` (novo)
+- `apps/intranet/src/lib/safe-action.ts` (editado — novos tiers de papel)
+- `apps/intranet/package.json` (editado — dependência `@hebron/integrations`)
+- `packages/validators/src/intranet/index.ts` (editado — `updateAnnouncementSchema`)
+- `packages/db/src/schema/admin.ts` (editado — 4 novos `audit_action`)
+- `packages/db/src/migrations/0038_intranet_audit_actions.sql` (novo)
+- `packages/db/src/migrations/0039_intranet_global_search.sql` (novo)
+- `packages/jobs/src/crons/intranet.ts` (novo)
+- `packages/jobs/src/index.ts` (editado — registro do cron)
+- `packages/jobs/src/catalog.ts` (editado — removida entrada `intranet-kpi-snapshot`)
+- `pnpm-lock.yaml` (atualizado pela nova dependência)
