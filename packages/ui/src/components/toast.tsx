@@ -67,7 +67,7 @@ const toastVariants = cva(
         ],
         warning: [
           "bg-(--hb-orange-muted) border-(--accent)",
-          "text-(--accent)",
+          "text-(--hb-orange-darker)",
         ],
         info: [
           "bg-(--hb-cyan-muted) border-(--hb-cyan)",
@@ -83,15 +83,29 @@ const toastVariants = cva(
 
 const toastIcons: Record<string, React.ReactNode> = {
   success: (
-    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-(--hb-green)" />
+    <CheckCircle2
+      className="mt-0.5 h-4 w-4 shrink-0 text-(--hb-green)"
+      aria-hidden="true"
+    />
   ),
   destructive: (
-    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-(--color-destructive)" />
+    <AlertCircle
+      className="mt-0.5 h-4 w-4 shrink-0 text-(--color-destructive)"
+      aria-hidden="true"
+    />
   ),
   warning: (
-    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-(--accent)" />
+    <AlertTriangle
+      className="mt-0.5 h-4 w-4 shrink-0 text-(--hb-orange-darker)"
+      aria-hidden="true"
+    />
   ),
-  info: <Info className="mt-0.5 h-4 w-4 shrink-0 text-(--hb-cyan)" />,
+  info: (
+    <Info
+      className="mt-0.5 h-4 w-4 shrink-0 text-(--hb-cyan)"
+      aria-hidden="true"
+    />
+  ),
   default: null,
 };
 
@@ -132,7 +146,7 @@ const ToastAction = React.forwardRef<
       "text-(--text-xs) font-medium",
       "transition-colors duration-(--transition-fast)",
       "hover:bg-(--surface-alt)",
-      "focus:outline-none focus:ring-2 focus:ring-(--brand) focus:ring-offset-2",
+      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--brand) focus-visible:ring-offset-2",
       "disabled:pointer-events-none disabled:opacity-50",
       className,
     )}
@@ -154,15 +168,15 @@ const ToastClose = React.forwardRef<
       "rounded-(--radius-sm)",
       "text-(--fg-muted)",
       "transition-colors duration-(--transition-fast)",
-      "hover:bg-black/10 hover:text-(--fg)",
-      "focus:outline-none focus:ring-2 focus:ring-(--brand)",
+      "hover:bg-(--fg)/10 hover:text-(--fg)",
+      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--brand)",
       "opacity-0 group-hover:opacity-100",
       className,
     )}
     aria-label="Fechar notificação"
     {...props}
   >
-    <X className="h-3.5 w-3.5" />
+    <X className="h-3.5 w-3.5" aria-hidden="true" />
   </ToastPrimitive.Close>
 ));
 ToastClose.displayName = ToastPrimitive.Close.displayName;

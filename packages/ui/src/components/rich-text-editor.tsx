@@ -38,6 +38,9 @@ export interface RichTextEditorProps {
   className?: string;
   "aria-describedby"?: string;
   "aria-label"?: string;
+  "aria-invalid"?: boolean;
+  "aria-required"?: boolean;
+  required?: boolean;
 }
 
 /**
@@ -59,18 +62,60 @@ export const RichTextEditor = React.forwardRef<
     className,
     "aria-describedby": describedBy,
     "aria-label": ariaLabel,
+    "aria-invalid": ariaInvalid,
+    "aria-required": ariaRequired,
+    required,
   },
   forwardedRef,
 ) {
   const innerRef = React.useRef<HTMLDivElement>(null);
+  const linkBoxRef = React.useRef<HTMLDivElement>(null);
   const [focused, setFocused] = React.useState(false);
   const [linkOpen, setLinkOpen] = React.useState(false);
   const [linkUrl, setLinkUrl] = React.useState("");
+  const [activeCommands, setActiveCommands] = React.useState<Set<string>>(
+    () => new Set(),
+  );
 
   React.useImperativeHandle(
     forwardedRef,
     () => innerRef.current as HTMLDivElement,
   );
+
+  // Reflete o estado de formatação do cursor nos botões da barra (aria-pressed
+  // + destaque visual) — usa a mesma família de APIs (execCommand) já adotada
+  // na decisão D-1, sem introduzir dependência nova.
+  React.useEffect(() => {
+    function updateActiveCommands() {
+      const el = innerRef.current;
+      if (!el || document.activeElement !== el) return;
+      const next = new Set<string>();
+      for (const { command } of TOOLBAR_ACTIONS) {
+        try {
+          if (document.queryCommandState(command)) next.add(command);
+        } catch {
+          // comando não suportado pelo navegador — ignora
+        }
+      }
+      setActiveCommands(next);
+    }
+    document.addEventListener("selectionchange", updateActiveCommands);
+    return () =>
+      document.removeEventListener("selectionchange", updateActiveCommands);
+  }, []);
+
+  // Fecha o popover de link ao clicar fora dele (não usa um primitivo Radix
+  // aqui, então precisa do próprio tratamento de outside-click).
+  React.useEffect(() => {
+    if (!linkOpen) return;
+    function handlePointerDown(e: MouseEvent) {
+      if (!linkBoxRef.current?.contains(e.target as Node)) {
+        setLinkOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [linkOpen]);
 
   // contentEditable não pode ser controlado via `value` a cada tecla (perde
   // o cursor); só resincroniza quando o HTML externo diverge do DOM atual
@@ -111,29 +156,37 @@ export const RichTextEditor = React.forwardRef<
         "overflow-hidden rounded-(--radius) border border-(--border) bg-(--bg)",
         "transition-colors duration-(--transition-fast)",
         focused && "border-(--brand) ring-2 ring-(--brand)/20",
+        ariaInvalid && "border-(--color-destructive)",
         disabled && "cursor-not-allowed opacity-50",
         className,
       )}
     >
       <div className="flex flex-wrap items-center gap-0.5 border-b border-(--border) bg-(--surface-alt) px-2 py-1.5">
-        {TOOLBAR_ACTIONS.map(({ command, icon: Icon, label }) => (
-          <button
-            key={command}
-            type="button"
-            title={label}
-            aria-label={label}
-            disabled={disabled}
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => runCommand(command)}
-            className="flex h-7 w-7 items-center justify-center rounded-(--radius-sm) text-(--fg-muted) transition-colors hover:bg-(--surface) hover:text-(--brand) disabled:pointer-events-none"
-          >
-            <Icon className="h-3.5 w-3.5" aria-hidden="true" />
-          </button>
-        ))}
+        {TOOLBAR_ACTIONS.map(({ command, icon: Icon, label }) => {
+          const isActive = activeCommands.has(command);
+          return (
+            <button
+              key={command}
+              type="button"
+              title={label}
+              aria-label={label}
+              aria-pressed={isActive}
+              disabled={disabled}
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => runCommand(command)}
+              className={cn(
+                "flex h-7 w-7 items-center justify-center rounded-(--radius-sm) text-(--fg-muted) transition-colors hover:bg-(--surface) hover:text-(--brand) disabled:pointer-events-none",
+                isActive && "bg-(--surface) text-(--brand)",
+              )}
+            >
+              <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          );
+        })}
 
         <span className="mx-1 h-4 w-px bg-(--border)" aria-hidden="true" />
 
-        <div className="relative">
+        <div className="relative" ref={linkBoxRef}>
           <button
             type="button"
             title="Inserir link"
@@ -195,6 +248,8 @@ export const RichTextEditor = React.forwardRef<
           aria-multiline="true"
           aria-label={ariaLabel ?? "Editor de texto rico"}
           aria-describedby={describedBy}
+          aria-invalid={ariaInvalid || undefined}
+          aria-required={(ariaRequired ?? required) || undefined}
           aria-placeholder={placeholder}
           contentEditable={!disabled}
           suppressContentEditableWarning

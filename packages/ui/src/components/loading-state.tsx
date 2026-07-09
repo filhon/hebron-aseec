@@ -27,15 +27,17 @@ export function LoadingState({
   return (
     <div
       role="status"
-      aria-live="polite"
-      aria-label={message}
+      aria-label={message ? undefined : "Carregando"}
       className={cn(
         "flex flex-col items-center justify-center gap-3 py-12 text-center",
         className,
       )}
     >
       <Loader2
-        className={cn(iconSizes[size], "animate-spin text-(--brand)")}
+        className={cn(
+          iconSizes[size],
+          "animate-spin text-(--brand) motion-reduce:animate-none",
+        )}
         aria-hidden="true"
       />
       {message && <p className="text-(--text-sm)">{message}</p>}

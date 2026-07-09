@@ -23,7 +23,7 @@ const DialogOverlay = React.forwardRef<
     ref={ref}
     className={cn(
       "fixed inset-0 z-(--z-overlay)",
-      "bg-black/50 backdrop-blur-[2px]",
+      "bg-(--overlay) backdrop-blur-[2px]",
       "data-[state=open]:animate-in data-[state=closed]:animate-out",
       "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
       className,
@@ -46,7 +46,7 @@ const DialogContent = React.forwardRef<
       className={cn(
         "fixed left-1/2 top-1/2 z-(--z-modal)",
         "-translate-x-1/2 -translate-y-1/2",
-        "w-full max-w-lg",
+        "w-full max-w-lg max-h-[85vh] overflow-y-auto",
         "rounded-(--radius-lg)",
         "border border-(--border)",
         "bg-(--bg)",
@@ -68,7 +68,7 @@ const DialogContent = React.forwardRef<
         <DialogPrimitive.Close
           className={cn(
             "absolute right-4 top-4",
-            "flex h-7 w-7 items-center justify-center",
+            "flex h-8 w-8 items-center justify-center",
             "rounded-(--radius-sm)",
             "text-(--fg-muted)",
             "transition-colors duration-(--transition-fast)",
@@ -79,7 +79,7 @@ const DialogContent = React.forwardRef<
           )}
           aria-label="Fechar"
         >
-          <X className="h-4 w-4" />
+          <X className="h-4 w-4" aria-hidden="true" />
         </DialogPrimitive.Close>
       )}
     </DialogPrimitive.Content>

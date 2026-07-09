@@ -57,8 +57,12 @@ function FormField({
   className,
   children,
 }: FormFieldProps) {
-  const descriptionId = id ? `${id}-description` : undefined;
-  const errorId = id ? `${id}-error` : undefined;
+  const generatedId = React.useId();
+  const fieldId = id ?? generatedId;
+  const descriptionId = hint ? `${fieldId}-description` : undefined;
+  const errorId = error ? `${fieldId}-error` : undefined;
+  const describedBy =
+    [errorId, descriptionId].filter(Boolean).join(" ") || undefined;
 
   return (
     <div
@@ -69,44 +73,44 @@ function FormField({
       )}
     >
       {label && (
-        <Label htmlFor={id} required={required}>
+        <Label htmlFor={fieldId} required={required}>
           {label}
         </Label>
       )}
 
       {React.Children.map(children, (child) => {
         if (!React.isValidElement(child)) return child;
+        const childProps = child.props as Record<string, unknown>;
         return React.cloneElement(
           child as React.ReactElement<Record<string, unknown>>,
           {
-            "aria-describedby": error
-              ? errorId
-              : hint
-                ? descriptionId
-                : undefined,
+            id: childProps.id ?? fieldId,
+            "aria-describedby": describedBy,
             "aria-invalid": error ? true : undefined,
-            disabled:
-              (child.props as Record<string, unknown>).disabled ?? disabled,
+            "aria-required": required || undefined,
+            required: childProps.required ?? required,
+            disabled: childProps.disabled ?? disabled,
           },
         );
       })}
 
-      {error ? (
-        <p
-          id={errorId}
-          role="alert"
-          className="flex items-center gap-1 text-(--text-xs)"
-        >
-          {error}
-        </p>
-      ) : hint ? (
+      {hint && (
         <p
           id={descriptionId}
           className="text-(--text-xs) leading-(--leading-relaxed)"
         >
           {hint}
         </p>
-      ) : null}
+      )}
+      {error && (
+        <p
+          id={errorId}
+          aria-live="polite"
+          className="flex items-center gap-1 text-(--text-xs)"
+        >
+          {error}
+        </p>
+      )}
     </div>
   );
 }

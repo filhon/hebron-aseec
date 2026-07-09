@@ -34,18 +34,19 @@ const SelectTrigger = React.forwardRef<
       "placeholder:text-(--fg-muted)",
       "transition-colors duration-(--transition-fast)",
       "hover:border-(--brand)/50",
-      "focus:outline-none focus:border-(--brand)",
-      "focus:ring-2 focus:ring-(--brand)/20",
+      "focus-visible:outline-none focus-visible:border-(--brand)",
+      "focus-visible:ring-2 focus-visible:ring-(--brand)/20",
       "disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-(--surface-alt)",
       "data-placeholder:text-(--fg-muted)",
       hasError && [
         "border-(--color-destructive)",
         "hover:border-(--color-destructive)",
-        "focus:border-(--color-destructive)",
-        "focus:ring-(--color-destructive)/20",
+        "focus-visible:border-(--color-destructive)",
+        "focus-visible:ring-(--color-destructive)/20",
       ],
       className,
     )}
+    aria-invalid={hasError || undefined}
     {...props}
   >
     {children}
@@ -124,7 +125,7 @@ const SelectContent = React.forwardRef<
         className={cn(
           "p-1",
           position === "popper" &&
-            "h-(--radix-select-trigger-height) w-full min-w-(--radix-select-trigger-width)",
+            "max-h-(--radix-select-content-available-height) w-full min-w-(--radix-select-trigger-width)",
         )}
       >
         {children}
@@ -171,7 +172,7 @@ const SelectItem = React.forwardRef<
   >
     <span className="absolute left-2 flex h-4 w-4 items-center justify-center">
       <SelectPrimitive.ItemIndicator>
-        <Check className="h-4 w-4 text-(--brand)" />
+        <Check className="h-4 w-4 text-(--brand)" aria-hidden="true" />
       </SelectPrimitive.ItemIndicator>
     </span>
     <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>

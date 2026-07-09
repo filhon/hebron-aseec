@@ -21,6 +21,8 @@ export interface EmptyStateProps {
   quote?: BibleQuote;
   hideQuote?: boolean;
   className?: string;
+  /** Nível do heading do título, para manter a hierarquia da página. @default "h3" */
+  titleAs?: "h2" | "h3" | "h4";
 }
 
 const DEFAULT_QUOTE: BibleQuote = {
@@ -36,6 +38,7 @@ export function EmptyState({
   quote,
   hideQuote = false,
   className,
+  titleAs: Title = "h3",
 }: EmptyStateProps) {
   const displayQuote = quote ?? DEFAULT_QUOTE;
 
@@ -51,9 +54,9 @@ export function EmptyState({
       </div>
 
       <div className="max-w-sm space-y-1.5">
-        <h3 className="font-(--font-display) text-(--text-lg) font-(--font-weight-semibold)">
+        <Title className="font-(--font-display) text-(--text-lg) font-(--font-weight-semibold)">
           {title}
-        </h3>
+        </Title>
         {description && <p className="text-(--text-sm)">{description}</p>}
       </div>
 
@@ -62,7 +65,7 @@ export function EmptyState({
       {!hideQuote && (
         <blockquote className="mt-1 max-w-xs">
           <p className="text-(--text-xs) italic leading-relaxed text-(--fg-muted)">
-            "{displayQuote.text}"
+            “{displayQuote.text}”
           </p>
           <cite className="mt-1.5 block text-(--text-xs) font-(--font-weight-semibold) not-italic text-(--brand)">
             — {displayQuote.reference}

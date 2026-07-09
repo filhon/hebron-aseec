@@ -71,11 +71,6 @@ function NotificationRow({ notification: n, onRead }: NotificationRowProps) {
           "focus-visible:outline-none",
           isUnread && "bg-(--brand)/4",
         )}
-        aria-label={
-          isUnread
-            ? `Notificação não lida: ${n.title}`
-            : `Notificação: ${n.title}`
-        }
       >
         {isUnread && (
           <span
@@ -94,6 +89,9 @@ function NotificationRow({ notification: n, onRead }: NotificationRowProps) {
                   : "font-(--font-weight-normal)",
               )}
             >
+              <span className="sr-only">
+                {isUnread ? "Não lida: " : "Lida: "}
+              </span>
               {n.title}
             </p>
             {n.body && (
@@ -183,9 +181,19 @@ export function NotificationCenter({
         {(["all", "unread"] as const).map((tab) => (
           <button
             key={tab}
+            id={`notification-tab-${tab}`}
             role="tab"
             aria-selected={activeTab === tab}
+            aria-controls="notification-tabpanel"
+            tabIndex={activeTab === tab ? 0 : -1}
             onClick={() => setActiveTab(tab)}
+            onKeyDown={(e) => {
+              if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+              e.preventDefault();
+              const other: FilterTab = tab === "all" ? "unread" : "all";
+              setActiveTab(other);
+              document.getElementById(`notification-tab-${other}`)?.focus();
+            }}
             className={cn(
               "relative -mb-px flex items-center gap-2 border-b-2 py-3 pr-4 text-(--text-sm)",
               "transition-colors duration-(--transition-fast)",
@@ -200,7 +208,7 @@ export function NotificationCenter({
               <span
                 className={cn(
                   "inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1",
-                  "text-[10px] font-(--font-weight-semibold) leading-none",
+                  "text-(--text-xs) font-(--font-weight-semibold) leading-none",
                   activeTab === "unread"
                     ? "bg-(--brand) text-white"
                     : "bg-(--surface-alt) text-(--fg-muted)",
@@ -214,12 +222,9 @@ export function NotificationCenter({
       </div>
 
       <div
+        id="notification-tabpanel"
         role="tabpanel"
-        aria-label={
-          activeTab === "all"
-            ? "Todas as notificações"
-            : "Notificações não lidas"
-        }
+        aria-labelledby={`notification-tab-${activeTab}`}
         className="flex-1 overflow-y-auto"
       >
         {displayed.length === 0 ? (
@@ -236,7 +241,7 @@ export function NotificationCenter({
             <p className="max-w-xs text-(--text-sm)">
               {activeTab === "unread"
                 ? "Você não tem notificações não lidas."
-                : '"Espera pelo Senhor; tem bom ânimo e ele fortalecerá o teu coração." — Sl 27.14'}
+                : "“Espera pelo Senhor; tem bom ânimo e ele fortalecerá o teu coração.” — Sl 27.14"}
             </p>
           </div>
         ) : (

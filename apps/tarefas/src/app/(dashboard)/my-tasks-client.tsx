@@ -66,7 +66,7 @@ const TONE_CFG: Record<KpiCardProps["tone"], { fg: string; bg: string }> = {
 function KpiCard({ label, value, icon: Icon, tone }: KpiCardProps) {
   const cfg = TONE_CFG[tone];
   return (
-    <div className="flex items-center gap-3 rounded-(--radius-md) border border-(--border) bg-(--surface) px-4 py-3.5">
+    <div className="flex items-center gap-3 rounded-md border border-(--border) bg-(--surface) px-4 py-3.5">
       <span
         className={cn(
           "flex h-10 w-10 shrink-0 items-center justify-center rounded-full",
@@ -163,7 +163,7 @@ export function MyTasksClient({
           }
         />
         <Dialog open={creating} onOpenChange={setCreating}>
-          <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
+          <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>Nova tarefa</DialogTitle>
             </DialogHeader>
@@ -244,7 +244,7 @@ export function MyTasksClient({
       />
 
       <Dialog open={creating} onOpenChange={setCreating}>
-        <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Nova tarefa</DialogTitle>
           </DialogHeader>

@@ -169,7 +169,7 @@ export function TemplatesClient({ templates }: TemplatesClientProps) {
       )}
 
       <Dialog open={creating} onOpenChange={setCreating}>
-        <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Novo template</DialogTitle>
           </DialogHeader>

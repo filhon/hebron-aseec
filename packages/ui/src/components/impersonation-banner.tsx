@@ -62,29 +62,31 @@ export function ImpersonationBanner({
   return (
     <div
       role="alert"
-      aria-live="polite"
       className={cn(
-        "sticky top-0 z-[9999] flex min-h-11 items-center gap-2.5 px-5",
-        "bg-[linear-gradient(90deg,#7f1d1d_0%,#991b1b_50%,#7f1d1d_100%)]",
-        "border-b-2 border-[#ef4444] shadow-[0_2px_12px_rgba(220,38,38,0.35)]",
+        "sticky top-0 z-[9999] flex flex-wrap items-center gap-x-2.5 gap-y-1 px-5 py-2",
+        "bg-[linear-gradient(90deg,var(--impersonation-bg-start)_0%,var(--impersonation-bg-mid)_50%,var(--impersonation-bg-start)_100%)]",
+        "border-b-2 border-(--impersonation-border) shadow-[0_2px_12px_var(--impersonation-shadow)]",
       )}
     >
       <span
         aria-hidden="true"
-        className="h-2 w-2 shrink-0 animate-[hb-imp-pulse_1.8s_ease-in-out_infinite] rounded-full bg-[#fca5a5]"
+        className="h-2 w-2 shrink-0 animate-[hb-imp-pulse_1.8s_ease-in-out_infinite] rounded-full bg-(--impersonation-dot) motion-reduce:animate-none"
       />
 
       <ShieldAlert
-        className="h-3.5 w-3.5 shrink-0 text-[#fca5a5]"
+        className="h-3.5 w-3.5 shrink-0 text-(--impersonation-dot)"
         aria-hidden="true"
       />
 
-      <span className="flex-1 text-(--text-sm) font-(--font-weight-semibold) tracking-[0.01em] text-[#fee2e2]">
+      <span className="min-w-0 flex-1 text-(--text-sm) font-(--font-weight-semibold) tracking-[0.01em] text-(--impersonation-fg)">
         Operando como{" "}
-        <strong className="font-(--font-weight-bold) text-[#fef2f2]">
+        <strong className="font-(--font-weight-bold) text-(--impersonation-fg-strong)">
           {impersonatedName}
         </strong>
-        <span className="ml-2 font-(--font-weight-normal) text-[#fca5a5]">
+        <span
+          aria-live="off"
+          className="ml-2 font-(--font-weight-normal) text-(--impersonation-fg-muted)"
+        >
           · {actorName} · desde {formatTime(startedAt)}
           {elapsed ? ` · ${elapsed}` : ""}
         </span>
@@ -106,8 +108,8 @@ export function ImpersonationBanner({
           disabled={pending}
           className={cn(
             "flex items-center gap-1.5 rounded-(--radius-sm) px-3.5 py-1.5",
-            "border-[1.5px] border-[rgba(252,165,165,0.5)] bg-white/10",
-            "text-(--text-xs) font-(--font-weight-semibold) tracking-[0.01em] text-[#fee2e2]",
+            "border-[1.5px] border-(--impersonation-action-border) bg-white/10",
+            "text-(--text-xs) font-(--font-weight-semibold) tracking-[0.01em] text-(--impersonation-fg)",
             "transition-colors duration-(--transition-fast) hover:bg-white/[0.18]",
             "disabled:cursor-not-allowed disabled:opacity-70",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50",

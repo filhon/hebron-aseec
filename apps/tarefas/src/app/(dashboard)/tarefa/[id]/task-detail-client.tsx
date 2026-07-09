@@ -333,12 +333,12 @@ export function TaskDetailClient({
                 </Button>
               )}
             </div>
-            <h1 className="font-(--font-editorial) text-(--text-2xl) leading-(--leading-tight) text-(--fg)">
+            <h1 className="font-(--font-editorial) text-(--text-2xl) leading-tight">
               {task.title}
             </h1>
           </div>
 
-          <div className="rounded-(--radius-md) border border-(--border) bg-(--surface) px-5 py-5">
+          <div className="rounded-md border border-(--border) bg-(--surface) px-5 py-5">
             <h2 className="mb-2 text-xs font-bold uppercase tracking-wide text-(--fg-muted)">
               Descrição
             </h2>
@@ -353,7 +353,7 @@ export function TaskDetailClient({
             )}
           </div>
 
-          <div className="rounded-(--radius-md) border border-(--border) bg-(--surface) px-5 py-5">
+          <div className="rounded-md border border-(--border) bg-(--surface) px-5 py-5">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-xs font-bold uppercase tracking-wide text-(--fg-muted)">
                 Subtarefas
@@ -384,7 +384,7 @@ export function TaskDetailClient({
                   .map((s) => (
                     <li
                       key={s.id}
-                      className="flex items-center gap-2.5 rounded-(--radius-sm) px-2 py-1.5 transition-colors hover:bg-(--surface-alt)"
+                      className="flex items-center gap-2.5 rounded-sm px-2 py-1.5 transition-colors hover:bg-(--surface-alt)"
                     >
                       <button
                         onClick={() =>
@@ -441,7 +441,7 @@ export function TaskDetailClient({
           </div>
 
           {task.attachments.length > 0 && (
-            <div className="rounded-(--radius-md) border border-(--border) bg-(--surface) px-5 py-5">
+            <div className="rounded-md border border-(--border) bg-(--surface) px-5 py-5">
               <h2 className="mb-3 text-xs font-bold uppercase tracking-wide text-(--fg-muted)">
                 Anexos
               </h2>
@@ -449,7 +449,7 @@ export function TaskDetailClient({
                 {task.attachments.map((a) => (
                   <li
                     key={a.id}
-                    className="flex items-center gap-2.5 rounded-(--radius-sm) border border-(--border) px-3 py-2"
+                    className="flex items-center gap-2.5 rounded-sm border border-(--border) px-3 py-2"
                   >
                     <Paperclip
                       className="h-3.5 w-3.5 shrink-0 text-(--fg-muted)"
@@ -477,7 +477,7 @@ export function TaskDetailClient({
             }}
           />
 
-          <div className="rounded-(--radius-md) border border-(--border) bg-(--surface) px-5 py-5">
+          <div className="rounded-md border border-(--border) bg-(--surface) px-5 py-5">
             <h2 className="mb-3 text-xs font-bold uppercase tracking-wide text-(--fg-muted)">
               Comentários
             </h2>
@@ -494,7 +494,7 @@ export function TaskDetailClient({
 
         {/* ── Sidebar de metadados ── */}
         <div className="flex flex-col gap-4">
-          <div className="rounded-(--radius-md) border border-(--border) bg-(--surface) px-4 py-4">
+          <div className="rounded-md border border-(--border) bg-(--surface) px-4 py-4">
             <h2 className="mb-3 text-xs font-bold uppercase tracking-wide text-(--fg-muted)">
               Detalhes
             </h2>
@@ -552,7 +552,7 @@ export function TaskDetailClient({
           </div>
 
           {task.recurrenceRule && (
-            <div className="rounded-(--radius-md) border border-(--border) bg-(--surface) px-4 py-4">
+            <div className="rounded-md border border-(--border) bg-(--surface) px-4 py-4">
               <h2 className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-(--fg-muted)">
                 <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
                 Recorrência
@@ -566,7 +566,7 @@ export function TaskDetailClient({
           )}
 
           {approvalRequest && (
-            <div className="rounded-(--radius-md) border border-(--hb-blue) bg-(--brand-muted) px-4 py-4">
+            <div className="rounded-md border border-(--hb-blue) bg-(--brand-muted) px-4 py-4">
               <h2 className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-(--hb-blue)">
                 <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
                 Aprovação da diretoria
@@ -631,7 +631,7 @@ export function TaskDetailClient({
           )}
 
           {task.sourceModule && (
-            <div className="rounded-(--radius-md) border border-(--border) bg-(--surface) px-4 py-4">
+            <div className="rounded-md border border-(--border) bg-(--surface) px-4 py-4">
               <h2 className="mb-1 text-xs font-bold uppercase tracking-wide text-(--fg-muted)">
                 Origem
               </h2>
@@ -644,7 +644,7 @@ export function TaskDetailClient({
             </div>
           )}
 
-          <div className="rounded-(--radius-md) border border-(--border) bg-(--surface) px-4 py-4">
+          <div className="rounded-md border border-(--border) bg-(--surface) px-4 py-4">
             <h2 className="mb-3 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-(--fg-muted)">
               <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
               Atividade
@@ -667,7 +667,7 @@ export function TaskDetailClient({
       </div>
 
       <Dialog open={editing} onOpenChange={setEditing}>
-        <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Editar tarefa</DialogTitle>
           </DialogHeader>
@@ -702,7 +702,7 @@ export function TaskDetailClient({
       </Dialog>
 
       <Dialog open={requestingApproval} onOpenChange={setRequestingApproval}>
-        <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Pedir aprovação da diretoria</DialogTitle>
           </DialogHeader>

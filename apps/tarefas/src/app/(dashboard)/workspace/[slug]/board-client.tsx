@@ -157,7 +157,7 @@ export function WorkspaceBoardClient({
       )}
 
       <Dialog open={creating} onOpenChange={setCreating}>
-        <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Nova tarefa</DialogTitle>
           </DialogHeader>

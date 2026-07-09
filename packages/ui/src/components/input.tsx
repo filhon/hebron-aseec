@@ -56,6 +56,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
         <input
           ref={ref}
           type={type}
+          aria-invalid={hasError || undefined}
           className={cn(
             inputBaseClasses,
             hasError && inputErrorClasses,
@@ -77,6 +78,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
         <input
           ref={ref}
           type={type}
+          aria-invalid={hasError || undefined}
           className={cn(
             inputBaseClasses,
             hasError && inputErrorClasses,

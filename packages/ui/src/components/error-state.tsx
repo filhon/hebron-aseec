@@ -13,7 +13,12 @@ export interface ErrorStateProps {
   error?: Error | string;
   action?: React.ReactNode;
   className?: string;
+  /** Nível do heading do título, para manter a hierarquia da página. @default "h3" */
+  titleAs?: "h2" | "h3" | "h4";
 }
+
+const GENERIC_ERROR_DESCRIPTION =
+  "Tente novamente ou entre em contato com o suporte se o problema persistir.";
 
 export function ErrorState({
   title = "Algo deu errado",
@@ -21,9 +26,13 @@ export function ErrorState({
   error,
   action,
   className,
+  titleAs: Title = "h3",
 }: ErrorStateProps) {
-  const errorMessage = typeof error === "string" ? error : error?.message;
-  const displayDescription = description ?? errorMessage;
+  // Error.message costuma conter texto técnico interno (stack, erro de banco etc.) —
+  // só é exibido diretamente quando `error` é uma string escrita deliberadamente.
+  const errorMessage = typeof error === "string" ? error : undefined;
+  const displayDescription =
+    description ?? errorMessage ?? (error ? GENERIC_ERROR_DESCRIPTION : undefined);
 
   return (
     <div
@@ -41,9 +50,9 @@ export function ErrorState({
       </div>
 
       <div className="max-w-sm space-y-1">
-        <h3 className="font-(--font-display) text-(--text-base) font-(--font-weight-semibold)">
+        <Title className="font-(--font-display) text-(--text-base) font-(--font-weight-semibold)">
           {title}
-        </h3>
+        </Title>
         {displayDescription && (
           <p className="text-(--text-sm)">{displayDescription}</p>
         )}

@@ -87,7 +87,7 @@ export function NotificationBell({
               className={cn(
                 "absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center",
                 "rounded-full bg-(--accent) px-1",
-                "text-[10px] font-(--font-weight-semibold) leading-none text-white",
+                "text-(--text-xs) font-(--font-weight-semibold) leading-none text-white",
               )}
             >
               {unreadCount > 99 ? "99+" : unreadCount}
@@ -101,7 +101,7 @@ export function NotificationBell({
           align="end"
           sideOffset={8}
           className={cn(
-            "z-(--z-dropdown) w-90 rounded-(--radius-md)",
+            "z-(--z-dropdown) w-90 max-w-[calc(100vw-2rem)] rounded-(--radius-md)",
             "border border-(--border) bg-(--bg)",
             "shadow-(--shadow-lg)",
             "data-[state=open]:animate-in data-[state=closed]:animate-out",
@@ -139,7 +139,7 @@ export function NotificationBell({
                 />
                 <p className="text-(--text-sm)">Nenhuma notificação</p>
                 <p className="text-(--text-xs) text-(--fg-muted)">
-                  "Espera pelo Senhor; tem bom ânimo."
+                  “Espera pelo Senhor; tem bom ânimo.” — Sl 27.14
                 </p>
               </div>
             ) : (
@@ -174,6 +174,9 @@ export function NotificationBell({
                                 isUnread && "font-(--font-weight-semibold)",
                               )}
                             >
+                              <span className="sr-only">
+                                {isUnread ? "Não lida: " : "Lida: "}
+                              </span>
                               {n.title}
                             </p>
                             {n.body && (
@@ -182,7 +185,9 @@ export function NotificationBell({
                               </p>
                             )}
                             <p className="mt-1 text-(--text-xs) text-(--fg-muted)">
-                              {formatRelativeTime(n.createdAt)}
+                              <time dateTime={n.createdAt}>
+                                {formatRelativeTime(n.createdAt)}
+                              </time>
                             </p>
                           </div>
 

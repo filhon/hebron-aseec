@@ -31,44 +31,47 @@ export function PageHeader({
       {breadcrumb && breadcrumb.length > 0 && (
         <nav aria-label="Localização atual">
           <ol className="flex flex-wrap items-center gap-1.5 text-(--fg-muted)">
-            {breadcrumb.map((item, i) => (
-              <React.Fragment key={item.label}>
-                {i > 0 && (
-                  <li aria-hidden="true" className="select-none">
-                    /
-                  </li>
-                )}
-                <li>
-                  {item.href ? (
-                    <a
-                      href={item.href}
-                      className="transition-colors duration-(--transition-fast) hover:text-(--fg)"
-                    >
-                      {item.label}
-                    </a>
-                  ) : (
-                    <span
-                      className={
-                        i === breadcrumb.length - 1
-                          ? "font-(--font-weight-medium) text-(--fg)"
-                          : ""
-                      }
-                      aria-current={
-                        i === breadcrumb.length - 1 ? "page" : undefined
-                      }
-                    >
-                      {item.label}
-                    </span>
+            {breadcrumb.map((item, i) => {
+              const isLast = i === breadcrumb.length - 1;
+              return (
+                <React.Fragment key={item.label}>
+                  {i > 0 && (
+                    <li aria-hidden="true" className="select-none">
+                      /
+                    </li>
                   )}
-                </li>
-              </React.Fragment>
-            ))}
+                  <li>
+                    {item.href ? (
+                      <a
+                        href={item.href}
+                        className={cn(
+                          "transition-colors duration-(--transition-fast) hover:text-(--fg)",
+                          isLast && "font-(--font-weight-medium) text-(--fg)",
+                        )}
+                        aria-current={isLast ? "page" : undefined}
+                      >
+                        {item.label}
+                      </a>
+                    ) : (
+                      <span
+                        className={
+                          isLast ? "font-(--font-weight-medium) text-(--fg)" : ""
+                        }
+                        aria-current={isLast ? "page" : undefined}
+                      >
+                        {item.label}
+                      </span>
+                    )}
+                  </li>
+                </React.Fragment>
+              );
+            })}
           </ol>
         </nav>
       )}
 
-      <div className="flex items-start justify-between gap-4">
-        <div className="space-y-1">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0 space-y-1">
           <h1 className="font-(--font-editorial) text-(--text-2xl) leading-(--leading-tight)">
             {title}
           </h1>

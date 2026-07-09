@@ -106,7 +106,7 @@ export function RecorrentesClient({
           {rules.map((rule) => (
             <li
               key={rule.id}
-              className="flex flex-col gap-3 rounded-(--radius-md) border border-(--border) bg-(--surface) px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
+              className="flex flex-col gap-3 rounded-md border border-(--border) bg-(--surface) px-4 py-4 sm:flex-row sm:items-center sm:justify-between"
             >
               <div className="flex min-w-0 flex-1 items-start gap-3">
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-(--brand-muted) text-(--hb-blue)">
@@ -136,7 +136,7 @@ export function RecorrentesClient({
       )}
 
       <Dialog open={creating} onOpenChange={setCreating}>
-        <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Nova regra de recorrência</DialogTitle>
           </DialogHeader>

@@ -14,7 +14,7 @@ const buttonVariants = cva(
     "inline-flex items-center justify-center gap-2",
     "font-medium whitespace-nowrap",
     "rounded-(--radius) border border-transparent",
-    "transition-all duration-(--transition-fast)",
+    "transition-[background-color,color,border-color,box-shadow] duration-(--transition-fast)",
     "focus-visible:outline-none focus-visible:ring-2",
     "focus-visible:ring-(--brand) focus-visible:ring-offset-2",
     "disabled:pointer-events-none disabled:opacity-50",
@@ -30,9 +30,9 @@ const buttonVariants = cva(
           "shadow-(--shadow-xs)",
         ],
         accent: [
-          "bg-(--accent) text-(--fg-invert)",
-          "hover:bg-(--hb-orange-deep)",
-          "active:bg-(--hb-orange-deep)",
+          "bg-(--hb-orange-deep) text-(--fg-invert)",
+          "hover:bg-(--hb-orange-darker)",
+          "active:bg-(--hb-orange-darker)",
           "shadow-(--shadow-xs)",
         ],
         destructive: [
@@ -60,6 +60,8 @@ const buttonVariants = cva(
           "h-auto px-0 py-0",
         ],
       },
+      // xs/sm/icon-sm (28-32px): reservados para contextos densos (tabelas, toolbars).
+      // Para CTAs primárias ou qualquer alvo tocável em mobile, usar md ou maior.
       size: {
         xs: "h-7 px-2.5 text-(--text-xs)",
         sm: "h-8 px-3 text-(--text-sm)",
@@ -110,11 +112,15 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       <Comp
         ref={ref}
         disabled={disabled ?? loading}
+        aria-busy={loading || undefined}
         className={cn(buttonVariants({ variant, size }), className)}
         {...props}
       >
         {loading ? (
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          <>
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+            <span className="sr-only">Carregando</span>
+          </>
         ) : (
           leftIcon
         )}

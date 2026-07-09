@@ -21,6 +21,7 @@
   /* Laranja — chamadas para ação, destaques */
   --hb-orange: #ea5a06; /* Pantone Orange 021 C */
   --hb-orange-deep: #c24a03;
+  --hb-orange-darker: #a03d02; /* estado active sobre --hb-orange-deep — contraste AA com texto branco */
   --hb-orange-muted: #fef0e7;
 
   /* Verde — "vivo, missão, vida" — highlight, nunca superfície primária */
@@ -80,6 +81,7 @@
   --border: var(--hb-gray-100);
   --border-strong: var(--hb-gray-200);
   --divider: rgba(19, 23, 55, 0.08);
+  --overlay: rgba(19, 23, 55, 0.5); /* scrim de modais — tingido com --hb-ink, nunca preto puro */
 
   /* ── TOKENS DE ESTADO (preservados) ───────────────────── */
   --color-destructive: #c0392b;
@@ -207,6 +209,19 @@
   --z-modal: 1040;
   --z-toast: 1050;
   --z-tooltip: 1060;
+
+  /* ── IMPERSONAÇÃO ──────────────────────────────────────────
+     Chrome de sistema deliberadamente fora do vocabulário --hb-*
+     (alerta raro e de alto risco — precisa destoar de tudo mais). */
+  --impersonation-bg-start: #7f1d1d;
+  --impersonation-bg-mid: #991b1b;
+  --impersonation-border: #ef4444;
+  --impersonation-shadow: rgba(220, 38, 38, 0.35);
+  --impersonation-fg: #fee2e2;
+  --impersonation-fg-strong: #fef2f2;
+  --impersonation-fg-muted: #ffb4b4; /* ajustado de #fca5a5 — 4.92:1 AA contra --impersonation-bg-mid */
+  --impersonation-dot: #fca5a5;
+  --impersonation-action-border: rgba(252, 165, 165, 0.5);
 
   /* ══ DEPRECATED — remover após migração dos apps (P-1.12b) ═
      Aliases de compatibilidade. Não usar em código novo.
