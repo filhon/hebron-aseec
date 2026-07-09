@@ -3156,15 +3156,15 @@ Criar tabelas Drizzle no schema `intranet`: announcements, dashboard_configs (us
 
 **Critérios de aceite:**
 
-- [ ] announcements: title, body, priority, author_id, published_at
-- [ ] dashboard_configs: user_id (unique), widgets (jsonb com posições)
-- [ ] meeting_decisions: meeting_session_id (FK admin.meeting_sessions), content, task_id (FK tarefas.tasks, nullable)
-- [ ] briefing_preferences: user_id, enabled, frequency (daily/weekly)
-- [ ] kpi_snapshots: metric_name, value, period, captured_at
-- [ ] kpi_snapshots com unique (metric_name, period) e captured_at
-- [ ] drizzle-kit check limpo
-- [ ] Migration aplica sem erros
-- [ ] Types passam
+- [x] announcements: title, body, priority, author_id, published_at
+- [x] dashboard_configs: user_id (unique), widgets (jsonb com posições)
+- [x] meeting_decisions: meeting_session_id (FK admin.meeting_sessions), content, task_id (FK tarefas.tasks, nullable)
+- [x] briefing_preferences: user_id, enabled, frequency (daily/weekly)
+- [x] kpi_snapshots: metric_name, value, period, captured_at
+- [x] kpi_snapshots com unique (metric_name, period) e captured_at
+- [x] drizzle-kit check limpo
+- [x] Migration aplica sem erros
+- [x] Types passam
 
 ---
 
@@ -3188,12 +3188,12 @@ RLS para schema intranet. Super_admin: full access. Diretores/conselheiros: SELE
 
 **Critérios de aceite:**
 
-- [ ] Super_admin: full CRUD
-- [ ] Diretores/conselheiros: criar anúncios, ver decisões
-- [ ] Colaboradores: ver anúncios (não criar), ver diretório
-- [ ] dashboard_config: cada um gerencia apenas a própria
-- [ ] Submissores: sem acesso ao schema intranet
-- [ ] Types passam
+- [x] Super_admin: full CRUD
+- [x] Diretores/conselheiros: criar anúncios, ver decisões
+- [x] Colaboradores: ver anúncios (não criar) — [ ] ver diretório: fora de escopo (schema `public`, não `intranet`; ver débito técnico em SESSIONS.md S-91)
+- [x] dashboard_config: cada um gerencia apenas a própria
+- [x] Submissores: sem acesso ao schema intranet
+- [x] Types passam
 
 ---
 

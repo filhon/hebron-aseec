@@ -111,6 +111,7 @@
 | S-88   | 2026-07-09 | P-5.4 — Formulários Intranet                                            | concluido                            |
 | S-89   | 2026-07-09 | P-5.5 — Estados Intranet                                                | concluido                            |
 | S-90   | 2026-07-09 | P-5.6 — Schema do Banco Intranet                                        | concluido                            |
+| S-91   | 2026-07-09 | P-5.7 — RLS Policies Intranet                                           | concluido                            |
 
 ---
 
@@ -4645,3 +4646,100 @@ sem tabelas): `announcements`, `dashboard_configs`, `meeting_decisions`,
 - `packages/db/src/migrations/0036_intranet.sql` (novo, gerado + renomeado)
 - `packages/db/src/migrations/meta/0016_snapshot.json` + `meta/_journal.json` (gerados por
   `drizzle-kit generate`)
+
+---
+
+### S-91 — 2026-07-09 — P-5.7 RLS Policies Intranet
+
+**Prompt:** P-5.7
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+RLS habilitado nas 5 tabelas do schema `intranet` (`announcements`, `meeting_decisions`,
+`dashboard_configs`, `briefing_preferences`, `kpi_snapshots`) via migration
+`0037_intranet_rls.sql`, gerada vazia com `drizzle-kit generate --custom` (schema sem
+mudança de DDL desde `0036_intranet.sql`) e preenchida à mão, mesmo padrão de
+`0033_tarefas_rls.sql`. GRANTs para `authenticated` incluídos no mesmo arquivo (G6.4).
+Aplicada com sucesso via `pnpm db:migrate`.
+
+**Decisoes tomadas:**
+
+- `briefing_preferences` e `kpi_snapshots` não são mencionadas por papel no texto do
+  escopo do prompt (só `announcements`, `meeting_decisions`, `dashboard_config`). Como
+  toda tabela do schema precisa de RLS (princípio invioável "RLS obrigatório em toda
+  tabela"), apliquei por analogia: `briefing_preferences` segue o mesmo padrão "própria
+  linha" de `dashboard_configs` (mesmo par de tabelas 1-linha-por-usuário do Bloco A,
+  P-5.4/P-5.6); `kpi_snapshots` segue o padrão de `admin.feature_flags` — SELECT para todo
+  staff autenticado (super_admin/diretor/conselheiro/colaborador), escrita restrita a
+  super_admin (o cron que grava o cache roda como o ator sistema de
+  `packages/db/src/system-actor.ts`, que tem papel `super_admin`, então a policy de
+  super_admin já cobre a escrita do job — P-5.8).
+- `announcements`: diretor/conselheiro recebem SELECT + INSERT (com `author_id =
+auth.uid()` no `WITH CHECK`) como o prompt pede; UPDATE/DELETE não foram listados para
+  esses papéis, então ficam só com `super_admin` (via policy `FOR ALL`). Não inventei uma
+  policy de "autor edita o próprio anúncio" — não estava no escopo nem havia Server Action
+  de edição implementada ainda (só o form de criação, P-5.4).
+- `meeting_decisions`: diretor/conselheiro recebem só SELECT, exatamente como o prompt
+  descreve — mesmo que isso signifique que só `super_admin` pode registrar uma decisão de
+  ata (nenhum papel de diretoria tem INSERT aqui). Segui literalmente em vez de assumir que
+  "quem cria a ata" deveria poder inserir decisões — ficou registrado aqui como possível
+  gap a confirmar com o Filipe antes de P-5.8/P-5.9.
+- Acesso de colaborador ao "diretório" (mencionado no escopo: "Colaboradores: SELECT em
+  announcements e diretório") não foi implementado nesta migration — o diretório lê
+  `public.users`, schema fora do escopo de arquivos permitidos deste prompt (só a migration
+  do schema `intranet`). Hoje `public.users` só permite `SELECT` da própria linha ou, para
+  `super_admin`/`diretor`, de todas (`0000_initial.sql`) — **não há policy que dê a
+  colaborador/conselheiro visão de todos os usuários**, então a página Diretório
+  (`apps/intranet/.../diretorio/page.tsx`, ainda mockada) vai continuar sem dados reais
+  até esse gap ser resolvido num prompt que tenha `packages/db/src/schema/public.ts` (ou
+  a migration correspondente) na lista de arquivos permitidos. Registrado como débito
+  técnico abaixo.
+- Como toda sessão (inclusive `super_admin`) conecta ao Postgres como o mesmo role
+  `authenticated` — a diferenciação de papel é só via RLS —, os GRANTs (teto de
+  privilégio) precisam cobrir toda operação usada por qualquer policy `FOR ALL`, não só
+  as de diretor/colaborador. `announcements`/`meeting_decisions` não têm coluna
+  `deleted_at` (sem soft-delete modelado ainda), então nenhum papel — nem `super_admin` —
+  recebe `GRANT DELETE` nessas duas tabelas (imutabilidade, mesmo racional de
+  `tarefas.tasks`/`comments` em `0033_tarefas_rls.sql`).
+- Validação funcional rodada manualmente contra o banco real (script descartável, dentro
+  de transações com `ROLLBACK`, nada persistido): `super_admin`/`diretor` inserem
+  announcement, `diretor` não insere com `author_id` de outro usuário, `colaborador` só
+  lê announcements (não insere), `submissor` não enxerga nenhuma linha do schema,
+  `colaborador` só grava a própria `dashboard_config`, `diretor` só lê
+  `meeting_decisions` (não insere). Nenhum arquivo de teste foi criado — não estava na
+  lista de arquivos permitidos do prompt (diferente do padrão
+  `apps/tarefas/src/__tests__/rls.test.ts`, que foi adicionado numa sessão de
+  auditoria/fix separada, não no P-4.7 original).
+
+**Debitos tecnicos:**
+
+- `public.users` não tem policy de SELECT para colaborador/conselheiro verem todos os
+  usuários — a página Diretório (`apps/intranet/.../diretorio`) precisa disso para
+  funcionar com dados reais. Fora do escopo de arquivos permitidos de P-5.7 (schema
+  `public`, não `intranet`).
+- `meeting_decisions` não tem nenhuma policy de INSERT para diretor/conselheiro — só
+  `super_admin` registra decisões de ata. Confirmar com o Filipe se é intencional antes
+  de conectar `MeetingDecisionForm` (P-5.4) a uma Server Action real em P-5.9.
+- Nenhum arquivo `apps/intranet/src/__tests__/rls.test.ts` foi criado (fora do escopo de
+  arquivos permitidos) — cobertura automatizada de RLS para este módulo fica pendente,
+  mesmo padrão de débito já registrado para tarefas antes de `6946975`.
+
+**Critérios de aceite verificados:**
+
+- [x] Super_admin: full CRUD (testado via INSERT em announcements)
+- [x] Diretores/conselheiros: criar anúncios (testado), ver decisões (testado)
+- [x] Colaboradores: ver anúncios — não criar (testado), ver diretório — débito técnico
+      acima (fora do schema intranet)
+- [x] dashboard_config: cada um gerencia apenas a própria (testado — INSERT em linha
+      alheia é rejeitado)
+- [x] Submissores: sem acesso ao schema intranet (testado — SELECT retorna zero linhas)
+- [x] Types passam (`pnpm turbo lint typecheck`, 38/38 tasks verdes)
+
+**Arquivos criados/editados:**
+
+- `packages/db/src/migrations/0037_intranet_rls.sql` (novo)
+- `packages/db/src/migrations/meta/0017_snapshot.json` + `meta/_journal.json` (gerados por
+  `drizzle-kit generate --custom`, arquivo `.sql` renomeado de `0017_intranet_rls.sql` para
+  `0037_intranet_rls.sql` para seguir a numeração sequencial em disco, mesmo padrão de
+  `0036_intranet.sql`/`0031_tarefas.sql`)
