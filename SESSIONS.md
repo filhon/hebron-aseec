@@ -108,6 +108,7 @@
 | S-85   | 2026-07-08 | P-5.1 — Schema de Tipos Intranet                                        | concluido                            |
 | S-86   | 2026-07-08 | P-5.2 — Componentes UI Intranet                                         | concluido                            |
 | S-87   | 2026-07-08 | P-5.3 — Telas e Páginas Intranet                                        | concluido                            |
+| S-88   | 2026-07-09 | P-5.4 — Formulários Intranet                                            | concluido                            |
 
 ---
 
@@ -4408,4 +4409,73 @@ P-5.3.
 - `apps/intranet/src/app/(dashboard)/diretorio/page.tsx`
 - `apps/intranet/src/app/(dashboard)/calendario/page.tsx`
 - `apps/intranet/src/app/(dashboard)/reunioes/page.tsx`
+
+---
+
+### S-88 — 2026-07-09 — P-5.4 Formulários Intranet
+
+**Prompt:** P-5.4
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Criados os 4 formulários do Bloco A de Intranet: anúncio (com o `RichTextEditor`
+compartilhado — decisão D-1), configuração de dashboard (adicionar/remover/reordenar
+widgets por drag-drop), registro de decisão de reunião (com opção de gerar tarefa) e
+configuração de briefing (opt-in + frequência). Todos seguem o padrão de
+`apps/tarefas/src/components/template-form.tsx`: estado local + `schema.safeParse` no
+submit, componentes de `@hebron/ui` (`FormField`, `Input`, `Select`, `Button`).
+
+**Decisoes tomadas:**
+
+- `meeting-decision-form.tsx` recebe `meetings`/`responsibles` como props genéricas
+  (`{ id, label }` / `{ id, name }`) em vez de importar `MeetingSession` de
+  `@hebron/types/admin` — mantém o form de Intranet desacoplado do módulo Admin (G6.5:
+  "App nunca importa de outro app"; aqui nem type-only import foi usado, por opção de
+  simplicidade, já que o prompt não especifica a origem dos dados).
+- Campo "criar tarefa" (checkbox) não existe em `createMeetingDecisionSchema` — o
+  schema compartilhado só cobre os campos que viram uma `MeetingDecision`. Modelei como
+  extensão local `MeetingDecisionFormValues extends CreateMeetingDecisionInput` com
+  `createTask: boolean`; o form valida o núcleo com o schema compartilhado e agrega
+  `createTask` só no values final entregue ao `onSubmit`. A geração da tarefa em
+  Tarefas fica para um prompt de integração (Bloco B).
+- Não existe schema/tipo de "briefing" em `packages/validators/intranet` nem em
+  `packages/types/intranet` (só a menção em BRAIN §6.6 "Briefing diário opcional"). Como
+  a lista de arquivos permitidos deste prompt não inclui esses packages, defini um Zod
+  schema local dentro do próprio `briefing-config-form.tsx`
+  (`{ enabled: boolean; frequency: "diario" | "semanal" }`), no mesmo padrão já usado em
+  `apps/documentos/src/components/subscription-form.tsx`. Fica como débito: se um
+  prompt de backend precisar persistir essa preferência, o schema oficial deve nascer
+  em `packages/validators/intranet` e este componente deve passar a importá-lo.
+- `widget-config-form.tsx` gera `id` novo via `crypto.randomUUID()` para widgets
+  adicionados no cliente (mesmo padrão já usado em outras actions do monorepo), porque
+  `updateDashboardWidgetsSchema.widgets[].id` exige `z.string().uuid()`.
+- Toggle de "opt-in" do briefing implementado como `button[role="switch"]` com tokens
+  Tailwind (`bg-(--brand)`), replicando o padrão já usado em
+  `apps/documentos/src/components/subscription-form.tsx` — não existe um componente
+  `Switch`/`Toggle` em `@hebron/ui` hoje.
+
+**Debitos tecnicos:**
+
+- Nenhum dos 4 formulários foi conectado a uma página/diálogo ainda — não havia página
+  na lista de arquivos permitidos deste prompt. A integração (abrir em `Dialog`, `Server
+Action` real) fica para os prompts de Bloco B (P-5.6+).
+- Schema de briefing só existe localmente no componente; deve migrar para
+  `packages/validators/intranet` quando o backend for implementado.
+
+**Critérios de aceite verificados:**
+
+- [x] Anúncio: título, corpo rich text, prioridade (normal/importante/urgente)
+- [x] Widget config: drag-drop para adicionar/remover/reordenar
+- [x] Decisão: texto, reunião vinculada, checkbox "criar tarefa"
+- [x] Briefing: toggle opt-in + frequência (diário/semanal)
+- [x] Lint passa (`pnpm --filter @hebron/intranet lint`)
+- [x] Types passam (`pnpm --filter @hebron/intranet exec tsc --noEmit`)
+
+**Arquivos criados:**
+
+- `apps/intranet/src/components/announcement-form.tsx`
+- `apps/intranet/src/components/widget-config-form.tsx`
+- `apps/intranet/src/components/meeting-decision-form.tsx`
+- `apps/intranet/src/components/briefing-config-form.tsx`
 - `apps/intranet/src/app/(dashboard)/busca/page.tsx`

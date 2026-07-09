@@ -114,7 +114,7 @@ export default function ReunioesPage() {
                           </span>
                           <span className="text-(--fg)">
                             {decision.description}
-                            <span className="text-(--text-xs) text-(--fg-muted)">
+                            <span className="text-(--text-xs)">
                               {" "}
                               — {decision.responsibleName}
                               {decision.dueDate &&

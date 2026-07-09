@@ -3087,12 +3087,12 @@ Formulários: criar anúncio (título, corpo com editor compartilhado de package
 
 **Critérios de aceite:**
 
-- [ ] Anúncio: título, corpo rich text, prioridade (normal/importante/urgente)
-- [ ] Widget config: drag-drop para adicionar/remover/reordenar
-- [ ] Decisão: texto, reunião vinculada, checkbox "criar tarefa"
-- [ ] Briefing: toggle opt-in + frequência (diário/semanal)
-- [ ] Lint passa
-- [ ] Types passam
+- [x] Anúncio: título, corpo rich text, prioridade (normal/importante/urgente)
+- [x] Widget config: drag-drop para adicionar/remover/reordenar
+- [x] Decisão: texto, reunião vinculada, checkbox "criar tarefa"
+- [x] Briefing: toggle opt-in + frequência (diário/semanal)
+- [x] Lint passa
+- [x] Types passam
 
 ---
 

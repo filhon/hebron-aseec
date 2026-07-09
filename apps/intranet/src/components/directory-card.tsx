@@ -33,10 +33,7 @@ export function DirectoryCard({ member }: DirectoryCardProps) {
           {member.role}
         </span>
         {member.bio && (
-          <p
-            className="line-clamp-2 text-(--text-xs) text-(--fg-muted)"
-            style={{ marginTop: 8 }}
-          >
+          <p className="line-clamp-2 text-(--text-xs)" style={{ marginTop: 8 }}>
             {member.bio}
           </p>
         )}

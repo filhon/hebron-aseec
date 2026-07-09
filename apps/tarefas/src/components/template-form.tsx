@@ -239,10 +239,7 @@ export function TemplateForm({
           </Button>
         </div>
         {errors.tasks && (
-          <p
-            role="alert"
-            className="text-(--text-xs)"
-          >
+          <p role="alert" className="text-(--text-xs)">
             {errors.tasks}
           </p>
         )}
@@ -289,10 +286,7 @@ export function TemplateForm({
                   </button>
                 </div>
                 {errors[`tasks.${index}.title`] && (
-                  <p
-                    role="alert"
-                    className="text-(--text-xs)"
-                  >
+                  <p role="alert" className="text-(--text-xs)">
                     {errors[`tasks.${index}.title`]}
                   </p>
                 )}

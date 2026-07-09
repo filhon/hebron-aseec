@@ -32,7 +32,9 @@ export function ErrorState({
   // só é exibido diretamente quando `error` é uma string escrita deliberadamente.
   const errorMessage = typeof error === "string" ? error : undefined;
   const displayDescription =
-    description ?? errorMessage ?? (error ? GENERIC_ERROR_DESCRIPTION : undefined);
+    description ??
+    errorMessage ??
+    (error ? GENERIC_ERROR_DESCRIPTION : undefined);
 
   return (
     <div

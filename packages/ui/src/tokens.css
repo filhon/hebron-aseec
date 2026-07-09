@@ -81,7 +81,12 @@
   --border: var(--hb-gray-100);
   --border-strong: var(--hb-gray-200);
   --divider: rgba(19, 23, 55, 0.08);
-  --overlay: rgba(19, 23, 55, 0.5); /* scrim de modais — tingido com --hb-ink, nunca preto puro */
+  --overlay: rgba(
+    19,
+    23,
+    55,
+    0.5
+  ); /* scrim de modais — tingido com --hb-ink, nunca preto puro */
 
   /* ── TOKENS DE ESTADO (preservados) ───────────────────── */
   --color-destructive: #c0392b;

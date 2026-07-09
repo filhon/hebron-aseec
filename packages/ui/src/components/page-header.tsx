@@ -55,7 +55,9 @@ export function PageHeader({
                     ) : (
                       <span
                         className={
-                          isLast ? "font-(--font-weight-medium) text-(--fg)" : ""
+                          isLast
+                            ? "font-(--font-weight-medium) text-(--fg)"
+                            : ""
                         }
                         aria-current={isLast ? "page" : undefined}
                       >
