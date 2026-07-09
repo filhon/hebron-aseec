@@ -75,7 +75,7 @@ export default function CalendarioPage() {
                     }}
                   >
                     <div
-                      className="text-(--text-xs) text-(--fg-muted)"
+                      className="text-(--text-xs)"
                       style={{ width: 88, flexShrink: 0, paddingTop: 2 }}
                     >
                       {formatDate(event.startAt)}
@@ -95,13 +95,13 @@ export default function CalendarioPage() {
                         >
                           {TYPE_LABEL[event.type]}
                         </span>
-                        <span className="text-(--text-sm) font-(--font-weight-semibold) text-(--fg)">
+                        <span className="text-(--text-sm) font-semibold">
                           {event.title}
                         </span>
                       </div>
                       {(event.description ?? event.location) && (
                         <p
-                          className="text-(--text-xs) text-(--fg-muted)"
+                          className="text-(--text-xs)"
                           style={{
                             marginTop: 4,
                             display: "flex",

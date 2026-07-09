@@ -3119,11 +3119,11 @@ Loading, empty e error states. Skeletons para dashboard (grid de widgets), feed,
 
 **Critérios de aceite:**
 
-- [ ] Skeletons para cada widget no dashboard
-- [ ] Feed vazio: "Nenhum anúncio recente"
-- [ ] Diretório vazio: "Nenhum membro encontrado"
-- [ ] Lint passa
-- [ ] Types passam
+- [x] Skeletons para cada widget no dashboard
+- [x] Feed vazio: "Nenhum anúncio recente"
+- [x] Diretório vazio: "Nenhum membro encontrado"
+- [x] Lint passa
+- [x] Types passam
 
 ---
 

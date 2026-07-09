@@ -3,7 +3,9 @@ import {
   Megaphone,
   Handshake,
   CalendarDays as CalendarIcon,
+  RotateCcw,
 } from "lucide-react";
+import { Button, EmptyState, ErrorState } from "@hebron/ui";
 import type { DashboardWidget } from "@hebron/types/intranet";
 import {
   mockAnnouncements,
@@ -17,6 +19,7 @@ import { FeedWidget, type FeedItem } from "../../components/feed-widget";
 import { CalendarWidget } from "../../components/calendar-widget";
 import { AppLauncher } from "../../components/app-launcher";
 import { WidgetGrid, type WidgetGridItem } from "../../components/widget-grid";
+import { DashboardSkeleton } from "../../components/dashboard-skeleton";
 
 // ─── Feed cross-módulo (dados mock da intranet — agregação real chega em P-5.9) ──
 
@@ -56,7 +59,10 @@ const feedItems: FeedItem[] = [
 // CalendarWidget) — reaproveita o KPICard, cujo sparkline já cobre a leitura de
 // tendência que o widget de gráfico pediria.
 
-function renderWidget(widget: DashboardWidget): ReactNode {
+function renderWidget(
+  widget: DashboardWidget,
+  activeFeedItems: FeedItem[],
+): ReactNode {
   switch (widget.type) {
     case "kpi":
     case "chart": {
@@ -65,9 +71,22 @@ function renderWidget(widget: DashboardWidget): ReactNode {
       return kpi ? <KPICard kpi={kpi} /> : null;
     }
     case "feed":
-      return (
+      return activeFeedItems.length === 0 ? (
+        <div className="hb-card">
+          <div className="hb-card-header">
+            <h3>Últimas atualizações</h3>
+          </div>
+          <div className="hb-card-body">
+            <EmptyState
+              icon={Megaphone}
+              title="Nenhum anúncio recente"
+              hideQuote
+            />
+          </div>
+        </div>
+      ) : (
         <FeedWidget
-          items={feedItems}
+          items={activeFeedItems}
           limit={(widget.config.feedLimit as number | undefined) ?? 6}
         />
       );
@@ -78,10 +97,46 @@ function renderWidget(widget: DashboardWidget): ReactNode {
   }
 }
 
-export default function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ state?: string }>;
+}) {
+  const { state } = await searchParams;
+
+  if (state === "loading") {
+    return <DashboardSkeleton />;
+  }
+
+  if (state === "error") {
+    return (
+      <div className="hb-page">
+        <ErrorState
+          title="Não foi possível carregar o painel"
+          description="Verifique sua conexão e tente novamente."
+          action={
+            <form method="get">
+              <Button
+                type="submit"
+                leftIcon={<RotateCcw size={14} aria-hidden="true" />}
+              >
+                Tentar novamente
+              </Button>
+            </form>
+          }
+        />
+      </div>
+    );
+  }
+
+  const activeFeedItems = state === "empty" ? [] : feedItems;
+
   const widgets: WidgetGridItem[] = [...mockDashboardWidgets]
     .sort((a, b) => a.position - b.position)
-    .map((widget) => ({ id: widget.id, content: renderWidget(widget) }));
+    .map((widget) => ({
+      id: widget.id,
+      content: renderWidget(widget, activeFeedItems),
+    }));
 
   return (
     <div className="hb-page">

@@ -109,6 +109,7 @@
 | S-86   | 2026-07-08 | P-5.2 — Componentes UI Intranet                                         | concluido                            |
 | S-87   | 2026-07-08 | P-5.3 — Telas e Páginas Intranet                                        | concluido                            |
 | S-88   | 2026-07-09 | P-5.4 — Formulários Intranet                                            | concluido                            |
+| S-89   | 2026-07-09 | P-5.5 — Estados Intranet                                                | concluido                            |
 
 ---
 
@@ -4479,3 +4480,78 @@ Action` real) fica para os prompts de Bloco B (P-5.6+).
 - `apps/intranet/src/components/meeting-decision-form.tsx`
 - `apps/intranet/src/components/briefing-config-form.tsx`
 - `apps/intranet/src/app/(dashboard)/busca/page.tsx`
+
+---
+
+### S-89 — 2026-07-09 — P-5.5 Estados Intranet
+
+**Prompt:** P-5.5
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Adicionados os estados de loading/vazio/erro do painel (dashboard) de Intranet. Três
+skeletons novos seguindo o padrão já estabelecido em `admin`/`financeiro`/`tarefas`
+(componente `Bone` local com `animate-pulse` + `var(--surface-alt)`, reaproveitando as
+classes globais `hb-card`/`hb-stat`/`hb-grid-3` de `packages/ui` para bater exatamente
+com o visual dos widgets reais). `(dashboard)/page.tsx` passou a ser Server Component
+async com `searchParams: Promise<{ state?: string }>` — mesmo padrão já usado em
+`apps/admin/src/app/(dashboard)/page.tsx` — para demonstrar `?state=loading`,
+`?state=empty` e `?state=error` sem precisar de fetch assíncrono real (o painel ainda é
+100% mock, Bloco B chega em P-5.9).
+
+**Decisoes tomadas:**
+
+- Escopo do prompt cita skeleton de "calendário", mas a lista de arquivos permitidos só
+  tinha `dashboard-skeleton.tsx`, `feed-skeleton.tsx`, `directory-skeleton.tsx` (sem
+  `calendar-skeleton.tsx`). Como `calendar` já é um dos 4 tipos de widget do grid
+  (`kpi | chart | feed | calendar` — `packages/types/intranet`), assumi que o skeleton
+  do calendário vive embutido em `DashboardSkeleton` (uma seção com a grade de 7
+  colunas), em vez de ganhar arquivo próprio.
+- `DirectorySkeleton` foi criado conforme a lista de arquivos permitidos, mas **não foi
+  conectado a nenhuma página nesta sessão**: `directory` não é um tipo de
+  `DashboardWidget`, então não aparece no grid do painel, e `diretorio/page.tsx` não
+  estava entre os arquivos permitidos deste prompt (ele já tem seu próprio `EmptyState`
+  "Nenhum membro encontrado" desde P-5.3, o que satisfaz o critério de aceite
+  correspondente sem mudança de código). Fica pronto para ser importado com
+  `Suspense`/`loading.tsx` quando `diretorio/page.tsx` ganhar fetch real (P-5.9).
+- Critério "Feed vazio: 'Nenhum anúncio recente'" refere-se ao widget de feed do
+  _painel_ (`renderWidget` em `(dashboard)/page.tsx`), não ao `FeedWidget` genérico
+  (`components/feed-widget.tsx`, fora da lista de arquivos permitidos) nem à página
+  `/anuncios` (também fora da lista). Implementei a checagem de vazio diretamente em
+  `renderWidget`: quando `activeFeedItems.length === 0`, o widget renderiza um
+  `EmptyState` com esse texto exato dentro do mesmo `hb-card`/`hb-card-header` do feed,
+  em vez de delegar para `FeedWidget` (cujo fallback interno continua sendo o genérico
+  "Nenhuma atividade recente.", usado por outros consumidores do componente).
+- O toggle `?state=` é só para demonstração do Bloco A (não existe fetch real ainda);
+  segue à risca o precedente de `apps/admin/src/app/(dashboard)/page.tsx`, incluindo o
+  botão "Tentar novamente" do estado de erro (`<form method="get">` + `Button` +
+  `RotateCcw`).
+
+**Debitos tecnicos:**
+
+- `DirectorySkeleton` está órfão (nenhum import) até `diretorio/page.tsx` ganhar
+  `Suspense`/`loading.tsx` num prompt de integração futuro — registrar isso ao revisar
+  P-5.9 para não reaparecer como "componente órfão" na auditoria (padrão PD-2).
+- Não foi possível validar visualmente no navegador: `(dashboard)` exige sessão real via
+  `middleware.ts` (Supabase Auth + gate de status/MFA), e não há usuário seed/bypass de
+  dev disponível neste ambiente. Validado via `pnpm turbo lint typecheck --filter
+@hebron/intranet` (verde) e `pnpm turbo build --filter @hebron/intranet` (build de
+  produção passou, incluindo geração estática das demais rotas).
+
+**Critérios de aceite verificados:**
+
+- [x] Skeletons para cada widget no dashboard (`DashboardSkeleton`, com `FeedSkeleton`
+      reaproveitado e seção de calendário embutida)
+- [x] Feed vazio: "Nenhum anúncio recente" (`?state=empty` no painel)
+- [x] Diretório vazio: "Nenhum membro encontrado" (já existente em `/diretorio` desde
+      P-5.3 — nenhuma mudança necessária)
+- [x] Lint passa (`pnpm turbo lint --filter @hebron/intranet`)
+- [x] Types passam (`pnpm turbo typecheck --filter @hebron/intranet`)
+
+**Arquivos criados/editados:**
+
+- `apps/intranet/src/components/dashboard-skeleton.tsx` (novo)
+- `apps/intranet/src/components/feed-skeleton.tsx` (novo)
+- `apps/intranet/src/components/directory-skeleton.tsx` (novo, não conectado ainda)
+- `apps/intranet/src/app/(dashboard)/page.tsx` (editado — estados loading/empty/error)

@@ -10,7 +10,7 @@ function Bone({ className }: { className: string }) {
 export function CalendarSkeleton() {
   return (
     <div
-      className="overflow-hidden rounded-(--radius-md) border border-(--border) bg-(--surface)"
+      className="overflow-hidden rounded-md border border-(--border) bg-(--surface)"
       role="presentation"
       aria-hidden="true"
     >
@@ -29,7 +29,7 @@ export function CalendarSkeleton() {
           >
             <Bone className="h-5 w-5 rounded-full" />
             {(i % 5 === 0 || i % 7 === 3) && (
-              <Bone className="h-3 w-full rounded-(--radius-sm)" />
+              <Bone className="h-3 w-full rounded-sm" />
             )}
           </div>
         ))}
