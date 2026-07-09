@@ -110,6 +110,7 @@
 | S-87   | 2026-07-08 | P-5.3 — Telas e Páginas Intranet                                        | concluido                            |
 | S-88   | 2026-07-09 | P-5.4 — Formulários Intranet                                            | concluido                            |
 | S-89   | 2026-07-09 | P-5.5 — Estados Intranet                                                | concluido                            |
+| S-90   | 2026-07-09 | P-5.6 — Schema do Banco Intranet                                        | concluido                            |
 
 ---
 
@@ -4555,3 +4556,92 @@ async com `searchParams: Promise<{ state?: string }>` — mesmo padrão já usad
 - `apps/intranet/src/components/feed-skeleton.tsx` (novo)
 - `apps/intranet/src/components/directory-skeleton.tsx` (novo, não conectado ainda)
 - `apps/intranet/src/app/(dashboard)/page.tsx` (editado — estados loading/empty/error)
+
+---
+
+### S-90 — 2026-07-09 — P-5.6 Schema do Banco Intranet
+
+**Prompt:** P-5.6
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Criado o schema Drizzle `intranet` (schema Postgres já existia desde `0000_initial.sql`,
+sem tabelas): `announcements`, `dashboard_configs`, `meeting_decisions`,
+`briefing_preferences`, `kpi_snapshots`. Migration `0036_intranet.sql` gerada com
+`drizzle-kit generate` e aplicada com sucesso no Supabase (projeto único do cluster,
+`ehobbmkssljdnzdvtmta`).
+
+**Decisoes tomadas:**
+
+- O escopo/critérios do prompt descrevem `meeting_decisions` de forma resumida
+  (`meeting_session_id, content, task_id`), mas P-5.1 já havia definido o contrato
+  completo do tipo `MeetingDecision` (`packages/types/src/intranet/index.ts`) e P-5.4 já
+  implementou `MeetingDecisionForm`/`createMeetingDecisionSchema` contra esse contrato:
+  `description` (não `content`), `responsibleId`, `dueDate`, `status`
+  (`pendente|em_andamento|concluida`), `taskId` nullable. Como o Bloco A já está validado
+  pela diretoria, segui o contrato já implementado em vez do texto abreviado do prompt —
+  mesma lógica de G3.5 (protótipo/contrato já existente vence para o que já foi
+  construído; PROMPTS.md venceria só para regra de negócio nova). Campo `content` não foi
+  criado.
+- `briefing_preferences`: o prompt diz "frequency (daily/weekly)", mas
+  `briefing-config-form.tsx` (P-5.4) já usa e valida `"diario" | "semanal"` via
+  `BriefingFrequency`/`briefingConfigSchema`. Usei os valores em pt-BR já em produção no
+  formulário, não os valores em inglês do texto do prompt.
+- `dashboard_configs.widgets` ficou como array `jsonb` de `{ id, type, position, config }`
+  por linha (uma linha por usuário), espelhando exatamente o formato que
+  `WidgetConfigForm`/`updateDashboardWidgetsSchema` (P-5.4) já serializa — e não o modelo
+  "uma linha por widget" que o tipo `DashboardWidget` (P-5.1) sugeria isoladamente. Essa
+  simplificação já estava explícita no próprio texto do prompt ("dashboard_configs
+  (user_id, widgets jsonb)").
+- Adicionei `UNIQUE(user_id)` em `briefing_preferences` (não pedido explicitamente no
+  prompt, só em `dashboard_configs`). Sem isso não dá para fazer upsert de uma preferência
+  por usuário — mesmo raciocínio de constraint de integridade já usado no restante do
+  schema (ex.: `consents_user_purpose_uniq`), não uma feature nova.
+- `meeting_decisions.meeting_session_id` e `.task_id` são FKs reais para
+  `admin.meeting_sessions` e `tarefas.tasks` (cross-schema, dentro de `packages/db`), como
+  o próprio critério de aceite pede ("FK admin.meeting_sessions", "FK tarefas.tasks").
+  Isso é diferente do padrão de referência frouxa por `jsonb` (`source_ref`) usado em
+  `tarefas.tasks` para desacoplar módulos — aqui o prompt explicitamente pede FK real, e a
+  Intranet já é um módulo "hub" que consome dados de outros schemas por design (BRAIN
+  §6.6).
+- `kpi_snapshots.value` ficou como `numeric(14,2)` (mesmo padrão de colunas monetárias do
+  Financeiro) para cobrir tanto contagens inteiras quanto valores em R$ no mesmo campo,
+  já que `KPI.value` (P-5.1) é heterogêneo entre métricas.
+- Migration: `drizzle-kit generate` produziu `0016_charming_korath.sql` (numeração
+  interna do drizzle-kit, cujo journal está parado em `0015_tarefas`) — mas, diferente do
+  caso de `0031_tarefas.sql`, o diff veio limpo (só os objetos novos da Intranet), sem
+  drift para resolver à mão. Renomeado para `0036_intranet.sql` para seguir a numeração
+  sequencial em disco, mesmo padrão de divergência entre nome de arquivo e tag interna do
+  journal já estabelecido em `0031_tarefas.sql`.
+- GRANTs para `authenticated` e `ENABLE ROW LEVEL SECURITY` ficam para P-5.7 (mesmo padrão
+  de `0033_tarefas_rls.sql`/G6.6). As 5 tabelas novas estão **sem RLS** neste momento —
+  Supabase advisor confirma exposição total a `anon`/`authenticated` até P-5.7 rodar.
+
+**Debitos tecnicos:**
+
+- RLS pendente em `intranet.announcements`, `intranet.briefing_preferences`,
+  `intranet.dashboard_configs`, `intranet.kpi_snapshots`, `intranet.meeting_decisions` —
+  tabelas expostas sem policy até P-5.7 (próximo prompt da sequência, já esperado pelo
+  Bloco B).
+
+**Critérios de aceite verificados:**
+
+- [x] announcements: title, body, priority, author_id, published_at
+- [x] dashboard_configs: user_id (unique), widgets (jsonb com posições)
+- [x] meeting_decisions: meeting_session_id (FK admin.meeting_sessions), description
+      (campo "content" do prompt — ver Decisões), task_id (FK tarefas.tasks, nullable)
+- [x] briefing_preferences: user_id, enabled, frequency (diario/semanal — ver Decisões)
+- [x] kpi_snapshots: metric_name, value, period, captured_at
+- [x] kpi_snapshots com unique (metric_name, period) e captured_at
+- [x] drizzle-kit check limpo
+- [x] Migration aplica sem erros (aplicada em produção via `db:migrate`)
+- [x] Types passam (`pnpm turbo lint typecheck`, 38/38 tasks verdes)
+
+**Arquivos criados/editados:**
+
+- `packages/db/src/schema/intranet.ts` (novo)
+- `packages/db/src/schema/index.ts` (editado — barrel export do módulo intranet)
+- `packages/db/src/migrations/0036_intranet.sql` (novo, gerado + renomeado)
+- `packages/db/src/migrations/meta/0016_snapshot.json` + `meta/_journal.json` (gerados por
+  `drizzle-kit generate`)

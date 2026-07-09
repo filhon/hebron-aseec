@@ -274,3 +274,28 @@ export type {
   TaskEvent,
   NewTaskEvent,
 } from "./tarefas";
+
+// Intranet schema (P-5.6)
+export {
+  announcementPriorityEnum,
+  meetingDecisionStatusEnum,
+  briefingFrequencyEnum,
+  announcements,
+  dashboardConfigs,
+  meetingDecisions,
+  briefingPreferences,
+  kpiSnapshots,
+} from "./intranet";
+
+export type {
+  Announcement,
+  NewAnnouncement,
+  DashboardConfig,
+  NewDashboardConfig,
+  MeetingDecision,
+  NewMeetingDecision,
+  BriefingPreference,
+  NewBriefingPreference,
+  KpiSnapshot,
+  NewKpiSnapshot,
+} from "./intranet";

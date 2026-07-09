@@ -246,7 +246,6 @@ async function DashboardContent() {
           value={totalRoles}
           sub={`${Object.keys(roleCountMap).length} tipos`}
           dotColor="var(--hb-blue)"
-          up
         />
       </div>
 
@@ -296,7 +295,7 @@ async function DashboardContent() {
                       {" · "}
                       <span
                         style={{
-                          fontFamily: "ui-monospace,monospace",
+                          fontFamily: "var(--font-mono)",
                           fontSize: 11,
                         }}
                       >
@@ -391,65 +390,17 @@ async function DashboardContent() {
                     .replace(".", "")
                     .toUpperCase();
                   return (
-                    <div
-                      key={m.id}
-                      style={{
-                        display: "flex",
-                        gap: 12,
-                        padding: "12px 0",
-                        borderBottom: "1px solid rgba(19,23,55,0.07)",
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: 52,
-                          textAlign: "center",
-                          background: "var(--bg-alt)",
-                          borderRadius: 10,
-                          padding: "8px 4px",
-                          flexShrink: 0,
-                        }}
-                      >
-                        <div
-                          style={{
-                            fontFamily:
-                              "var(--font-display,'Parkinsans',sans-serif)",
-                            fontSize: 20,
-                            fontWeight: 700,
-                            color: "var(--hb-blue)",
-                            lineHeight: 1,
-                          }}
-                        >
-                          {day}
-                        </div>
-                        <div
-                          style={{
-                            fontSize: 10,
-                            color: "var(--fg-muted)",
-                            marginTop: 4,
-                          }}
-                        >
-                          {month}
-                        </div>
+                    <div key={m.id} className="hb-meeting-row">
+                      <div className="hb-meeting-date">
+                        <div className="hb-meeting-date-day">{day}</div>
+                        <div className="hb-meeting-date-month">{month}</div>
                       </div>
-                      <div style={{ flex: 1 }}>
-                        <div
-                          style={{
-                            fontWeight: 600,
-                            fontSize: 13.5,
-                            color: "var(--fg)",
-                          }}
-                        >
+                      <div className="hb-meeting-info">
+                        <div className="hb-meeting-title">
                           Reunião{" "}
                           {m.type === "mensal" ? "mensal" : "extraordinária"}
                         </div>
-                        <div
-                          style={{
-                            fontSize: 12,
-                            color: "var(--fg-muted)",
-                            marginTop: 2,
-                          }}
-                        >
+                        <div className="hb-meeting-meta">
                           {d.toLocaleTimeString("pt-BR", {
                             hour: "2-digit",
                             minute: "2-digit",
