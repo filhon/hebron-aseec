@@ -145,7 +145,7 @@ export function MeetingDecisionForm({
           type="date"
           value={dueDate}
           onChange={(e) => setDueDate(e.target.value)}
-          className="h-10 w-full rounded-(--radius) border border-(--border) bg-(--bg-alt) px-3 text-(--text-sm) text-(--fg) outline-none focus:border-(--brand)"
+          className="h-10 w-full rounded-(--radius) border border-(--border) bg-(--bg-alt) px-3 text-(--text-sm) outline-none focus:border-(--brand)"
         />
       </FormField>
 
@@ -154,14 +154,14 @@ export function MeetingDecisionForm({
           type="checkbox"
           checked={createTask}
           onChange={(e) => setCreateTask(e.target.checked)}
-          className="mt-0.5 h-4 w-4 shrink-0 rounded-(--radius-sm) border-(--border) text-(--brand)"
+          className="mt-0.5 h-4 w-4 shrink-0 rounded-sm border-(--border) text-(--brand)"
         />
         <span className="flex flex-col gap-0.5">
-          <span className="flex items-center gap-1.5 text-(--text-sm) font-medium text-(--fg)">
+          <span className="flex items-center gap-1.5 text-(--text-sm) font-medium">
             <ListChecks className="h-3.5 w-3.5" aria-hidden="true" />
             Criar tarefa a partir desta decisão
           </span>
-          <span className="text-(--text-xs) text-(--fg-muted)">
+          <span className="text-(--text-xs)">
             Gera uma tarefa em Tarefas para o responsável, com o prazo informado
             acima.
           </span>

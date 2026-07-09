@@ -1,25 +1,9 @@
-"use client";
-
-import { usePathname, useRouter } from "next/navigation";
+import { redirect } from "next/navigation";
 import { Parkinsans, Titillium_Web } from "next/font/google";
-import {
-  Home,
-  LayoutDashboard,
-  Megaphone,
-  Users,
-  CalendarDays,
-  Handshake,
-  Search,
-  Settings,
-  FolderOpen,
-  BookOpen,
-  Radio,
-  DollarSign,
-  Folder,
-  Building2,
-  CheckCircle,
-} from "lucide-react";
-import { AppShell, type NavSection, type AppShortcut } from "@hebron/ui";
+import { CANONICAL_LOGIN_URL } from "@hebron/auth";
+import type { Role } from "@hebron/types/roles";
+import { getAuthUser } from "../../lib/queries";
+import IntranetShell from "./shell";
 import "../globals.css";
 
 const parkinsans = Parkinsans({
@@ -36,121 +20,26 @@ const titillium = Titillium_Web({
   display: "swap",
 });
 
-const SECTIONS: NavSection[] = [
-  {
-    items: [
-      {
-        label: "Painel",
-        href: "/",
-        icon: LayoutDashboard,
-        exact: true,
-      },
-    ],
-  },
-  {
-    title: "Comunicação",
-    items: [
-      {
-        label: "Anúncios",
-        href: "/anuncios",
-        icon: Megaphone,
-      },
-      {
-        label: "Diretório",
-        href: "/diretorio",
-        icon: Users,
-      },
-    ],
-  },
-  {
-    title: "Governança",
-    items: [
-      {
-        label: "Calendário",
-        href: "/calendario",
-        icon: CalendarDays,
-      },
-      {
-        label: "Reuniões",
-        href: "/reunioes",
-        icon: Handshake,
-      },
-    ],
-  },
-  {
-    items: [
-      {
-        label: "Busca",
-        href: "/busca",
-        icon: Search,
-      },
-    ],
-  },
+// Equipe interna — submissor/aluno/hospede/ouvinte ficam fora da intranet
+// (G5, escopo do prompt P-5.9).
+const INTERNAL_ROLES: Role[] = [
+  "super_admin",
+  "diretor",
+  "conselheiro",
+  "colaborador",
 ];
 
-const APPS: AppShortcut[] = [
-  {
-    id: "admin",
-    label: "Admin",
-    href: "https://admin.hebronaseec.com.br",
-    icon: Settings,
-  },
-  {
-    id: "projetos",
-    label: "Projetos",
-    href: "https://projetos.hebronaseec.com.br",
-    icon: FolderOpen,
-  },
-  {
-    id: "plataforma",
-    label: "Plataforma",
-    href: "https://plataforma.hebronaseec.com.br",
-    icon: BookOpen,
-  },
-  {
-    id: "radio",
-    label: "Rádio",
-    href: "https://radio.hebronaseec.com.br",
-    icon: Radio,
-  },
-  {
-    id: "financeiro",
-    label: "Financeiro",
-    href: "https://financeiro.hebronaseec.com.br",
-    icon: DollarSign,
-  },
-  {
-    id: "documentos",
-    label: "Documentos",
-    href: "https://docs.hebronaseec.com.br",
-    icon: Folder,
-  },
-  {
-    id: "flats",
-    label: "Flats",
-    href: "https://flats.hebronaseec.com.br",
-    icon: Building2,
-  },
-  {
-    id: "tarefas",
-    label: "Tarefas",
-    href: "https://tarefas.hebronaseec.com.br",
-    icon: CheckCircle,
-  },
-];
-
-const MOCK_USER = {
-  name: "Fábio Ribeiro",
-  email: "fabio.ribeiro@hebronaseec.com.br",
-};
-
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const pathname = usePathname();
-  const router = useRouter();
+  const user = await getAuthUser();
+  if (!user) redirect(CANONICAL_LOGIN_URL);
+
+  if (!user.roles.some((role) => INTERNAL_ROLES.includes(role))) {
+    redirect(CANONICAL_LOGIN_URL);
+  }
 
   return (
     <html
@@ -158,24 +47,7 @@ export default function DashboardLayout({
       className={`${parkinsans.variable} ${titillium.variable}`}
     >
       <body>
-        <AppShell
-          sections={SECTIONS}
-          apps={APPS}
-          user={MOCK_USER}
-          profileHref="/perfil"
-          onLogout={() => router.push("/login")}
-          currentPath={pathname}
-          appName="Intranet"
-          logo={
-            <Home
-              className="h-5 w-5 shrink-0"
-              style={{ color: "var(--hb-cyan)" }}
-            />
-          }
-          sidebarDark
-        >
-          {children}
-        </AppShell>
+        <IntranetShell user={user}>{children}</IntranetShell>
       </body>
     </html>
   );

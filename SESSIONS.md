@@ -113,6 +113,7 @@
 | S-90   | 2026-07-09 | P-5.6 — Schema do Banco Intranet                                        | concluido                            |
 | S-91   | 2026-07-09 | P-5.7 — RLS Policies Intranet                                           | concluido                            |
 | S-92   | 2026-07-09 | P-5.8 — Server Actions Intranet                                         | concluido                            |
+| S-93   | 2026-07-09 | P-5.9 — Integração UI ↔ Backend Intranet                                | concluido                            |
 
 ---
 
@@ -4894,3 +4895,126 @@ visibilidade na aplicação — e PostgREST só expõe os schemas `public`/`grap
 - `packages/jobs/src/index.ts` (editado — registro do cron)
 - `packages/jobs/src/catalog.ts` (editado — removida entrada `intranet-kpi-snapshot`)
 - `pnpm-lock.yaml` (atualizado pela nova dependência)
+
+---
+
+### S-93 — 2026-07-09 — P-5.9 Integração UI ↔ Backend Intranet
+
+**Prompt:** P-5.9
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Mocks removidos (`lib/mock-data.ts` deletado) das 6 páginas do módulo (Dashboard,
+Anúncios, Diretório, Calendário, Reuniões, Busca), conectadas às Server Actions de
+P-5.8 e a novas queries de leitura em `lib/queries.ts`. Aplicado o padrão G5
+Server/Client (`(dashboard)/layout.tsx` vira Server Component com gate de papel
+interno; `shell.tsx` novo Client Component com `usePathname`; `actions/auth.ts` com
+`logoutAction`).
+
+**Decisoes tomadas:**
+
+- **`actions/briefing.ts` criado fora da lista de arquivos permitidos do prompt** —
+  `briefing-config-form.tsx` (P-5.4) não tinha nenhuma Server Action para se conectar
+  (P-5.8 só cobriu announcements/dashboard/decisions/kpis/search). RLS já cobre
+  `intranet.briefing_preferences` (`0037_intranet_rls.sql: briefing_preferences_write_own`),
+  então bastou um `staffAction` + upsert por `user_id`, mesmo padrão de `dashboard.ts`.
+  Débito de infraestrutura óbvio (G1) — registrado aqui em vez de deixar o formulário
+  órfão.
+- **Diretório não despeja `public.users`**: `getDirectoryMembers` (lib/queries.ts) lê só
+  `id/fullName/email/avatarUrl/phone` de usuários com papel interno
+  (super_admin/diretor/conselheiro/colaborador), status `active`, não anonimizados.
+  "Papel" exibido é o rótulo do RBAC (não existe coluna de cargo/título em
+  `public.users` — o mock tinha títulos como "Diretor Presidente" que não têm fonte de
+  verdade real). Telefone só aparece se `getConsent(userId, "comunicacao").granted` —
+  não existe finalidade de consentimento específica para "telefone pessoal" no enum
+  `consent_purpose` (P-0.13); "comunicacao" é a mais próxima do caso de uso (contato
+  direto pela intranet). Sem bio (campo não existe em `public.users`) — sempre `null`.
+- **Calendário/Reuniões usam só `admin.meeting_sessions`**: o tipo mock `CalendarEvent`
+  também previa prazo/evento/outro, mas não existe tabela para isso (só
+  `meeting_sessions` foi criada em P-5.6) — o próprio critério de aceite de P-5.9 já
+  restringe a "Calendário com meeting_sessions reais". `meetingSessionsToCalendarEvents`
+  (lib/queries.ts) adapta a sessão real para o formato que `CalendarWidget` (P-5.2) já
+  sabe renderizar, sempre como tipo "reuniao".
+- **"Registrar decisão" só aparece para `super_admin`**: `createMeetingDecision` é
+  `superAdminAction` (RLS `meeting_decisions_mutate_admin` — diretor/conselheiro só têm
+  SELECT, débito herdado de S-91). O botão/diálogo respeita essa restrição em vez de
+  expor uma ação que falharia no backend.
+- **KPIs sem leitura de snapshot com fallback**: `actions/kpis.ts` (P-5.8, fora da lista
+  de arquivos permitidos deste prompt) sempre computa ao vivo — nunca lê
+  `intranet.kpi_snapshots`. O Dashboard consome `getKpis` como está (dados reais, mas
+  sem o "cai para live só se snapshot > 2h" que P-5.6 originalmente desenhou). Não
+  corrigido aqui por estar fora do escopo de arquivos de P-5.9; registrado como débito.
+- **Busca (`SearchGlobal`) reescrita para busca assíncrona real**: antes recebia
+  `items` estáticos e filtrava no client; agora chama `globalSearch` (Server Action) com
+  debounce de 300ms, mostrando estado de carregamento — é a primeira vez que
+  `@hebron/ui`'s `Dialog` é usado no repo (para os 4 formulários do Bloco A: anúncio,
+  config de painel, decisão de reunião, briefing), via componentes novos
+  `*-dialog.tsx` (Client Components com `useAction` de `next-safe-action/hooks`).
+- **Reordenar widgets do Dashboard persiste imediatamente**: `dashboard-widgets.tsx`
+  chama `saveDashboardConfig` a cada drag-and-drop no `WidgetGrid` (não só ao editar
+  pelo `WidgetConfigForm`/diálogo) — as duas superfícies de reordenação (grid solto +
+  formulário de config) ficam consistentes com o backend.
+- **Suspense + skeletons reais**: os `state=loading|error|empty` de query string (hack
+  de demonstração do Bloco A, P-5.5) foram removidos; Dashboard e Diretório agora usam
+  `<Suspense>` com os skeletons reais (`DashboardSkeleton`/`DirectorySkeleton`) como
+  fallback durante o carregamento de dados.
+
+**Debitos tecnicos:**
+
+- `getKpis` (P-5.8) não lê `kpi_snapshots` com fallback de 2h — sempre live. Ajustar
+  quando um prompt futuro puder editar `actions/kpis.ts`.
+- `MeetingDecisionForm`/decisão de reunião continua restrita a `super_admin` (herdado
+  de S-91/S-92) — mesmo débito de "presidente de sessão poder registrar" segue aberto.
+- `/perfil` (referenciado por `profileHref` no `AppShell`) ainda não existe como
+  página — mesmo padrão dos outros apps do monorepo (financeiro aponta para
+  `/configuracoes`, também inexistente); fora do escopo de P-5.9.
+
+**Criterios de aceite verificados:**
+
+- [x] Layout G5: papel externo (submissor/aluno/hospede/ouvinte) redirecionado para
+      login — gate em `(dashboard)/layout.tsx`
+- [x] KPIs com dados reais (sem fallback de snapshot — ver débito acima)
+- [x] Anúncio criável pela tela por diretor/conselheiro/super_admin
+      (`AnnouncementCreateDialog`); colaborador não vê o botão (`PageHeader actions`
+      condicional)
+- [x] Decisão de reunião registrável pela tela (super_admin), checkbox "criar tarefa"
+      ponta a ponta via `createMeetingDecision` já existente
+- [x] Dashboard configurável: adicionar/remover/reordenar widget persiste
+      (`WidgetConfigDialog` + drag no `WidgetGrid`, ambos chamam `saveDashboardConfig`)
+- [x] Briefing: opt-in/frequência configurável pela tela (`BriefingConfigDialog` +
+      `actions/briefing.ts`, novo)
+- [x] Diretório: nome, foto, papel (RBAC) e contato institucional; telefone só com
+      consentimento "comunicacao"; sem despejo de `public.users`
+- [x] Calendário com `meeting_sessions` reais
+- [x] Busca funcional respeitando RLS (client de sessão, RPC `SECURITY INVOKER`)
+- [x] Nenhum componente/formulário do Bloco A (P-5.2/P-5.4) sem import (grep
+      confirmado)
+- [x] Mock data removido (`lib/mock-data.ts` deletado)
+- [x] Lint passa · Types passam (`pnpm turbo lint typecheck` limpo; `next build`
+      verde)
+
+**Arquivos criados/editados:**
+
+- `apps/intranet/src/lib/queries.ts` (novo)
+- `apps/intranet/src/actions/briefing.ts` (novo — fora da lista permitida, débito
+  registrado acima)
+- `apps/intranet/src/actions/auth.ts` (novo — `logoutAction`, G5)
+- `apps/intranet/src/app/(dashboard)/layout.tsx` (editado — Server Component + gate
+  de papel)
+- `apps/intranet/src/app/(dashboard)/shell.tsx` (novo — Client Component, G5)
+- `apps/intranet/src/app/(dashboard)/page.tsx` (editado — dados reais + Suspense)
+- `apps/intranet/src/app/(dashboard)/anuncios/page.tsx` (editado)
+- `apps/intranet/src/app/(dashboard)/diretorio/page.tsx` (editado — Suspense)
+- `apps/intranet/src/app/(dashboard)/calendario/page.tsx` (editado)
+- `apps/intranet/src/app/(dashboard)/reunioes/page.tsx` (editado)
+- `apps/intranet/src/app/(dashboard)/busca/page.tsx` (editado)
+- `apps/intranet/src/components/dashboard-widgets.tsx` (novo)
+- `apps/intranet/src/components/announcements-list.tsx` (novo)
+- `apps/intranet/src/components/directory-list.tsx` (novo)
+- `apps/intranet/src/components/announcement-create-dialog.tsx` (novo)
+- `apps/intranet/src/components/widget-config-dialog.tsx` (novo)
+- `apps/intranet/src/components/meeting-decision-dialog.tsx` (novo)
+- `apps/intranet/src/components/briefing-config-dialog.tsx` (novo)
+- `apps/intranet/src/components/search-global.tsx` (editado — busca assíncrona real)
+- `apps/intranet/src/lib/mock-data.ts` (removido)

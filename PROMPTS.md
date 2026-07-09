@@ -3223,15 +3223,15 @@ Busca global cross-app — CONTRATO (fechado nesta auditoria): a busca executa c
 
 **Critérios de aceite:**
 
-- [ ] CRUD de anúncios com audit central
-- [ ] Dashboard config persiste por usuário
-- [ ] Decisão de reunião cria tarefa via packages/integrations (teste)
-- [ ] KPI doações: SUM de despesas da categoria "Doações" no mês (teste com fixture)
-- [ ] KPIs live + snapshot por cron registrado
-- [ ] Busca roda com o client da sessão; colaborador NÃO recebe resultado restricted de documentos que seu papel não vê (teste de RLS via busca)
-- [ ] Busca retorna resultados de Projetos, Documentos e Tarefas agrupados; Financeiro ausente
-- [ ] Zero createClient manual / zero SERVICE_ROLE em actions (grep)
-- [ ] Lint passa · Types passam
+- [x] CRUD de anúncios com audit central
+- [x] Dashboard config persiste por usuário
+- [x] Decisão de reunião cria tarefa via packages/integrations (teste)
+- [x] KPI doações: SUM de despesas da categoria "Doações" no mês (teste com fixture)
+- [x] KPIs live + snapshot por cron registrado
+- [x] Busca roda com o client da sessão; colaborador NÃO recebe resultado restricted de documentos que seu papel não vê (teste de RLS via busca)
+- [x] Busca retorna resultados de Projetos, Documentos e Tarefas agrupados; Financeiro ausente
+- [x] Zero createClient manual / zero SERVICE_ROLE em actions (grep)
+- [x] Lint passa · Types passam
 
 ---
 
@@ -3266,18 +3266,18 @@ Substituir mocks. Dashboard com KPIs reais. Feed de anúncios do banco. Diretór
 
 **Critérios de aceite:**
 
-- [ ] Layout G5: papel externo não entra na intranet (teste)
-- [ ] KPIs com dados reais (snapshot + fallback)
-- [ ] Anúncio criável pela tela por diretor/conselheiro (announcement-form conectado); colaborador não vê o botão
-- [ ] Decisão de reunião registrável pela tela, com checkbox "criar tarefa" funcionando de ponta a ponta
-- [ ] Dashboard configurável: adicionar/remover/reordenar widget persiste (widget-config-form conectado)
-- [ ] Briefing: opt-in/frequência configurável pela tela (briefing-config-form conectado)
-- [ ] Diretório: nome, foto, papel e contato INSTITUCIONAL; telefone pessoal só com consentimento (P-0.13) — não despejar public.users inteiro
-- [ ] Calendário com meeting_sessions reais
-- [ ] Busca funcional respeitando RLS (contrato de P-5.8)
-- [ ] Nenhum componente/formulário do Bloco A (P-5.2/P-5.4) sem import (grep)
-- [ ] Mock data removido
-- [ ] Lint passa · Types passam
+- [x] Layout G5: papel externo não entra na intranet (teste)
+- [x] KPIs com dados reais (snapshot + fallback)
+- [x] Anúncio criável pela tela por diretor/conselheiro (announcement-form conectado); colaborador não vê o botão
+- [x] Decisão de reunião registrável pela tela, com checkbox "criar tarefa" funcionando de ponta a ponta
+- [x] Dashboard configurável: adicionar/remover/reordenar widget persiste (widget-config-form conectado)
+- [x] Briefing: opt-in/frequência configurável pela tela (briefing-config-form conectado)
+- [x] Diretório: nome, foto, papel e contato INSTITUCIONAL; telefone pessoal só com consentimento (P-0.13) — não despejar public.users inteiro
+- [x] Calendário com meeting_sessions reais
+- [x] Busca funcional respeitando RLS (contrato de P-5.8)
+- [x] Nenhum componente/formulário do Bloco A (P-5.2/P-5.4) sem import (grep)
+- [x] Mock data removido
+- [x] Lint passa · Types passam
 
 ---
 

@@ -69,14 +69,11 @@ export function AnnouncementCard({ announcement }: AnnouncementCardProps) {
           {announcement.title}
         </h3>
         <div
-          className="line-clamp-3 text-(--text-sm) text-(--fg-muted)"
+          className="line-clamp-3 text-(--text-sm)"
           style={{ lineHeight: 1.55 }}
           dangerouslySetInnerHTML={{ __html: announcement.body }}
         />
-        <p
-          className="text-(--text-xs) text-(--fg-muted)"
-          style={{ marginTop: 10 }}
-        >
+        <p className="text-(--text-xs)" style={{ marginTop: 10 }}>
           Por {announcement.authorName}
         </p>
       </div>

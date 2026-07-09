@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import { EmptyState, Input } from "@hebron/ui";
+import { globalSearch } from "../actions/search";
 
 export interface SearchResultItem {
   id: string;
@@ -13,34 +14,52 @@ export interface SearchResultItem {
 }
 
 export interface SearchGlobalProps {
-  items: SearchResultItem[];
   placeholder?: string;
 }
 
+const DEBOUNCE_MS = 300;
+
 export function SearchGlobal({
-  items,
   placeholder = "Buscar em todos os módulos…",
 }: SearchGlobalProps) {
   const [query, setQuery] = useState("");
+  const [results, setResults] = useState<SearchResultItem[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const requestId = useRef(0);
+
+  useEffect(() => {
+    const term = query.trim();
+    if (term.length < 2) {
+      setResults([]);
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    const currentRequest = ++requestId.current;
+
+    const timeout = setTimeout(() => {
+      void globalSearch({ query: term }).then((response) => {
+        if (currentRequest !== requestId.current) return;
+        setResults(response?.data?.results ?? []);
+        setIsLoading(false);
+      });
+    }, DEBOUNCE_MS);
+
+    return () => clearTimeout(timeout);
+  }, [query]);
 
   const grouped = useMemo(() => {
-    const term = query.trim().toLowerCase();
-    if (!term) return [];
-    const matches = items.filter(
-      (item) =>
-        item.title.toLowerCase().includes(term) ||
-        item.description?.toLowerCase().includes(term),
-    );
     const byModule = new Map<string, SearchResultItem[]>();
-    for (const match of matches) {
-      const bucket = byModule.get(match.module) ?? [];
-      bucket.push(match);
-      byModule.set(match.module, bucket);
+    for (const result of results) {
+      const bucket = byModule.get(result.module) ?? [];
+      bucket.push(result);
+      byModule.set(result.module, bucket);
     }
     return Array.from(byModule.entries());
-  }, [items, query]);
+  }, [results]);
 
-  const hasQuery = query.trim().length > 0;
+  const hasQuery = query.trim().length >= 2;
 
   return (
     <div className="hb-card">
@@ -55,7 +74,11 @@ export function SearchGlobal({
       </div>
       {hasQuery && (
         <div className="hb-card-body" style={{ paddingTop: 0 }}>
-          {grouped.length === 0 ? (
+          {isLoading ? (
+            <p className="text-(--text-sm)" style={{ padding: "16px 0" }}>
+              Buscando…
+            </p>
+          ) : grouped.length === 0 ? (
             <EmptyState
               title="Nenhum resultado encontrado"
               description={`Não encontramos nada para "${query}".`}
@@ -63,27 +86,27 @@ export function SearchGlobal({
               hideQuote
             />
           ) : (
-            grouped.map(([module, results]) => (
+            grouped.map(([module, items]) => (
               <div key={module} style={{ marginBottom: 14 }}>
                 <p className="hb-section-label">{module}</p>
                 <ul
                   style={{ display: "flex", flexDirection: "column", gap: 2 }}
                 >
-                  {results.map((result) => (
+                  {items.map((result) => (
                     <li key={result.id}>
                       <a
                         href={result.href}
-                        className="block rounded-(--radius-xs) p-2 transition-colors duration-(--transition-fast) hover:bg-(--surface-alt)"
+                        className="block rounded-xs p-2 transition-colors duration-(--transition-fast) hover:bg-(--surface-alt)"
                       >
                         <span
-                          className="text-(--text-sm) text-(--fg)"
+                          className="text-(--text-sm)"
                           style={{ fontWeight: 600 }}
                         >
                           {result.title}
                         </span>
                         {result.description && (
                           <span
-                            className="text-(--text-xs) text-(--fg-muted)"
+                            className="text-(--text-xs)"
                             style={{ display: "block", marginTop: 2 }}
                           >
                             {result.description}

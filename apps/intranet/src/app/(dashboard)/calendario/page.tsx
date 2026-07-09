@@ -1,32 +1,10 @@
-import type { CSSProperties } from "react";
-import { CalendarDays, MapPin } from "lucide-react";
-import { PageHeader, EmptyState } from "@hebron/ui";
-import type { CalendarEventType } from "@hebron/types/intranet";
-import { mockCalendarEvents } from "../../../lib/mock-data";
+import { CalendarDays } from "lucide-react";
+import { EmptyState, ErrorState, PageHeader } from "@hebron/ui";
+import {
+  getMeetingSessionsWithDecisions,
+  meetingSessionsToCalendarEvents,
+} from "../../../lib/queries";
 import { CalendarWidget } from "../../../components/calendar-widget";
-
-const TYPE_LABEL: Record<CalendarEventType, string> = {
-  reuniao: "Reunião",
-  prazo: "Prazo",
-  evento: "Evento",
-  outro: "Outro",
-};
-
-const TYPE_STYLE: Record<CalendarEventType, CSSProperties> = {
-  reuniao: { background: "var(--brand-muted)", color: "var(--hb-blue)" },
-  prazo: {
-    background: "var(--hb-orange-muted)",
-    color: "var(--hb-orange-deep)",
-  },
-  evento: {
-    background: "color-mix(in srgb, var(--hb-green) 16%, transparent)",
-    color: "var(--hb-green-deep)",
-  },
-  outro: {
-    background: "color-mix(in srgb, var(--hb-cyan) 16%, transparent)",
-    color: "var(--hb-cyan-deep)",
-  },
-};
 
 function formatDate(date: Date): string {
   return date.toLocaleDateString("pt-BR", {
@@ -36,37 +14,53 @@ function formatDate(date: Date): string {
   });
 }
 
-export default function CalendarioPage() {
-  const events = [...mockCalendarEvents].sort(
-    (a, b) => a.startAt.getTime() - b.startAt.getTime(),
-  );
+export default async function CalendarioPage() {
+  let sessions;
+
+  try {
+    sessions = await getMeetingSessionsWithDecisions();
+  } catch {
+    return (
+      <div className="hb-page">
+        <ErrorState
+          title="Não foi possível carregar o calendário"
+          description="Verifique sua conexão e tente novamente."
+        />
+      </div>
+    );
+  }
+
+  const upcoming = sessions
+    .filter((session) => session.date >= new Date())
+    .sort((a, b) => a.date.getTime() - b.date.getTime());
+  const calendarEvents = meetingSessionsToCalendarEvents(sessions);
 
   return (
     <div className="hb-page">
       <PageHeader
         title="Calendário"
-        description="Agenda de reuniões, prazos e eventos da Hebron Aseec."
+        description="Agenda de reuniões da diretoria e do conselho."
       />
 
       <div className="hb-grid hb-grid-stat">
         <div className="hb-card">
           <div className="hb-card-header">
-            <h3>Agenda</h3>
+            <h3>Próximas reuniões</h3>
           </div>
-          {events.length === 0 ? (
+          {upcoming.length === 0 ? (
             <div className="hb-card-body">
               <EmptyState
                 icon={CalendarDays}
-                title="Nenhum evento cadastrado"
+                title="Nenhuma reunião agendada"
                 hideQuote
               />
             </div>
           ) : (
             <div className="hb-card-body" style={{ paddingTop: 8 }}>
               <ul style={{ display: "flex", flexDirection: "column" }}>
-                {events.map((event) => (
+                {upcoming.map((session) => (
                   <li
-                    key={event.id}
+                    key={session.id}
                     style={{
                       display: "flex",
                       gap: 14,
@@ -78,7 +72,7 @@ export default function CalendarioPage() {
                       className="text-(--text-xs)"
                       style={{ width: 88, flexShrink: 0, paddingTop: 2 }}
                     >
-                      {formatDate(event.startAt)}
+                      {formatDate(session.date)}
                     </div>
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div
@@ -89,34 +83,17 @@ export default function CalendarioPage() {
                           flexWrap: "wrap",
                         }}
                       >
-                        <span
-                          className="hb-badge"
-                          style={TYPE_STYLE[event.type]}
-                        >
-                          {TYPE_LABEL[event.type]}
-                        </span>
+                        <span className="hb-badge">{session.typeLabel}</span>
                         <span className="text-(--text-sm) font-semibold">
-                          {event.title}
+                          Reunião {session.typeLabel}
                         </span>
                       </div>
-                      {(event.description ?? event.location) && (
+                      {session.chairName && (
                         <p
                           className="text-(--text-xs)"
-                          style={{
-                            marginTop: 4,
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 4,
-                          }}
+                          style={{ marginTop: 4 }}
                         >
-                          {event.location && (
-                            <>
-                              <MapPin className="h-3 w-3" aria-hidden="true" />
-                              {event.location}
-                              {event.description && " · "}
-                            </>
-                          )}
-                          {event.description}
+                          Presidida por {session.chairName}
                         </p>
                       )}
                     </div>
@@ -127,7 +104,7 @@ export default function CalendarioPage() {
           )}
         </div>
 
-        <CalendarWidget events={mockCalendarEvents} />
+        <CalendarWidget events={calendarEvents} />
       </div>
     </div>
   );

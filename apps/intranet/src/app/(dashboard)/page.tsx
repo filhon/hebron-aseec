@@ -1,149 +1,156 @@
-import type { ReactNode } from "react";
+import { Suspense } from "react";
+import { Megaphone, Handshake } from "lucide-react";
+import { ErrorState } from "@hebron/ui";
+import type {
+  DashboardWidget,
+  DashboardWidgetType,
+} from "@hebron/types/intranet";
 import {
-  Megaphone,
-  Handshake,
-  CalendarDays as CalendarIcon,
-  RotateCcw,
-} from "lucide-react";
-import { Button, EmptyState, ErrorState } from "@hebron/ui";
-import type { DashboardWidget } from "@hebron/types/intranet";
-import {
-  mockAnnouncements,
-  mockCalendarEvents,
-  mockDashboardWidgets,
-  mockKpis,
-  mockMeetingDecisions,
-} from "../../lib/mock-data";
-import { KPICard } from "../../components/kpi-card";
-import { FeedWidget, type FeedItem } from "../../components/feed-widget";
-import { CalendarWidget } from "../../components/calendar-widget";
+  getAnnouncementsWithAuthors,
+  getMeetingSessionsWithDecisions,
+  meetingSessionsToCalendarEvents,
+} from "../../lib/queries";
+import { getKpis } from "../../actions/kpis";
+import { getDashboardConfig } from "../../actions/dashboard";
+import { getBriefingPreference } from "../../actions/briefing";
+import type { FeedItem } from "../../components/feed-widget";
 import { AppLauncher } from "../../components/app-launcher";
-import { WidgetGrid, type WidgetGridItem } from "../../components/widget-grid";
+import { DashboardWidgets } from "../../components/dashboard-widgets";
+import { WidgetConfigDialog } from "../../components/widget-config-dialog";
+import { BriefingConfigDialog } from "../../components/briefing-config-dialog";
 import { DashboardSkeleton } from "../../components/dashboard-skeleton";
 
-// ─── Feed cross-módulo (dados mock da intranet — agregação real chega em P-5.9) ──
-
-const feedItems: FeedItem[] = [
-  ...mockAnnouncements
-    .filter((a) => a.publishedAt !== null)
-    .map((a) => ({
-      id: `feed-${a.id}`,
-      module: "Anúncios",
-      title: a.title,
-      description: a.authorName,
-      occurredAt: a.publishedAt as Date,
-      icon: Megaphone,
-    })),
-  ...mockMeetingDecisions.map((d) => ({
-    id: `feed-${d.id}`,
-    module: "Reuniões",
-    title: d.description,
-    description: d.responsibleName,
-    occurredAt: d.updatedAt,
-    icon: Handshake,
-  })),
-  ...mockCalendarEvents
-    .filter((e) => e.type === "evento")
-    .map((e) => ({
-      id: `feed-${e.id}`,
-      module: "Calendário",
-      title: e.title,
-      description: e.location ?? undefined,
-      occurredAt: e.createdAt,
-      icon: CalendarIcon,
-    })),
-];
-
-// ─── Renderização por tipo de widget ──────────────────────────────────────────
-// "chart" ainda não tem componente próprio (P-5.2 só entregou KPICard/FeedWidget/
-// CalendarWidget) — reaproveita o KPICard, cujo sparkline já cobre a leitura de
-// tendência que o widget de gráfico pediria.
-
-function renderWidget(
-  widget: DashboardWidget,
-  activeFeedItems: FeedItem[],
-): ReactNode {
-  switch (widget.type) {
-    case "kpi":
-    case "chart": {
-      const kpiId = widget.config.kpiId as string | undefined;
-      const kpi = mockKpis.find((k) => k.id === kpiId);
-      return kpi ? <KPICard kpi={kpi} /> : null;
-    }
-    case "feed":
-      return activeFeedItems.length === 0 ? (
-        <div className="hb-card">
-          <div className="hb-card-header">
-            <h3>Últimas atualizações</h3>
-          </div>
-          <div className="hb-card-body">
-            <EmptyState
-              icon={Megaphone}
-              title="Nenhum anúncio recente"
-              hideQuote
-            />
-          </div>
-        </div>
-      ) : (
-        <FeedWidget
-          items={activeFeedItems}
-          limit={(widget.config.feedLimit as number | undefined) ?? 6}
-        />
-      );
-    case "calendar":
-      return <CalendarWidget events={mockCalendarEvents} />;
-    default:
-      return null;
-  }
+// Mesmo shape de intranet.dashboard_configs.widgets (jsonb) — sem
+// userId/createdAt/updatedAt, que a tabela não guarda por widget. IDs fixos
+// em formato uuid válido (dashboardWidgetSchema exige .uuid() ao resalvar).
+interface RawWidget {
+  id: string;
+  type: DashboardWidgetType;
+  position: number;
+  config: Record<string, unknown>;
 }
 
-export default async function DashboardPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ state?: string }>;
-}) {
-  const { state } = await searchParams;
+const DEFAULT_WIDGETS: RawWidget[] = [
+  {
+    id: "00000000-0000-4000-8000-000000000001",
+    type: "kpi",
+    position: 0,
+    config: { kpiId: "kpi-projetos-ativos" },
+  },
+  {
+    id: "00000000-0000-4000-8000-000000000002",
+    type: "kpi",
+    position: 1,
+    config: { kpiId: "kpi-doacoes-mes" },
+  },
+  {
+    id: "00000000-0000-4000-8000-000000000003",
+    type: "feed",
+    position: 2,
+    config: { feedLimit: 6 },
+  },
+  {
+    id: "00000000-0000-4000-8000-000000000004",
+    type: "calendar",
+    position: 3,
+    config: {},
+  },
+  {
+    id: "00000000-0000-4000-8000-000000000005",
+    type: "kpi",
+    position: 4,
+    config: { kpiId: "kpi-tarefas-abertas" },
+  },
+];
 
-  if (state === "loading") {
-    return <DashboardSkeleton />;
-  }
+async function loadDashboardData() {
+  const [
+    kpisResult,
+    dashboardResult,
+    briefingResult,
+    announcements,
+    meetingSessions,
+  ] = await Promise.all([
+    getKpis({}),
+    getDashboardConfig({}),
+    getBriefingPreference({}),
+    getAnnouncementsWithAuthors(),
+    getMeetingSessionsWithDecisions(),
+  ]);
 
-  if (state === "error") {
+  return {
+    kpis: kpisResult?.data?.kpis ?? [],
+    dashboardConfig: dashboardResult?.data?.config ?? null,
+    briefingPreference: briefingResult?.data?.preference ?? null,
+    announcements,
+    meetingSessions,
+  };
+}
+
+async function DashboardContent() {
+  let data: Awaited<ReturnType<typeof loadDashboardData>>;
+
+  try {
+    data = await loadDashboardData();
+  } catch {
     return (
-      <div className="hb-page">
-        <ErrorState
-          title="Não foi possível carregar o painel"
-          description="Verifique sua conexão e tente novamente."
-          action={
-            <form method="get">
-              <Button
-                type="submit"
-                leftIcon={<RotateCcw size={14} aria-hidden="true" />}
-              >
-                Tentar novamente
-              </Button>
-            </form>
-          }
-        />
-      </div>
+      <ErrorState
+        title="Não foi possível carregar o painel"
+        description="Verifique sua conexão e tente novamente."
+      />
     );
   }
 
-  const activeFeedItems = state === "empty" ? [] : feedItems;
+  const {
+    kpis,
+    dashboardConfig,
+    briefingPreference,
+    announcements,
+    meetingSessions,
+  } = data;
 
-  const widgets: WidgetGridItem[] = [...mockDashboardWidgets]
-    .sort((a, b) => a.position - b.position)
-    .map((widget) => ({
-      id: widget.id,
-      content: renderWidget(widget, activeFeedItems),
-    }));
+  const feedItems: FeedItem[] = [
+    ...announcements
+      .filter((a) => a.publishedAt !== null)
+      .map((a) => ({
+        id: `announcement-${a.id}`,
+        module: "Anúncios",
+        title: a.title,
+        description: a.authorName,
+        occurredAt: a.publishedAt as Date,
+        icon: Megaphone,
+      })),
+    ...meetingSessions.flatMap((session) =>
+      session.decisions.map((decision) => ({
+        id: `decision-${decision.id}`,
+        module: "Reuniões",
+        title: decision.description,
+        description: decision.responsibleName,
+        occurredAt: decision.updatedAt,
+        icon: Handshake,
+      })),
+    ),
+  ];
+
+  const calendarEvents = meetingSessionsToCalendarEvents(meetingSessions);
+  const rawWidgets = dashboardConfig?.widgets ?? DEFAULT_WIDGETS;
+  const widgetsUpdatedAt = dashboardConfig?.updatedAt ?? new Date();
+  const widgets: DashboardWidget[] = rawWidgets.map((w) => ({
+    id: w.id,
+    userId: dashboardConfig?.userId ?? "",
+    type: w.type as DashboardWidgetType,
+    position: w.position,
+    config: w.config,
+    createdAt: widgetsUpdatedAt,
+    updatedAt: widgetsUpdatedAt,
+  }));
 
   return (
     <div className="hb-page">
       <div className="hb-welcome-card">
         <div className="hb-welcome-card-inner">
           <div className="hb-welcome-eyebrow">Painel pessoal</div>
-          <h2>Bem-vindo de volta, Fábio.</h2>
+          <h2>Bem-vindo de volta.</h2>
           <p>
             Acompanhe indicadores, anúncios e a agenda da diretoria em um só
             lugar. Arraste os cartões abaixo para organizar o seu painel.
@@ -162,9 +169,43 @@ export default async function DashboardPage({
         </svg>
       </div>
 
-      <WidgetGrid items={widgets} className="mb-(--sp-5)" />
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          gap: 8,
+          marginBottom: "var(--sp-4)",
+        }}
+      >
+        <BriefingConfigDialog
+          initialValues={
+            briefingPreference
+              ? {
+                  enabled: briefingPreference.enabled,
+                  frequency: briefingPreference.frequency,
+                }
+              : { enabled: false, frequency: "diario" }
+          }
+        />
+        <WidgetConfigDialog initialWidgets={widgets} availableKpis={kpis} />
+      </div>
+
+      <DashboardWidgets
+        widgets={widgets}
+        kpis={kpis}
+        feedItems={feedItems}
+        calendarEvents={calendarEvents}
+      />
 
       <AppLauncher />
     </div>
+  );
+}
+
+export default function DashboardPage() {
+  return (
+    <Suspense fallback={<DashboardSkeleton />}>
+      <DashboardContent />
+    </Suspense>
   );
 }
