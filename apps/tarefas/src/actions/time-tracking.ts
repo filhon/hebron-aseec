@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@hebron/db/client";
+import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { timeEntries } from "@hebron/db/schema";
 import { createTimeEntrySchema } from "@hebron/validators/tarefas";
 import { colaboradorAction } from "../lib/safe-action";
@@ -37,15 +38,21 @@ export const startTimeEntry = colaboradorAction
       );
     }
 
-    const [entry] = await db
-      .insert(timeEntries)
-      .values({
-        taskId: input.taskId,
-        userId: ctx.actorId,
-        startedAt: new Date(),
-      })
-      .returning();
-    if (!entry) throw new Error("Falha ao iniciar cronômetro");
+    const entry = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const [row] = await tx
+          .insert(timeEntries)
+          .values({
+            taskId: input.taskId,
+            userId: ctx.actorId,
+            startedAt: new Date(),
+          })
+          .returning();
+        if (!row) throw new Error("Falha ao iniciar cronômetro");
+        return row;
+      },
+    );
 
     return { entry };
   });
@@ -75,12 +82,18 @@ export const stopTimeEntry = colaboradorAction
     const endedAt = new Date();
     const durationMinutes = diffMinutes(existing.startedAt, endedAt);
 
-    const [entry] = await db
-      .update(timeEntries)
-      .set({ endedAt, durationMinutes })
-      .where(eq(timeEntries.id, input.timeEntryId))
-      .returning();
-    if (!entry) throw new Error("Falha ao finalizar cronômetro");
+    const entry = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const [row] = await tx
+          .update(timeEntries)
+          .set({ endedAt, durationMinutes })
+          .where(eq(timeEntries.id, input.timeEntryId))
+          .returning();
+        if (!row) throw new Error("Falha ao finalizar cronômetro");
+        return row;
+      },
+    );
 
     return { entry };
   });
@@ -96,18 +109,24 @@ export const createManualTimeEntry = colaboradorAction
       ? diffMinutes(input.startedAt, input.endedAt)
       : null;
 
-    const [entry] = await db
-      .insert(timeEntries)
-      .values({
-        taskId: input.taskId,
-        userId: ctx.actorId,
-        startedAt: input.startedAt,
-        endedAt: input.endedAt,
-        durationMinutes,
-        notes: input.notes,
-      })
-      .returning();
-    if (!entry) throw new Error("Falha ao registrar tempo");
+    const entry = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const [row] = await tx
+          .insert(timeEntries)
+          .values({
+            taskId: input.taskId,
+            userId: ctx.actorId,
+            startedAt: input.startedAt,
+            endedAt: input.endedAt,
+            durationMinutes,
+            notes: input.notes,
+          })
+          .returning();
+        if (!row) throw new Error("Falha ao registrar tempo");
+        return row;
+      },
+    );
 
     return { entry };
   });

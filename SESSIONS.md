@@ -115,6 +115,7 @@
 | S-92   | 2026-07-09 | P-5.8 — Server Actions Intranet                                         | concluido                            |
 | S-93   | 2026-07-09 | P-5.9 — Integração UI ↔ Backend Intranet                                | concluido                            |
 | S-94   | 2026-07-10 | P-5.10 — Notificações e Emails Intranet                                 | concluido                            |
+| S-95   | 2026-07-10 | P-0.17 — Runtime RLS para mutações críticas (PATCH-016)                 | concluido                            |
 
 ---
 
@@ -5089,13 +5090,13 @@ PLANNED_JOBS`** — a função Inngest real (`briefingCron`) substitui o placeho
 - [x] Anúncio normal/importante: apenas in_app/feed (função só é chamada para
       `priority === "urgente"`; sem email em massa para os demais)
 - [x] Briefing: cron registrado em `packages/jobs` (`briefingCron`, `packages/jobs/
-    src/index.ts::functions`) respeitando `enabled` + `frequency` por usuário —
+src/index.ts::functions`) respeitando `enabled` + `frequency` por usuário —
       testado em `packages/jobs/src/__tests__/briefing.test.ts` (3 casos: diário,
       semanal em segunda, desativado nunca recebe)
 - [x] Briefing: resumo com KPIs (`intranet.kpi_snapshots`) + últimos eventos
       (últimos 5 anúncios + últimas 5 decisões de reunião)
 - [x] Nenhum envio de relatório financeiro neste módulo — `grep -rn
-    "monthly-financial"` nos arquivos novos só encontra um comentário
+"monthly-financial"` nos arquivos novos só encontra um comentário
       explicando que o cron de P-3.10 não foi duplicado
 - [x] Lint passa (`pnpm turbo lint` — `@hebron/email`, `@hebron/jobs`,
       `@hebron/intranet`)
@@ -5115,3 +5116,137 @@ PLANNED_JOBS`** — a função Inngest real (`briefingCron`) substitui o placeho
 - `packages/jobs/src/catalog.ts` (editado — remoção do placeholder `intranet-briefing`)
 - `packages/jobs/src/__tests__/briefing.test.ts` (novo)
 - `apps/intranet/src/lib/mock-data.ts` (removido)
+
+---
+
+### S-95 — 2026-07-10 — P-0.17 Runtime RLS para mutações críticas (PATCH-016)
+
+**Prompt:** P-0.17 (`PATCHES/016-runtime-rls-mutacoes-authenticated.md`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Verificado contra BRAIN.md/PROMPTS.md/SESSIONS.md que o débito descrito no
+PATCH-016 era real e precisamente diagnosticado: `packages/db/src/authenticated.ts`
+(`withAuthenticatedContext`) foi criado em S-57/P-0.10 e adotado pelas
+_leituras_ RSC de admin/documentos/projetos/financeiro (Onda 1), mas nenhuma
+Server Action de mutação em nenhum app jamais foi migrada — todo `db.insert/
+update/delete` das actions continuava na conexão superuser de
+`@hebron/db/client`, que ignora RLS por completo. `pnpm vitest` confirmou:
+antes desta sessão, `withAuthenticatedContext` só aparecia em `rls.test.ts`/
+`session-real.test.ts` (testes manuais) e em `lib/queries.ts` de 4 apps —
+zero em `actions/*.ts` de qualquer app.
+
+Migradas as mutações de `apps/tarefas/src/actions/{tasks,comments,recurrence,
+templates,time-tracking,approvals}.ts`, `apps/intranet/src/actions/
+{announcements,dashboard,decisions,briefing}.ts` e `apps/financeiro/src/
+actions/{approval,transactions,payables,reports}.ts` para `withAuthenticated
+Context({ actorId: ctx.actorId }, ...)`, preservando os limites de transação
+já existentes (onde já havia `db.transaction`, virou uma única
+`withAuthenticatedContext`; onde a mutação e o audit eram chamadas soltas,
+foram combinadas na mesma transação autenticada — melhoria de atomicidade,
+não mudança de regra de negócio). `logIntranetAudit` ganhou o parâmetro
+`dbHandle` opcional (só `logTarefasAudit`/`logFinanceiroAudit` já tinham,
+S-55) para poder participar da mesma transação.
+
+Ativar RLS de verdade nas escritas (não só nas leituras) expôs 3
+incompatibilidades reais entre o gate de aplicação (JS) e as policies de RLS
+já declaradas — nenhuma delas visível antes porque a conexão superuser
+sempre bypassava RLS:
+
+1. `tarefas.tasks_update_own_or_assignee` (0033_tarefas_rls.sql) não concede
+   UPDATE a diretor/conselheiro, só a creator/assignee/super_admin — mas
+   `resolveApprovalRequest` (diretor aprova pedido) precisa avançar
+   `tasks.status` como efeito colateral de uma aprovação já autorizada.
+2. `financeiro.batch_approvals_update_gestor` (0011_financeiro_rls.sql) só
+   concede UPDATE a diretor com designation 'gestor' (+ super_admin) — não
+   cobre o autorizador, o segundo papel da própria governança dual que a
+   policy deveria proteger; `authorizeBatch` (diretor autorizador) ficaria
+   permanentemente impossível de executar sob RLS real.
+3. `admin.audit_log_insert_service` (0014_grants_authenticated.sql) só
+   concede INSERT a `service_role` — nenhuma mutação auditável conseguiria
+   gravar o próprio audit rodando como `authenticated` (toda mutação
+   crítica do sistema teria passado a falhar).
+
+Para os 3 casos, criada `withSystemRole(tx, fn)` em `packages/db/src/
+authenticated.ts`: dentro da mesma transação autenticada, faz `RESET ROLE`
+(volta ao role `postgres` da conexão `DATABASE_URL`, dono das tabelas — não
+GRANT/policy novos) só para o `fn`, depois `SET LOCAL ROLE authenticated`
+de novo. Usada nos 3 pontos acima com comentário explicando o porquê —
+nunca para contornar uma regra de negócio, só para o efeito colateral
+"sistema" de uma ação já autorizada por quem chamou (audit; task.status
+avançado por aprovação já verificada; batch_approvals atualizado por
+autorizador já validado por papel+designation+"diferente do aprovador").
+
+**Decisão deliberada de NÃO usar `withSystemRole`:** `financeiro.
+colaboradorAction` (gate JS) permite diretor em `createPayable`/
+`createReceivable`/`createManualTransaction`, mas as RLS policies de INSERT
+(`payables_insert_staff`, `receivables_insert_collab`,
+`transactions_insert_collab`) só permitem `super_admin`/`colaborador` — sem
+diretor. Nenhum teste existente nem página de UI encontrada (`grep`) exercia
+diretor nesses 3 fluxos; a suite `transactions.test.ts` só testa colaborador
+e super_admin. Interpretado como a RLS (mais estreita, e provavelmente mais
+fiel à intenção de "colaborador faz o CRUD do dia a dia") estar correta e o
+gate JS ser apenas reuso amplo de `colaboradorAction` — não alterada (fora
+de escopo do prompt tocar regra de negócio "quem cria payable"; RLS agora
+ativa é exatamente o que barra isso corretamente). Documentado aqui em vez
+de silenciosamente contornado — se diretor precisar mesmo criar payables no
+futuro, é decisão do Filipe, não suposição minha.
+
+Corrigido `apps/financeiro/src/__tests__/audit-abort.test.ts`: o mock de
+`resolveSession` reivindicava designation "gestor" sem nunca inserir a linha
+real em `public.designations` — passava porque `approveBatch` rodava como
+superuser antes desta sessão; com RLS real, a policy `batch_approvals_
+update_gestor` bloqueava o UPDATE mesmo com o gate JS satisfeito. Adicionado
+insert real de `designations` no fixture (mesmo padrão já usado em
+`designation-governance.test.ts`).
+
+**Critérios de aceite verificados:**
+
+- [x] Nenhuma action migrada usa `db` direto para INSERT/UPDATE/DELETE fora do helper autenticado — `grep "db\.(insert|update|delete)("` nos 14 arquivos migrados só encontra chamadas explicitamente fora de escopo (ex.: `notifications`/`role_assignments` restritas a service_role, já corretas na conexão superuser antes desta sessão).
+- [x] Falha de RLS aparece como erro de action compreensível — `next-safe-action` já redige exceções não tratadas para "Something went wrong while executing the operation." por padrão; confirmado nos testes novos (nenhum SQL bruto no `serverError`).
+- [x] Audit crítico permanece atômico com a mutação principal — preservado onde já existia, e melhorado (combinado numa única transação) onde a mutação e o audit eram chamadas soltas antes.
+- [x] Testes novos por módulo usando o caminho autenticado — `apps/{tarefas,intranet,financeiro}/src/__tests__/runtime-rls.test.ts` (9 testes): cada um chama a Server Action real (não SQL manual) com um ator cujo claim de papel/designation (via `resolveSession` mockado) diverge da verdade em `role_assignments`/`designations` — prova que só a RLS (não o gate JS) barra esse ator, e que o ator real com a linha correspondente real completa o fluxo com audit gravado.
+- [x] Jobs/crons existentes continuam verdes — `packages/jobs` não foi tocado (fora de escopo do prompt); `createAutoTask`/ `createAutoTaskChecklist` (`packages/integrations`) seguem escrevendocomo o ator sistema (`getSystemActorId`) via conexão superuser, sem mudança.
+- [x] `pnpm turbo lint typecheck` — 38/38 tasks verdes nos 21 pacotes do monorepo.
+- [x] Suites afetadas passam isoladamente: tarefas 44/44, intranet 8/8, financeiro 49/49 (todas rodadas com `singleFork`/sequencial contra o banco de desenvolvimento real, sem mock de Postgres).
+
+**Débitos técnicos / pendências:**
+
+- As 3 incompatibilidades de RLS descritas acima (tasks UPDATE por diretor
+  via aprovação, batch_approvals UPDATE por autorizador, audit_log INSERT
+  restrito a service_role) foram contornadas com `withSystemRole` — não
+  corrigidas na origem (as próprias policies), porque alterar policy está
+  explicitamente fora de escopo do PATCH-016. Se uma auditoria de segurança
+  futura quiser que essas policies reflitam os casos reais em vez de
+  depender de `withSystemRole` na aplicação, é trabalho de um prompt
+  dedicado a RLS (não deste).
+- `financeiro.colaboradorAction` continua mais permissivo (inclui diretor)
+  que as RLS policies de INSERT de payables/receivables/transactions —
+  documentado acima como decisão deliberada, não corrigido; diretor
+  tentando criar um desses hoje recebe um erro genérico de RLS, não um erro
+  de gate específico. Se isso for regra de negócio real (diretor deveria
+  poder), é uma pergunta para o Filipe, não uma suposição a resolver aqui.
+- `apps/financeiro/src/actions/{accounts,categories,conciliation,import,
+organization-budgets}.ts` e `apps/intranet/src/actions/{invitations,kpis,
+onboarding,search}.ts` continuam usando `db` superuser diretamente —
+  fora do escopo explícito de arquivos permitidos do PATCH-016.
+
+**Arquivos criados:**
+
+- `apps/tarefas/src/__tests__/runtime-rls.test.ts`
+- `apps/intranet/src/__tests__/runtime-rls.test.ts`
+- `apps/financeiro/src/__tests__/runtime-rls.test.ts`
+
+**Arquivos modificados:**
+
+- `packages/db/src/authenticated.ts` (`withSystemRole`, novo)
+- `apps/tarefas/src/actions/{tasks,comments,recurrence,templates,
+time-tracking,approvals}.ts`
+- `apps/intranet/src/actions/{announcements,dashboard,decisions,
+briefing}.ts`
+- `apps/intranet/src/lib/audit.ts` (`logIntranetAudit` ganha `dbHandle`
+  opcional)
+- `apps/financeiro/src/actions/{approval,transactions,payables,reports}.ts`
+- `apps/financeiro/src/__tests__/audit-abort.test.ts` (fixture: designation
+  real de "gestor")

@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { db } from "@hebron/db/client";
+import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { recurrenceRules, taskTemplates } from "@hebron/db/schema";
 import { recurrenceRuleSchema } from "@hebron/validators/tarefas";
 import { colaboradorAction } from "../lib/safe-action";
@@ -61,7 +62,7 @@ const createRecurrenceRuleSchema = z.object({
 
 export const createRecurrenceRule = colaboradorAction
   .schema(createRecurrenceRuleSchema)
-  .action(async ({ parsedInput: input }) => {
+  .action(async ({ parsedInput: input, ctx }) => {
     const [template] = await db
       .select({ id: taskTemplates.id })
       .from(taskTemplates)
@@ -71,19 +72,25 @@ export const createRecurrenceRule = colaboradorAction
 
     const nextRunAt = computeNextRun(input.rule, new Date());
 
-    const [rule] = await db
-      .insert(recurrenceRules)
-      .values({
-        taskTemplateId: input.taskTemplateId,
-        type: input.rule.type,
-        interval: input.rule.interval,
-        dayOfWeek: input.rule.dayOfWeek,
-        dayOfMonth: input.rule.dayOfMonth,
-        endDate: input.rule.endDate,
-        nextRunAt,
-      })
-      .returning();
-    if (!rule) throw new Error("Falha ao criar regra de recorrência");
+    const rule = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const [row] = await tx
+          .insert(recurrenceRules)
+          .values({
+            taskTemplateId: input.taskTemplateId,
+            type: input.rule.type,
+            interval: input.rule.interval,
+            dayOfWeek: input.rule.dayOfWeek,
+            dayOfMonth: input.rule.dayOfMonth,
+            endDate: input.rule.endDate,
+            nextRunAt,
+          })
+          .returning();
+        if (!row) throw new Error("Falha ao criar regra de recorrência");
+        return row;
+      },
+    );
 
     return { rule };
   });
@@ -99,22 +106,28 @@ const updateRecurrenceRuleSchema = z.object({
 
 export const updateRecurrenceRule = colaboradorAction
   .schema(updateRecurrenceRuleSchema)
-  .action(async ({ parsedInput: input }) => {
+  .action(async ({ parsedInput: input, ctx }) => {
     const nextRunAt = computeNextRun(input.rule, new Date());
 
-    const [rule] = await db
-      .update(recurrenceRules)
-      .set({
-        type: input.rule.type,
-        interval: input.rule.interval,
-        dayOfWeek: input.rule.dayOfWeek,
-        dayOfMonth: input.rule.dayOfMonth,
-        endDate: input.rule.endDate,
-        nextRunAt,
-      })
-      .where(eq(recurrenceRules.id, input.recurrenceRuleId))
-      .returning();
-    if (!rule) throw new Error("Regra de recorrência não encontrada");
+    const rule = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const [row] = await tx
+          .update(recurrenceRules)
+          .set({
+            type: input.rule.type,
+            interval: input.rule.interval,
+            dayOfWeek: input.rule.dayOfWeek,
+            dayOfMonth: input.rule.dayOfMonth,
+            endDate: input.rule.endDate,
+            nextRunAt,
+          })
+          .where(eq(recurrenceRules.id, input.recurrenceRuleId))
+          .returning();
+        if (!row) throw new Error("Regra de recorrência não encontrada");
+        return row;
+      },
+    );
 
     return { rule };
   });

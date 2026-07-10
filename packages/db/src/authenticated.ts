@@ -45,3 +45,29 @@ export async function withAuthenticatedContext<T>(
     return fn(tx);
   });
 }
+
+/**
+ * Runs `fn` against the same `tx` opened by `withAuthenticatedContext`, but
+ * with the role reset to the connection's own privileged role (`postgres`
+ * for `DATABASE_URL`) for the duration of `fn` — same transaction, so still
+ * atomic with the surrounding mutation, but bypassing RLS for tables that
+ * are deliberately not writable by `authenticated` (e.g. `admin.audit_log`,
+ * whose only INSERT policy is `TO service_role` — decision F3-15/S-57: the
+ * audit trail must not be forgeable by an arbitrary authenticated session).
+ *
+ * `RESET ROLE` reverts to the session's own role (not a stack), so nesting
+ * two calls would collapse to one level — restoring `authenticated`
+ * unconditionally afterward is correct here because every caller of this
+ * helper is already inside a `withAuthenticatedContext` transaction.
+ */
+export async function withSystemRole<T>(
+  tx: AuthenticatedTx,
+  fn: (tx: AuthenticatedTx) => Promise<T>,
+): Promise<T> {
+  await tx.execute(sql`RESET ROLE`);
+  try {
+    return await fn(tx);
+  } finally {
+    await tx.execute(sql`SET LOCAL ROLE authenticated`);
+  }
+}

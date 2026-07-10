@@ -2,6 +2,10 @@
 
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@hebron/db/client";
+import {
+  withAuthenticatedContext,
+  withSystemRole,
+} from "@hebron/db/authenticated";
 import { approvalRequests, tasks, users } from "@hebron/db/schema";
 import { makeNotificationInserter } from "@hebron/db/notifications";
 import { createNotification } from "@hebron/email";
@@ -39,36 +43,41 @@ export const requestApproval = colaboradorAction
       .limit(1);
     if (!approver) throw new Error("Aprovador não encontrado");
 
-    const request = await db.transaction(async (tx) => {
-      const [row] = await tx
-        .insert(approvalRequests)
-        .values({
-          taskId: input.taskId,
-          requestedStatus: input.requestedStatus,
-          requestedBy: ctx.actorId,
-          approverId: input.approverId,
-          notes: input.notes,
-        })
-        .returning();
-      if (!row) throw new Error("Falha ao criar pedido de aprovação");
-
-      await logTarefasAudit(
-        {
-          actorId: ctx.actorId,
-          action: "task.approval_requested",
-          entity: "approval_request",
-          entityId: row.id,
-          diff: {
+    const request = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const [row] = await tx
+          .insert(approvalRequests)
+          .values({
             taskId: input.taskId,
             requestedStatus: input.requestedStatus,
+            requestedBy: ctx.actorId,
             approverId: input.approverId,
-          },
-        },
-        tx,
-      );
+            notes: input.notes,
+          })
+          .returning();
+        if (!row) throw new Error("Falha ao criar pedido de aprovação");
 
-      return row;
-    });
+        await withSystemRole(tx, (sysTx) =>
+          logTarefasAudit(
+            {
+              actorId: ctx.actorId,
+              action: "task.approval_requested",
+              entity: "approval_request",
+              entityId: row.id,
+              diff: {
+                taskId: input.taskId,
+                requestedStatus: input.requestedStatus,
+                approverId: input.approverId,
+              },
+            },
+            sysTx,
+          ),
+        );
+
+        return row;
+      },
+    );
 
     // Notificação best-effort, fora da transação de governança — falha em
     // notificar não deve desfazer um pedido já auditado. In_app + email ao
@@ -86,71 +95,88 @@ export const requestApproval = colaboradorAction
 export const resolveApprovalRequest = diretorAction
   .schema(resolveApprovalRequestSchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    const result = await db.transaction(async (tx) => {
-      const [existing] = await tx
-        .select()
-        .from(approvalRequests)
-        .where(eq(approvalRequests.id, input.approvalRequestId))
-        .limit(1);
-      if (!existing) throw new Error("Pedido de aprovação não encontrado");
+    const result = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const [existing] = await tx
+          .select()
+          .from(approvalRequests)
+          .where(eq(approvalRequests.id, input.approvalRequestId))
+          .limit(1);
+        if (!existing) throw new Error("Pedido de aprovação não encontrado");
 
-      if (
-        existing.approverId !== ctx.actorId &&
-        !ctx.roles.includes("super_admin")
-      ) {
-        throw new Error(
-          "Apenas o diretor designado pode responder este pedido",
-        );
-      }
-      if (existing.status !== "pendente") {
-        throw new Error("Este pedido já foi respondido");
-      }
+        if (
+          existing.approverId !== ctx.actorId &&
+          !ctx.roles.includes("super_admin")
+        ) {
+          throw new Error(
+            "Apenas o diretor designado pode responder este pedido",
+          );
+        }
+        if (existing.status !== "pendente") {
+          throw new Error("Este pedido já foi respondido");
+        }
 
-      const now = new Date();
-      const [updated] = await tx
-        .update(approvalRequests)
-        .set({
-          status: input.decision,
-          notes: input.notes ?? existing.notes,
-          resolvedAt: now,
-        })
-        .where(eq(approvalRequests.id, input.approvalRequestId))
-        .returning();
-      if (!updated) throw new Error("Falha ao atualizar pedido de aprovação");
-
-      if (input.decision === "aprovado") {
-        await tx
-          .update(tasks)
+        const now = new Date();
+        const [updated] = await tx
+          .update(approvalRequests)
           .set({
-            status: existing.requestedStatus,
-            updatedAt: now,
-            completedAt: existing.requestedStatus === "concluido" ? now : null,
+            status: input.decision,
+            notes: input.notes ?? existing.notes,
+            resolvedAt: now,
           })
-          .where(eq(tasks.id, existing.taskId));
-      }
+          .where(eq(approvalRequests.id, input.approvalRequestId))
+          .returning();
+        if (!updated) throw new Error("Falha ao atualizar pedido de aprovação");
 
-      await logTarefasAudit(
-        {
-          actorId: ctx.actorId,
-          action:
-            input.decision === "aprovado" ? "task.approved" : "task.rejected",
-          entity: "approval_request",
-          entityId: updated.id,
-          diff: {
-            taskId: existing.taskId,
-            requestedStatus: existing.requestedStatus,
-            decision: input.decision,
-          },
-        },
-        tx,
-      );
+        if (input.decision === "aprovado") {
+          // tarefas.tasks_update_creator_or_assignee (0033_tarefas_rls.sql) não
+          // concede UPDATE a diretor/conselheiro — só creator/assignee/
+          // super_admin. Avançar o status é um efeito colateral do sistema
+          // sobre um approval_request já resolvido (autorização real já
+          // verificada acima: approverId === ctx.actorId), não uma edição
+          // direta de tarefa por quem não é dono — mesmo raciocínio do audit
+          // log (withSystemRole).
+          await withSystemRole(tx, (sysTx) =>
+            sysTx
+              .update(tasks)
+              .set({
+                status: existing.requestedStatus,
+                updatedAt: now,
+                completedAt:
+                  existing.requestedStatus === "concluido" ? now : null,
+              })
+              .where(eq(tasks.id, existing.taskId)),
+          );
+        }
 
-      return {
-        updated,
-        taskId: existing.taskId,
-        requestedBy: existing.requestedBy,
-      };
-    });
+        await withSystemRole(tx, (sysTx) =>
+          logTarefasAudit(
+            {
+              actorId: ctx.actorId,
+              action:
+                input.decision === "aprovado"
+                  ? "task.approved"
+                  : "task.rejected",
+              entity: "approval_request",
+              entityId: updated.id,
+              diff: {
+                taskId: existing.taskId,
+                requestedStatus: existing.requestedStatus,
+                decision: input.decision,
+              },
+            },
+            sysTx,
+          ),
+        );
+
+        return {
+          updated,
+          taskId: existing.taskId,
+          requestedBy: existing.requestedBy,
+        };
+      },
+    );
 
     await createNotification({
       insert: insertNotification,

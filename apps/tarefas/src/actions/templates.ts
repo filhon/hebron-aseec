@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { asc, eq } from "drizzle-orm";
 import { db } from "@hebron/db/client";
+import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import {
   taskTemplates,
   templateItems,
@@ -40,34 +41,37 @@ export const createTaskTemplate = colaboradorAction
   .action(async ({ parsedInput: input, ctx }) => {
     const workspaceId = await resolveWorkspaceId(input.workspace);
 
-    const template = await db.transaction(async (tx) => {
-      const [row] = await tx
-        .insert(taskTemplates)
-        .values({
-          name: input.name,
-          description: input.description,
-          workspaceId,
-          triggerSourceModule: input.trigger?.sourceModule ?? null,
-          triggerEvent: input.trigger?.event ?? null,
-          createdBy: ctx.actorId,
-        })
-        .returning();
-      if (!row) throw new Error("Falha ao criar template");
+    const template = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const [row] = await tx
+          .insert(taskTemplates)
+          .values({
+            name: input.name,
+            description: input.description,
+            workspaceId,
+            triggerSourceModule: input.trigger?.sourceModule ?? null,
+            triggerEvent: input.trigger?.event ?? null,
+            createdBy: ctx.actorId,
+          })
+          .returning();
+        if (!row) throw new Error("Falha ao criar template");
 
-      await tx.insert(templateItems).values(
-        input.tasks.map((item, index) => ({
-          taskTemplateId: row.id,
-          title: item.title,
-          description: item.description,
-          priority: item.priority,
-          dueOffsetDays: item.dueOffsetDays,
-          subtasks: item.subtasks,
-          order: index,
-        })),
-      );
+        await tx.insert(templateItems).values(
+          input.tasks.map((item, index) => ({
+            taskTemplateId: row.id,
+            title: item.title,
+            description: item.description,
+            priority: item.priority,
+            dueOffsetDays: item.dueOffsetDays,
+            subtasks: item.subtasks,
+            order: index,
+          })),
+        );
 
-      return row;
-    });
+        return row;
+      },
+    );
 
     return { template };
   });
@@ -101,41 +105,44 @@ export const instantiateTaskTemplate = colaboradorAction
       throw new Error("Template não possui tarefas definidas");
     }
 
-    const createdTaskIds = await db.transaction(async (tx) => {
-      const ids: string[] = [];
-      for (const item of items) {
-        const dueDate =
-          item.dueOffsetDays !== null
-            ? addDays(new Date(), item.dueOffsetDays)
-            : null;
+    const createdTaskIds = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const ids: string[] = [];
+        for (const item of items) {
+          const dueDate =
+            item.dueOffsetDays !== null
+              ? addDays(new Date(), item.dueOffsetDays)
+              : null;
 
-        const [task] = await tx
-          .insert(tasks)
-          .values({
-            title: item.title,
-            description: item.description,
-            workspaceId: template.workspaceId,
-            priority: item.priority,
-            dueDate,
-            source: "manual",
-            createdBy: ctx.actorId,
-          })
-          .returning();
-        if (!task) continue;
-        ids.push(task.id);
+          const [task] = await tx
+            .insert(tasks)
+            .values({
+              title: item.title,
+              description: item.description,
+              workspaceId: template.workspaceId,
+              priority: item.priority,
+              dueDate,
+              source: "manual",
+              createdBy: ctx.actorId,
+            })
+            .returning();
+          if (!task) continue;
+          ids.push(task.id);
 
-        if (item.subtasks.length > 0) {
-          await tx.insert(subtasks).values(
-            item.subtasks.map((title, index) => ({
-              taskId: task.id,
-              title,
-              order: index,
-            })),
-          );
+          if (item.subtasks.length > 0) {
+            await tx.insert(subtasks).values(
+              item.subtasks.map((title, index) => ({
+                taskId: task.id,
+                title,
+                order: index,
+              })),
+            );
+          }
         }
-      }
-      return ids;
-    });
+        return ids;
+      },
+    );
 
     return { taskIds: createdTaskIds };
   });

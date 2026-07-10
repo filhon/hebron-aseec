@@ -2,7 +2,10 @@
 
 import { z } from "zod";
 import { eq, and, isNull } from "drizzle-orm";
-import { db } from "@hebron/db/client";
+import {
+  withAuthenticatedContext,
+  withSystemRole,
+} from "@hebron/db/authenticated";
 import { payables } from "@hebron/db/schema";
 import { superAdminAction } from "../lib/safe-action";
 import { logFinanceiroAudit } from "../lib/audit";
@@ -28,7 +31,7 @@ export const overrideBlock = superAdminAction
   .action(async ({ parsedInput: input, ctx }) => {
     const now = new Date();
 
-    await db.transaction(async (tx) => {
+    await withAuthenticatedContext({ actorId: ctx.actorId }, async (tx) => {
       const rows = await tx
         .select()
         .from(payables)
@@ -58,19 +61,21 @@ export const overrideBlock = superAdminAction
         })
         .where(eq(payables.id, input.payableId));
 
-      await logFinanceiroAudit(
-        {
-          actorId: ctx.actorId,
-          action: "financeiro.payable.block_overridden",
-          entity: "payable",
-          entityId: input.payableId,
-          diff: {
-            status: { from: "bloqueado", to: "pendente" },
-            justification: input.justification,
-            blockReason: payable.blockReason,
+      await withSystemRole(tx, (sysTx) =>
+        logFinanceiroAudit(
+          {
+            actorId: ctx.actorId,
+            action: "financeiro.payable.block_overridden",
+            entity: "payable",
+            entityId: input.payableId,
+            diff: {
+              status: { from: "bloqueado", to: "pendente" },
+              justification: input.justification,
+              blockReason: payable.blockReason,
+            },
           },
-        },
-        tx,
+          sysTx,
+        ),
       );
     });
 

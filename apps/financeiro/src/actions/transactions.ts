@@ -4,6 +4,10 @@ import { z } from "zod";
 import { eq, and, isNull } from "drizzle-orm";
 import { db } from "@hebron/db/client";
 import {
+  withAuthenticatedContext,
+  withSystemRole,
+} from "@hebron/db/authenticated";
+import {
   payables,
   receivables,
   transactions,
@@ -65,37 +69,47 @@ export const createPayable = colaboradorAction
     if (input.supplierCnpj) notesLines.push(`CNPJ: ${input.supplierCnpj}`);
     if (input.notes) notesLines.push(input.notes);
 
-    const inserted = await db
-      .insert(payables)
-      .values({
-        description: input.description,
-        amount: input.amount.toString(),
-        dueDate: toDateString(input.dueAt),
-        supplier: input.supplierName,
-        notes: notesLines.length > 0 ? notesLines.join("\n") : null,
-        categoryId: input.categoryId,
-        costCenterId: input.costCenterId ?? null,
-        status: "pendente",
-        createdBy: ctx.actorId,
-      })
-      .returning();
+    const payable = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const [row] = await tx
+          .insert(payables)
+          .values({
+            description: input.description,
+            amount: input.amount.toString(),
+            dueDate: toDateString(input.dueAt),
+            supplier: input.supplierName,
+            notes: notesLines.length > 0 ? notesLines.join("\n") : null,
+            categoryId: input.categoryId,
+            costCenterId: input.costCenterId ?? null,
+            status: "pendente",
+            createdBy: ctx.actorId,
+          })
+          .returning();
+        if (!row) throw new Error("Falha ao criar conta a pagar");
 
-    const payable = inserted[0];
-    if (!payable) throw new Error("Falha ao criar conta a pagar");
+        await withSystemRole(tx, (sysTx) =>
+          logFinanceiroAudit(
+            {
+              actorId: ctx.actorId,
+              action: "financeiro.payable.created",
+              entity: "payable",
+              entityId: row.id,
+              diff: {
+                description: row.description,
+                amount: row.amount,
+                dueDate: row.dueDate,
+                supplier: row.supplier,
+                status: "pendente",
+              },
+            },
+            sysTx,
+          ),
+        );
 
-    await logFinanceiroAudit({
-      actorId: ctx.actorId,
-      action: "financeiro.payable.created",
-      entity: "payable",
-      entityId: payable.id,
-      diff: {
-        description: payable.description,
-        amount: payable.amount,
-        dueDate: payable.dueDate,
-        supplier: payable.supplier,
-        status: "pendente",
+        return row;
       },
-    });
+    );
 
     return { payable };
   });
@@ -125,17 +139,24 @@ export const cancelPayable = colaboradorAction
     }
 
     const now = new Date();
-    await db
-      .update(payables)
-      .set({ status: "cancelado", deletedAt: now, updatedAt: now })
-      .where(eq(payables.id, input.payableId));
+    await withAuthenticatedContext({ actorId: ctx.actorId }, async (tx) => {
+      await tx
+        .update(payables)
+        .set({ status: "cancelado", deletedAt: now, updatedAt: now })
+        .where(eq(payables.id, input.payableId));
 
-    await logFinanceiroAudit({
-      actorId: ctx.actorId,
-      action: "financeiro.payable.cancelled",
-      entity: "payable",
-      entityId: input.payableId,
-      diff: { reason: input.reason, previousStatus: payable.status },
+      await withSystemRole(tx, (sysTx) =>
+        logFinanceiroAudit(
+          {
+            actorId: ctx.actorId,
+            action: "financeiro.payable.cancelled",
+            entity: "payable",
+            entityId: input.payableId,
+            diff: { reason: input.reason, previousStatus: payable.status },
+          },
+          sysTx,
+        ),
+      );
     });
 
     return { ok: true };
@@ -152,37 +173,47 @@ export const createReceivable = colaboradorAction
     if (input.payerCnpj) notesLines.push(`CNPJ pagador: ${input.payerCnpj}`);
     if (input.notes) notesLines.push(input.notes);
 
-    const inserted = await db
-      .insert(receivables)
-      .values({
-        description: `${input.description} — ${input.payerName}`,
-        amount: input.amount.toString(),
-        expectedDate: toDateString(input.expectedAt),
-        accountId: input.bankAccountId ?? null,
-        costCenterId: input.costCenterId ?? null,
-        categoryId: input.categoryId,
-        source: "outro",
-        notes: notesLines.length > 0 ? notesLines.join("\n") : null,
-        status: "pendente",
-        createdBy: ctx.actorId,
-      })
-      .returning();
+    const receivable = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const [row] = await tx
+          .insert(receivables)
+          .values({
+            description: `${input.description} — ${input.payerName}`,
+            amount: input.amount.toString(),
+            expectedDate: toDateString(input.expectedAt),
+            accountId: input.bankAccountId ?? null,
+            costCenterId: input.costCenterId ?? null,
+            categoryId: input.categoryId,
+            source: "outro",
+            notes: notesLines.length > 0 ? notesLines.join("\n") : null,
+            status: "pendente",
+            createdBy: ctx.actorId,
+          })
+          .returning();
+        if (!row) throw new Error("Falha ao criar conta a receber");
 
-    const receivable = inserted[0];
-    if (!receivable) throw new Error("Falha ao criar conta a receber");
+        await withSystemRole(tx, (sysTx) =>
+          logFinanceiroAudit(
+            {
+              actorId: ctx.actorId,
+              action: "financeiro.receivable.created",
+              entity: "receivable",
+              entityId: row.id,
+              diff: {
+                description: row.description,
+                amount: row.amount,
+                expectedDate: row.expectedDate,
+                status: "pendente",
+              },
+            },
+            sysTx,
+          ),
+        );
 
-    await logFinanceiroAudit({
-      actorId: ctx.actorId,
-      action: "financeiro.receivable.created",
-      entity: "receivable",
-      entityId: receivable.id,
-      diff: {
-        description: receivable.description,
-        amount: receivable.amount,
-        expectedDate: receivable.expectedDate,
-        status: "pendente",
+        return row;
       },
-    });
+    );
 
     return { receivable };
   });
@@ -223,49 +254,62 @@ export const markReceivableReceived = colaboradorAction
     const now = new Date();
     const dateStr = toDateString(input.receivedDate);
 
-    // Create immutable credit transaction
-    const txInserted = await db
-      .insert(transactions)
-      .values({
-        type: "credito",
-        amount: receivable.amount,
-        description: receivable.description,
-        date: dateStr,
-        accountId: input.bankAccountId,
-        costCenterId: receivable.costCenterId ?? null,
-        categoryId: receivable.categoryId ?? null,
-        referenceType: "receivable",
-        referenceId: receivable.id,
-        createdBy: ctx.actorId,
-      })
-      .returning();
+    const tx = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (authTx) => {
+        // Create immutable credit transaction
+        const txInserted = await authTx
+          .insert(transactions)
+          .values({
+            type: "credito",
+            amount: receivable.amount,
+            description: receivable.description,
+            date: dateStr,
+            accountId: input.bankAccountId,
+            costCenterId: receivable.costCenterId ?? null,
+            categoryId: receivable.categoryId ?? null,
+            referenceType: "receivable",
+            referenceId: receivable.id,
+            createdBy: ctx.actorId,
+          })
+          .returning();
 
-    const tx = txInserted[0];
-    if (!tx) throw new Error("Falha ao criar transação de recebimento");
+        const ledgerTx = txInserted[0];
+        if (!ledgerTx)
+          throw new Error("Falha ao criar transação de recebimento");
 
-    // Update receivable status
-    await db
-      .update(receivables)
-      .set({
-        status: "recebido",
-        receivedDate: dateStr,
-        receivedBy: ctx.actorId,
-        accountId: input.bankAccountId,
-        updatedAt: now,
-      })
-      .where(eq(receivables.id, input.receivableId));
+        // Update receivable status
+        await authTx
+          .update(receivables)
+          .set({
+            status: "recebido",
+            receivedDate: dateStr,
+            receivedBy: ctx.actorId,
+            accountId: input.bankAccountId,
+            updatedAt: now,
+          })
+          .where(eq(receivables.id, input.receivableId));
 
-    await logFinanceiroAudit({
-      actorId: ctx.actorId,
-      action: "financeiro.receivable.received",
-      entity: "receivable",
-      entityId: input.receivableId,
-      diff: {
-        status: { from: "pendente", to: "recebido" },
-        transactionId: tx.id,
-        receivedDate: dateStr,
+        await withSystemRole(authTx, (sysTx) =>
+          logFinanceiroAudit(
+            {
+              actorId: ctx.actorId,
+              action: "financeiro.receivable.received",
+              entity: "receivable",
+              entityId: input.receivableId,
+              diff: {
+                status: { from: "pendente", to: "recebido" },
+                transactionId: ledgerTx.id,
+                receivedDate: dateStr,
+              },
+            },
+            sysTx,
+          ),
+        );
+
+        return ledgerTx;
       },
-    });
+    );
 
     return { receivable: { id: input.receivableId, transactionId: tx.id } };
   });
@@ -290,38 +334,48 @@ export const createManualTransaction = colaboradorAction
       referenceId = input.receivableId;
     }
 
-    const inserted = await db
-      .insert(transactions)
-      .values({
-        type: input.type,
-        amount: input.amount.toString(),
-        description: input.description,
-        date: toDateString(input.occurredAt),
-        accountId: input.bankAccountId,
-        costCenterId: input.costCenterId ?? null,
-        categoryId: input.categoryId ?? null,
-        referenceType,
-        referenceId,
-        createdBy: ctx.actorId,
-      })
-      .returning();
+    const tx = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (authTx) => {
+        const [row] = await authTx
+          .insert(transactions)
+          .values({
+            type: input.type,
+            amount: input.amount.toString(),
+            description: input.description,
+            date: toDateString(input.occurredAt),
+            accountId: input.bankAccountId,
+            costCenterId: input.costCenterId ?? null,
+            categoryId: input.categoryId ?? null,
+            referenceType,
+            referenceId,
+            createdBy: ctx.actorId,
+          })
+          .returning();
+        if (!row) throw new Error("Falha ao criar transação");
 
-    const tx = inserted[0];
-    if (!tx) throw new Error("Falha ao criar transação");
+        await withSystemRole(authTx, (sysTx) =>
+          logFinanceiroAudit(
+            {
+              actorId: ctx.actorId,
+              action: "financeiro.transaction.created",
+              entity: "transaction",
+              entityId: row.id,
+              diff: {
+                type: row.type,
+                amount: row.amount,
+                date: row.date,
+                referenceType,
+                referenceId,
+              },
+            },
+            sysTx,
+          ),
+        );
 
-    await logFinanceiroAudit({
-      actorId: ctx.actorId,
-      action: "financeiro.transaction.created",
-      entity: "transaction",
-      entityId: tx.id,
-      diff: {
-        type: tx.type,
-        amount: tx.amount,
-        date: tx.date,
-        referenceType,
-        referenceId,
+        return row;
       },
-    });
+    );
 
     // Alerta de orçamento (P-3.10) — best-effort, só para débitos com centro
     // de custo vinculado (é o que consome orçamento).
@@ -368,51 +422,67 @@ export const createReversal = superAdminAction
     // Counter-transaction: opposite type
     const reversalType = original.type === "debito" ? "credito" : "debito";
 
-    const reversalTxInserted = await db
-      .insert(transactions)
-      .values({
-        type: reversalType,
-        amount: original.amount,
-        description: `ESTORNO — ${original.description}`,
-        date: new Date().toISOString().split("T")[0] ?? "",
-        accountId: original.accountId,
-        costCenterId: original.costCenterId ?? null,
-        categoryId: original.categoryId ?? null,
-        referenceType: "reversal",
-        referenceId: original.id,
-        createdBy: ctx.actorId,
-      })
-      .returning();
+    const { reversalTx, reversalRecord } = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const reversalTxInserted = await tx
+          .insert(transactions)
+          .values({
+            type: reversalType,
+            amount: original.amount,
+            description: `ESTORNO — ${original.description}`,
+            date: new Date().toISOString().split("T")[0] ?? "",
+            accountId: original.accountId,
+            costCenterId: original.costCenterId ?? null,
+            categoryId: original.categoryId ?? null,
+            referenceType: "reversal",
+            referenceId: original.id,
+            createdBy: ctx.actorId,
+          })
+          .returning();
 
-    const reversalTx = reversalTxInserted[0];
-    if (!reversalTx) throw new Error("Falha ao criar transação de estorno");
+        const insertedReversalTx = reversalTxInserted[0];
+        if (!insertedReversalTx)
+          throw new Error("Falha ao criar transação de estorno");
 
-    // Audit record
-    const reversalRecord = await db
-      .insert(transactionReversals)
-      .values({
-        originalTransactionId: input.originalTransactionId,
-        reversalTransactionId: reversalTx.id,
-        justification: input.reason,
-        createdBy: ctx.actorId,
-      })
-      .returning();
+        // Audit record
+        const reversalRecordInserted = await tx
+          .insert(transactionReversals)
+          .values({
+            originalTransactionId: input.originalTransactionId,
+            reversalTransactionId: insertedReversalTx.id,
+            justification: input.reason,
+            createdBy: ctx.actorId,
+          })
+          .returning();
 
-    await logFinanceiroAudit({
-      actorId: ctx.actorId,
-      action: "financeiro.transaction.reversed",
-      entity: "transaction",
-      entityId: input.originalTransactionId,
-      diff: {
-        reversalTransactionId: reversalTx.id,
-        reason: input.reason,
-        originalAmount: original.amount,
-        originalType: original.type,
+        await withSystemRole(tx, (sysTx) =>
+          logFinanceiroAudit(
+            {
+              actorId: ctx.actorId,
+              action: "financeiro.transaction.reversed",
+              entity: "transaction",
+              entityId: input.originalTransactionId,
+              diff: {
+                reversalTransactionId: insertedReversalTx.id,
+                reason: input.reason,
+                originalAmount: original.amount,
+                originalType: original.type,
+              },
+            },
+            sysTx,
+          ),
+        );
+
+        return {
+          reversalTx: insertedReversalTx,
+          reversalRecord: reversalRecordInserted[0],
+        };
       },
-    });
+    );
 
     return {
       reversalTransaction: reversalTx,
-      reversalRecord: reversalRecord[0],
+      reversalRecord,
     };
   });

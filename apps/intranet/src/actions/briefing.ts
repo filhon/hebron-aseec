@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { db } from "@hebron/db/client";
+import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { briefingPreferences } from "@hebron/db/schema";
 import { staffAction } from "../lib/safe-action";
 
@@ -43,24 +44,29 @@ export const getBriefingPreference = staffAction
 export const saveBriefingPreference = staffAction
   .schema(saveBriefingPreferenceSchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    const [preference] = await db
-      .insert(briefingPreferences)
-      .values({
-        userId: ctx.actorId,
-        enabled: input.enabled,
-        frequency: input.frequency,
-      })
-      .onConflictDoUpdate({
-        target: briefingPreferences.userId,
-        set: {
-          enabled: input.enabled,
-          frequency: input.frequency,
-          updatedAt: new Date(),
-        },
-      })
-      .returning();
-
-    if (!preference) throw new Error("Falha ao salvar preferência de briefing");
+    const preference = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const [row] = await tx
+          .insert(briefingPreferences)
+          .values({
+            userId: ctx.actorId,
+            enabled: input.enabled,
+            frequency: input.frequency,
+          })
+          .onConflictDoUpdate({
+            target: briefingPreferences.userId,
+            set: {
+              enabled: input.enabled,
+              frequency: input.frequency,
+              updatedAt: new Date(),
+            },
+          })
+          .returning();
+        if (!row) throw new Error("Falha ao salvar preferência de briefing");
+        return row;
+      },
+    );
 
     return { preference };
   });

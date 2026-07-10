@@ -6,6 +6,7 @@ import { z } from "zod";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { createSupabaseServerActionClient } from "@hebron/auth/server";
 import { db } from "@hebron/db/client";
+import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import {
   tasks,
   assignees,
@@ -107,41 +108,44 @@ export const createTask = colaboradorAction
   .action(async ({ parsedInput: input, ctx }) => {
     const workspaceId = await resolveWorkspaceId(input.workspace);
 
-    const task = await db.transaction(async (tx) => {
-      const [row] = await tx
-        .insert(tasks)
-        .values({
-          title: input.title,
-          description: input.description,
-          workspaceId,
-          priority: input.priority,
-          dueDate: input.dueDate,
-          source: "manual",
-          createdBy: ctx.actorId,
-        })
-        .returning();
-      if (!row) throw new Error("Falha ao criar tarefa");
+    const task = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const [row] = await tx
+          .insert(tasks)
+          .values({
+            title: input.title,
+            description: input.description,
+            workspaceId,
+            priority: input.priority,
+            dueDate: input.dueDate,
+            source: "manual",
+            createdBy: ctx.actorId,
+          })
+          .returning();
+        if (!row) throw new Error("Falha ao criar tarefa");
 
-      if (input.assigneeIds.length > 0) {
-        await tx
-          .insert(assignees)
-          .values(
-            input.assigneeIds.map((userId) => ({ taskId: row.id, userId })),
-          );
-      }
-      if (input.tagIds.length > 0) {
-        await tx
-          .insert(taskTags)
-          .values(input.tagIds.map((tagId) => ({ taskId: row.id, tagId })));
-      }
+        if (input.assigneeIds.length > 0) {
+          await tx
+            .insert(assignees)
+            .values(
+              input.assigneeIds.map((userId) => ({ taskId: row.id, userId })),
+            );
+        }
+        if (input.tagIds.length > 0) {
+          await tx
+            .insert(taskTags)
+            .values(input.tagIds.map((tagId) => ({ taskId: row.id, tagId })));
+        }
 
-      await logTaskEvent(
-        { taskId: row.id, actorId: ctx.actorId, eventType: "created" },
-        tx,
-      );
+        await logTaskEvent(
+          { taskId: row.id, actorId: ctx.actorId, eventType: "created" },
+          tx,
+        );
 
-      return row;
-    });
+        return row;
+      },
+    );
 
     // Notificação best-effort, fora da transação — falha em notificar não
     // deve desfazer a tarefa já criada (P-4.10).
@@ -187,57 +191,60 @@ export const updateTask = colaboradorAction
 
     let newAssigneeIds: string[] = [];
 
-    const task = await db.transaction(async (tx) => {
-      const [row] = await tx
-        .update(tasks)
-        .set(patch)
-        .where(eq(tasks.id, input.taskId))
-        .returning();
-      if (!row) throw new Error("Tarefa não encontrada");
+    const task = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const [row] = await tx
+          .update(tasks)
+          .set(patch)
+          .where(eq(tasks.id, input.taskId))
+          .returning();
+        if (!row) throw new Error("Tarefa não encontrada");
 
-      if (input.assigneeIds !== undefined) {
-        const previousAssignees = await tx
-          .select({ userId: assignees.userId })
-          .from(assignees)
-          .where(eq(assignees.taskId, input.taskId));
-        const previousIds = new Set(previousAssignees.map((a) => a.userId));
-        newAssigneeIds = input.assigneeIds.filter(
-          (userId) => !previousIds.has(userId),
+        if (input.assigneeIds !== undefined) {
+          const previousAssignees = await tx
+            .select({ userId: assignees.userId })
+            .from(assignees)
+            .where(eq(assignees.taskId, input.taskId));
+          const previousIds = new Set(previousAssignees.map((a) => a.userId));
+          newAssigneeIds = input.assigneeIds.filter(
+            (userId) => !previousIds.has(userId),
+          );
+
+          await tx.delete(assignees).where(eq(assignees.taskId, input.taskId));
+          if (input.assigneeIds.length > 0) {
+            await tx.insert(assignees).values(
+              input.assigneeIds.map((userId) => ({
+                taskId: input.taskId,
+                userId,
+              })),
+            );
+          }
+        }
+        if (input.tagIds !== undefined) {
+          await tx.delete(taskTags).where(eq(taskTags.taskId, input.taskId));
+          if (input.tagIds.length > 0) {
+            await tx
+              .insert(taskTags)
+              .values(
+                input.tagIds.map((tagId) => ({ taskId: input.taskId, tagId })),
+              );
+          }
+        }
+
+        await logTaskEvent(
+          {
+            taskId: input.taskId,
+            actorId: ctx.actorId,
+            eventType: "updated",
+            diff: patch,
+          },
+          tx,
         );
 
-        await tx.delete(assignees).where(eq(assignees.taskId, input.taskId));
-        if (input.assigneeIds.length > 0) {
-          await tx.insert(assignees).values(
-            input.assigneeIds.map((userId) => ({
-              taskId: input.taskId,
-              userId,
-            })),
-          );
-        }
-      }
-      if (input.tagIds !== undefined) {
-        await tx.delete(taskTags).where(eq(taskTags.taskId, input.taskId));
-        if (input.tagIds.length > 0) {
-          await tx
-            .insert(taskTags)
-            .values(
-              input.tagIds.map((tagId) => ({ taskId: input.taskId, tagId })),
-            );
-        }
-      }
-
-      await logTaskEvent(
-        {
-          taskId: input.taskId,
-          actorId: ctx.actorId,
-          eventType: "updated",
-          diff: patch,
-        },
-        tx,
-      );
-
-      return row;
-    });
+        return row;
+      },
+    );
 
     // Notificação best-effort, só para responsáveis novos (evita renotificar
     // a cada edição quem já era responsável) — P-4.10.
@@ -265,30 +272,33 @@ export const updateTaskStatus = colaboradorAction
     }
 
     const now = new Date();
-    const task = await db.transaction(async (tx) => {
-      const [row] = await tx
-        .update(tasks)
-        .set({
-          status: input.status,
-          updatedAt: now,
-          completedAt: input.status === "concluido" ? now : null,
-        })
-        .where(eq(tasks.id, input.taskId))
-        .returning();
-      if (!row) throw new Error("Tarefa não encontrada");
+    const task = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const [row] = await tx
+          .update(tasks)
+          .set({
+            status: input.status,
+            updatedAt: now,
+            completedAt: input.status === "concluido" ? now : null,
+          })
+          .where(eq(tasks.id, input.taskId))
+          .returning();
+        if (!row) throw new Error("Tarefa não encontrada");
 
-      await logTaskEvent(
-        {
-          taskId: input.taskId,
-          actorId: ctx.actorId,
-          eventType: "status_changed",
-          diff: { status: input.status },
-        },
-        tx,
-      );
+        await logTaskEvent(
+          {
+            taskId: input.taskId,
+            actorId: ctx.actorId,
+            eventType: "status_changed",
+            diff: { status: input.status },
+          },
+          tx,
+        );
 
-      return row;
-    });
+        return row;
+      },
+    );
 
     return { task };
   });
@@ -311,21 +321,24 @@ export const deleteTask = colaboradorAction
       );
     }
 
-    const task = await db.transaction(async (tx) => {
-      const [row] = await tx
-        .update(tasks)
-        .set({ deletedAt: new Date() })
-        .where(eq(tasks.id, input.taskId))
-        .returning();
-      if (!row) throw new Error("Tarefa não encontrada");
+    const task = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const [row] = await tx
+          .update(tasks)
+          .set({ deletedAt: new Date() })
+          .where(eq(tasks.id, input.taskId))
+          .returning();
+        if (!row) throw new Error("Tarefa não encontrada");
 
-      await logTaskEvent(
-        { taskId: input.taskId, actorId: ctx.actorId, eventType: "deleted" },
-        tx,
-      );
+        await logTaskEvent(
+          { taskId: input.taskId, actorId: ctx.actorId, eventType: "deleted" },
+          tx,
+        );
 
-      return row;
-    });
+        return row;
+      },
+    );
 
     return { task };
   });
@@ -345,33 +358,39 @@ const assignTaskManuallySchema = z.object({
 export const assignTaskManually = superAdminAction
   .schema(assignTaskManuallySchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    const task = await db.transaction(async (tx) => {
-      await tx
-        .insert(assignees)
-        .values(
-          input.assigneeIds.map((userId) => ({ taskId: input.taskId, userId })),
-        )
-        .onConflictDoNothing();
+    const task = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        await tx
+          .insert(assignees)
+          .values(
+            input.assigneeIds.map((userId) => ({
+              taskId: input.taskId,
+              userId,
+            })),
+          )
+          .onConflictDoNothing();
 
-      const [row] = await tx
-        .update(tasks)
-        .set({ needsManualAssignment: false, updatedAt: new Date() })
-        .where(eq(tasks.id, input.taskId))
-        .returning();
-      if (!row) throw new Error("Tarefa não encontrada");
+        const [row] = await tx
+          .update(tasks)
+          .set({ needsManualAssignment: false, updatedAt: new Date() })
+          .where(eq(tasks.id, input.taskId))
+          .returning();
+        if (!row) throw new Error("Tarefa não encontrada");
 
-      await logTaskEvent(
-        {
-          taskId: input.taskId,
-          actorId: ctx.actorId,
-          eventType: "assigned_manually",
-          diff: { assigneeIds: input.assigneeIds },
-        },
-        tx,
-      );
+        await logTaskEvent(
+          {
+            taskId: input.taskId,
+            actorId: ctx.actorId,
+            eventType: "assigned_manually",
+            diff: { assigneeIds: input.assigneeIds },
+          },
+          tx,
+        );
 
-      return row;
-    });
+        return row;
+      },
+    );
 
     // Notificação best-effort — fecha o ciclo de createAutoTask (P-4.10).
     await notifyTaskAssigned(input.taskId, input.assigneeIds, ctx.actorId);
@@ -401,23 +420,33 @@ export const createSubtask = colaboradorAction
       .from(subtasks)
       .where(eq(subtasks.taskId, input.taskId));
 
-    const [subtask] = await db
-      .insert(subtasks)
-      .values({
-        taskId: input.taskId,
-        title: input.title,
-        assigneeId: input.assigneeId,
-        order: countRow?.count ?? 0,
-      })
-      .returning();
-    if (!subtask) throw new Error("Falha ao criar subtarefa");
+    const subtask = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const [row] = await tx
+          .insert(subtasks)
+          .values({
+            taskId: input.taskId,
+            title: input.title,
+            assigneeId: input.assigneeId,
+            order: countRow?.count ?? 0,
+          })
+          .returning();
+        if (!row) throw new Error("Falha ao criar subtarefa");
 
-    await logTaskEvent({
-      taskId: input.taskId,
-      actorId: ctx.actorId,
-      eventType: "subtask_created",
-      diff: { title: input.title },
-    });
+        await logTaskEvent(
+          {
+            taskId: input.taskId,
+            actorId: ctx.actorId,
+            eventType: "subtask_created",
+            diff: { title: input.title },
+          },
+          tx,
+        );
+
+        return row;
+      },
+    );
 
     return { subtask };
   });
@@ -441,22 +470,32 @@ export const toggleSubtask = colaboradorAction
       );
     }
 
-    const [subtask] = await db
-      .update(subtasks)
-      .set({
-        completed: input.isDone,
-        completedAt: input.isDone ? new Date() : null,
-      })
-      .where(eq(subtasks.id, input.subtaskId))
-      .returning();
-    if (!subtask) throw new Error("Falha ao atualizar subtarefa");
+    const subtask = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const [row] = await tx
+          .update(subtasks)
+          .set({
+            completed: input.isDone,
+            completedAt: input.isDone ? new Date() : null,
+          })
+          .where(eq(subtasks.id, input.subtaskId))
+          .returning();
+        if (!row) throw new Error("Falha ao atualizar subtarefa");
 
-    await logTaskEvent({
-      taskId: existing.taskId,
-      actorId: ctx.actorId,
-      eventType: "subtask_toggled",
-      diff: { subtaskId: input.subtaskId, isDone: input.isDone },
-    });
+        await logTaskEvent(
+          {
+            taskId: existing.taskId,
+            actorId: ctx.actorId,
+            eventType: "subtask_toggled",
+            diff: { subtaskId: input.subtaskId, isDone: input.isDone },
+          },
+          tx,
+        );
+
+        return row;
+      },
+    );
 
     return { subtask };
   });
@@ -498,26 +537,36 @@ export const createAttachment = staffAction
     if (error)
       throw new Error(`Falha ao gerar URL de upload: ${error.message}`);
 
-    const [attachment] = await db
-      .insert(taskAttachments)
-      .values({
-        parentType: input.parentType,
-        parentId: input.parentId,
-        storageKey,
-        fileName: input.fileName,
-        fileSizeBytes: input.fileSizeBytes,
-        mimeType: input.mimeType,
-        uploadedBy: ctx.actorId,
-      })
-      .returning();
-    if (!attachment) throw new Error("Falha ao registrar anexo");
+    const attachment = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const [row] = await tx
+          .insert(taskAttachments)
+          .values({
+            parentType: input.parentType,
+            parentId: input.parentId,
+            storageKey,
+            fileName: input.fileName,
+            fileSizeBytes: input.fileSizeBytes,
+            mimeType: input.mimeType,
+            uploadedBy: ctx.actorId,
+          })
+          .returning();
+        if (!row) throw new Error("Falha ao registrar anexo");
 
-    await logTaskEvent({
-      taskId,
-      actorId: ctx.actorId,
-      eventType: "attachment_added",
-      diff: { fileName: input.fileName },
-    });
+        await logTaskEvent(
+          {
+            taskId,
+            actorId: ctx.actorId,
+            eventType: "attachment_added",
+            diff: { fileName: input.fileName },
+          },
+          tx,
+        );
+
+        return row;
+      },
+    );
 
     return { attachment, uploadUrl: data.signedUrl };
   });

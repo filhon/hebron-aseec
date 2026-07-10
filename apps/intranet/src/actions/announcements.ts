@@ -3,6 +3,10 @@
 import { z } from "zod";
 import { desc, eq } from "drizzle-orm";
 import { db } from "@hebron/db/client";
+import {
+  withAuthenticatedContext,
+  withSystemRole,
+} from "@hebron/db/authenticated";
 import { announcements, users } from "@hebron/db/schema";
 import {
   createAnnouncementSchema,
@@ -36,26 +40,37 @@ export const listAnnouncements = staffAction
 export const createAnnouncement = boardAction
   .schema(createAnnouncementSchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    const [announcement] = await db
-      .insert(announcements)
-      .values({
-        title: input.title,
-        body: input.body,
-        priority: input.priority,
-        authorId: ctx.actorId,
-        publishedAt: new Date(),
-      })
-      .returning();
+    const announcement = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const [row] = await tx
+          .insert(announcements)
+          .values({
+            title: input.title,
+            body: input.body,
+            priority: input.priority,
+            authorId: ctx.actorId,
+            publishedAt: new Date(),
+          })
+          .returning();
+        if (!row) throw new Error("Falha ao criar anúncio");
 
-    if (!announcement) throw new Error("Falha ao criar anúncio");
+        await withSystemRole(tx, (sysTx) =>
+          logIntranetAudit(
+            {
+              actorId: ctx.actorId,
+              action: "announcement.created",
+              entity: "announcement",
+              entityId: row.id,
+              diff: { title: row.title, priority: row.priority },
+            },
+            sysTx,
+          ),
+        );
 
-    await logIntranetAudit({
-      actorId: ctx.actorId,
-      action: "announcement.created",
-      entity: "announcement",
-      entityId: announcement.id,
-      diff: { title: announcement.title, priority: announcement.priority },
-    });
+        return row;
+      },
+    );
 
     // Anúncio urgente: in_app + email imediato a todos os internos
     // (critério de aceite P-5.10). Normal/importante ficam só no feed.
@@ -97,29 +112,40 @@ export const updateAnnouncement = superAdminAction
     const existing = rows[0];
     if (!existing) throw new Error("Anúncio não encontrado");
 
-    const [updated] = await db
-      .update(announcements)
-      .set({
-        title: input.title,
-        body: input.body,
-        priority: input.priority,
-        updatedAt: new Date(),
-      })
-      .where(eq(announcements.id, input.announcementId))
-      .returning();
+    const updated = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const [row] = await tx
+          .update(announcements)
+          .set({
+            title: input.title,
+            body: input.body,
+            priority: input.priority,
+            updatedAt: new Date(),
+          })
+          .where(eq(announcements.id, input.announcementId))
+          .returning();
+        if (!row) throw new Error("Falha ao atualizar anúncio");
 
-    if (!updated) throw new Error("Falha ao atualizar anúncio");
+        await withSystemRole(tx, (sysTx) =>
+          logIntranetAudit(
+            {
+              actorId: ctx.actorId,
+              action: "announcement.updated",
+              entity: "announcement",
+              entityId: row.id,
+              diff: {
+                title: { before: existing.title, after: row.title },
+                priority: { before: existing.priority, after: row.priority },
+              },
+            },
+            sysTx,
+          ),
+        );
 
-    await logIntranetAudit({
-      actorId: ctx.actorId,
-      action: "announcement.updated",
-      entity: "announcement",
-      entityId: updated.id,
-      diff: {
-        title: { before: existing.title, after: updated.title },
-        priority: { before: existing.priority, after: updated.priority },
+        return row;
       },
-    });
+    );
 
     return { announcement: updated };
   });

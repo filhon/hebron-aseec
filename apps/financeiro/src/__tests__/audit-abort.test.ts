@@ -16,6 +16,7 @@ import { db } from "@hebron/db/client";
 import {
   users,
   roleAssignments,
+  designations,
   payables,
   batchApprovals,
   batchApprovalItems,
@@ -67,6 +68,17 @@ beforeAll(async () => {
     .values({ userId: IDS.diretor, role: "diretor", grantedBy: IDS.diretor })
     .onConflictDoNothing();
 
+  // financeiro.batch_approvals_update_gestor (0011_financeiro_rls.sql) exige
+  // public.has_designation('gestor') de verdade — o mock de resolveSession
+  // abaixo já reivindica "gestor" no gate JS, mas agora que approveBatch
+  // roda sob RLS real (P-0.17) a policy também precisa de uma linha real em
+  // public.designations, senão o UPDATE de batch_approvals é barrado pela
+  // RLS mesmo com o gate JS satisfeito.
+  await db
+    .insert(designations)
+    .values({ userId: IDS.diretor, type: "gestor", assignedBy: IDS.diretor })
+    .onConflictDoNothing();
+
   await db.insert(payables).values({
     id: IDS.payable,
     description: "Payable Audit Abort Test",
@@ -95,6 +107,7 @@ afterAll(async () => {
   await db.delete(batchApprovals).where(eq(batchApprovals.id, IDS.batch));
   await db.delete(payables).where(eq(payables.id, IDS.payable));
   await db.delete(auditLog).where(eq(auditLog.actorId, IDS.diretor));
+  await db.delete(designations).where(eq(designations.userId, IDS.diretor));
   await db
     .delete(roleAssignments)
     .where(eq(roleAssignments.userId, IDS.diretor));

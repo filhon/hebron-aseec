@@ -2,7 +2,10 @@
 
 import { z } from "zod";
 import { eq } from "drizzle-orm";
-import { db } from "@hebron/db/client";
+import {
+  withAuthenticatedContext,
+  withSystemRole,
+} from "@hebron/db/authenticated";
 import { meetingDecisions } from "@hebron/db/schema";
 import { createMeetingDecisionSchema } from "@hebron/validators/intranet";
 import { createAutoTask } from "@hebron/integrations/tarefas";
@@ -30,18 +33,28 @@ const createMeetingDecisionActionSchema = createMeetingDecisionSchema.extend({
 export const createMeetingDecision = superAdminAction
   .schema(createMeetingDecisionActionSchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    const [decision] = await db
-      .insert(meetingDecisions)
-      .values({
-        meetingSessionId: input.meetingSessionId,
-        description: input.description,
-        responsibleId: input.responsibleId,
-        dueDate: input.dueDate,
-      })
-      .returning();
+    const decision = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const [row] = await tx
+          .insert(meetingDecisions)
+          .values({
+            meetingSessionId: input.meetingSessionId,
+            description: input.description,
+            responsibleId: input.responsibleId,
+            dueDate: input.dueDate,
+          })
+          .returning();
+        if (!row) throw new Error("Falha ao registrar decisão de reunião");
+        return row;
+      },
+    );
 
-    if (!decision) throw new Error("Falha ao registrar decisão de reunião");
-
+    // createAutoTask (packages/integrations) grava como o ator sistema
+    // (getSystemActorId), fora do papel do usuário corrente — não entra na
+    // mesma transação autenticada acima (mesmo padrão de packages/jobs:
+    // ator sistema tem seu próprio caminho de escrita, fora de escopo do
+    // P-0.17).
     let taskId: string | null = null;
     if (input.createTask) {
       const taskTitle = `Decisão de reunião: ${input.description}`.slice(
@@ -57,23 +70,32 @@ export const createMeetingDecision = superAdminAction
       });
       taskId = createdTaskId;
 
-      await db
-        .update(meetingDecisions)
-        .set({ taskId, updatedAt: new Date() })
-        .where(eq(meetingDecisions.id, decision.id));
+      await withAuthenticatedContext({ actorId: ctx.actorId }, (tx) =>
+        tx
+          .update(meetingDecisions)
+          .set({ taskId, updatedAt: new Date() })
+          .where(eq(meetingDecisions.id, decision.id)),
+      );
     }
 
-    await logIntranetAudit({
-      actorId: ctx.actorId,
-      action: "meeting_decision.created",
-      entity: "meeting_decision",
-      entityId: decision.id,
-      diff: {
-        meetingSessionId: decision.meetingSessionId,
-        responsibleId: decision.responsibleId,
-        taskId,
-      },
-    });
+    await withAuthenticatedContext({ actorId: ctx.actorId }, (tx) =>
+      withSystemRole(tx, (sysTx) =>
+        logIntranetAudit(
+          {
+            actorId: ctx.actorId,
+            action: "meeting_decision.created",
+            entity: "meeting_decision",
+            entityId: decision.id,
+            diff: {
+              meetingSessionId: decision.meetingSessionId,
+              responsibleId: decision.responsibleId,
+              taskId,
+            },
+          },
+          sysTx,
+        ),
+      ),
+    );
 
     // Decisão de reunião: in_app para a diretoria (critério de aceite P-5.10).
     await notifyMeetingDecisionCreated({

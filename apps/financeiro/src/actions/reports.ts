@@ -16,6 +16,10 @@ import {
   View,
 } from "@react-pdf/renderer";
 import { db } from "@hebron/db/client";
+import {
+  withAuthenticatedContext,
+  withSystemRole,
+} from "@hebron/db/authenticated";
 import { financialAttachments, payables, receivables } from "@hebron/db/schema";
 import { getCategories, getTransactions } from "../lib/queries";
 import { superAdminAction } from "../lib/safe-action";
@@ -392,16 +396,23 @@ export const exportMonthlyReport = superAdminAction
       ...receiptEntries,
     ]);
 
-    await logFinanceiroAudit({
-      actorId: ctx.actorId,
-      action: "financeiro.report.exported",
-      entity: "monthly_report",
-      diff: {
-        year: input.year,
-        month: input.month,
-        receiptCount: receiptEntries.length,
-      },
-    });
+    await withAuthenticatedContext({ actorId: ctx.actorId }, (tx) =>
+      withSystemRole(tx, (sysTx) =>
+        logFinanceiroAudit(
+          {
+            actorId: ctx.actorId,
+            action: "financeiro.report.exported",
+            entity: "monthly_report",
+            diff: {
+              year: input.year,
+              month: input.month,
+              receiptCount: receiptEntries.length,
+            },
+          },
+          sysTx,
+        ),
+      ),
+    );
 
     return {
       fileName: `relatorio-financeiro-${fileSuffix}.zip`,

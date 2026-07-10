@@ -2,6 +2,7 @@
 
 import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@hebron/db/client";
+import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { comments, tasks } from "@hebron/db/schema";
 import { makeNotificationInserter } from "@hebron/db/notifications";
 import { createNotification } from "@hebron/email";
@@ -26,16 +27,22 @@ export const createComment = staffAction
       .limit(1);
     if (!task) throw new Error("Tarefa não encontrada");
 
-    const [comment] = await db
-      .insert(comments)
-      .values({
-        taskId: input.taskId,
-        authorId: ctx.actorId,
-        content: input.content,
-        mentions: input.mentions,
-      })
-      .returning();
-    if (!comment) throw new Error("Falha ao criar comentário");
+    const comment = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const [row] = await tx
+          .insert(comments)
+          .values({
+            taskId: input.taskId,
+            authorId: ctx.actorId,
+            content: input.content,
+            mentions: input.mentions,
+          })
+          .returning();
+        if (!row) throw new Error("Falha ao criar comentário");
+        return row;
+      },
+    );
 
     for (const mentionedUserId of input.mentions) {
       if (mentionedUserId === ctx.actorId) continue;
