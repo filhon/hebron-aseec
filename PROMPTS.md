@@ -3304,12 +3304,12 @@ Notificações: anúncio urgente (in_app + email para todos os papéis internos 
 
 **Critérios de aceite:**
 
-- [ ] Anúncio urgente: in_app + email imediato a todos os internos
-- [ ] Anúncio normal/importante: apenas in_app/feed (sem email em massa)
-- [ ] Briefing: cron registrado em packages/jobs respeitando enabled + frequency por usuário (teste)
-- [ ] Briefing: resumo com KPIs + últimos eventos
-- [ ] Nenhum envio de relatório financeiro neste módulo (grep monthly-financial)
-- [ ] Lint passa · Types passam
+- [x] Anúncio urgente: in_app + email imediato a todos os internos
+- [x] Anúncio normal/importante: apenas in_app/feed (sem email em massa)
+- [x] Briefing: cron registrado em packages/jobs respeitando enabled + frequency por usuário (teste)
+- [x] Briefing: resumo com KPIs + últimos eventos
+- [x] Nenhum envio de relatório financeiro neste módulo (grep monthly-financial)
+- [x] Lint passa · Types passam
 
 ---
 

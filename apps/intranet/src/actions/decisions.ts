@@ -8,6 +8,7 @@ import { createMeetingDecisionSchema } from "@hebron/validators/intranet";
 import { createAutoTask } from "@hebron/integrations/tarefas";
 import { superAdminAction } from "../lib/safe-action";
 import { logIntranetAudit } from "../lib/audit";
+import { notifyMeetingDecisionCreated } from "../lib/notifications";
 
 // ---------------------------------------------------------------------------
 // createMeetingDecision — registra a decisão de uma reunião (ata).
@@ -72,6 +73,12 @@ export const createMeetingDecision = superAdminAction
         responsibleId: decision.responsibleId,
         taskId,
       },
+    });
+
+    // Decisão de reunião: in_app para a diretoria (critério de aceite P-5.10).
+    await notifyMeetingDecisionCreated({
+      id: decision.id,
+      description: decision.description,
     });
 
     return { decision: { ...decision, taskId: taskId ?? decision.taskId } };

@@ -25,15 +25,6 @@ export interface PlannedJob {
 
 export const PLANNED_JOBS: PlannedJob[] = [
   {
-    id: "intranet-briefing",
-    name: "Intranet: briefing diário/semanal",
-    cron: "0 7 * * *",
-    sourcePrompt: "P-5.8/P-5.10",
-    description:
-      "Envia o briefing personalizado (preferências em " +
-      "`intranet.briefing_preferences`). Aguarda P-5.8/P-5.10.",
-  },
-  {
     id: "flats-checkin-reminder",
     name: "Flats: instruções de check-in (3 dias antes)",
     cron: "0 8 * * *",

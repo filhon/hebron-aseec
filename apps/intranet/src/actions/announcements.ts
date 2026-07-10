@@ -3,13 +3,14 @@
 import { z } from "zod";
 import { desc, eq } from "drizzle-orm";
 import { db } from "@hebron/db/client";
-import { announcements } from "@hebron/db/schema";
+import { announcements, users } from "@hebron/db/schema";
 import {
   createAnnouncementSchema,
   updateAnnouncementSchema,
 } from "@hebron/validators/intranet";
 import { boardAction, staffAction, superAdminAction } from "../lib/safe-action";
 import { logIntranetAudit } from "../lib/audit";
+import { notifyUrgentAnnouncement } from "../lib/notifications";
 
 // ---------------------------------------------------------------------------
 // listAnnouncements — feed de anúncios (equipe interna).
@@ -55,6 +56,24 @@ export const createAnnouncement = boardAction
       entityId: announcement.id,
       diff: { title: announcement.title, priority: announcement.priority },
     });
+
+    // Anúncio urgente: in_app + email imediato a todos os internos
+    // (critério de aceite P-5.10). Normal/importante ficam só no feed.
+    if (announcement.priority === "urgente") {
+      const [author] = await db
+        .select({ fullName: users.fullName, email: users.email })
+        .from(users)
+        .where(eq(users.id, announcement.authorId))
+        .limit(1);
+
+      await notifyUrgentAnnouncement({
+        id: announcement.id,
+        title: announcement.title,
+        body: announcement.body,
+        authorName: author?.fullName ?? author?.email ?? "Diretoria",
+        publishedAt: announcement.publishedAt ?? new Date(),
+      });
+    }
 
     return { announcement };
   });

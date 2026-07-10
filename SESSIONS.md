@@ -114,6 +114,7 @@
 | S-91   | 2026-07-09 | P-5.7 — RLS Policies Intranet                                           | concluido                            |
 | S-92   | 2026-07-09 | P-5.8 — Server Actions Intranet                                         | concluido                            |
 | S-93   | 2026-07-09 | P-5.9 — Integração UI ↔ Backend Intranet                                | concluido                            |
+| S-94   | 2026-07-10 | P-5.10 — Notificações e Emails Intranet                                 | concluido                            |
 
 ---
 
@@ -5017,4 +5018,100 @@ interno; `shell.tsx` novo Client Component com `usePathname`; `actions/auth.ts` 
 - `apps/intranet/src/components/meeting-decision-dialog.tsx` (novo)
 - `apps/intranet/src/components/briefing-config-dialog.tsx` (novo)
 - `apps/intranet/src/components/search-global.tsx` (editado — busca assíncrona real)
+
+---
+
+### S-94 — 2026-07-10 — P-5.10 Notificações e Emails Intranet
+
+**Prompt:** P-5.10
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Anúncio urgente (`priority = "urgente"`) agora dispara in_app + email imediato a
+toda a equipe interna via `notifyUrgentAnnouncement` (novo, `lib/notifications.ts`)
+e o template `UrgentAnnouncementEmail`. Decisão de reunião notifica a diretoria
+in_app via `notifyMeetingDecisionCreated`. Briefing diário/semanal virou cron real
+em `packages/jobs/src/crons/briefing.ts` (`briefingCron`), respeitando
+`intranet.briefing_preferences` (enabled + frequency), com KPIs (lidos do cache
+`intranet.kpi_snapshots`) e últimos eventos (anúncios/decisões) via o template
+`BriefingEmail`. Nenhum código do relatório financeiro mensal (P-3.10) foi tocado
+ou duplicado.
+
+**Decisoes tomadas:**
+
+- **`actions/announcements.ts` e `actions/decisions.ts` editados fora da lista de
+  arquivos permitidos do prompt** — a lista oficial só cobria os templates novos e
+  `lib/notifications.ts`, mas os dois helpers novos (`notifyUrgentAnnouncement`,
+  `notifyMeetingDecisionCreated`) ficariam órfãos sem um ponto de disparo: nenhuma
+  Server Action os chamaria e os critérios de aceite ("in_app + email imediato",
+  "in_app para diretores") não seriam atendidos com as funções apenas definidas e
+  nunca invocadas. Mesmo padrão de débito de infraestrutura já registrado em S-93
+  (`actions/briefing.ts` criado fora da lista de P-5.9). Ambas as edições são
+  pontuais: um `if (priority === "urgente")` após o audit log em `createAnnouncement`,
+  e uma chamada após o audit log em `createMeetingDecision` — nenhuma tela nem regra
+  de negócio nova.
+- **Destinatários de "todos os papéis internos"**: reutilizado o mesmo conjunto de
+  `(dashboard)/layout.tsx::INTERNAL_ROLES` (super_admin/diretor/conselheiro/
+  colaborador — não exportado de lá, duplicado em `lib/notifications.ts` com
+  comentário apontando a fonte), igual ao gate que já protege o app inteiro (G5).
+- **Destinatários de "diretores" na decisão de reunião**: BRAIN/PROMPTS não
+  detalham a lista exata; assumido o mesmo conjunto de `boardAction`
+  (diretor/conselheiro/super_admin) — quem já tem SELECT em
+  `intranet.meeting_decisions` via RLS (`0037_intranet_rls.sql:
+meeting_decisions_select_board`) mais super_admin. Suposição registrada por G1.
+- **Briefing lê `intranet.kpi_snapshots` em vez de recomputar KPIs ao vivo** —
+  evita uma 3ª cópia das mesmas 3 queries (já duplicadas entre
+  `apps/intranet/src/actions/kpis.ts` e `packages/jobs/src/crons/intranet.ts::
+runKpiSnapshot`, ambas fora da lista de arquivos permitidos deste prompt). Se o
+  cron horário de snapshot ainda não rodou no período corrente, os KPIs aparecem
+  zerados no briefing — aceitável para um resumo periódico, não crítico como o
+  relatório financeiro mensal.
+- **Cadência semanal fixada em segundas-feiras**: o cron roda todo dia às 7h (era o
+  cron sugerido em `catalog.ts::PLANNED_JOBS`), mas só envia aos usuários com
+  `frequency = "semanal"` quando `today` cai numa segunda-feira
+  (`isWeeklyRunDay`). BRAIN/PROMPTS não especificam o dia da semana; escolhida a
+  opção mais simples (G1), registrada aqui.
+- **Entrada `intranet-briefing` removida de `packages/jobs/src/catalog.ts::
+PLANNED_JOBS`** — a função Inngest real (`briefingCron`) substitui o placeholder,
+  conforme o próprio comentário do arquivo pede (G6.6).
+- **Sem novo valor de `admin.audit_action`**: os disparos de notificação são
+  efeito colateral de mutações já auditadas (`announcement.created`,
+  `meeting_decision.created`); não há decisão de governança nova para auditar —
+  mesmo padrão de `financeiro.ts::runMonthlyReport`, que também não audita o envio
+  de cada email individualmente.
+
+**Criterios de aceite verificados:**
+
+- [x] Anúncio urgente: in_app + email imediato a todos os internos
+      (`notifyUrgentAnnouncement`, disparado de `createAnnouncement` quando
+      `priority === "urgente"`)
+- [x] Anúncio normal/importante: apenas in_app/feed (função só é chamada para
+      `priority === "urgente"`; sem email em massa para os demais)
+- [x] Briefing: cron registrado em `packages/jobs` (`briefingCron`, `packages/jobs/
+    src/index.ts::functions`) respeitando `enabled` + `frequency` por usuário —
+      testado em `packages/jobs/src/__tests__/briefing.test.ts` (3 casos: diário,
+      semanal em segunda, desativado nunca recebe)
+- [x] Briefing: resumo com KPIs (`intranet.kpi_snapshots`) + últimos eventos
+      (últimos 5 anúncios + últimas 5 decisões de reunião)
+- [x] Nenhum envio de relatório financeiro neste módulo — `grep -rn
+    "monthly-financial"` nos arquivos novos só encontra um comentário
+      explicando que o cron de P-3.10 não foi duplicado
+- [x] Lint passa (`pnpm turbo lint` — `@hebron/email`, `@hebron/jobs`,
+      `@hebron/intranet`)
+- [x] Types passam (`pnpm turbo typecheck` — mesmos 3 pacotes)
+
+**Arquivos:**
+
+- `packages/email/src/templates/urgent-announcement.tsx` (novo)
+- `packages/email/src/templates/briefing.tsx` (novo)
+- `apps/intranet/src/lib/notifications.ts` (editado)
+- `packages/jobs/src/crons/briefing.ts` (novo)
+- `apps/intranet/src/actions/announcements.ts` (editado — fora da lista permitida,
+  débito registrado acima)
+- `apps/intranet/src/actions/decisions.ts` (editado — fora da lista permitida,
+  débito registrado acima)
+- `packages/jobs/src/index.ts` (editado — registro de `briefingCron`)
+- `packages/jobs/src/catalog.ts` (editado — remoção do placeholder `intranet-briefing`)
+- `packages/jobs/src/__tests__/briefing.test.ts` (novo)
 - `apps/intranet/src/lib/mock-data.ts` (removido)

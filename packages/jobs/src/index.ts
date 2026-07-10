@@ -14,6 +14,7 @@ import {
 } from "./crons/projetos";
 import { projetosInadimplenciaCron } from "./crons/projetos-inadimplencia";
 import { kpiSnapshotCron } from "./crons/intranet";
+import { briefingCron } from "./crons/briefing";
 import { tarefasRecurrenceCron } from "./crons/tarefas";
 import { tarefasPrazosCron } from "./crons/tarefas-prazos";
 
@@ -35,6 +36,7 @@ export const functions = [
   tarefasRecurrenceCron,
   tarefasPrazosCron,
   kpiSnapshotCron,
+  briefingCron,
 ];
 
 export { PLANNED_JOBS } from "./catalog";
