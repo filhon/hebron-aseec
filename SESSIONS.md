@@ -117,6 +117,7 @@
 | S-94   | 2026-07-10 | P-5.10 — Notificações e Emails Intranet                                 | concluido                            |
 | S-95   | 2026-07-10 | P-0.17 — Runtime RLS para mutações críticas (PATCH-016)                 | concluido                            |
 | S-96   | 2026-07-10 | P-5.9b — Intranet: decisões por presidente da sessão (PATCH-017)        | concluido                            |
+| S-97   | 2026-07-10 | P-5.9c — Intranet: snapshot de KPIs e tendências (PATCH-018)            | concluido                            |
 
 ---
 
@@ -5362,3 +5363,88 @@ Corrigido com `0042_intranet_meeting_decisions_select_admin.sql`
 - `apps/intranet/src/app/(dashboard)/reunioes/page.tsx` (`canRegisterDecision`/`canEditStatus` por presidente de sessão)
 
 **Migrations aplicadas:** `0040`, `0041`, `0042` via `pnpm db:migrate` (banco Supabase remoto, confirmado com o Filipe antes de rodar por afetar RLS em produção).
+
+---
+
+### S-97 — 2026-07-10 — P-5.9c Intranet: snapshot de KPIs e tendências (PATCH-018)
+
+**Prompt:** P-5.9c (`PATCHES/018-intranet-kpi-snapshots-fallback-trends.md`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Verificado contra o código atual que o débito do PATCH-018 era real: `getKpis`
+(`apps/intranet/src/actions/kpis.ts`) sempre recalculava as 3 métricas
+persistíveis ao vivo e retornava `trend: "stable"` fixo, ignorando
+`intranet.kpi_snapshots` (criada em P-5.6, cron horário criado em P-5.8) —
+débito já registrado em S-93 e nunca resolvido.
+
+Durante a verificação, identificado um consumidor não listado no PATCH-018:
+`packages/jobs/src/crons/briefing.ts::getKpis` lê `intranet.kpi_snapshots`
+assumindo exatamente 1 linha por `metric_name`/`period` (sem `ORDER BY`/
+`LIMIT`). A "Nota de modelagem" do patch sugeria trocar a unique key de
+`kpi_snapshots` para incluir `bucket_hour`, o que quebraria essa suposição
+silenciosamente (múltiplas linhas por período, `Map` ficaria com uma linha
+arbitrária). Confirmado com o Filipe: em vez de alterar `kpi_snapshots`,
+criada uma tabela nova só para a série temporal —
+`intranet.kpi_snapshot_history` (`metric_name`, `value`, `bucket_hour`,
+`captured_at`, unique em `metric_name`+`bucket_hour`, RLS espelhando
+`kpi_snapshots`: SELECT para staff, mutação só `super_admin`). `kpi_snapshots`
+e `briefing.ts` ficaram intocados.
+
+`runKpiSnapshot` (`packages/jobs/src/crons/intranet.ts`) passou a gravar nas
+duas tabelas a cada execução horária: upsert em `kpi_snapshots` (cache
+"atual", como antes) e upsert em `kpi_snapshot_history` por
+`metric_name`/`bucket_hour` (nova linha a cada hora — histórico
+insert-per-hour, idempotente dentro da mesma hora).
+
+`getKpis` passou a ler os 2 pontos mais recentes de `kpi_snapshot_history`
+por métrica persistível (`projetos_ativos`, `doacoes_mes`, `tarefas_abertas`):
+se todos tiverem ponto com `captured_at` há menos de 2h, monta o KPI a partir
+do snapshot e calcula `trend` comparando com o ponto anterior (`up`/`down`/
+`stable`, `stable` se não houver ponto anterior); se qualquer um estiver
+ausente ou velho, recalcula ao vivo para o conjunto inteiro (`trend: "stable"`
+em todos), evitando misturar snapshot de uma métrica com live de outra.
+"Alunos na Plataforma" continua stub, fora do escopo até Fase 6.
+
+**Decisões tomadas:**
+
+- **Tabela de histórico separada em vez de alterar `kpi_snapshots`** —
+  confirmado com o Filipe (pergunta direta durante a sessão) por preservar
+  `briefing.ts` sem tocar em arquivo fora da lista de permitidos do
+  PATCH-018 e sem risco de regressão silenciosa num consumidor existente.
+- **`period` exibido em `getKpis` continua calculado em request-time**
+  (`currentPeriodLabel()`), não lido do snapshot — cosmético, a janela de
+  frescor de 2h praticamente garante o mesmo mês; mantém o comportamento já
+  existente antes do patch.
+- **Sem non-null assertions (`!`)** — `getKpis` usa helpers explícitos
+  (`kpiFromSnapshot`, `requireKpi`) que lançam erro com mensagem em vez de
+  assertar, seguindo a regra do projeto (ESLint `no-non-null-assertion`).
+- **Testes tocam linhas globais não escopadas por ID** —
+  `intranet.kpi_snapshot_history` tem `metric_name` fixo (não há fixture
+  isolado possível); os dois novos arquivos de teste documentam esse
+  limite e não devem rodar em paralelo entre si.
+
+**Critérios de aceite verificados:**
+
+- [x] `getKpis` lê snapshots frescos (`kpi_snapshot_history`) quando disponíveis.
+- [x] `getKpis` faz fallback live quando snapshots estão ausentes ou com mais de 2h.
+- [x] Tendência `up/down/stable` calculada a partir do ponto anterior real.
+- [x] "Alunos na Plataforma" continua stub claro até Fase 6.
+- [x] Cron horário grava histórico suficiente para tendência (`kpi_snapshot_history`, insert por hora).
+- [x] Testes cobrem snapshot fresco, snapshot velho, ausência de snapshot e tendência (`kpis.test.ts`, 4 testes) + gravação/idempotência/preservação de histórico do cron (`intranet-kpis.test.ts`, 3 testes).
+- [x] Lint e types passam (`pnpm turbo lint typecheck --filter=@hebron/db --filter=@hebron/jobs --filter=@hebron/intranet`).
+- [x] Suítes completas de `@hebron/intranet` (21/21) e `@hebron/jobs` (16/16) verdes, sem regressão em `briefing.test.ts`.
+
+**Arquivos criados:**
+
+- `packages/db/src/migrations/0043_intranet_kpi_snapshot_history.sql`
+- `apps/intranet/src/__tests__/kpis.test.ts`
+- `packages/jobs/src/__tests__/intranet-kpis.test.ts`
+
+**Arquivos modificados:**
+
+- `packages/db/src/schema/intranet.ts` (nova tabela `kpiSnapshotHistory`)
+- `packages/db/src/schema/index.ts` (export de `kpiSnapshotHistory`/`KpiSnapshotHistory`/`NewKpiSnapshotHistory`)
+- `packages/jobs/src/crons/intranet.ts` (`runKpiSnapshot` grava também em `kpi_snapshot_history`)
+- `apps/intranet/src/actions/kpis.ts` (fallback snapshot/live + tendência real)

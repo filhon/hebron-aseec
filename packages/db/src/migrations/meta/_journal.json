@@ -29,6 +29,13 @@
       "when": 1783621832299,
       "tag": "0017_intranet_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1783694067803,
+      "tag": "0018_intranet_kpi_snapshot_history",
+      "breakpoints": true
     }
   ]
 }

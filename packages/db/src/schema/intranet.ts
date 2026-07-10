@@ -154,6 +154,35 @@ export const kpiSnapshots = intranetSchema.table(
 );
 
 // ---------------------------------------------------------------------------
+// intranet.kpi_snapshot_history
+// Série temporal insert-only por hora — PATCH-018 (P-5.9c). Mantém
+// intranet.kpi_snapshots intocada (continua 1 linha por metric_name/period,
+// upsertada a cada hora — consumida por packages/jobs/src/crons/briefing.ts
+// que assume exatamente essa cardinalidade). O cron horário
+// (packages/jobs/src/crons/intranet.ts) grava aqui também, uma linha por
+// metric_name/bucket_hour, para getKpis calcular tendência real comparando
+// o bucket atual com o anterior sem quebrar o consumidor existente.
+// ---------------------------------------------------------------------------
+export const kpiSnapshotHistory = intranetSchema.table(
+  "kpi_snapshot_history",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    metricName: text("metric_name").notNull(),
+    value: numeric("value", { precision: 14, scale: 2 }).notNull(),
+    bucketHour: timestamp("bucket_hour", { withTimezone: true }).notNull(),
+    capturedAt: timestamp("captured_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    unique("kpi_snapshot_history_metric_bucket_uniq").on(
+      table.metricName,
+      table.bucketHour,
+    ),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // Inferred types
 // ---------------------------------------------------------------------------
 export type Announcement = typeof announcements.$inferSelect;
@@ -166,3 +195,5 @@ export type BriefingPreference = typeof briefingPreferences.$inferSelect;
 export type NewBriefingPreference = typeof briefingPreferences.$inferInsert;
 export type KpiSnapshot = typeof kpiSnapshots.$inferSelect;
 export type NewKpiSnapshot = typeof kpiSnapshots.$inferInsert;
+export type KpiSnapshotHistory = typeof kpiSnapshotHistory.$inferSelect;
+export type NewKpiSnapshotHistory = typeof kpiSnapshotHistory.$inferInsert;

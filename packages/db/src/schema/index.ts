@@ -285,6 +285,7 @@ export {
   meetingDecisions,
   briefingPreferences,
   kpiSnapshots,
+  kpiSnapshotHistory,
 } from "./intranet";
 
 export type {
@@ -298,4 +299,6 @@ export type {
   NewBriefingPreference,
   KpiSnapshot,
   NewKpiSnapshot,
+  KpiSnapshotHistory,
+  NewKpiSnapshotHistory,
 } from "./intranet";

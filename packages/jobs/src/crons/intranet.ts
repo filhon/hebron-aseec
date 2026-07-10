@@ -2,6 +2,7 @@ import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import { db } from "@hebron/db/client";
 import {
   financialCategories,
+  kpiSnapshotHistory,
   kpiSnapshots,
   projects,
   tasks,
@@ -55,16 +56,27 @@ function currentPeriodKey(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
+function currentBucketHour(): Date {
+  const now = new Date();
+  now.setUTCMinutes(0, 0, 0);
+  return now;
+}
+
 // ---------------------------------------------------------------------------
-// runKpiSnapshot — grava intranet.kpi_snapshots a cada hora (P-5.8). O
-// dashboard lê o snapshot mais recente e cai para query live só se não
-// houver snapshot com menos de 2h (packages/db/src/schema/intranet.ts).
-// "Alunos" fica fora do snapshot: é stub até packages/db/src/schema/
+// runKpiSnapshot — grava intranet.kpi_snapshots a cada hora (P-5.8), upsert
+// por metric_name/period (cache "atual" — packages/jobs/src/crons/
+// briefing.ts lê esta tabela assumindo 1 linha por metric_name/period, não
+// mexer nessa cardinalidade). Também grava intranet.kpi_snapshot_history
+// (PATCH-018/P-5.9c), 1 linha por metric_name/bucket_hour, insert-only por
+// hora — série temporal que apps/intranet/src/actions/kpis.ts usa para
+// calcular tendência real (up/down/stable) sem depender de kpi_snapshots.
+// "Alunos" fica fora de ambas: é stub até packages/db/src/schema/
 // plataforma.ts existir (Fase 6).
 // ---------------------------------------------------------------------------
 
 export async function runKpiSnapshot(): Promise<{ metricsWritten: number }> {
   const period = currentPeriodKey();
+  const bucketHour = currentBucketHour();
   const [projetosAtivos, doacoesDoMes, tarefasAbertas] = await Promise.all([
     countProjetosAtivos(),
     sumDoacoesDoMes(),
@@ -87,6 +99,18 @@ export async function runKpiSnapshot(): Promise<{ metricsWritten: number }> {
       })
       .onConflictDoUpdate({
         target: [kpiSnapshots.metricName, kpiSnapshots.period],
+        set: { value: metric.value.toString(), capturedAt: new Date() },
+      });
+
+    await db
+      .insert(kpiSnapshotHistory)
+      .values({
+        metricName: metric.metricName,
+        value: metric.value.toString(),
+        bucketHour,
+      })
+      .onConflictDoUpdate({
+        target: [kpiSnapshotHistory.metricName, kpiSnapshotHistory.bucketHour],
         set: { value: metric.value.toString(), capturedAt: new Date() },
       });
   }
