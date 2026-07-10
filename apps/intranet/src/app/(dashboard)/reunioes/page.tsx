@@ -9,6 +9,7 @@ import {
   getStaffOptions,
 } from "../../../lib/queries";
 import { MeetingDecisionDialog } from "../../../components/meeting-decision-dialog";
+import { MeetingDecisionStatusSelect } from "../../../components/meeting-decision-status-select";
 
 const STATUS_LABEL: Record<MeetingDecisionStatus, string> = {
   pendente: "Pendente",
@@ -36,15 +37,31 @@ function formatDate(date: Date): string {
 }
 
 async function loadReunioesData() {
-  const [sessions, user, meetingOptions, staffOptions] = await Promise.all([
+  const [sessions, user, staffOptions] = await Promise.all([
     getMeetingSessionsWithDecisions(),
     getAuthUser(),
-    getMeetingSessionOptions(),
     getStaffOptions(),
   ]);
+
+  const isSuperAdmin = user?.roles.includes("super_admin") ?? false;
+  const isBoard =
+    user?.roles.some((r) => r === "diretor" || r === "conselheiro") ?? false;
+
+  // Presidente de sessão (diretor/conselheiro) só registra decisão nas
+  // reuniões que preside (PATCH-017); super_admin vê/registra em todas.
+  const meetingOptions = await getMeetingSessionOptions(
+    isSuperAdmin || !user ? undefined : user.id,
+  );
+
   return {
-    sessions,
-    canRegisterDecision: user?.roles.includes("super_admin") ?? false,
+    sessions: sessions.map((session) => ({
+      ...session,
+      // Presidente da sessão ou super_admin altera o status das decisões
+      // desta sessão (0040_intranet_meeting_decisions_chair_rls.sql).
+      canEditStatus:
+        isSuperAdmin || (isBoard && !!user && session.chairUserId === user.id),
+    })),
+    canRegisterDecision: isSuperAdmin || (isBoard && meetingOptions.length > 0),
     meetingOptions,
     staffOptions,
   };
@@ -135,15 +152,22 @@ export default async function ReunioesPage() {
                             fontSize: 13.5,
                           }}
                         >
-                          <span
-                            className="hb-badge"
-                            style={{
-                              ...STATUS_STYLE[decision.status],
-                              flexShrink: 0,
-                            }}
-                          >
-                            {STATUS_LABEL[decision.status]}
-                          </span>
+                          {session.canEditStatus ? (
+                            <MeetingDecisionStatusSelect
+                              meetingDecisionId={decision.id}
+                              status={decision.status}
+                            />
+                          ) : (
+                            <span
+                              className="hb-badge"
+                              style={{
+                                ...STATUS_STYLE[decision.status],
+                                flexShrink: 0,
+                              }}
+                            >
+                              {STATUS_LABEL[decision.status]}
+                            </span>
+                          )}
                           <span className="text-(--fg)">
                             {decision.description}
                             <span className="text-(--text-xs)">

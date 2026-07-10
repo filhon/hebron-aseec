@@ -107,6 +107,9 @@ export const auditActionEnum = adminSchema.enum("audit_action", [
   "announcement.updated",
   "meeting_decision.created",
   "dashboard_config.updated",
+  // PATCH-017 — presidente de sessão pode atualizar status de decisão,
+  // added via ALTER TYPE in 0041_intranet_audit_actions_status.sql
+  "meeting_decision.status_updated",
 ]);
 
 export const meetingTypeEnum = adminSchema.enum("meeting_type", [

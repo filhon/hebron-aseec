@@ -207,12 +207,19 @@ export interface MeetingSessionOption {
   date: Date;
 }
 
-export async function getMeetingSessionOptions(): Promise<
-  MeetingSessionOption[]
-> {
+// `chairUserId` restringe às sessões presididas por esse usuário (PATCH-017:
+// diretor/conselheiro só podem registrar/atualizar decisões da própria
+// sessão — a mesma regra de 0040_intranet_meeting_decisions_chair_rls.sql).
+// Omitido (ou super_admin, que muta qualquer sessão) retorna todas.
+export async function getMeetingSessionOptions(
+  chairUserId?: string,
+): Promise<MeetingSessionOption[]> {
   const rows = await db
     .select()
     .from(meetingSessions)
+    .where(
+      chairUserId ? eq(meetingSessions.chairUserId, chairUserId) : undefined,
+    )
     .orderBy(desc(meetingSessions.date));
 
   return rows.map((m) => ({
@@ -229,6 +236,7 @@ export interface MeetingSessionWithDecisions {
   typeLabel: string;
   status: string;
   notes: string | null;
+  chairUserId: string | null;
   chairName: string | null;
   decisions: MeetingDecision[];
 }
@@ -281,6 +289,7 @@ export async function getMeetingSessionsWithDecisions(): Promise<
     typeLabel: MEETING_TYPE_LABEL[session.type] ?? session.type,
     status: session.status,
     notes: session.notes,
+    chairUserId: session.chairUserId,
     chairName: session.chairUserId
       ? (nameById.get(session.chairUserId) ?? null)
       : null,

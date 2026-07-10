@@ -116,6 +116,7 @@
 | S-93   | 2026-07-09 | P-5.9 — Integração UI ↔ Backend Intranet                                | concluido                            |
 | S-94   | 2026-07-10 | P-5.10 — Notificações e Emails Intranet                                 | concluido                            |
 | S-95   | 2026-07-10 | P-0.17 — Runtime RLS para mutações críticas (PATCH-016)                 | concluido                            |
+| S-96   | 2026-07-10 | P-5.9b — Intranet: decisões por presidente da sessão (PATCH-017)        | concluido                            |
 
 ---
 
@@ -5250,3 +5251,114 @@ briefing}.ts`
 - `apps/financeiro/src/actions/{approval,transactions,payables,reports}.ts`
 - `apps/financeiro/src/__tests__/audit-abort.test.ts` (fixture: designation
   real de "gestor")
+
+---
+
+### S-96 — 2026-07-10 — P-5.9b Intranet: decisões por presidente da sessão (PATCH-017)
+
+**Prompt:** P-5.9b (`PATCHES/017-intranet-meeting-decisions-presidente-sessao.md`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Verificado contra BRAIN.md §6.6, SESSIONS.md (S-91/S-92/S-93) e o estado atual
+do código que o débito descrito no PATCH-017 era real: `intranet.
+meeting_decisions` restringia INSERT/UPDATE a `super_admin`
+(`meeting_decisions_mutate_admin`, `0037_intranet_rls.sql`), embora BRAIN.md
+§6.6 diga explicitamente "presidente de sessão registra decisões" — débito
+registrado três vezes seguidas (S-91 → S-92 → S-93) sem nunca ser resolvido,
+sempre aguardando confirmação do Filipe. `admin.meeting_sessions.
+chair_user_id` (P-5.6) já existia e nunca tinha sido lido por nenhuma RLS
+policy ou Server Action — exatamente o mecanismo que o PATCH-017 propôs usar,
+sem inventar papel novo.
+
+Criada `0040_intranet_meeting_decisions_chair_rls.sql`: substitui a policy
+`FOR ALL` por policies separadas de INSERT/UPDATE — `super_admin` continua
+mutando qualquer decisão; `diretor`/`conselheiro` só mutam decisões de
+sessões que presidem (`EXISTS` cruzando `admin.meeting_sessions.
+chair_user_id = auth.uid()`). `meeting_decisions_select_board` (diretor/
+conselheiro) não mudou.
+
+`createMeetingDecision` trocou de `superAdminAction` para `boardAction`
+(diretor/conselheiro/super_admin) com uma checagem explícita em JS
+(`assertCanMutateSessionDecisions`, busca `chair_user_id` da sessão e compara
+com `ctx.actorId`) antes de mutar — camada de aplicação com mensagem de erro
+legível; a RLS é quem de fato barra a escrita. Implementada
+`updateMeetingDecisionStatus` (schema Zod já existia, órfão desde S-92),
+mesmo padrão de checagem + `withAuthenticatedContext`.
+
+UI: `getMeetingSessionOptions` ganhou filtro opcional por `chairUserId`;
+`reunioes/page.tsx` mostra "Registrar decisão" para `super_admin` ou para
+quem preside pelo menos uma sessão (dropdown do diálogo já vem filtrado só
+com as sessões que a pessoa preside, exceto super_admin, que vê todas); cada
+decisão exibe um seletor de status (`MeetingDecisionStatusSelect`, novo
+Client Component) em vez do badge estático quando o usuário atual pode mutar
+aquela sessão especificamente (`super_admin` ou presidente daquela sessão).
+
+**Bug real exposto durante os testes (corrigido nesta mesma sessão):** a
+policy `FOR ALL` antiga dava `SELECT` implícito ao `super_admin` via sua
+cláusula `USING` — perdido ao trocá-la por policies só de INSERT/UPDATE.
+Sem `SELECT`, `INSERT/UPDATE ... RETURNING` falha para `super_admin`
+("new row violates row-level security policy"), porque o Postgres exige a
+policy de SELECT para devolver a linha mutada. `meeting_decisions_select_
+board` nunca incluiu `super_admin` explicitamente (diferente de
+`admin.meeting_sessions_select_board`, que lista `super_admin` junto com
+diretor/conselheiro) — gap pré-existente mascarado pela política antiga.
+Corrigido com `0042_intranet_meeting_decisions_select_admin.sql`
+(`meeting_decisions_select_admin`, SELECT só para `super_admin`).
+
+**Decisões tomadas:**
+
+- **Sem papel novo** — confirmado pela seção "Decisão" do próprio PATCH-017:
+  o dono da permissão já existe (`chair_user_id`). Não criado enum nem coluna
+  nova.
+- **Novo `audit_action` `meeting_decision.status_updated`** (migration
+  `0041`, mesmo padrão manual de `0038`) — não pedido explicitamente no
+  escopo do prompt, mas exigido pelo princípio inviolável "audit log em toda
+  mutação crítica" (G6.3, mesmo racional de `announcement.updated`/
+  `dashboard_config.updated` em S-92); `updateMeetingDecisionStatus` audita
+  com esse valor.
+- **`meeting-decision-dialog.tsx`/`meeting-decision-form.tsx` não tocados**
+  — já eram componentes puros sem lógica de papel; a visibilidade e o filtro
+  de sessões disponíveis já são resolvidos no Server Component
+  (`reunioes/page.tsx`) antes de chegar neles, mesmo padrão de
+  `AnnouncementCreateDialog`.
+- **Testes mockam `notifyMeetingDecisionCreated`** — sem o mock, cada
+  decisão criada nos testes dispararia notificação in_app real para todo
+  diretor/conselheiro/super_admin já cadastrado no banco de desenvolvimento
+  (não só os atores de teste), efeito colateral em dados de terceiros;
+  mockado como `next/headers`/`@hebron/auth/server` já eram.
+- **Teste de RLS "crua"** (sem passar pela Server Action) incluído — insere
+  direto via `withAuthenticatedContext` como diretor não-presidente,
+  ignorando o gate JS da action, confirmando que quem barra é a policy de
+  Postgres e não só `assertCanMutateSessionDecisions` (mesmo racional do
+  ator "fantasma" em `runtime-rls.test.ts`, S-95).
+
+**Critérios de aceite verificados:**
+
+- [x] Presidente da sessão consegue registrar decisão pela UI (`canRegisterDecision`/`meetingOptions` filtrados por `chairUserId` em `reunioes/page.tsx`).
+- [x] Diretor/conselheiro que não preside a sessão não consegue registrar decisão — barrado pelo gate JS da action e, independentemente dele, pela RLS (teste dedicado).
+- [x] `super_admin` continua podendo registrar decisão em qualquer reunião.
+- [x] `updateMeetingDecisionStatus` existe e é acionável pela tela (`MeetingDecisionStatusSelect`).
+- [x] Criar tarefa a partir da decisão continua funcionando (`createTask`, não alterado).
+- [x] RLS cobre a regra; a action não é a única camada de segurança (testes de INSERT direto).
+- [x] `pnpm turbo lint typecheck` verde nos pacotes afetados (`@hebron/db`, `@hebron/intranet`) + `next build` do app intranet sem erros.
+- [x] `apps/intranet/src/__tests__/meeting-decisions.test.ts` (9 testes) + suíte completa do app (17/17) verdes.
+
+**Arquivos criados:**
+
+- `packages/db/src/migrations/0040_intranet_meeting_decisions_chair_rls.sql`
+- `packages/db/src/migrations/0041_intranet_audit_actions_status.sql`
+- `packages/db/src/migrations/0042_intranet_meeting_decisions_select_admin.sql`
+  (correção do gap de SELECT exposto pelos testes desta mesma sessão)
+- `apps/intranet/src/components/meeting-decision-status-select.tsx`
+- `apps/intranet/src/__tests__/meeting-decisions.test.ts`
+
+**Arquivos modificados:**
+
+- `packages/db/src/schema/admin.ts` (`audit_action`: `meeting_decision.status_updated`)
+- `apps/intranet/src/actions/decisions.ts` (`superAdminAction` → `boardAction` + `assertCanMutateSessionDecisions`; `updateMeetingDecisionStatus` novo)
+- `apps/intranet/src/lib/queries.ts` (`getMeetingSessionOptions` ganha filtro `chairUserId`; `getMeetingSessionsWithDecisions` expõe `chairUserId`)
+- `apps/intranet/src/app/(dashboard)/reunioes/page.tsx` (`canRegisterDecision`/`canEditStatus` por presidente de sessão)
+
+**Migrations aplicadas:** `0040`, `0041`, `0042` via `pnpm db:migrate` (banco Supabase remoto, confirmado com o Filipe antes de rodar por afetar RLS em produção).
