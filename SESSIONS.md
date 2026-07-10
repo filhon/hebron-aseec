@@ -118,6 +118,7 @@
 | S-95   | 2026-07-10 | P-0.17 — Runtime RLS para mutações críticas (PATCH-016)                 | concluido                            |
 | S-96   | 2026-07-10 | P-5.9b — Intranet: decisões por presidente da sessão (PATCH-017)        | concluido                            |
 | S-97   | 2026-07-10 | P-5.9c — Intranet: snapshot de KPIs e tendências (PATCH-018)            | concluido                            |
+| S-98   | 2026-07-10 | P-4.11b — Tarefas: seed e configuração do checklist padrão (PATCH-019)  | concluido                            |
 
 ---
 
@@ -5448,3 +5449,91 @@ em todos), evitando misturar snapshot de uma métrica com live de outra.
 - `packages/db/src/schema/index.ts` (export de `kpiSnapshotHistory`/`KpiSnapshotHistory`/`NewKpiSnapshotHistory`)
 - `packages/jobs/src/crons/intranet.ts` (`runKpiSnapshot` grava também em `kpi_snapshot_history`)
 - `apps/intranet/src/actions/kpis.ts` (fallback snapshot/live + tendência real)
+
+---
+
+### S-98 — 2026-07-10 — P-4.11b Tarefas: seed e configuração do checklist padrão de análise (PATCH-019)
+
+**Prompt:** P-4.11b (`PATCHES/019-projetos-tarefas-checklist-seed-admin.md`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Verificado contra o código atual que o débito do PATCH-019 era real:
+`onProjectSubmitted` (`packages/integrations/src/projetos-tarefas.ts`, real
+desde P-4.11) já cria o checklist de análise via `createAutoTaskChecklist`,
+mas depende de `admin.system_settings["projetos_analysis_checklist_template"]`
+apontar para um `tarefas.task_templates` ativo com itens — nem a chave nem o
+template eram seedados em nenhuma migration, e não havia UI para criá-los.
+Débito já auto-registrado em S-83.
+
+Como `task_templates.created_by` e `system_settings.updated_by` são NOT NULL
+com FK para `public.users`, e o único ator de sistema (`getSystemActorId`) é
+provisionado via Supabase Admin API — não existe como INSERT puro em SQL —
+optado por seed em TypeScript (`packages/db/src/seed.ts`, `pnpm db:seed`) em
+vez de migration: idempotente, cria/reaproveita o workspace `administrativo`
+(seedado em 0031), cria o template "Checklist de análise de projeto" (5
+itens: validar documentação, revisar resumo/versão compacta, conferir
+orçamento/teto, preparar pauta de avaliação, registrar pendências) com
+`trigger = { sourceModule: "projetos", event: "project.submitted" }`, e grava
+a chave de `system_settings` apontando para ele.
+
+Admin ganhou `setProjetosChecklistTemplate` (`apps/admin/src/actions/settings.ts`)
+— action dedicada (não o `updateSystemSetting` genérico) que valida o novo
+template (ativo + com itens) antes de trocar, com audit log. A aba "Sistema"
+de `/configuracoes` passou a renderizar essa linha com um `<select>` dos
+templates existentes + botão salvar, em vez do badge somente-leitura. A
+"visualização de qual template está associado a Projetos" pedida pelo patch
+já existia de graça em `apps/tarefas/templates` (badge de trigger
+`sourceModule · event`, renderizado para qualquer template com `trigger` —
+nenhuma mudança necessária lá).
+
+**Decisões tomadas:**
+
+- **Seed TypeScript em vez de migration SQL** — FK NOT NULL para
+  `public.users` em duas tabelas exige um ator real, e o único ator de
+  sistema do projeto nasce via Admin API (`system-actor.ts`), não SQL puro.
+- **`clearSettingsCache` exportada em `packages/db/src/settings.ts`** —
+  pequena adição fora da lista original de arquivos permitidos, necessária
+  para os testes de `onProjectSubmitted` cobrirem os dois cenários (setting
+  ausente/presente) sem depender do TTL real de 30s do cache em memória.
+- **Testes reais, sem mock de banco** — seguindo o padrão já estabelecido
+  em `packages/db`/`apps/admin`; `packages/integrations` não tinha infra de
+  teste (`vitest`) — adicionada (`vitest.config.ts`, `setup-env.ts`,
+  devDependency) só para isso, mesmo padrão de `packages/db`.
+
+**Critérios de aceite verificados:**
+
+- [x] Banco novo recebe template ativo e setting `projetos_analysis_checklist_template` (`pnpm db:seed`, idempotente).
+- [x] `onProjectSubmitted` cria tarefas de checklist sem configuração manual prévia (após seed).
+- [x] Super_admin troca o template associado sem editar banco diretamente (`setProjetosChecklistTemplate` + UI em Sistema).
+- [x] Template inativo/removido ainda gera notificação de falha compreensível (comportamento pré-existente de `onProjectSubmitted`, preservado).
+- [x] Testes cobrem ambiente com seed e ambiente com setting ausente (`packages/db/src/__tests__/seed.test.ts`, `packages/integrations/src/__tests__/projetos-tarefas.test.ts`, `apps/admin/src/__tests__/settings-actions.test.ts`).
+- [x] Lint, types e testes afetados passam (`@hebron/db` 60/60, `@hebron/integrations` 2/2, `@hebron/admin` 61/61, `@hebron/tarefas` 6/6).
+
+**Débito identificado, fora do escopo deste patch:**
+`apps/projetos` — `src/__tests__/rls.test.ts` (16 testes) falha com
+`permission denied for schema projetos`, reproduzível mesmo isolado (sem
+suítes concorrentes). Confirmado não relacionado a este patch (nenhum
+arquivo de `apps/projetos`, RLS ou grants foi tocado) — parece drift de
+permissões pré-existente no banco de dev/teste compartilhado. Não
+investigado nem corrigido aqui.
+
+**Arquivos criados:**
+
+- `packages/db/src/seed.ts`
+- `packages/db/src/__tests__/seed.test.ts`
+- `packages/integrations/vitest.config.ts`
+- `packages/integrations/src/__tests__/setup-env.ts`
+- `packages/integrations/src/__tests__/projetos-tarefas.test.ts`
+- `apps/admin/src/__tests__/settings-actions.test.ts`
+
+**Arquivos modificados:**
+
+- `packages/db/package.json` (script `db:seed`, export `./seed`)
+- `packages/db/src/settings.ts` (`clearSettingsCache`, uso em testes)
+- `packages/integrations/package.json` (scripts de teste, devDependencies `vitest`/`dotenv`)
+- `packages/integrations/tsconfig.json` (`include` de `vitest.config.ts`)
+- `packages/integrations/src/projetos-tarefas.ts` (usa `PROJETOS_CHECKLIST_TEMPLATE_SETTING_KEY` de `@hebron/db/seed`)
+- `apps/admin/src/actions/settings.ts` (`setProjetosChecklistTemplate`)
+- `apps/admin/src/app/(dashboard)/configuracoes/page.tsx` (UI de troca de template na aba Sistema)

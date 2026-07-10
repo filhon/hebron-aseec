@@ -3,6 +3,7 @@ import { db } from "@hebron/db/client";
 import { roleAssignments, users } from "@hebron/db/schema";
 import { getSystemSetting } from "@hebron/db/settings";
 import { makeNotificationInserter } from "@hebron/db/notifications";
+import { PROJETOS_CHECKLIST_TEMPLATE_SETTING_KEY } from "@hebron/db/seed";
 import { createAutoTaskChecklist } from "./tarefas";
 
 // ---------------------------------------------------------------------------
@@ -12,7 +13,11 @@ import { createAutoTaskChecklist } from "./tarefas";
 // checklist de análise (BRAIN §7: "Tarefas → Projetos: submissão cria
 // checklist padrão de análise") via createAutoTaskChecklist, a partir de um
 // `tarefas.task_templates` configurável pelo Admin em
-// `admin.system_settings`, chave abaixo (BRAIN §7 "Configuração cross-app").
+// `admin.system_settings["projetos_analysis_checklist_template"]`
+// (BRAIN §7 "Configuração cross-app"). A chave nasce via seed idempotente
+// (packages/db/src/seed.ts::seedProjetosChecklistTemplate, PATCH-019) e é
+// trocável sem SQL manual via apps/admin/src/actions/settings.ts
+// ::setProjetosChecklistTemplate.
 //
 // Esta é uma integração de MUTAÇÃO CRÍTICA, não de leitura (BRAIN §7,
 // padrão S1-22): nunca roda fire-and-forget. O chamador
@@ -20,20 +25,18 @@ import { createAutoTaskChecklist } from "./tarefas";
 // e decide não abortar a submissão do projeto por causa de uma falha aqui —
 // mas a falha em si nunca é engolida: é logada de forma estruturada e
 // sinalizada a todo super_admin via notificação in-app, para que alguém
-// resolva manualmente (ex.: configurar a chave de settings abaixo, ou criar
-// o checklist à mão em apps/tarefas).
+// resolva manualmente (ex.: trocar o template no Admin, ou criar o
+// checklist à mão em apps/tarefas, caso o seed nunca tenha rodado).
 // ---------------------------------------------------------------------------
-
-const CHECKLIST_TEMPLATE_SETTING_KEY = "projetos_analysis_checklist_template";
 
 export async function onProjectSubmitted(projectId: string): Promise<void> {
   try {
     const templateId = await getSystemSetting<string>(
-      CHECKLIST_TEMPLATE_SETTING_KEY,
+      PROJETOS_CHECKLIST_TEMPLATE_SETTING_KEY,
     );
     if (!templateId) {
       throw new Error(
-        `Template de checklist de análise não configurado (admin.system_settings: "${CHECKLIST_TEMPLATE_SETTING_KEY}")`,
+        `Template de checklist de análise não configurado (admin.system_settings: "${PROJETOS_CHECKLIST_TEMPLATE_SETTING_KEY}"). Rode "pnpm db:seed" (packages/db/src/seed.ts) para provisionar o template padrão.`,
       );
     }
 

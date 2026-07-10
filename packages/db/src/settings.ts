@@ -60,6 +60,17 @@ export async function getSystemSetting<T = unknown>(
   return value;
 }
 
+/**
+ * Limpa o cache em memória (uso exclusivo de testes — packages/db e
+ * packages/integrations manipulam admin.system_settings/admin.feature_flags
+ * diretamente entre asserts e precisam de leituras não cacheadas, sem
+ * esperar os 30s de TTL real).
+ */
+export function clearSettingsCache(): void {
+  settingsCache.clear();
+  flagsCache.clear();
+}
+
 export interface FeatureFlagState {
   enabled: boolean;
   rolloutPercent: number;

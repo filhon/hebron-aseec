@@ -7,7 +7,9 @@ import {
   featureFlags,
   systemSettings,
   emailTemplates,
+  taskTemplates,
 } from "@hebron/db/schema";
+import { PROJETOS_CHECKLIST_TEMPLATE_SETTING_KEY } from "@hebron/db/seed";
 import {
   Shield,
   Flag,
@@ -19,7 +21,10 @@ import {
   Eye,
   Users,
 } from "lucide-react";
-import { toggleFeatureFlag } from "../../../actions/settings";
+import {
+  toggleFeatureFlag,
+  setProjetosChecklistTemplate,
+} from "../../../actions/settings";
 import { RoleAssignmentPanel } from "../../../components/role-assignment-panel";
 import { DesignationPanel } from "../../../components/designation-panel";
 import type { RoleAssignmentInput } from "@hebron/validators";
@@ -56,6 +61,14 @@ async function handleToggleFlag(formData: FormData) {
   await toggleFeatureFlag({ key, enabled: !currentEnabled });
   revalidatePath("/configuracoes");
   redirect("/configuracoes?tab=feature-flags");
+}
+
+async function handleSetChecklistTemplate(formData: FormData) {
+  "use server";
+  const templateId = formData.get("templateId") as string;
+  await setProjetosChecklistTemplate({ templateId });
+  revalidatePath("/configuracoes");
+  redirect("/configuracoes?tab=sistema");
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -398,6 +411,7 @@ function EmailTemplatesPanel({
 
 function SistemaPanel({
   settings,
+  checklistTemplates,
 }: {
   settings: Array<{
     id: string;
@@ -408,6 +422,7 @@ function SistemaPanel({
     isPublic: boolean;
     updatedAt: Date;
   }>;
+  checklistTemplates: Array<{ id: string; name: string; isActive: boolean }>;
 }) {
   return (
     <div>
@@ -416,25 +431,90 @@ function SistemaPanel({
         auditoria.
       </div>
       <div className="hb-card hb-card-overflow">
-        {settings.map((setting) => (
-          <div key={setting.id} className="hb-setting-row">
-            <div>
-              <div className="hb-setting-label">{setting.label}</div>
-              {setting.description && (
-                <div className="hb-setting-desc">{setting.description}</div>
-              )}
-              <div className="hb-setting-key">{setting.key}</div>
+        {settings.map((setting) => {
+          if (setting.key === PROJETOS_CHECKLIST_TEMPLATE_SETTING_KEY) {
+            const currentId =
+              typeof setting.value === "string" ? setting.value : null;
+            const current = checklistTemplates.find((t) => t.id === currentId);
+            return (
+              <div key={setting.id} className="hb-setting-row">
+                <div>
+                  <div className="hb-setting-label">{setting.label}</div>
+                  {setting.description && (
+                    <div className="hb-setting-desc">{setting.description}</div>
+                  )}
+                  <div className="hb-setting-key">{setting.key}</div>
+                  {current && !current.isActive && (
+                    <div
+                      className="hb-setting-desc"
+                      style={{ color: "var(--color-destructive)" }}
+                    >
+                      Template associado está inativo — escolha outro abaixo.
+                    </div>
+                  )}
+                  {!current && (
+                    <div
+                      className="hb-setting-desc"
+                      style={{ color: "var(--color-destructive)" }}
+                    >
+                      Template associado não foi encontrado.
+                    </div>
+                  )}
+                </div>
+                <form
+                  action={handleSetChecklistTemplate}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    flexShrink: 0,
+                  }}
+                >
+                  <select
+                    name="templateId"
+                    defaultValue={currentId ?? ""}
+                    className="hb-form-select"
+                    style={{ width: "auto", minWidth: 220 }}
+                    aria-label="Template de checklist de análise de projeto"
+                  >
+                    {checklistTemplates.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                        {!t.isActive ? " (inativo)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="submit"
+                    className="hb-btn hb-btn-secondary hb-btn-sm"
+                  >
+                    Salvar
+                  </button>
+                </form>
+              </div>
+            );
+          }
+
+          return (
+            <div key={setting.id} className="hb-setting-row">
+              <div>
+                <div className="hb-setting-label">{setting.label}</div>
+                {setting.description && (
+                  <div className="hb-setting-desc">{setting.description}</div>
+                )}
+                <div className="hb-setting-key">{setting.key}</div>
+              </div>
+              <div className="hb-setting-value">
+                <span className="hb-setting-value-badge">
+                  {String(setting.value)}
+                </span>
+                <span className="hb-setting-value-date">
+                  {formatDate(setting.updatedAt)}
+                </span>
+              </div>
             </div>
-            <div className="hb-setting-value">
-              <span className="hb-setting-value-badge">
-                {String(setting.value)}
-              </span>
-              <span className="hb-setting-value-date">
-                {formatDate(setting.updatedAt)}
-              </span>
-            </div>
-          </div>
-        ))}
+          );
+        })}
         {settings.length === 0 && (
           <p
             style={{
@@ -471,6 +551,7 @@ export default async function ConfiguracoesPage({
     allUsers,
     allRoleAssignments,
     directorRows,
+    checklistTemplateRows,
   ] = await Promise.all([
     db
       .select({
@@ -515,6 +596,15 @@ export default async function ConfiguracoesPage({
       .from(roleAssignments)
       .innerJoin(users, eq(roleAssignments.userId, users.id))
       .where(eq(roleAssignments.role, "diretor")),
+
+    db
+      .select({
+        id: taskTemplates.id,
+        name: taskTemplates.name,
+        isActive: taskTemplates.isActive,
+      })
+      .from(taskTemplates)
+      .orderBy(asc(taskTemplates.name)),
   ]);
 
   const directors = directorRows.map((d) => ({
@@ -588,7 +678,12 @@ export default async function ConfiguracoesPage({
             selectedSlug={selectedTemplate}
           />
         )}
-        {activeTab === "sistema" && <SistemaPanel settings={settingRows} />}
+        {activeTab === "sistema" && (
+          <SistemaPanel
+            settings={settingRows}
+            checklistTemplates={checklistTemplateRows}
+          />
+        )}
       </div>
     </div>
   );

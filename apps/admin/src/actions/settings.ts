@@ -3,7 +3,13 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { db } from "@hebron/db/client";
-import { featureFlags, systemSettings } from "@hebron/db/schema";
+import {
+  featureFlags,
+  systemSettings,
+  taskTemplates,
+  templateItems,
+} from "@hebron/db/schema";
+import { PROJETOS_CHECKLIST_TEMPLATE_SETTING_KEY } from "@hebron/db/seed";
 import { adminAction } from "../lib/safe-action";
 import { logAudit, computeDiff } from "../lib/audit";
 
@@ -109,4 +115,78 @@ export const updateSystemSetting = adminAction
     });
 
     return { setting: updated };
+  });
+
+// ─── setProjetosChecklistTemplate ─────────────────────────────────────────────
+//
+// Aponta admin.system_settings["projetos_analysis_checklist_template"]
+// (lido por onProjectSubmitted, packages/integrations/src/projetos-tarefas.ts,
+// para criar o checklist de análise ao submeter um projeto) para outro
+// tarefas.task_templates — sem editar o banco manualmente (PATCH-019). A
+// linha em si nasce via seed idempotente
+// (packages/db/src/seed.ts::seedProjetosChecklistTemplate); esta action só
+// troca o valor, nunca cria a chave do zero.
+
+export const setProjetosChecklistTemplate = adminAction
+  .schema(z.object({ templateId: z.string().uuid() }))
+  .action(async ({ parsedInput, ctx }) => {
+    const [template] = await db
+      .select()
+      .from(taskTemplates)
+      .where(eq(taskTemplates.id, parsedInput.templateId))
+      .limit(1);
+    if (!template) throw new Error("Template não encontrado");
+    if (!template.isActive) {
+      throw new Error(
+        `Template "${template.name}" está inativo — ative-o antes de associá-lo a Projetos`,
+      );
+    }
+
+    const items = await db
+      .select({ id: templateItems.id })
+      .from(templateItems)
+      .where(eq(templateItems.taskTemplateId, template.id))
+      .limit(1);
+    if (items.length === 0) {
+      throw new Error(
+        `Template "${template.name}" não possui tarefas definidas`,
+      );
+    }
+
+    const beforeRows = await db
+      .select()
+      .from(systemSettings)
+      .where(eq(systemSettings.key, PROJETOS_CHECKLIST_TEMPLATE_SETTING_KEY));
+
+    const before = beforeRows[0];
+    if (!before) {
+      throw new Error(
+        `Configuração "${PROJETOS_CHECKLIST_TEMPLATE_SETTING_KEY}" não encontrada — rode "pnpm db:seed" antes de trocar o template`,
+      );
+    }
+
+    const updatedRows = await db
+      .update(systemSettings)
+      .set({
+        value: template.id,
+        updatedBy: ctx.actorId,
+        updatedAt: new Date(),
+      })
+      .where(eq(systemSettings.key, PROJETOS_CHECKLIST_TEMPLATE_SETTING_KEY))
+      .returning();
+
+    const updated = updatedRows[0];
+    if (!updated) throw new Error("Falha ao atualizar configuração");
+
+    await logAudit({
+      actorId: ctx.actorId,
+      action: "setting.updated",
+      entity: "system_setting",
+      entityId: updated.id,
+      diff: {
+        value: { before: before.value, after: updated.value },
+      },
+    });
+
+    return { setting: updated, template };
   });
