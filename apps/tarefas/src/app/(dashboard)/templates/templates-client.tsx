@@ -13,10 +13,12 @@ import {
   EmptyState,
   PageHeader,
 } from "@hebron/ui";
-import { Layers, Plus, Zap } from "lucide-react";
+import { Layers, Pencil, Plus, Power, Zap } from "lucide-react";
 import {
   createTaskTemplate,
   instantiateTaskTemplate,
+  toggleTaskTemplate,
+  updateTaskTemplate,
 } from "../../../actions/templates";
 import { TemplateForm } from "../../../components/template-form";
 
@@ -36,6 +38,9 @@ export interface TemplatesClientProps {
 export function TemplatesClient({ templates }: TemplatesClientProps) {
   const router = useRouter();
   const [creating, setCreating] = useState(false);
+  const [editingTemplate, setEditingTemplate] = useState<TaskTemplate | null>(
+    null,
+  );
 
   const { execute: submitCreateTemplate, isPending: isCreating } = useAction(
     createTaskTemplate,
@@ -46,6 +51,22 @@ export function TemplatesClient({ templates }: TemplatesClientProps) {
       },
     },
   );
+
+  const { execute: submitUpdateTemplate, isPending: isUpdating } = useAction(
+    updateTaskTemplate,
+    {
+      onSuccess() {
+        setEditingTemplate(null);
+        router.refresh();
+      },
+    },
+  );
+
+  const { execute: submitToggleTemplate } = useAction(toggleTaskTemplate, {
+    onSuccess() {
+      router.refresh();
+    },
+  });
 
   const { execute: submitInstantiate, isPending: isInstantiating } = useAction(
     instantiateTaskTemplate,
@@ -128,16 +149,41 @@ export function TemplatesClient({ templates }: TemplatesClientProps) {
                   </div>
                 </div>
 
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={!template.isActive}
-                  loading={isInstantiating}
-                  onClick={() => submitInstantiate({ templateId: template.id })}
-                >
-                  <Zap className="h-3.5 w-3.5" aria-hidden="true" />
-                  Instanciar
-                </Button>
+                <div className="flex shrink-0 flex-wrap items-center gap-2">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setEditingTemplate(template)}
+                  >
+                    <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                    Editar
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() =>
+                      submitToggleTemplate({
+                        templateId: template.id,
+                        isActive: !template.isActive,
+                      })
+                    }
+                  >
+                    <Power className="h-3.5 w-3.5" aria-hidden="true" />
+                    {template.isActive ? "Desativar" : "Ativar"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!template.isActive}
+                    loading={isInstantiating}
+                    onClick={() =>
+                      submitInstantiate({ templateId: template.id })
+                    }
+                  >
+                    <Zap className="h-3.5 w-3.5" aria-hidden="true" />
+                    Instanciar
+                  </Button>
+                </div>
               </div>
 
               {/* Preview das tarefas pré-definidas */}
@@ -178,6 +224,44 @@ export function TemplatesClient({ templates }: TemplatesClientProps) {
             onCancel={() => setCreating(false)}
             isLoading={isCreating}
           />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={editingTemplate !== null}
+        onOpenChange={(open) => {
+          if (!open) setEditingTemplate(null);
+        }}
+      >
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Editar template</DialogTitle>
+          </DialogHeader>
+          {editingTemplate && (
+            <TemplateForm
+              initialValues={{
+                name: editingTemplate.name,
+                description: editingTemplate.description,
+                workspace: editingTemplate.workspace,
+                tasks: editingTemplate.tasks.map((item) => ({
+                  title: item.title,
+                  description: item.description,
+                  priority: item.priority,
+                  dueOffsetDays: item.dueOffsetDays,
+                  subtasks: item.subtasks,
+                })),
+                trigger: editingTemplate.trigger,
+              }}
+              onSubmit={(values) =>
+                submitUpdateTemplate({
+                  templateId: editingTemplate.id,
+                  ...values,
+                })
+              }
+              onCancel={() => setEditingTemplate(null)}
+              isLoading={isUpdating}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>

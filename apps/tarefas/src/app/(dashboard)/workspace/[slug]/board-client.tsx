@@ -13,13 +13,17 @@ import {
   EmptyState,
   PageHeader,
 } from "@hebron/ui";
-import { GitBranch, LayoutGrid, ListTodo, Plus, Rows3 } from "lucide-react";
+import { GitBranch, LayoutGrid, ListTodo, Plus, Rows3, X } from "lucide-react";
+import type { CreateTaskInput } from "@hebron/validators/tarefas";
 import { createTask, updateTaskStatus } from "../../../../actions/tasks";
 import type { Person } from "../../../../lib/queries";
 import { KanbanBoard } from "../../../../components/kanban-board";
 import { TaskList } from "../../../../components/task-list";
 import { TreeView } from "../../../../components/tree-view";
-import { TaskForm } from "../../../../components/task-form";
+import {
+  TaskForm,
+  uploadTaskAttachments,
+} from "../../../../components/task-form";
 
 function cn(...cls: (string | false | null | undefined)[]): string {
   return cls.filter(Boolean).join(" ");
@@ -59,6 +63,9 @@ export function WorkspaceBoardClient({
   const router = useRouter();
   const [view, setView] = useState<BoardView>("kanban");
   const [creating, setCreating] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [attachmentNotice, setAttachmentNotice] = useState<string | null>(null);
 
   const openCount = useMemo(
     () => tasks.filter((t) => t.status !== "concluido").length,
@@ -71,15 +78,40 @@ export function WorkspaceBoardClient({
     },
   });
 
-  const { execute: submitCreateTask, isPending: isCreating } = useAction(
-    createTask,
-    {
-      onSuccess() {
-        setCreating(false);
-        router.refresh();
-      },
-    },
-  );
+  const { executeAsync: createTaskAsync } = useAction(createTask);
+
+  async function handleCreate(values: CreateTaskInput, attachments: File[]) {
+    setFormError(null);
+    setIsSubmitting(true);
+    try {
+      const result = await createTaskAsync(values);
+      const task = result?.data?.task;
+      if (!task) {
+        setFormError(result?.serverError ?? "Não foi possível criar a tarefa.");
+        return;
+      }
+      const failures =
+        attachments.length > 0
+          ? await uploadTaskAttachments(task.id, attachments)
+          : [];
+      setCreating(false);
+      setAttachmentNotice(
+        failures.length > 0
+          ? `Tarefa criada, mas ${failures.length} anexo(s) não foram enviados: ${failures
+              .map((f) => f.fileName)
+              .join(", ")}.`
+          : null,
+      );
+      router.refresh();
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  function handleDialogChange(open: boolean) {
+    setCreating(open);
+    if (!open) setFormError(null);
+  }
 
   function handleMove(taskId: string, targetStatus: TaskStatus) {
     moveTask({ taskId, status: targetStatus });
@@ -126,6 +158,23 @@ export function WorkspaceBoardClient({
         }
       />
 
+      {attachmentNotice && (
+        <div
+          role="status"
+          className="mb-5 flex items-start justify-between gap-3 rounded-md border border-(--hb-orange) bg-(--hb-orange-muted) px-4 py-3 text-sm text-(--hb-orange-deep)"
+        >
+          <span className="min-w-0">{attachmentNotice}</span>
+          <button
+            type="button"
+            onClick={() => setAttachmentNotice(null)}
+            aria-label="Dispensar aviso"
+            className="shrink-0 text-(--hb-orange-deep)/70 hover:text-(--hb-orange-deep)"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
+
       {tasks.length === 0 ? (
         <EmptyState
           icon={ListTodo}
@@ -156,7 +205,7 @@ export function WorkspaceBoardClient({
         </>
       )}
 
-      <Dialog open={creating} onOpenChange={setCreating}>
+      <Dialog open={creating} onOpenChange={handleDialogChange}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Nova tarefa</DialogTitle>
@@ -165,9 +214,10 @@ export function WorkspaceBoardClient({
             initialValues={{ workspace }}
             assignableUsers={assignableUsers}
             availableTags={tags}
-            onSubmit={(values) => submitCreateTask(values)}
-            onCancel={() => setCreating(false)}
-            isLoading={isCreating}
+            onSubmit={handleCreate}
+            onCancel={() => handleDialogChange(false)}
+            isLoading={isSubmitting}
+            submitError={formError}
           />
         </DialogContent>
       </Dialog>

@@ -17,10 +17,52 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@hebron/ui";
-import { Check, Paperclip, UserPlus, X } from "lucide-react";
+import { AlertCircle, Check, Paperclip, UserPlus, X } from "lucide-react";
+import { createAttachment } from "../actions/tasks";
 
 function cn(...cls: (string | false | null | undefined)[]): string {
   return cls.filter(Boolean).join(" ");
+}
+
+/**
+ * Persiste anexos de uma tarefa em dois passos (P-4.9b): registra a linha via
+ * `createAttachment` (que devolve uma signed upload URL) e faz o PUT do arquivo
+ * direto ao Storage — mesmo padrão de apps/documentos. Não lança: devolve a
+ * lista de falhas por arquivo para que a tarefa já criada não seja perdida.
+ */
+export async function uploadTaskAttachments(
+  taskId: string,
+  files: File[],
+): Promise<{ fileName: string; message: string }[]> {
+  const failures: { fileName: string; message: string }[] = [];
+  for (const file of files) {
+    try {
+      const mimeType = file.type || "application/octet-stream";
+      const result = await createAttachment({
+        parentType: "task",
+        parentId: taskId,
+        fileName: file.name,
+        fileSizeBytes: file.size,
+        mimeType,
+      });
+      const uploadUrl = result?.data?.uploadUrl;
+      if (!uploadUrl) {
+        throw new Error(result?.serverError ?? "Falha ao registrar anexo");
+      }
+      const res = await fetch(uploadUrl, {
+        method: "PUT",
+        body: file,
+        headers: { "Content-Type": mimeType },
+      });
+      if (!res.ok) throw new Error("Falha ao enviar arquivo ao armazenamento");
+    } catch (err) {
+      failures.push({
+        fileName: file.name,
+        message: err instanceof Error ? err.message : "Erro desconhecido",
+      });
+    }
+  }
+  return failures;
 }
 
 const WORKSPACE_LABEL: Record<Workspace, string> = {
@@ -76,6 +118,9 @@ export interface TaskFormProps {
   onSubmit: (values: CreateTaskInput, attachments: File[]) => void;
   onCancel?: () => void;
   isLoading?: boolean;
+  /** Erro de submissão geral (ex.: falha ao enviar anexos), fora do escopo
+   * das validações de campo. */
+  submitError?: string | null;
 }
 
 export function TaskForm({
@@ -86,6 +131,7 @@ export function TaskForm({
   onSubmit,
   onCancel,
   isLoading = false,
+  submitError = null,
 }: TaskFormProps) {
   const titleId = useId();
   const descriptionId = useId();
@@ -411,6 +457,16 @@ export function TaskForm({
           </ul>
         )}
       </FormField>
+
+      {submitError && (
+        <p
+          role="alert"
+          className="flex items-start gap-2 rounded-(--radius) border border-(--color-destructive) bg-(--color-destructive-muted) px-3 py-2 text-sm text-(--color-destructive)"
+        >
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+          <span className="min-w-0">{submitError}</span>
+        </p>
+      )}
 
       <div className="flex items-center justify-end gap-3 border-t border-(--divider) pt-4">
         {onCancel && (

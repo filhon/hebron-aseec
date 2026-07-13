@@ -262,3 +262,149 @@ describe("instantiateTaskTemplate — instancia todas as tarefas filhas", () => 
     expect(result?.serverError).toBeDefined();
   });
 });
+
+describe("updateTaskTemplate — edita e substitui os template_items", () => {
+  it("persiste nome, descrição e o novo conjunto de tarefas", async () => {
+    const { createTaskTemplate, updateTaskTemplate } =
+      await import("../actions/templates");
+
+    const created = await createTaskTemplate({
+      name: "Template Original",
+      description: "descrição original",
+      workspace: "comunicacao",
+      tasks: [
+        {
+          title: "Tarefa antiga A",
+          description: null,
+          priority: "media",
+          dueOffsetDays: null,
+          subtasks: [],
+        },
+        {
+          title: "Tarefa antiga B",
+          description: null,
+          priority: "baixa",
+          dueOffsetDays: null,
+          subtasks: [],
+        },
+      ],
+      trigger: null,
+    });
+    const templateId = created?.data?.template.id as unknown as string;
+    expect(templateId).toBeTruthy();
+
+    const result = await updateTaskTemplate({
+      templateId,
+      name: "Template Renomeado",
+      description: "nova descrição",
+      workspace: "comunicacao",
+      tasks: [
+        {
+          title: "Tarefa nova única",
+          description: null,
+          priority: "alta",
+          dueOffsetDays: 4,
+          subtasks: ["Passo 1"],
+        },
+      ],
+      trigger: null,
+    });
+    expect(result?.serverError).toBeUndefined();
+
+    const [row] = await db
+      .select()
+      .from(taskTemplates)
+      .where(eq(taskTemplates.id, templateId));
+    expect(row?.name).toBe("Template Renomeado");
+    expect(row?.description).toBe("nova descrição");
+
+    const items = await db
+      .select()
+      .from(templateItems)
+      .where(eq(templateItems.taskTemplateId, templateId));
+    expect(items).toHaveLength(1);
+    expect(items[0]?.title).toBe("Tarefa nova única");
+    expect(items[0]?.dueOffsetDays).toBe(4);
+
+    await db
+      .delete(templateItems)
+      .where(eq(templateItems.taskTemplateId, templateId));
+    await db.delete(taskTemplates).where(eq(taskTemplates.id, templateId));
+  });
+
+  it("respeita o gate de papel: diretor não pode editar", async () => {
+    const { updateTaskTemplate } = await import("../actions/templates");
+    const { resolveSession } = await import("@hebron/auth/server");
+    vi.mocked(resolveSession).mockResolvedValueOnce({
+      actorId: IDS.actor,
+      roles: ["diretor"],
+      designations: [],
+    });
+
+    const result = await updateTaskTemplate({
+      templateId: IDS.inactiveTemplate,
+      name: "Tentativa do diretor",
+      description: null,
+      workspace: "comunicacao",
+      tasks: [
+        {
+          title: "Item qualquer",
+          description: null,
+          priority: "media",
+          dueOffsetDays: null,
+          subtasks: [],
+        },
+      ],
+      trigger: null,
+    });
+    expect(result?.serverError).toBeDefined();
+  });
+});
+
+describe("toggleTaskTemplate — ativa/desativa", () => {
+  it("persiste isActive e bloqueia instanciação quando desativado", async () => {
+    const { createTaskTemplate, toggleTaskTemplate, instantiateTaskTemplate } =
+      await import("../actions/templates");
+
+    const created = await createTaskTemplate({
+      name: "Template Alternável",
+      description: null,
+      workspace: "comunicacao",
+      tasks: [
+        {
+          title: "Tarefa do alternável",
+          description: null,
+          priority: "media",
+          dueOffsetDays: null,
+          subtasks: [],
+        },
+      ],
+      trigger: null,
+    });
+    const templateId = created?.data?.template.id as unknown as string;
+
+    const off = await toggleTaskTemplate({ templateId, isActive: false });
+    expect(off?.serverError).toBeUndefined();
+    const [afterOff] = await db
+      .select()
+      .from(taskTemplates)
+      .where(eq(taskTemplates.id, templateId));
+    expect(afterOff?.isActive).toBe(false);
+
+    const blocked = await instantiateTaskTemplate({ templateId });
+    expect(blocked?.serverError).toBeDefined();
+
+    const on = await toggleTaskTemplate({ templateId, isActive: true });
+    expect(on?.serverError).toBeUndefined();
+    const [afterOn] = await db
+      .select()
+      .from(taskTemplates)
+      .where(eq(taskTemplates.id, templateId));
+    expect(afterOn?.isActive).toBe(true);
+
+    await db
+      .delete(templateItems)
+      .where(eq(templateItems.taskTemplateId, templateId));
+    await db.delete(taskTemplates).where(eq(taskTemplates.id, templateId));
+  });
+});

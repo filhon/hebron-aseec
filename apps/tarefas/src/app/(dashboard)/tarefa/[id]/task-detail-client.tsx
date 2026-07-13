@@ -11,6 +11,7 @@ import type {
   TaskStatus,
   Workspace,
 } from "@hebron/types/tarefas";
+import type { CreateTaskInput } from "@hebron/validators/tarefas";
 import {
   Avatar,
   Button,
@@ -36,6 +37,7 @@ import {
   ThumbsDown,
   ThumbsUp,
   UserX,
+  X,
 } from "lucide-react";
 import {
   createSubtask,
@@ -56,7 +58,10 @@ import type { Person } from "../../../../lib/queries";
 import { CommentForm } from "../../../../components/comment-form";
 import { CommentThread } from "../../../../components/comment-thread";
 import { TimeTracker } from "../../../../components/time-tracker";
-import { TaskForm } from "../../../../components/task-form";
+import {
+  TaskForm,
+  uploadTaskAttachments,
+} from "../../../../components/task-form";
 import { SubtaskForm } from "../../../../components/subtask-form";
 import { ApprovalRequestForm } from "../../../../components/approval-request-form";
 
@@ -174,20 +179,60 @@ export function TaskDetailClient({
   const [editing, setEditing] = useState(false);
   const [addingSubtask, setAddingSubtask] = useState(false);
   const [requestingApproval, setRequestingApproval] = useState(false);
+  const [isSavingTask, setIsSavingTask] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [attachmentNotice, setAttachmentNotice] = useState<string | null>(null);
 
   function refresh() {
     router.refresh();
   }
 
-  const { execute: submitUpdateTask, isPending: isSavingTask } = useAction(
-    updateTask,
-    {
-      onSuccess() {
-        setEditing(false);
-        refresh();
-      },
-    },
-  );
+  const { executeAsync: updateTaskAsync } = useAction(updateTask);
+
+  async function handleUpdateTask(
+    values: CreateTaskInput,
+    attachments: File[],
+  ) {
+    setEditError(null);
+    setIsSavingTask(true);
+    try {
+      const result = await updateTaskAsync({
+        taskId: task.id,
+        title: values.title,
+        description: values.description,
+        priority: values.priority,
+        dueDate: values.dueDate,
+        assigneeIds: values.assigneeIds,
+        tagIds: values.tagIds,
+      });
+      if (!result?.data?.task) {
+        setEditError(
+          result?.serverError ?? "Não foi possível salvar a tarefa.",
+        );
+        return;
+      }
+      const failures =
+        attachments.length > 0
+          ? await uploadTaskAttachments(task.id, attachments)
+          : [];
+      setEditing(false);
+      setAttachmentNotice(
+        failures.length > 0
+          ? `Alterações salvas, mas ${failures.length} anexo(s) não foram enviados: ${failures
+              .map((f) => f.fileName)
+              .join(", ")}.`
+          : null,
+      );
+      refresh();
+    } finally {
+      setIsSavingTask(false);
+    }
+  }
+
+  function handleEditDialogChange(open: boolean) {
+    setEditing(open);
+    if (!open) setEditError(null);
+  }
 
   const { execute: submitStatusChange } = useAction(updateTaskStatus, {
     onSuccess: refresh,
@@ -264,6 +309,23 @@ export function TaskDetailClient({
         <ChevronLeft className="h-4 w-4" aria-hidden="true" />
         {WORKSPACE_LABEL[task.workspace]}
       </Link>
+
+      {attachmentNotice && (
+        <div
+          role="status"
+          className="mb-4 flex items-start justify-between gap-3 rounded-md border border-(--hb-orange) bg-(--hb-orange-muted) px-4 py-3 text-sm text-(--hb-orange-deep)"
+        >
+          <span className="min-w-0">{attachmentNotice}</span>
+          <button
+            type="button"
+            onClick={() => setAttachmentNotice(null)}
+            aria-label="Dispensar aviso"
+            className="shrink-0 text-(--hb-orange-deep)/70 hover:text-(--hb-orange-deep)"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_20rem]">
         {/* ── Corpo principal ── */}
@@ -666,7 +728,7 @@ export function TaskDetailClient({
         </div>
       </div>
 
-      <Dialog open={editing} onOpenChange={setEditing}>
+      <Dialog open={editing} onOpenChange={handleEditDialogChange}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>Editar tarefa</DialogTitle>
@@ -684,19 +746,10 @@ export function TaskDetailClient({
             }}
             assignableUsers={assignableUsers}
             availableTags={tags}
-            onSubmit={(values) =>
-              submitUpdateTask({
-                taskId: task.id,
-                title: values.title,
-                description: values.description,
-                priority: values.priority,
-                dueDate: values.dueDate,
-                assigneeIds: values.assigneeIds,
-                tagIds: values.tagIds,
-              })
-            }
-            onCancel={() => setEditing(false)}
+            onSubmit={handleUpdateTask}
+            onCancel={() => handleEditDialogChange(false)}
             isLoading={isSavingTask}
+            submitError={editError}
           />
         </DialogContent>
       </Dialog>

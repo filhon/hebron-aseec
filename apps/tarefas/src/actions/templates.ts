@@ -11,7 +11,11 @@ import {
   subtasks,
   workspaces,
 } from "@hebron/db/schema";
-import { createTaskTemplateSchema } from "@hebron/validators/tarefas";
+import {
+  createTaskTemplateSchema,
+  updateTaskTemplateSchema,
+  toggleTaskTemplateSchema,
+} from "@hebron/validators/tarefas";
 import type { Workspace } from "@hebron/types/tarefas";
 import { colaboradorAction } from "../lib/safe-action";
 
@@ -69,6 +73,81 @@ export const createTaskTemplate = colaboradorAction
           })),
         );
 
+        return row;
+      },
+    );
+
+    return { template };
+  });
+
+// ---------------------------------------------------------------------------
+// updateTaskTemplate — edita o template e substitui seus template_items por
+// completo (P-4.9b). Mesmo gate de papel de createTaskTemplate.
+// ---------------------------------------------------------------------------
+
+export const updateTaskTemplate = colaboradorAction
+  .schema(updateTaskTemplateSchema)
+  .action(async ({ parsedInput: input, ctx }) => {
+    const workspaceId = await resolveWorkspaceId(input.workspace);
+
+    const template = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const [row] = await tx
+          .update(taskTemplates)
+          .set({
+            name: input.name,
+            description: input.description,
+            workspaceId,
+            triggerSourceModule: input.trigger?.sourceModule ?? null,
+            triggerEvent: input.trigger?.event ?? null,
+            updatedAt: new Date(),
+          })
+          .where(eq(taskTemplates.id, input.templateId))
+          .returning();
+        if (!row) throw new Error("Template não encontrado");
+
+        // Substitui a lista de tarefas pré-definidas por completo — a UI
+        // envia o conjunto final, não um diff.
+        await tx
+          .delete(templateItems)
+          .where(eq(templateItems.taskTemplateId, input.templateId));
+        await tx.insert(templateItems).values(
+          input.tasks.map((item, index) => ({
+            taskTemplateId: input.templateId,
+            title: item.title,
+            description: item.description,
+            priority: item.priority,
+            dueOffsetDays: item.dueOffsetDays,
+            subtasks: item.subtasks,
+            order: index,
+          })),
+        );
+
+        return row;
+      },
+    );
+
+    return { template };
+  });
+
+// ---------------------------------------------------------------------------
+// toggleTaskTemplate — ativa/desativa. Template inativo não instancia
+// (guard em instantiateTaskTemplate).
+// ---------------------------------------------------------------------------
+
+export const toggleTaskTemplate = colaboradorAction
+  .schema(toggleTaskTemplateSchema)
+  .action(async ({ parsedInput: input, ctx }) => {
+    const template = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const [row] = await tx
+          .update(taskTemplates)
+          .set({ isActive: input.isActive, updatedAt: new Date() })
+          .where(eq(taskTemplates.id, input.templateId))
+          .returning();
+        if (!row) throw new Error("Template não encontrado");
         return row;
       },
     );

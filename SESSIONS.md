@@ -119,6 +119,7 @@
 | S-96   | 2026-07-10 | P-5.9b — Intranet: decisões por presidente da sessão (PATCH-017)        | concluido                            |
 | S-97   | 2026-07-10 | P-5.9c — Intranet: snapshot de KPIs e tendências (PATCH-018)            | concluido                            |
 | S-98   | 2026-07-10 | P-4.11b — Tarefas: seed e configuração do checklist padrão (PATCH-019)  | concluido                            |
+| S-99   | 2026-07-13 | P-4.9b — Tarefas: anexos persistidos e gestão de templates (PATCH-020)  | concluido                            |
 
 ---
 
@@ -5537,3 +5538,87 @@ investigado nem corrigido aqui.
 - `packages/integrations/src/projetos-tarefas.ts` (usa `PROJETOS_CHECKLIST_TEMPLATE_SETTING_KEY` de `@hebron/db/seed`)
 - `apps/admin/src/actions/settings.ts` (`setProjetosChecklistTemplate`)
 - `apps/admin/src/app/(dashboard)/configuracoes/page.tsx` (UI de troca de template na aba Sistema)
+
+---
+
+### S-99 — 2026-07-13 — P-4.9b Tarefas: anexos persistidos e gestão de templates (PATCH-020)
+
+**Prompt:** P-4.9b (`PATCHES/020-tarefas-anexos-templates-operaveis.md`)
+**Modelo:** claude-opus-4-8
+**Status:** concluido
+
+**Resumo:**
+Verificado contra o código atual que os dois débitos do PATCH-020 eram reais:
+(1) `TaskForm` mantinha os anexos só em estado local — os três consumidores
+(`my-tasks-client`, `board-client`, `task-detail-client`) chamavam
+`onSubmit={(values) => submit(values)}`, descartando o arg `attachments`,
+mesmo com a action `createAttachment` (tasks.ts, desde S-81) já pronta; e
+(2) `templates.ts` só tinha `createTaskTemplate`/`instantiateTaskTemplate`, e
+`templates-client` não expunha editar/ativar/desativar (não havia action).
+
+Anexos: a persistência segue o padrão já estabelecido em `apps/documentos`
+(action devolve signed upload URL → cliente faz o `PUT` direto ao Storage).
+Extraído um helper `uploadTaskAttachments(taskId, files)` exportado de
+`task-form.tsx` (arquivo permitido) que registra cada anexo via
+`createAttachment` e faz o `PUT`, devolvendo falhas por arquivo sem lançar.
+Os consumidores passaram de `execute` (fire-and-forget) para `executeAsync`:
+criam a tarefa, então enviam os anexos; em falha de upload a tarefa criada é
+preservada e um aviso é exibido num banner de página (sem risco de duplicar
+a tarefa — o form fica desabilitado durante o envio e fecha ao concluir).
+`TaskForm` ganhou prop `submitError` para erros gerais de submissão.
+
+Templates: novas actions `updateTaskTemplate` (substitui os `template_items`
+por completo) e `toggleTaskTemplate` (ativa/desativa), com os schemas Zod
+compartilhados `updateTaskTemplateSchema`/`toggleTaskTemplateSchema`
+(`packages/validators`). Mesmo gate de papel de `createTaskTemplate`
+(`colaboradorAction`). `templates-client` ganhou botões Editar (reusa
+`TemplateForm` pré-preenchido) e Ativar/Desativar. O bloqueio de instanciação
+de template inativo já existia (guard em `instantiateTaskTemplate` + botão
+desabilitado na UI) e foi preservado.
+
+**Desvios do prompt (registrados):**
+
+- `apps/tarefas/src/__tests__/templates.test.ts` **já existia** (o prompt o
+  listava como criação) — estendido com cobertura de update/toggle e gate de
+  papel, em vez de recriado.
+- O item "impedir instanciação de template inativo pela action" já estava
+  implementado desde P-4.8 — mantido e coberto por teste, não reimplementado.
+- `apps/tarefas/src/actions/tasks.ts` estava na lista de permitidos mas não
+  precisou de mudança (`createAttachment` já pronto).
+
+**Critérios de aceite verificados:**
+
+- [x] Criar tarefa com arquivo persiste a tarefa, registra anexo e gera upload
+      assinado (`attachments.test.ts`).
+- [x] Editar tarefa permite adicionar novos anexos (`task-detail-client`).
+- [x] Falha de upload mostra aviso específico sem duplicar tarefa (banner de
+      página; form desabilitado durante o envio).
+- [x] Template pode ser editado e ativado/desativado pela UI.
+- [x] Template inativo não pode ser instanciado (guard pré-existente + teste).
+- [x] RLS de anexos continua respeitada (`createAttachment` sob
+      `withAuthenticatedContext`, sem service_role).
+- [x] Lint, types e testes de Tarefas passam (`@hebron/tarefas` 50/50 em 6
+      arquivos; `@hebron/validators` typecheck ok).
+
+**Débito de infra de teste resolvido de passagem:**
+`runtime-rls.test.ts` falhava (mesmo isolado) por poluição pré-existente do
+banco de teste compartilhado: o fixture sintético `ec000000-…-001`
+(ghostColaborador, mesmo UUID do ACTOR_ID de `templates.test.ts`) tinha 3
+tasks e um role_assignment órfãos de uma execução abortada anterior. Limpeza
+pontual dos fixtures sintéticos `ec000000-…` (script descartável, removido em
+seguida). Não relacionado às mudanças deste patch.
+
+**Arquivos criados:**
+
+- `apps/tarefas/src/__tests__/attachments.test.ts`
+
+**Arquivos modificados:**
+
+- `packages/validators/src/tarefas/index.ts` (schemas update/toggle template)
+- `apps/tarefas/src/actions/templates.ts` (`updateTaskTemplate`, `toggleTaskTemplate`)
+- `apps/tarefas/src/components/task-form.tsx` (`submitError`, `uploadTaskAttachments`)
+- `apps/tarefas/src/app/(dashboard)/my-tasks-client.tsx` (create+upload)
+- `apps/tarefas/src/app/(dashboard)/workspace/[slug]/board-client.tsx` (create+upload)
+- `apps/tarefas/src/app/(dashboard)/tarefa/[id]/task-detail-client.tsx` (edit+upload)
+- `apps/tarefas/src/app/(dashboard)/templates/templates-client.tsx` (editar/ativar/desativar)
+- `apps/tarefas/src/__tests__/templates.test.ts` (cobertura update/toggle/gate)

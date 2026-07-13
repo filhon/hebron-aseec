@@ -210,6 +210,27 @@ export const createTaskTemplateSchema = z.object({
 
 export type CreateTaskTemplateInput = z.infer<typeof createTaskTemplateSchema>;
 
+// ─── updateTaskTemplateSchema ─────────────────────────────────────────────────
+// Mesma forma de createTaskTemplate + o id do template. A action substitui os
+// template_items por completo (P-4.9b).
+
+export const updateTaskTemplateSchema = createTaskTemplateSchema.extend({
+  templateId: z.string().uuid(),
+});
+
+export type UpdateTaskTemplateInput = z.infer<typeof updateTaskTemplateSchema>;
+
+// ─── toggleTaskTemplateSchema ─────────────────────────────────────────────────
+// Ativa/desativa um template. Template inativo não pode ser instanciado
+// (BRAIN §6.9) — o gate é reforçado na action instantiateTaskTemplate.
+
+export const toggleTaskTemplateSchema = z.object({
+  templateId: z.string().uuid(),
+  isActive: z.boolean(),
+});
+
+export type ToggleTaskTemplateInput = z.infer<typeof toggleTaskTemplateSchema>;
+
 // ─── Re-export enums for shared use ───────────────────────────────────────────
 
 export {
