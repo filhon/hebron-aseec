@@ -1,0 +1,119 @@
+"use client";
+
+import * as React from "react";
+import { EmptyState } from "@hebron/ui";
+import { Plus, StickyNote } from "lucide-react";
+
+function cn(...cls: (string | false | null | undefined)[]): string {
+  return cls.filter(Boolean).join(" ");
+}
+
+function formatTimestamp(seconds: number): string {
+  const totalSeconds = Math.floor(seconds);
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+/**
+ * Não existe entidade `Note` em `packages/types/plataforma` (P-6.1) — o
+ * escopo de anotações no vídeo não foi coberto pelos tipos/schemas. Definido
+ * localmente aqui; registrado como débito em SESSIONS.md para o backend
+ * (P-6.6+) adicionar `Note` ao pacote compartilhado.
+ */
+export interface LessonNote {
+  id: string;
+  timestampSeconds: number;
+  content: string;
+  createdAt: Date;
+}
+
+export interface NoteWidgetProps {
+  notes: LessonNote[];
+  /** Tempo atual do vídeo (segundos) — usado como timestamp da próxima nota. */
+  currentTimeSeconds: number;
+  onAddNote: (content: string, timestampSeconds: number) => void;
+  onNoteClick?: (note: LessonNote) => void;
+  isLoading?: boolean;
+  className?: string;
+}
+
+/** Painel de notas por aula — cada nota fica ancorada a um minuto do vídeo e
+ * é clicável para levar o player até aquele ponto. */
+export function NoteWidget({
+  notes,
+  currentTimeSeconds,
+  onAddNote,
+  onNoteClick,
+  isLoading = false,
+  className,
+}: NoteWidgetProps) {
+  const [content, setContent] = React.useState("");
+
+  const sortedNotes = [...notes].sort(
+    (a, b) => a.timestampSeconds - b.timestampSeconds,
+  );
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const trimmed = content.trim();
+    if (!trimmed) return;
+    onAddNote(trimmed, currentTimeSeconds);
+    setContent("");
+  }
+
+  return (
+    <div className={cn("flex flex-col gap-4", className)}>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-2">
+        <label className="text-xs font-(--font-weight-medium) text-(--fg-muted)">
+          Nova nota em {formatTimestamp(currentTimeSeconds)}
+        </label>
+        <div className="flex items-end gap-2">
+          <textarea
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            placeholder="Escreva uma anotação sobre este momento da aula…"
+            rows={2}
+            className="min-w-0 flex-1 resize-none rounded-(--radius) border border-(--border) bg-(--bg) px-3 py-2 text-sm text-(--fg) outline-none transition-colors placeholder:text-(--fg-muted) focus:border-(--brand)"
+          />
+          <button
+            type="submit"
+            disabled={!content.trim() || isLoading}
+            aria-label="Adicionar nota"
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-(--brand) text-(--brand-fg) transition-colors hover:bg-(--hb-blue-soft) disabled:opacity-40"
+          >
+            <Plus className="h-4 w-4" aria-hidden="true" />
+          </button>
+        </div>
+      </form>
+
+      {sortedNotes.length === 0 ? (
+        <EmptyState
+          icon={StickyNote}
+          title="Nenhuma nota nesta aula"
+          description="Suas anotações ficam vinculadas ao minuto do vídeo."
+          hideQuote
+        />
+      ) : (
+        <ul className="flex flex-col gap-1.5">
+          {sortedNotes.map((note) => (
+            <li key={note.id}>
+              <button
+                type="button"
+                onClick={() => onNoteClick?.(note)}
+                className="flex w-full items-start gap-2.5 rounded-(--radius-sm) px-2.5 py-2 text-left transition-colors hover:bg-(--surface-alt)"
+              >
+                <span className="mt-0.5 shrink-0 rounded-(--radius-xs) bg-(--brand-muted) px-1.5 py-0.5 font-(--font-mono) text-xs font-(--font-weight-semibold) text-(--brand)">
+                  {formatTimestamp(note.timestampSeconds)}
+                </span>
+                <span className="min-w-0 flex-1 text-sm leading-relaxed text-(--fg)">
+                  {note.content}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}

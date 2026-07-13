@@ -483,6 +483,12 @@ importers:
       "@hebron/validators":
         specifier: workspace:*
         version: link:../../packages/validators
+      hls.js:
+        specifier: ^1.6.16
+        version: 1.6.16
+      lucide-react:
+        specifier: ^0.460.0
+        version: 0.460.0(react@19.2.6)
       next:
         specifier: ^15.3.0
         version: 15.5.18(@opentelemetry/api@1.9.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -7104,6 +7110,12 @@ packages:
       }
     engines: { node: ">= 0.4" }
 
+  hls.js@1.6.16:
+    resolution:
+      {
+        integrity: sha512-VSIRpLfRwlAAdGL4wiTucx2ScRipo0ed1FBatWkyt832jC4CReKstga6yIhYVwGu9LOBjuX9wzmRMeQdBJtzEA==,
+      }
+
   hsl-to-hex@1.0.0:
     resolution:
       {
@@ -13009,6 +13021,8 @@ snapshots:
   hasown@2.0.3:
     dependencies:
       function-bind: 1.1.2
+
+  hls.js@1.6.16: {}
 
   hsl-to-hex@1.0.0:
     dependencies:

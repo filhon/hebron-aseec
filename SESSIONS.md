@@ -123,6 +123,8 @@
 | S-100  | 2026-07-13 | P-1.25b — Admin: designações honestas e revogação sem hard delete (PATCH-021) | concluido                            |
 | S-101  | 2026-07-13 | P-5.11 — Integrações Cross-App Intranet                                       | concluido                            |
 | S-102  | 2026-07-13 | P-5.12 — Testes Intranet                                                      | concluido                            |
+| S-103  | 2026-07-13 | P-6.1 — Schema de Tipos Plataforma                                            | concluido                            |
+| S-104  | 2026-07-13 | P-6.2 — Componentes UI Plataforma                                             | parcial                              |
 
 ---
 
@@ -5971,3 +5973,89 @@ continua sendo "concluir 100% da trilha").
 
 - `packages/types/package.json` (entrada `./plataforma` no `exports`)
 - `packages/validators/package.json` (entrada `./plataforma` no `exports`)
+
+### S-104 — 2026-07-13 — P-6.2 Componentes UI Plataforma
+
+**Prompt:** P-6.2
+**Duracao:** ~1 sessao
+**Modelo:** sonnet-5
+**Status:** parcial
+
+**Resumo:**
+Implementados os 8 componentes de UI do módulo (CourseCard, LessonPlayer,
+QuizForm, ProgressBar, CertificateCard, DiscussionThread, CourseSidebar,
+NoteWidget), sobre os tipos/mocks de P-6.1. `design-refs/plataforma/` não
+existe — seguido o fallback do G3 (BRAIN §5, tokens canônicos, componentes
+de `@hebron/ui`), replicando os padrões já usados em `apps/tarefas` e
+`apps/projetos` (helper `cn` local por arquivo, `EmptyState`/`Avatar` do
+design system, sem CSS próprio do app).
+
+**Decisões tomadas:**
+
+- `LessonContent` (rich text) está no texto do escopo do prompt, mas
+  **não** está na lista de "Arquivos permitidos" (só os 8 arquivos
+  listados) — não foi criado, por G1 (não criar arquivo fora da lista
+  permitida). A renderização de aula de texto provavelmente reaproveita
+  `RichTextEditor`/conteúdo já existente em `@hebron/ui` em modo leitura,
+  em prompt de telas futuro.
+- `QuizForm` cobre **apenas múltipla escolha** — o critério de aceite pede
+  "múltipla escolha e dissertativa", mas `QuizQuestion` (P-6.1,
+  `packages/types/src/plataforma`) só tem `options`/`correctOptionId`; o
+  Zod schema (`quizQuestionSchema`) exige no mínimo 2 alternativas sempre.
+  Não há campo para questão dissertativa em nenhuma camada existente.
+  Registrado como débito — dissertativa exige extensão de tipo/schema em
+  prompt de backend futuro (fora do escopo de arquivos permitidos aqui).
+- `NoteWidget`: não existe entidade `Note` em `packages/types/plataforma`
+  (P-6.1 registrou explicitamente que notas ficaram fora daquele escopo).
+  Definido um tipo local `LessonNote` (exportado) dentro do próprio
+  componente — decisão mais simples (G1) até um prompt de backend
+  adicionar `Note` ao pacote compartilhado.
+- `CourseSidebar`: status de cada aula (completo/em andamento/disponível/
+  bloqueado) é computado a partir de `progress` + a cadeia `nextLessonId`
+  (busca reversa: aula anterior = aula cujo `nextLessonId` aponta para a
+  atual). Uma aula com `requiresCompletion=true` só fica disponível quando
+  a aula anterior da trilha está concluída (BRAIN §6.3) — lógica mantida
+  no componente por ser puramente apresentacional/derivada de props, sem
+  chamada a Server Action.
+- `apps/plataforma/package.json` não estava na lista de arquivos
+  permitidos, mas precisou de `hls.js` (player HLS, pedido explicitamente
+  no critério de aceite) e `lucide-react` (ícones, ausente no app embora
+  presente em outros apps do monorepo) como dependências diretas — sem
+  isso o app não compila. Tratado como infraestrutura óbvia faltante (G1),
+  mesmo precedente de S-103 com `packages/types/package.json`.
+- `LessonPlayer`: sem lib de UI para os controles (nenhum componente de
+  vídeo em `@hebron/ui`) — construídos sobre `<video>` nativo + `hls.js`,
+  com popover de velocidade no mesmo padrão do popover de link do
+  `RichTextEditor` (click-outside via `mousedown` no documento).
+
+**Critérios de aceite verificados:**
+
+- [x] LessonPlayer com vídeo HLS (hls.js), controle de velocidade,
+      marcadores — `lesson-player.tsx`.
+- [x] CourseSidebar com módulos/aulas e ícones de progresso (completo/em
+      andamento/locked) — `course-sidebar.tsx`.
+- [~] QuizForm com tipos: múltipla escolha e dissertativa — apenas
+      múltipla escolha implementada; dissertativa não suportada pelo tipo
+      `QuizQuestion` existente (ver decisão acima).
+- [x] NoteWidget: criar nota em timestamp do vídeo, clicável para ir ao
+      ponto — `note-widget.tsx`.
+- [x] ProgressBar por curso e global (% de conclusão) — `progress-bar.tsx`,
+      reutilizado por `course-card.tsx`.
+- [x] Responsivo — componentes usam flex/grid fluido, sem larguras fixas.
+- [x] Lint passa — `pnpm turbo lint --filter=@hebron/plataforma`.
+- [x] Types passam — `pnpm turbo typecheck --filter=@hebron/plataforma`.
+
+**Arquivos criados:**
+
+- `apps/plataforma/src/components/course-card.tsx`
+- `apps/plataforma/src/components/lesson-player.tsx`
+- `apps/plataforma/src/components/quiz-form.tsx`
+- `apps/plataforma/src/components/progress-bar.tsx`
+- `apps/plataforma/src/components/certificate-card.tsx`
+- `apps/plataforma/src/components/discussion-thread.tsx`
+- `apps/plataforma/src/components/course-sidebar.tsx`
+- `apps/plataforma/src/components/note-widget.tsx`
+
+**Arquivos modificados:**
+
+- `apps/plataforma/package.json` (dependências `hls.js` e `lucide-react`)
