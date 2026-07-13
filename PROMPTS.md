@@ -3523,12 +3523,12 @@ Formulários: criar/editar curso (título, descrição, categoria, instrutor, ca
 
 **Critérios de aceite:**
 
-- [ ] Curso form: título, descrição (editor compartilhado — D-1), capa (upload para o bucket plataforma-capas de P-0.12), categoria, instrutor
-- [ ] Lesson form: upload de vídeo (URL Bunny.net) ou conteúdo rich text
-- [ ] Quiz editor: adicionar/remover perguntas, definir respostas corretas
-- [ ] Validação Zod
-- [ ] Lint passa
-- [ ] Types passam
+- [x] Curso form: título, descrição (editor compartilhado — D-1), capa (upload para o bucket plataforma-capas de P-0.12), categoria, instrutor
+- [x] Lesson form: upload de vídeo (URL Bunny.net) ou conteúdo rich text
+- [x] Quiz editor: adicionar/remover perguntas, definir respostas corretas
+- [x] Validação Zod
+- [x] Lint passa
+- [x] Types passam
 
 ---
 

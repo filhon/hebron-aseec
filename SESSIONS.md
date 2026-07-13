@@ -126,6 +126,7 @@
 | S-103  | 2026-07-13 | P-6.1 — Schema de Tipos Plataforma                                            | concluido                            |
 | S-104  | 2026-07-13 | P-6.2 — Componentes UI Plataforma                                             | parcial                              |
 | S-105  | 2026-07-13 | P-6.3 — Telas e Páginas Plataforma                                            | parcial                              |
+| S-106  | 2026-07-13 | P-6.4 — Formulários Plataforma                                                | parcial                              |
 
 ---
 
@@ -6183,3 +6184,106 @@ infraestrutura Next.js (mesmo padrão de S-10/S-75).
 **Arquivos modificados:**
 
 - `apps/plataforma/eslint.config.mjs` (ignores `next-env.d.ts` e `.next/**`)
+
+### S-106 — 2026-07-13 — P-6.4 Formulários Plataforma
+
+**Prompt:** P-6.4
+**Duracao:** ~1 sessao
+**Modelo:** sonnet-5
+**Status:** parcial
+
+**Resumo:**
+Criados os 5 formulários reutilizáveis do módulo (curso, aula, quiz, post de
+discussão, nota pessoal) sobre os tipos de P-6.1 e os schemas Zod de
+`packages/validators/plataforma` (criados em P-6.3 mas nunca conectados a um
+app — ver decisão abaixo). Componentes usam o padrão já estabelecido em
+P-6.2/P-6.3 (`FormField`, `Input`, `Select`, `RichTextEditor`, `Button` de
+`@hebron/ui`, validação manual com `schema.safeParse` no submit), não
+`react-hook-form`/`next-safe-action` (isso é Bloco B).
+
+**Decisões tomadas:**
+
+- **`packages/validators/src/index.ts` não reexportava `./plataforma`**:
+  os schemas existiam desde P-6.3 mas nenhum app conseguia importá-los de
+  `@hebron/validators` (só `admin`, `documentos`, `financeiro`, `projetos`
+  estavam no barrel). Infraestrutura óbvia faltante (G1) — adicionada a
+  linha de export. Mesmo tipo de lacuna já visto em `packages/types`
+  (S-103/S-104, ver comentário em `note-widget.tsx`/`quiz-form.tsx`).
+- **`zod` ausente de `apps/plataforma/package.json`**: o app usa
+  `@hebron/validators` (que depende de `zod`) mas nunca declarou `zod`
+  diretamente, diferente de todos os outros 6 apps que o fazem. Sem isso
+  `tsc` falha (`Cannot find module 'zod'`) ao tipar `z.ZodError` nos
+  helpers de erro de campo. Adicionado `"zod": "catalog:"` — infraestrutura
+  óbvia faltante (G1).
+- **"Criar/editar módulo" sem arquivo próprio na lista de arquivos
+  permitidos**: o Escopo pede o formulário de módulo mas `Arquivos
+permitidos` só lista 5 arquivos (curso, aula, quiz, post, nota) — nenhum
+  `module-form.tsx`. Interpretação mais simples: módulo é sub-entidade de
+  curso, então `CourseModuleForm` foi adicionado como export extra dentro
+  de `course-form.tsx` (mesmo arquivo, dois componentes relacionados) em
+  vez de criar um arquivo fora da lista.
+- **"Matrícula (botão)" também sem arquivo próprio**: o botão "Matricular-se"
+  já existe, funcional, inline em `(aluno)/curso/[slug]/page.tsx` desde
+  P-6.3. Como nenhum arquivo foi listado para esse item em P-6.4, nenhum
+  componente novo foi criado — o critério já está coberto pelo trabalho
+  anterior.
+- **Nota pessoal sem schema/tipo compartilhado**: mesmo débito já registrado
+  em `note-widget.tsx` (P-6.2) — não existe `Note` em
+  `packages/types/plataforma` nem schema em `packages/validators/plataforma`.
+  `note-form.tsx` define um `z.object` local só para validar
+  `content`/`timestampSeconds`; Bloco B deve promover isso a
+  `createNoteSchema` compartilhado.
+- **Capa do curso e anexo de aula (tipo `download`) sem upload real**: o
+  bucket `plataforma-capas` (P-0.12) e o storage de anexos são Bloco B. Os
+  dois formulários capturam o `File` localmente; `course-form.tsx` só faz
+  preview (não força URL), mas `createLessonSchema` exige `downloadUrl`
+  não-nulo quando `type === "download"` — para não violar o schema
+  compartilhado nem inventar uma exceção nele, `lesson-form.tsx` usa
+  `URL.createObjectURL` como valor local de `downloadUrl` (mesmo padrão de
+  preview de PDF já usado em `apps/documentos/document-form.tsx`); o Bloco
+  B troca pela URL real do bucket após o upload.
+- **`discussion-post-form.tsx` e `note-form.tsx` duplicam funcionalmente**
+  os composers já embutidos em `discussion-thread.tsx` e `note-widget.tsx`
+  (P-6.2). Esses dois arquivos não estão na lista de arquivos permitidos
+  deste prompt e não foram tocados — a reconciliação (usar os formulários
+  dedicados em vez da lógica inline) é trabalho de integração e fica para
+  P-6.9, conforme G5 ("P-X.9 usa e conecta componentes do Bloco A, não
+  reescreve inline").
+- **`next build` volta a falhar** com o mesmo erro de ambiente
+  (`WasmHash._updateWithBuffer ... Cannot read properties of undefined`)
+  já registrado em S-105 como pré-existente do ambiente Windows/pnpm/Node,
+  não relacionado ao código deste prompt. `tsc --noEmit` e `eslint` passam
+  limpos.
+
+**Critérios de aceite verificados:**
+
+- [x] Curso form: título, descrição (editor compartilhado — D-1), capa
+      (captura local de `File`, upload real é débito de Bloco B), categoria,
+      instrutor.
+- [x] Lesson form: upload de vídeo (URL Bunny.net) ou conteúdo rich text —
+      também cobre tipo `download` (anexo) e mostra aviso para tipo `quiz`
+      apontando ao editor de quiz.
+- [x] Quiz editor: adicionar/remover perguntas, definir respostas corretas.
+- [x] Validação Zod em todos os 5 formulários.
+- [x] Lint passa — `pnpm turbo lint --filter=@hebron/plataforma
+    --filter=@hebron/validators`.
+- [x] Types passam — `pnpm turbo typecheck --filter=@hebron/plataforma
+    --filter=@hebron/validators`, zero erros.
+- [~] `next build` — falha por erro de ambiente pré-existente (ver decisão
+  acima), não relacionado ao código deste prompt.
+
+**Arquivos criados:**
+
+- `apps/plataforma/src/components/course-form.tsx` (`CourseForm` +
+  `CourseModuleForm`)
+- `apps/plataforma/src/components/lesson-form.tsx`
+- `apps/plataforma/src/components/quiz-editor.tsx`
+- `apps/plataforma/src/components/discussion-post-form.tsx`
+- `apps/plataforma/src/components/note-form.tsx`
+
+**Arquivos modificados:**
+
+- `packages/validators/src/index.ts` (adiciona `export * from "./plataforma"`
+  — ver decisão acima)
+- `apps/plataforma/package.json` (adiciona dependência `zod` — ver decisão
+  acima)
