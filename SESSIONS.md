@@ -122,6 +122,7 @@
 | S-99   | 2026-07-13 | P-4.9b — Tarefas: anexos persistidos e gestão de templates (PATCH-020)        | concluido                            |
 | S-100  | 2026-07-13 | P-1.25b — Admin: designações honestas e revogação sem hard delete (PATCH-021) | concluido                            |
 | S-101  | 2026-07-13 | P-5.11 — Integrações Cross-App Intranet                                       | concluido                            |
+| S-102  | 2026-07-13 | P-5.12 — Testes Intranet                                                      | concluido                            |
 
 ---
 
@@ -5819,3 +5820,87 @@ projetos` e vários `GRANT SELECT/INSERT/UPDATE` de tabelas de
 - `packages/integrations/src/index.ts` (re-export dos 3 arquivos novos)
 - `packages/integrations/package.json` (subpath exports `./feed`,
   `./plataforma`, `./radio`)
+
+### S-102 — 2026-07-13 — P-5.12 Testes Intranet
+
+**Prompt:** P-5.12
+**Duracao:** ~1 sessao
+**Modelo:** sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Criados `rls.test.ts` e `search.test.ts`. `kpis.test.ts` já existia (P-5.9c)
+e já cobria o critério "KPIs cross-schema retornam contagens corretas"
+(fallback ao vivo exercita `countProjetosAtivos`/`sumDoacoesDoMes`/
+`countTarefasAbertas` contra projetos/financeiro/tarefas reais) — não
+precisou de mudança.
+
+**Decisões tomadas:**
+
+- O texto de escopo do prompt lista 5 áreas de teste, mas só 3 arquivos
+  estão na lista de arquivos permitidos (`rls.test.ts`, `kpis.test.ts`,
+  `search.test.ts`) e os critérios de aceite (checkboxes) só citam
+  explicitamente RLS/KPIs/Busca. Interpretação assumida (G1, "opção mais
+  simples, suposição registrada"): `rls.test.ts` é o arquivo "guarda-chuva"
+  para as duas áreas de escopo sem checkbox próprio — "Dashboard config
+  persiste e carrega" e "Decisão → tarefa funciona" — em vez de inventar
+  arquivos fora da lista.
+- "RLS: colaborador não cria anúncios; diretor sim" já tinha cobertura
+  parcial em `runtime-rls.test.ts` (P-0.17), mas com um ator "fantasma"
+  (claim de diretor via `resolveSession` mockado, sem `role_assignments`
+  real) — isso prova que a RLS barra claims forjados, não que barra um
+  colaborador real. `rls.test.ts` adiciona o caso que faltava: INSERT direto
+  via `withAuthenticatedContext` como colaborador com `role_assignments`
+  verdadeiro (ignorando o gate JS de `createAnnouncement`), mais o mesmo
+  cenário passando pela Server Action de verdade.
+- "Decisão → tarefa" já tinha um teste end-to-end do lado de
+  `packages/integrations` (`tarefas.test.ts`, P-5.11) exercitando
+  `createAutoTask` isoladamente. `rls.test.ts` adiciona a ponta que faltava:
+  chamar `createMeetingDecision({ createTask: true })` de verdade e
+  confirmar que a tarefa criada em `tarefas.tasks` é a mesma referenciada em
+  `meeting_decisions.task_id` — a integração ponta a ponta pela Server
+  Action, não só o contrato isolado.
+- `search.test.ts` não mocka `resolveSession`: `globalSearch` chama
+  `getSessionSupabaseClient()` (cookies reais) e não `ctx.actorId`, porque a
+  RPC `intranet_global_search` (0039, `SECURITY INVOKER`) precisa de
+  `auth.uid()` real para a RLS de cada schema filtrar. Único padrão que
+  funciona é o de `apps/documentos/src/__tests__/session-real.test.ts`:
+  `createTestAuthUser` + login real (`createTestSessionCookies`) + mock só
+  de `next/headers.cookies()`. Estendido aqui para alternar entre duas
+  sessões reais (diretor/colaborador) trocando `state.activeCookieJar` entre
+  chamadas — mesmo processo sequencial (`singleFork`) que os demais testes
+  do app já assumem.
+- Documento "restricted" e demais fixtures (projeto, tarefa) usam o diretor
+  de teste como autor/submissor/criador — evita depender de
+  `projects_select_reviewer` (que exige `stage` em `votacao`+) e usa
+  `projects_select_own_or_org` (dono vê independente do estágio), mais
+  simples para o fixture do teste.
+- Teste de busca por reunião (`admin.meeting_sessions`, formatação
+  `to_char(date, 'DD/MM/YYYY')`) foi descartado: dependeria do timezone da
+  sessão Postgres para não cruzar limite de dia, e não é um critério de
+  aceite explícito — os 2 critérios de busca (múltiplos módulos, documento
+  restricted) já ficam cobertos com projetos/documentos/tarefas.
+
+**Critérios de aceite verificados:**
+
+- [x] RLS: colaborador não cria anúncios; diretor sim — `rls.test.ts`
+      (INSERT direto via RLS + Server Action).
+- [x] KPIs: queries cross-schema retornam contagens corretas —
+      `kpis.test.ts` (já existente, P-5.9c).
+- [x] Busca: resultados de múltiplos módulos — `search.test.ts` (projetos,
+      documentos, tarefas para o mesmo termo).
+- [x] Busca: usuário sem papel para ver documento restricted não o recebe
+      via busca global (contrato P-5.8) — `search.test.ts` (diretor vê,
+      colaborador não).
+- [x] Testes passam — `pnpm vitest run` em `apps/intranet`: 7 arquivos,
+      29 testes, todos verdes.
+- [x] Lint passa — `pnpm turbo lint --filter=@hebron/intranet`.
+
+**Arquivos criados:**
+
+- `apps/intranet/src/__tests__/rls.test.ts`
+- `apps/intranet/src/__tests__/search.test.ts`
+
+**Arquivos modificados:**
+
+- Nenhum (`kpis.test.ts` já satisfazia o critério, sem alteração).

@@ -3367,12 +3367,12 @@ Testes: RLS (diretor cria anúncio, colaborador não). KPIs cross-schema retorna
 
 **Critérios de aceite:**
 
-- [ ] RLS: colaborador não cria anúncios; diretor sim
-- [ ] KPIs: queries cross-schema retornam contagens corretas
-- [ ] Busca: resultados de múltiplos módulos
-- [ ] Busca: usuário sem papel para ver documento restricted não o recebe via busca global (contrato P-5.8)
-- [ ] Testes passam
-- [ ] Lint passa
+- [x] RLS: colaborador não cria anúncios; diretor sim
+- [x] KPIs: queries cross-schema retornam contagens corretas
+- [x] Busca: resultados de múltiplos módulos
+- [x] Busca: usuário sem papel para ver documento restricted não o recebe via busca global (contrato P-5.8)
+- [x] Testes passam
+- [x] Lint passa
 
 ---
 
