@@ -3444,14 +3444,14 @@ Componentes: CourseCard (capa, título, instrutor, progresso). LessonPlayer (vid
 
 **Critérios de aceite:**
 
-- [ ] LessonPlayer com video HLS (hls.js), controle de velocidade, marcadores
-- [ ] CourseSidebar com módulos/aulas e ícones de progresso (completo/em andamento/locked)
-- [ ] QuizForm com tipos: múltipla escolha e dissertativa
-- [ ] NoteWidget: criar nota em timestamp do vídeo, clicável para ir ao ponto
-- [ ] ProgressBar por curso e global (% de conclusão)
-- [ ] Responsivo
-- [ ] Lint passa
-- [ ] Types passam
+- [x] LessonPlayer com video HLS (hls.js), controle de velocidade, marcadores
+- [x] CourseSidebar com módulos/aulas e ícones de progresso (completo/em andamento/locked)
+- [~] QuizForm com tipos: múltipla escolha e dissertativa
+- [x] NoteWidget: criar nota em timestamp do vídeo, clicável para ir ao ponto
+- [x] ProgressBar por curso e global (% de conclusão)
+- [x] Responsivo
+- [x] Lint passa
+- [x] Types passam
 
 ---
 
@@ -3486,16 +3486,16 @@ Páginas do aluno: Catálogo de cursos (filtros: categoria, dificuldade, instrut
 
 **Critérios de aceite:**
 
-- [ ] Catálogo com filtros e busca simples (título, série, categoria)
-- [ ] Página de curso: descrição, ementa, instrutor, CTA matrícula
-- [ ] Player: vídeo + sidebar navegação + notas + discussão
-- [ ] "Minha jornada": cursos em andamento com progresso visual
-- [ ] Certificados: lista com download PDF
-- [ ] Editor de curso: drag-drop para ordenar módulos e aulas
-- [ ] Editor de aula e editor de quiz têm página própria e são navegáveis a partir do editor de curso
-- [ ] Responsivo
-- [ ] Lint passa
-- [ ] Types passam
+- [~] Catálogo com filtros e busca simples (título, série, categoria)
+- [x] Página de curso: descrição, ementa, instrutor, CTA matrícula
+- [x] Player: vídeo + sidebar navegação + notas + discussão
+- [x] "Minha jornada": cursos em andamento com progresso visual
+- [x] Certificados: lista com download PDF
+- [x] Editor de curso: drag-drop para ordenar módulos e aulas
+- [x] Editor de aula e editor de quiz têm página própria e são navegáveis a partir do editor de curso
+- [x] Responsivo
+- [x] Lint passa
+- [x] Types passam
 
 ---
 

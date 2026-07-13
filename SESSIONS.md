@@ -125,6 +125,7 @@
 | S-102  | 2026-07-13 | P-5.12 — Testes Intranet                                                      | concluido                            |
 | S-103  | 2026-07-13 | P-6.1 — Schema de Tipos Plataforma                                            | concluido                            |
 | S-104  | 2026-07-13 | P-6.2 — Componentes UI Plataforma                                             | parcial                              |
+| S-105  | 2026-07-13 | P-6.3 — Telas e Páginas Plataforma                                            | parcial                              |
 
 ---
 
@@ -6035,8 +6036,8 @@ design system, sem CSS próprio do app).
 - [x] CourseSidebar com módulos/aulas e ícones de progresso (completo/em
       andamento/locked) — `course-sidebar.tsx`.
 - [~] QuizForm com tipos: múltipla escolha e dissertativa — apenas
-      múltipla escolha implementada; dissertativa não suportada pelo tipo
-      `QuizQuestion` existente (ver decisão acima).
+  múltipla escolha implementada; dissertativa não suportada pelo tipo
+  `QuizQuestion` existente (ver decisão acima).
 - [x] NoteWidget: criar nota em timestamp do vídeo, clicável para ir ao
       ponto — `note-widget.tsx`.
 - [x] ProgressBar por curso e global (% de conclusão) — `progress-bar.tsx`,
@@ -6059,3 +6060,126 @@ design system, sem CSS próprio do app).
 **Arquivos modificados:**
 
 - `apps/plataforma/package.json` (dependências `hls.js` e `lucide-react`)
+
+---
+
+### S-105 — 2026-07-13 — P-6.3 Telas e Páginas Plataforma
+
+**Prompt:** P-6.3
+**Duracao:** ~1 sessao
+**Modelo:** sonnet-5
+**Status:** parcial
+
+**Resumo:**
+Implementadas as 12 páginas do módulo (catálogo, detalhe do curso, player de
+aula, minha jornada, certificados no lado aluno; painel, novo curso, editor
+de curso com drag-drop, editor de aula, editor de quiz no lado instrutor),
+sobre os componentes de P-6.2 e mocks de P-6.1. `design-refs/plataforma/`
+não existe — seguido o fallback do G3 (BRAIN §5), replicando a convenção
+Tailwind-utility-com-CSS-var já estabelecida pelos próprios componentes de
+P-6.2 (não a convenção `.hb-*` de `patterns.css` usada por apps mais
+antigos). `apps/plataforma/src/app/` não existia — criada toda a
+infraestrutura Next.js (mesmo padrão de S-10/S-75).
+
+**Decisões tomadas:**
+
+- **`apps/plataforma/src/app/` inexistente**: criados `layout.tsx` raiz,
+  `globals.css`, `postcss.config.mjs` e ignores de `next-env.d.ts`/`.next/**`
+  em `eslint.config.mjs` — infraestrutura óbvia faltante (G1), mesmo padrão
+  de `apps/admin` (S-10) e `apps/tarefas` (S-75).
+- **Conflito de rota `(aluno)/page.tsx` × `(instrutor)/page.tsx`**: o prompt
+  lista os dois arquivos como páginas separadas, mas grupos de rota do
+  Next.js App Router não adicionam segmento à URL — ambos resolveriam para
+  `/`, o que o Next.js rejeita em build ("two parallel pages that resolve
+  to the same path"). Resolvido renomeando `(instrutor)` (grupo) para
+  `instrutor` (segmento real), mesmo padrão já usado por `apps/documentos`
+  para sua área editorial (`editorial/`, não `(editorial)/`). Todas as
+  rotas do instrutor agora vivem sob `/instrutor/*`. Build limpo
+  (`next build`) confirma 11 rotas sem conflito.
+- **Filtros do catálogo**: o texto do Escopo pede "categoria, dificuldade,
+  instrutor" e o Critério de aceite pede "título, série, categoria" — nem
+  `dificuldade` nem `série` existem em `Course` (P-6.1, tipos não editáveis
+  neste prompt). Implementados os filtros com campos que de fato existem:
+  busca por título + categoria + instrutor.
+- **Páginas dinâmicas são Client Components com `useParams()`**, não Server
+  Components com `params` assíncrono. Todas as páginas de aula/curso
+  precisam de estado interativo coordenado entre múltiplos componentes de
+  P-6.2 (player, notas, discussão, quiz) — um wrapper client único por
+  página evita separar em arquivos `_client.tsx` extras (fora da lista de
+  arquivos permitidos) e evita o problema conhecido de combinar
+  `"use client"` com `params` baseado em Promise no mesmo arquivo.
+- **Narrowing de `course`/`lesson` possivelmente `undefined` em funções
+  aninhadas**: TypeScript não propaga o narrowing do guard `if (!x) return`
+  para dentro de `function` declarations aninhadas mesmo com `const`. Em vez
+  de `!` (banido no projeto), capturadas variáveis primitivas (`lessonId`,
+  `courseId`, `nextLessonId`) logo após o guard e usadas nos closures.
+- **Matrícula, conclusão de aula, submissão de quiz, posts de discussão,
+  notas, publicar/despublicar curso, reordenar módulos/aulas, criar
+  módulo/curso, editar aula/quiz**: todas as mutações são estado local
+  (`useState`), sem Server Action — Bloco A. Nenhuma persiste entre
+  navegações. Registrado como débito para P-6.6+ (Bloco B).
+- **Reordenação drag-drop** implementada com eventos nativos HTML5
+  (`draggable`, `onDragStart`, `onDragOver`, `onDrop`) em vez de biblioteca
+  externa — nenhum app do monorepo usa lib de drag-drop hoje, e
+  `package.json` não está na lista de arquivos permitidos deste prompt.
+- **Correção de quiz** é calculada no cliente comparando `answers` com
+  `correctOptionId` de cada `QuizQuestion` — reflete a mesma regra que o
+  Bloco B vai aplicar no servidor (PATCH-010: `score >= passingScore`,
+  tentativas ilimitadas).
+- **Download de certificado**: sem geração real de PDF nesta fase, o botão
+  gera um arquivo `.txt` local via `Blob`/`URL.createObjectURL` com o hash
+  de verificação — funcional de verdade (não é só visual), mas explicitamente
+  rotulado como comprovante provisório. PDF real fica para o Bloco B.
+- **Editor de aula**: ao abrir a URL de uma aula do tipo `quiz`, a página
+  mostra um `EmptyState` com link direto para `/instrutor/curso/[id]/quiz/
+[quizId]` em vez de duplicar o formulário de quiz — o prompt já define o
+  editor de quiz como rota própria e separada.
+- **Usuário mock fixo por área**: aluno = João Pedro Lima (`user-aluno-01`,
+  o perfil com mais progresso no mock-data de P-6.1); instrutor = Pr. Elias
+  Cavalcanti (`instr-01`). Sem sessão real nesta fase (Bloco A).
+
+**Critérios de aceite verificados:**
+
+- [~] Catálogo com filtros e busca simples (título, série, categoria) —
+  implementado título + categoria + instrutor; `série`/`dificuldade`
+  não existem no tipo `Course` (ver decisão acima).
+- [x] Página de curso: descrição, ementa, instrutor, CTA matrícula.
+- [x] Player: vídeo + sidebar navegação + notas + discussão.
+- [x] "Minha jornada": cursos em andamento com progresso visual.
+- [x] Certificados: lista com download (arquivo `.txt` provisório — ver
+      decisão acima; PDF real é débito de Bloco B).
+- [x] Editor de curso: drag-drop nativo para ordenar módulos e aulas.
+- [x] Editor de aula e editor de quiz têm página própria e são navegáveis a
+      partir do editor de curso.
+- [x] Responsivo — grid/flex fluido com breakpoints `sm:`/`lg:`.
+- [x] Lint passa — `pnpm turbo lint --filter=@hebron/plataforma`.
+- [x] Types passam — `pnpm turbo typecheck --filter=@hebron/plataforma` e
+      `next build` (gera `.next/types`), zero erros.
+- [x] Build (`next build`) e smoke test via `curl` em todas as 12 rotas
+      (200 em dev; produção via `next start` apresentou um erro de vendor
+      chunk do webpack pré-existente do ambiente Windows/pnpm, não
+      relacionado ao código deste prompt — não reproduzido em `next build`
+      nem `next dev`). Verificação visual em browser real não foi possível
+      neste ambiente (sem Playwright/chromium configurado).
+
+**Arquivos criados:**
+
+- `apps/plataforma/postcss.config.mjs`
+- `apps/plataforma/src/app/globals.css`
+- `apps/plataforma/src/app/layout.tsx`
+- `apps/plataforma/src/app/(aluno)/layout.tsx`
+- `apps/plataforma/src/app/(aluno)/page.tsx`
+- `apps/plataforma/src/app/(aluno)/curso/[slug]/page.tsx`
+- `apps/plataforma/src/app/(aluno)/curso/[slug]/aula/[id]/page.tsx`
+- `apps/plataforma/src/app/(aluno)/jornada/page.tsx`
+- `apps/plataforma/src/app/(aluno)/certificados/page.tsx`
+- `apps/plataforma/src/app/instrutor/layout.tsx` (renomeado de `(instrutor)` — ver decisão acima)
+- `apps/plataforma/src/app/instrutor/page.tsx`
+- `apps/plataforma/src/app/instrutor/curso/novo/page.tsx`
+- `apps/plataforma/src/app/instrutor/curso/[id]/page.tsx`
+- `apps/plataforma/src/app/instrutor/curso/[id]/aula/[aulaId]/page.tsx`
+- `apps/plataforma/src/app/instrutor/curso/[id]/quiz/[quizId]/page.tsx`
+
+**Arquivos modificados:**
+
+- `apps/plataforma/eslint.config.mjs` (ignores `next-env.d.ts` e `.next/**`)
