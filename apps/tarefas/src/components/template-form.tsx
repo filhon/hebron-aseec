@@ -206,7 +206,7 @@ export function TemplateForm({
           onChange={(e) => setDescription(e.target.value)}
           rows={2}
           placeholder="Quando este template deve ser usado?"
-          className="w-full resize-none rounded-(--radius) border border-(--border) bg-(--bg-alt) px-3 py-2 text-(--text-sm) outline-none placeholder:text-(--fg-muted) focus:border-(--hb-blue)"
+          className="w-full resize-none rounded-(--radius) border border-(--border) bg-(--bg-alt) px-3 py-2 text-sm outline-none placeholder:text-(--fg-muted) focus:border-(--hb-blue)"
         />
       </FormField>
 
@@ -230,7 +230,7 @@ export function TemplateForm({
 
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
-          <span className="text-(--text-sm) font-semibold">
+          <span className="text-sm font-semibold">
             Tarefas pré-definidas
           </span>
           <Button type="button" variant="outline" size="sm" onClick={addTask}>
@@ -239,7 +239,7 @@ export function TemplateForm({
           </Button>
         </div>
         {errors.tasks && (
-          <p role="alert" className="text-(--text-xs)">
+          <p role="alert" className="text-xs">
             {errors.tasks}
           </p>
         )}
@@ -286,7 +286,7 @@ export function TemplateForm({
                   </button>
                 </div>
                 {errors[`tasks.${index}.title`] && (
-                  <p role="alert" className="text-(--text-xs)">
+                  <p role="alert" className="text-xs">
                     {errors[`tasks.${index}.title`]}
                   </p>
                 )}
@@ -329,7 +329,7 @@ export function TemplateForm({
                   }
                   rows={2}
                   placeholder="Descrição (opcional)"
-                  className="w-full resize-none rounded-(--radius) border border-(--border) bg-(--bg-alt) px-3 py-2 text-(--text-xs) outline-none placeholder:text-(--fg-muted) focus:border-(--hb-blue)"
+                  className="w-full resize-none rounded-(--radius) border border-(--border) bg-(--bg-alt) px-3 py-2 text-xs outline-none placeholder:text-(--fg-muted) focus:border-(--hb-blue)"
                 />
 
                 <div className="flex flex-col gap-1.5">
@@ -338,7 +338,7 @@ export function TemplateForm({
                       {task.subtasks.map((s, si) => (
                         <li
                           key={si}
-                          className="flex items-center justify-between gap-2 rounded-sm bg-(--surface-alt) px-2.5 py-1 text-(--text-xs)"
+                          className="flex items-center justify-between gap-2 rounded-sm bg-(--surface-alt) px-2.5 py-1 text-xs"
                         >
                           {s}
                           <button
@@ -365,7 +365,7 @@ export function TemplateForm({
                       }
                     }}
                     placeholder="Adicionar subtarefa e pressionar Enter"
-                    className="min-w-0 flex-1 rounded-sm border border-(--border) bg-(--bg) px-2.5 py-1.5 text-(--text-xs) outline-none placeholder:text-(--fg-muted) focus:border-(--hb-blue)"
+                    className="min-w-0 flex-1 rounded-sm border border-(--border) bg-(--bg) px-2.5 py-1.5 text-xs outline-none placeholder:text-(--fg-muted) focus:border-(--hb-blue)"
                   />
                 </div>
               </div>

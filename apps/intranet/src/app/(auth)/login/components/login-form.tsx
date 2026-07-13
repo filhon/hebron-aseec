@@ -360,7 +360,7 @@ function ModeTab({
       type="button"
       onClick={onClick}
       className={[
-        "flex-1 rounded-[calc(var(--radius)-2px)] py-1.5 text-(--text-sm) font-medium",
+        "flex-1 rounded-[calc(var(--radius)-2px)] py-1.5 text-sm font-medium",
         "transition-all duration-(--transition-fast)",
         active
           ? "bg-(--color-background) text-(--color-primary) shadow-(--shadow-xs)"
@@ -376,7 +376,7 @@ function ErrorMessage({ children }: { children: React.ReactNode }) {
   return (
     <p
       role="alert"
-      className="rounded-(--radius) border border-(--color-destructive)/20 bg-(--color-destructive-muted) px-3 py-2 text-(--text-sm) text-(--color-destructive)"
+      className="rounded-(--radius) border border-(--color-destructive)/20 bg-(--color-destructive-muted) px-3 py-2 text-sm text-(--color-destructive)"
     >
       {children}
     </p>
@@ -401,10 +401,10 @@ function MfaStep({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h3 className="text-(--text-base) font-semibold text-(--color-foreground)">
+        <h3 className="text-base font-semibold text-(--color-foreground)">
           Verificação em dois fatores
         </h3>
-        <p className="mt-1 text-(--text-sm) text-(--color-muted-foreground)">
+        <p className="mt-1 text-sm text-(--color-muted-foreground)">
           Abra seu aplicativo autenticador e insira o código de 6 dígitos.
         </p>
       </div>
@@ -435,7 +435,7 @@ function MfaStep({
       <button
         type="button"
         onClick={onBack}
-        className="text-center text-(--text-sm) text-(--color-muted-foreground) hover:text-(--color-foreground) transition-colors"
+        className="text-center text-sm text-(--color-muted-foreground) hover:text-(--color-foreground) transition-colors"
       >
         Voltar ao login
       </button>
@@ -468,14 +468,14 @@ function MagicLinkSentState({ email }: { email: string }) {
 
       <div>
         <p className="font-medium text-(--color-foreground)">Link enviado</p>
-        <p className="mt-1 text-(--text-sm) text-(--color-muted-foreground)">
+        <p className="mt-1 text-sm text-(--color-muted-foreground)">
           Verifique sua caixa de entrada em{" "}
           <span className="font-medium text-(--color-foreground)">{email}</span>
           . O link expira em 60 minutos.
         </p>
       </div>
 
-      <p className="text-(--text-xs) text-(--color-muted-foreground)">
+      <p className="text-xs text-(--color-muted-foreground)">
         Não recebeu? Verifique a pasta de spam.
       </p>
     </div>

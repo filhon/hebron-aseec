@@ -75,7 +75,7 @@ export function SearchGlobal({
       {hasQuery && (
         <div className="hb-card-body" style={{ paddingTop: 0 }}>
           {isLoading ? (
-            <p className="text-(--text-sm)" style={{ padding: "16px 0" }}>
+            <p className="text-sm" style={{ padding: "16px 0" }}>
               Buscando…
             </p>
           ) : grouped.length === 0 ? (
@@ -99,14 +99,14 @@ export function SearchGlobal({
                         className="block rounded-xs p-2 transition-colors duration-(--transition-fast) hover:bg-(--surface-alt)"
                       >
                         <span
-                          className="text-(--text-sm)"
+                          className="text-sm"
                           style={{ fontWeight: 600 }}
                         >
                           {result.title}
                         </span>
                         {result.description && (
                           <span
-                            className="text-(--text-xs)"
+                            className="text-xs"
                             style={{ display: "block", marginTop: 2 }}
                           >
                             {result.description}

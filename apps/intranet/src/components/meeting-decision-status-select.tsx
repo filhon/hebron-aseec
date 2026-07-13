@@ -44,7 +44,7 @@ export function MeetingDecisionStatusSelect({
     >
       <SelectTrigger
         disabled={isPending}
-        className="h-7 w-[150px] shrink-0 text-(--text-xs)"
+        className="h-7 w-[150px] shrink-0 text-xs"
       >
         <SelectValue />
       </SelectTrigger>

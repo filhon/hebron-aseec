@@ -170,7 +170,7 @@ export default async function ReunioesPage() {
                           )}
                           <span className="text-(--fg)">
                             {decision.description}
-                            <span className="text-(--text-xs)">
+                            <span className="text-xs">
                               {" "}
                               — {decision.responsibleName}
                               {decision.dueDate &&

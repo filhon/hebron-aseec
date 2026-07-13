@@ -143,7 +143,7 @@ const ToastAction = React.forwardRef<
       "inline-flex shrink-0 items-center justify-center",
       "rounded-(--radius-sm) border border-(--border)",
       "bg-transparent px-3 py-1.5",
-      "text-(--text-xs) font-medium",
+      "text-xs font-medium",
       "transition-colors duration-(--transition-fast)",
       "hover:bg-(--surface-alt)",
       "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--brand) focus-visible:ring-offset-2",
@@ -188,7 +188,7 @@ const ToastTitle = React.forwardRef<
   <ToastPrimitive.Title
     ref={ref}
     className={cn(
-      "text-(--text-sm) font-semibold leading-(--leading-tight)",
+      "text-sm font-semibold leading-(--leading-tight)",
       className,
     )}
     {...props}
@@ -203,7 +203,7 @@ const ToastDescription = React.forwardRef<
   <ToastPrimitive.Description
     ref={ref}
     className={cn(
-      "text-(--text-xs) leading-(--leading-relaxed) opacity-90",
+      "text-xs leading-(--leading-relaxed) opacity-90",
       className,
     )}
     {...props}

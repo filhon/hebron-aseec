@@ -26,10 +26,10 @@ export function AuthCard({
         <div className="mb-8 flex flex-col items-center gap-3">
           <HebronLogo />
           <div className="text-center">
-            <h1 className="text-(--text-xl) font-semibold tracking-tight text-(--color-foreground)">
+            <h1 className="text-xl font-semibold tracking-tight text-(--color-foreground)">
               {title}
             </h1>
-            <p className="mt-1 text-(--text-sm) text-(--color-muted-foreground)">
+            <p className="mt-1 text-sm text-(--color-muted-foreground)">
               {subtitle}
             </p>
           </div>
@@ -38,14 +38,14 @@ export function AuthCard({
         {children}
 
         {footer && (
-          <p className="mt-8 text-center text-(--text-xs) text-(--color-muted-foreground)">
+          <p className="mt-8 text-center text-xs text-(--color-muted-foreground)">
             {footer}
           </p>
         )}
       </div>
 
       {tagline && (
-        <p className="mt-6 max-w-xs text-center text-(--text-xs) text-(--color-muted-foreground)">
+        <p className="mt-6 max-w-xs text-center text-xs text-(--color-muted-foreground)">
           {tagline}
         </p>
       )}
@@ -60,16 +60,16 @@ export function HebronLogo() {
         className="flex h-12 w-12 items-center justify-center rounded-(--radius-md) bg-(--color-primary)"
         aria-hidden="true"
       >
-        <span className="text-(--text-xl) font-bold text-(--color-primary-foreground) tracking-tight select-none">
+        <span className="text-xl font-bold text-(--color-primary-foreground) tracking-tight select-none">
           H
         </span>
       </div>
 
       <div className="mt-2 text-center leading-none">
-        <span className="block text-(--text-xs) font-semibold tracking-[0.2em] uppercase text-(--color-primary)">
+        <span className="block text-xs font-semibold tracking-[0.2em] uppercase text-(--color-primary)">
           Hebron
         </span>
-        <span className="block text-(--text-xs) tracking-[0.15em] uppercase text-(--color-muted-foreground)">
+        <span className="block text-xs tracking-[0.15em] uppercase text-(--color-muted-foreground)">
           Aseec
         </span>
       </div>

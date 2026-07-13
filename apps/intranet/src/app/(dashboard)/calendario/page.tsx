@@ -69,7 +69,7 @@ export default async function CalendarioPage() {
                     }}
                   >
                     <div
-                      className="text-(--text-xs)"
+                      className="text-xs"
                       style={{ width: 88, flexShrink: 0, paddingTop: 2 }}
                     >
                       {formatDate(session.date)}
@@ -84,13 +84,13 @@ export default async function CalendarioPage() {
                         }}
                       >
                         <span className="hb-badge">{session.typeLabel}</span>
-                        <span className="text-(--text-sm) font-semibold">
+                        <span className="text-sm font-semibold">
                           Reunião {session.typeLabel}
                         </span>
                       </div>
                       {session.chairName && (
                         <p
-                          className="text-(--text-xs)"
+                          className="text-xs"
                           style={{ marginTop: 4 }}
                         >
                           Presidida por {session.chairName}

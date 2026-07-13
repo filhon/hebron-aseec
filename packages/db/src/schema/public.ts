@@ -100,6 +100,9 @@ export const roleAssignments = pgTable("role_assignments", {
   grantedAt: timestamp("granted_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  revokedBy: uuid("revoked_by").references(() => users.id),
+  revocationReason: text("revocation_reason"),
 });
 
 // ---------------------------------------------------------------------------
@@ -115,6 +118,9 @@ export const designations = pgTable("designations", {
   assignedAt: timestamp("assigned_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  revokedBy: uuid("revoked_by").references(() => users.id),
+  revocationReason: text("revocation_reason"),
 });
 
 // ---------------------------------------------------------------------------

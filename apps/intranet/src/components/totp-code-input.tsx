@@ -29,7 +29,7 @@ export function TotpCodeInput({
         onChange(raw.length > 3 ? `${raw.slice(0, 3)} ${raw.slice(3)}` : raw);
       }}
       disabled={disabled}
-      className="text-center tracking-[0.3em] text-(--text-lg) font-mono"
+      className="text-center tracking-[0.3em] text-lg font-mono"
     />
   );
 }

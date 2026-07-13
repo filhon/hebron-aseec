@@ -97,7 +97,7 @@ export function CommentForm({
             onChange={(e) => handleChange(e.target.value)}
             placeholder="Escreva um comentário — use @ para mencionar"
             rows={2}
-            className="min-w-0 flex-1 resize-none bg-transparent text-(--text-sm) text-(--fg) outline-none placeholder:text-(--fg-muted)"
+            className="min-w-0 flex-1 resize-none bg-transparent text-sm text-(--fg) outline-none placeholder:text-(--fg-muted)"
           />
           <button
             type="submit"
@@ -122,7 +122,7 @@ export function CommentForm({
               type="button"
               onMouseDown={(e) => e.preventDefault()}
               onClick={() => insertMention(person)}
-              className="flex w-full items-center gap-2 px-3 py-2 text-left text-(--text-sm) text-(--fg) transition-colors hover:bg-(--surface-alt)"
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-(--fg) transition-colors hover:bg-(--surface-alt)"
             >
               <Avatar
                 name={person.name}

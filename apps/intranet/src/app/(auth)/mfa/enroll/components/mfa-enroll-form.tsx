@@ -82,7 +82,7 @@ export function MfaEnrollForm({ returnTo }: MfaEnrollFormProps) {
 
   if (step === "loading") {
     return (
-      <p className="py-8 text-center text-(--text-sm) text-(--color-muted-foreground)">
+      <p className="py-8 text-center text-sm text-(--color-muted-foreground)">
         Preparando o código de ativação…
       </p>
     );
@@ -92,7 +92,7 @@ export function MfaEnrollForm({ returnTo }: MfaEnrollFormProps) {
     return (
       <p
         role="alert"
-        className="rounded-(--radius) border border-(--color-destructive)/20 bg-(--color-destructive-muted) px-3 py-2 text-(--text-sm) text-(--color-destructive)"
+        className="rounded-(--radius) border border-(--color-destructive)/20 bg-(--color-destructive-muted) px-3 py-2 text-sm text-(--color-destructive)"
       >
         Não foi possível gerar o código de ativação. Recarregue a página ou
         contate o suporte.
@@ -103,7 +103,7 @@ export function MfaEnrollForm({ returnTo }: MfaEnrollFormProps) {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col items-center gap-3">
-        <p className="text-(--text-sm) text-(--color-muted-foreground)">
+        <p className="text-sm text-(--color-muted-foreground)">
           Escaneie o código com um aplicativo autenticador (Google
           Authenticator, Authy, 1Password).
         </p>
@@ -117,10 +117,10 @@ export function MfaEnrollForm({ returnTo }: MfaEnrollFormProps) {
           />
         )}
         <details className="w-full text-center">
-          <summary className="cursor-pointer text-(--text-xs) text-(--color-muted-foreground)">
+          <summary className="cursor-pointer text-xs text-(--color-muted-foreground)">
             Não consegue escanear? Insira manualmente
           </summary>
-          <code className="mt-2 block break-all rounded-(--radius) bg-(--color-muted) px-3 py-2 text-(--text-xs)">
+          <code className="mt-2 block break-all rounded-(--radius) bg-(--color-muted) px-3 py-2 text-xs">
             {secret}
           </code>
         </details>
@@ -139,7 +139,7 @@ export function MfaEnrollForm({ returnTo }: MfaEnrollFormProps) {
         {error && (
           <p
             role="alert"
-            className="rounded-(--radius) border border-(--color-destructive)/20 bg-(--color-destructive-muted) px-3 py-2 text-(--text-sm) text-(--color-destructive)"
+            className="rounded-(--radius) border border-(--color-destructive)/20 bg-(--color-destructive-muted) px-3 py-2 text-sm text-(--color-destructive)"
           >
             {error}
           </p>

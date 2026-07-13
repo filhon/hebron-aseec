@@ -54,7 +54,7 @@ export default async function CadastroStatusPage() {
       tagline={copy.tagline}
     >
       <div className="flex flex-col items-center gap-4 py-2 text-center">
-        <p className="text-(--text-sm) text-(--color-muted-foreground)">
+        <p className="text-sm text-(--color-muted-foreground)">
           {copy.body}
         </p>
         <SignOutLink />

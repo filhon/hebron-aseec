@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@hebron/db/client";
 import { roleAssignments, designations } from "@hebron/db/schema";
 import type { Role } from "@hebron/types/roles";
@@ -22,7 +22,12 @@ async function checkConflictOfInterest(
   const currentRows = await db
     .select({ role: roleAssignments.role })
     .from(roleAssignments)
-    .where(eq(roleAssignments.userId, userId));
+    .where(
+      and(
+        eq(roleAssignments.userId, userId),
+        isNull(roleAssignments.revokedAt),
+      ),
+    );
 
   const current = currentRows.map((r) => r.role as Role);
 
@@ -82,7 +87,8 @@ export const assignRole = adminAction
   .action(async ({ parsedInput, ctx }) => {
     await checkConflictOfInterest(parsedInput.userId, parsedInput.role as Role);
 
-    // Prevent duplicate assignment
+    // Prevent duplicate assignment (ignora atribuições já revogadas — uma
+    // revogação anterior não pode bloquear uma nova concessão do mesmo papel)
     const existingRows = await db
       .select({ id: roleAssignments.id })
       .from(roleAssignments)
@@ -91,6 +97,7 @@ export const assignRole = adminAction
           eq(roleAssignments.userId, parsedInput.userId),
           eq(roleAssignments.role, parsedInput.role),
           eq(roleAssignments.scope, parsedInput.scope),
+          isNull(roleAssignments.revokedAt),
         ),
       );
 
@@ -133,18 +140,34 @@ export const assignRole = adminAction
 // ─── revokeRole ───────────────────────────────────────────────────────────────
 
 export const revokeRole = adminAction
-  .schema(z.object({ assignmentId: z.string().uuid() }))
+  .schema(
+    z.object({
+      assignmentId: z.string().uuid(),
+      reason: z.string().max(500).optional(),
+    }),
+  )
   .action(async ({ parsedInput, ctx }) => {
     const rows = await db
       .select()
       .from(roleAssignments)
-      .where(eq(roleAssignments.id, parsedInput.assignmentId));
+      .where(
+        and(
+          eq(roleAssignments.id, parsedInput.assignmentId),
+          isNull(roleAssignments.revokedAt),
+        ),
+      );
 
     const assignment = rows[0];
-    if (!assignment) throw new Error("Atribuição de papel não encontrada");
+    if (!assignment)
+      throw new Error("Atribuição de papel não encontrada ou já revogada");
 
     await db
-      .delete(roleAssignments)
+      .update(roleAssignments)
+      .set({
+        revokedAt: new Date(),
+        revokedBy: ctx.actorId,
+        revocationReason: parsedInput.reason ?? null,
+      })
       .where(eq(roleAssignments.id, parsedInput.assignmentId));
 
     await logAudit({
@@ -158,6 +181,7 @@ export const revokeRole = adminAction
           role: assignment.role,
           scope: assignment.scope,
         },
+        after: { reason: parsedInput.reason ?? null },
       },
     });
 
@@ -177,6 +201,7 @@ export const updateDesignation = adminAction
       userId: z.string().uuid(),
       type: z.enum(["gestor", "autorizador"]),
       action: z.enum(["assign", "revoke"]),
+      reason: z.string().max(500).optional(),
     }),
   )
   .action(async ({ parsedInput, ctx }) => {
@@ -188,6 +213,7 @@ export const updateDesignation = adminAction
           and(
             eq(designations.userId, parsedInput.userId),
             eq(designations.type, parsedInput.type),
+            isNull(designations.revokedAt),
           ),
         );
 
@@ -195,7 +221,14 @@ export const updateDesignation = adminAction
       if (!active)
         throw new Error("Designação ativa não encontrada para este usuário");
 
-      await db.delete(designations).where(eq(designations.id, active.id));
+      await db
+        .update(designations)
+        .set({
+          revokedAt: new Date(),
+          revokedBy: ctx.actorId,
+          revocationReason: parsedInput.reason ?? null,
+        })
+        .where(eq(designations.id, active.id));
 
       await logAudit({
         actorId: ctx.actorId,
@@ -204,6 +237,7 @@ export const updateDesignation = adminAction
         entityId: active.id,
         diff: {
           before: { userId: active.userId, type: active.type },
+          after: { reason: parsedInput.reason ?? null },
         },
       });
 
@@ -214,7 +248,12 @@ export const updateDesignation = adminAction
     const roleRows = await db
       .select({ role: roleAssignments.role })
       .from(roleAssignments)
-      .where(eq(roleAssignments.userId, parsedInput.userId));
+      .where(
+        and(
+          eq(roleAssignments.userId, parsedInput.userId),
+          isNull(roleAssignments.revokedAt),
+        ),
+      );
 
     const hasGovernanceRole = roleRows.some(
       (r) => r.role === "diretor" || r.role === "conselheiro",

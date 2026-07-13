@@ -120,7 +120,7 @@ export function MeetingDecisionForm({
           rows={3}
           placeholder="Ex.: Aprovar o projeto “Casa de Apoio ao Migrante” com orçamento de R$ 42.000."
           aria-invalid={!!errors.description}
-          className="w-full resize-none rounded-(--radius) border border-(--border) bg-(--bg-alt) px-3 py-2 text-(--text-sm) outline-none placeholder:text-(--fg-muted) focus:border-(--hb-blue)"
+          className="w-full resize-none rounded-(--radius) border border-(--border) bg-(--bg-alt) px-3 py-2 text-sm outline-none placeholder:text-(--fg-muted) focus:border-(--hb-blue)"
         />
       </FormField>
 
@@ -145,7 +145,7 @@ export function MeetingDecisionForm({
           type="date"
           value={dueDate}
           onChange={(e) => setDueDate(e.target.value)}
-          className="h-10 w-full rounded-(--radius) border border-(--border) bg-(--bg-alt) px-3 text-(--text-sm) outline-none focus:border-(--brand)"
+          className="h-10 w-full rounded-(--radius) border border-(--border) bg-(--bg-alt) px-3 text-sm outline-none focus:border-(--brand)"
         />
       </FormField>
 
@@ -157,11 +157,11 @@ export function MeetingDecisionForm({
           className="mt-0.5 h-4 w-4 shrink-0 rounded-sm border-(--border) text-(--brand)"
         />
         <span className="flex flex-col gap-0.5">
-          <span className="flex items-center gap-1.5 text-(--text-sm) font-medium">
+          <span className="flex items-center gap-1.5 text-sm font-medium">
             <ListChecks className="h-3.5 w-3.5" aria-hidden="true" />
             Criar tarefa a partir desta decisão
           </span>
-          <span className="text-(--text-xs)">
+          <span className="text-xs">
             Gera uma tarefa em Tarefas para o responsável, com o prazo informado
             acima.
           </span>

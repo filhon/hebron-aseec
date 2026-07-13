@@ -78,7 +78,7 @@ export function ImpersonationBanner({
         aria-hidden="true"
       />
 
-      <span className="min-w-0 flex-1 text-(--text-sm) font-(--font-weight-semibold) tracking-[0.01em] text-(--impersonation-fg)">
+      <span className="min-w-0 flex-1 text-sm font-(--font-weight-semibold) tracking-[0.01em] text-(--impersonation-fg)">
         Operando como{" "}
         <strong className="font-(--font-weight-bold) text-(--impersonation-fg-strong)">
           {impersonatedName}
@@ -109,7 +109,7 @@ export function ImpersonationBanner({
           className={cn(
             "flex items-center gap-1.5 rounded-(--radius-sm) px-3.5 py-1.5",
             "border-[1.5px] border-(--impersonation-action-border) bg-white/10",
-            "text-(--text-xs) font-(--font-weight-semibold) tracking-[0.01em] text-(--impersonation-fg)",
+            "text-xs font-(--font-weight-semibold) tracking-[0.01em] text-(--impersonation-fg)",
             "transition-colors duration-(--transition-fast) hover:bg-white/[0.18]",
             "disabled:cursor-not-allowed disabled:opacity-70",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50",

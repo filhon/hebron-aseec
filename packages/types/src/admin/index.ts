@@ -35,6 +35,8 @@ export interface RoleAssignment {
   grantedBy: string; // user ID
   grantedAt: Date;
   revokedAt: Date | null;
+  revokedBy: string | null; // user ID
+  revocationReason: string | null;
 }
 
 // ─── Invitation ───────────────────────────────────────────────────────────────
@@ -161,9 +163,9 @@ export interface Designation {
   /** Denormalized for display */
   directorName: string;
   type: DesignationType;
-  /** Optional scope; null = organization-wide */
-  scope: Scope | null;
   assignedBy: string; // user ID
   assignedAt: Date;
   revokedAt: Date | null;
+  revokedBy: string | null; // user ID
+  revocationReason: string | null;
 }

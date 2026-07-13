@@ -87,7 +87,7 @@ export function NotificationBell({
               className={cn(
                 "absolute right-1.5 top-1.5 flex h-4 min-w-4 items-center justify-center",
                 "rounded-full bg-(--accent) px-1",
-                "text-(--text-xs) font-(--font-weight-semibold) leading-none text-white",
+                "text-xs font-(--font-weight-semibold) leading-none text-white",
               )}
             >
               {unreadCount > 99 ? "99+" : unreadCount}
@@ -111,7 +111,7 @@ export function NotificationBell({
           )}
         >
           <div className="flex items-center justify-between border-b border-(--border) px-4 py-3">
-            <h2 className="text-(--text-sm) font-(--font-weight-semibold)">
+            <h2 className="text-sm font-(--font-weight-semibold)">
               Notificações
             </h2>
             {hasUnread && (
@@ -119,7 +119,7 @@ export function NotificationBell({
                 onClick={onMarkAllRead}
                 className={cn(
                   "flex items-center gap-1 rounded-(--radius-sm) px-2 py-1",
-                  "text-(--text-xs)",
+                  "text-xs",
                   "transition-colors duration-(--transition-fast)",
                   "hover:bg-(--surface-alt) hover:text-(--fg)",
                 )}
@@ -137,8 +137,8 @@ export function NotificationBell({
                   className="h-8 w-8 text-(--fg-muted) opacity-40"
                   aria-hidden="true"
                 />
-                <p className="text-(--text-sm)">Nenhuma notificação</p>
-                <p className="text-(--text-xs) text-(--fg-muted)">
+                <p className="text-sm">Nenhuma notificação</p>
+                <p className="text-xs text-(--fg-muted)">
                   “Espera pelo Senhor; tem bom ânimo.” — Sl 27.14
                 </p>
               </div>
@@ -170,7 +170,7 @@ export function NotificationBell({
                           <div className="pl-2">
                             <p
                               className={cn(
-                                "truncate text-(--text-sm)",
+                                "truncate text-sm",
                                 isUnread && "font-(--font-weight-semibold)",
                               )}
                             >
@@ -180,11 +180,11 @@ export function NotificationBell({
                               {n.title}
                             </p>
                             {n.body && (
-                              <p className="mt-0.5 line-clamp-2 text-(--text-xs)">
+                              <p className="mt-0.5 line-clamp-2 text-xs">
                                 {n.body}
                               </p>
                             )}
-                            <p className="mt-1 text-(--text-xs) text-(--fg-muted)">
+                            <p className="mt-1 text-xs text-(--fg-muted)">
                               <time dateTime={n.createdAt}>
                                 {formatRelativeTime(n.createdAt)}
                               </time>
@@ -210,7 +210,7 @@ export function NotificationBell({
             <a
               href={centerHref}
               className={cn(
-                "block w-full text-center text-(--text-xs)",
+                "block w-full text-center text-xs",
                 "text-(--brand) transition-colors duration-(--transition-fast)",
                 "hover:underline focus-visible:outline-none focus-visible:underline",
               )}

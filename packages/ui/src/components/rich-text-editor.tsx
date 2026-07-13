@@ -218,12 +218,12 @@ export const RichTextEditor = React.forwardRef<
                 }}
                 placeholder="https://…"
                 autoFocus
-                className="min-w-0 flex-1 bg-transparent px-1.5 text-(--text-xs) text-(--fg) outline-none placeholder:text-(--fg-muted)"
+                className="min-w-0 flex-1 bg-transparent px-1.5 text-xs text-(--fg) outline-none placeholder:text-(--fg-muted)"
               />
               <button
                 type="button"
                 onClick={applyLink}
-                className="shrink-0 rounded-(--radius-xs) bg-(--brand) px-2 py-1 text-(--text-xs) font-semibold text-(--brand-fg)"
+                className="shrink-0 rounded-(--radius-xs) bg-(--brand) px-2 py-1 text-xs font-semibold text-(--brand-fg)"
               >
                 Aplicar
               </button>
@@ -235,7 +235,7 @@ export const RichTextEditor = React.forwardRef<
       <div className="relative">
         {empty && !focused && (
           <p
-            className="pointer-events-none absolute left-3.5 top-3 text-(--text-sm) text-(--fg-muted)"
+            className="pointer-events-none absolute left-3.5 top-3 text-sm text-(--fg-muted)"
             aria-hidden="true"
           >
             {placeholder}
@@ -258,7 +258,7 @@ export const RichTextEditor = React.forwardRef<
           onBlur={() => setFocused(false)}
           style={{ minHeight }}
           className={cn(
-            "px-3.5 py-3 text-(--text-sm) leading-relaxed text-(--fg) outline-none",
+            "px-3.5 py-3 text-sm leading-relaxed text-(--fg) outline-none",
             "[&_ul]:list-disc [&_ul]:pl-5 [&_ol]:list-decimal [&_ol]:pl-5",
             "[&_a]:text-(--brand) [&_a]:underline",
           )}

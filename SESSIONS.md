@@ -20,106 +20,107 @@
 
 > Atualizar conforme sessoes sao executadas.
 
-| Sessao | Data       | Prompt                                                                  | Status                               |
-| ------ | ---------- | ----------------------------------------------------------------------- | ------------------------------------ |
-| S-1    | 2026-05-21 | P-0.1 — Monorepo Setup                                                  | concluido                            |
-| S-2    | 2026-05-22 | P-0.1 — Monorepo Setup (complemento)                                    | concluido                            |
-| S-3    | 2026-05-22 | P-0.2 — Design System Base                                              | concluido                            |
-| S-4    | 2026-05-22 | P-0.3 — Supabase Setup                                                  | concluido                            |
-| S-5    | 2026-05-22 | P-0.4 — Autenticação e SSO                                              | concluido                            |
-| S-6    | 2026-05-22 | P-0.5 — Layout Compartilhado (AppShell)                                 | concluido                            |
-| S-7    | 2026-05-22 | P-0.6 — Sistema de Notificações                                         | concluido                            |
-| S-8    | 2026-05-22 | P-1.1 — Schema de Tipos Admin                                           | concluido                            |
-| S-9    | 2026-05-22 | P-1.2 — Componentes UI Admin                                            | concluido                            |
-| S-10   | 2026-05-22 | P-1.3 — Telas e Páginas Admin                                           | concluido                            |
-| S-11   | 2026-05-22 | P-1.4 — Formulários Admin                                               | concluido                            |
-| S-12   | 2026-05-22 | P-1.5 — Estados Admin                                                   | concluido                            |
-| S-13   | 2026-05-25 | P-1.6 — Schema do Banco Admin                                           | concluido                            |
-| S-14   | 2026-05-25 | P-1.7 — RLS Policies Admin                                              | concluido                            |
-| S-15   | 2026-05-25 | P-1.8 — Server Actions Admin                                            | concluido                            |
-| S-16   | 2026-05-25 | P-1.9 — Integração UI ↔ Backend Admin                                   | concluido                            |
-| S-17   | 2026-05-25 | P-1.10 — Notificações e Emails Admin                                    | concluido                            |
-| S-18   | 2026-05-26 | P-1.11 — Impersonation e Audit Avançado                                 | concluido                            |
-| S-19   | 2026-05-26 | P-1.12 — Testes Admin                                                   | concluido                            |
-| S-20   | 2026-06-13 | P-0.2b — Unificação do Design System                                    | concluido                            |
-| S-21   | 2026-06-15 | P-1.12b — Ajustes Menores DS Admin                                      | concluido                            |
-| S-22   | 2026-06-15 | P-0.3b — Pipeline de Migrations                                         | concluido                            |
-| S-23   | 2026-06-16 | P-1.13 — Schema de Tipos Documentos                                     | concluido                            |
-| S-24   | 2026-06-16 | P-1.14 — Componentes UI Documentos                                      | concluido                            |
-| S-25   | 2026-06-16 | P-1.15 — Telas e Páginas Documentos                                     | concluido                            |
-| S-26   | 2026-06-17 | P-1.16 — Formulários Documentos                                         | concluido                            |
-| S-27   | 2026-06-17 | P-1.17 — Estados Documentos                                             | concluido                            |
-| S-28   | 2026-06-17 | P-1.18 — Schema do Banco Documentos                                     | concluido                            |
-| S-29   | 2026-06-17 | P-1.20 — Server Actions Documentos                                      | concluido                            |
-| S-30   | 2026-06-18 | P-1.22 — Notificações e Emails Documentos                               | concluido                            |
-| S-31   | 2026-06-18 | P-1.23 — Integração Documentos ↔ Projetos                               | concluido                            |
-| S-32   | 2026-06-18 | P-1.24 — Testes Documentos                                              | concluido                            |
-| S-33   | 2026-06-20 | P-2.1 — Schema de Tipos Projetos                                        | concluido                            |
-| S-34   | 2026-06-20 | P-2.2 — Componentes UI Projetos                                         | concluido                            |
-| S-35   | 2026-06-20 | P-2.3 — Telas e Páginas Projetos                                        | concluido                            |
-| S-36   | 2026-06-20 | P-2.4 — Formulários Projetos                                            | concluido                            |
-| S-37   | 2026-06-22 | P-2.5 — Estados Projetos                                                | concluido                            |
-| S-38   | 2026-06-22 | P-2.6 — Schema do Banco Projetos                                        | concluido                            |
-| S-39   | 2026-06-22 | P-2.7 — RLS Policies Projetos                                           | concluido                            |
-| S-40   | 2026-06-22 | P-2.8 — Server Actions Projetos                                         | concluido                            |
-| S-41   | 2026-06-22 | P-2.9 — Integração UI ↔ Backend Projetos                                | concluido                            |
-| S-42   | 2026-06-23 | P-2.10 — Notificações e Emails Projetos                                 | concluido                            |
-| S-43   | 2026-06-23 | P-2.11 — Integrações Cross-App Projetos                                 | parcial                              |
-| S-44   | 2026-06-23 | P-2.9b — Usuário Real no Header Projetos                                | concluido                            |
-| S-45   | 2026-06-23 | Polish — apps/projetos/src/app                                          | concluido                            |
-| S-46   | 2026-06-23 | P-3.1 — Schema de Tipos Financeiro                                      | concluido                            |
-| S-47   | 2026-06-25 | P-3.2 — Componentes UI Financeiro                                       | concluido                            |
-| S-48   | 2026-06-25 | P-3.3 — Telas e Páginas Financeiro                                      | concluido                            |
-| S-49   | 2026-06-26 | P-3.4 — Formulários Financeiro                                          | concluido                            |
-| S-50   | 2026-06-26 | P-3.5 — Estados Financeiro                                              | concluido                            |
-| S-51   | 2026-06-26 | P-3.6 — Schema do Banco Financeiro                                      | concluido                            |
-| S-52   | 2026-06-26 | P-3.7 — RLS Policies Financeiro                                         | concluido                            |
-| S-53   | 2026-06-26 | P-3.8 — Server Actions Financeiro                                       | concluido                            |
-| S-54   | 2026-07-03 | P-0.7 — Resgate do Banco (Onda 0)                                       | concluido                            |
-| S-55   | 2026-07-03 | P-0.8 — Kit de Backend Compartilhado (Onda 0)                           | concluido                            |
-| S-56   | 2026-07-03 | P-0.9 — CI Mínimo (Onda 0)                                              | concluido (validação em PR pendente) |
-| S-57   | 2026-07-03 | P-0.10 — Decisão B: RLS Ativa (Onda 0)                                  | concluido                            |
-| S-58   | 2026-07-04 | P-0.11 — Drizzle-kit Reconciliado (Onda 0)                              | concluido                            |
-| S-59   | 2026-07-04 | P-1.25 — Admin: leitura protegida e fiação completa (Onda 1)            | concluido                            |
-| S-60   | 2026-07-04 | P-1.26 — Onboarding: convite, auto-signup e MFA (Onda 1)                | concluido                            |
-| S-61   | 2026-07-04 | P-1.27 — Documentos: visibilidade e área editorial verdadeiras (Onda 1) | concluido                            |
-| S-62   | 2026-07-04 | P-2.9c — Projetos: operável de ponta a ponta                            | concluido                            |
-| S-63   | 2026-07-04 | P-3.8b — Financeiro: governança e conciliação verdadeiras               | concluido                            |
-| S-64   | 2026-07-05 | P-0.12 — Storage: buckets e policies (Onda 2)                           | concluido                            |
-| S-65   | 2026-07-05 | P-0.13 — LGPD: fundação (Onda 2)                                        | concluido                            |
-| S-66   | 2026-07-06 | P-0.14 — Jobs: Inngest de verdade (Onda 2)                              | concluido                            |
-| S-67   | 2026-07-06 | P-0.15 — packages/integrations + contrato de settings (Onda 2)          | concluido                            |
-| S-68   | 2026-07-06 | P-0.16 — Registro retroativo (Onda 2)                                   | concluido                            |
-| S-69   | 2026-07-06 | P-3.9 — Financeiro: Integração UI ↔ Backend                             | concluido                            |
-| S-70   | 2026-07-07 | P-3.10 — Financeiro: Notificações e Emails                              | concluido                            |
-| S-71   | 2026-07-07 | P-3.11 — Financeiro: Integrações Cross-App                              | concluido                            |
-| S-72   | 2026-07-07 | P-3.12 — Testes Financeiro                                              | concluido                            |
-| S-73   | 2026-07-07 | P-4.1 — Schema de Tipos Tarefas                                         | concluido                            |
-| S-74   | 2026-07-07 | P-4.2 — Componentes UI Tarefas                                          | concluido                            |
-| S-75   | 2026-07-07 | P-4.3 — Telas e Páginas Tarefas                                         | concluido                            |
-| S-76   | 2026-07-07 | P-4.4 — Formulários Tarefas                                             | concluido                            |
-| S-77   | 2026-07-07 | P-4.5 — Estados Tarefas                                                 | concluido                            |
-| S-79   | 2026-07-07 | P-4.7 — RLS Policies Tarefas                                            | concluido                            |
-| S-80   | 2026-07-07 | P-4.8 — Server Actions Tarefas                                          | concluido                            |
-| S-81   | 2026-07-07 | P-4.9 — Integração UI ↔ Backend Tarefas                                 | concluido                            |
-| S-82   | 2026-07-08 | P-4.10 — Notificações e Emails Tarefas                                  | concluido                            |
-| S-83   | 2026-07-08 | P-4.11 — Integrações Cross-App Tarefas                                  | concluido                            |
-| S-84   | 2026-07-08 | P-4.12 — Testes Tarefas                                                 | concluido                            |
-| S-85   | 2026-07-08 | P-5.1 — Schema de Tipos Intranet                                        | concluido                            |
-| S-86   | 2026-07-08 | P-5.2 — Componentes UI Intranet                                         | concluido                            |
-| S-87   | 2026-07-08 | P-5.3 — Telas e Páginas Intranet                                        | concluido                            |
-| S-88   | 2026-07-09 | P-5.4 — Formulários Intranet                                            | concluido                            |
-| S-89   | 2026-07-09 | P-5.5 — Estados Intranet                                                | concluido                            |
-| S-90   | 2026-07-09 | P-5.6 — Schema do Banco Intranet                                        | concluido                            |
-| S-91   | 2026-07-09 | P-5.7 — RLS Policies Intranet                                           | concluido                            |
-| S-92   | 2026-07-09 | P-5.8 — Server Actions Intranet                                         | concluido                            |
-| S-93   | 2026-07-09 | P-5.9 — Integração UI ↔ Backend Intranet                                | concluido                            |
-| S-94   | 2026-07-10 | P-5.10 — Notificações e Emails Intranet                                 | concluido                            |
-| S-95   | 2026-07-10 | P-0.17 — Runtime RLS para mutações críticas (PATCH-016)                 | concluido                            |
-| S-96   | 2026-07-10 | P-5.9b — Intranet: decisões por presidente da sessão (PATCH-017)        | concluido                            |
-| S-97   | 2026-07-10 | P-5.9c — Intranet: snapshot de KPIs e tendências (PATCH-018)            | concluido                            |
-| S-98   | 2026-07-10 | P-4.11b — Tarefas: seed e configuração do checklist padrão (PATCH-019)  | concluido                            |
-| S-99   | 2026-07-13 | P-4.9b — Tarefas: anexos persistidos e gestão de templates (PATCH-020)  | concluido                            |
+| Sessao | Data       | Prompt                                                                        | Status                               |
+| ------ | ---------- | ----------------------------------------------------------------------------- | ------------------------------------ |
+| S-1    | 2026-05-21 | P-0.1 — Monorepo Setup                                                        | concluido                            |
+| S-2    | 2026-05-22 | P-0.1 — Monorepo Setup (complemento)                                          | concluido                            |
+| S-3    | 2026-05-22 | P-0.2 — Design System Base                                                    | concluido                            |
+| S-4    | 2026-05-22 | P-0.3 — Supabase Setup                                                        | concluido                            |
+| S-5    | 2026-05-22 | P-0.4 — Autenticação e SSO                                                    | concluido                            |
+| S-6    | 2026-05-22 | P-0.5 — Layout Compartilhado (AppShell)                                       | concluido                            |
+| S-7    | 2026-05-22 | P-0.6 — Sistema de Notificações                                               | concluido                            |
+| S-8    | 2026-05-22 | P-1.1 — Schema de Tipos Admin                                                 | concluido                            |
+| S-9    | 2026-05-22 | P-1.2 — Componentes UI Admin                                                  | concluido                            |
+| S-10   | 2026-05-22 | P-1.3 — Telas e Páginas Admin                                                 | concluido                            |
+| S-11   | 2026-05-22 | P-1.4 — Formulários Admin                                                     | concluido                            |
+| S-12   | 2026-05-22 | P-1.5 — Estados Admin                                                         | concluido                            |
+| S-13   | 2026-05-25 | P-1.6 — Schema do Banco Admin                                                 | concluido                            |
+| S-14   | 2026-05-25 | P-1.7 — RLS Policies Admin                                                    | concluido                            |
+| S-15   | 2026-05-25 | P-1.8 — Server Actions Admin                                                  | concluido                            |
+| S-16   | 2026-05-25 | P-1.9 — Integração UI ↔ Backend Admin                                         | concluido                            |
+| S-17   | 2026-05-25 | P-1.10 — Notificações e Emails Admin                                          | concluido                            |
+| S-18   | 2026-05-26 | P-1.11 — Impersonation e Audit Avançado                                       | concluido                            |
+| S-19   | 2026-05-26 | P-1.12 — Testes Admin                                                         | concluido                            |
+| S-20   | 2026-06-13 | P-0.2b — Unificação do Design System                                          | concluido                            |
+| S-21   | 2026-06-15 | P-1.12b — Ajustes Menores DS Admin                                            | concluido                            |
+| S-22   | 2026-06-15 | P-0.3b — Pipeline de Migrations                                               | concluido                            |
+| S-23   | 2026-06-16 | P-1.13 — Schema de Tipos Documentos                                           | concluido                            |
+| S-24   | 2026-06-16 | P-1.14 — Componentes UI Documentos                                            | concluido                            |
+| S-25   | 2026-06-16 | P-1.15 — Telas e Páginas Documentos                                           | concluido                            |
+| S-26   | 2026-06-17 | P-1.16 — Formulários Documentos                                               | concluido                            |
+| S-27   | 2026-06-17 | P-1.17 — Estados Documentos                                                   | concluido                            |
+| S-28   | 2026-06-17 | P-1.18 — Schema do Banco Documentos                                           | concluido                            |
+| S-29   | 2026-06-17 | P-1.20 — Server Actions Documentos                                            | concluido                            |
+| S-30   | 2026-06-18 | P-1.22 — Notificações e Emails Documentos                                     | concluido                            |
+| S-31   | 2026-06-18 | P-1.23 — Integração Documentos ↔ Projetos                                     | concluido                            |
+| S-32   | 2026-06-18 | P-1.24 — Testes Documentos                                                    | concluido                            |
+| S-33   | 2026-06-20 | P-2.1 — Schema de Tipos Projetos                                              | concluido                            |
+| S-34   | 2026-06-20 | P-2.2 — Componentes UI Projetos                                               | concluido                            |
+| S-35   | 2026-06-20 | P-2.3 — Telas e Páginas Projetos                                              | concluido                            |
+| S-36   | 2026-06-20 | P-2.4 — Formulários Projetos                                                  | concluido                            |
+| S-37   | 2026-06-22 | P-2.5 — Estados Projetos                                                      | concluido                            |
+| S-38   | 2026-06-22 | P-2.6 — Schema do Banco Projetos                                              | concluido                            |
+| S-39   | 2026-06-22 | P-2.7 — RLS Policies Projetos                                                 | concluido                            |
+| S-40   | 2026-06-22 | P-2.8 — Server Actions Projetos                                               | concluido                            |
+| S-41   | 2026-06-22 | P-2.9 — Integração UI ↔ Backend Projetos                                      | concluido                            |
+| S-42   | 2026-06-23 | P-2.10 — Notificações e Emails Projetos                                       | concluido                            |
+| S-43   | 2026-06-23 | P-2.11 — Integrações Cross-App Projetos                                       | parcial                              |
+| S-44   | 2026-06-23 | P-2.9b — Usuário Real no Header Projetos                                      | concluido                            |
+| S-45   | 2026-06-23 | Polish — apps/projetos/src/app                                                | concluido                            |
+| S-46   | 2026-06-23 | P-3.1 — Schema de Tipos Financeiro                                            | concluido                            |
+| S-47   | 2026-06-25 | P-3.2 — Componentes UI Financeiro                                             | concluido                            |
+| S-48   | 2026-06-25 | P-3.3 — Telas e Páginas Financeiro                                            | concluido                            |
+| S-49   | 2026-06-26 | P-3.4 — Formulários Financeiro                                                | concluido                            |
+| S-50   | 2026-06-26 | P-3.5 — Estados Financeiro                                                    | concluido                            |
+| S-51   | 2026-06-26 | P-3.6 — Schema do Banco Financeiro                                            | concluido                            |
+| S-52   | 2026-06-26 | P-3.7 — RLS Policies Financeiro                                               | concluido                            |
+| S-53   | 2026-06-26 | P-3.8 — Server Actions Financeiro                                             | concluido                            |
+| S-54   | 2026-07-03 | P-0.7 — Resgate do Banco (Onda 0)                                             | concluido                            |
+| S-55   | 2026-07-03 | P-0.8 — Kit de Backend Compartilhado (Onda 0)                                 | concluido                            |
+| S-56   | 2026-07-03 | P-0.9 — CI Mínimo (Onda 0)                                                    | concluido (validação em PR pendente) |
+| S-57   | 2026-07-03 | P-0.10 — Decisão B: RLS Ativa (Onda 0)                                        | concluido                            |
+| S-58   | 2026-07-04 | P-0.11 — Drizzle-kit Reconciliado (Onda 0)                                    | concluido                            |
+| S-59   | 2026-07-04 | P-1.25 — Admin: leitura protegida e fiação completa (Onda 1)                  | concluido                            |
+| S-60   | 2026-07-04 | P-1.26 — Onboarding: convite, auto-signup e MFA (Onda 1)                      | concluido                            |
+| S-61   | 2026-07-04 | P-1.27 — Documentos: visibilidade e área editorial verdadeiras (Onda 1)       | concluido                            |
+| S-62   | 2026-07-04 | P-2.9c — Projetos: operável de ponta a ponta                                  | concluido                            |
+| S-63   | 2026-07-04 | P-3.8b — Financeiro: governança e conciliação verdadeiras                     | concluido                            |
+| S-64   | 2026-07-05 | P-0.12 — Storage: buckets e policies (Onda 2)                                 | concluido                            |
+| S-65   | 2026-07-05 | P-0.13 — LGPD: fundação (Onda 2)                                              | concluido                            |
+| S-66   | 2026-07-06 | P-0.14 — Jobs: Inngest de verdade (Onda 2)                                    | concluido                            |
+| S-67   | 2026-07-06 | P-0.15 — packages/integrations + contrato de settings (Onda 2)                | concluido                            |
+| S-68   | 2026-07-06 | P-0.16 — Registro retroativo (Onda 2)                                         | concluido                            |
+| S-69   | 2026-07-06 | P-3.9 — Financeiro: Integração UI ↔ Backend                                   | concluido                            |
+| S-70   | 2026-07-07 | P-3.10 — Financeiro: Notificações e Emails                                    | concluido                            |
+| S-71   | 2026-07-07 | P-3.11 — Financeiro: Integrações Cross-App                                    | concluido                            |
+| S-72   | 2026-07-07 | P-3.12 — Testes Financeiro                                                    | concluido                            |
+| S-73   | 2026-07-07 | P-4.1 — Schema de Tipos Tarefas                                               | concluido                            |
+| S-74   | 2026-07-07 | P-4.2 — Componentes UI Tarefas                                                | concluido                            |
+| S-75   | 2026-07-07 | P-4.3 — Telas e Páginas Tarefas                                               | concluido                            |
+| S-76   | 2026-07-07 | P-4.4 — Formulários Tarefas                                                   | concluido                            |
+| S-77   | 2026-07-07 | P-4.5 — Estados Tarefas                                                       | concluido                            |
+| S-79   | 2026-07-07 | P-4.7 — RLS Policies Tarefas                                                  | concluido                            |
+| S-80   | 2026-07-07 | P-4.8 — Server Actions Tarefas                                                | concluido                            |
+| S-81   | 2026-07-07 | P-4.9 — Integração UI ↔ Backend Tarefas                                       | concluido                            |
+| S-82   | 2026-07-08 | P-4.10 — Notificações e Emails Tarefas                                        | concluido                            |
+| S-83   | 2026-07-08 | P-4.11 — Integrações Cross-App Tarefas                                        | concluido                            |
+| S-84   | 2026-07-08 | P-4.12 — Testes Tarefas                                                       | concluido                            |
+| S-85   | 2026-07-08 | P-5.1 — Schema de Tipos Intranet                                              | concluido                            |
+| S-86   | 2026-07-08 | P-5.2 — Componentes UI Intranet                                               | concluido                            |
+| S-87   | 2026-07-08 | P-5.3 — Telas e Páginas Intranet                                              | concluido                            |
+| S-88   | 2026-07-09 | P-5.4 — Formulários Intranet                                                  | concluido                            |
+| S-89   | 2026-07-09 | P-5.5 — Estados Intranet                                                      | concluido                            |
+| S-90   | 2026-07-09 | P-5.6 — Schema do Banco Intranet                                              | concluido                            |
+| S-91   | 2026-07-09 | P-5.7 — RLS Policies Intranet                                                 | concluido                            |
+| S-92   | 2026-07-09 | P-5.8 — Server Actions Intranet                                               | concluido                            |
+| S-93   | 2026-07-09 | P-5.9 — Integração UI ↔ Backend Intranet                                      | concluido                            |
+| S-94   | 2026-07-10 | P-5.10 — Notificações e Emails Intranet                                       | concluido                            |
+| S-95   | 2026-07-10 | P-0.17 — Runtime RLS para mutações críticas (PATCH-016)                       | concluido                            |
+| S-96   | 2026-07-10 | P-5.9b — Intranet: decisões por presidente da sessão (PATCH-017)              | concluido                            |
+| S-97   | 2026-07-10 | P-5.9c — Intranet: snapshot de KPIs e tendências (PATCH-018)                  | concluido                            |
+| S-98   | 2026-07-10 | P-4.11b — Tarefas: seed e configuração do checklist padrão (PATCH-019)        | concluido                            |
+| S-99   | 2026-07-13 | P-4.9b — Tarefas: anexos persistidos e gestão de templates (PATCH-020)        | concluido                            |
+| S-100  | 2026-07-13 | P-1.25b — Admin: designações honestas e revogação sem hard delete (PATCH-021) | concluido                            |
 
 ---
 
@@ -5622,3 +5623,100 @@ seguida). Não relacionado às mudanças deste patch.
 - `apps/tarefas/src/app/(dashboard)/tarefa/[id]/task-detail-client.tsx` (edit+upload)
 - `apps/tarefas/src/app/(dashboard)/templates/templates-client.tsx` (editar/ativar/desativar)
 - `apps/tarefas/src/__tests__/templates.test.ts` (cobertura update/toggle/gate)
+
+---
+
+### S-100 — 2026-07-13 — P-1.25b Admin: designações honestas e revogação sem hard delete (PATCH-021)
+
+**Prompt:** P-1.25b (`PATCHES/021-admin-designacoes-escopo-e-revogacao.md`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Verificado contra o código atual que os dois débitos do PATCH-021 eram
+reais: (1) `DesignationForm` renderizava um seletor "Escopo" ligado a
+`designationSchema.scope`, mas `public.designations` nunca teve essa coluna
+— `DesignationPanel.handleAssign` já descartava o valor antes de chamar a
+action; e (2) `revokeRole`/`updateDesignation(action: "revoke")` faziam
+`db.delete(...)`, hard delete, contrariando o princípio de imutabilidade.
+
+Ao validar a lista de arquivos permitidos do prompt corretivo contra a
+codebase, duas lacunas tornariam a correção um placebo perigoso se seguida à
+risca — reportadas ao Filipe antes de executar, que optou por expandir o
+escopo:
+
+1. `packages/auth/src/server.ts` (`resolveSession`) não estava na lista —
+   é o único ponto de resolução de RBAC usado por toda Server Action nos 9
+   apps (via `adminAction`/`baseAction`). Sem filtrar `revoked_at IS NULL`
+   ali, marcar uma linha como revogada não removeria acesso algum.
+2. A função SQL `public.has_role()` (definida em `0000_initial.sql`, usada em
+   ~290 policies de RLS em todos os schemas do monorepo) também faltava —
+   sem `CREATE OR REPLACE FUNCTION` com o mesmo filtro, a RLS inteira do
+   ecossistema continuaria enxergando papéis revogados como ativos.
+3. O caminho de arquivo do prompt estava errado: quem renderiza
+   `DesignationForm`/`DesignationPanel` é
+   `apps/admin/src/app/(dashboard)/configuracoes/page.tsx` (aba
+   "Designações"), não `usuarios/[id]/page.tsx`.
+
+Ambas as tabelas (`public.role_assignments` e `public.designations`, não
+`admin.*` como o prompt original nomeava) ganharam `revoked_at`,
+`revoked_by`, `revocation_reason` via `0044_admin_revogacoes_imutaveis.sql`,
+que também redefine `has_role()`. `revokeRole` e
+`updateDesignation(action: "revoke")` passaram a fazer UPDATE; as queries de
+"ativos" (`checkConflictOfInterest`, verificação de duplicata em
+`assignRole`, `resolveSession`, listagens de `configuracoes/page.tsx`,
+diretores elegíveis para designação) passaram a filtrar `revoked_at IS
+NULL`. `revocation_reason` foi aceito como parâmetro opcional nas actions e
+persistido quando informado, mas deliberadamente sem UI de preenchimento —
+para não reintroduzir o mesmo padrão de campo fantasma que este patch
+corrige.
+
+**Desvios do prompt (registrados):**
+
+- Não foi criado `apps/admin/src/actions/designations.ts` — `updateDesignation`
+  já vivia em `roles.ts`; separar em outro arquivo seria reorganização sem
+  motivo ligado ao bug.
+- `apps/admin/src/app/(dashboard)/usuarios/[id]/page.tsx` não foi tocado
+  (não referencia designações); `configuracoes/page.tsx` foi editado em
+  seu lugar — ver lacuna 3 acima.
+- `packages/db/src/schema/admin.ts` não foi tocado — `role_assignments` e
+  `designations` são definidas em `packages/db/src/schema/public.ts`.
+
+**Critérios de aceite verificados:**
+
+- [x] Formulário de designação não exibe campo que não persiste (seletor
+      "Escopo" removido de `DesignationForm`).
+- [x] Revogar papel atualiza linha com `revoked_at`, não faz DELETE.
+- [x] Revogar designação atualiza linha com `revoked_at`, não faz DELETE.
+- [x] Leituras de permissões ativas ignoram revogadas (`resolveSession`,
+      `has_role()`, queries de `configuracoes/page.tsx`).
+- [x] Audit log registra revogação com ator e motivo quando aplicável.
+- [x] Teste cobre revogação e garante que linha histórica permanece
+      (`roles-designations.test.ts`, 5 testes).
+- [x] Lint, types e testes de Admin passam (66/66 em 8 arquivos); suítes de
+      RLS de Financeiro e Intranet rodadas à parte para confirmar que a
+      redefinição global de `has_role()` não regrediu nada (16 e 2 testes,
+      100% verde).
+
+**Arquivos criados:**
+
+- `packages/db/src/migrations/0044_admin_revogacoes_imutaveis.sql`
+- `apps/admin/src/__tests__/roles-designations.test.ts`
+
+**Arquivos modificados:**
+
+- `packages/db/src/schema/public.ts` (colunas de revogação em
+  `roleAssignments` e `designations`)
+- `packages/validators/src/admin/index.ts` (`designationSchema` sem `scope`;
+  `reason` opcional em `roleRevocationSchema`)
+- `packages/types/src/admin/index.ts` (`Designation` sem `scope`;
+  `revokedBy`/`revocationReason` em `RoleAssignment` e `Designation`)
+- `packages/auth/src/server.ts` (`resolveSession` filtra `revoked_at IS NULL`)
+- `apps/admin/src/actions/roles.ts` (`revokeRole`/`updateDesignation` viram
+  UPDATE; queries de ativos filtradas)
+- `apps/admin/src/components/designation-form.tsx` (seletor "Escopo" e coluna
+  removidos)
+- `apps/admin/src/app/(dashboard)/configuracoes/page.tsx` (queries filtram
+  `revoked_at IS NULL`; `revokedCount` real em vez de hardcoded)
+- `PATCHES/021-admin-designacoes-escopo-e-revogacao.md` (lista de arquivos e
+  critérios corrigidos pós-validação)

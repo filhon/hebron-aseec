@@ -16,7 +16,7 @@ const Label = React.forwardRef<
   <LabelPrimitive.Root
     ref={ref}
     className={cn(
-      "text-(--text-sm) font-medium leading-none",
+      "text-sm font-medium leading-none",
       "peer-disabled:cursor-not-allowed peer-disabled:opacity-70",
       className,
     )}
@@ -97,7 +97,7 @@ function FormField({
       {hint && (
         <p
           id={descriptionId}
-          className="text-(--text-xs) leading-(--leading-relaxed)"
+          className="text-xs leading-(--leading-relaxed)"
         >
           {hint}
         </p>
@@ -106,7 +106,7 @@ function FormField({
         <p
           id={errorId}
           aria-live="polite"
-          className="flex items-center gap-1 text-(--text-xs)"
+          className="flex items-center gap-1 text-xs"
         >
           {error}
         </p>

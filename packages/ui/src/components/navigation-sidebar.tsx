@@ -90,7 +90,7 @@ function NavTooltip({ label, collapsed, children }: NavTooltipProps) {
           sideOffset={8}
           className={cn(
             "z-(--z-tooltip) rounded-(--radius) px-2.5 py-1.5",
-            "bg-(--fg) text-(--text-xs) text-(--bg)",
+            "bg-(--fg) text-xs text-(--bg)",
             "shadow-(--shadow-md)",
             "animate-in fade-in-0 zoom-in-95",
           )}
@@ -137,7 +137,7 @@ function NavItemButton({
         }
         className={cn(
           "group flex items-center gap-2.5 rounded-(--radius) px-2.5 py-2.5",
-          "text-(--text-sm) transition-colors duration-(--transition-fast)",
+          "text-sm transition-colors duration-(--transition-fast)",
           "focus-visible:outline-none focus-visible:ring-2",
           dark
             ? "focus-visible:ring-(--fg-invert)"
@@ -183,7 +183,7 @@ function NavItemButton({
               <span
                 className={cn(
                   "ml-auto inline-flex h-5 min-w-5 items-center justify-center",
-                  "rounded-full px-1.5 text-(--text-xs) font-(--font-weight-medium)",
+                  "rounded-full px-1.5 text-xs font-(--font-weight-medium)",
                   active
                     ? dark
                       ? "bg-white/25 text-(--fg-invert)"
@@ -238,7 +238,7 @@ function AppShortcutTile({
         )}
       >
         <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-        <span className="w-full truncate text-center text-(--text-xs) leading-none">
+        <span className="w-full truncate text-center text-xs leading-none">
           {app.label}
         </span>
       </Link>
@@ -279,7 +279,7 @@ export function NavigationSidebar({
               {section.title && !collapsed && (
                 <p
                   className={cn(
-                    "mb-1.5 mt-1 px-3 text-(--text-xs) font-(--font-weight-semibold)",
+                    "mb-1.5 mt-1 px-3 text-xs font-(--font-weight-semibold)",
                     "uppercase tracking-wider",
                     dark ? "text-(--fg-invert-muted)" : "text-(--fg-muted)",
                   )}

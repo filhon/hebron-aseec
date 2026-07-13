@@ -241,7 +241,7 @@ export function RecurrenceForm({
         />
       </FormField>
 
-      <div className="flex items-start gap-2.5 rounded-(--radius) bg-(--brand-muted) px-3.5 py-3 text-(--text-sm) text-(--hb-blue)">
+      <div className="flex items-start gap-2.5 rounded-(--radius) bg-(--brand-muted) px-3.5 py-3 text-sm text-(--hb-blue)">
         <RefreshCw className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
         <p>
           <span className="font-semibold">Pré-visualização:</span> {preview}

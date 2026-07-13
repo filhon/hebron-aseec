@@ -103,11 +103,11 @@ function ConviteErrorState({
   return (
     <div className="flex flex-col items-center gap-3 py-4 text-center">
       <p className="font-medium text-(--color-foreground)">{title}</p>
-      <p className="text-(--text-sm) text-(--color-muted-foreground)">{body}</p>
+      <p className="text-sm text-(--color-muted-foreground)">{body}</p>
       {kind === "accepted" && (
         <a
           href="/login"
-          className="mt-2 text-(--text-sm) font-medium text-(--color-primary) underline-offset-2 hover:underline"
+          className="mt-2 text-sm font-medium text-(--color-primary) underline-offset-2 hover:underline"
         >
           Ir para o login
         </a>

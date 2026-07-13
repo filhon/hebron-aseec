@@ -63,11 +63,11 @@ const buttonVariants = cva(
       // xs/sm/icon-sm (28-32px): reservados para contextos densos (tabelas, toolbars).
       // Para CTAs primárias ou qualquer alvo tocável em mobile, usar md ou maior.
       size: {
-        xs: "h-7 px-2.5 text-(--text-xs)",
-        sm: "h-8 px-3 text-(--text-sm)",
-        md: "h-10 px-4 text-(--text-sm)",
-        lg: "h-11 px-5 text-(--text-base)",
-        xl: "h-12 px-6 text-(--text-base)",
+        xs: "h-7 px-2.5 text-xs",
+        sm: "h-8 px-3 text-sm",
+        md: "h-10 px-4 text-sm",
+        lg: "h-11 px-5 text-base",
+        xl: "h-12 px-6 text-base",
         icon: "h-10 w-10 p-0",
         "icon-sm": "h-8 w-8 p-0",
         "icon-lg": "h-12 w-12 p-0",

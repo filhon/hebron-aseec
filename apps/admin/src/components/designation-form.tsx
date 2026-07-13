@@ -13,7 +13,6 @@ import {
   SelectItem,
 } from "@hebron/ui";
 import { designationSchema, type DesignationInput } from "@hebron/validators";
-import { SCOPES } from "@hebron/types/roles";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -27,24 +26,10 @@ export interface DesignationFormDesignation {
   userId: string;
   directorName: string;
   type: DesignationInput["type"];
-  scope: DesignationInput["scope"];
   assignedAt: Date;
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-const SCOPE_LABELS: Record<string, string> = {
-  global: "Organização inteira",
-  admin: "Administração",
-  projetos: "Projetos",
-  plataforma: "Plataforma",
-  radio: "Rádio",
-  financeiro: "Financeiro",
-  intranet: "Intranet",
-  documentos: "Documentos",
-  flats: "Flats",
-  tarefas: "Tarefas",
-};
 
 const DESIGNATION_TYPE_LABELS = {
   gestor: "Gestor",
@@ -82,14 +67,12 @@ export function DesignationForm({
     defaultValues: {
       userId: "",
       type: "gestor",
-      scope: null,
     },
   });
 
   const loading = isLoading ?? isSubmitting;
   const watchedUserId = watch("userId");
   const watchedType = watch("type");
-  const watchedScope = watch("scope");
 
   async function handleAssign(data: DesignationInput) {
     await onAssign(data);
@@ -108,24 +91,24 @@ export function DesignationForm({
         noValidate
       >
         <div>
-          <h3 className="text-(--text-sm) font-semibold">
+          <h3 className="text-sm font-semibold">
             Configurar designação
           </h3>
-          <p className="mt-1 text-(--text-xs)">
+          <p className="mt-1 text-xs">
             Somente diretores podem ser designados como gestor ou autorizador.
           </p>
         </div>
 
         {directors.length === 0 ? (
           <div className="rounded-(--radius) border border-(--color-border) px-4 py-6 text-center">
-            <p className="text-(--text-sm)">
+            <p className="text-sm">
               Nenhum diretor encontrado. Atribua o papel de diretor a um usuário
               primeiro.
             </p>
           </div>
         ) : (
           <>
-            <div className="grid gap-4 sm:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2">
               {/* Diretor */}
               <FormField
                 id="userId"
@@ -176,41 +159,6 @@ export function DesignationForm({
                   </SelectContent>
                 </Select>
               </FormField>
-
-              {/* Escopo */}
-              <FormField
-                id="scope"
-                label="Escopo"
-                hint="Vazio = organização inteira"
-                error={errors.scope?.message}
-              >
-                <Select
-                  value={watchedScope ?? "__null__"}
-                  onValueChange={(v) =>
-                    setValue(
-                      "scope",
-                      v === "__null__"
-                        ? null
-                        : (v as DesignationInput["scope"]),
-                      { shouldValidate: true },
-                    )
-                  }
-                >
-                  <SelectTrigger id="scope" hasError={!!errors.scope}>
-                    <SelectValue placeholder="Organização inteira" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__null__">
-                      Organização inteira
-                    </SelectItem>
-                    {SCOPES.filter((s) => s !== "global").map((scope) => (
-                      <SelectItem key={scope} value={scope}>
-                        {SCOPE_LABELS[scope] ?? scope}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </FormField>
             </div>
 
             <div className="flex justify-end">
@@ -225,9 +173,9 @@ export function DesignationForm({
       {/* Active designations */}
       {activeDesignations.length > 0 && (
         <div className="flex flex-col gap-3">
-          <h3 className="text-(--text-sm) font-semibold">Designações ativas</h3>
+          <h3 className="text-sm font-semibold">Designações ativas</h3>
           <div className="overflow-hidden rounded-(--radius) border border-(--color-border)">
-            <table className="w-full text-(--text-sm)">
+            <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-(--color-border) bg-(--color-muted)/40">
                   <th className="px-4 py-2.5 text-left font-medium text-(--color-muted-foreground)">
@@ -235,9 +183,6 @@ export function DesignationForm({
                   </th>
                   <th className="px-4 py-2.5 text-left font-medium text-(--color-muted-foreground)">
                     Tipo
-                  </th>
-                  <th className="px-4 py-2.5 text-left font-medium text-(--color-muted-foreground)">
-                    Escopo
                   </th>
                   <th className="px-4 py-2.5 text-left font-medium text-(--color-muted-foreground)">
                     Desde
@@ -260,11 +205,6 @@ export function DesignationForm({
                     </td>
                     <td className="px-4 py-3 text-(--color-foreground)">
                       {DESIGNATION_TYPE_LABELS[d.type]}
-                    </td>
-                    <td className="px-4 py-3 text-(--color-foreground)">
-                      {d.scope
-                        ? (SCOPE_LABELS[d.scope] ?? d.scope)
-                        : "Organização inteira"}
                     </td>
                     <td className="px-4 py-3 text-(--color-muted-foreground)">
                       {d.assignedAt.toLocaleDateString("pt-BR")}

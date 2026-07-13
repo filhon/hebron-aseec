@@ -187,13 +187,13 @@ export function WidgetConfigForm({
       </div>
 
       {errors.widgets && (
-        <p role="alert" className="text-(--text-xs)">
+        <p role="alert" className="text-xs">
           {errors.widgets}
         </p>
       )}
 
       {widgets.length === 0 ? (
-        <p className="rounded-(--radius) border border-dashed border-(--border) px-4 py-6 text-center text-(--text-sm)">
+        <p className="rounded-(--radius) border border-dashed border-(--border) px-4 py-6 text-center text-sm">
           Nenhum widget configurado. Adicione um acima para montar seu painel.
         </p>
       ) : (
@@ -219,7 +219,7 @@ export function WidgetConfigForm({
 
               <div className="flex min-w-0 flex-1 flex-col gap-2.5">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-(--text-sm) font-semibold">
+                  <span className="text-sm font-semibold">
                     {WIDGET_TYPE_LABEL[widget.type]}
                   </span>
                   <button

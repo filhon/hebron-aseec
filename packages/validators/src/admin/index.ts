@@ -130,16 +130,18 @@ export type RoleAssignmentInput = z.infer<typeof roleAssignmentSchema>;
 
 export const roleRevocationSchema = z.object({
   assignmentId: z.string().min(1, "ID de atribuição inválido"),
+  reason: z.string().max(500).optional(),
 });
 
 export type RoleRevocationInput = z.infer<typeof roleRevocationSchema>;
 
 // ─── designationSchema ────────────────────────────────────────────────────────
+// Designações são por função (gestor/autorizador), nunca por escopo arbitrário
+// — ver BRAIN.md §"Designações especiais". PATCH-021.
 
 export const designationSchema = z.object({
   userId: z.string().min(1, "Selecione um diretor"),
   type: z.enum(["gestor", "autorizador"]),
-  scope: scopeEnum.nullable(),
 });
 
 export type DesignationInput = z.infer<typeof designationSchema>;

@@ -88,7 +88,7 @@ export function MfaChallengeForm({ returnTo }: MfaChallengeFormProps) {
       {error && (
         <p
           role="alert"
-          className="rounded-(--radius) border border-(--color-destructive)/20 bg-(--color-destructive-muted) px-3 py-2 text-(--text-sm) text-(--color-destructive)"
+          className="rounded-(--radius) border border-(--color-destructive)/20 bg-(--color-destructive-muted) px-3 py-2 text-sm text-(--color-destructive)"
         >
           {error}
         </p>

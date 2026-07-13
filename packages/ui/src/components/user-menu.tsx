@@ -33,9 +33,9 @@ export interface AvatarProps {
 }
 
 const avatarSizes = {
-  sm: "h-7 w-7 text-(--text-xs)",
-  md: "h-9 w-9 text-(--text-sm)",
-  lg: "h-12 w-12 text-(--text-base)",
+  sm: "h-7 w-7 text-xs",
+  md: "h-9 w-9 text-sm",
+  lg: "h-12 w-12 text-base",
 } as const;
 
 export function Avatar({
@@ -107,7 +107,7 @@ export function UserMenu({
           className={cn(
             "flex h-8 items-center gap-1.5 rounded-full pl-1 pr-2.5",
             "border border-(--border)",
-            "text-(--text-sm) font-(--font-weight-medium)",
+            "text-sm font-(--font-weight-medium)",
             "transition-colors duration-(--transition-fast)",
             open
               ? "bg-(--surface-alt)"
@@ -155,10 +155,10 @@ export function UserMenu({
         >
           {/* Identity header — tinted, no avatar (already visible in trigger) */}
           <div className="border-b border-(--border) bg-(--surface-alt) px-3.5 py-3">
-            <p className="truncate text-(--text-sm) font-(--font-weight-semibold) leading-tight">
+            <p className="truncate text-sm font-(--font-weight-semibold) leading-tight">
               {user.name}
             </p>
-            <p className="mt-0.5 truncate text-(--text-xs) leading-tight text-(--fg-muted)">
+            <p className="mt-0.5 truncate text-xs leading-tight text-(--fg-muted)">
               {user.email}
             </p>
           </div>
@@ -169,7 +169,7 @@ export function UserMenu({
                 href={profileHref}
                 className={cn(
                   "group mx-1 flex cursor-pointer items-center gap-2.5 rounded-(--radius-sm)",
-                  "px-2.5 py-2 text-(--text-sm) text-(--fg) outline-hidden",
+                  "px-2.5 py-2 text-sm text-(--fg) outline-hidden",
                   "transition-colors duration-(--transition-fast)",
                   "data-[highlighted]:bg-(--surface-alt) data-[highlighted]:text-(--brand)",
                 )}
@@ -194,7 +194,7 @@ export function UserMenu({
               onSelect={onLogout}
               className={cn(
                 "mx-1 flex cursor-pointer items-center gap-2.5 rounded-(--radius-sm)",
-                "px-2.5 py-2 text-(--text-sm) outline-hidden",
+                "px-2.5 py-2 text-sm outline-hidden",
                 "text-(--color-destructive)",
                 "transition-colors duration-(--transition-fast)",
                 "data-[highlighted]:bg-(--color-destructive-muted)",

@@ -44,7 +44,7 @@ export function FeedWidget({
       <div className="hb-card-body" style={{ paddingTop: 8, paddingBottom: 8 }}>
         {visible.length === 0 ? (
           <p
-            className="text-(--text-sm) text-(--fg-muted)"
+            className="text-sm text-(--fg-muted)"
             style={{ padding: "16px 0" }}
           >
             Nenhuma atividade recente.

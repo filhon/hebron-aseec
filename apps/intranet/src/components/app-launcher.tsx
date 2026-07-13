@@ -97,7 +97,7 @@ export function AppLauncher({ title = "Outros módulos" }: AppLauncherProps) {
                 >
                   <Icon className="h-5 w-5" aria-hidden="true" />
                 </span>
-                <span className="text-(--text-xs) font-medium">
+                <span className="text-xs font-medium">
                   {app.label}
                 </span>
               </a>

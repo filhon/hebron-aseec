@@ -65,7 +65,7 @@ export function CalendarWidget({ events, referenceDate }: CalendarWidgetProps) {
           {WEEKDAY_LABELS.map((label, i) => (
             <span
               key={i}
-              className="text-(--text-xs)"
+              className="text-xs"
               style={{ fontWeight: 600 }}
             >
               {label}

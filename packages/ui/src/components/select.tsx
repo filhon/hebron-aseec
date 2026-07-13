@@ -30,7 +30,7 @@ const SelectTrigger = React.forwardRef<
       "flex h-10 w-full items-center justify-between gap-2",
       "rounded-(--radius) border border-(--border)",
       "bg-(--bg-alt) text-(--fg)",
-      "px-3 py-2 text-(--text-sm)",
+      "px-3 py-2 text-sm",
       "placeholder:text-(--fg-muted)",
       "transition-colors duration-(--transition-fast)",
       "hover:border-(--brand)/50",
@@ -143,7 +143,7 @@ const SelectLabel = React.forwardRef<
   <SelectPrimitive.Label
     ref={ref}
     className={cn(
-      "px-2 py-1.5 text-(--text-xs) font-semibold uppercase tracking-wide",
+      "px-2 py-1.5 text-xs font-semibold uppercase tracking-wide",
       className,
     )}
     {...props}
@@ -161,7 +161,7 @@ const SelectItem = React.forwardRef<
       "relative flex w-full cursor-default select-none items-center",
       "rounded-(--radius-sm)",
       "py-2 pl-8 pr-3",
-      "text-(--text-sm)",
+      "text-sm",
       "outline-none",
       "transition-colors duration-(--transition-fast)",
       "focus:bg-(--brand-muted) focus:text-(--brand)",

@@ -136,11 +136,11 @@ export function InstituicaoForm() {
                       className="shrink-0 text-(--color-muted-foreground)"
                     />
                     <span className="flex flex-col">
-                      <span className="text-(--text-sm) font-medium text-(--color-foreground)">
+                      <span className="text-sm font-medium text-(--color-foreground)">
                         {org.nome}
                       </span>
                       {org.cnpj && (
-                        <span className="text-(--text-xs) text-(--color-muted-foreground)">
+                        <span className="text-xs text-(--color-muted-foreground)">
                           {org.cnpj}
                         </span>
                       )}
@@ -152,7 +152,7 @@ export function InstituicaoForm() {
           )}
 
           {results.length === 0 && query.trim().length >= 2 && !searching && (
-            <p className="text-(--text-sm) text-(--color-muted-foreground)">
+            <p className="text-sm text-(--color-muted-foreground)">
               Nenhuma instituição encontrada. Você pode cadastrar uma nova.
             </p>
           )}
@@ -183,7 +183,7 @@ export function InstituicaoForm() {
       {error && (
         <p
           role="alert"
-          className="rounded-(--radius) border border-(--color-destructive)/20 bg-(--color-destructive-muted) px-3 py-2 text-(--text-sm) text-(--color-destructive)"
+          className="rounded-(--radius) border border-(--color-destructive)/20 bg-(--color-destructive-muted) px-3 py-2 text-sm text-(--color-destructive)"
         >
           {error}
         </p>
@@ -217,7 +217,7 @@ function ModeTab({
       type="button"
       onClick={onClick}
       className={[
-        "flex-1 rounded-[calc(var(--radius)-2px)] py-1.5 text-(--text-sm) font-medium",
+        "flex-1 rounded-[calc(var(--radius)-2px)] py-1.5 text-sm font-medium",
         "transition-all duration-(--transition-fast)",
         active
           ? "bg-(--color-background) text-(--color-primary) shadow-(--shadow-xs)"

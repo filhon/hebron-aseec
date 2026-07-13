@@ -54,20 +54,20 @@ export function EmptyState({
       </div>
 
       <div className="max-w-sm space-y-1.5">
-        <Title className="font-(--font-display) text-(--text-lg) font-(--font-weight-semibold)">
+        <Title className="font-(--font-display) text-lg font-(--font-weight-semibold)">
           {title}
         </Title>
-        {description && <p className="text-(--text-sm)">{description}</p>}
+        {description && <p className="text-sm">{description}</p>}
       </div>
 
       {action && <div>{action}</div>}
 
       {!hideQuote && (
         <blockquote className="mt-1 max-w-xs">
-          <p className="text-(--text-xs) italic leading-relaxed text-(--fg-muted)">
+          <p className="text-xs italic leading-relaxed text-(--fg-muted)">
             “{displayQuote.text}”
           </p>
-          <cite className="mt-1.5 block text-(--text-xs) font-(--font-weight-semibold) not-italic text-(--brand)">
+          <cite className="mt-1.5 block text-xs font-(--font-weight-semibold) not-italic text-(--brand)">
             — {displayQuote.reference}
           </cite>
         </blockquote>

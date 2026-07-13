@@ -83,7 +83,7 @@ export function InvitationForm({ onSubmit, isLoading }: InvitationFormProps) {
 
       {/* Papéis */}
       <fieldset className="flex flex-col gap-3">
-        <legend className="text-(--text-sm) font-medium">
+        <legend className="text-sm font-medium">
           Papéis{" "}
           <span
             className="ml-0.5 text-(--color-destructive)"
@@ -101,7 +101,7 @@ export function InvitationForm({ onSubmit, isLoading }: InvitationFormProps) {
                 key={role}
                 className={[
                   "flex cursor-pointer items-center gap-2 rounded-(--radius) border px-3 py-2.5",
-                  "text-(--text-sm) transition-colors duration-(--transition-fast)",
+                  "text-sm transition-colors duration-(--transition-fast)",
                   checked
                     ? "border-(--color-primary) bg-(--color-primary)/8 text-(--color-primary)"
                     : "border-(--color-border) bg-(--color-background) text-(--color-foreground)",
@@ -142,7 +142,7 @@ export function InvitationForm({ onSubmit, isLoading }: InvitationFormProps) {
         </div>
 
         {errors.roles && (
-          <p role="alert" className="text-(--text-xs)">
+          <p role="alert" className="text-xs">
             {errors.roles.message ??
               (errors.roles as { root?: { message?: string } }).root?.message}
           </p>
@@ -181,7 +181,7 @@ export function InvitationForm({ onSubmit, isLoading }: InvitationFormProps) {
             "flex w-full resize-none",
             "rounded-(--radius) border border-(--color-border)",
             "bg-(--color-input-bg) text-(--color-foreground)",
-            "px-3 py-2 text-(--text-sm)",
+            "px-3 py-2 text-sm",
             "placeholder:text-(--color-muted-foreground)",
             "transition-colors duration-(--transition-fast)",
             "hover:border-(--color-primary)/50",

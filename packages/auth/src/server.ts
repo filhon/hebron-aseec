@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import type { CookieOptions } from "@supabase/ssr";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@hebron/db/client";
 import { designations, roleAssignments } from "@hebron/db/schema";
 import type { DesignationType, Role } from "@hebron/types/roles";
@@ -94,12 +94,19 @@ export async function resolveSession(
   const rows = await db
     .select({ role: roleAssignments.role })
     .from(roleAssignments)
-    .where(eq(roleAssignments.userId, user.id));
+    .where(
+      and(
+        eq(roleAssignments.userId, user.id),
+        isNull(roleAssignments.revokedAt),
+      ),
+    );
 
   const designationRows = await db
     .select({ type: designations.type })
     .from(designations)
-    .where(eq(designations.userId, user.id));
+    .where(
+      and(eq(designations.userId, user.id), isNull(designations.revokedAt)),
+    );
 
   return {
     actorId: user.id,

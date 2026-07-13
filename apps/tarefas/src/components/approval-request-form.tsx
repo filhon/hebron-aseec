@@ -94,7 +94,7 @@ export function ApprovalRequestForm({
 
   return (
     <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
-      <div className="flex items-start gap-2.5 rounded-(--radius) bg-(--brand-muted) px-3.5 py-3 text-(--text-xs)">
+      <div className="flex items-start gap-2.5 rounded-(--radius) bg-(--brand-muted) px-3.5 py-3 text-xs">
         <ShieldCheck className="h-4 w-4 shrink-0" aria-hidden="true" />
         <p>
           Diretores não recebem tarefas operacionais — apenas pedidos de
@@ -122,7 +122,7 @@ export function ApprovalRequestForm({
 
       <FormField label="Diretor aprovador" required error={errors.approverId}>
         {approvers.length === 0 ? (
-          <p className="rounded-(--radius) border border-(--border) bg-(--bg-alt) px-3 py-2 text-(--text-sm)">
+          <p className="rounded-(--radius) border border-(--border) bg-(--bg-alt) px-3 py-2 text-sm">
             Nenhum diretor disponível.
           </p>
         ) : (
@@ -149,7 +149,7 @@ export function ApprovalRequestForm({
           rows={3}
           maxLength={500}
           placeholder="Contexto adicional para o aprovador (opcional)"
-          className="w-full resize-none rounded-(--radius) border border-(--border) bg-(--bg-alt) px-3 py-2 text-(--text-sm) outline-none placeholder:text-(--fg-muted) focus:border-(--hb-blue)"
+          className="w-full resize-none rounded-(--radius) border border-(--border) bg-(--bg-alt) px-3 py-2 text-sm outline-none placeholder:text-(--fg-muted) focus:border-(--hb-blue)"
         />
       </FormField>
 

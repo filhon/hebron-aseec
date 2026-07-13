@@ -135,7 +135,7 @@ export function CadastroForm() {
         />
       </FormField>
 
-      <label className="flex items-start gap-2 text-(--text-xs) text-(--color-muted-foreground)">
+      <label className="flex items-start gap-2 text-xs text-(--color-muted-foreground)">
         <input
           type="checkbox"
           checked={state.consent}
@@ -152,7 +152,7 @@ export function CadastroForm() {
       {state.error && (
         <p
           role="alert"
-          className="rounded-(--radius) border border-(--color-destructive)/20 bg-(--color-destructive-muted) px-3 py-2 text-(--text-sm) text-(--color-destructive)"
+          className="rounded-(--radius) border border-(--color-destructive)/20 bg-(--color-destructive-muted) px-3 py-2 text-sm text-(--color-destructive)"
         >
           {state.error}
         </p>
@@ -173,7 +173,7 @@ export function CadastroForm() {
         Solicitar acesso
       </Button>
 
-      <p className="text-center text-(--text-xs) text-(--color-muted-foreground)">
+      <p className="text-center text-xs text-(--color-muted-foreground)">
         Já tem uma conta?{" "}
         <a
           href="/login"
@@ -225,7 +225,7 @@ function ConfirmationSentState({ email }: { email: string }) {
         <p className="font-medium text-(--color-foreground)">
           Confirme seu e-mail
         </p>
-        <p className="mt-1 text-(--text-sm) text-(--color-muted-foreground)">
+        <p className="mt-1 text-sm text-(--color-muted-foreground)">
           Enviamos um link de confirmação para{" "}
           <span className="font-medium text-(--color-foreground)">{email}</span>
           . Depois de confirmar, você vai vincular sua instituição para concluir

@@ -40,7 +40,7 @@ export function LoadingState({
         )}
         aria-hidden="true"
       />
-      {message && <p className="text-(--text-sm)">{message}</p>}
+      {message && <p className="text-sm">{message}</p>}
     </div>
   );
 }

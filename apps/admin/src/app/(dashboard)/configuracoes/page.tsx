@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { db } from "@hebron/db/client";
-import { eq, asc } from "drizzle-orm";
+import { and, eq, asc, isNull } from "drizzle-orm";
 import { users, designations, roleAssignments } from "@hebron/db/schema";
 import {
   featureFlags,
@@ -232,7 +232,6 @@ function DesignacoesPanel({
             userId: d.userId,
             directorName: d.userName ?? "—",
             type: d.type,
-            scope: null,
             assignedAt: d.assignedAt,
           }))}
         />
@@ -560,6 +559,7 @@ export default async function ConfiguracoesPage({
         userId: designations.userId,
         assignedBy: designations.assignedBy,
         assignedAt: designations.assignedAt,
+        revokedAt: designations.revokedAt,
         userName: users.fullName,
       })
       .from(designations)
@@ -585,7 +585,8 @@ export default async function ConfiguracoesPage({
         scope: roleAssignments.scope,
         grantedAt: roleAssignments.grantedAt,
       })
-      .from(roleAssignments),
+      .from(roleAssignments)
+      .where(isNull(roleAssignments.revokedAt)),
 
     db
       .selectDistinct({
@@ -595,7 +596,12 @@ export default async function ConfiguracoesPage({
       })
       .from(roleAssignments)
       .innerJoin(users, eq(roleAssignments.userId, users.id))
-      .where(eq(roleAssignments.role, "diretor")),
+      .where(
+        and(
+          eq(roleAssignments.role, "diretor"),
+          isNull(roleAssignments.revokedAt),
+        ),
+      ),
 
     db
       .select({
@@ -611,6 +617,12 @@ export default async function ConfiguracoesPage({
     id: d.id,
     name: d.fullName ?? d.email,
   }));
+
+  const activeDesignationRows = designationRows.filter(
+    (d) => d.revokedAt === null,
+  );
+  const revokedDesignationCount =
+    designationRows.length - activeDesignationRows.length;
 
   return (
     <div className="hb-page">
@@ -648,8 +660,8 @@ export default async function ConfiguracoesPage({
       <div role="tabpanel">
         {activeTab === "designacoes" && (
           <DesignacoesPanel
-            activeDesignations={designationRows}
-            revokedCount={0}
+            activeDesignations={activeDesignationRows}
+            revokedCount={revokedDesignationCount}
             directors={directors}
           />
         )}
