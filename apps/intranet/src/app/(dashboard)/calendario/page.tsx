@@ -89,10 +89,7 @@ export default async function CalendarioPage() {
                         </span>
                       </div>
                       {session.chairName && (
-                        <p
-                          className="text-xs"
-                          style={{ marginTop: 4 }}
-                        >
+                        <p className="text-xs" style={{ marginTop: 4 }}>
                           Presidida por {session.chairName}
                         </p>
                       )}

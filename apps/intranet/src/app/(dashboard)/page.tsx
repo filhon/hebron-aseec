@@ -1,5 +1,4 @@
 import { Suspense } from "react";
-import { Megaphone, Handshake } from "lucide-react";
 import { ErrorState } from "@hebron/ui";
 import type {
   DashboardWidget,
@@ -118,7 +117,7 @@ async function DashboardContent() {
         title: a.title,
         description: a.authorName,
         occurredAt: a.publishedAt as Date,
-        icon: Megaphone,
+        iconKey: "megaphone" as const,
       })),
     ...meetingSessions.flatMap((session) =>
       session.decisions.map((decision) => ({
@@ -127,7 +126,7 @@ async function DashboardContent() {
         title: decision.description,
         description: decision.responsibleName,
         occurredAt: decision.updatedAt,
-        icon: Handshake,
+        iconKey: "handshake" as const,
       })),
     ),
   ];

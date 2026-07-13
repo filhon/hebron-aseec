@@ -91,9 +91,7 @@ export function DesignationForm({
         noValidate
       >
         <div>
-          <h3 className="text-sm font-semibold">
-            Configurar designação
-          </h3>
+          <h3 className="text-sm font-semibold">Configurar designação</h3>
           <p className="mt-1 text-xs">
             Somente diretores podem ser designados como gestor ou autorizador.
           </p>

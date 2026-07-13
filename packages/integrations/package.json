@@ -11,7 +11,10 @@
     "./projetos": "./src/projetos.ts",
     "./tarefas": "./src/tarefas.ts",
     "./flats": "./src/flats.ts",
-    "./intranet": "./src/intranet.ts"
+    "./intranet": "./src/intranet.ts",
+    "./plataforma": "./src/plataforma.ts",
+    "./radio": "./src/radio.ts",
+    "./feed": "./src/feed.ts"
   },
   "scripts": {
     "lint": "eslint .",

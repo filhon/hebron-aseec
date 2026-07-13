@@ -163,9 +163,7 @@ export function EmailTemplateEditor({
                 {watchedSubject && (
                   <div className="mb-3 border-b border-(--color-border) pb-2">
                     <span className="text-xs">Assunto: </span>
-                    <strong className="text-sm">
-                      {watchedSubject}
-                    </strong>
+                    <strong className="text-sm">{watchedSubject}</strong>
                   </div>
                 )}
                 <div

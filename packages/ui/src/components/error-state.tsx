@@ -55,9 +55,7 @@ export function ErrorState({
         <Title className="font-(--font-display) text-base font-(--font-weight-semibold)">
           {title}
         </Title>
-        {displayDescription && (
-          <p className="text-sm">{displayDescription}</p>
-        )}
+        {displayDescription && <p className="text-sm">{displayDescription}</p>}
       </div>
 
       {action && <div className="mt-2">{action}</div>}

@@ -389,9 +389,7 @@ export function TaskForm({
           {tagPickerOpen && (
             <div className="absolute z-(--z-dropdown) mt-1 max-h-56 w-full overflow-y-auto rounded-(--radius) border border-(--border) bg-(--bg) p-1 shadow-(--shadow-md)">
               {availableTags.length === 0 ? (
-                <p className="px-3 py-2 text-xs">
-                  Nenhuma tag cadastrada.
-                </p>
+                <p className="px-3 py-2 text-xs">Nenhuma tag cadastrada.</p>
               ) : (
                 availableTags.map((t) => {
                   const checked = values.tagIds.includes(t.id);

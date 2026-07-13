@@ -1,4 +1,16 @@
-import { Activity, type LucideIcon } from "lucide-react";
+import { Activity, Megaphone, Handshake, type LucideIcon } from "lucide-react";
+
+export type FeedIconKey = "megaphone" | "handshake" | "activity";
+
+// Ícones nunca cruzam a fronteira Server → Client Component como prop
+// (referência de componente não é serializável) — o server só manda a
+// chave; a resolução para o componente Lucide acontece aqui, no lado
+// client.
+const ICONS: Record<FeedIconKey, LucideIcon> = {
+  megaphone: Megaphone,
+  handshake: Handshake,
+  activity: Activity,
+};
 
 export interface FeedItem {
   id: string;
@@ -6,7 +18,7 @@ export interface FeedItem {
   title: string;
   description?: string;
   occurredAt: Date;
-  icon?: LucideIcon;
+  iconKey?: FeedIconKey;
 }
 
 export interface FeedWidgetProps {
@@ -52,7 +64,7 @@ export function FeedWidget({
         ) : (
           <ul className="hb-timeline" aria-label={title}>
             {visible.map((item) => {
-              const Icon = item.icon ?? Activity;
+              const Icon = ICONS[item.iconKey ?? "activity"];
               return (
                 <li key={item.id} className="hb-timeline-item">
                   <div className="hb-timeline-time">

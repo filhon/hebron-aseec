@@ -94,16 +94,11 @@ function NotificationRow({ notification: n, onRead }: NotificationRowProps) {
               </span>
               {n.title}
             </p>
-            {n.body && (
-              <p className="mt-1 line-clamp-3 text-sm">{n.body}</p>
-            )}
+            {n.body && <p className="mt-1 line-clamp-3 text-sm">{n.body}</p>}
           </div>
 
           <div className="flex shrink-0 flex-col items-end gap-1">
-            <time
-              dateTime={n.createdAt}
-              className="whitespace-nowrap text-xs"
-            >
+            <time dateTime={n.createdAt} className="whitespace-nowrap text-xs">
               {formatDate(n.createdAt)}
             </time>
             {!isUnread && (
@@ -151,9 +146,7 @@ export function NotificationCenter({
           <h1 className="text-base font-(--font-weight-semibold)">
             Notificações
           </h1>
-          {total > 0 && (
-            <span className="text-xs">{total} no total</span>
-          )}
+          {total > 0 && <span className="text-xs">{total} no total</span>}
         </div>
 
         {unreadCount > 0 && (

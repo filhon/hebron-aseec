@@ -141,7 +141,7 @@ export function CadastroForm() {
           checked={state.consent}
           onChange={(e) => setField("consent", e.target.checked)}
           disabled={state.loading}
-          className="mt-0.5 h-4 w-4 shrink-0 rounded-(--radius-sm) border-(--color-border) text-(--color-primary)"
+          className="mt-0.5 h-4 w-4 shrink-0 rounded-sm border-(--color-border) text-(--color-primary)"
         />
         <span>
           Autorizo o uso dos meus dados para fins de análise e aprovação de

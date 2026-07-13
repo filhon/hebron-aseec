@@ -230,9 +230,7 @@ export function TemplateForm({
 
       <div className="flex flex-col gap-3">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-semibold">
-            Tarefas pré-definidas
-          </span>
+          <span className="text-sm font-semibold">Tarefas pré-definidas</span>
           <Button type="button" variant="outline" size="sm" onClick={addTask}>
             <Plus className="h-3.5 w-3.5" aria-hidden="true" />
             Adicionar tarefa

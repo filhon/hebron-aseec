@@ -22,7 +22,7 @@ export function AuthCard({
 }: AuthCardProps) {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-(--color-muted) px-4 py-12">
-      <div className="w-full max-w-md rounded-(--radius-lg) bg-(--color-background) p-8 shadow-(--shadow-md)">
+      <div className="w-full max-w-md rounded-lg bg-(--color-background) p-8 shadow-(--shadow-md)">
         <div className="mb-8 flex flex-col items-center gap-3">
           <HebronLogo />
           <div className="text-center">
@@ -57,7 +57,7 @@ export function HebronLogo() {
   return (
     <div className="flex flex-col items-center">
       <div
-        className="flex h-12 w-12 items-center justify-center rounded-(--radius-md) bg-(--color-primary)"
+        className="flex h-12 w-12 items-center justify-center rounded-md bg-(--color-primary)"
         aria-hidden="true"
       >
         <span className="text-xl font-bold text-(--color-primary-foreground) tracking-tight select-none">

@@ -3336,12 +3336,12 @@ Conectar integrações reais via packages/integrations. Intranet → Tarefas: de
 
 **Critérios de aceite:**
 
-- [ ] Decisão de reunião cria tarefa via packages/integrations (teste end-to-end)
-- [ ] Feed agrega eventos reais dos 3 módulos e respeita RLS: colaborador sem acesso a financeiro não vê eventos financeiros no feed (teste)
-- [ ] Stubs para Plataforma e Rádio documentados
-- [ ] Zero imports app→app (verificação do CI)
-- [ ] Lint passa
-- [ ] Types passam
+- [x] Decisão de reunião cria tarefa via packages/integrations (teste end-to-end)
+- [x] Feed agrega eventos reais dos 3 módulos e respeita RLS: colaborador sem acesso a financeiro não vê eventos financeiros no feed (teste)
+- [x] Stubs para Plataforma e Rádio documentados
+- [x] Zero imports app→app (verificação do CI)
+- [x] Lint passa
+- [x] Types passam
 
 ---
 

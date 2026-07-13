@@ -6,3 +6,6 @@ export * from "./projetos";
 export * from "./tarefas";
 export * from "./flats";
 export * from "./intranet";
+export * from "./plataforma";
+export * from "./radio";
+export * from "./feed";

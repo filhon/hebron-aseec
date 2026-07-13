@@ -95,10 +95,7 @@ function FormField({
       })}
 
       {hint && (
-        <p
-          id={descriptionId}
-          className="text-xs leading-(--leading-relaxed)"
-        >
+        <p id={descriptionId} className="text-xs leading-(--leading-relaxed)">
           {hint}
         </p>
       )}

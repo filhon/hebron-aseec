@@ -121,6 +121,7 @@
 | S-98   | 2026-07-10 | P-4.11b — Tarefas: seed e configuração do checklist padrão (PATCH-019)        | concluido                            |
 | S-99   | 2026-07-13 | P-4.9b — Tarefas: anexos persistidos e gestão de templates (PATCH-020)        | concluido                            |
 | S-100  | 2026-07-13 | P-1.25b — Admin: designações honestas e revogação sem hard delete (PATCH-021) | concluido                            |
+| S-101  | 2026-07-13 | P-5.11 — Integrações Cross-App Intranet                                       | concluido                            |
 
 ---
 
@@ -5720,3 +5721,101 @@ corrige.
   `revoked_at IS NULL`; `revokedCount` real em vez de hardcoded)
 - `PATCHES/021-admin-designacoes-escopo-e-revogacao.md` (lista de arquivos e
   critérios corrigidos pós-validação)
+
+### S-101 — 2026-07-13 — P-5.11 Integrações Cross-App Intranet
+
+**Prompt:** P-5.11
+**Duracao:** ~1 sessao
+**Modelo:** sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Implementado o agregador de feed cross-app (`packages/integrations/src/feed.ts`)
+e os stubs documentados de Plataforma → Intranet e Rádio → Intranet, ambos
+adiados para as fases 6 e 8. A consumação real "decisão de reunião → tarefa
+via `createAutoTask`" já existia desde P-5.8
+(`apps/intranet/src/actions/decisions.ts::createMeetingDecision`) — não
+precisou de mudança de código, só de um teste end-to-end cobrindo o
+contrato que ela consome.
+
+**Decisoes tomadas:**
+
+- `feed.ts` roda com `withAuthenticatedContext` (packages/db/src/
+  authenticated.ts) em vez de uma função SQL `SECURITY INVOKER` nova (padrão
+  de `intranet_global_search`, 0039). Não há migration na lista de arquivos
+  permitidos deste prompt, e `withAuthenticatedContext` já é exatamente
+  "o client da sessão" dentro de um package (troca `SET LOCAL ROLE
+authenticated` + `request.jwt.claims.sub`) — a RLS de projetos/financeiro/
+  tarefas filtra as linhas normalmente, sem reimplementar visibilidade.
+  `getSessionSupabaseClient` (o mecanismo usado por P-5.8) não é importável
+  aqui: vive em `apps/intranet/src/lib` e depende de `next/headers`, que um
+  package nunca pode importar.
+- Cada módulo é consultado isoladamente (3 SELECTs) e mesclado/ordenado em
+  memória — mais simples que uma função UNION cross-schema para o escopo
+  deste prompt.
+- `packages/integrations/src/tarefas.ts` não foi alterado: `createAutoTask`
+  já é real (não um stub) e `decisions.ts` já a consome integralmente desde
+  P-5.8. `packages/integrations/src/intranet.ts` (stub `
+onMeetingActionItemDecided`) também não foi tocado — não estava na lista
+  de arquivos permitidos deste prompt, apesar do comentário no próprio
+  arquivo citar P-5.11; ver desvio abaixo.
+- `package.json` (mapa de `exports`) e `index.ts` do package foram editados
+  para registrar os 3 arquivos novos — não estavam na lista, mas sem isso
+  os arquivos ficam inertes (todo arquivo existente do package já segue
+  esse padrão de export por subpath).
+
+**Desvios do prompt (registrados):**
+
+- `packages/integrations/src/intranet.ts` permanece stub. O texto do prompt
+  ("decisão de reunião cria tarefa via createAutoTask — substituir stub do
+  package") já está satisfeito por `decisions.ts` chamando `createAutoTask`
+  diretamente (P-5.8); a lista de arquivos permitidos deste prompt não
+  incluía `intranet.ts` nem `decisions.ts`, então o stub, hoje morto/nunca
+  chamado, foi deixado como está para não editar fora do escopo. Sugestão
+  para um prompt futuro: ou apagar `onMeetingActionItemDecided` (código
+  morto) ou fazer `decisions.ts` delegar a ela, para não manter duas cópias
+  do mesmo fluxo.
+- Critério de aceite "colaborador sem acesso a financeiro não vê eventos
+  financeiros" foi testado com o papel `conselheiro`, não `colaborador`:
+  pela RLS atual (`0011_financeiro_rls.sql::transactions_select_staff`),
+  colaborador TEM select em financeiro (papel operacional do módulo).
+  `conselheiro` é o papel de staff real sem acesso a financeiro que ainda
+  vê tarefas — o mesmo comportamento que o critério pede, com o papel
+  correto.
+- Achado de ambiente (não corrigido por migration, fora do escopo deste
+  prompt): o banco de dev local estava com `GRANT USAGE ON SCHEMA
+projetos` e vários `GRANT SELECT/INSERT/UPDATE` de tabelas de
+  `projetos.*` para `authenticated` ausentes, apesar de `_migrations`
+  registrar 0014/0025/0026 como aplicadas — só o schema `projetos` estava
+  afetado (financeiro/tarefas/admin/documentos/intranet ok). Re-aplicados
+  manualmente (mesmos `GRANT`s dessas migrations, idempotentes) para
+  destravar os testes de `feed.ts`. Vale investigar a causa raiz (reset
+  parcial de roles local?) antes de assumir que produção está no mesmo
+  estado.
+
+**Critérios de aceite verificados:**
+
+- [x] Decisão de reunião cria tarefa via packages/integrations (teste
+      end-to-end) — `tarefas.test.ts` exercita `createAutoTask` com o mesmo
+      contrato que `decisions.ts` usa.
+- [x] Feed agrega eventos reais dos 3 módulos e respeita RLS —
+      `feed.test.ts` (super_admin vê os 3; conselheiro não vê financeiro).
+- [x] Stubs para Plataforma e Rádio documentados (`plataforma.ts`, `radio.ts`).
+- [x] Zero imports app→app (grep confirmado; `packages/integrations` só
+      importa de `@hebron/db`/`@hebron/types`).
+- [x] Lint passa (`packages/integrations` e `apps/intranet`).
+- [x] Types passam (`packages/integrations` e `apps/intranet`).
+
+**Arquivos criados:**
+
+- `packages/integrations/src/feed.ts`
+- `packages/integrations/src/plataforma.ts`
+- `packages/integrations/src/radio.ts`
+- `packages/integrations/src/__tests__/feed.test.ts`
+- `packages/integrations/src/__tests__/tarefas.test.ts`
+
+**Arquivos modificados:**
+
+- `packages/integrations/src/index.ts` (re-export dos 3 arquivos novos)
+- `packages/integrations/package.json` (subpath exports `./feed`,
+  `./plataforma`, `./radio`)

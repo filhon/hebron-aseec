@@ -98,10 +98,7 @@ export function SearchGlobal({
                         href={result.href}
                         className="block rounded-xs p-2 transition-colors duration-(--transition-fast) hover:bg-(--surface-alt)"
                       >
-                        <span
-                          className="text-sm"
-                          style={{ fontWeight: 600 }}
-                        >
+                        <span className="text-sm" style={{ fontWeight: 600 }}>
                           {result.title}
                         </span>
                         {result.description && (
