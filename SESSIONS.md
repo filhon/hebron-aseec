@@ -5904,3 +5904,70 @@ precisou de mudança.
 **Arquivos modificados:**
 
 - Nenhum (`kpis.test.ts` já satisfazia o critério, sem alteração).
+
+### S-103 — 2026-07-13 — P-6.1 Schema de Tipos Plataforma
+
+**Prompt:** P-6.1
+**Duracao:** ~1 sessao
+**Modelo:** sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Primeiro prompt da Fase 6 (Plataforma/LMS). Criados os tipos, schemas Zod e
+mock data para o módulo, seguindo a semântica de quiz/certificado/trilha
+definida em BRAIN §6.3 e PATCH-010 (quiz é tipo de aula que conclui com
+`attempt.score >= passing_score`, tentativas ilimitadas; certificado
+continua sendo "concluir 100% da trilha").
+
+**Decisões tomadas:**
+
+- Tipo "Module" do escopo foi nomeado `CourseModule` (não `Module`) — nome
+  genérico demais e sobrecarregado no ecossistema JS/Node; mantém a
+  intenção do prompt sem ambiguidade.
+- `NoteWidget`/notas pessoais em timestamp (também citado em PATCH-010 como
+  mantido na v1) **não** foi criado aqui — não está na lista de tipos do
+  escopo de P-6.1 nem nos critérios de aceite; fica para um prompt futuro
+  da Fase 6 (G1: não inventar campos/telas fora do que o prompt pede).
+- `packages/types/package.json` e `packages/validators/package.json` não
+  estavam na lista de arquivos permitidos, mas precisaram de uma entrada
+  `"./plataforma"` no mapa `exports` — sem isso, `@hebron/types/plataforma`
+  e `@hebron/validators/plataforma` não resolvem (todo módulo existente já
+  segue esse padrão). Tratado como infraestrutura óbvia faltante (G1).
+- Enrollment/Progress/QuizAttempt/Certificate/Discussion/DiscussionPost
+  seguem o padrão de denormalização já usado no repo (`userName`,
+  `courseName`, `authorName` ao lado do id) para evitar joins nas telas de
+  Bloco A, mesmo padrão de `Task`/`Comment` (P-4.1) e `MeetingDecision`
+  (P-5.1).
+- Mock data usa "Fundamentos da Liderança Cristã" como o curso piloto já
+  pronto citado em BRAIN §6.3 (referência de profundidade), com 2 módulos,
+  6 aulas e 2 quizzes; mais 2 cursos (um publicado, um rascunho não
+  publicado) para totalizar 3 cursos, 13 aulas e 3 quizzes — acima dos
+  mínimos do critério de aceite.
+
+**Critérios de aceite verificados:**
+
+- [x] Lesson com tipo enum: video, text, quiz, download —
+      `packages/types/src/plataforma/index.ts` (`LessonType`).
+- [x] Progress granular por aula (lesson_id, user_id, completed_at) —
+      `Progress` em `packages/types/src/plataforma/index.ts`.
+- [x] Trilha sequencial: next_lesson_id, requires_completion — `Lesson.nextLessonId`
+      / `Lesson.requiresCompletion`.
+- [x] Quiz: questions (jsonb), passing_score — `Quiz.questions` /
+      `Quiz.passingScore`.
+- [x] Certificate: course_id, user_id, issued_at, hash (verificação) —
+      `Certificate`.
+- [x] Mock data: 3+ cursos, 10+ aulas, 2+ quizzes — `mock-data.ts`: 3
+      cursos, 13 aulas, 3 quizzes.
+- [x] Lint passa — `pnpm turbo lint`.
+- [x] Types passam — `pnpm turbo typecheck`.
+
+**Arquivos criados:**
+
+- `packages/types/src/plataforma/index.ts`
+- `packages/validators/src/plataforma/index.ts`
+- `apps/plataforma/src/lib/mock-data.ts`
+
+**Arquivos modificados:**
+
+- `packages/types/package.json` (entrada `./plataforma` no `exports`)
+- `packages/validators/package.json` (entrada `./plataforma` no `exports`)

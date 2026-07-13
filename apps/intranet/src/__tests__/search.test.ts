@@ -58,9 +58,8 @@ const FIXTURE_IDS = {
 };
 
 beforeAll(async () => {
-  const { createTestAuthUser, createTestSessionCookies } = await import(
-    "@hebron/auth/testing"
-  );
+  const { createTestAuthUser, createTestSessionCookies } =
+    await import("@hebron/auth/testing");
 
   diretorId = await createTestAuthUser(
     DIRETOR_EMAIL,

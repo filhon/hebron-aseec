@@ -3406,14 +3406,14 @@ Tipos e schemas Zod: Course, Module, Lesson (tipo: video/text/quiz/download), En
 
 **Critérios de aceite:**
 
-- [ ] Lesson com tipo enum: video, text, quiz, download
-- [ ] Progress granular por aula (lesson_id, user_id, completed_at)
-- [ ] Trilha sequencial: next_lesson_id, requires_completion
-- [ ] Quiz: questions (jsonb), passing_score
-- [ ] Certificate: course_id, user_id, issued_at, hash (verificação)
-- [ ] Mock data: 3+ cursos, 10+ aulas, 2+ quizzes
-- [ ] Lint passa
-- [ ] Types passam
+- [x] Lesson com tipo enum: video, text, quiz, download
+- [x] Progress granular por aula (lesson_id, user_id, completed_at)
+- [x] Trilha sequencial: next_lesson_id, requires_completion
+- [x] Quiz: questions (jsonb), passing_score
+- [x] Certificate: course_id, user_id, issued_at, hash (verificação)
+- [x] Mock data: 3+ cursos, 10+ aulas, 2+ quizzes
+- [x] Lint passa
+- [x] Types passam
 
 ---
 

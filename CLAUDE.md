@@ -173,7 +173,7 @@ pnpm turbo test           # Rodar testes
 - **Defense in depth:** RBAC + RLS sempre, nunca apenas um
 - **Frontend-first:** UI com mocks → validação com diretoria → backend
 - **Uma sessão = um prompt:** não misturar prompts na mesma sessão
-- **Skill `/frontend-design` obrigatória:** todo prompt que envolver criação ou edição de UI (páginas, componentes, layouts, estados) deve invocar o skill `/frontend-design` antes de implementar
+- **Skill `/impeccable` obrigatória:** todo prompt que envolver criação ou edição de UI (páginas, componentes, layouts, estados) deve invocar o skill `/impeccable` antes de implementar
 
 ## Referências
 

@@ -196,9 +196,8 @@ describe("RLS real em intranet.announcements — colaborador não publica, diret
 describe("Dashboard config — persiste e carrega (dashboard_configs_write_own)", () => {
   it("salva e recarrega o arranjo de widgets do usuário autenticado", async () => {
     await actingAs(IDS.colaborador, ["colaborador"]);
-    const { saveDashboardConfig, getDashboardConfig } = await import(
-      "../actions/dashboard"
-    );
+    const { saveDashboardConfig, getDashboardConfig } =
+      await import("../actions/dashboard");
 
     const widgetId = "b1000000-0000-0000-0000-000000000001";
     const saved = await saveDashboardConfig({
