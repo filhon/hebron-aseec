@@ -3429,7 +3429,7 @@ Tipos e schemas Zod: Course, Module, Lesson (tipo: video/text/quiz/download), En
 - Env vars: nenhuma
 
 **Escopo:**
-Componentes: CourseCard (capa, título, instrutor, progresso). LessonPlayer (video HLS + controls). LessonContent (rich text). QuizForm (múltipla escolha, dissertativa). ProgressBar (por curso e geral). CertificateCard. DiscussionThread (por aula). CourseSidebar (lista de módulos/aulas com status de progresso). NoteWidget (notas no minuto do vídeo).
+Componentes: CourseCard (capa, título, instrutor, progresso). LessonPlayer (video HLS + controls). LessonContent (rich text). QuizForm (múltipla escolha, dissertativa). ProgressBar (por curso e geral). CertificateCard. DiscussionThread (por aula). CourseSidebar (lista de módulos/aulas com status de progresso). NoteWidget (notas no minuto do vídeo). Nota: QuizForm é só múltipla escolha — dissertativa fora da v1 (ver PATCH-023).
 
 **Arquivos permitidos para criação/edição:**
 
@@ -3446,7 +3446,7 @@ Componentes: CourseCard (capa, título, instrutor, progresso). LessonPlayer (vid
 
 - [x] LessonPlayer com video HLS (hls.js), controle de velocidade, marcadores
 - [x] CourseSidebar com módulos/aulas e ícones de progresso (completo/em andamento/locked)
-- [~] QuizForm com tipos: múltipla escolha e dissertativa
+- [x] QuizForm com tipos: múltipla escolha (dissertativa fora da v1 — ver PATCH-023)
 - [x] NoteWidget: criar nota em timestamp do vídeo, clicável para ir ao ponto
 - [x] ProgressBar por curso e global (% de conclusão)
 - [x] Responsivo
@@ -3467,7 +3467,7 @@ Componentes: CourseCard (capa, título, instrutor, progresso). LessonPlayer (vid
 - Env vars: nenhuma
 
 **Escopo:**
-Páginas do aluno: Catálogo de cursos (filtros: categoria, dificuldade, instrutor). Página do curso (descrição, ementa, instrutor, CTA matrícula). Player de aula (vídeo + sidebar de navegação). Quiz. "Minha jornada" (cursos em andamento, progresso). Certificados. Discussões. Páginas do instrutor/pedagógico: Dashboard com estatísticas. Editor de curso (drag-drop módulos/aulas). Editor de aula. Editor de quiz.
+Páginas do aluno: Catálogo de cursos (filtros: categoria, instrutor — "dificuldade" fora da v1, ver PATCH-024). Página do curso (descrição, ementa, instrutor, CTA matrícula). Player de aula (vídeo + sidebar de navegação). Quiz. "Minha jornada" (cursos em andamento, progresso). Certificados. Discussões. Páginas do instrutor/pedagógico: Dashboard com estatísticas. Editor de curso (drag-drop módulos/aulas). Editor de aula. Editor de quiz.
 
 **Arquivos permitidos para criação/edição:**
 
@@ -3486,7 +3486,7 @@ Páginas do aluno: Catálogo de cursos (filtros: categoria, dificuldade, instrut
 
 **Critérios de aceite:**
 
-- [~] Catálogo com filtros e busca simples (título, série, categoria)
+- [x] Catálogo com filtros e busca simples (título, categoria, instrutor); série entra como terceiro eixo em P-6.3b (ver PATCH-024)
 - [x] Página de curso: descrição, ementa, instrutor, CTA matrícula
 - [x] Player: vídeo + sidebar navegação + notas + discussão
 - [x] "Minha jornada": cursos em andamento com progresso visual
@@ -3496,6 +3496,49 @@ Páginas do aluno: Catálogo de cursos (filtros: categoria, dificuldade, instrut
 - [x] Responsivo
 - [x] Lint passa
 - [x] Types passam
+
+---
+
+### P-6.3b — Plataforma: série como coleção temática no catálogo
+
+**Fase:** 6
+**Módulo:** plataforma
+**Tipo:** ui
+**Pré-condições:**
+
+- Branch: `fix/P-6.3b-plataforma-serie`
+- Dependências: P-6.5 concluído
+- Env vars: nenhuma
+
+**Origem:** PATCH-024 — débito de S-105 (P-6.3), critério de aceite marcado `[~]`. BRAIN §6.3 lista título, série e categoria como três eixos distintos de busca; nenhuma camada modelava "série" (`Course` só tinha `category`).
+
+**Escopo:**
+Introduzir "série" (coleção temática de cursos, mesmo precedente do módulo Rádio §6.4) como terceiro eixo de busca/filtro do catálogo, ainda sobre mocks (Bloco A).
+
+1. Tipo `Series` (`id`, `name`, `slug`, `description`, `createdAt`, `updatedAt`) e campos `seriesId: string | null` + `seriesName: string | null` (denormalizado, mesmo padrão de `instructorName`) em `Course`.
+2. Schema Zod: `seriesSchema` e inclusão de `seriesId` opcional no schema de curso (`createCourseSchema`/equivalente).
+3. Mock data: 2+ séries; associar `seriesId`/`seriesName` aos cursos existentes; ao menos um curso sem série (`null`).
+4. Catálogo (`(aluno)/page.tsx`): filtro por série (Select, mesmo padrão dos filtros de categoria/instrutor); busca por texto passa a casar título e nome da série.
+5. `course-form.tsx` (P-6.4): seletor opcional de série (Select com as séries do mock; opção "Sem série").
+6. `course-card.tsx`: exibir o nome da série como rótulo discreto quando presente.
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/types/src/plataforma/index.ts`
+- `packages/validators/src/plataforma/index.ts`
+- `apps/plataforma/src/lib/mock-data.ts`
+- `apps/plataforma/src/app/(aluno)/page.tsx`
+- `apps/plataforma/src/components/course-form.tsx`
+- `apps/plataforma/src/components/course-card.tsx`
+
+**Critérios de aceite:**
+
+- [x] `Series` modelado em types + `seriesSchema` em validators.
+- [x] `Course.seriesId`/`seriesName` opcionais; ao menos um curso sem série no mock.
+- [x] Catálogo filtra por série e a busca por texto casa título + nome da série.
+- [x] `course-form` permite escolher série (incluindo "Sem série").
+- [x] Sem regressão nos filtros de categoria/instrutor existentes.
+- [x] Lint passa · Types passam.
 
 ---
 
@@ -3582,7 +3625,7 @@ Loading, empty e error states. Skeletons para catálogo, player, jornada. Estado
 - Env vars: `DATABASE_URL`
 
 **Escopo:**
-Criar tabelas no schema `plataforma`: courses, modules, lessons, enrollments, progress, quizzes, quiz_questions, quiz_attempts, certificates, discussions, discussion_posts, instructors, notes (user_id, lesson_id, timestamp_seconds, content).
+Criar tabelas no schema `plataforma`: courses, modules, lessons, enrollments, progress, quizzes, quiz_questions, quiz_attempts, certificates, discussions, discussion_posts, instructors, notes (user_id, lesson_id, timestamp_seconds, content), series (id, name, slug, description, timestamps — PATCH-024) + coluna `courses.series_id` (FK nullable para `series`).
 
 **Arquivos permitidos para criação/edição:**
 
@@ -3596,6 +3639,7 @@ Criar tabelas no schema `plataforma`: courses, modules, lessons, enrollments, pr
 - [ ] progress: lesson_id, user_id, completed_at (unique constraint)
 - [ ] certificates: course_id, user_id, issued_at, verification_hash (unique)
 - [ ] notes: lesson_id, user_id, timestamp_seconds, content
+- [ ] series: name, slug, description; courses.series_id (FK nullable) (PATCH-024)
 - [ ] Migration aplica sem erros
 - [ ] Types passam
 
@@ -3613,7 +3657,7 @@ Criar tabelas no schema `plataforma`: courses, modules, lessons, enrollments, pr
 - Env vars: `DATABASE_URL`
 
 **Escopo:**
-RLS para schema plataforma. Qualquer usuário autenticado: SELECT em courses publicados; lessons de cursos matriculados. Trilha sequencial: criar função helper plataforma.can_access_lesson(user_id, lesson_id) — SECURITY DEFINER STABLE, mesmo padrão de has_role — que retorna true se a aula é a primeira do curso ou se a aula anterior (por module/order) tem progress.completed_at do usuário; a policy de SELECT em lessons usa o helper (evitar subquery correlata inline). Progresso e notas: apenas próprios. Super_admin e instrutor: CRUD completo. Certificados: SELECT próprio; verificação pública por hash via rota que consulta apenas (hash → curso, nome, data) — não abrir SELECT anon na tabela.
+RLS para schema plataforma. Qualquer usuário autenticado: SELECT em courses publicados; lessons de cursos matriculados. Trilha sequencial: criar função helper plataforma.can_access_lesson(user_id, lesson_id) — SECURITY DEFINER STABLE, mesmo padrão de has_role — que retorna true se a aula é a primeira do curso ou se a aula anterior (por module/order) tem progress.completed_at do usuário; a policy de SELECT em lessons usa o helper (evitar subquery correlata inline). Progresso e notas: apenas próprios. Super_admin e instrutor: CRUD completo. Certificados: SELECT próprio; verificação pública por hash via rota que consulta apenas (hash → curso, nome, data) — não abrir SELECT anon na tabela. Séries (PATCH-024): SELECT para autenticado, mesmo padrão de courses publicados; CRUD para super_admin/instrutor.
 
 **Arquivos permitidos para criação/edição:**
 
@@ -3629,6 +3673,7 @@ RLS para schema plataforma. Qualquer usuário autenticado: SELECT em courses pub
 - [ ] Super_admin/instrutor: CRUD completo em cursos, módulos, aulas
 - [ ] Notas: apenas próprias
 - [ ] Certificados: próprio + verificação pública por hash
+- [ ] Séries: SELECT autenticado; CRUD super_admin/instrutor (PATCH-024)
 - [ ] Types passam
 
 ---
@@ -3645,7 +3690,7 @@ RLS para schema plataforma. Qualquer usuário autenticado: SELECT em courses pub
 - Env vars: `DATABASE_URL` (migrations), `SUPABASE_URL`, `SUPABASE_ANON_KEY`(G6.1/G6.2)
 
 **Escopo:**
-Server Actions: CRUD de cursos, módulos, aulas (instrutor/admin). Matrícula. Registrar progresso (marcar aula como concluída). Submeter quiz — SEMÂNTICA (decisão D-5 da auditoria): quiz é tipo de aula; a aula-quiz é considerada concluída quando um attempt atinge score >= passing_score; tentativas ilimitadas; attempts todos registrados. Emissão automática de certificado ao concluir 100% das aulas da trilha (BRAIN §6.3 — a regra de certificação NÃO muda; o quiz só conta como conclusão da própria aula). Certificado: PDF gerado com @react-pdf/renderer (D-6), hash de verificação único. CRUD de discussões e posts. Notas pessoais. Busca simples (título, série, categoria).
+Server Actions: CRUD de cursos, módulos, aulas (instrutor/admin) — CRUD de curso aceita `series_id` (PATCH-024). Matrícula. Registrar progresso (marcar aula como concluída). Submeter quiz — SEMÂNTICA (decisão D-5 da auditoria): quiz é tipo de aula; a aula-quiz é considerada concluída quando um attempt atinge score >= passing_score; tentativas ilimitadas; attempts todos registrados. Emissão automática de certificado ao concluir 100% das aulas da trilha (BRAIN §6.3 — a regra de certificação NÃO muda; o quiz só conta como conclusão da própria aula). Certificado: PDF gerado com @react-pdf/renderer (D-6), hash de verificação único. CRUD de discussões e posts. Notas pessoais. Busca simples (título, série, categoria) filtrando de fato por `series_id` (PATCH-024).
 
 **Arquivos permitidos para criação/edição:**
 
@@ -3684,21 +3729,21 @@ Server Actions: CRUD de cursos, módulos, aulas (instrutor/admin). Matrícula. R
 - Env vars: `DATABASE_URL`, `SUPABASE_URL`
 
 **Escopo:**
-Substituir mocks. Catálogo com cursos reais. Player com vídeo via Bunny.net HLS. Progresso real. Certificados reais com download PDF. Discussões reais.
+Substituir mocks. Catálogo com cursos reais, filtro de série consumindo dados reais (PATCH-024). Player com vídeo via Bunny.net HLS. Progresso real. Certificados reais com download PDF. Discussões reais. `course-form` conectado grava `series_id` (PATCH-024).
 
 **Arquivos permitidos para criação/edição:**
 
 - `apps/plataforma/src/app/(aluno)/layout.tsx` (G5: autenticado; qualquer papel — BRAIN §6.3)
 - `apps/plataforma/src/app/(aluno)/shell.tsx`
-- `apps/plataforma/src/app/(instrutor)/layout.tsx` (G5: gate instrutor|super_admin)
-- `apps/plataforma/src/app/(instrutor)/shell.tsx`
+- `apps/plataforma/src/app/instrutor/layout.tsx` (G5: gate instrutor|super_admin — segmento real, ver PATCH-022)
+- `apps/plataforma/src/app/instrutor/shell.tsx`
 - `apps/plataforma/src/actions/auth.ts` (G5)
 - `apps/plataforma/src/app/(aluno)/page.tsx`
 - `apps/plataforma/src/app/(aluno)/curso/[slug]/page.tsx`
 - `apps/plataforma/src/app/(aluno)/curso/[slug]/aula/[id]/page.tsx`
 - `apps/plataforma/src/app/(aluno)/jornada/page.tsx`
 - `apps/plataforma/src/app/(aluno)/certificados/page.tsx`
-- `apps/plataforma/src/app/(instrutor)/**/page.tsx` (incl. editores de P-6.3 patcheado)
+- `apps/plataforma/src/app/instrutor/**/page.tsx` (segmento real, ver PATCH-022; incl. editores de P-6.3)
 - `apps/plataforma/src/components/*` (conectar componentes/forms do Bloco A)
 - `apps/plataforma/src/lib/queries.ts`
 - `apps/plataforma/src/lib/mock-data.ts` (remover)

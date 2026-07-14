@@ -67,10 +67,7 @@ export function DiscussionPostForm({
     >
       {parentAuthorName && (
         <p className="text-xs text-(--fg-muted)">
-          Respondendo a{" "}
-          <span className="font-medium">
-            {parentAuthorName}
-          </span>
+          Respondendo a <span className="font-medium">{parentAuthorName}</span>
         </p>
       )}
 

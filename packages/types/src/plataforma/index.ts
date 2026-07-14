@@ -17,6 +17,20 @@ export interface Instructor {
   updatedAt: Date;
 }
 
+// ─── Series ───────────────────────────────────────────────────────────────────
+// Coleção temática de cursos (ex.: "Fundamentos", "Discipulado") — terceiro eixo
+// de busca/filtro do catálogo ao lado de título e categoria (BRAIN §6.3,
+// PATCH-024). Precedente: Series do módulo Rádio (§6.4).
+
+export interface Series {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
 // ─── Course ───────────────────────────────────────────────────────────────────
 // Acesso liberado a qualquer usuário registrado, sem restrição por papel
 // (BRAIN §6.3).
@@ -30,6 +44,9 @@ export interface Course {
   category: string;
   instructorId: string;
   instructorName: string;
+  /** Coleção temática à qual o curso pertence (PATCH-024). Opcional. */
+  seriesId: string | null;
+  seriesName: string | null;
   isPublished: boolean;
   createdAt: Date;
   updatedAt: Date;

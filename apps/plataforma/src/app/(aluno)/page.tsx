@@ -26,6 +26,7 @@ const LOADING_DELAY_MS = 500;
 const CURRENT_USER_ID = "user-aluno-01";
 const ALL_CATEGORIES = "__todas__";
 const ALL_INSTRUCTORS = "__todos__";
+const ALL_SERIES = "__todas_series__";
 
 function courseProgressPercent(courseId: string): number | undefined {
   const enrolled = mockEnrollments.some(
@@ -51,6 +52,7 @@ export default function CatalogoPage() {
   const [search, setSearch] = React.useState("");
   const [category, setCategory] = React.useState(ALL_CATEGORIES);
   const [instructor, setInstructor] = React.useState(ALL_INSTRUCTORS);
+  const [series, setSeries] = React.useState(ALL_SERIES);
 
   React.useEffect(() => {
     const timer = setTimeout(() => setLoading(false), LOADING_DELAY_MS);
@@ -77,15 +79,31 @@ export default function CatalogoPage() {
     [publishedCourses],
   );
 
+  const seriesOptions = React.useMemo(
+    () =>
+      Array.from(
+        new Map(
+          publishedCourses
+            .filter((c) => c.seriesId !== null && c.seriesName !== null)
+            .map((c) => [c.seriesId as string, c.seriesName as string]),
+        ),
+      ),
+    [publishedCourses],
+  );
+
   const filteredCourses = publishedCourses.filter((course) => {
-    const matchesSearch = course.title
-      .toLowerCase()
-      .includes(search.trim().toLowerCase());
+    const term = search.trim().toLowerCase();
+    const matchesSearch =
+      course.title.toLowerCase().includes(term) ||
+      (course.seriesName?.toLowerCase().includes(term) ?? false);
     const matchesCategory =
       category === ALL_CATEGORIES || course.category === category;
     const matchesInstructor =
       instructor === ALL_INSTRUCTORS || course.instructorId === instructor;
-    return matchesSearch && matchesCategory && matchesInstructor;
+    const matchesSeries = series === ALL_SERIES || course.seriesId === series;
+    return (
+      matchesSearch && matchesCategory && matchesInstructor && matchesSeries
+    );
   });
 
   return (
@@ -117,10 +135,10 @@ export default function CatalogoPage() {
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por título…"
+              placeholder="Buscar por título ou série…"
               leftAdornment={<Search className="h-4 w-4" aria-hidden="true" />}
               className="sm:max-w-xs"
-              aria-label="Buscar curso por título"
+              aria-label="Buscar curso por título ou série"
             />
 
             <Select value={category} onValueChange={setCategory}>
@@ -154,6 +172,20 @@ export default function CatalogoPage() {
                   Todos os instrutores
                 </SelectItem>
                 {instructors.map(([id, name]) => (
+                  <SelectItem key={id} value={id}>
+                    {name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={series} onValueChange={setSeries}>
+              <SelectTrigger className="sm:w-56" aria-label="Filtrar por série">
+                <SelectValue placeholder="Série" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_SERIES}>Todas as séries</SelectItem>
+                {seriesOptions.map(([id, name]) => (
                   <SelectItem key={id} value={id}>
                     {name}
                   </SelectItem>

@@ -6,6 +6,7 @@ import type {
   Course,
   CourseModule,
   Instructor,
+  Series,
 } from "@hebron/types/plataforma";
 import {
   createCourseSchema,
@@ -47,6 +48,7 @@ function fieldErrors(error: z.ZodError): Record<string, string> {
 }
 
 const OTHER_CATEGORY = "__outra__";
+const NO_SERIES = "__sem_serie__";
 
 // ─── CourseForm ─────────────────────────────────────────────────────────────
 
@@ -56,6 +58,7 @@ export interface CourseFormValues {
   description: string;
   category: string;
   instructorId: string;
+  seriesId: string | null;
   /** Upload para o bucket `plataforma-capas` (P-0.12) acontece no Bloco B —
    * aqui só o arquivo local é capturado e repassado em `onSubmit`. */
   coverImageFile: File | null;
@@ -67,6 +70,7 @@ export interface CourseFormProps {
   course?: Course;
   instructors: Instructor[];
   categories: string[];
+  series: Series[];
   onSubmit: (values: CourseFormValues) => void;
   isLoading?: boolean;
   className?: string;
@@ -78,6 +82,7 @@ export function CourseForm({
   course,
   instructors,
   categories,
+  series,
   onSubmit,
   isLoading = false,
   className,
@@ -97,6 +102,9 @@ export function CourseForm({
   );
   const [instructorId, setInstructorId] = React.useState(
     course?.instructorId ?? instructors[0]?.id ?? "",
+  );
+  const [seriesSelectValue, setSeriesSelectValue] = React.useState(
+    course?.seriesId ?? NO_SERIES,
   );
   const [coverImageFile, setCoverImageFile] = React.useState<File | null>(null);
   const [coverPreview, setCoverPreview] = React.useState<string | null>(
@@ -132,12 +140,15 @@ export function CourseForm({
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
+    const seriesId = seriesSelectValue === NO_SERIES ? null : seriesSelectValue;
+
     const result = createCourseSchema.safeParse({
       title,
       slug,
       description,
       category,
       instructorId,
+      seriesId,
       coverImageUrl: course?.coverImageUrl ?? null,
       isPublished: course?.isPublished ?? false,
     });
@@ -154,6 +165,7 @@ export function CourseForm({
       description: result.data.description,
       category: result.data.category,
       instructorId: result.data.instructorId,
+      seriesId: result.data.seriesId,
       coverImageFile,
       coverImageUrl: course?.coverImageUrl ?? null,
     });
@@ -277,6 +289,25 @@ export function CourseForm({
             {instructors.map((instructor) => (
               <SelectItem key={instructor.id} value={instructor.id}>
                 {instructor.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </FormField>
+
+      <FormField
+        label="Série"
+        hint="Coleção temática à qual este curso pertence, se houver."
+      >
+        <Select value={seriesSelectValue} onValueChange={setSeriesSelectValue}>
+          <SelectTrigger>
+            <SelectValue placeholder="Selecione uma série" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={NO_SERIES}>Sem série</SelectItem>
+            {series.map((s) => (
+              <SelectItem key={s.id} value={s.id}>
+                {s.name}
               </SelectItem>
             ))}
           </SelectContent>

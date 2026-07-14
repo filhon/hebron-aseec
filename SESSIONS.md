@@ -128,6 +128,7 @@
 | S-105  | 2026-07-13 | P-6.3 — Telas e Páginas Plataforma                                            | parcial                              |
 | S-106  | 2026-07-13 | P-6.4 — Formulários Plataforma                                                | parcial                              |
 | S-107  | 2026-07-14 | P-6.5 — Estados Plataforma                                                    | parcial                              |
+| S-108  | 2026-07-14 | P-6.3b — Plataforma: série como coleção temática (PATCH-024)                  | concluido                            |
 
 ---
 
@@ -6267,9 +6268,9 @@ permitidos` só lista 5 arquivos (curso, aula, quiz, post, nota) — nenhum
 - [x] Quiz editor: adicionar/remover perguntas, definir respostas corretas.
 - [x] Validação Zod em todos os 5 formulários.
 - [x] Lint passa — `pnpm turbo lint --filter=@hebron/plataforma
-  --filter=@hebron/validators`.
+--filter=@hebron/validators`.
 - [x] Types passam — `pnpm turbo typecheck --filter=@hebron/plataforma
-  --filter=@hebron/validators`, zero erros.
+--filter=@hebron/validators`, zero erros.
 - [~] `next build` — falha por erro de ambiente pré-existente (ver decisão
   acima), não relacionado ao código deste prompt.
 
@@ -6367,3 +6368,93 @@ renderizado antes da hidratação, nas duas rotas.
 
 - `apps/plataforma/src/app/(aluno)/page.tsx`
 - `apps/plataforma/src/app/(aluno)/jornada/page.tsx`
+
+---
+
+### S-108 — 2026-07-14 — P-6.3b — Plataforma: série como coleção temática (PATCH-024)
+
+**Prompt:** P-6.3b (`PROMPTS.md:3500`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Aplicado o prompt corretivo de PATCH-024: "série" modelada como entidade
+própria (`Series`, coleção temática de cursos), com `Course.seriesId`/
+`seriesName` opcionais, e adicionada como terceiro eixo de busca/filtro do
+catálogo — resolvendo o débito de S-105 (P-6.3, critério `[~]`) sem
+introduzir o campo "dificuldade" (fora de escopo, confirmado pelo patch).
+
+- `packages/types/src/plataforma/index.ts`: `interface Series` + campos
+  `seriesId`/`seriesName` em `Course`.
+- `packages/validators/src/plataforma/index.ts`: `seriesSchema` +
+  `seriesId` opcional em `createCourseSchema`.
+- `apps/plataforma/src/lib/mock-data.ts`: `mockSeries` (2 séries —
+  "Fundamentos da Fé", "Formação de Líderes"); `course-01`/`course-02`
+  associados a uma série cada, `course-03` sem série (`null`), exercitando
+  o caso opcional.
+- `(aluno)/page.tsx`: Select de série no mesmo padrão dos filtros de
+  categoria/instrutor (opções derivadas dos cursos publicados); busca por
+  texto passa a casar `title` OU `seriesName`.
+- `course-form.tsx`: `CourseFormProps.series: Series[]` + Select de série
+  com opção "Sem série" (`NO_SERIES` sentinel, mesmo padrão de
+  `OTHER_CATEGORY`); `seriesId` incluído no parse Zod e em `onSubmit`.
+- `course-card.tsx`: nome da série como rótulo discreto abaixo do título,
+  renderizado apenas quando `seriesName` não é nulo.
+
+**Suposições registradas (G1):**
+
+- **`CourseForm` ganhou a prop obrigatória `series`, sem callers a
+  atualizar.** O componente não está conectado a nenhuma página em Bloco A
+  (mesmo padrão de componente órfão já registrado em P-6.4/P-6.5), então
+  não há call site existente para migrar; a prop fica pronta para quando
+  P-6.9 conectar o formulário.
+- **Filtro de série no catálogo deriva as opções apenas dos cursos
+  publicados**, mesmo padrão já usado para `categories`/`instructors`
+  nessa página — evita listar séries sem nenhum curso publicado visível.
+
+**Ajustes em `PROMPTS.md` (conforme "Ajustes de prompts a jusante" do
+patch):**
+
+- P-6.3: critério `[~]` → `[x]`, nota redirecionando "dificuldade"/"série"
+  para P-6.3b; Escopo do catálogo ajustado (remove "dificuldade").
+- Inserido bloco `P-6.3b` completo entre P-6.3 e P-6.4, com critérios já
+  `[x]`.
+- P-6.6 (Escopo + critério): tabela `series` e `courses.series_id`
+  adicionadas à lista de tabelas do Bloco B.
+- P-6.7 (Escopo + critério): policy de `series` (SELECT autenticado, CRUD
+  super_admin/instrutor).
+- P-6.8 (Escopo): CRUD de curso aceita `series_id`; busca simples passa a
+  filtrar de fato por `series_id`.
+- P-6.9 (Escopo): catálogo consumindo série real; `course-form` conectado
+  grava `series_id`.
+
+**Verificação:** `pnpm turbo lint typecheck --filter=@hebron/types
+--filter=@hebron/validators --filter=@hebron/plataforma` verde (16/16
+tasks). Servidor dev da Plataforma já estava rodando localmente na porta
+3002 (`curl localhost:3002` → 200); como as três telas tocadas
+(`(aluno)/page.tsx`, `course-form.tsx`, `course-card.tsx`) são Client
+Components, não há ferramenta de browser disponível nesta sessão para
+dirigir a interação (selecionar o filtro de série, digitar busca) — a
+verificação de comportamento em runtime ficou restrita a lint/types e
+revisão de código, não a interação real no navegador.
+
+**Critérios de aceite verificados:**
+
+- [x] `Series` modelado em types + `seriesSchema` em validators
+- [x] `Course.seriesId`/`seriesName` opcionais; `course-03` sem série no mock
+- [x] Catálogo filtra por série; busca por texto casa título + nome da série
+- [x] `course-form` permite escolher série (incluindo "Sem série")
+- [x] Sem regressão nos filtros de categoria/instrutor existentes (mesmo
+      padrão reaproveitado, lógica de `matchesCategory`/`matchesInstructor`
+      inalterada)
+- [x] Lint passa · Types passam
+
+**Arquivos modificados:**
+
+- `packages/types/src/plataforma/index.ts`
+- `packages/validators/src/plataforma/index.ts`
+- `apps/plataforma/src/lib/mock-data.ts`
+- `apps/plataforma/src/app/(aluno)/page.tsx`
+- `apps/plataforma/src/components/course-form.tsx`
+- `apps/plataforma/src/components/course-card.tsx`
+- `PROMPTS.md` (P-6.3, P-6.3b, P-6.6, P-6.7, P-6.8, P-6.9)

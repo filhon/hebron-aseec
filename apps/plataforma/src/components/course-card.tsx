@@ -73,6 +73,11 @@ export function CourseCard({
           <h3 className="line-clamp-2 font-(--font-display) text-base leading-snug text-(--fg)">
             {course.title}
           </h3>
+          {course.seriesName && (
+            <span className="block text-xs text-(--fg-subtle)">
+              {course.seriesName}
+            </span>
+          )}
         </div>
 
         <p className="line-clamp-2 text-sm leading-relaxed text-(--fg-muted)">

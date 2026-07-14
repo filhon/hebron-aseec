@@ -10,6 +10,7 @@ import type {
   Progress,
   Quiz,
   QuizAttempt,
+  Series,
 } from "@hebron/types/plataforma";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -55,6 +56,30 @@ export const mockInstructors: Instructor[] = [
   },
 ];
 
+// ─── Series ───────────────────────────────────────────────────────────────────
+// Coleção temática de cursos, terceiro eixo de busca/filtro do catálogo
+// (BRAIN §6.3, PATCH-024).
+
+export const mockSeries: Series[] = [
+  {
+    id: "series-01",
+    name: "Fundamentos da Fé",
+    slug: "fundamentos-da-fe",
+    description: "Trilhas de base para quem está começando a caminhada cristã.",
+    createdAt: past(180),
+    updatedAt: past(180),
+  },
+  {
+    id: "series-02",
+    name: "Formação de Líderes",
+    slug: "formacao-de-lideres",
+    description:
+      "Cursos voltados a quem já serve ou se prepara para servir em posição de liderança.",
+    createdAt: past(180),
+    updatedAt: past(180),
+  },
+];
+
 // ─── Courses ──────────────────────────────────────────────────────────────────
 // "Fundamentos da Liderança Cristã" é o curso piloto já pronto (BRAIN §6.3),
 // usado como referência de profundidade de conteúdo para os demais.
@@ -70,6 +95,8 @@ export const mockCourses: Course[] = [
     category: "Liderança",
     instructorId: "instr-01",
     instructorName: pessoas.elias.name,
+    seriesId: "series-02",
+    seriesName: "Formação de Líderes",
     isPublished: true,
     createdAt: past(180),
     updatedAt: past(5),
@@ -84,6 +111,8 @@ export const mockCourses: Course[] = [
     category: "Discipulado",
     instructorId: "instr-02",
     instructorName: pessoas.rosana.name,
+    seriesId: "series-01",
+    seriesName: "Fundamentos da Fé",
     isPublished: true,
     createdAt: past(60),
     updatedAt: past(10),
@@ -98,6 +127,8 @@ export const mockCourses: Course[] = [
     category: "Ensino",
     instructorId: "instr-01",
     instructorName: pessoas.elias.name,
+    seriesId: null,
+    seriesName: null,
     isPublished: false,
     createdAt: past(15),
     updatedAt: past(2),

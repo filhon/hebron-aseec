@@ -15,6 +15,25 @@ export const createInstructorSchema = z.object({
 
 export type CreateInstructorInput = z.infer<typeof createInstructorSchema>;
 
+// ─── seriesSchema ─────────────────────────────────────────────────────────────
+// Série é coleção temática de cursos, terceiro eixo de busca/filtro do
+// catálogo (BRAIN §6.3, PATCH-024).
+
+export const seriesSchema = z.object({
+  name: z.string().min(2, "Nome é obrigatório").max(200),
+  slug: z
+    .string()
+    .min(2)
+    .max(200)
+    .regex(
+      /^[a-z0-9-]+$/,
+      "Slug deve conter apenas letras minúsculas, números e hífen",
+    ),
+  description: z.string().max(2000).nullable().optional().default(null),
+});
+
+export type SeriesInput = z.infer<typeof seriesSchema>;
+
 // ─── createCourseSchema ───────────────────────────────────────────────────────
 
 export const createCourseSchema = z.object({
@@ -31,6 +50,7 @@ export const createCourseSchema = z.object({
   coverImageUrl: z.string().url().nullable().optional().default(null),
   category: z.string().min(2, "Categoria é obrigatória").max(100),
   instructorId: z.string().uuid("Selecione um instrutor"),
+  seriesId: z.string().uuid().nullable().optional().default(null),
   isPublished: z.boolean().optional().default(false),
 });
 
