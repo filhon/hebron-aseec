@@ -11,7 +11,7 @@ export function CourseCardSkeleton() {
     <div
       role="presentation"
       aria-hidden="true"
-      className="flex flex-col overflow-hidden rounded-(--radius-md) border border-(--border) bg-(--surface)"
+      className="flex flex-col overflow-hidden rounded-md border border-(--border) bg-(--surface)"
     >
       <Bone className="aspect-video w-full shrink-0 rounded-none" />
 

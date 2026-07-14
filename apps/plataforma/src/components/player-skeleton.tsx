@@ -11,7 +11,7 @@ export function PlayerSkeleton() {
     <div
       role="presentation"
       aria-hidden="true"
-      className="relative aspect-video w-full overflow-hidden rounded-(--radius-md) bg-(--hb-ink)"
+      className="relative aspect-video w-full overflow-hidden rounded-md bg-(--hb-ink)"
     >
       <div className="absolute inset-0 flex items-center justify-center">
         <div className="h-14 w-14 animate-pulse rounded-full bg-white/10" />
@@ -23,7 +23,7 @@ export function PlayerSkeleton() {
           <div className="h-8 w-8 animate-pulse rounded-full bg-white/10" />
           <div className="h-8 w-8 animate-pulse rounded-full bg-white/10" />
           <div className="h-3 w-16 animate-pulse rounded bg-white/10" />
-          <div className="ml-auto h-8 w-14 animate-pulse rounded-(--radius-sm) bg-white/10" />
+          <div className="ml-auto h-8 w-14 animate-pulse rounded-sm bg-white/10" />
           <div className="h-8 w-8 animate-pulse rounded-full bg-white/10" />
         </div>
       </div>
