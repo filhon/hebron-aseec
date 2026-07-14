@@ -89,7 +89,7 @@ function PostBubble({ post, className }: PostBubbleProps) {
       <Avatar name={post.authorName} size="sm" className="mt-0.5" />
       <div className="min-w-0 flex-1 rounded-(--radius) bg-(--surface-alt) px-3.5 py-2.5">
         <div className="flex flex-wrap items-baseline gap-x-2">
-          <span className="text-sm font-(--font-weight-semibold) text-(--fg)">
+          <span className="text-sm font-semibold text-(--fg)">
             {post.authorName}
           </span>
           <span className="text-xs text-(--fg-muted)">
@@ -167,7 +167,7 @@ export function DiscussionThread({
                   <button
                     type="button"
                     onClick={() => setReplyingToId(post.id)}
-                    className="text-xs font-(--font-weight-medium) text-(--fg-muted) hover:text-(--brand)"
+                    className="text-xs font-medium text-(--fg-muted) hover:text-(--brand)"
                   >
                     Responder
                   </button>

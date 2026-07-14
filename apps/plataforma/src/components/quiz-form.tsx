@@ -19,10 +19,10 @@ export interface QuizFormProps {
 }
 
 /**
- * As perguntas do banco (PATCH-010) só suportam alternativas de múltipla
- * escolha (`options` + `correctOptionId`) — não há campo para questão
- * dissertativa no tipo `QuizQuestion` de P-6.1. Registrado como débito em
- * SESSIONS.md; este componente cobre apenas múltipla escolha.
+ * Quiz na v1 é só múltipla escolha (`options` + `correctOptionId`), por
+ * decisão de produto (PATCH-023): a aula-quiz auto-conclui com
+ * `score >= passingScore` (PATCH-010), o que é incompatível com questão
+ * dissertativa (exigiria correção manual). Não é débito — é o modelo da v1.
  */
 export function QuizForm({
   quiz,
@@ -77,7 +77,7 @@ export function QuizForm({
       <ol className="space-y-6">
         {quiz.questions.map((question, index) => (
           <li key={question.id} className="space-y-3">
-            <p className="text-sm font-(--font-weight-semibold) text-(--fg)">
+            <p className="text-sm font-semibold text-(--fg)">
               <span className="text-(--fg-muted)">{index + 1}. </span>
               {question.text}
             </p>

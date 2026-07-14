@@ -65,7 +65,7 @@ export function NoteWidget({
   return (
     <div className={cn("flex flex-col gap-4", className)}>
       <form onSubmit={handleSubmit} className="flex flex-col gap-2">
-        <label className="text-xs font-(--font-weight-medium) text-(--fg-muted)">
+        <label className="text-xs font-medium text-(--fg-muted)">
           Nova nota em {formatTimestamp(currentTimeSeconds)}
         </label>
         <div className="flex items-end gap-2">
@@ -101,9 +101,9 @@ export function NoteWidget({
               <button
                 type="button"
                 onClick={() => onNoteClick?.(note)}
-                className="flex w-full items-start gap-2.5 rounded-(--radius-sm) px-2.5 py-2 text-left transition-colors hover:bg-(--surface-alt)"
+                className="flex w-full items-start gap-2.5 rounded-sm px-2.5 py-2 text-left transition-colors hover:bg-(--surface-alt)"
               >
-                <span className="mt-0.5 shrink-0 rounded-(--radius-xs) bg-(--brand-muted) px-1.5 py-0.5 font-(--font-mono) text-xs font-(--font-weight-semibold) text-(--brand)">
+                <span className="mt-0.5 shrink-0 rounded-xs bg-(--brand-muted) px-1.5 py-0.5 font-(--font-mono) text-xs text-(--brand)">
                   {formatTimestamp(note.timestampSeconds)}
                 </span>
                 <span className="min-w-0 flex-1 text-sm leading-relaxed text-(--fg)">

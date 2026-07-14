@@ -177,7 +177,7 @@ export function QuizEditor({
         {questions.map((question, index) => (
           <div
             key={question.id}
-            className="space-y-3 rounded-(--radius-md) border border-(--border) bg-(--surface) p-4"
+            className="space-y-3 rounded-md border border-(--border) bg-(--surface) p-4"
           >
             <div className="flex items-start gap-2">
               <FormField

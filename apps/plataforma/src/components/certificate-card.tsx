@@ -45,7 +45,7 @@ export function CertificateCard({
   return (
     <div
       className={cn(
-        "flex flex-col gap-4 rounded-(--radius-md) border border-(--border) bg-(--surface) p-5",
+        "flex flex-col gap-4 rounded-md border border-(--border) bg-(--surface) p-5",
         className,
       )}
     >
@@ -55,7 +55,7 @@ export function CertificateCard({
         </div>
         <div className="min-w-0 space-y-0.5">
           <p className="hb-eyebrow">Certificado de conclusão</p>
-          <h3 className="font-(--font-display) text-base font-(--font-weight-semibold) leading-(--leading-snug) text-(--fg)">
+          <h3 className="font-(--font-display) text-base leading-snug text-(--fg)">
             {certificate.courseName}
           </h3>
         </div>
@@ -72,7 +72,7 @@ export function CertificateCard({
         </div>
       </dl>
 
-      <div className="flex items-center justify-between gap-2 rounded-(--radius-sm) bg-(--surface-alt) px-3 py-2">
+      <div className="flex items-center justify-between gap-2 rounded-sm bg-(--surface-alt) px-3 py-2">
         <span className="min-w-0 truncate font-(--font-mono) text-xs text-(--fg-muted)">
           {certificate.hash}
         </span>
@@ -80,7 +80,7 @@ export function CertificateCard({
           type="button"
           onClick={handleCopyHash}
           aria-label="Copiar código de verificação"
-          className="flex shrink-0 items-center gap-1 rounded-(--radius-xs) px-2 py-1 text-xs font-(--font-weight-medium) text-(--brand) transition-colors hover:bg-(--surface)"
+          className="flex shrink-0 items-center gap-1 rounded-xs px-2 py-1 text-xs font-medium text-(--brand) transition-colors hover:bg-(--surface)"
         >
           {copied ? (
             <Check className="h-3.5 w-3.5" aria-hidden="true" />

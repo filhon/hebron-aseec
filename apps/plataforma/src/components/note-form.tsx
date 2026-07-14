@@ -74,7 +74,7 @@ export function NoteForm({
       noValidate
       className={cn("flex flex-col gap-2", className)}
     >
-      <label className="text-xs font-(--font-weight-medium) text-(--fg-muted)">
+      <label className="text-xs font-medium text-(--fg-muted)">
         Nova nota em {formatTimestamp(currentTimeSeconds)}
       </label>
       <div className="flex items-end gap-2">
