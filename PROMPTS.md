@@ -3634,14 +3634,14 @@ Criar tabelas no schema `plataforma`: courses, modules, lessons, enrollments, pr
 
 **Critérios de aceite:**
 
-- [ ] courses: title, slug, description, category, cover_url, instructor_id, published
-- [ ] lessons: module_id, title, type (video/text/quiz/download), content, video_url, order, requires_previous
-- [ ] progress: lesson_id, user_id, completed_at (unique constraint)
-- [ ] certificates: course_id, user_id, issued_at, verification_hash (unique)
-- [ ] notes: lesson_id, user_id, timestamp_seconds, content
-- [ ] series: name, slug, description; courses.series_id (FK nullable) (PATCH-024)
-- [ ] Migration aplica sem erros
-- [ ] Types passam
+- [x] courses: title, slug, description, category, cover_url, instructor_id, published
+- [x] lessons: module_id, title, type (video/text/quiz/download), content, video_url, order, requires_previous
+- [x] progress: lesson_id, user_id, completed_at (unique constraint)
+- [x] certificates: course_id, user_id, issued_at, verification_hash (unique)
+- [x] notes: lesson_id, user_id, timestamp_seconds, content
+- [x] series: name, slug, description; courses.series_id (FK nullable) (PATCH-024)
+- [x] Migration aplica sem erros
+- [x] Types passam
 
 ---
 

@@ -129,6 +129,7 @@
 | S-106  | 2026-07-13 | P-6.4 — Formulários Plataforma                                                | parcial                              |
 | S-107  | 2026-07-14 | P-6.5 — Estados Plataforma                                                    | parcial                              |
 | S-108  | 2026-07-14 | P-6.3b — Plataforma: série como coleção temática (PATCH-024)                  | concluido                            |
+| S-109  | 2026-07-14 | P-6.6 — Schema do Banco Plataforma                                            | concluido                            |
 
 ---
 
@@ -6458,3 +6459,104 @@ revisão de código, não a interação real no navegador.
 - `apps/plataforma/src/components/course-form.tsx`
 - `apps/plataforma/src/components/course-card.tsx`
 - `PROMPTS.md` (P-6.3, P-6.3b, P-6.6, P-6.7, P-6.8, P-6.9)
+
+---
+
+### S-109 — 2026-07-14 — P-6.6 — Schema do Banco Plataforma
+
+**Prompt:** P-6.6 (`PROMPTS.md:3616`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Criado `packages/db/src/schema/plataforma.ts` com as 14 tabelas do escopo
+(`instructors`, `series`, `courses`, `modules`, `lessons`, `enrollments`,
+`progress`, `quizzes`, `quiz_questions`, `quiz_attempts`, `certificates`,
+`discussions`, `discussion_posts`, `notes`) e o enum `lesson_type`. `series`
+
+- `courses.series_id` incluídos conforme PATCH-024. `admin.audit_action`
+  recebeu 2 valores novos (`course.published`, `certificate.issued` — G6.3,
+  usados por P-6.8). Migration aplicada com sucesso contra o banco real
+  (`db:migrate`), `db:check` limpo ("Everything's fine"), schema parity test
+  verde (60/60 testes) e `pnpm turbo lint typecheck` verde nos 38
+  packages/apps do monorepo.
+
+**Suposições registradas (G1 — ambiguidade resolvida pela opção mais simples):**
+
+- **Drift pré-existente de `drizzle-kit generate` (mesmo achado de
+  S-72/P-3.11 e S-78/P-4.6):** o snapshot de `src/migrations/meta` estava
+  parado em `0018` — `0044_admin_revogacoes_imutaveis.sql` (PATCH-021, colunas
+  `revoked_at`/`revoked_by`/`revocation_reason` em `designations`/
+  `role_assignments`) foi aplicada sem rodar `db:generate` depois. Rodar
+  `db:generate` produziu um SQL que reincluía essas colunas/FKs já aplicadas
+  sem idempotência (`ADD COLUMN` sem guarda), o que quebraria qualquer banco
+  já migrado. O comando foi usado só para nomear o arquivo (nome automático,
+  G6.4) e resincronizar `meta/0019_snapshot.json` + `_journal.json` (agora em
+  paridade com `schema/index.ts` — `db:check` reporta "Everything's fine");
+  o SQL de `0019_shocking_wrecking_crew.sql` foi editado à mão para remover
+  as 6 linhas `ADD COLUMN` e os 2 blocos `ADD CONSTRAINT` de FK redundantes
+  de `designations`/`role_assignments`, ficando só com as tabelas novas de
+  `plataforma`. Seguindo o mesmo precedente, o `ALTER TYPE
+admin.audit_action` foi isolado em `0020_plataforma_audit_actions.sql`
+  (não-transacional, `ADD VALUE IF NOT EXISTS`), igual ao padrão já usado
+  por `0016`/`0018`/`0027`/`0028`/`0029`/`0032`.
+- **`lessons.content` genérico em vez de replicar 1:1 os campos de
+  `packages/types` (P-6.1).** O critério de aceite lista literalmente
+  "lessons: module_id, title, type, content, video_url, order,
+  requires_previous" — mantive também `video_duration_seconds`,
+  `download_url`, `download_file_name`, `download_file_size_bytes` (já
+  ratificados em `Lesson` de P-6.1) porque são necessários para os tipos
+  `video`/`download` funcionarem; `content` cobre o `textContent` do tipo
+  `Lesson` do front-end (nomeado conforme o critério de aceite, não o types).
+- **`lessons.quiz_id` omitido.** `Lesson` (types) tem `quizId` denormalizado,
+  mas o critério de aceite de P-6.6 não lista essa coluna e ela criaria uma
+  FK circular lessons↔quizzes. A relação já é 100% modelada por
+  `quizzes.lesson_id` (UNIQUE NOT NULL) — o join inverso resolve o mesmo
+  dado sem coluna redundante. Registrado para quem escrever P-6.8: buscar
+  quiz de uma aula via `quizzes.lesson_id`, não via `lessons.quiz_id`.
+- **`quiz_questions`/`quiz_options` normalizadas conforme o Escopo, mas
+  `options` fica em `jsonb` dentro de `quiz_questions`.** O Escopo pede
+  tabela `quiz_questions` separada de `quizzes` (Bloco A guardava tudo em
+  `Quiz.questions` jsonb) mas não pede `quiz_options` — options continuam
+  jsonb (`{id, text}[]`) dentro da linha da pergunta, com `correct_option_id`
+  referenciando um id do array (não há FK, é validado em Zod/action).
+- **Unique constraints não pedidas literalmente, mas implícitas na regra de
+  negócio, adicionadas por defesa em profundidade:**
+  `certificates_course_user_uniq` (BRAIN §6.3: certificado é emitido
+  automaticamente ao concluir a trilha — nunca deveria haver 2 por
+  curso/usuário) e `discussions_lesson_id_unique` (`Discussion` em types é
+  1:1 com `Lesson` — "fórum por aula").
+- **`discussion_posts.parent_post_id` com `onDelete: cascade`.** Não
+  especificado no Escopo; ao deletar um post (moderação por super_admin em
+  P-6.9), as respostas são removidas junto em vez de ficarem órfãs — opção
+  mais simples, sem "post [deletado]" fantasma.
+- **Débito de `Note`/`packages/types` NÃO resolvido nesta sessão.**
+  `note-widget.tsx` (P-6.4) registra que falta expor `Note` em
+  `@hebron/types/plataforma`; a lista de arquivos permitidos de P-6.6 cobre
+  só `packages/db/src/schema/plataforma.ts` + migration, então o tipo
+  compartilhado continua pendente para P-6.8 (actions) resolver ao mapear
+  `plataforma.notes` para o DTO do front-end.
+
+**Critérios de aceite verificados:**
+
+- [x] courses: title, slug, description, category, cover_url, instructor_id, published
+- [x] lessons: module_id, title, type (video/text/quiz/download), content, video_url, order, requires_previous
+- [x] progress: lesson_id, user_id, completed_at (unique constraint)
+- [x] certificates: course_id, user_id, issued_at, verification_hash (unique)
+- [x] notes: lesson_id, user_id, timestamp_seconds, content
+- [x] series: name, slug, description; courses.series_id (FK nullable) (PATCH-024)
+- [x] Migration aplica sem erros (`db:migrate` → "Applied 2 migration(s)")
+- [x] Types passam (`pnpm turbo typecheck` — 38/38 packages)
+
+**Arquivos criados:**
+
+- `packages/db/src/schema/plataforma.ts`
+- `packages/db/src/migrations/0019_shocking_wrecking_crew.sql`
+- `packages/db/src/migrations/0020_plataforma_audit_actions.sql`
+- `packages/db/src/migrations/meta/0019_snapshot.json` (gerado por `drizzle-kit generate`, ressincroniza o drift pré-existente de `designations`/`role_assignments`)
+
+**Arquivos modificados:**
+
+- `packages/db/src/schema/admin.ts` (2 valores novos em `auditActionEnum`)
+- `packages/db/src/schema/index.ts` (exporta o schema `plataforma`)
+- `packages/db/src/migrations/meta/_journal.json` (gerado por `drizzle-kit generate`)

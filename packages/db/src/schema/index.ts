@@ -275,6 +275,56 @@ export type {
   NewTaskEvent,
 } from "./tarefas";
 
+// Plataforma schema (P-6.6)
+export {
+  lessonTypeEnum,
+  instructors,
+  series,
+  courses,
+  modules,
+  lessons,
+  enrollments,
+  progress,
+  quizzes,
+  quizQuestions,
+  quizAttempts,
+  certificates,
+  discussions,
+  discussionPosts,
+  notes,
+} from "./plataforma";
+
+export type {
+  Instructor,
+  NewInstructor,
+  Series,
+  NewSeries,
+  Course,
+  NewCourse,
+  CourseModule,
+  NewCourseModule,
+  Lesson,
+  NewLesson,
+  Enrollment,
+  NewEnrollment,
+  Progress,
+  NewProgress,
+  Quiz,
+  NewQuiz,
+  QuizQuestion,
+  NewQuizQuestion,
+  QuizAttempt,
+  NewQuizAttempt,
+  Certificate,
+  NewCertificate,
+  Discussion,
+  NewDiscussion,
+  DiscussionPost,
+  NewDiscussionPost,
+  Note,
+  NewNote,
+} from "./plataforma";
+
 // Intranet schema (P-5.6)
 export {
   announcementPriorityEnum,
