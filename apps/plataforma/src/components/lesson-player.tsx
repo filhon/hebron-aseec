@@ -168,7 +168,7 @@ export function LessonPlayer({
     <div
       ref={containerRef}
       className={cn(
-        "group/player relative overflow-hidden rounded-(--radius-md) bg-(--hb-ink)",
+        "group/player relative overflow-hidden rounded-md bg-(--hb-ink)",
         className,
       )}
     >
@@ -190,7 +190,7 @@ export function LessonPlayer({
         }}
       />
 
-      <div className="absolute inset-x-0 bottom-0 flex flex-col gap-1.5 bg-gradient-to-t from-black/85 to-transparent px-3 pb-2.5 pt-8">
+      <div className="absolute inset-x-0 bottom-0 flex flex-col gap-1.5 bg-linear-to-t from-black/85 to-transparent px-3 pb-2.5 pt-8">
         {/* Barra de progresso + marcadores */}
         <div
           ref={seekBarRef}
@@ -272,14 +272,14 @@ export function LessonPlayer({
                 onClick={() => setSpeedMenuOpen((v) => !v)}
                 aria-label="Velocidade de reprodução"
                 aria-expanded={speedMenuOpen}
-                className="flex h-8 items-center gap-1 rounded-(--radius-sm) px-2 text-xs font-(--font-weight-medium) transition-colors hover:bg-white/15"
+                className="flex h-8 items-center gap-1 rounded-sm px-2 text-xs font-medium transition-colors hover:bg-white/15"
               >
                 <Gauge className="h-3.5 w-3.5" aria-hidden="true" />
                 {playbackRate}x
               </button>
 
               {speedMenuOpen && (
-                <div className="absolute bottom-full right-0 mb-1.5 w-24 overflow-hidden rounded-(--radius-sm) border border-white/10 bg-(--hb-ink) py-1 shadow-(--shadow-md)">
+                <div className="absolute bottom-full right-0 mb-1.5 w-24 overflow-hidden rounded-sm border border-white/10 bg-(--hb-ink) py-1 shadow-(--shadow-md)">
                   {PLAYBACK_RATES.map((rate) => (
                     <button
                       key={rate}

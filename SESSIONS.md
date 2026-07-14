@@ -127,6 +127,7 @@
 | S-104  | 2026-07-13 | P-6.2 — Componentes UI Plataforma                                             | parcial                              |
 | S-105  | 2026-07-13 | P-6.3 — Telas e Páginas Plataforma                                            | parcial                              |
 | S-106  | 2026-07-13 | P-6.4 — Formulários Plataforma                                                | parcial                              |
+| S-107  | 2026-07-14 | P-6.5 — Estados Plataforma                                                    | parcial                              |
 
 ---
 
@@ -6266,9 +6267,9 @@ permitidos` só lista 5 arquivos (curso, aula, quiz, post, nota) — nenhum
 - [x] Quiz editor: adicionar/remover perguntas, definir respostas corretas.
 - [x] Validação Zod em todos os 5 formulários.
 - [x] Lint passa — `pnpm turbo lint --filter=@hebron/plataforma
-    --filter=@hebron/validators`.
+  --filter=@hebron/validators`.
 - [x] Types passam — `pnpm turbo typecheck --filter=@hebron/plataforma
-    --filter=@hebron/validators`, zero erros.
+  --filter=@hebron/validators`, zero erros.
 - [~] `next build` — falha por erro de ambiente pré-existente (ver decisão
   acima), não relacionado ao código deste prompt.
 
@@ -6287,3 +6288,82 @@ permitidos` só lista 5 arquivos (curso, aula, quiz, post, nota) — nenhum
   — ver decisão acima)
 - `apps/plataforma/package.json` (adiciona dependência `zod` — ver decisão
   acima)
+
+---
+
+### S-107 — 2026-07-14 — P-6.5 — Estados Plataforma
+
+**Prompt:** P-6.5 (`PROMPTS.md:3535`)
+**Modelo:** claude-sonnet-5
+**Status:** parcial
+
+**Resumo:**
+Criados os 2 skeletons listados no escopo (`CourseCardSkeleton`,
+`PlayerSkeleton` + `CourseSidebarSkeleton` como segundo export do mesmo
+arquivo), mais os estados de loading/vazio das duas páginas permitidas
+(`(aluno)/page.tsx` — catálogo — e `(aluno)/jornada/page.tsx`).
+
+**Suposições registradas (G1 — ambiguidade resolvida pela opção mais simples):**
+
+- **`player-skeleton.tsx` ainda não está wireado em tela nenhuma.** O escopo
+  pede "Skeletons para catálogo, player, jornada", mas a página de aula
+  (`curso/[slug]/aula/[id]/page.tsx`) não está na lista de Arquivos
+  permitidos deste prompt. `PlayerSkeleton` foi construído fielmente à
+  moldura escura de `LessonPlayer` (P-6.2), e `CourseSidebarSkeleton` (segundo
+  export do mesmo arquivo, mesmo padrão de `TreeViewSkeleton` em
+  `task-list-skeleton.tsx` — S-77/P-4.5) espelha `CourseSidebar`. Ambos ficam
+  prontos para consumo em P-6.9 (mesmo padrão de componentes órfãos já
+  registrado em P-4.5/P-6.4 — G5).
+- **Loading simulado via `setTimeout`, não `loading.tsx` de rota.** As duas
+  páginas são Client Components com dado mockado estático (sem fronteira
+  assíncrona real) — mesmo raciocínio e mesmo padrão (`useState(true)` +
+  `useEffect(setTimeout(..., 500))`) já registrado em S-77/P-4.5 Tarefas;
+  será substituído por Suspense real quando a integração com backend (P-6.9)
+  trocar os mocks por Server Actions/RSC.
+- **Catálogo passa a distinguir dois estados vazios distintos.** O critério
+  de aceite pede a copy literal "Nenhum curso disponível ainda", mas a tela
+  já tinha um `EmptyState` para busca/filtro sem resultado ("Nenhum curso
+  encontrado", de P-6.3). Interpretado como dois casos diferentes: catálogo
+  genuinamente vazio (`publishedCourses.length === 0`, sem nenhum curso
+  publicado — novo `EmptyState` com a copy literal do critério, filtros
+  ocultos) vs. filtro/busca sem resultado (caso já existente, mantido como
+  estava). Mesmo raciocínio de "estado vazio real vs. filtro sem resultado"
+  já usado em S-77 para distinguir o `EmptyState` interno de `TaskList` do
+  novo estado vazio de workspace.
+- **Copy do estado vazio da jornada trocada para o texto literal do critério
+  de aceite.** `(aluno)/jornada/page.tsx` (P-6.3) já tinha um `EmptyState`
+  para zero matrículas, mas com copy diferente ("Você ainda não iniciou
+  nenhum curso"). Substituída pela copy literal do critério ("Você ainda não
+  se matriculou em nenhum curso") — G1 pede seguir o prompt ao pé da letra.
+- **Sem `design-refs/plataforma`** (mesma situação já registrada em
+  S-104/S-105/S-106). Seguida a linguagem visual já estabelecida pelos
+  skeletons de `financeiro`/`documentos`/`tarefas` (bones com
+  `animate-pulse` sobre `var(--surface-alt)`), e pelos próprios componentes
+  de P-6.2 (`CourseCard`, `LessonPlayer`, `CourseSidebar`) para a estrutura
+  de cada skeleton.
+
+**Verificação:** `pnpm turbo lint typecheck --filter=@hebron/plataforma`
+verde. Servidor dev iniciado localmente (`next dev --port 3002`); `curl` em
+`/` e `/jornada` confirmou HTML SSR com o estado de loading (`animate-pulse`)
+renderizado antes da hidratação, nas duas rotas.
+
+**Critérios de aceite verificados:**
+
+- [x] Skeletons por tela (catálogo → `CourseCardSkeleton`; player →
+      `PlayerSkeleton`/`CourseSidebarSkeleton`, órfão — ver suposição acima;
+      jornada reaproveita `CourseCardSkeleton`)
+- [x] Estados vazios contextuais (catálogo genuinamente vazio vs. filtro sem
+      resultado; jornada sem matrículas)
+- [x] Lint passa (`pnpm turbo lint --filter=@hebron/plataforma`)
+- [x] Types passam (`pnpm turbo typecheck --filter=@hebron/plataforma`)
+
+**Arquivos criados:**
+
+- `apps/plataforma/src/components/course-card-skeleton.tsx`
+- `apps/plataforma/src/components/player-skeleton.tsx` (`PlayerSkeleton` +
+  `CourseSidebarSkeleton`)
+
+**Arquivos modificados:**
+
+- `apps/plataforma/src/app/(aluno)/page.tsx`
+- `apps/plataforma/src/app/(aluno)/jornada/page.tsx`

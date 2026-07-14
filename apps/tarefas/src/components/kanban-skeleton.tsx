@@ -9,7 +9,7 @@ function Bone({ className }: { className: string }) {
 
 function KanbanColumnSkeleton({ cards }: { cards: number }) {
   return (
-    <div className="flex min-w-70 max-w-80 flex-1 flex-col rounded-(--radius-md) border-2 border-transparent bg-(--surface-alt)">
+    <div className="flex min-w-70 max-w-80 flex-1 flex-col rounded-md border-2 border-transparent bg-(--surface-alt)">
       <div className="flex items-center justify-between gap-2 rounded-t-[calc(var(--radius-md)-2px)] px-3.5 py-3">
         <div className="flex items-center gap-2">
           <Bone className="h-2 w-2 rounded-full" />
@@ -21,7 +21,7 @@ function KanbanColumnSkeleton({ cards }: { cards: number }) {
         {Array.from({ length: cards }).map((_, i) => (
           <div
             key={i}
-            className="flex flex-col gap-2 rounded-(--radius-sm) border border-(--border) bg-(--surface) p-3"
+            className="flex flex-col gap-2 rounded-sm border border-(--border) bg-(--surface) p-3"
           >
             <Bone className="h-3 w-4/5" />
             <Bone className="h-3 w-2/5" />

@@ -218,7 +218,7 @@ export default function AulaPage() {
           )}
 
           {lesson.type === "text" && lesson.textContent && (
-            <div className="space-y-4 rounded-(--radius-md) border border-(--border) bg-(--surface) p-6">
+            <div className="space-y-4 rounded-md border border-(--border) bg-(--surface) p-6">
               <div
                 className="text-sm leading-relaxed text-(--fg)"
                 dangerouslySetInnerHTML={{ __html: lesson.textContent }}
@@ -237,7 +237,7 @@ export default function AulaPage() {
           )}
 
           {lesson.type === "download" && lesson.downloadUrl && (
-            <div className="space-y-4 rounded-(--radius-md) border border-(--border) bg-(--surface) p-6">
+            <div className="space-y-4 rounded-md border border-(--border) bg-(--surface) p-6">
               <div className="flex items-center gap-3">
                 <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-(--brand-muted)">
                   <FileText
@@ -246,7 +246,7 @@ export default function AulaPage() {
                   />
                 </div>
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-(--font-weight-semibold) text-(--fg)">
+                  <p className="truncate text-sm font-semibold text-(--fg)">
                     {lesson.downloadFileName}
                   </p>
                   {lesson.downloadFileSizeBytes && (
@@ -274,7 +274,7 @@ export default function AulaPage() {
           )}
 
           {lesson.type === "quiz" && quiz && (
-            <div className="rounded-(--radius-md) border border-(--border) bg-(--surface) p-6">
+            <div className="rounded-md border border-(--border) bg-(--surface) p-6">
               <QuizForm
                 quiz={quiz}
                 lastAttempt={lastAttempt}
@@ -290,15 +290,15 @@ export default function AulaPage() {
           )}
 
           <section className="space-y-3 border-t border-(--divider) pt-6">
-            <h2 className="font-(--font-display) text-base font-(--font-weight-semibold) text-(--fg)">
+            <h2 className="font-(--font-display) text-base text-(--fg)">
               Discussão desta aula
             </h2>
             <DiscussionThread posts={posts} onSubmit={handleDiscussionSubmit} />
           </section>
         </div>
 
-        <aside className="h-fit rounded-(--radius-md) border border-(--border) bg-(--surface) p-4">
-          <h2 className="mb-1 px-1 text-sm font-(--font-weight-semibold) text-(--fg)">
+        <aside className="h-fit rounded-md border border-(--border) bg-(--surface) p-4">
+          <h2 className="mb-1 px-1 text-sm font-semibold text-(--fg)">
             Módulos do curso
           </h2>
           <CourseSidebar

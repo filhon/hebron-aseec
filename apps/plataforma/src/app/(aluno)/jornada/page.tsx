@@ -1,8 +1,10 @@
 "use client";
 
+import * as React from "react";
 import { PageHeader, EmptyState } from "@hebron/ui";
 import { Route } from "lucide-react";
 import { CourseCard } from "../../../components/course-card";
+import { CourseCardSkeleton } from "../../../components/course-card-skeleton";
 import { ProgressBar } from "../../../components/progress-bar";
 import {
   mockCourses,
@@ -12,6 +14,7 @@ import {
 } from "../../../lib/mock-data";
 
 const CURRENT_USER_ID = "user-aluno-01";
+const LOADING_DELAY_MS = 500;
 
 function progressPercentFor(courseId: string): number {
   const totalLessons = mockLessons.filter(
@@ -26,6 +29,13 @@ function progressPercentFor(courseId: string): number {
 }
 
 export default function JornadaPage() {
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), LOADING_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, []);
+
   const enrollments = mockEnrollments.filter(
     (e) => e.userId === CURRENT_USER_ID,
   );
@@ -50,10 +60,29 @@ export default function JornadaPage() {
         description="Seus cursos em andamento e concluídos na Plataforma."
       />
 
-      {enrollments.length === 0 ? (
+      {loading ? (
+        <div className="space-y-10">
+          <div className="animate-pulse space-y-1.5 rounded-md border border-(--border) bg-(--surface) p-5">
+            <div className="flex items-baseline justify-between gap-2">
+              <div className="h-2.5 w-40 rounded bg-(--surface-alt)" />
+              <div className="h-2.5 w-8 rounded bg-(--surface-alt)" />
+            </div>
+            <div className="h-2.5 w-full rounded-(--radius-pill) bg-(--surface-alt)" />
+          </div>
+
+          <section className="space-y-4">
+            <div className="h-5 w-32 animate-pulse rounded bg-(--surface-alt)" />
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <CourseCardSkeleton key={i} />
+              ))}
+            </div>
+          </section>
+        </div>
+      ) : enrollments.length === 0 ? (
         <EmptyState
           icon={Route}
-          title="Você ainda não iniciou nenhum curso"
+          title="Você ainda não se matriculou em nenhum curso"
           description="Explore o catálogo e matricule-se em uma trilha de formação."
           quote={{
             text: "Prossigo para o alvo, pelo prêmio da soberana vocação de Deus em Cristo Jesus.",
@@ -62,7 +91,7 @@ export default function JornadaPage() {
         />
       ) : (
         <div className="space-y-10">
-          <div className="rounded-(--radius-md) border border-(--border) bg-(--surface) p-5">
+          <div className="rounded-md border border-(--border) bg-(--surface) p-5">
             <ProgressBar
               value={overallPercent}
               label="Progresso geral na Plataforma"
@@ -71,7 +100,7 @@ export default function JornadaPage() {
           </div>
 
           <section className="space-y-4">
-            <h2 className="font-(--font-display) text-lg font-(--font-weight-semibold) text-(--fg)">
+            <h2 className="font-(--font-display) text-lg text-(--fg)">
               Em andamento
             </h2>
             {inProgress.length === 0 ? (
@@ -99,7 +128,7 @@ export default function JornadaPage() {
           </section>
 
           <section className="space-y-4">
-            <h2 className="font-(--font-display) text-lg font-(--font-weight-semibold) text-(--fg)">
+            <h2 className="font-(--font-display) text-lg text-(--fg)">
               Concluídos
             </h2>
             {completed.length === 0 ? (

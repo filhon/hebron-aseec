@@ -14,7 +14,7 @@ export function DocumentViewerSkeleton({
     >
       {/* Toolbar skeleton */}
       <div className="flex items-center gap-2 px-4 py-3 border-b border-(--border) bg-(--bg-alt)">
-        <div className="flex border border-(--border) rounded-(--radius-sm) overflow-hidden">
+        <div className="flex border border-(--border) rounded-sm overflow-hidden">
           <div
             className="animate-pulse bg-(--border)"
             style={{ width: 90, height: 29 }}

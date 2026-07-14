@@ -104,7 +104,7 @@ export function CourseSidebar({
             key={courseModule.id}
             className="border-b border-(--divider) py-3 last:border-b-0"
           >
-            <h3 className="px-1 pb-2 text-xs font-(--font-weight-semibold) uppercase tracking-wide text-(--fg-muted)">
+            <h3 className="px-1 pb-2 text-xs font-semibold uppercase tracking-wide text-(--fg-muted)">
               {courseModule.title}
             </h3>
 
@@ -132,13 +132,13 @@ export function CourseSidebar({
                       }
                       onClick={() => !locked && onSelectLesson?.(lesson)}
                       className={cn(
-                        "flex w-full items-center gap-2.5 rounded-(--radius-sm) px-2.5 py-2 text-left text-sm",
+                        "flex w-full items-center gap-2.5 rounded-sm px-2.5 py-2 text-left text-sm",
                         "transition-colors duration-(--transition-fast)",
                         locked
                           ? "cursor-not-allowed opacity-60"
                           : "cursor-pointer hover:bg-(--surface-alt)",
                         lesson.id === currentLessonId &&
-                          "bg-(--brand-muted) font-(--font-weight-medium)",
+                          "bg-(--brand-muted) font-medium",
                       )}
                     >
                       <StatusIcon

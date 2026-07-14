@@ -54,7 +54,7 @@ export function EditalCardSkeleton({ className = "" }: { className?: string }) {
           <div className="h-5 w-16 rounded-full animate-pulse bg-(--bg-alt)" />
           <div className="h-5 w-12 rounded-full animate-pulse bg-(--bg-alt)" />
         </div>
-        <div className="p-3 rounded-(--radius-sm) border border-(--divider)">
+        <div className="p-3 rounded-sm border border-(--divider)">
           <div className="h-3 w-16 rounded animate-pulse bg-(--bg-alt) mb-2" />
           <div className="h-3 w-36 rounded animate-pulse bg-(--bg-alt)" />
         </div>

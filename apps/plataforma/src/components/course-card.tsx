@@ -61,7 +61,7 @@ export function CourseCard({
           </div>
         )}
         {!course.isPublished && (
-          <span className="absolute left-2.5 top-2.5 rounded-(--radius-pill) bg-(--color-warning-muted) px-2 py-0.5 text-[10px] font-(--font-weight-semibold) uppercase tracking-wide text-(--hb-orange-deep)">
+          <span className="absolute left-2.5 top-2.5 rounded-(--radius-pill) bg-(--color-warning-muted) px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-(--hb-orange-deep)">
             Em preparação
           </span>
         )}
@@ -70,7 +70,7 @@ export function CourseCard({
       <div className="flex flex-1 flex-col gap-2.5 p-4">
         <div className="space-y-1">
           <span className="hb-eyebrow">{course.category}</span>
-          <h3 className="line-clamp-2 font-(--font-display) text-base font-(--font-weight-semibold) leading-(--leading-snug) text-(--fg)">
+          <h3 className="line-clamp-2 font-(--font-display) text-base leading-snug text-(--fg)">
             {course.title}
           </h3>
         </div>
