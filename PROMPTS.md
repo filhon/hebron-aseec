@@ -3943,12 +3943,12 @@ Corretivo — débito registrado desde P-6.4/S-106 e nunca resolvido em P-6.8/P-
 
 **Critérios de aceite:**
 
-- [ ] Instrutor (não só super_admin) sobe capa de curso pela tela (teste)
-- [ ] Anexo de aula tipo "download" sobe pela tela e fica disponível para aluno matriculado (teste)
-- [ ] Bucket `plataforma-anexos` criado com policy testada (quem lê/escreve)
-- [ ] `plataforma-capas`: policy de escrita passa a aceitar instrutor, não só super_admin (teste)
-- [ ] Nenhum `URL.createObjectURL`/File local sobrevive sem upload real (grep)
-- [ ] Lint passa · Types passam
+- [x] Instrutor (não só super_admin) sobe capa de curso pela tela (teste)
+- [x] Anexo de aula tipo "download" sobe pela tela e fica disponível para aluno matriculado (teste)
+- [x] Bucket `plataforma-anexos` criado com policy testada (quem lê/escreve)
+- [x] `plataforma-capas`: policy de escrita passa a aceitar instrutor, não só super_admin (teste)
+- [x] Nenhum `URL.createObjectURL`/File local sobrevive sem upload real (grep)
+- [x] Lint passa · Types passam
 
 ---
 

@@ -20,6 +20,7 @@
     "@hebron/ui": "workspace:*",
     "@hebron/validators": "workspace:*",
     "@react-pdf/renderer": "^4.0.0",
+    "@supabase/supabase-js": "catalog:",
     "drizzle-orm": "catalog:",
     "hls.js": "^1.6.16",
     "lucide-react": "^0.460.0",

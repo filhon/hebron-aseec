@@ -23,7 +23,46 @@ import {
   SelectItem,
   Button,
 } from "@hebron/ui";
-import { ImagePlus, X } from "lucide-react";
+import { ImagePlus, Loader2, X } from "lucide-react";
+import {
+  getCourseCoverUploadUrl,
+  getCourseCoverReadUrl,
+} from "../actions/uploads";
+
+type CourseCoverMimeType = "image/jpeg" | "image/png" | "image/webp";
+
+const COVER_MAX_SIZE_BYTES = 5 * 1024 * 1024;
+const COVER_ALLOWED_MIME_TYPES: CourseCoverMimeType[] = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+];
+
+// Só é chamada depois que handleCoverChange já validou file.type contra
+// COVER_ALLOWED_MIME_TYPES — a asserção abaixo reflete essa garantia.
+async function uploadCourseCover(file: File): Promise<string> {
+  const urlResult = await getCourseCoverUploadUrl({
+    fileName: file.name,
+    mimeType: file.type as CourseCoverMimeType,
+  });
+  const uploadData = urlResult?.data;
+  if (!uploadData) throw new Error("Não foi possível obter URL de upload.");
+
+  const putRes = await fetch(uploadData.uploadUrl, {
+    method: "PUT",
+    body: file,
+    headers: { "Content-Type": file.type },
+  });
+  if (!putRes.ok) throw new Error("Falha ao enviar imagem para o storage.");
+
+  const readResult = await getCourseCoverReadUrl({
+    storagePath: uploadData.storagePath,
+  });
+  const readData = readResult?.data;
+  if (!readData) throw new Error("Não foi possível gerar a URL da imagem.");
+
+  return readData.url;
+}
 
 function cn(...cls: (string | false | null | undefined)[]): string {
   return cls.filter(Boolean).join(" ");
@@ -59,9 +98,6 @@ export interface CourseFormValues {
   category: string;
   instructorId: string;
   seriesId: string | null;
-  /** Upload para o bucket `plataforma-capas` (P-0.12) acontece no Bloco B —
-   * aqui só o arquivo local é capturado e repassado em `onSubmit`. */
-  coverImageFile: File | null;
   coverImageUrl: string | null;
 }
 
@@ -106,20 +142,31 @@ export function CourseForm({
   const [seriesSelectValue, setSeriesSelectValue] = React.useState(
     course?.seriesId ?? NO_SERIES,
   );
-  const [coverImageFile, setCoverImageFile] = React.useState<File | null>(null);
   const [coverPreview, setCoverPreview] = React.useState<string | null>(
     course?.coverImageUrl ?? null,
+  );
+  const [coverImageUrl, setCoverImageUrl] = React.useState<string | null>(
+    course?.coverImageUrl ?? null,
+  );
+  const [coverUploadStatus, setCoverUploadStatus] = React.useState<
+    "idle" | "uploading" | "error"
+  >("idle");
+  const [coverUploadError, setCoverUploadError] = React.useState<string | null>(
+    null,
   );
   const [errors, setErrors] = React.useState<Record<string, string>>({});
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  // Blob local do preview: só é revogado ao trocar/remover a imagem ou ao
+  // desmontar — nunca logo após o upload, senão a prévia quebra caso o
+  // upload falhe e o usuário ainda esteja olhando para o arquivo escolhido.
+  const localPreviewRef = React.useRef<string | null>(null);
 
   React.useEffect(() => {
-    if (!coverImageFile) return;
-    const url = URL.createObjectURL(coverImageFile);
-    setCoverPreview(url);
-    return () => URL.revokeObjectURL(url);
-  }, [coverImageFile]);
+    return () => {
+      if (localPreviewRef.current) URL.revokeObjectURL(localPreviewRef.current);
+    };
+  }, []);
 
   const category =
     categorySelectValue === OTHER_CATEGORY
@@ -128,17 +175,59 @@ export function CourseForm({
 
   function handleCoverChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0] ?? null;
-    setCoverImageFile(file);
+    if (!file) return;
+
+    if (!(COVER_ALLOWED_MIME_TYPES as string[]).includes(file.type)) {
+      setCoverUploadStatus("error");
+      setCoverUploadError("Formato não suportado. Use JPEG, PNG ou WebP.");
+      return;
+    }
+    if (file.size > COVER_MAX_SIZE_BYTES) {
+      setCoverUploadStatus("error");
+      setCoverUploadError("Imagem muito grande. Tamanho máximo: 5 MB.");
+      return;
+    }
+
+    if (localPreviewRef.current) URL.revokeObjectURL(localPreviewRef.current);
+    const previewUrl = URL.createObjectURL(file);
+    localPreviewRef.current = previewUrl;
+    setCoverPreview(previewUrl);
+    setCoverImageUrl(null);
+    setCoverUploadStatus("uploading");
+    setCoverUploadError(null);
+
+    uploadCourseCover(file)
+      .then((url) => {
+        setCoverImageUrl(url);
+        setCoverPreview(url);
+        setCoverUploadStatus("idle");
+        if (localPreviewRef.current) {
+          URL.revokeObjectURL(localPreviewRef.current);
+          localPreviewRef.current = null;
+        }
+      })
+      .catch(() => {
+        setCoverUploadStatus("error");
+        setCoverUploadError("Falha ao enviar imagem. Tente novamente.");
+      });
   }
 
   function removeCover() {
-    setCoverImageFile(null);
+    if (localPreviewRef.current) {
+      URL.revokeObjectURL(localPreviewRef.current);
+      localPreviewRef.current = null;
+    }
     setCoverPreview(null);
+    setCoverImageUrl(null);
+    setCoverUploadStatus("idle");
+    setCoverUploadError(null);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+
+    if (coverUploadStatus === "uploading") return;
 
     const seriesId = seriesSelectValue === NO_SERIES ? null : seriesSelectValue;
 
@@ -149,7 +238,7 @@ export function CourseForm({
       category,
       instructorId,
       seriesId,
-      coverImageUrl: course?.coverImageUrl ?? null,
+      coverImageUrl,
       isPublished: course?.isPublished ?? false,
     });
 
@@ -166,8 +255,7 @@ export function CourseForm({
       category: result.data.category,
       instructorId: result.data.instructorId,
       seriesId: result.data.seriesId,
-      coverImageFile,
-      coverImageUrl: course?.coverImageUrl ?? null,
+      coverImageUrl: result.data.coverImageUrl,
     });
   }
 
@@ -202,10 +290,11 @@ export function CourseForm({
 
       <FormField
         label="Capa do curso"
-        hint="Imagem exibida no catálogo e nos cards."
+        hint="Imagem exibida no catálogo e nos cards. JPEG, PNG ou WebP, até 5 MB."
+        error={coverUploadError ?? undefined}
       >
         <div className="flex items-center gap-4">
-          <div className="flex h-20 w-32 shrink-0 items-center justify-center overflow-hidden rounded-(--radius) border border-(--border) bg-(--surface-alt)">
+          <div className="relative flex h-20 w-32 shrink-0 items-center justify-center overflow-hidden rounded-(--radius) border border-(--border) bg-(--surface-alt)">
             {coverPreview ? (
               <img
                 src={coverPreview}
@@ -218,6 +307,14 @@ export function CourseForm({
                 aria-hidden="true"
               />
             )}
+            {coverUploadStatus === "uploading" && (
+              <div className="absolute inset-0 flex items-center justify-center bg-(--surface)/80">
+                <Loader2
+                  className="h-5 w-5 animate-spin text-(--fg-muted)"
+                  aria-hidden="true"
+                />
+              </div>
+            )}
           </div>
           <div className="flex flex-col gap-2">
             <Button
@@ -225,6 +322,7 @@ export function CourseForm({
               variant="outline"
               size="sm"
               onClick={() => fileInputRef.current?.click()}
+              disabled={coverUploadStatus === "uploading"}
             >
               {coverPreview ? "Trocar imagem" : "Selecionar imagem"}
             </Button>
@@ -235,6 +333,7 @@ export function CourseForm({
                 size="sm"
                 leftIcon={<X className="h-3.5 w-3.5" aria-hidden="true" />}
                 onClick={removeCover}
+                disabled={coverUploadStatus === "uploading"}
               >
                 Remover
               </Button>
@@ -323,7 +422,11 @@ export function CourseForm({
         <RichTextEditor value={description} onChange={setDescription} />
       </FormField>
 
-      <Button type="submit" disabled={isLoading} loading={isLoading}>
+      <Button
+        type="submit"
+        disabled={isLoading || coverUploadStatus === "uploading"}
+        loading={isLoading}
+      >
         {mode === "edit" ? "Salvar alterações" : "Criar curso"}
       </Button>
     </form>

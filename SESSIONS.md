@@ -140,6 +140,7 @@
 | S-117  | 2026-07-14 | Auditoria: débitos técnicos P-6.6–P-6.12 (Plataforma, Bloco B)                | concluido (gera P-6.13/6.14/6.15)    |
 | S-118  | 2026-07-14 | P-6.13 — Gestão de Instrutores (Plataforma)                                   | concluido                            |
 | S-119  | 2026-07-14 | P-6.14 — Verificação Pública de Certificado (Plataforma)                      | concluido                            |
+| S-120  | 2026-07-14 | P-6.15 — Upload de Mídia da Plataforma (capa de curso, anexo de aula)         | concluido                            |
 
 ---
 
@@ -7586,3 +7587,117 @@ permitida):**
   (`verificationUrl`/`PLATAFORMA_BASE_URL`, `downloadCertificatePdf`)
 - `apps/plataforma/src/components/certificate-card.tsx` (link
   "Verificar")
+
+---
+
+### S-120 — 2026-07-14 — P-6.15 — Upload de Mídia da Plataforma (capa de curso, anexo de aula)
+
+**Prompt:** P-6.15
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Fecha o débito registrado desde P-6.4/S-106 e adiado em P-6.8/P-6.9:
+`CourseForm`/`LessonForm` capturavam `File` só localmente
+(`URL.createObjectURL`), sem nenhuma Server Action de upload real.
+Criada `apps/plataforma/src/actions/uploads.ts` (mesmo padrão de
+`getUploadUrl` em `apps/documentos/src/actions/documents.ts`: client
+admin de service-role local, `createSignedUploadUrl` para o PUT direto
+do navegador ao Storage). Diferente de documentos — que guarda um path
+bruto e resolve a URL de leitura em outro lugar — os schemas
+`createCourseSchema`/`createLessonSchema` (`packages/validators`, fora
+da lista de arquivos permitidos) exigem `coverImageUrl`/`downloadUrl`
+como `z.string().url()`, e `course-card.tsx`/`lesson-view.tsx` (também
+fora da lista) já usam esse campo direto como `src`/`href`. Por isso
+cada action de upload tem uma companheira de leitura
+(`getCourseCoverReadUrl`/`getLessonAttachmentReadUrl`) que gera uma
+signed URL de 10 anos logo após o PUT — dois round-trips (o storage do
+Supabase exige o objeto já existir para assinar leitura), mas nenhuma
+mudança fora do escopo do prompt.
+
+Migration `0046_plataforma_uploads_storage.sql` corrige
+`plataforma-capas` (INSERT/UPDATE/DELETE eram só `super_admin` desde
+0020_storage_buckets.sql — inconsistente com a decisão de P-6.7/G1 de
+que qualquer instrutor tem CRUD completo em curso) e cria o bucket
+`plataforma-anexos` (privado; escrita staff; leitura staff OU
+matriculado no curso da pasta), que não existia (P-0.12 só provisionou
+`plataforma-capas`).
+
+**Suposições registradas (G1):**
+
+- Número da migration: `drizzle-kit generate --custom` gerou
+  `0021_plataforma_uploads_storage.sql`, colidindo com o
+  `0021_users_anonymized_at.sql` já existente — o journal interno do
+  drizzle-kit (`meta/_journal.json`) está defasado (só 8 entradas para
+  45 arquivos reais) porque a ordem de aplicação real vem de
+  `migrate.ts` (`readdir().sort()` + tabela `public._migrations`), não
+  do journal. Renomeado para `0046_...` (próximo número real, seguindo
+  `0045_plataforma_certificate_issue_fn.sql`); `meta/_journal.json` e o
+  snapshot gerado foram revertidos/descartados antes do commit — mesmo
+  padrão observado no commit de 0045 (nenhuma mudança em `meta/`).
+- Path de `plataforma-capas`: `{actorId}/{uuid}.{ext}`, não
+  `{course_id}/{uuid}.{ext}` como o comentário ilustrativo de
+  `0020_storage_buckets.sql` sugere — o curso ainda não existe no
+  momento do upload da capa (`CourseForm` só cria o curso depois do
+  submit). Sem efeito na policy, que checa só `bucket_id`.
+- `plataforma-anexos_select_enrolled_or_staff` verifica matrícula no
+  curso da pasta (`(storage.foldername(name))[1] = course_id`), não a
+  trilha sequencial fina de `plataforma.can_access_lesson` — o path não
+  carrega `lesson_id` (a aula também não existe ainda no momento do
+  upload do anexo), só `course_id`. Mesmo nível de granularidade de
+  `project-attachments`/`flats-documentos` (pasta, não linha).
+- Nenhuma auditoria nova: `courses.ts`/`audit.ts` não estão na lista de
+  arquivos permitidos, e o precedente de `documentos` também não audita
+  o passo de mint da signed URL — só a mutação subsequente
+  (`createCourse`/`updateCourse`, que hoje só audita `course.published`,
+  inalterado por este prompt).
+- `apps/plataforma/package.json` ganhou `@supabase/supabase-js:
+catalog:` (não listado nos arquivos permitidos, mas obrigatório — o
+  prompt pede explicitamente "mesmo padrão de `getUploadUrl` em
+  `apps/documentos`", que depende dessa lib; sem isso `uploads.ts` nem
+  compila). `pnpm-lock.yaml` atualizado via `pnpm install`.
+
+**Critérios de aceite verificados:**
+
+- [x] Instrutor (não só super_admin) sobe capa de curso pela tela —
+      policy `plataforma_capas_insert_staff` testada com sessão
+      simulada (`SET LOCAL ROLE authenticated` + `request.jwt.claims`):
+      instrutor insere em `plataforma-capas` (1 linha), não-instrutor/
+      não-admin recebe "new row violates row-level security policy"
+- [x] Anexo de aula tipo "download" sobe pela tela e fica disponível
+      para aluno matriculado — `plataforma_anexos_select_enrolled_or_staff`
+      testada: aluno matriculado no curso vê o objeto (1 linha), aluno
+      não matriculado não vê (0 linhas), instrutor vê (staff bypass)
+- [x] Bucket `plataforma-anexos` criado com policy testada (ver acima)
+- [x] `plataforma-capas`: policy de escrita passa a aceitar instrutor
+      (testada acima)
+- [x] Nenhum `URL.createObjectURL`/`File` local sobrevive sem upload
+      real — grep em `apps/plataforma/src` só retorna o preview
+      instantâneo de `course-form.tsx` (substituído pela URL real após
+      o upload, nunca submetido) e um uso não relacionado em
+      `certificate-card.tsx` (download de PDF gerado)
+- [x] Lint passa — `pnpm turbo lint --filter=@hebron/plataforma
+    --filter=@hebron/db`
+- [x] Types passam — `pnpm turbo typecheck --filter=@hebron/plataforma
+    --filter=@hebron/db`
+- Migration aplicada com sucesso em banco de dev real (`pnpm db:migrate`)
+  e verificada via `pg_policies`; suíte de testes existente do módulo
+  (21 testes, `rls.test.ts`/`progress.test.ts`/`certificates.test.ts`)
+  segue verde, sem regressão
+
+**Não verificado neste ambiente:** fluxo end-to-end pela UI num
+navegador com sessão real de instrutor/aluno (sem credenciais de teste
+disponíveis nesta sessão) — a cobertura acima é via simulação de RLS
+direta no banco (mesma técnica de `rls.test.ts`) e verificação estática
+de policy/bucket, não clique-a-clique no browser.
+
+**Arquivos modificados:**
+
+- `packages/db/src/migrations/0046_plataforma_uploads_storage.sql`
+  (novo)
+- `apps/plataforma/src/actions/uploads.ts` (novo)
+- `apps/plataforma/src/components/course-form.tsx`
+- `apps/plataforma/src/components/lesson-form.tsx`
+- `apps/plataforma/package.json` (`@supabase/supabase-js`)
+- `pnpm-lock.yaml`
+- `SESSIONS.md` (esta entrada + linha no índice)
