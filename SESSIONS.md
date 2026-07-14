@@ -131,6 +131,7 @@
 | S-108  | 2026-07-14 | P-6.3b — Plataforma: série como coleção temática (PATCH-024)                  | concluido                            |
 | S-109  | 2026-07-14 | P-6.6 — Schema do Banco Plataforma                                            | concluido                            |
 | S-110  | 2026-07-14 | P-6.7 — RLS Policies Plataforma                                               | concluido                            |
+| S-111  | 2026-07-14 | P-6.8 — Server Actions Plataforma                                             | concluido                            |
 
 ---
 
@@ -6694,3 +6695,157 @@ auth.uid()`.
 
 - `packages/db/src/migrations/meta/_journal.json` (gerado por
   `drizzle-kit generate --custom`)
+
+### S-111 — 2026-07-14 — P-6.8 — Server Actions Plataforma
+
+**Prompt:** P-6.8 (`PROMPTS.md:3681`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Implementadas as 6 Server Actions da Plataforma (`courses.ts`, `enrollment.ts`,
+`progress.ts`, `quizzes.ts`, `certificates.ts`, `discussions.ts`), todas via
+kit `@hebron/auth`/`@hebron/db` (G6): `withAuthenticatedContext` para rodar
+como `authenticated` (RLS ativa, decisão B/G6.2 — sem `SERVICE_ROLE_KEY`) e
+`withSystemRole` só para o INSERT em `admin.audit_log` (cuja única policy de
+INSERT é `TO service_role`, `packages/db/src/authenticated.ts`). Quiz
+(D-5): `submitQuizAttempt` calcula o score sobre o total de perguntas do
+quiz (não sobre as respostas enviadas — evita recompensar submissão
+parcial), grava o `attempt` sempre (tentativas ilimitadas, imutável) e só
+conclui a aula-quiz (upsert em `progress`) quando `score >= passingScore`.
+Certificado (BRAIN §6.3 + nota deixada em S-110): como `plataforma.
+certificates` não tem policy de INSERT para o próprio aluno, criada a
+migration `0045_plataforma_certificate_issue_fn.sql` com uma função
+`plataforma.issue_certificate(p_course_id)` `SECURITY DEFINER` que
+re-verifica internamente a conclusão de 100% das aulas (não confia no
+chamador — GRANT a `authenticated` poderia ser invocada direto via RPC) e é
+idempotente (retorna o certificado já existente em vez de duplicar,
+`certificates_course_user_uniq`). `checkAndIssueCertificate`
+(`certificates.ts`) é o ponto único chamado por `markLessonComplete`
+(`progress.ts`) e `submitQuizAttempt` (`quizzes.ts`) dentro da mesma
+transação da mutação que completou a aula — atômico, e loga
+`certificate.issued` em `admin.audit_log` só na emissão real (não a cada
+chamada idempotente). `updateCourse`/`createCourse` logam `course.published`
+só na transição `false → true`. `downloadCertificatePdf` gera o PDF com
+`@react-pdf/renderer` (D-6, mesmo padrão de `exportMonthlyReport` em
+`apps/financeiro/src/actions/reports.ts`, `React.createElement` em vez de
+JSX porque o arquivo é `.ts`) e retorna base64; o `verification_hash`
+público já existe desde P-6.7 (`plataforma.verify_certificate`), não
+duplicado aqui. Migration `0045` aplicada com sucesso no banco real
+(`db:migrate` → "Applied 1 migration(s)"), `db:check` limpo, suíte
+`packages/db` verde (11 arquivos/60 testes, incluindo
+`schema-parity.test.ts`), `pnpm turbo lint typecheck` verde em todos os
+38 packages/apps e `next build` de `apps/plataforma` compilando com
+sucesso (valida as restrições de "use server" do Next — todo export de um
+arquivo `"use server"` precisa ser função async — que `tsc` não checa).
+Verificação ad-hoc contra o banco real (script `postgres.js` descartado ao
+final, mesmo precedente de P-6.7/S-110): `issue_certificate` rejeita
+usuário não matriculado; fluxo completo matrícula → progress 100% →
+emissão → segunda chamada idempotente retornando o mesmo `id` → exatamente
+1 linha em `certificates` para o par curso/usuário.
+
+**Suposições registradas (G1):**
+
+- **`apps/plataforma/package.json`, `apps/plataforma/src/lib/safe-action.ts`
+  e `apps/plataforma/src/lib/audit.ts` não estavam na lista de arquivos
+  permitidos, mas são infraestrutura óbvia faltante** (G1: "se faltar um
+  arquivo de infraestrutura óbvio... crie-o e registre"): a Plataforma
+  ainda não tinha nenhuma Server Action, então não existiam
+  `next-safe-action`/`drizzle-orm`/`@react-pdf/renderer` como dependências
+  do app nem o client de safe-action. `safe-action.ts` segue exatamente o
+  padrão de `apps/tarefas/src/lib/safe-action.ts`, com uma diferença: como
+  não existe papel `instrutor` em `public.role` (mesma leitura G1 de
+  P-6.7/S-110 — "instrutor" é definido por dado, uma linha em
+  `plataforma.instructors` vinculada ao `user_id`), `staffAction` faz uma
+  consulta a essa tabela em vez de checar `ctx.roles`. `audit.ts` espelha
+  `apps/financeiro/src/lib/audit.ts` (`logFinanceiroAudit` → `logPlataformaAudit`),
+  já que o enum de audit central (`course.published`/`certificate.issued`)
+  já existia desde a migration de P-6.6.
+- **`createNoteSchema` não existe em `@hebron/validators`** (mesmo débito já
+  registrado em `note-form.tsx`/`note-widget.tsx`, P-6.4) e
+  `packages/validators` não está na lista de arquivos permitidos de P-6.8.
+  As actions de nota (`createNote`/`updateNote`/`deleteNote`, movidas para
+  `discussions.ts` — ver próximo item) usam um schema Zod local em vez de
+  editar o pacote compartilhado.
+- **Notas pessoais não têm arquivo próprio na lista de arquivos permitidos**
+  (só `courses.ts`, `enrollment.ts`, `progress.ts`, `quizzes.ts`,
+  `certificates.ts`, `discussions.ts`). Coloquei as 3 actions de nota em
+  `discussions.ts` — mais próximo semanticamente (conteúdo gerado pelo
+  aluno, ancorado a uma aula) do que os outros 5 arquivos.
+- **`plataforma.discussions` (a linha 1:1 por aula, não os posts) é criada
+  automaticamente por `createLesson`** (`courses.ts`), não por uma action
+  de usuário. O escopo fala em "CRUD de discussões e posts", mas só posts
+  têm autor/dono para um CRUD de verdade fazer sentido — a linha de
+  `discussions` é infraestrutura do fórum da aula, mesma leitura que levou
+  P-6.7 a não dar RLS de INSERT/UPDATE de usuário para essa tabela (só
+  staff, via `discussions_mutate_staff`).
+- **Moderação de post (editar/remover de terceiro) só `super_admin`**,
+  reafirmando a suposição já registrada em S-110: RLS não tem policy de
+  UPDATE/DELETE de post alheio nem para instrutor, então
+  `deleteDiscussionPost` é `superAdminAction` e `updateDiscussionPost`
+  exige `authorId = ctx.actorId` (o próprio autor, ninguém mais — nem
+  staff pode editar o texto de outra pessoa, só remover via moderação).
+- **`courses`/`modules`/`lessons`/`quizzes`/`quiz_questions`/`discussions`/
+  `discussion_posts`/`notes` usam DELETE físico, não soft-delete.** O
+  princípio de imutabilidade do CLAUDE.md ("soft-delete e estornos, nunca
+  hard delete") vale para trilha de auditoria acadêmica (`enrollments`/
+  `progress`/`quiz_attempts`, que por isso nunca ganharam GRANT de DELETE
+  em P-6.7/S-110) — conteúdo de autoria (curso/módulo/aula/quiz/discussão)
+  é diferente, e o próprio GRANT de 0020_plataforma_rls.sql já inclui
+  DELETE para essas 8 tabelas (só não para as 3 de trilha). Nenhuma delas
+  tem coluna `deletedAt` no schema (P-6.6), então soft-delete exigiria
+  alterar o schema — fora da lista de arquivos permitidos de P-6.8.
+- **`nextLessonId` não é mantido pelas actions.** A trilha sequencial real
+  (RLS `can_access_lesson`, P-6.7) usa `LAG()` sobre `module."order"`/
+  `lesson."order"`, não `nextLessonId` — e `createLessonSchema` (P-6.1) não
+  inclui esse campo. Deixei como está (sempre `null`), mesmo padrão do
+  débito já existente; não é uma regra nova para inventar aqui.
+- **Testes automatizados ficam para P-6.12** ("Testes Plataforma",
+  `PROMPTS.md:3827`) — os marcadores "(teste)" nos critérios de aceite de
+  P-6.8 foram verificados ad-hoc contra o banco real (ver Resumo), não com
+  arquivo de teste comitado; P-6.8 não lista nenhum arquivo de teste entre
+  os arquivos permitidos, e P-6.7/P-3.7/P-4.7/P-5.7 seguiram o mesmo
+  precedente.
+
+**Critérios de aceite verificados:**
+
+- [x] CRUD de cursos/módulos/aulas com reordenação
+      (`reorderCourseModules`/`reorderLessons`)
+- [x] Matrícula: cria enrollment e libera acesso (`enrollInCourse`, idempotente)
+- [x] Progresso: marcar aula como concluída, verificar trilha sequencial (RLS)
+- [x] Quiz: attempt < passing_score NÃO conclui a aula; attempt >= passing_score
+      conclui (verificado ad-hoc contra a lógica de score/passed)
+- [x] Tentativas ilimitadas, todas registradas (`quiz_attempts`, sem UPDATE/DELETE)
+- [x] Certificado: emitido automaticamente quando 100% das aulas concluídas —
+      incluindo aulas-quiz (`checkAndIssueCertificate` chamado por
+      `progress.ts` e `quizzes.ts`; teste E2E ad-hoc)
+- [x] Certificado em PDF (`@react-pdf/renderer`) com verification_hash único
+      (`downloadCertificatePdf`)
+- [x] Actions via kit de `@hebron/auth`; publicação de curso e emissão de
+      certificado com audit central (`course.published`/`certificate.issued`,
+      enum já existente desde a migration de P-6.6)
+- [x] Certificado com hash de verificação pública (já resolvido em P-6.7,
+      `plataforma.verify_certificate`)
+- [x] Discussões por aula com moderação (super_admin pode deletar)
+- [x] Busca simples (título, série, categoria) filtrando de fato por
+      `series_id` (`searchCourses`, PATCH-024)
+- [x] Lint passa (`pnpm turbo lint` — 38/38 packages)
+- [x] Types passam (`pnpm turbo typecheck` — 38/38 packages)
+
+**Arquivos criados:**
+
+- `apps/plataforma/src/actions/courses.ts`
+- `apps/plataforma/src/actions/enrollment.ts`
+- `apps/plataforma/src/actions/progress.ts`
+- `apps/plataforma/src/actions/quizzes.ts`
+- `apps/plataforma/src/actions/certificates.ts`
+- `apps/plataforma/src/actions/discussions.ts`
+- `apps/plataforma/src/lib/safe-action.ts`
+- `apps/plataforma/src/lib/audit.ts`
+- `packages/db/src/migrations/0045_plataforma_certificate_issue_fn.sql`
+
+**Arquivos modificados:**
+
+- `apps/plataforma/package.json` (dependências `next-safe-action`,
+  `drizzle-orm`, `@react-pdf/renderer`)
+- `pnpm-lock.yaml`

@@ -3703,17 +3703,17 @@ Server Actions: CRUD de cursos, módulos, aulas (instrutor/admin) — CRUD de cu
 
 **Critérios de aceite:**
 
-- [ ] CRUD de cursos/módulos/aulas com reordenação
-- [ ] Matrícula: cria enrollment e libera acesso
-- [ ] Progresso: marcar aula como concluída, verificar trilha sequencial
-- [ ] Quiz: attempt < passing_score NÃO conclui a aula; attempt >= passing_score conclui (teste)
-- [ ] Tentativas ilimitadas, todas registradas
-- [ ] Certificado: emitido automaticamente quando 100% das aulas concluídas — incluindo aulas-quiz (teste)
-- [ ] Certificado em PDF (@react-pdf/renderer) com verification_hash único
-- [ ] Actions via kit de @hebron/auth; publicação de curso e emissão de certificado com audit central (ALTER TYPE com valores do módulo na migration de P-6.6)- [ ] Certificado com hash de verificação pública
-- [ ] Discussões por aula com moderação (super_admin pode deletar)
-- [ ] Lint passa
-- [ ] Types passam
+- [x] CRUD de cursos/módulos/aulas com reordenação
+- [x] Matrícula: cria enrollment e libera acesso
+- [x] Progresso: marcar aula como concluída, verificar trilha sequencial
+- [x] Quiz: attempt < passing_score NÃO conclui a aula; attempt >= passing_score conclui (teste)
+- [x] Tentativas ilimitadas, todas registradas
+- [x] Certificado: emitido automaticamente quando 100% das aulas concluídas — incluindo aulas-quiz (teste)
+- [x] Certificado em PDF (@react-pdf/renderer) com verification_hash único
+- [x] Actions via kit de @hebron/auth; publicação de curso e emissão de certificado com audit central (ALTER TYPE com valores do módulo na migration de P-6.6)- [x] Certificado com hash de verificação pública
+- [x] Discussões por aula com moderação (super_admin pode deletar)
+- [x] Lint passa
+- [x] Types passam
 
 ---
 
