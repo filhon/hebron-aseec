@@ -1,9 +1,11 @@
 "use client";
 
 import * as React from "react";
+import { useAction } from "next-safe-action/hooks";
 import type { Certificate } from "@hebron/types/plataforma";
 import { Button } from "@hebron/ui";
 import { Award, Check, Copy, Download } from "lucide-react";
+import { downloadCertificatePdf } from "../actions/certificates";
 
 function cn(...cls: (string | false | null | undefined)[]): string {
   return cls.filter(Boolean).join(" ");
@@ -17,20 +19,39 @@ function formatDate(date: Date): string {
   });
 }
 
+function downloadPdfFromBase64(fileName: string, base64: string): void {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+  const blob = new Blob([bytes], { type: "application/pdf" });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
 export interface CertificateCardProps {
   certificate: Certificate;
-  onDownload?: () => void;
   className?: string;
 }
 
 /** Cartão de certificado — emissão automática ao concluir 100% da trilha
- * (BRAIN §6.3). O hash é o código de verificação de autenticidade (PATCH-010). */
+ * (BRAIN §6.3). O hash é o código de verificação de autenticidade (PATCH-010).
+ * O download gera o PDF real via downloadCertificatePdf (P-6.8). */
 export function CertificateCard({
   certificate,
-  onDownload,
   className,
 }: CertificateCardProps) {
   const [copied, setCopied] = React.useState(false);
+
+  const { execute: download, status } = useAction(downloadCertificatePdf, {
+    onSuccess: ({ data }) => {
+      if (data) downloadPdfFromBase64(data.fileName, data.base64);
+    },
+  });
 
   async function handleCopyHash() {
     try {
@@ -91,16 +112,16 @@ export function CertificateCard({
         </button>
       </div>
 
-      {onDownload && (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={onDownload}
-          leftIcon={<Download className="h-3.5 w-3.5" aria-hidden="true" />}
-        >
-          Baixar certificado
-        </Button>
-      )}
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={() => download({ certificateId: certificate.id })}
+        loading={status === "executing"}
+        disabled={status === "executing"}
+        leftIcon={<Download className="h-3.5 w-3.5" aria-hidden="true" />}
+      >
+        Baixar certificado
+      </Button>
     </div>
   );
 }

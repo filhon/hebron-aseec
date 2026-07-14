@@ -3,7 +3,8 @@
 import * as React from "react";
 import type { DiscussionPost } from "@hebron/types/plataforma";
 import { Avatar, EmptyState } from "@hebron/ui";
-import { MessageSquare, Send } from "lucide-react";
+import { MessageSquare } from "lucide-react";
+import { DiscussionPostForm } from "./discussion-post-form";
 
 function cn(...cls: (string | false | null | undefined)[]): string {
   return cls.filter(Boolean).join(" ");
@@ -18,64 +19,6 @@ function relativeTime(date: Date): string {
   if (hours < 24) return `há ${hours}h`;
   const days = Math.round(hours / 24);
   return `há ${days} dia${days > 1 ? "s" : ""}`;
-}
-
-interface ComposerProps {
-  placeholder: string;
-  autoFocus?: boolean;
-  isLoading?: boolean;
-  onSubmit: (content: string) => void;
-  onCancel?: () => void;
-}
-
-function Composer({
-  placeholder,
-  autoFocus,
-  isLoading,
-  onSubmit,
-  onCancel,
-}: ComposerProps) {
-  const [content, setContent] = React.useState("");
-
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const trimmed = content.trim();
-    if (!trimmed) return;
-    onSubmit(trimmed);
-    setContent("");
-  }
-
-  return (
-    <form onSubmit={handleSubmit} className="flex items-end gap-2">
-      <textarea
-        value={content}
-        onChange={(e) => setContent(e.target.value)}
-        placeholder={placeholder}
-        rows={2}
-        autoFocus={autoFocus}
-        className="min-w-0 flex-1 resize-none rounded-(--radius) border border-(--border) bg-(--bg) px-3 py-2 text-sm text-(--fg) outline-none transition-colors placeholder:text-(--fg-muted) focus:border-(--brand)"
-      />
-      <div className="flex shrink-0 flex-col gap-1.5">
-        <button
-          type="submit"
-          disabled={!content.trim() || isLoading}
-          aria-label="Enviar comentário"
-          className="flex h-8 w-8 items-center justify-center rounded-full bg-(--brand) text-(--brand-fg) transition-colors hover:bg-(--hb-blue-soft) disabled:opacity-40"
-        >
-          <Send className="h-3.5 w-3.5" aria-hidden="true" />
-        </button>
-        {onCancel && (
-          <button
-            type="button"
-            onClick={onCancel}
-            className="text-xs text-(--fg-muted) hover:text-(--fg)"
-          >
-            Cancelar
-          </button>
-        )}
-      </div>
-    </form>
-  );
 }
 
 interface PostBubbleProps {
@@ -106,6 +49,7 @@ function PostBubble({ post, className }: PostBubbleProps) {
 }
 
 export interface DiscussionThreadProps {
+  lessonId: string;
   posts: DiscussionPost[];
   onSubmit: (content: string, parentPostId: string | null) => void;
   isLoading?: boolean;
@@ -113,8 +57,10 @@ export interface DiscussionThreadProps {
 }
 
 /** Fórum de discussão por aula (BRAIN §6.3) — lista de comentários com uma
- * camada de respostas, mais o formulário de novo comentário/resposta. */
+ * camada de respostas, mais o formulário de novo comentário/resposta
+ * (DiscussionPostForm, P-6.4). */
 export function DiscussionThread({
+  lessonId,
   posts,
   onSubmit,
   isLoading = false,
@@ -153,13 +99,16 @@ export function DiscussionThread({
 
               <div className="ml-10">
                 {replyingToId === post.id ? (
-                  <Composer
+                  <DiscussionPostForm
+                    lessonId={lessonId}
+                    parentPostId={post.id}
+                    parentAuthorName={post.authorName}
                     placeholder="Escreva uma resposta…"
                     autoFocus
                     isLoading={isLoading}
                     onCancel={() => setReplyingToId(null)}
-                    onSubmit={(content) => {
-                      onSubmit(content, post.id);
+                    onSubmit={(values) => {
+                      onSubmit(values.content, values.parentPostId ?? post.id);
                       setReplyingToId(null);
                     }}
                   />
@@ -178,10 +127,13 @@ export function DiscussionThread({
         </ul>
       )}
 
-      <Composer
+      <DiscussionPostForm
+        lessonId={lessonId}
         placeholder="Escreva um comentário sobre esta aula…"
         isLoading={isLoading}
-        onSubmit={(content) => onSubmit(content, null)}
+        onSubmit={(values) =>
+          onSubmit(values.content, values.parentPostId ?? null)
+        }
       />
     </div>
   );

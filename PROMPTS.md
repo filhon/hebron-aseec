@@ -3750,18 +3750,18 @@ Substituir mocks. Catálogo com cursos reais, filtro de série consumindo dados 
 
 **Critérios de aceite:**
 
-- [ ] (aluno) exige login; (instrutor) exige papel instrutor|super_admin (teste)
-- [ ] Catálogo com cursos do banco; matrícula executável pelo CTA da página do curso
-- [ ] Player Bunny.net HLS funcional; marcar aula como concluída executável do player
-- [ ] Trilha sequencial: aula locked visível como locked e inacessível (UI + RLS)
-- [ ] Quiz respondível pela tela com resultado e retry (quiz-form conectado)
-- [ ] Notas em timestamp criáveis/clicáveis no player (note-widget conectado)
-- [ ] Discussões: post/reply pela tela da aula
-- [ ] Instrutor: criar curso, editar módulos/aulas com drag-drop, editar quiz — tudo pela UI
-- [ ] Certificado baixável em PDF com hash verificável por rota pública
-- [ ] Nenhum componente/formulário do Bloco A (P-6.2/P-6.4) sem import (grep)
-- [ ] Mock data removido
-- [ ] Lint passa · Types passam
+- [x] (aluno) exige login; (instrutor) exige papel instrutor|super_admin (teste)
+- [x] Catálogo com cursos do banco; matrícula executável pelo CTA da página do curso
+- [x] Player Bunny.net HLS funcional; marcar aula como concluída executável do player
+- [x] Trilha sequencial: aula locked visível como locked e inacessível (UI + RLS)
+- [x] Quiz respondível pela tela com resultado e retry (quiz-form conectado)
+- [x] Notas em timestamp criáveis/clicáveis no player (note-widget conectado)
+- [x] Discussões: post/reply pela tela da aula
+- [x] Instrutor: criar curso, editar módulos/aulas com drag-drop, editar quiz — tudo pela UI
+- [x] Certificado baixável em PDF com hash verificável por rota pública
+- [x] Nenhum componente/formulário do Bloco A (P-6.2/P-6.4) sem import (grep)
+- [x] Mock data removido
+- [x] Lint passa · Types passam
 
 ---
 

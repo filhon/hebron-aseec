@@ -132,6 +132,8 @@
 | S-109  | 2026-07-14 | P-6.6 — Schema do Banco Plataforma                                            | concluido                            |
 | S-110  | 2026-07-14 | P-6.7 — RLS Policies Plataforma                                               | concluido                            |
 | S-111  | 2026-07-14 | P-6.8 — Server Actions Plataforma                                             | concluido                            |
+| S-112  | 2026-07-14 | P-6.9 — Integração UI ↔ Backend Plataforma                                    | concluido                            |
+| S-113  | 2026-07-14 | Gap: gestão de instrutores (Plataforma)                                       | bloqueado                            |
 
 ---
 
@@ -6849,3 +6851,204 @@ emissão → segunda chamada idempotente retornando o mesmo `id` → exatamente
 - `apps/plataforma/package.json` (dependências `next-safe-action`,
   `drizzle-orm`, `@react-pdf/renderer`)
 - `pnpm-lock.yaml`
+
+### S-112 — 2026-07-14 — P-6.9 — Integração UI ↔ Backend Plataforma
+
+**Prompt:** P-6.9 (`PROMPTS.md:3720`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Substituídos os mocks pelas 12 páginas reais da Plataforma. Criado
+`apps/plataforma/src/lib/queries.ts` (não existia ação de leitura para
+catálogo completo/jornada/certificados/painéis do instrutor — só
+`searchCourses`, P-6.8) com os gates de sessão (`requireAlunoSession`,
+`requireInstrutorSession` — mesmo padrão G5/`apps/tarefas` de duplicar o gate
+em `queries.ts` porque `lib/session.ts` não está na lista de arquivos
+permitidos) e todas as leituras por tela, sempre via
+`withAuthenticatedContext({actorId}, tx => ...)` — nunca o `db` puro que
+`apps/tarefas/src/lib/queries.ts` usa, porque na Plataforma a RLS diferencia
+visibilidade por papel/dado (curso publicado vs. rascunho,
+`plataforma.can_access_lesson` na trilha sequencial), diferente de `tarefas`
+(transparência total, RLS não filtra por papel). `queries.ts` também faz o
+remap DB → forma "rica" de `@hebron/types/plataforma` que os componentes já
+esperavam (`published`→`isPublished`, `verificationHash`→`hash`, joins para
+`instructorName`/`seriesName`/`courseName`/`userName`/`authorName`) — mesma
+ideia de `assembleTasks` em `apps/tarefas`.
+
+Onde uma rota dinâmica (`[slug]`, `[id]`) precisava de interatividade real
+(matrícula, player, formulários), `page.tsx` virou Server Component (busca
+dados, `await params`) delegando a um novo componente client em
+`apps/plataforma/src/components/*` (já no glob de arquivos permitidos, sem
+débito de arquivo fora da lista): `course-detail-view.tsx`, `lesson-view.tsx`,
+`new-course-view.tsx`, `course-editor-view.tsx`, `lesson-editor-view.tsx`,
+`quiz-editor-view.tsx`. Resolvida também a duplicação já registrada em S-106
+entre os composers inline de `discussion-thread.tsx`/`note-widget.tsx` e os
+formulários órfãos `discussion-post-form.tsx`/`note-form.tsx` (P-6.4): os
+dois primeiros agora usam os segundos internamente — todo componente/
+formulário do Bloco A (P-6.2/P-6.4) tem hoje pelo menos um importador real
+(verificado por grep).
+
+**Suposições registradas (G1):**
+
+- **Nenhuma rota pública de verificação de certificado foi criada.** O
+  critério "hash verificável por rota pública" já foi tratado como resolvido
+  em P-6.7/S-110 pela função `plataforma.issue_certificate`/
+  `plataforma.verify_certificate` (`SECURITY DEFINER`, `GRANT ... TO anon`) —
+  as próprias notas de sessão anteriores já chamam essa função de "a rota
+  pública de verificação". P-6.9 não lista nenhum arquivo de rota/página
+  pública entre os arquivos permitidos, e criar uma página nova é uma
+  decisão de escopo maior (superfície pública nova) do que a carve-out de
+  "infra óbvia faltante" do G1 — não inventada aqui. O PDF do certificado já
+  exibe o `verification_hash` para conferência (P-6.8).
+- **"Nova aula" e "criar quiz" não tinham ponto de entrada nenhum no Bloco A**
+  (só edição de aula/quiz existentes tinha rota). Adicionado como formulário
+  inline dentro de `course-editor-view.tsx` (usa `LessonForm` + `createLesson`
+  direto, sem navegação) — mínimo necessário para o critério de aceite
+  "editar módulos/aulas... tudo pela UI". Para quiz, a rota `quiz/[quizId]`
+  existente (permitida) passou a aceitar o valor literal `"novo"` +
+  `?lessonId=` como criação (`createQuiz`), em vez de `updateQuiz` — reaproveita
+  o arquivo já permitido em vez de inventar uma rota nova.
+- **Painel do instrutor lista TODOS os cursos** (publicados e rascunhos), não
+  filtrados por um instrutor "dono" — mesma leitura já registrada em
+  P-6.7/P-6.8 (qualquer instrutor tem CRUD completo sobre qualquer curso, sem
+  escopo por curso). Substitui o mock, que filtrava por um
+  `CURRENT_INSTRUCTOR_ID` hardcoded.
+- **Catálogo: filtro de instrutor continua client-side, por cima do
+  resultado de `searchCourses`** — a action (P-6.8) só filtra por
+  `query`/`category`/`seriesId` (BRAIN §6.3: "busca simples — título, série,
+  categoria"), sem parâmetro de instrutor; `actions/courses.ts` não está na
+  lista de arquivos permitidos de P-6.9 para adicionar esse parâmetro.
+  Também removida a barra de progresso por curso no catálogo (existia no
+  mock via `mockProgress` global) — não há leitura de progresso do usuário
+  para todos os cursos do catálogo em nenhuma action existente; a barra de
+  progresso continua completa em "Minha jornada".
+- **Upload real de capa de curso/anexo de aula permanece fora de escopo**
+  (mesmo débito de P-6.4/S-106): `CourseForm`/`LessonForm` continuam
+  capturando `File` localmente; `actions/courses.ts` não está na lista de
+  arquivos permitidos de P-6.9 e não existe action de signed-upload para a
+  Plataforma ainda.
+- **"Adicionar módulo" no editor de curso passou a usar `CourseModuleForm`
+  completo** (título+descrição+ordem, já existente em `course-form.tsx`,
+  órfão) em vez do input de título único do mock — resolve o órfão do Bloco A
+  sem inventar um formulário novo.
+- **Progresso/certificado após mutação**: todas as `useAction` de
+  matrícula/conclusão/quiz/nota/discussão/publicação chamam
+  `router.refresh()` no sucesso para buscar o estado real do servidor (Server
+  Components pai), em vez de replicar o cálculo de progresso/certificado no
+  cliente (que já é feito, atomicamente, dentro das próprias actions de
+  P-6.8 — `checkAndIssueCertificate`).
+
+**Verificação:** `pnpm turbo lint typecheck` verde (38/38 packages/apps).
+`next build` de `apps/plataforma` compilando as 10 rotas sem erro (confirma
+os limites de Server/Client Component). Servidor dev local
+(`next dev --port 3099`): `GET /` e `GET /instrutor` sem sessão retornam
+`307` para a URL de login canônica, confirmando os gates de
+`requireAlunoSession`/`requireInstrutorSession` em runtime. Verificação com
+sessão autenticada real em navegador não foi possível neste ambiente (sem
+Playwright/chromium configurado nem credenciais de sessão real) — mesma
+limitação já registrada em S-105/S-108.
+
+**Critérios de aceite verificados:**
+
+- [x] (aluno) exige login; (instrutor) exige papel instrutor|super_admin
+      (redirect 307 confirmado sem sessão)
+- [x] Catálogo com cursos do banco; matrícula executável pelo CTA da página
+      do curso (`enrollInCourse`)
+- [x] Player Bunny.net HLS funcional (mesmo `LessonPlayer`/`hls.js` de P-6.2,
+      alimentado por `lessons.videoUrl` real); marcar aula como concluída
+      executável do player (`onEnded` → `markLessonComplete`)
+- [x] Trilha sequencial: aula locked inacessível (RLS
+      `plataforma.can_access_lesson` já barra o SELECT; a tela trata a
+      ausência da aula como bloqueada/não encontrada, sem duplicar a regra)
+- [x] Quiz respondível pela tela com resultado e retry (`QuizForm` conectado
+      a `submitQuizAttempt`)
+- [x] Notas em timestamp criáveis/clicáveis no player (`NoteWidget`+
+      `NoteForm` conectados a `createNote`)
+- [x] Discussões: post/reply pela tela da aula (`DiscussionThread`+
+      `DiscussionPostForm` conectados a `createDiscussionPost`)
+- [x] Instrutor: criar curso, editar módulos/aulas com drag-drop, editar
+      quiz — tudo pela UI
+- [x] Certificado baixável em PDF com hash verificável (PDF real via
+      `downloadCertificatePdf`; verificação pública já resolvida em P-6.7)
+- [x] Nenhum componente/formulário do Bloco A (P-6.2/P-6.4) sem import
+      (verificado por grep)
+- [x] Mock data removido (`lib/mock-data.ts` deletado)
+- [x] Lint passa · Types passam (`pnpm turbo lint typecheck` — 38/38)
+
+**Arquivos criados:**
+
+- `apps/plataforma/src/lib/queries.ts`
+- `apps/plataforma/src/actions/auth.ts`
+- `apps/plataforma/src/app/(aluno)/shell.tsx`
+- `apps/plataforma/src/app/instrutor/shell.tsx`
+- `apps/plataforma/src/components/course-detail-view.tsx`
+- `apps/plataforma/src/components/lesson-view.tsx`
+- `apps/plataforma/src/components/new-course-view.tsx`
+- `apps/plataforma/src/components/course-editor-view.tsx`
+- `apps/plataforma/src/components/lesson-editor-view.tsx`
+- `apps/plataforma/src/components/quiz-editor-view.tsx`
+
+**Arquivos modificados:**
+
+- `apps/plataforma/src/app/(aluno)/layout.tsx`
+- `apps/plataforma/src/app/(aluno)/page.tsx`
+- `apps/plataforma/src/app/(aluno)/curso/[slug]/page.tsx`
+- `apps/plataforma/src/app/(aluno)/curso/[slug]/aula/[id]/page.tsx`
+- `apps/plataforma/src/app/(aluno)/jornada/page.tsx`
+- `apps/plataforma/src/app/(aluno)/certificados/page.tsx`
+- `apps/plataforma/src/app/instrutor/layout.tsx`
+- `apps/plataforma/src/app/instrutor/page.tsx`
+- `apps/plataforma/src/app/instrutor/curso/novo/page.tsx`
+- `apps/plataforma/src/app/instrutor/curso/[id]/page.tsx`
+- `apps/plataforma/src/app/instrutor/curso/[id]/aula/[aulaId]/page.tsx`
+- `apps/plataforma/src/app/instrutor/curso/[id]/quiz/[quizId]/page.tsx`
+- `apps/plataforma/src/components/discussion-thread.tsx`
+- `apps/plataforma/src/components/note-widget.tsx`
+- `apps/plataforma/src/components/certificate-card.tsx`
+
+**Arquivos removidos:**
+
+- `apps/plataforma/src/lib/mock-data.ts`
+
+### S-113 — 2026-07-14 — Gap identificado: gestão de instrutores (Plataforma)
+
+**Prompt:** N/A (gap identificado em teste manual pós-P-6.9, sem prompt
+correspondente em PROMPTS.md)
+**Status:** bloqueado (aguarda decisão de Filipe)
+
+**Resumo:**
+Ao testar P-6.9 manualmente, Filipe não conseguiu criar um curso: o select
+"Instrutor" do `CourseForm` vem vazio, porque não existe nenhuma linha em
+`plataforma.instructors` para o usuário de teste. Investigação confirmou que
+**nenhuma tela de gestão de instrutores foi construída em nenhum prompt do
+módulo (P-6.1 a P-6.9)** — não existe `createInstructor`/`updateInstructor`
+em nenhuma action, e a RLS (`instructors_mutate_admin`,
+`0020_plataforma_rls.sql`) só permite `super_admin` escrever nessa tabela.
+Hoje a única forma de popular `plataforma.instructors` é INSERT direto no
+banco (Supabase Studio/SQL).
+
+**Gap registrado:**
+"Instrutor" não é um papel em `public.role` (`packages/types/src/roles.ts`)
+— é modelado como dado (`plataforma.instructors`, decisão de P-6.7/S-110).
+Isso significa que **o gap não pode ser resolvido como atribuição de papel
+em `/admin`**, como Filipe cogitou — o Admin só atribui papéis do enum
+`public.role`, que não inclui `instrutor`/`professor`. Duas soluções
+possíveis, ambas fora do escopo de P-6.1–P-6.9 e pendentes de decisão:
+
+1. Criar uma tela de gestão de instrutores dentro da própria Plataforma
+   (CRUD sobre `plataforma.instructors`, acessível a `super_admin`) —
+   mantém o modelo atual (instrutor = dado, não papel).
+2. Promover `instrutor`/`professor` a um valor real do enum `public.role`
+   (mudança de schema em `public`, fora de qualquer lista de arquivos
+   permitidos de P-6.x) e passar a atribuir via `public.role_assignments`
+   pelo Admin, como os demais papéis — mas isso contradiz a leitura já
+   registrada em P-6.7/P-6.8 ("preparar estrutura para papel `professor`
+   futuro... sem funcionalidade adicional na v1") e exige revisar toda RLS/
+   action que hoje checa `plataforma.is_instructor()`.
+
+Nenhum código foi alterado nesta entrada — só o registro do gap para uma
+sessão futura resolver, após Filipe decidir qual caminho seguir.
+
+**Arquivos criados:** nenhum
+**Arquivos modificados:** nenhum (só este registro em SESSIONS.md)

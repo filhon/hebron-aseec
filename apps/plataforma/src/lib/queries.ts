@@ -1,0 +1,951 @@
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { and, asc, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { db } from "@hebron/db/client";
+import { withAuthenticatedContext } from "@hebron/db/authenticated";
+import { CANONICAL_LOGIN_URL } from "@hebron/auth";
+import {
+  createSupabaseServerActionClient,
+  resolveSession,
+} from "@hebron/auth/server";
+import type { ActionSession } from "@hebron/auth/server";
+import {
+  certificates,
+  courses,
+  discussionPosts,
+  discussions,
+  enrollments,
+  instructors,
+  lessons,
+  modules,
+  notes,
+  progress,
+  quizAttempts,
+  quizQuestions,
+  quizzes,
+  series,
+  users,
+} from "@hebron/db/schema";
+import type {
+  Certificate,
+  Course,
+  CourseModule,
+  DiscussionPost,
+  Enrollment,
+  Instructor,
+  Lesson,
+  Progress,
+  Quiz,
+  QuizAttempt,
+  Series,
+} from "@hebron/types/plataforma";
+import type { LessonNote } from "../components/note-widget";
+
+type CourseRow = typeof courses.$inferSelect;
+type LessonRow = typeof lessons.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// Sessão — "instrutor" não é papel em public.role, é dado (linha em
+// plataforma.instructors vinculada ao próprio user_id), mesma checagem de
+// lib/safe-action.ts#staffAction. lib/session.ts não está na lista de
+// arquivos permitidos de P-6.9, então os gates ficam aqui (mesmo precedente
+// de apps/tarefas/src/lib/queries.ts).
+// ---------------------------------------------------------------------------
+
+export async function getAuthUser(): Promise<{
+  fullName: string | null;
+  email: string | null;
+} | null> {
+  const cookieStore = await cookies();
+  const supabase = createSupabaseServerActionClient({
+    getAll: () => cookieStore.getAll(),
+    setAll: (cookiesToSet) => {
+      try {
+        cookiesToSet.forEach(({ name, value, options }) =>
+          cookieStore.set(name, value, options),
+        );
+      } catch {
+        // Server Component — não pode setar cookies, ignorar
+      }
+    },
+  });
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const rows = await db
+    .select({ fullName: users.fullName })
+    .from(users)
+    .where(eq(users.id, user.id))
+    .limit(1);
+
+  return {
+    fullName: rows[0]?.fullName ?? null,
+    email: user.email ?? null,
+  };
+}
+
+/** Acesso liberado a qualquer usuário autenticado, sem restrição de papel
+ * (BRAIN §6.3: "acesso a todos os cursos para qualquer usuário registrado"). */
+export async function requireAlunoSession(): Promise<ActionSession> {
+  const cookieStore = await cookies();
+  try {
+    return await resolveSession(cookieStore);
+  } catch {
+    redirect(CANONICAL_LOGIN_URL);
+  }
+}
+
+async function isInstructor(userId: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: instructors.id })
+    .from(instructors)
+    .where(eq(instructors.userId, userId))
+    .limit(1);
+  return !!row;
+}
+
+/** super_admin OU instrutor (dado) — mesma checagem de
+ * lib/safe-action.ts#staffAction. Qualquer instrutor gerencia qualquer
+ * curso, sem escopo por curso (mesma suposição G1 de P-6.7/P-6.8). */
+export async function requireInstrutorSession(): Promise<ActionSession> {
+  const cookieStore = await cookies();
+  let session: ActionSession;
+  try {
+    session = await resolveSession(cookieStore);
+  } catch {
+    redirect(CANONICAL_LOGIN_URL);
+  }
+
+  if (
+    !session.roles.includes("super_admin") &&
+    !(await isInstructor(session.actorId))
+  ) {
+    redirect(CANONICAL_LOGIN_URL);
+  }
+
+  return session;
+}
+
+// ---------------------------------------------------------------------------
+// Mapeamento DB → forma "rica" de @hebron/types/plataforma (já consumida
+// pelos componentes do Bloco A). Mesma ideia de assembleTasks em
+// apps/tarefas/src/lib/queries.ts.
+// ---------------------------------------------------------------------------
+
+function mapCourse(
+  row: CourseRow,
+  instructorName: string | null,
+  seriesName: string | null,
+): Course {
+  return {
+    id: row.id,
+    title: row.title,
+    slug: row.slug,
+    description: row.description,
+    coverImageUrl: row.coverUrl,
+    category: row.category,
+    instructorId: row.instructorId,
+    instructorName: instructorName ?? "",
+    seriesId: row.seriesId,
+    seriesName: seriesName ?? null,
+    isPublished: row.published,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+function mapLesson(row: LessonRow, quizId: string | null = null): Lesson {
+  return {
+    id: row.id,
+    moduleId: row.moduleId,
+    courseId: row.courseId,
+    title: row.title,
+    type: row.type,
+    order: row.order,
+    videoUrl: row.videoUrl,
+    videoDurationSeconds: row.videoDurationSeconds,
+    textContent: row.content,
+    downloadUrl: row.downloadUrl,
+    downloadFileName: row.downloadFileName,
+    downloadFileSizeBytes: row.downloadFileSizeBytes,
+    quizId,
+    nextLessonId: row.nextLessonId,
+    requiresCompletion: row.requiresCompletion,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Instrutores / séries / categorias — usados pelo formulário de criação de
+// curso (instrutor/curso/novo).
+// ---------------------------------------------------------------------------
+
+export async function getInstructors(actorId: string): Promise<Instructor[]> {
+  return withAuthenticatedContext({ actorId }, (tx) =>
+    tx.select().from(instructors).orderBy(asc(instructors.name)),
+  );
+}
+
+export async function getSeriesList(actorId: string): Promise<Series[]> {
+  return withAuthenticatedContext({ actorId }, (tx) =>
+    tx.select().from(series).orderBy(asc(series.name)),
+  );
+}
+
+export async function getCourseCategories(actorId: string): Promise<string[]> {
+  const rows = await withAuthenticatedContext({ actorId }, (tx) =>
+    tx.selectDistinct({ category: courses.category }).from(courses),
+  );
+  return rows
+    .map((r) => r.category)
+    .sort((a, b) => a.localeCompare(b, "pt-BR"));
+}
+
+// ---------------------------------------------------------------------------
+// Curso (aluno) — página de detalhe.
+// ---------------------------------------------------------------------------
+
+export interface CourseDetail {
+  course: Course;
+  instructorBio: string | null;
+}
+
+export async function getCourseBySlug(
+  actorId: string,
+  slug: string,
+): Promise<CourseDetail | null> {
+  const rows = await withAuthenticatedContext({ actorId }, (tx) =>
+    tx
+      .select({
+        course: courses,
+        instructorName: instructors.name,
+        instructorBio: instructors.bio,
+        seriesName: series.name,
+      })
+      .from(courses)
+      .leftJoin(instructors, eq(instructors.id, courses.instructorId))
+      .leftJoin(series, eq(series.id, courses.seriesId))
+      .where(eq(courses.slug, slug))
+      .limit(1),
+  );
+  const row = rows[0];
+  if (!row) return null;
+
+  return {
+    course: mapCourse(row.course, row.instructorName, row.seriesName),
+    instructorBio: row.instructorBio ?? null,
+  };
+}
+
+export async function getCourseModulesWithLessons(
+  actorId: string,
+  courseId: string,
+): Promise<{ modules: CourseModule[]; lessons: Lesson[] }> {
+  return withAuthenticatedContext({ actorId }, async (tx) => {
+    const moduleRows = await tx
+      .select()
+      .from(modules)
+      .where(eq(modules.courseId, courseId))
+      .orderBy(asc(modules.order));
+    const lessonRows = await tx
+      .select()
+      .from(lessons)
+      .where(eq(lessons.courseId, courseId))
+      .orderBy(asc(lessons.order));
+
+    return {
+      modules: moduleRows,
+      lessons: lessonRows.map((row) => mapLesson(row)),
+    };
+  });
+}
+
+export async function getEnrollment(
+  actorId: string,
+  courseId: string,
+): Promise<Enrollment | null> {
+  const rows = await withAuthenticatedContext({ actorId }, (tx) =>
+    tx
+      .select({ enrollment: enrollments, courseName: courses.title })
+      .from(enrollments)
+      .innerJoin(courses, eq(courses.id, enrollments.courseId))
+      .where(
+        and(
+          eq(enrollments.userId, actorId),
+          eq(enrollments.courseId, courseId),
+        ),
+      )
+      .limit(1),
+  );
+  const row = rows[0];
+  if (!row) return null;
+
+  return {
+    id: row.enrollment.id,
+    userId: row.enrollment.userId,
+    userName: "",
+    courseId: row.enrollment.courseId,
+    courseName: row.courseName,
+    enrolledAt: row.enrollment.enrolledAt,
+    completedAt: row.enrollment.completedAt,
+  };
+}
+
+export async function getUserProgressForCourse(
+  actorId: string,
+  courseId: string,
+): Promise<Progress[]> {
+  return withAuthenticatedContext({ actorId }, (tx) =>
+    tx
+      .select()
+      .from(progress)
+      .where(
+        and(eq(progress.userId, actorId), eq(progress.courseId, courseId)),
+      ),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Aula (aluno) — player, quiz, discussão, notas. Se a aula não retornar
+// (RLS plataforma.can_access_lesson barra aula fora da trilha liberada), a
+// página trata como "não encontrada/bloqueada" — a regra vive só no banco,
+// não duplicada aqui (defense in depth, G6 do CLAUDE.md).
+// ---------------------------------------------------------------------------
+
+export interface LessonPageData {
+  course: Course;
+  modules: CourseModule[];
+  lessons: Lesson[];
+  lesson: Lesson;
+  progress: Progress[];
+  quiz: Quiz | null;
+  lastAttempt: QuizAttempt | null;
+  posts: DiscussionPost[];
+  notes: LessonNote[];
+}
+
+export async function getLessonPageData(
+  actorId: string,
+  slug: string,
+  lessonId: string,
+): Promise<LessonPageData | null> {
+  return withAuthenticatedContext({ actorId }, async (tx) => {
+    const courseRows = await tx
+      .select({
+        course: courses,
+        instructorName: instructors.name,
+        seriesName: series.name,
+      })
+      .from(courses)
+      .leftJoin(instructors, eq(instructors.id, courses.instructorId))
+      .leftJoin(series, eq(series.id, courses.seriesId))
+      .where(eq(courses.slug, slug))
+      .limit(1);
+    const courseRow = courseRows[0];
+    if (!courseRow) return null;
+    const course = mapCourse(
+      courseRow.course,
+      courseRow.instructorName,
+      courseRow.seriesName,
+    );
+
+    const lessonRows = await tx
+      .select()
+      .from(lessons)
+      .where(and(eq(lessons.id, lessonId), eq(lessons.courseId, course.id)))
+      .limit(1);
+    const lessonRow = lessonRows[0];
+    if (!lessonRow) return null;
+
+    const moduleRows = await tx
+      .select()
+      .from(modules)
+      .where(eq(modules.courseId, course.id))
+      .orderBy(asc(modules.order));
+    const allLessonRows = await tx
+      .select()
+      .from(lessons)
+      .where(eq(lessons.courseId, course.id))
+      .orderBy(asc(lessons.order));
+
+    const progressRows = await tx
+      .select()
+      .from(progress)
+      .where(
+        and(eq(progress.userId, actorId), eq(progress.courseId, course.id)),
+      );
+
+    let quiz: Quiz | null = null;
+    let lastAttempt: QuizAttempt | null = null;
+    let lessonQuizId: string | null = null;
+
+    if (lessonRow.type === "quiz") {
+      const quizRows = await tx
+        .select()
+        .from(quizzes)
+        .where(eq(quizzes.lessonId, lessonRow.id))
+        .limit(1);
+      const quizRow = quizRows[0];
+
+      if (quizRow) {
+        lessonQuizId = quizRow.id;
+        const questionRows = await tx
+          .select()
+          .from(quizQuestions)
+          .where(eq(quizQuestions.quizId, quizRow.id))
+          .orderBy(asc(quizQuestions.order));
+
+        quiz = {
+          id: quizRow.id,
+          lessonId: quizRow.lessonId,
+          passingScore: quizRow.passingScore,
+          questions: questionRows.map((q) => ({
+            id: q.id,
+            text: q.text,
+            options: q.options,
+            correctOptionId: q.correctOptionId,
+          })),
+          createdAt: quizRow.createdAt,
+          updatedAt: quizRow.updatedAt,
+        };
+
+        const attemptRows = await tx
+          .select()
+          .from(quizAttempts)
+          .where(
+            and(
+              eq(quizAttempts.quizId, quizRow.id),
+              eq(quizAttempts.userId, actorId),
+            ),
+          )
+          .orderBy(desc(quizAttempts.attemptedAt))
+          .limit(1);
+        const attemptRow = attemptRows[0];
+        if (attemptRow) {
+          lastAttempt = {
+            id: attemptRow.id,
+            quizId: attemptRow.quizId,
+            userId: attemptRow.userId,
+            answers: attemptRow.answers,
+            score: attemptRow.score,
+            passed: attemptRow.passed,
+            attemptedAt: attemptRow.attemptedAt,
+          };
+        }
+      }
+    }
+
+    const discussionRows = await tx
+      .select()
+      .from(discussions)
+      .where(eq(discussions.lessonId, lessonRow.id))
+      .limit(1);
+    const discussionRow = discussionRows[0];
+
+    let posts: DiscussionPost[] = [];
+    if (discussionRow) {
+      const postRows = await tx
+        .select({ post: discussionPosts, authorName: users.fullName })
+        .from(discussionPosts)
+        .innerJoin(users, eq(users.id, discussionPosts.authorId))
+        .where(eq(discussionPosts.discussionId, discussionRow.id))
+        .orderBy(asc(discussionPosts.createdAt));
+
+      posts = postRows.map((r) => ({
+        id: r.post.id,
+        discussionId: r.post.discussionId,
+        authorId: r.post.authorId,
+        authorName: r.authorName ?? "—",
+        content: r.post.content,
+        parentPostId: r.post.parentPostId,
+        createdAt: r.post.createdAt,
+        updatedAt: r.post.updatedAt,
+      }));
+    }
+
+    const noteRows = await tx
+      .select()
+      .from(notes)
+      .where(and(eq(notes.userId, actorId), eq(notes.lessonId, lessonRow.id)))
+      .orderBy(asc(notes.timestampSeconds));
+
+    return {
+      course,
+      modules: moduleRows,
+      lessons: allLessonRows.map((row) =>
+        mapLesson(row, row.id === lessonRow.id ? lessonQuizId : null),
+      ),
+      lesson: mapLesson(lessonRow, lessonQuizId),
+      progress: progressRows,
+      quiz,
+      lastAttempt,
+      posts,
+      notes: noteRows.map((n) => ({
+        id: n.id,
+        timestampSeconds: n.timestampSeconds,
+        content: n.content,
+        createdAt: n.createdAt,
+      })),
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Jornada (aluno) — matrículas + progresso por curso.
+// ---------------------------------------------------------------------------
+
+export interface EnrollmentWithCourse {
+  enrollment: Enrollment;
+  course: Course;
+  progressPercent: number;
+}
+
+export async function getUserEnrollmentsWithProgress(
+  actorId: string,
+): Promise<EnrollmentWithCourse[]> {
+  return withAuthenticatedContext({ actorId }, async (tx) => {
+    const rows = await tx
+      .select({
+        enrollment: enrollments,
+        course: courses,
+        instructorName: instructors.name,
+        seriesName: series.name,
+      })
+      .from(enrollments)
+      .innerJoin(courses, eq(courses.id, enrollments.courseId))
+      .leftJoin(instructors, eq(instructors.id, courses.instructorId))
+      .leftJoin(series, eq(series.id, courses.seriesId))
+      .where(eq(enrollments.userId, actorId))
+      .orderBy(desc(enrollments.enrolledAt));
+
+    if (rows.length === 0) return [];
+    const courseIds = rows.map((r) => r.course.id);
+
+    const totalsRows = await tx
+      .select({ courseId: lessons.courseId, total: sql<number>`count(*)::int` })
+      .from(lessons)
+      .where(inArray(lessons.courseId, courseIds))
+      .groupBy(lessons.courseId);
+    const totalsByCourse = new Map(
+      totalsRows.map((r) => [r.courseId, r.total]),
+    );
+
+    const completedRows = await tx
+      .select({
+        courseId: progress.courseId,
+        completed: sql<number>`count(*)::int`,
+      })
+      .from(progress)
+      .where(
+        and(
+          eq(progress.userId, actorId),
+          inArray(progress.courseId, courseIds),
+          isNotNull(progress.completedAt),
+        ),
+      )
+      .groupBy(progress.courseId);
+    const completedByCourse = new Map(
+      completedRows.map((r) => [r.courseId, r.completed]),
+    );
+
+    return rows.map((r) => {
+      const total = totalsByCourse.get(r.course.id) ?? 0;
+      const completed = completedByCourse.get(r.course.id) ?? 0;
+      const progressPercent =
+        total > 0 ? Math.round((completed / total) * 100) : 0;
+
+      return {
+        enrollment: {
+          id: r.enrollment.id,
+          userId: r.enrollment.userId,
+          userName: "",
+          courseId: r.enrollment.courseId,
+          courseName: r.course.title,
+          enrolledAt: r.enrollment.enrolledAt,
+          completedAt: r.enrollment.completedAt,
+        },
+        course: mapCourse(r.course, r.instructorName, r.seriesName),
+        progressPercent,
+      };
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Certificados (aluno).
+// ---------------------------------------------------------------------------
+
+export async function getUserCertificates(
+  actorId: string,
+): Promise<Certificate[]> {
+  const rows = await withAuthenticatedContext({ actorId }, (tx) =>
+    tx
+      .select({
+        certificate: certificates,
+        courseTitle: courses.title,
+        userFullName: users.fullName,
+      })
+      .from(certificates)
+      .innerJoin(courses, eq(courses.id, certificates.courseId))
+      .innerJoin(users, eq(users.id, certificates.userId))
+      .where(eq(certificates.userId, actorId))
+      .orderBy(desc(certificates.issuedAt)),
+  );
+
+  return rows.map((r) => ({
+    id: r.certificate.id,
+    courseId: r.certificate.courseId,
+    courseName: r.courseTitle,
+    userId: r.certificate.userId,
+    userName: r.userFullName ?? "Aluno",
+    issuedAt: r.certificate.issuedAt,
+    hash: r.certificate.verificationHash,
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// Painel do instrutor — todos os cursos (qualquer instrutor gerencia
+// qualquer curso, sem escopo por curso — suposição já registrada em
+// P-6.7/P-6.8).
+// ---------------------------------------------------------------------------
+
+export interface InstructorCourseStats {
+  course: Course;
+  enrollmentCount: number;
+  avgPercent: number;
+  certificateCount: number;
+}
+
+export async function getInstructorDashboardCourses(
+  actorId: string,
+): Promise<InstructorCourseStats[]> {
+  return withAuthenticatedContext({ actorId }, async (tx) => {
+    const courseRows = await tx
+      .select({
+        course: courses,
+        instructorName: instructors.name,
+        seriesName: series.name,
+      })
+      .from(courses)
+      .leftJoin(instructors, eq(instructors.id, courses.instructorId))
+      .leftJoin(series, eq(series.id, courses.seriesId))
+      .orderBy(desc(courses.createdAt));
+
+    if (courseRows.length === 0) return [];
+    const courseIds = courseRows.map((r) => r.course.id);
+
+    const enrollmentRows = await tx
+      .select({ courseId: enrollments.courseId, userId: enrollments.userId })
+      .from(enrollments)
+      .where(inArray(enrollments.courseId, courseIds));
+    const enrollmentsByCourse = new Map<string, string[]>();
+    for (const r of enrollmentRows) {
+      const list = enrollmentsByCourse.get(r.courseId) ?? [];
+      list.push(r.userId);
+      enrollmentsByCourse.set(r.courseId, list);
+    }
+
+    const totalsRows = await tx
+      .select({ courseId: lessons.courseId, total: sql<number>`count(*)::int` })
+      .from(lessons)
+      .where(inArray(lessons.courseId, courseIds))
+      .groupBy(lessons.courseId);
+    const totalsByCourse = new Map(
+      totalsRows.map((r) => [r.courseId, r.total]),
+    );
+
+    const progressRows = await tx
+      .select({
+        courseId: progress.courseId,
+        userId: progress.userId,
+        completed: sql<number>`count(*)::int`,
+      })
+      .from(progress)
+      .where(
+        and(
+          inArray(progress.courseId, courseIds),
+          isNotNull(progress.completedAt),
+        ),
+      )
+      .groupBy(progress.courseId, progress.userId);
+    const completedByCourseUser = new Map<string, number>();
+    for (const r of progressRows) {
+      completedByCourseUser.set(`${r.courseId}:${r.userId}`, r.completed);
+    }
+
+    const certificateRows = await tx
+      .select({
+        courseId: certificates.courseId,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(certificates)
+      .where(inArray(certificates.courseId, courseIds))
+      .groupBy(certificates.courseId);
+    const certificatesByCourse = new Map(
+      certificateRows.map((r) => [r.courseId, r.count]),
+    );
+
+    return courseRows.map((r) => {
+      const courseId = r.course.id;
+      const enrolledUserIds = enrollmentsByCourse.get(courseId) ?? [];
+      const total = totalsByCourse.get(courseId) ?? 0;
+      const avgPercent =
+        enrolledUserIds.length === 0 || total === 0
+          ? 0
+          : Math.round(
+              (enrolledUserIds.reduce((sum, userId) => {
+                const completed =
+                  completedByCourseUser.get(`${courseId}:${userId}`) ?? 0;
+                return sum + completed / total;
+              }, 0) /
+                enrolledUserIds.length) *
+                100,
+            );
+
+      return {
+        course: mapCourse(r.course, r.instructorName, r.seriesName),
+        enrollmentCount: enrolledUserIds.length,
+        avgPercent,
+        certificateCount: certificatesByCourse.get(courseId) ?? 0,
+      };
+    });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Editor de curso (instrutor) — módulos, aulas (qualquer status).
+// ---------------------------------------------------------------------------
+
+export interface CourseEditorData {
+  course: Course;
+  modules: CourseModule[];
+  lessons: Lesson[];
+}
+
+export async function getCourseForEditor(
+  actorId: string,
+  courseId: string,
+): Promise<CourseEditorData | null> {
+  return withAuthenticatedContext({ actorId }, async (tx) => {
+    const courseRows = await tx
+      .select({
+        course: courses,
+        instructorName: instructors.name,
+        seriesName: series.name,
+      })
+      .from(courses)
+      .leftJoin(instructors, eq(instructors.id, courses.instructorId))
+      .leftJoin(series, eq(series.id, courses.seriesId))
+      .where(eq(courses.id, courseId))
+      .limit(1);
+    const courseRow = courseRows[0];
+    if (!courseRow) return null;
+
+    const moduleRows = await tx
+      .select()
+      .from(modules)
+      .where(eq(modules.courseId, courseId))
+      .orderBy(asc(modules.order));
+    const lessonRows = await tx
+      .select()
+      .from(lessons)
+      .where(eq(lessons.courseId, courseId))
+      .orderBy(asc(lessons.order));
+
+    const quizLessonIds = lessonRows
+      .filter((l) => l.type === "quiz")
+      .map((l) => l.id);
+    const quizRows =
+      quizLessonIds.length > 0
+        ? await tx
+            .select({ id: quizzes.id, lessonId: quizzes.lessonId })
+            .from(quizzes)
+            .where(inArray(quizzes.lessonId, quizLessonIds))
+        : [];
+    const quizIdByLessonId = new Map(quizRows.map((q) => [q.lessonId, q.id]));
+
+    return {
+      course: mapCourse(
+        courseRow.course,
+        courseRow.instructorName,
+        courseRow.seriesName,
+      ),
+      modules: moduleRows,
+      lessons: lessonRows.map((row) =>
+        mapLesson(row, quizIdByLessonId.get(row.id) ?? null),
+      ),
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Editor de aula (instrutor).
+// ---------------------------------------------------------------------------
+
+export interface LessonEditorData {
+  course: Course;
+  lesson: Lesson;
+}
+
+export async function getLessonForEditor(
+  actorId: string,
+  courseId: string,
+  lessonId: string,
+): Promise<LessonEditorData | null> {
+  return withAuthenticatedContext({ actorId }, async (tx) => {
+    const courseRows = await tx
+      .select()
+      .from(courses)
+      .where(eq(courses.id, courseId))
+      .limit(1);
+    const courseRow = courseRows[0];
+    if (!courseRow) return null;
+
+    const lessonRows = await tx
+      .select()
+      .from(lessons)
+      .where(and(eq(lessons.id, lessonId), eq(lessons.courseId, courseId)))
+      .limit(1);
+    const lessonRow = lessonRows[0];
+    if (!lessonRow) return null;
+
+    let quizId: string | null = null;
+    if (lessonRow.type === "quiz") {
+      const quizRows = await tx
+        .select({ id: quizzes.id })
+        .from(quizzes)
+        .where(eq(quizzes.lessonId, lessonRow.id))
+        .limit(1);
+      quizId = quizRows[0]?.id ?? null;
+    }
+
+    return {
+      course: mapCourse(courseRow, null, null),
+      lesson: mapLesson(lessonRow, quizId),
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Editor de quiz (instrutor) — "novo" (por lessonId) ou edição (por quizId).
+// ---------------------------------------------------------------------------
+
+export interface QuizEditorData {
+  course: Course;
+  lesson: Lesson;
+  quiz: Quiz | null;
+}
+
+async function buildQuizEditorData(
+  tx: Parameters<Parameters<typeof withAuthenticatedContext>[1]>[0],
+  courseRow: CourseRow,
+  lessonRow: LessonRow,
+): Promise<QuizEditorData> {
+  const quizRows = await tx
+    .select()
+    .from(quizzes)
+    .where(eq(quizzes.lessonId, lessonRow.id))
+    .limit(1);
+  const quizRow = quizRows[0];
+
+  let quiz: Quiz | null = null;
+  if (quizRow) {
+    const questionRows = await tx
+      .select()
+      .from(quizQuestions)
+      .where(eq(quizQuestions.quizId, quizRow.id))
+      .orderBy(asc(quizQuestions.order));
+
+    quiz = {
+      id: quizRow.id,
+      lessonId: quizRow.lessonId,
+      passingScore: quizRow.passingScore,
+      questions: questionRows.map((q) => ({
+        id: q.id,
+        text: q.text,
+        options: q.options,
+        correctOptionId: q.correctOptionId,
+      })),
+      createdAt: quizRow.createdAt,
+      updatedAt: quizRow.updatedAt,
+    };
+  }
+
+  return {
+    course: mapCourse(courseRow, null, null),
+    lesson: mapLesson(lessonRow, quizRow?.id ?? null),
+    quiz,
+  };
+}
+
+export async function getQuizEditorDataForLesson(
+  actorId: string,
+  courseId: string,
+  lessonId: string,
+): Promise<QuizEditorData | null> {
+  return withAuthenticatedContext({ actorId }, async (tx) => {
+    const courseRows = await tx
+      .select()
+      .from(courses)
+      .where(eq(courses.id, courseId))
+      .limit(1);
+    const courseRow = courseRows[0];
+    if (!courseRow) return null;
+
+    const lessonRows = await tx
+      .select()
+      .from(lessons)
+      .where(
+        and(
+          eq(lessons.id, lessonId),
+          eq(lessons.courseId, courseId),
+          eq(lessons.type, "quiz"),
+        ),
+      )
+      .limit(1);
+    const lessonRow = lessonRows[0];
+    if (!lessonRow) return null;
+
+    return buildQuizEditorData(tx, courseRow, lessonRow);
+  });
+}
+
+export async function getQuizEditorDataByQuizId(
+  actorId: string,
+  courseId: string,
+  quizId: string,
+): Promise<QuizEditorData | null> {
+  return withAuthenticatedContext({ actorId }, async (tx) => {
+    const quizRows = await tx
+      .select()
+      .from(quizzes)
+      .where(eq(quizzes.id, quizId))
+      .limit(1);
+    const quizRow = quizRows[0];
+    if (!quizRow) return null;
+
+    const lessonRows = await tx
+      .select()
+      .from(lessons)
+      .where(
+        and(eq(lessons.id, quizRow.lessonId), eq(lessons.courseId, courseId)),
+      )
+      .limit(1);
+    const lessonRow = lessonRows[0];
+    if (!lessonRow) return null;
+
+    const courseRows = await tx
+      .select()
+      .from(courses)
+      .where(eq(courses.id, courseId))
+      .limit(1);
+    const courseRow = courseRows[0];
+    if (!courseRow) return null;
+
+    return buildQuizEditorData(tx, courseRow, lessonRow);
+  });
+}

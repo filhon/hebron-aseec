@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useAction } from "next-safe-action/hooks";
 import {
   PageHeader,
   EmptyState,
@@ -12,57 +13,49 @@ import {
   SelectItem,
 } from "@hebron/ui";
 import { Search, GraduationCap } from "lucide-react";
+import type { Course } from "@hebron/types/plataforma";
 import { CourseCard } from "../../components/course-card";
 import { CourseCardSkeleton } from "../../components/course-card-skeleton";
-import {
-  mockCourses,
-  mockEnrollments,
-  mockLessons,
-  mockProgress,
-} from "../../lib/mock-data";
+import { searchCourses } from "../../actions/courses";
 
-const LOADING_DELAY_MS = 500;
-
-const CURRENT_USER_ID = "user-aluno-01";
 const ALL_CATEGORIES = "__todas__";
 const ALL_INSTRUCTORS = "__todos__";
 const ALL_SERIES = "__todas_series__";
 
-function courseProgressPercent(courseId: string): number | undefined {
-  const enrolled = mockEnrollments.some(
-    (e) => e.userId === CURRENT_USER_ID && e.courseId === courseId,
-  );
-  if (!enrolled) return undefined;
-
-  const totalLessons = mockLessons.filter(
-    (l) => l.courseId === courseId,
-  ).length;
-  if (totalLessons === 0) return 0;
-
-  const completedLessons = mockProgress.filter(
-    (p) =>
-      p.userId === CURRENT_USER_ID && p.courseId === courseId && p.completedAt,
-  ).length;
-
-  return Math.round((completedLessons / totalLessons) * 100);
-}
-
 export default function CatalogoPage() {
-  const [loading, setLoading] = React.useState(true);
   const [search, setSearch] = React.useState("");
   const [category, setCategory] = React.useState(ALL_CATEGORIES);
   const [instructor, setInstructor] = React.useState(ALL_INSTRUCTORS);
-  const [series, setSeries] = React.useState(ALL_SERIES);
+  const [seriesFilter, setSeriesFilter] = React.useState(ALL_SERIES);
+
+  const { execute, result, status } = useAction(searchCourses);
 
   React.useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), LOADING_DELAY_MS);
-    return () => clearTimeout(timer);
-  }, []);
+    execute({});
+  }, [execute]);
 
-  const publishedCourses = React.useMemo(
-    () => mockCourses.filter((c) => c.isPublished),
-    [],
-  );
+  const loading = status === "executing" && result.data === undefined;
+
+  // Busca por título/série já cobre searchCourses (PATCH-024); o filtro de
+  // instrutor não existe na action (BRAIN §6.3 só pede título/série/categoria)
+  // — mantido aqui por cima do resultado, como já era em Bloco A (S-105/S-108).
+  const publishedCourses: Course[] = (result.data?.courses ?? [])
+    .filter((c) => c.published)
+    .map((c) => ({
+      id: c.id,
+      title: c.title,
+      slug: c.slug,
+      description: c.description,
+      coverImageUrl: c.coverUrl,
+      category: c.category,
+      instructorId: c.instructorId,
+      instructorName: c.instructorName,
+      seriesId: c.seriesId,
+      seriesName: c.seriesName,
+      isPublished: c.published,
+      createdAt: c.createdAt,
+      updatedAt: c.updatedAt,
+    }));
 
   const categories = React.useMemo(
     () => Array.from(new Set(publishedCourses.map((c) => c.category))).sort(),
@@ -100,7 +93,8 @@ export default function CatalogoPage() {
       category === ALL_CATEGORIES || course.category === category;
     const matchesInstructor =
       instructor === ALL_INSTRUCTORS || course.instructorId === instructor;
-    const matchesSeries = series === ALL_SERIES || course.seriesId === series;
+    const matchesSeries =
+      seriesFilter === ALL_SERIES || course.seriesId === seriesFilter;
     return (
       matchesSearch && matchesCategory && matchesInstructor && matchesSeries
     );
@@ -179,7 +173,7 @@ export default function CatalogoPage() {
               </SelectContent>
             </Select>
 
-            <Select value={series} onValueChange={setSeries}>
+            <Select value={seriesFilter} onValueChange={setSeriesFilter}>
               <SelectTrigger className="sm:w-56" aria-label="Filtrar por série">
                 <SelectValue placeholder="Série" />
               </SelectTrigger>
@@ -210,7 +204,6 @@ export default function CatalogoPage() {
                 <CourseCard
                   key={course.id}
                   course={course}
-                  progressPercent={courseProgressPercent(course.id)}
                   href={`/curso/${course.slug}`}
                 />
               ))}

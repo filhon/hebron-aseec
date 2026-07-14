@@ -1,27 +1,11 @@
-"use client";
-
 import { PageHeader, EmptyState } from "@hebron/ui";
 import { Award } from "lucide-react";
 import { CertificateCard } from "../../../components/certificate-card";
-import { mockCertificates } from "../../../lib/mock-data";
+import { requireAlunoSession, getUserCertificates } from "../../../lib/queries";
 
-const CURRENT_USER_ID = "user-aluno-01";
-
-function downloadCertificate(courseName: string, hash: string) {
-  const content = `Certificado de conclusão\n\nCurso: ${courseName}\nCódigo de verificação: ${hash}\n\nEste é um comprovante provisório (Bloco A). A emissão em PDF definitiva acontece no Bloco B.`;
-  const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = `certificado-${hash.slice(0, 8)}.txt`;
-  anchor.click();
-  URL.revokeObjectURL(url);
-}
-
-export default function CertificadosPage() {
-  const certificates = mockCertificates.filter(
-    (c) => c.userId === CURRENT_USER_ID,
-  );
+export default async function CertificadosPage() {
+  const session = await requireAlunoSession();
+  const certificates = await getUserCertificates(session.actorId);
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-8">
@@ -43,13 +27,7 @@ export default function CertificadosPage() {
       ) : (
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {certificates.map((certificate) => (
-            <CertificateCard
-              key={certificate.id}
-              certificate={certificate}
-              onDownload={() =>
-                downloadCertificate(certificate.courseName, certificate.hash)
-              }
-            />
+            <CertificateCard key={certificate.id} certificate={certificate} />
           ))}
         </div>
       )}

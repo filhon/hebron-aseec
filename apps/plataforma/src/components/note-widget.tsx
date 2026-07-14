@@ -1,8 +1,8 @@
 "use client";
 
-import * as React from "react";
 import { EmptyState } from "@hebron/ui";
-import { Plus, StickyNote } from "lucide-react";
+import { StickyNote } from "lucide-react";
+import { NoteForm } from "./note-form";
 
 function cn(...cls: (string | false | null | undefined)[]): string {
   return cls.filter(Boolean).join(" ");
@@ -48,44 +48,19 @@ export function NoteWidget({
   isLoading = false,
   className,
 }: NoteWidgetProps) {
-  const [content, setContent] = React.useState("");
-
   const sortedNotes = [...notes].sort(
     (a, b) => a.timestampSeconds - b.timestampSeconds,
   );
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const trimmed = content.trim();
-    if (!trimmed) return;
-    onAddNote(trimmed, currentTimeSeconds);
-    setContent("");
-  }
-
   return (
     <div className={cn("flex flex-col gap-4", className)}>
-      <form onSubmit={handleSubmit} className="flex flex-col gap-2">
-        <label className="text-xs font-medium text-(--fg-muted)">
-          Nova nota em {formatTimestamp(currentTimeSeconds)}
-        </label>
-        <div className="flex items-end gap-2">
-          <textarea
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder="Escreva uma anotação sobre este momento da aula…"
-            rows={2}
-            className="min-w-0 flex-1 resize-none rounded-(--radius) border border-(--border) bg-(--bg) px-3 py-2 text-sm text-(--fg) outline-none transition-colors placeholder:text-(--fg-muted) focus:border-(--brand)"
-          />
-          <button
-            type="submit"
-            disabled={!content.trim() || isLoading}
-            aria-label="Adicionar nota"
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-(--brand) text-(--brand-fg) transition-colors hover:bg-(--hb-blue-soft) disabled:opacity-40"
-          >
-            <Plus className="h-4 w-4" aria-hidden="true" />
-          </button>
-        </div>
-      </form>
+      <NoteForm
+        currentTimeSeconds={currentTimeSeconds}
+        onSubmit={(values) =>
+          onAddNote(values.content, values.timestampSeconds)
+        }
+        isLoading={isLoading}
+      />
 
       {sortedNotes.length === 0 ? (
         <EmptyState
