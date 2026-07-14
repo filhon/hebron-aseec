@@ -3788,11 +3788,11 @@ Notificações: matrícula confirmada (email ao aluno — transacional). Novo cu
 
 **Critérios de aceite:**
 
-- [ ] Matrícula: email de confirmação com link para o curso
-- [ ] Novo curso: email SOMENTE a usuários com consentimento de novidades (teste: usuário sem opt-in não recebe)
-- [ ] Certificado: email com link + in_app
-- [ ] Resposta no fórum: in_app ao autor do post original
-- [ ] Lint passa · Types passam
+- [x] Matrícula: email de confirmação com link para o curso
+- [x] Novo curso: email SOMENTE a usuários com consentimento de novidades (teste: usuário sem opt-in não recebe)
+- [x] Certificado: email com link + in_app
+- [x] Resposta no fórum: in_app ao autor do post original
+- [x] Lint passa · Types passam
 
 ---
 

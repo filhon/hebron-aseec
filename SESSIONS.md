@@ -134,6 +134,7 @@
 | S-111  | 2026-07-14 | P-6.8 — Server Actions Plataforma                                             | concluido                            |
 | S-112  | 2026-07-14 | P-6.9 — Integração UI ↔ Backend Plataforma                                    | concluido                            |
 | S-113  | 2026-07-14 | Gap: gestão de instrutores (Plataforma)                                       | bloqueado                            |
+| S-114  | 2026-07-14 | P-6.10 — Notificações e Emails Plataforma                                     | concluido                            |
 
 ---
 
@@ -7052,3 +7053,107 @@ sessão futura resolver, após Filipe decidir qual caminho seguir.
 
 **Arquivos criados:** nenhum
 **Arquivos modificados:** nenhum (só este registro em SESSIONS.md)
+
+---
+
+### S-114 — 2026-07-14 — P-6.10 — Notificações e Emails Plataforma
+
+**Prompt:** P-6.10 (`PROMPTS.md:3768`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Criados os 3 templates de email pedidos (`enrollment-confirmed.tsx`,
+`new-course.tsx`, `certificate-issued.tsx`), seguindo à risca o padrão visual
+já estabelecido nos templates existentes (`EmailLayout`/`emailColors`/
+`emailFontFamily` compartilhados, "info card" com borda lateral colorida,
+botão CTA, `Hr` + rodapé — G4, sem cor/fonte nova). Criado
+`apps/plataforma/src/lib/notifications.ts` com 4 helpers: `notifyEnrollmentConfirmed`
+(email transacional, requery por `enrollmentId`), `notifyNewCoursePublished`
+(email em massa, mas só a usuários com `public.consents.purpose = "newsletter"`
+e `granted = true`, join com `users` filtrando `status = "active"` e
+`suspended_at IS NULL` — nunca dispara para a base inteira sem esse opt-in,
+P-0.13), `notifyCertificateIssued` (in_app + email, `Promise.allSettled`,
+requery por `certificateId`) e `notifyDiscussionReply` (in_app só ao autor do
+post pai, e só quando o post pai existe e o autor não é o próprio
+respondente — sem self-notify).
+
+**Suposição registrada (G1 — arquivos fora da lista, mas bloqueantes para o
+critério de aceite; mesmo precedente de S-82/P-4.10):**
+
+- **`apps/plataforma/src/actions/enrollment.ts`, `courses.ts`, `progress.ts`,
+  `quizzes.ts` e `discussions.ts` foram editados**, apesar de não estarem na
+  lista de "Arquivos permitidos" do prompt. Sem um call-site nenhum dos 4
+  critérios de aceite seria atingível — não é criação de arquivo novo fora da
+  lista (proibido por G1), é o mínimo de fiação necessário no código já
+  existente (P-6.8):
+  - `enrollment.ts` (`enrollInCourse`): a inserção agora retorna
+    `{ enrollment, isNew }` (antes só `enrollment`) para distinguir a
+    primeira matrícula do reclique idempotente (`onConflictDoNothing`);
+    `notifyEnrollmentConfirmed` só dispara quando `isNew`.
+  - `courses.ts` (`createCourse`/`updateCourse`): `notifyNewCoursePublished`
+    dispara quando o curso é criado já publicado, ou quando transiciona de
+    rascunho para publicado (`updateCourse` agora retorna também
+    `newlyPublished`, calculado com a mesma condição já usada para o audit
+    de `course.published`) — nunca a cada edição de um curso já publicado.
+  - `progress.ts` (`markLessonComplete`) e `quizzes.ts`
+    (`submitQuizAttempt`): ambos já recebiam `certificate: Certificate | null`
+    de `checkAndIssueCertificate` (P-6.8); `notifyCertificateIssued` dispara
+    fora da transação quando `result.certificate` não é null.
+  - `discussions.ts` (`createDiscussionPost`): dispara
+    `notifyDiscussionReply(post.id)` quando `post.parentPostId` existe (a
+    própria função valida se o autor do post pai é diferente do respondente).
+  - Todas as chamadas são best-effort, fora da transação (`withAuthenticatedContext`
+    já resolvida) — falha ao notificar não desfaz a mutação já persistida,
+    mesmo padrão de `apps/tarefas/src/actions/tasks.ts` (P-4.10).
+- **`apps/plataforma/package.json`** — adicionada a dependência
+  `@hebron/email: "workspace:*"` (faltava; nenhum prompt anterior do módulo
+  Plataforma havia consumido o pacote de email). Sem essa entrada,
+  `notifications.ts` não compila (`Cannot find module '@hebron/email'`).
+- **URL base da app**: sem `NEXT_PUBLIC_PLATAFORMA_URL` em `.env.example`
+  (nenhum outro app-specific `NEXT_PUBLIC_*_URL` está lá também — mesmo
+  padrão de `apps/tarefas/src/lib/notifications.ts`, que usa
+  `NEXT_PUBLIC_TAREFAS_URL` só com fallback hardcoded, sem entrada no
+  `.env.example`); `notifications.ts` usa
+  `process.env.NEXT_PUBLIC_PLATAFORMA_URL ?? "https://plataforma.hebronaseec.com.br"`.
+- **Nenhum teste criado** — `PROMPTS.md` reserva P-6.12 ("Testes Plataforma")
+  com lista própria de arquivos permitidos; o critério "(teste)" de "Novo
+  curso" fica verificável ali, mesmo precedente de P-5.10/P-5.12.
+
+**Verificação funcional (evidência além de lint/typecheck):**
+
+- `pnpm turbo lint typecheck` no monorepo inteiro — 38/38 pacotes/apps
+  verdes (inclui `@hebron/email` e `@hebron/plataforma`).
+
+**Critérios de aceite verificados:**
+
+- [x] Matrícula: email de confirmação com link para o curso —
+      `notifyEnrollmentConfirmed`, chamado em `enrollInCourse` só na
+      primeira matrícula
+- [x] Novo curso: email SOMENTE a usuários com consentimento de novidades —
+      `notifyNewCoursePublished` filtra por `consents.purpose = "newsletter"` + `granted = true`; usuário sem opt-in não aparece na query de
+      destinatários (teste automatizado fica para P-6.12)
+- [x] Certificado: email com link + in_app — `notifyCertificateIssued`,
+      chamado em `markLessonComplete` e `submitQuizAttempt` quando um
+      certificado é emitido
+- [x] Resposta no fórum: in_app ao autor do post original —
+      `notifyDiscussionReply`, chamado em `createDiscussionPost` quando
+      `parentPostId` está presente
+- [x] Lint passa
+- [x] Types passam
+
+**Arquivos criados:**
+
+- `packages/email/src/templates/enrollment-confirmed.tsx`
+- `packages/email/src/templates/new-course.tsx`
+- `packages/email/src/templates/certificate-issued.tsx`
+- `apps/plataforma/src/lib/notifications.ts`
+
+**Arquivos modificados (fora da lista, G1 — ver suposição acima):**
+
+- `apps/plataforma/src/actions/enrollment.ts`
+- `apps/plataforma/src/actions/courses.ts`
+- `apps/plataforma/src/actions/progress.ts`
+- `apps/plataforma/src/actions/quizzes.ts`
+- `apps/plataforma/src/actions/discussions.ts`
+- `apps/plataforma/package.json`

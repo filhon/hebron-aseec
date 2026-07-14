@@ -6,6 +6,7 @@ import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { discussionPosts, discussions, notes } from "@hebron/db/schema";
 import { createDiscussionPostSchema } from "@hebron/validators";
 import { plataformaAction, superAdminAction } from "../lib/safe-action";
+import { notifyDiscussionReply } from "../lib/notifications";
 
 // ---------------------------------------------------------------------------
 // discussion posts — fórum por aula (BRAIN §6.3). O registro plataforma.
@@ -45,6 +46,12 @@ export const createDiscussionPost = plataformaAction
         return row;
       },
     );
+
+    // Notificação best-effort, fora da transação (P-6.10) — só quando é
+    // resposta a outro post (notifyDiscussionReply ignora o resto).
+    if (post.parentPostId) {
+      await notifyDiscussionReply(post.id);
+    }
 
     return { post };
   });

@@ -22,6 +22,7 @@ import {
 } from "@hebron/validators";
 import { plataformaAction, staffAction } from "../lib/safe-action";
 import { logPlataformaAudit } from "../lib/audit";
+import { notifyNewCoursePublished } from "../lib/notifications";
 
 // ---------------------------------------------------------------------------
 // courses — CRUD (super_admin/instrutor); publicação com audit central
@@ -69,13 +70,19 @@ export const createCourse = staffAction
       },
     );
 
+    // Notificação best-effort, fora da transação (P-6.10) — só a usuários
+    // com opt-in de newsletter (notifyNewCoursePublished já filtra).
+    if (course.published) {
+      await notifyNewCoursePublished(course.id);
+    }
+
     return { course };
   });
 
 export const updateCourse = staffAction
   .schema(updateCourseSchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    const course = await withAuthenticatedContext(
+    const { course, newlyPublished } = await withAuthenticatedContext(
       { actorId: ctx.actorId },
       async (tx) => {
         const [existing] = await tx
@@ -102,7 +109,8 @@ export const updateCourse = staffAction
           .returning();
         if (!row) throw new Error("Curso não encontrado");
 
-        if (!existing.published && row.published) {
+        const newlyPublished = !existing.published && row.published;
+        if (newlyPublished) {
           await withSystemRole(tx, (sysTx) =>
             logPlataformaAudit(
               {
@@ -117,9 +125,15 @@ export const updateCourse = staffAction
           );
         }
 
-        return row;
+        return { course: row, newlyPublished };
       },
     );
+
+    // Notificação best-effort, fora da transação (P-6.10) — só quando o
+    // curso passa de rascunho para publicado, não a cada edição.
+    if (newlyPublished) {
+      await notifyNewCoursePublished(course.id);
+    }
 
     return { course };
   });

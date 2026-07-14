@@ -6,6 +6,7 @@ import { lessons, progress } from "@hebron/db/schema";
 import { markLessonCompleteSchema } from "@hebron/validators";
 import { plataformaAction } from "../lib/safe-action";
 import { checkAndIssueCertificate } from "./certificates";
+import { notifyCertificateIssued } from "../lib/notifications";
 
 // ---------------------------------------------------------------------------
 // markLessonComplete — RLS (progress_insert_own/progress_update_own,
@@ -61,6 +62,11 @@ export const markLessonComplete = plataformaAction
         return { progress: progressRow, certificate };
       },
     );
+
+    // Notificação best-effort, fora da transação (P-6.10).
+    if (result.certificate) {
+      await notifyCertificateIssued(result.certificate.id);
+    }
 
     return result;
   });

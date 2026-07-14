@@ -13,6 +13,7 @@ import {
 import { createQuizSchema, submitQuizAttemptSchema } from "@hebron/validators";
 import { plataformaAction, staffAction } from "../lib/safe-action";
 import { checkAndIssueCertificate } from "./certificates";
+import { notifyCertificateIssued } from "../lib/notifications";
 
 // ---------------------------------------------------------------------------
 // createQuiz / updateQuiz — só sobre aulas do tipo "quiz". Alternativas
@@ -189,6 +190,11 @@ export const submitQuizAttempt = plataformaAction
         return { attempt, certificate };
       },
     );
+
+    // Notificação best-effort, fora da transação (P-6.10).
+    if (result.certificate) {
+      await notifyCertificateIssued(result.certificate.id);
+    }
 
     return result;
   });

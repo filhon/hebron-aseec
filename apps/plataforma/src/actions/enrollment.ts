@@ -5,6 +5,7 @@ import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { enrollments } from "@hebron/db/schema";
 import { enrollInCourseSchema } from "@hebron/validators";
 import { plataformaAction } from "../lib/safe-action";
+import { notifyEnrollmentConfirmed } from "../lib/notifications";
 
 // ---------------------------------------------------------------------------
 // enrollInCourse — cria a matrícula (RLS enrollments_insert_own já valida
@@ -17,7 +18,7 @@ import { plataformaAction } from "../lib/safe-action";
 export const enrollInCourse = plataformaAction
   .schema(enrollInCourseSchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    const enrollment = await withAuthenticatedContext(
+    const { enrollment, isNew } = await withAuthenticatedContext(
       { actorId: ctx.actorId },
       async (tx) => {
         const [inserted] = await tx
@@ -27,7 +28,7 @@ export const enrollInCourse = plataformaAction
             target: [enrollments.userId, enrollments.courseId],
           })
           .returning();
-        if (inserted) return inserted;
+        if (inserted) return { enrollment: inserted, isNew: true };
 
         const [existing] = await tx
           .select()
@@ -40,9 +41,16 @@ export const enrollInCourse = plataformaAction
           )
           .limit(1);
         if (!existing) throw new Error("Falha ao matricular no curso");
-        return existing;
+        return { enrollment: existing, isNew: false };
       },
     );
+
+    // Notificação best-effort, fora da transação — falha em notificar não
+    // deve desfazer a matrícula já criada (P-6.10). Só na primeira
+    // matrícula, para não reenviar o email a cada reclique idempotente.
+    if (isNew) {
+      await notifyEnrollmentConfirmed(enrollment.id);
+    }
 
     return { enrollment };
   });
