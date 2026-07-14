@@ -136,6 +136,7 @@
 | S-113  | 2026-07-14 | Gap: gestão de instrutores (Plataforma)                                       | bloqueado                            |
 | S-114  | 2026-07-14 | P-6.10 — Notificações e Emails Plataforma                                     | concluido                            |
 | S-115  | 2026-07-14 | P-6.11 — Integração Cross-App Plataforma                                      | concluido                            |
+| S-116  | 2026-07-14 | P-6.12 — Testes Plataforma                                                    | concluido                            |
 
 ---
 
@@ -7255,3 +7256,104 @@ imports app→app.
 - `apps/intranet/src/actions/kpis.ts` (fora da lista — ver suposição acima)
 - `apps/intranet/src/__tests__/kpis.test.ts` (fora da lista — ver suposição
   acima)
+
+### S-116 — 2026-07-14 — P-6.12 — Testes Plataforma
+
+**Prompt:** P-6.12 (`PROMPTS.md:3827`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Criados os 3 arquivos de teste listados no escopo — `rls.test.ts`,
+`progress.test.ts`, `certificates.test.ts` — cobrindo RLS de catálogo/
+progresso/moderação de discussões, trilha sequencial, scoring de quiz e
+emissão automática de certificado (inclusive o caso de curso com aula-quiz
+final). Mesmo padrão dos demais módulos: `rls.test.ts` conecta via
+`postgres.js` com `SET LOCAL ROLE` + `request.jwt.claims` para simular
+usuários (mesmo padrão de `apps/tarefas/src/__tests__/rls.test.ts`);
+`progress.test.ts`/`certificates.test.ts` chamam as Server Actions
+(`markLessonComplete`, `submitQuizAttempt`) diretamente com `next/headers` e
+`@hebron/auth/server` mockados (mesmo padrão de
+`apps/financeiro/src/__tests__/governance.test.ts`), e `@hebron/email`
+mockado para não depender de `RESEND_API_KEY`.
+
+**Suposição registrada (G1 — arquivos de infraestrutura fora da lista, mas
+bloqueantes para o critério "Testes passam"; mesmo precedente de S-102/
+P-5.12 e S-100/PATCH-021 — plataforma nunca teve testes antes, então a
+infra de test runner simplesmente não existia):**
+
+- **`apps/plataforma/vitest.config.ts` e
+  `apps/plataforma/src/__tests__/setup-env.ts` foram criados** — cópia
+  literal do padrão já usado por `tarefas`/`financeiro`/`intranet`
+  (`pool: "forks"` + `singleFork: true`, `setupFiles` carregando
+  `.env.local` via `dotenv`). Sem esses dois arquivos, `pnpm test` não
+  existe no app e os 3 arquivos de teste do escopo não rodam.
+- **`apps/plataforma/package.json` foi editado**: adicionados os scripts
+  `test`/`test:watch`, a dependency `postgres` (usada por `rls.test.ts` para
+  a conexão direta — mesma posição de `dependencies`, não
+  `devDependencies`, que todo outro app já segue) e as devDependencies
+  `dotenv`/`vitest` (mesmas versões dos demais apps: `vitest@^2.1.0`,
+  `dotenv@^16.4.5`).
+
+**Cobertura por arquivo (mapeamento dos critérios de aceite às 3 categorias
+do escopo — "RLS", "Trilha sequencial + Quiz" e "Certificado" — já que a
+lista de arquivos permitidos tem só esses 3 nomes e a moderação de
+discussões citada no escopo não tinha arquivo próprio):**
+
+- `rls.test.ts`: `courses_select_published` (aluno só vê curso publicado,
+  nunca rascunho); `progress_select_own` (aluno não vê progresso de outro
+  aluno — critério de aceite explícito); moderação de `discussion_posts`
+  (só o autor edita o próprio post; só `super_admin` edita/remove post
+  alheio, via `discussion_posts_mutate_admin`/`discussion_posts_update_own`,
+  0020_plataforma_rls.sql — é o "Discussões (moderação)" do escopo, sem
+  critério de aceite próprio, testado aqui por ser fundamentalmente uma
+  regra de RLS); GRANT de tabela ausente para `anon` (só `USAGE` de schema,
+  liberado para `plataforma.verify_certificate`).
+- `progress.test.ts`: trilha sequencial (aula 3 bloqueada por
+  `plataforma.can_access_lesson` se aula 2 não concluída, depois liberada
+  após concluir aula 2); quiz — score calculado sobre o total de perguntas,
+  não sobre as respondidas (decisão D-5, `quizzes.ts`) — 3 de 4 corretas =
+  75; attempt abaixo do `passing_score` não gera linha de `progress`
+  completa nem certificado.
+- `certificates.test.ts`: certificado emitido automaticamente só ao
+  concluir 100% das aulas (não ao concluir a primeira de duas); curso com
+  aula-quiz final só certifica depois que o quiz é aprovado — um attempt
+  reprovado deixa a aula-quiz (e portanto o curso) incompleta, sem
+  certificado; ao aprovar, a mesma trilha é concluída e o certificado
+  emitido, com `verificationHash` presente.
+
+**Nota técnica — ids de `quiz_questions`:** a coluna `id` da tabela é
+`uuid` com `defaultRandom()` (não aceita string arbitrária como
+`"<quizId>-q1"`, tentativa inicial que falhou com `invalid input syntax for
+type uuid`). Os fixtures inserem as perguntas sem `id` explícito e capturam
+os ids gerados via `.returning({ id, order })`, ordenados por `order`, para
+montar as respostas do quiz nos testes.
+
+**Critérios de aceite verificados:**
+
+- [x] Trilha: aula 3 inacessível se aula 2 não concluída — `progress.test.ts`
+- [x] Certificado: emitido quando todas as aulas marcadas como concluídas —
+      `certificates.test.ts`
+- [x] Quiz: score calculado corretamente — `progress.test.ts`
+- [x] RLS: aluno não vê progresso de outro aluno — `rls.test.ts`
+- [x] Quiz: attempt abaixo do passing_score não conclui a aula (semântica
+      P-6.8) — `progress.test.ts`
+- [x] Certificado: curso com aula-quiz só certifica após quiz aprovado —
+      `certificates.test.ts`
+- [x] Testes passam — `pnpm test` em `apps/plataforma`: 3 arquivos, 21/21
+      verde
+- [x] Lint passa — `pnpm turbo lint --filter=@hebron/plataforma`
+- [x] Types passam — `pnpm turbo typecheck --filter=@hebron/plataforma`
+
+**Verificação adicional:** `node scripts/check-cross-app-imports.mjs` — zero
+imports app→app.
+
+**Arquivos modificados:**
+
+- `apps/plataforma/src/__tests__/rls.test.ts`
+- `apps/plataforma/src/__tests__/progress.test.ts`
+- `apps/plataforma/src/__tests__/certificates.test.ts`
+- `apps/plataforma/vitest.config.ts` (fora da lista — ver suposição acima)
+- `apps/plataforma/src/__tests__/setup-env.ts` (fora da lista — ver
+  suposição acima)
+- `apps/plataforma/package.json` (fora da lista — ver suposição acima)
