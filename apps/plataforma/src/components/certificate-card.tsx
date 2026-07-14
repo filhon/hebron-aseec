@@ -4,7 +4,7 @@ import * as React from "react";
 import { useAction } from "next-safe-action/hooks";
 import type { Certificate } from "@hebron/types/plataforma";
 import { Button } from "@hebron/ui";
-import { Award, Check, Copy, Download } from "lucide-react";
+import { Award, Check, Copy, Download, ShieldCheck } from "lucide-react";
 import { downloadCertificatePdf } from "../actions/certificates";
 
 function cn(...cls: (string | false | null | undefined)[]): string {
@@ -40,7 +40,8 @@ export interface CertificateCardProps {
 
 /** Cartão de certificado — emissão automática ao concluir 100% da trilha
  * (BRAIN §6.3). O hash é o código de verificação de autenticidade (PATCH-010).
- * O download gera o PDF real via downloadCertificatePdf (P-6.8). */
+ * O download gera o PDF real via downloadCertificatePdf (P-6.8). "Verificar"
+ * abre a rota pública /certificado/verificar (P-6.14), sem exigir login. */
 export function CertificateCard({
   certificate,
   className,
@@ -112,16 +113,27 @@ export function CertificateCard({
         </button>
       </div>
 
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => download({ certificateId: certificate.id })}
-        loading={status === "executing"}
-        disabled={status === "executing"}
-        leftIcon={<Download className="h-3.5 w-3.5" aria-hidden="true" />}
-      >
-        Baixar certificado
-      </Button>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => download({ certificateId: certificate.id })}
+          loading={status === "executing"}
+          disabled={status === "executing"}
+          leftIcon={<Download className="h-3.5 w-3.5" aria-hidden="true" />}
+        >
+          Baixar certificado
+        </Button>
+        <a
+          href={`/certificado/verificar?hash=${encodeURIComponent(certificate.hash)}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1 text-xs font-medium text-(--brand) hover:underline"
+        >
+          <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
+          Verificar
+        </a>
+      </div>
     </div>
   );
 }

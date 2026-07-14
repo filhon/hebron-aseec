@@ -3912,11 +3912,11 @@ Corretivo — P-6.7/P-6.8/P-6.9 (S-110/S-111/S-112) marcam repetidamente o crit�
 
 **Critérios de aceite:**
 
-- [ ] Rota acessível sem login (fora do gate de sessão de `(aluno)`)
-- [ ] Hash válido exibe curso/nome/data; hash inválido/inexistente exibe estado vazio claro, sem stack trace
-- [ ] Consulta usa somente `plataforma.verify_certificate` — nenhum SELECT direto em `certificates` (grep)
-- [ ] PDF do certificado (`downloadCertificatePdf`) passa a exibir a URL completa de verificação, não só o hash cru
-- [ ] Lint passa · Types passam
+- [x] Rota acessível sem login (fora do gate de sessão de `(aluno)`)
+- [x] Hash válido exibe curso/nome/data; hash inválido/inexistente exibe estado vazio claro, sem stack trace
+- [x] Consulta usa somente `plataforma.verify_certificate` — nenhum SELECT direto em `certificates` (grep)
+- [x] PDF do certificado (`downloadCertificatePdf`) passa a exibir a URL completa de verificação, não só o hash cru
+- [x] Lint passa · Types passam
 
 ---
 

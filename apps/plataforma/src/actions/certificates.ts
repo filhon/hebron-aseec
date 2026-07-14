@@ -125,10 +125,18 @@ export async function checkAndIssueCertificate(
 // ---------------------------------------------------------------------------
 // downloadCertificatePdf — PDF gerado com @react-pdf/renderer (D-6),
 // retornado em base64 para download direto no client (mesmo padrão de
-// exportMonthlyReport em apps/financeiro). O verification_hash já existente
-// (P-6.7, plataforma.verify_certificate) é a rota pública de verificação —
-// o PDF só exibe o hash para o portador conferir.
+// exportMonthlyReport em apps/financeiro). O PDF exibe a URL completa da
+// rota pública de verificação (P-6.14, apps/plataforma/src/app/certificado/
+// verificar) — não só o hash cru, para o portador conferir com um clique.
 // ---------------------------------------------------------------------------
+
+const PLATAFORMA_BASE_URL =
+  process.env.NEXT_PUBLIC_PLATAFORMA_URL ??
+  "https://plataforma.hebronaseec.com.br";
+
+function verificationUrl(hash: string): string {
+  return `${PLATAFORMA_BASE_URL}/certificado/verificar?hash=${hash}`;
+}
 
 const pdfStyles = StyleSheet.create({
   page: {
@@ -204,7 +212,7 @@ function buildCertificatePdfDocument(params: {
       React.createElement(
         Text,
         { style: pdfStyles.meta },
-        `Verificação: ${params.verificationHash}`,
+        `Verificação: ${verificationUrl(params.verificationHash)}`,
       ),
     ),
   );

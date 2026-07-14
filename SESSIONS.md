@@ -139,6 +139,7 @@
 | S-116  | 2026-07-14 | P-6.12 — Testes Plataforma                                                    | concluido                            |
 | S-117  | 2026-07-14 | Auditoria: débitos técnicos P-6.6–P-6.12 (Plataforma, Bloco B)                | concluido (gera P-6.13/6.14/6.15)    |
 | S-118  | 2026-07-14 | P-6.13 — Gestão de Instrutores (Plataforma)                                   | concluido                            |
+| S-119  | 2026-07-14 | P-6.14 — Verificação Pública de Certificado (Plataforma)                      | concluido                            |
 
 ---
 
@@ -7518,3 +7519,70 @@ arquivos fora da lista permitida):**
 - `apps/plataforma/src/components/instructor-table.tsx` (novo)
 - `apps/plataforma/src/lib/queries.ts` (`requireSuperAdminSession`,
   `getInstructorsWithStats`, `getUsersForInstructorLink`)
+
+---
+
+### S-119 — 2026-07-14 — P-6.14 — Verificação Pública de Certificado (Plataforma)
+
+**Prompt:** P-6.14
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Fecha o gap corretivo descrito no prompt: P-6.7/P-6.8/P-6.9 (S-110/S-111/
+S-112) marcavam repetidamente "verificação pública de certificado por
+hash" como satisfeito só porque `plataforma.verify_certificate(hash)`
+existia no banco (SECURITY DEFINER STABLE, GRANT a `anon`, migration 0020) — nenhuma rota jamais a chamou. Criada a rota pública
+`/certificado/verificar` (`apps/plataforma/src/app/certificado/
+verificar/page.tsx`, fora do grupo `(aluno)`, sem gate de sessão),
+`getCertificateVerification(hash)` em `lib/queries.ts` (roda como `anon`
+via `withAuthenticatedContext(null, ...)`, chama só a function do
+banco), URL completa de verificação no PDF (`downloadCertificatePdf` em
+`actions/certificates.ts`, antes só imprimia o hash cru) e link
+"Verificar" no `certificate-card.tsx` apontando para a rota.
+
+**Suposições registradas (G1 — nenhuma tocou arquivos fora da lista
+permitida):**
+
+- Página pública sem `AppShell`/nav — nem `design-refs/plataforma/` nem
+  um componente `PublicNav` existem neste app (diferente de
+  `apps/documentos`); layout próprio, minimal, seguindo os tokens/
+  componentes já usados em `certificate-card.tsx` (`@hebron/ui`
+  `EmptyState`/`BrandMark`/`Button`/`Input`, classes `hb-eyebrow`,
+  tokens `--surface`/`--border`/`--brand`).
+- Hash lido via `searchParams` (`?hash=`) num formulário HTML simples
+  (`method` GET implícito, sem client JS) — mesmo padrão de
+  `apps/documentos/src/app/busca/page.tsx`.
+- Hash inválido/inexistente reaproveita `EmptyState` com citação bíblica
+  (Deuteronômio 19:15, sobre confirmação por testemunhas) — mesma
+  convenção de tom de BRAIN.md §5 usada em outros estados vazios do app,
+  aplicada aqui a um resultado de busca sem match em vez de "sem dados".
+- URL de verificação usa `NEXT_PUBLIC_PLATAFORMA_URL` com fallback
+  `https://plataforma.hebronaseec.com.br` — mesma constante/padrão já
+  usado em `lib/notifications.ts` para `courseUrl`/`certificatesUrl`.
+
+**Critérios de aceite verificados:**
+
+- [x] Rota acessível sem login — `app/certificado/verificar/page.tsx`
+      fica fora de `(aluno)/layout.tsx`, sem `requireAlunoSession()`
+- [x] Hash válido exibe curso/nome/data; hash inválido/inexistente exibe
+      `EmptyState` claro, sem stack trace (`getCertificateVerification`
+      retorna `null`, nunca lança)
+- [x] Consulta usa somente `plataforma.verify_certificate` — grep por
+      `certificates` em `page.tsx` não retorna nenhum SELECT direto;
+      `getCertificateVerification` só executa
+      `SELECT * FROM plataforma.verify_certificate(...)`
+- [x] PDF (`downloadCertificatePdf`) exibe a URL completa
+      (`verificationUrl(hash)`), não só o hash cru
+- [x] Lint passa — `pnpm turbo lint --filter=@hebron/plataforma`
+- [x] Types passam — `pnpm turbo typecheck --filter=@hebron/plataforma`
+
+**Arquivos modificados:**
+
+- `apps/plataforma/src/app/certificado/verificar/page.tsx` (novo)
+- `apps/plataforma/src/lib/queries.ts` (`getCertificateVerification`,
+  `CertificateVerification`)
+- `apps/plataforma/src/actions/certificates.ts`
+  (`verificationUrl`/`PLATAFORMA_BASE_URL`, `downloadCertificatePdf`)
+- `apps/plataforma/src/components/certificate-card.tsx` (link
+  "Verificar")

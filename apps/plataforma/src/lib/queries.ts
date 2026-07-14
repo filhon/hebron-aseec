@@ -683,6 +683,36 @@ export async function getUserCertificates(
   }));
 }
 
+export interface CertificateVerification {
+  courseTitle: string;
+  userName: string;
+  issuedAt: Date;
+}
+
+/** Verificação pública de certificado (P-6.14) — sem sessão, papel `anon`.
+ * Usa exclusivamente plataforma.verify_certificate (SECURITY DEFINER STABLE,
+ * GRANT a anon); nunca SELECT direto em certificates, que não abre RLS para
+ * anon (P-6.7, 0020_plataforma_rls.sql). */
+export async function getCertificateVerification(
+  hash: string,
+): Promise<CertificateVerification | null> {
+  const rows = await withAuthenticatedContext(null, (tx) =>
+    tx.execute<{
+      course_title: string;
+      user_name: string | null;
+      issued_at: string;
+    }>(sql`SELECT * FROM plataforma.verify_certificate(${hash})`),
+  );
+  const row = rows[0];
+  if (!row) return null;
+
+  return {
+    courseTitle: row.course_title,
+    userName: row.user_name ?? "Aluno",
+    issuedAt: new Date(row.issued_at),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Painel do instrutor — todos os cursos (qualquer instrutor gerencia
 // qualquer curso, sem escopo por curso — suposição já registrada em
