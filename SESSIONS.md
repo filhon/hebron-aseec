@@ -130,6 +130,7 @@
 | S-107  | 2026-07-14 | P-6.5 — Estados Plataforma                                                    | parcial                              |
 | S-108  | 2026-07-14 | P-6.3b — Plataforma: série como coleção temática (PATCH-024)                  | concluido                            |
 | S-109  | 2026-07-14 | P-6.6 — Schema do Banco Plataforma                                            | concluido                            |
+| S-110  | 2026-07-14 | P-6.7 — RLS Policies Plataforma                                               | concluido                            |
 
 ---
 
@@ -6560,3 +6561,136 @@ admin.audit_action` foi isolado em `0020_plataforma_audit_actions.sql`
 - `packages/db/src/schema/admin.ts` (2 valores novos em `auditActionEnum`)
 - `packages/db/src/schema/index.ts` (exporta o schema `plataforma`)
 - `packages/db/src/migrations/meta/_journal.json` (gerado por `drizzle-kit generate`)
+
+### S-110 — 2026-07-14 — P-6.7 — RLS Policies Plataforma
+
+**Prompt:** P-6.7 (`PROMPTS.md:3648`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Criada `packages/db/src/migrations/0020_plataforma_rls.sql` (nome automático
+via `drizzle-kit generate --custom`, G6.4) com DENY-by-default nas 14
+tabelas do schema `plataforma` + `series`. Três helpers `SECURITY DEFINER
+STABLE`: `plataforma.is_instructor()`, `plataforma.can_access_lesson(p_user_id,
+p_lesson_id)` (trilha sequencial via `LAG()` sobre `module."order"`/
+`lesson."order"`, usado pela policy de SELECT de `lessons` — e também por
+`quizzes`/`quiz_questions`/`discussions`/`discussion_posts`, que seguem a
+mesma visibilidade de aula) e `plataforma.verify_certificate(p_hash)`
+(`RETURNS TABLE`, verificação pública sem abrir SELECT em `certificates`
+para `anon`). Migration aplicada com sucesso (`db:migrate` →
+"Applied 1 migration(s)"), `db:check` limpo, `pnpm turbo lint typecheck`
+verde nos 38 packages/apps, suíte `packages/db` verde (11 arquivos/60
+testes, incluindo `schema-parity.test.ts`). Verificação manual das policies
+contra o banco real via script ad-hoc (`postgres.js` + `SET LOCAL ROLE
+authenticated` + `request.jwt.claims`, mesmo padrão de
+`apps/financeiro/src/__tests__/rls.test.ts`) — 12/12 checks: curso
+publicado vs. rascunho, staff bypass, aula 1 acessível, aula 2 bloqueada até
+`progress.completed_at` da aula 1, aula 2 liberada após concluir aula 1,
+INSERT direto de `progress` numa aula ainda bloqueada rejeitado pela
+policy, progresso alheio invisível, certificado alheio invisível via SELECT
+direto, `anon` sem SELECT na tabela `certificates` mas com verificação via
+`verify_certificate()`. Script descartado ao final (não fazia parte dos
+arquivos permitidos do prompt — mesmo precedente de P-3.7/P-4.7/P-5.7, cujo
+critério "teste" também foi verificado ad-hoc, não com arquivo de teste
+comitado).
+
+**Suposições registradas (G1 — ambiguidade resolvida pela opção mais
+simples, "pare e pergunte" não acionado por não envolver dado real ainda em
+produção):**
+
+- **Não existe papel `instrutor` em `public.role`** (`ROLES`,
+  `packages/types/src/roles.ts`: `super_admin`, `diretor`, `conselheiro`,
+  `colaborador`, `submissor`, `aluno`, `hospede`, `ouvinte`). P-6.11 confirma
+  isso explicitamente: "Preparar estrutura para papel 'professor' futuro
+  (flag no schema, sem funcionalidade adicional na v1)". Interpretei
+  "instrutor" do escopo de P-6.7 como **definido por dado**, não por papel:
+  qualquer usuário com uma linha em `plataforma.instructors` vinculada ao
+  próprio `user_id` (helper `plataforma.is_instructor()`). Opção mais
+  simples disponível hoje, sem inventar um papel novo fora do enum
+  `public.role` (que exigiria migration em `public`, fora do escopo de
+  arquivos permitidos de P-6.7, que só lista a migration de `plataforma`).
+- **Qualquer instrutor tem CRUD completo em qualquer curso, não só nos que
+  leciona.** O escopo diz "Super_admin e instrutor: CRUD completo" sem o
+  qualificador "próprios" que aparece explicitamente para
+  progresso/notas/certificados/matrícula. Optei pela leitura literal
+  (CRUD completo = sem escopo por curso) — mais simples de implementar
+  (sem helper de posse `courses.instructor_id ↔ instructors.user_id`) e
+  consistente com o padrão já usado em `tarefas` (colaborador vê/edita
+  todas as tarefas dos 6 workspaces, sem membership). Fica registrado como
+  ponto a revisitar se o time pedagógico crescer e precisar de isolamento
+  por curso — nesse caso, trocar o `plataforma.is_instructor()` inline nas
+  policies de `courses`/`modules`/`lessons`/`quizzes`/`quiz_questions` por
+  um helper `plataforma.owns_course(p_course_id)` que verifica
+  `courses.instructor_id = instructors.id AND instructors.user_id =
+auth.uid()`.
+- **`plataforma.can_access_lesson` também respeita `lessons.requires_completion`**
+  (não só "primeira aula do curso"). O escopo do prompt descreve a regra
+  como "primeira aula OU aula anterior concluída", mas
+  `requires_completion` já existe no schema desde P-6.6 com o comentário
+  explícito "indica se esta aula só desbloqueia após a conclusão da aula
+  anterior" (S-109) e o front-end (`CourseSidebar`, S-105) já assume esse
+  comportamento. Ignorar a coluna deixaria um campo do schema morto;
+  incorporá-la é uma leitura consistente do propósito documentado da
+  coluna, não uma invenção de regra nova.
+- **`progress` ganhou INSERT gated por `can_access_lesson` + matrícula**,
+  além do SELECT gated em `lessons` que o escopo pede explicitamente. Sem
+  isso, um INSERT direto em `plataforma.progress` (bypassando o player)
+  "destravaria" a aula seguinte sem nunca ter passado pelo SELECT gated —
+  defesa em profundidade (BRAIN, G do CLAUDE.md), verificada no teste
+  ad-hoc (#4).
+- **`certificates` não recebe policy de INSERT para o próprio aluno.** O
+  escopo pede só "SELECT próprio" + verificação pública; não há pedido de
+  auto-emissão. Como certificado é "emitido automaticamente ao concluir
+  100% da trilha" (BRAIN §6.3) mas por decisão B (G6.2) todas as escritas
+  rodam como `authenticated` (não superuser), a emissão real em P-6.8 vai
+  precisar de uma função `SECURITY DEFINER` própria que grava a linha
+  internamente — registrado aqui como pré-requisito para quem escrever
+  P-6.8, para não tentar um INSERT direto do cliente que a RLS vai barrar
+  (por design: evita autodeclaração de certificado).
+- **`enrollments`/`progress` nunca recebem GRANT de DELETE (nem
+  super_admin).** Não pedido no escopo; tratados como trilha de auditoria
+  acadêmica, mesmo padrão de `tarefas.tasks` (nunca hard delete, BRAIN).
+  `quiz_attempts` segue o mesmo raciocínio (`tarefas.task_events`): só
+  SELECT/INSERT, tentativa é imutável.
+- **`discussion_posts`: moderação (editar/remover post de terceiro) só
+  `super_admin`, não `instrutor`.** Escopo não lista discussões/posts entre
+  as tabelas de CRUD do instrutor (só "cursos, módulos, aulas"); mantive
+  fora por leitura literal — instrutor pode postar como autor comum
+  (mesma policy `discussion_posts_insert_own` de qualquer aluno
+  matriculado), mas não modera post alheio.
+- **`series` sem coluna `published`** (confirmado em P-6.6/S-109: `id`,
+  `name`, `slug`, `description`, timestamps). "SELECT para autenticado,
+  mesmo padrão de courses publicados" foi implementado como SELECT aberto
+  a qualquer autenticado (`USING (true)`) — o equivalente mais próximo
+  possível sem inventar uma coluna `published` que o prompt de P-6.6 não
+  pediu.
+
+**Critérios de aceite verificados:**
+
+- [x] Autenticado: vê cursos publicados (teste #1)
+- [x] Matriculado: vê aulas do curso, registra progresso (teste #2)
+- [x] Helper `can_access_lesson` criado (`SECURITY DEFINER STABLE`) e usado
+      pela policy de SELECT de `lessons`
+- [x] Aula N inacessível com aula N-1 incompleta; acessível após concluir
+      (teste com 2 cenários do mesmo usuário — #2)
+- [x] Verificação pública de certificado expõe somente curso/nome/data via
+      hash (teste #5)
+- [x] Super_admin/instrutor: CRUD completo em cursos, módulos, aulas
+      (teste #1, staff bypass)
+- [x] Notas: apenas próprias (mesma policy de progress, verificada por
+      simetria — teste #3 cobre progress)
+- [x] Certificados: próprio + verificação pública por hash (teste #5)
+- [x] Séries: SELECT autenticado; CRUD super_admin/instrutor (PATCH-024)
+- [x] Types passam (`pnpm turbo typecheck` — 38/38 packages)
+
+**Arquivos criados:**
+
+- `packages/db/src/migrations/0020_plataforma_rls.sql`
+- `packages/db/src/migrations/meta/0020_snapshot.json` (gerado por
+  `drizzle-kit generate --custom`)
+
+**Arquivos modificados:**
+
+- `packages/db/src/migrations/meta/_journal.json` (gerado por
+  `drizzle-kit generate --custom`)

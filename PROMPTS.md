@@ -3665,16 +3665,16 @@ RLS para schema plataforma. Qualquer usuário autenticado: SELECT em courses pub
 
 **Critérios de aceite:**
 
-- [ ] Autenticado: vê cursos publicados
-- [ ] Matriculado: vê aulas do curso, registra progresso
-- [ ] Helper can_access_lesson criado (SECURITY DEFINER STABLE) e usado pela policy de lessons
-- [ ] Aula N inacessível com aula N-1 incompleta; acessível após concluir (teste com 2 usuários)
-- [ ] Verificação pública de certificado expõe somente curso/nome/data via hash (teste)
-- [ ] Super_admin/instrutor: CRUD completo em cursos, módulos, aulas
-- [ ] Notas: apenas próprias
-- [ ] Certificados: próprio + verificação pública por hash
-- [ ] Séries: SELECT autenticado; CRUD super_admin/instrutor (PATCH-024)
-- [ ] Types passam
+- [x] Autenticado: vê cursos publicados
+- [x] Matriculado: vê aulas do curso, registra progresso
+- [x] Helper can_access_lesson criado (SECURITY DEFINER STABLE) e usado pela policy de lessons
+- [x] Aula N inacessível com aula N-1 incompleta; acessível após concluir (teste com 2 usuários)
+- [x] Verificação pública de certificado expõe somente curso/nome/data via hash (teste)
+- [x] Super_admin/instrutor: CRUD completo em cursos, módulos, aulas
+- [x] Notas: apenas próprias
+- [x] Certificados: próprio + verificação pública por hash
+- [x] Séries: SELECT autenticado; CRUD super_admin/instrutor (PATCH-024)
+- [x] Types passam
 
 ---
 
