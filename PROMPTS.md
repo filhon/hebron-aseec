@@ -3816,11 +3816,11 @@ Plataforma → Intranet: KPI de alunos (total matriculados, cursos ativos, taxa 
 
 **Critérios de aceite:**
 
-- [ ] KPI de alunos disponível para Intranet (query cross-schema)
-- [ ] Stub da Intranet substituído por dados reais
-- [ ] Campo instructor_role preparado no schema (sem funcionalidade extra na v1)
-- [ ] Lint passa
-- [ ] Types passam
+- [x] KPI de alunos disponível para Intranet (query cross-schema)
+- [x] Stub da Intranet substituído por dados reais
+- [x] Campo instructor_role preparado no schema (sem funcionalidade extra na v1)
+- [x] Lint passa
+- [x] Types passam
 
 ---
 

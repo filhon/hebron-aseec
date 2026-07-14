@@ -10,6 +10,7 @@ import {
   tasks,
   transactions,
 } from "@hebron/db/schema";
+import { getStudentKpiMetrics } from "@hebron/integrations/plataforma";
 import type { KPI, KPITrend } from "@hebron/types/intranet";
 import { staffAction } from "../lib/safe-action";
 
@@ -228,16 +229,19 @@ function requireKpi(kpiByMetric: Map<string, KPI>, metricName: string): KPI {
 // (fonte primária) quando o snapshot de todo KPI persistível está fresco
 // (< 2h); caso contrário recalcula ao vivo para o conjunto inteiro, evitando
 // misturar snapshot de um KPI com live de outro (contrato de frescor,
-// PATCH-018).
+// PATCH-018). "Alunos na Plataforma" fica fora desse contrato de frescor —
+// não há snapshot persistido para ele ainda (fora do escopo de P-6.11) — e é
+// sempre calculado ao vivo via packages/integrations (P-6.11).
 // ---------------------------------------------------------------------------
 
 export const getKpis = staffAction.schema(z.object({})).action(async () => {
   const now = new Date();
   const period = currentPeriodLabel();
 
-  const results = await Promise.all(
-    PERSISTABLE_KPIS.map(loadPersistableKpiResult),
-  );
+  const [results, studentMetrics] = await Promise.all([
+    Promise.all(PERSISTABLE_KPIS.map(loadPersistableKpiResult)),
+    getStudentKpiMetrics(),
+  ]);
 
   const allFresh = results.every(
     (r) => r.latest !== undefined && isFresh(r.latest.capturedAt, now),
@@ -264,10 +268,10 @@ export const getKpis = staffAction.schema(z.object({})).action(async () => {
     {
       id: "kpi-alunos-plataforma",
       name: "Alunos na Plataforma",
-      value: 0,
+      value: studentMetrics.totalEnrolled,
       unit: "alunos",
       trend: "stable",
-      period: "Aguardando Fase 6",
+      period,
       sourceModule: "plataforma",
       updatedAt: now,
     },

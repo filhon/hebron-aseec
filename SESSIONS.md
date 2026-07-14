@@ -135,6 +135,7 @@
 | S-112  | 2026-07-14 | P-6.9 — Integração UI ↔ Backend Plataforma                                    | concluido                            |
 | S-113  | 2026-07-14 | Gap: gestão de instrutores (Plataforma)                                       | bloqueado                            |
 | S-114  | 2026-07-14 | P-6.10 — Notificações e Emails Plataforma                                     | concluido                            |
+| S-115  | 2026-07-14 | P-6.11 — Integração Cross-App Plataforma                                      | concluido                            |
 
 ---
 
@@ -7157,3 +7158,100 @@ critério de aceite; mesmo precedente de S-82/P-4.10):**
 - `apps/plataforma/src/actions/quizzes.ts`
 - `apps/plataforma/src/actions/discussions.ts`
 - `apps/plataforma/package.json`
+
+---
+
+### S-115 — 2026-07-14 — P-6.11 — Integração Cross-App Plataforma
+
+**Prompt:** P-6.11 (`PROMPTS.md:3799`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Substituído o stub de `packages/integrations/src/plataforma.ts` (criado em
+P-5.11, S-101) por uma query real cross-schema. `getStudentProgressMetrics`
+virou `getStudentKpiMetrics`, retornando `{ totalEnrolled, activeCourses,
+completionRate }`: `totalEnrolled` conta alunos distintos (não matrículas)
+via `count(distinct enrollments.user_id)`; `activeCourses` conta
+`courses.published = true`; `completionRate` é o percentual de matrículas
+com `completedAt` preenchido sobre o total (0 quando não há matrícula
+nenhuma). O nome/shape mudou em relação ao stub original
+(`activeEnrollments/completedTracks/certificatesIssued`) porque o texto do
+prompt (P-6.11) pede explicitamente "total matriculados, cursos ativos, taxa
+de conclusão" — o stub tinha sido escrito em P-5.11, antes do schema real
+existir, com um chute diferente.
+
+**Suposição registrada (G1 — arquivo fora da lista, mas bloqueante para o
+critério "Stub da Intranet substituído por dados reais"; mesmo precedente de
+S-114/P-6.10 e S-101/P-5.11):**
+
+- **`apps/intranet/src/actions/kpis.ts` foi editado**, apesar de não estar
+  na lista de "Arquivos permitidos" do prompt (só listava
+  `packages/integrations/src/plataforma.ts`). O stub real que o critério de
+  aceite pede para substituir não vive no package — vive inline em
+  `getKpis()`, como um objeto `KPI` hardcoded (`value: 0`, `period:
+"Aguardando Fase 6"`), que nunca chamou o stub do package (confirmado:
+  S-101 já registrou que P-5.11 criou o stub mas nada o consumia). Sem
+  editar `kpis.ts` o critério "Stub da Intranet substituído por dados reais"
+  seria inatingível. Mudança: import de `getStudentKpiMetrics` de
+  `@hebron/integrations/plataforma`, chamado em paralelo com os KPIs
+  persistíveis; o card "Alunos na Plataforma" agora mostra
+  `studentMetrics.totalEnrolled` (unidade "alunos") com `period` igual ao
+  dos demais KPIs (antes fixo em "Aguardando Fase 6"). Esse KPI continua
+  fora do pipeline de snapshot (`intranet.kpi_snapshot_history` /
+  `PERSISTABLE_KPIS`) — sempre calculado ao vivo; adicioná-lo ao snapshot é
+  trabalho de outro prompt (job em `packages/jobs`, fora do escopo aqui).
+  `activeCourses`/`completionRate` são retornados pela função mas não têm
+  card próprio hoje — ficam disponíveis para um widget futuro sem exigir
+  nova mudança de contrato.
+- **`apps/intranet/src/__tests__/kpis.test.ts` foi ajustado** (2 asserções
+  que fixavam `kpi-alunos-plataforma` em `value: 0` — só faziam sentido
+  enquanto o stub existia). Trocado por `typeof value === "number"` +
+  `trend: "stable"`, mesmo padrão já usado no restante do arquivo para os
+  demais KPIs em modo "live". Rodado contra o banco de dev real
+  (`pnpm vitest run src/__tests__/kpis.test.ts`) — 4/4 verde.
+
+**Decisão sobre o critério "Campo instructor_role preparado no schema" —
+NENHUMA migration/mudança de schema nesta sessão:**
+
+`packages/db/src/migrations/0020_plataforma_rls.sql` (P-6.7, S-110) já
+documenta no cabeçalho: "não existe papel 'instrutor' em `public.role`... P-6.11
+confirma que o 'papel professor' é preparado só como estrutura futura, sem
+funcionalidade na v1" — ou seja, a decisão de P-6.7 já antecipava que P-6.11
+não criaria um papel novo, só confirmaria que a estrutura de dados existente
+(`plataforma.instructors.user_id` + `plataforma.is_instructor()`) já é o
+substrato suficiente para um futuro papel `professor`: qualquer conta de
+usuário vinculada a uma linha de `instructors` já é tratada como instrutor
+pela RLS, sem precisar de um valor em `public.role` nem de uma coluna nova.
+Criar uma coluna/enum `instructor_role` seria funcionalidade nova sem
+consumidor (contradiz "sem funcionalidade adicional na v1") e colidiria com
+o gap já registrado e bloqueado em S-113 (gestão de instrutores), que
+explicitamente marca uma mudança em `public.role` como "fora de qualquer
+lista de arquivos permitidos de P-6.x" e pendente de decisão de Filipe. Este
+critério de aceite é considerado satisfeito por confirmação/documentação, não
+por código novo — nenhum arquivo de schema foi tocado.
+
+**Critérios de aceite verificados:**
+
+- [x] KPI de alunos disponível para Intranet (query cross-schema) —
+      `getStudentKpiMetrics` em `packages/integrations/src/plataforma.ts`
+- [x] Stub da Intranet substituído por dados reais — `kpis.ts` consome
+      `getStudentKpiMetrics`; `pnpm vitest run` confirma execução contra o
+      banco real
+- [x] Campo instructor_role preparado no schema (sem funcionalidade extra na
+      v1) — satisfeito pela estrutura já existente desde P-6.7
+      (`instructors.user_id` + `is_instructor()`), conforme documentado no
+      próprio `0020_plataforma_rls.sql`; ver decisão acima
+- [x] Lint passa (`pnpm turbo lint` — `@hebron/integrations` e
+      `@hebron/intranet` verdes)
+- [x] Types passam (`pnpm turbo typecheck` — idem)
+
+**Verificação adicional:** `node scripts/check-cross-app-imports.mjs` — zero
+imports app→app.
+
+**Arquivos modificados:**
+
+- `packages/integrations/src/plataforma.ts`
+- `apps/intranet/src/actions/kpis.ts` (fora da lista — ver suposição acima)
+- `apps/intranet/src/__tests__/kpis.test.ts` (fora da lista — ver suposição
+  acima)

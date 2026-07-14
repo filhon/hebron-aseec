@@ -1,27 +1,51 @@
+import { eq, sql } from "drizzle-orm";
+import { db } from "@hebron/db/client";
+import { courses, enrollments } from "@hebron/db/schema";
+
 // ---------------------------------------------------------------------------
-// getStudentProgressMetrics — Plataforma → Intranet
+// getStudentKpiMetrics — Plataforma → Intranet
 //
-// Stub: a integração real nasce quando o módulo Plataforma (LMS) for
-// construído (Fase 6). Comportamento esperado (BRAIN.md, tabela de
-// integrações cross-app §"Plataforma → Intranet"):
-//   Métricas de progresso dos alunos (matrículas ativas, trilhas concluídas,
-//   certificados emitidos) alimentam o widget de KPI do dashboard da
-//   Intranet (BRAIN §6.10 — "alunos na Plataforma").
+// Alimenta o KPI "Alunos na Plataforma" do dashboard da Intranet (BRAIN.md,
+// tabela de integrações cross-app §"Plataforma → Intranet"). Substitui o
+// stub criado em P-5.11 agora que o schema da Plataforma existe (P-6.6).
+//
+// totalEnrolled conta alunos distintos (não matrículas) — um aluno com
+// várias matrículas conta uma vez só, coerente com "alunos" como unidade do
+// KPI. activeCourses conta cursos publicados (courses.published), o
+// universo visível a qualquer usuário registrado (BRAIN §6.3). completionRate
+// é a fração de matrículas concluídas (enrollments.completedAt) sobre o
+// total de matrículas, 0 quando não há nenhuma.
 //
 // Vive em packages/integrations (P-0.15) — o dashboard da Intranet nunca
 // importa direto de apps/plataforma (G6.5, PROMPTS.md).
 // ---------------------------------------------------------------------------
 
-export interface StudentProgressMetrics {
-  activeEnrollments: number;
-  completedTracks: number;
-  certificatesIssued: number;
+export interface StudentKpiMetrics {
+  totalEnrolled: number;
+  activeCourses: number;
+  completionRate: number;
 }
 
-export async function getStudentProgressMetrics(): Promise<StudentProgressMetrics> {
-  // Stub — nenhum dado real até que o módulo Plataforma exista (Fase 6).
-  console.info(
-    "[integrations/plataforma] stub — métricas de progresso de alunos pendentes (Fase 6)",
-  );
-  return { activeEnrollments: 0, completedTracks: 0, certificatesIssued: 0 };
+export async function getStudentKpiMetrics(): Promise<StudentKpiMetrics> {
+  const [enrollmentRow] = await db
+    .select({
+      totalEnrolled: sql<number>`count(distinct ${enrollments.userId})::int`,
+      total: sql<number>`count(*)::int`,
+      completed: sql<number>`count(case when ${enrollments.completedAt} is not null then 1 end)::int`,
+    })
+    .from(enrollments);
+
+  const [courseRow] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(courses)
+    .where(eq(courses.published, true));
+
+  const total = enrollmentRow?.total ?? 0;
+  const completed = enrollmentRow?.completed ?? 0;
+
+  return {
+    totalEnrolled: enrollmentRow?.totalEnrolled ?? 0,
+    activeCourses: courseRow?.count ?? 0,
+    completionRate: total > 0 ? Math.round((completed / total) * 100) : 0,
+  };
 }
