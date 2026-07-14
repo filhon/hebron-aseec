@@ -129,6 +129,26 @@ export async function requireInstrutorSession(): Promise<ActionSession> {
   return session;
 }
 
+/** super_admin exclusivamente — gestão do cadastro de instrutores (RLS
+ * `instructors_mutate_admin`, 0020_plataforma_rls.sql). Diferente de
+ * requireInstrutorSession: instrutor (dado, sem papel em public.role) não
+ * deve acessar esta tela — só quem administra o cadastro global. */
+export async function requireSuperAdminSession(): Promise<ActionSession> {
+  const cookieStore = await cookies();
+  let session: ActionSession;
+  try {
+    session = await resolveSession(cookieStore);
+  } catch {
+    redirect(CANONICAL_LOGIN_URL);
+  }
+
+  if (!session.roles.includes("super_admin")) {
+    redirect(CANONICAL_LOGIN_URL);
+  }
+
+  return session;
+}
+
 // ---------------------------------------------------------------------------
 // Mapeamento DB → forma "rica" de @hebron/types/plataforma (já consumida
 // pelos componentes do Bloco A). Mesma ideia de assembleTasks em
@@ -187,6 +207,62 @@ function mapLesson(row: LessonRow, quizId: string | null = null): Lesson {
 export async function getInstructors(actorId: string): Promise<Instructor[]> {
   return withAuthenticatedContext({ actorId }, (tx) =>
     tx.select().from(instructors).orderBy(asc(instructors.name)),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Gestão de instrutores (equipe) — super_admin (P-6.13, gap S-113).
+// ---------------------------------------------------------------------------
+
+export interface InstructorWithStats extends Instructor {
+  courseCount: number;
+}
+
+export async function getInstructorsWithStats(
+  actorId: string,
+): Promise<InstructorWithStats[]> {
+  return withAuthenticatedContext({ actorId }, async (tx) => {
+    const instructorRows = await tx
+      .select()
+      .from(instructors)
+      .orderBy(asc(instructors.name));
+
+    const courseCountRows = await tx
+      .select({
+        instructorId: courses.instructorId,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(courses)
+      .groupBy(courses.instructorId);
+    const courseCountByInstructor = new Map(
+      courseCountRows.map((r) => [r.instructorId, r.count]),
+    );
+
+    return instructorRows.map((row) => ({
+      ...row,
+      courseCount: courseCountByInstructor.get(row.id) ?? 0,
+    }));
+  });
+}
+
+export interface SelectableUser {
+  id: string;
+  fullName: string | null;
+  email: string;
+}
+
+/** Lista de usuários para vincular a um instrutor (P-6.13). Sem filtro por
+ * usuário já vinculado — um mesmo usuário pode ter mais de uma linha em
+ * plataforma.instructors (ex.: reaproveitar conta de teste), suposição
+ * simples registrada em SESSIONS.md por não haver regra em BRAIN.md/RLS. */
+export async function getUsersForInstructorLink(
+  actorId: string,
+): Promise<SelectableUser[]> {
+  return withAuthenticatedContext({ actorId }, (tx) =>
+    tx
+      .select({ id: users.id, fullName: users.fullName, email: users.email })
+      .from(users)
+      .orderBy(asc(users.fullName)),
   );
 }
 

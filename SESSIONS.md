@@ -137,6 +137,8 @@
 | S-114  | 2026-07-14 | P-6.10 — Notificações e Emails Plataforma                                     | concluido                            |
 | S-115  | 2026-07-14 | P-6.11 — Integração Cross-App Plataforma                                      | concluido                            |
 | S-116  | 2026-07-14 | P-6.12 — Testes Plataforma                                                    | concluido                            |
+| S-117  | 2026-07-14 | Auditoria: débitos técnicos P-6.6–P-6.12 (Plataforma, Bloco B)                | concluido (gera P-6.13/6.14/6.15)    |
+| S-118  | 2026-07-14 | P-6.13 — Gestão de Instrutores (Plataforma)                                   | concluido                            |
 
 ---
 
@@ -7357,3 +7359,162 @@ imports app→app.
 - `apps/plataforma/src/__tests__/setup-env.ts` (fora da lista — ver
   suposição acima)
 - `apps/plataforma/package.json` (fora da lista — ver suposição acima)
+
+---
+
+### S-117 — 2026-07-14 — Auditoria: débitos técnicos P-6.6–P-6.12 (Plataforma, Bloco B)
+
+**Prompt:** N/A (auditoria solicitada pelo Filipe — reler P-6.6–P-6.12 em
+PROMPTS.md + S-109–S-116 em SESSIONS.md, cruzar com a codebase real, gerar
+patches corretivos se necessário)
+**Modelo:** claude-sonnet-5
+**Status:** concluido (read-only; gera 3 prompts novos em PROMPTS.md, nenhum
+código alterado)
+
+**Resumo:**
+Reler os 7 prompts do Bloco B da Plataforma e as 8 sessões que os
+implementaram (S-109–S-116, incl. o gap S-113) e confirmar contra a
+codebase real quais débitos documentados ("registrado como suposição",
+"fora de escopo", "fica para sessão futura") seguem abertos hoje. Três
+achados são bloqueantes ou enganosos o suficiente para justificar prompt
+corretivo; dois são cosméticos e não geraram prompt.
+
+**Achados confirmados na codebase (não só em SESSIONS):**
+
+1. **Gestão de instrutores (S-113) continua bloqueada.** Confirmado por
+   grep: `createInstructor`/`updateInstructor` não existem em nenhuma
+   action; `createInstructorSchema` existe em
+   `packages/validators/src/plataforma/index.ts` desde o Bloco A mas é
+   órfão (zero importadores fora do próprio arquivo). RLS
+   (`instructors_mutate_admin`, `0020_plataforma_rls.sql`) só permite
+   `super_admin` escrever. Efeito prático: `CourseForm` não tem instrutor
+   nenhum para selecionar em qualquer instalação nova. → **P-6.13**.
+2. **"Verificação pública de certificado por hash" nunca foi construída,**
+   apesar de P-6.7/P-6.8/P-6.9 marcarem esse critério `[x]` três vezes
+   citando `plataforma.verify_certificate()`. Confirmado: zero páginas/rotas
+   em `apps/plataforma/src/app/**` chamam essa função; o hash só aparece
+   como texto estático no PDF (`certificates.ts:207`), sem nenhum lugar para
+   um terceiro conferir. A função SQL existe e está correta (RLS,
+   `SECURITY DEFINER`, `GRANT` a `anon`) — falta só o consumidor, que nenhum
+   prompt do Bloco B jamais listou como arquivo permitido. → **P-6.14**.
+3. **Upload real de capa de curso/anexo de aula nunca foi implementado**
+   (débito aberto desde P-6.4/S-106, adiado conscientemente em P-6.8/P-6.9
+   por não estar na lista de arquivos permitidos de nenhum dos dois).
+   Confirmado: `course-form.tsx` só faz `URL.createObjectURL` local; não
+   existe `apps/plataforma/src/actions/uploads.ts` nem qualquer chamada a
+   Storage. Dois problemas adicionais descobertos nesta auditoria (não
+   registrados em nenhuma sessão anterior): (a) a policy de INSERT do
+   bucket `plataforma-capas` (`0020_storage_buckets.sql`, criado em P-0.12)
+   restringe a `public.has_role('super_admin')` — inconsistente com a
+   decisão de P-6.7 de que qualquer instrutor (dado, não papel) tem CRUD
+   completo em cursos; (b) não existe bucket nenhum para
+   `lessons.download_url` (coluna no schema desde P-6.6) — P-0.12 só previu
+   `plataforma-capas`, nunca um bucket de anexo de aula. → **P-6.15**.
+
+**Débitos avaliados e NÃO convertidos em prompt (cosméticos, sem impacto
+funcional):**
+
+- `Note` (tipo de `plataforma.notes`) ausente em `@hebron/types/plataforma`
+  e `createNoteSchema` ausente em `@hebron/validators/plataforma` — a
+  feature de notas funciona ponta a ponta (schema Zod local em
+  `discussions.ts`, prop local em `NoteWidgetProps`), é só um tipo
+  compartilhado que nunca foi extraído. Baixo risco, sem usuário afetado.
+- `getStudentKpiMetrics` (P-6.11) retorna `activeCourses`/`completionRate`,
+  mas só `totalEnrolled` tem card na Intranet hoje — intencional
+  (S-115 registra que ficam "disponíveis para um widget futuro"), não é
+  um bug.
+
+**Prompts corretivos gerados (inseridos em PROMPTS.md, após P-6.12, antes da
+Fase 7 — não bloqueiam Flats):**
+
+- **P-6.13** — Gestão de Instrutores (Plataforma): CRUD restrito a
+  `super_admin` sobre `plataforma.instructors`.
+- **P-6.14** — Verificação Pública de Certificado (Plataforma): rota
+  pública consumindo `plataforma.verify_certificate`.
+- **P-6.15** — Upload de Mídia da Plataforma: signed-upload real para capa
+  de curso (com policy corrigida para instrutor) + novo bucket
+  `plataforma-anexos` para anexo de aula.
+
+Nenhum código de produto foi alterado nesta sessão — só leitura
+(PROMPTS.md, SESSIONS.md, schema, RLS, actions, components) e a escrita dos
+3 prompts novos + esta entrada de registro.
+
+**Arquivos modificados:**
+
+- `PROMPTS.md` (3 prompts novos: P-6.13, P-6.14, P-6.15)
+- `SESSIONS.md` (esta entrada + linha na tabela-índice)
+
+---
+
+### S-118 — 2026-07-14 — P-6.13 — Gestão de Instrutores (Plataforma)
+
+**Prompt:** P-6.13
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Fecha o gap S-113: `plataforma.instructors` só podia ser escrita por
+`super_admin` (RLS `instructors_mutate_admin`), mas nenhuma action/tela
+jamais consumiu isso — a única forma de cadastrar instrutor era INSERT
+manual no banco, o que deixava o select "Instrutor" do `CourseForm` vazio
+em qualquer instalação nova. Criado CRUD completo restrito a `super_admin`:
+`createInstructor`/`updateInstructor`/`deleteInstructor` em
+`actions/instructors.ts` (usa `createInstructorSchema`, órfão em
+`@hebron/validators` desde o Bloco A), tela `instrutor/equipe` com tabela
+(`instructor-table.tsx`) e formulário em dialog (`instructor-form.tsx`).
+
+**Suposições registradas (G1 — nenhuma tocou packages/validators nem
+arquivos fora da lista permitida):**
+
+- `updateInstructorSchema` (com `instructorId`) definido localmente em
+  `actions/instructors.ts` por extensão de `createInstructorSchema` —
+  mesmo padrão de `updateDiscussionPostSchema`/`deleteCourseSchema` já
+  usado em `courses.ts`/`discussions.ts`. `packages/validators` não está
+  na lista de arquivos permitidos deste prompt.
+- Gate de página usa `requireSuperAdminSession()`, nova função em
+  `lib/queries.ts` — diferente de `requireInstrutorSession()` (que também
+  libera instrutor-dado). Only super_admin deve gerenciar o cadastro
+  global; a checagem RLS (`instructors_mutate_admin`) já é super_admin-only,
+  então o gate de página só espelha isso (defense in depth, G6).
+- `instrutor/shell.tsx` (nav lateral) **não** está na lista de arquivos
+  permitidos de P-6.13 — não foi editado. Efeito prático: a tela
+  `/instrutor/equipe` existe e funciona, mas não tem link nenhum na
+  sidebar do instrutor; só é alcançável por URL direta. Registrado aqui
+  como débito para um prompt futuro que inclua `shell.tsx` na lista de
+  arquivos permitidos.
+- `getUsersForInstructorLink` (novo em `lib/queries.ts`) lista todos os
+  usuários sem filtrar quem já é instrutor — `instructors.user_id` não tem
+  constraint de unicidade no schema, então nada impede (nem exige) 1:1.
+  Simplicidade escolhida por não haver regra em BRAIN.md/RLS sobre o caso.
+- Remoção de instrutor com curso vinculado é bloqueada por checagem
+  explícita (`count` de `courses.instructor_id`) antes do DELETE, dando
+  mensagem legível — o banco já rejeitaria via FK (`courses.instructor_id`
+  é NOT NULL + FK sem `onDelete`), a checagem só evita o erro cru de
+  violação de constraint chegar à UI.
+
+**Critérios de aceite verificados:**
+
+- [x] super_admin cria instrutor vinculando a um usuário existente —
+      `createInstructor` + `InstructorForm` (Select de usuário obrigatório)
+- [x] super_admin edita instrutor; remoção bloqueada por FK/verificação se
+      houver curso vinculado — `deleteInstructor` checa `courseCount` antes
+      do DELETE; botão de remover fica desabilitado na tabela quando
+      `courseCount > 0`
+- [x] Não-super_admin não acessa a tela — RLS nega escrita
+      (`instructors_mutate_admin`) + `requireSuperAdminSession()` redireciona
+      no gate de página
+- [x] `CourseForm` lista instrutores reais — já consumia `getInstructors`
+      desde P-6.9; agora a tabela deixa de estar vazia porque existe um
+      caminho de UI para populá-la
+- [x] Lint passa — `pnpm turbo lint --filter=@hebron/plataforma`
+- [x] Types passam — `pnpm turbo typecheck --filter=@hebron/plataforma`
+      (também `pnpm turbo lint typecheck` no monorepo inteiro, 38/38 verde)
+
+**Arquivos modificados:**
+
+- `apps/plataforma/src/actions/instructors.ts` (novo)
+- `apps/plataforma/src/app/instrutor/equipe/page.tsx` (novo)
+- `apps/plataforma/src/components/instructor-form.tsx` (novo)
+- `apps/plataforma/src/components/instructor-table.tsx` (novo)
+- `apps/plataforma/src/lib/queries.ts` (`requireSuperAdminSession`,
+  `getInstructorsWithStats`, `getUsersForInstructorLink`)

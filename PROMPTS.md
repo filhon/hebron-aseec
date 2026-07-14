@@ -3846,14 +3846,113 @@ Testes: RLS (aluno vê apenas cursos publicados e próprio progresso). Trilha se
 
 **Critérios de aceite:**
 
-- [ ] Trilha: aula 3 inacessível se aula 2 não concluída
-- [ ] Certificado: emitido quando todas as aulas marcadas como concluídas
-- [ ] Quiz: score calculado corretamente
-- [ ] RLS: aluno não vê progresso de outro aluno
-- [ ] Quiz: attempt abaixo do passing_score não conclui a aula (semântica P-6.8)
-- [ ] Certificado: curso com aula-quiz só certifica após quiz aprovado
-- [ ] Testes passam
-- [ ] Lint passa
+- [x] Trilha: aula 3 inacessível se aula 2 não concluída
+- [x] Certificado: emitido quando todas as aulas marcadas como concluídas
+- [x] Quiz: score calculado corretamente
+- [x] RLS: aluno não vê progresso de outro aluno
+- [x] Quiz: attempt abaixo do passing_score não conclui a aula (semântica P-6.8)
+- [x] Certificado: curso com aula-quiz só certifica após quiz aprovado
+- [x] Testes passam
+- [x] Lint passa
+
+---
+
+### P-6.13 — Gestão de Instrutores (Plataforma)
+
+**Fase:** 6
+**Módulo:** plataforma
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-6.13-plataforma-instrutores`
+- Dependências: P-6.12 concluído
+- Env vars: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`
+
+**Escopo:**
+Corretivo — gap registrado em S-113 (SESSIONS.md), nunca resolvido em P-6.6–P-6.12. `plataforma.instructors` só pode ser escrita por `super_admin` (RLS `instructors_mutate_admin`, `0020_plataforma_rls.sql`), mas nenhuma Server Action ou tela jamais consumiu isso. Hoje a única forma de cadastrar um instrutor é INSERT manual no banco (Supabase Studio/SQL) — o que bloqueia a criação de curso na prática: o select "Instrutor" do `CourseForm` fica vazio para qualquer instalação nova (confirmado em teste manual do Filipe pós-P-6.9). Criar CRUD de instrutores restrito a `super_admin`: listar, criar (vincular a um `user_id` existente + bio opcional), editar, remover (bloquear remoção se houver curso vinculado — nunca deixar `courses.instructor_id` órfão). Tela dentro da própria Plataforma, não no app Admin — "instrutor" continua sendo dado do módulo, não papel global (decisão ratificada em P-6.7/P-6.11).
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/plataforma/src/actions/instructors.ts`
+- `apps/plataforma/src/app/instrutor/equipe/page.tsx`
+- `apps/plataforma/src/components/instructor-form.tsx`
+- `apps/plataforma/src/components/instructor-table.tsx`
+- `apps/plataforma/src/lib/queries.ts`
+
+**Critérios de aceite:**
+
+- [x] super_admin cria instrutor vinculando a um usuário existente (`createInstructorSchema`, já existente em `@hebron/validators` desde o Bloco A, hoje órfão — sem nenhum consumidor)
+- [x] super_admin edita instrutor; remoção bloqueada por FK/verificação se houver curso vinculado
+- [x] Não-super_admin não acessa a tela (RLS nega escrita + gate de página redireciona)
+- [x] `CourseForm` lista instrutores reais cadastrados — fim do select vazio (teste manual: criar instrutor → aparece no formulário de novo curso)
+- [x] Lint passa · Types passam
+
+---
+
+### P-6.14 — Verificação Pública de Certificado (Plataforma)
+
+**Fase:** 6
+**Módulo:** plataforma
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-6.14-plataforma-certificado-publico`
+- Dependências: P-6.12 concluído
+- Env vars: `SUPABASE_URL`, `SUPABASE_ANON_KEY`
+
+**Escopo:**
+Corretivo — P-6.7/P-6.8/P-6.9 (S-110/S-111/S-112) marcam repetidamente o critério "verificação pública de certificado por hash" como satisfeito pela função `plataforma.verify_certificate(hash)` (SECURITY DEFINER STABLE, GRANT a `anon`) — mas nenhuma rota ou página jamais chamou essa função. Confirmado por busca na codebase: zero páginas/rotas de verificação existem hoje; o hash só é impresso no PDF do certificado, sem nenhum lugar para um terceiro conferi-lo. Criar rota pública (sem exigir sessão) que recebe o hash e exibe curso, nome do aluno e data de emissão, consultando exclusivamente `plataforma.verify_certificate` — nunca SELECT direto na tabela `certificates` (RLS não abre `anon` nela, por design, desde P-6.7).
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/plataforma/src/app/certificado/verificar/page.tsx`
+- `apps/plataforma/src/lib/queries.ts`
+- `apps/plataforma/src/actions/certificates.ts` (PDF passa a referenciar a URL completa)
+- `apps/plataforma/src/components/certificate-card.tsx` (link "verificar" apontando para a rota)
+
+**Critérios de aceite:**
+
+- [ ] Rota acessível sem login (fora do gate de sessão de `(aluno)`)
+- [ ] Hash válido exibe curso/nome/data; hash inválido/inexistente exibe estado vazio claro, sem stack trace
+- [ ] Consulta usa somente `plataforma.verify_certificate` — nenhum SELECT direto em `certificates` (grep)
+- [ ] PDF do certificado (`downloadCertificatePdf`) passa a exibir a URL completa de verificação, não só o hash cru
+- [ ] Lint passa · Types passam
+
+---
+
+### P-6.15 — Upload de Mídia da Plataforma (capa de curso, anexo de aula)
+
+**Fase:** 6
+**Módulo:** plataforma
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-6.15-plataforma-uploads`
+- Dependências: P-6.12 concluído
+- Env vars: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (assinatura de upload, mesmo padrão de `apps/documentos`)
+
+**Escopo:**
+Corretivo — débito registrado desde P-6.4/S-106 e nunca resolvido em P-6.8/P-6.9 (ambos documentaram e conscientemente adiaram): `CourseForm`/`LessonForm` capturam `File` só localmente (`URL.createObjectURL`), sem nenhuma Server Action de upload — capa de curso e anexo de aula tipo "download" nunca chegam ao Storage de verdade. Dois problemas confirmados na codebase: (1) o bucket `plataforma-capas` existe desde P-0.12, mas sua policy de INSERT/UPDATE/DELETE restringe a `public.has_role('super_admin')` (`0020_storage_buckets.sql`) — inconsistente com a decisão de P-6.7 de que qualquer instrutor (dado, não papel) tem CRUD completo em cursos; um instrutor não-super_admin não conseguiria subir capa mesmo com a action pronta. (2) Não existe nenhum bucket para anexo de aula — `lessons.download_url`/`download_file_name`/`download_file_size_bytes` estão no schema desde P-6.6, mas P-0.12 só previu `plataforma-capas`. Criar: (a) Server Action de signed-upload para `plataforma-capas` (mesmo padrão de `getUploadUrl` em `apps/documentos/src/actions/documents.ts`); (b) migration ajustando as policies de `plataforma-capas` para `super_admin OR plataforma.is_instructor()`; (c) novo bucket `plataforma-anexos` (privado, mime/tamanho adequados a PDF/doc/zip) com policies — SELECT para matriculado (mesma visibilidade de aula), INSERT/UPDATE/DELETE staff — e sua Server Action de signed-upload; (d) conectar `CourseForm`/`LessonForm` às actions reais.
+
+**Arquivos permitidos para criação/edição:**
+
+- migration gerada via `drizzle-kit generate --custom` (nome automático, G6.4) — ajusta policies de `plataforma-capas` e cria `plataforma-anexos`
+- `apps/plataforma/src/actions/uploads.ts`
+- `apps/plataforma/src/components/course-form.tsx`
+- `apps/plataforma/src/components/lesson-form.tsx`
+
+**Critérios de aceite:**
+
+- [ ] Instrutor (não só super_admin) sobe capa de curso pela tela (teste)
+- [ ] Anexo de aula tipo "download" sobe pela tela e fica disponível para aluno matriculado (teste)
+- [ ] Bucket `plataforma-anexos` criado com policy testada (quem lê/escreve)
+- [ ] `plataforma-capas`: policy de escrita passa a aceitar instrutor, não só super_admin (teste)
+- [ ] Nenhum `URL.createObjectURL`/File local sobrevive sem upload real (grep)
+- [ ] Lint passa · Types passam
+
+---
+
+> **Nota de auditoria (2026-07-14):** P-6.13/6.14/6.15 são corretivos gerados por auditoria cruzada de PROMPTS.md × SESSIONS.md × codebase (ver SESSIONS.md). Não bloqueiam a Fase 7 (Flats é módulo independente) — podem rodar em paralelo ou depois, a critério do Filipe. Débitos leves adicionais (tipo `Note`/`createNoteSchema` ausentes em `@hebron/types`/`@hebron/validators`; KPIs `activeCourses`/`completionRate` calculados mas sem card na Intranet) foram avaliados e considerados não-bloqueantes — não geraram prompt.
 
 ---
 

@@ -221,14 +221,14 @@ export function CourseEditorView({
               }}
               onDragOver={(e) => e.preventDefault()}
               onDrop={() => handleModuleDrop(courseModule.id)}
-              className="rounded-(--radius-md) border border-(--border) bg-(--surface)"
+              className="rounded-md border border-(--border) bg-(--surface)"
             >
               <div className="flex items-center gap-2.5 border-b border-(--divider) px-4 py-3">
                 <GripVertical
                   className="h-4 w-4 shrink-0 cursor-grab text-(--fg-subtle)"
                   aria-hidden="true"
                 />
-                <h3 className="min-w-0 flex-1 truncate font-(--font-display) text-sm font-(--font-weight-semibold) text-(--fg)">
+                <h3 className="min-w-0 flex-1 truncate font-(--font-display) text-sm text-(--fg)">
                   {courseModule.title}
                 </h3>
                 <span className="shrink-0 text-xs text-(--fg-muted)">
@@ -276,7 +276,7 @@ export function CourseEditorView({
                       </span>
                       <Link
                         href={editHref}
-                        className="shrink-0 text-xs font-(--font-weight-medium) text-(--brand) hover:underline"
+                        className="shrink-0 text-xs font-medium text-(--brand) hover:underline"
                       >
                         {lesson.type === "quiz" && !lesson.quizId
                           ? "Criar quiz"
@@ -315,7 +315,7 @@ export function CourseEditorView({
           );
         })}
 
-        <div className="rounded-(--radius-md) border border-dashed border-(--border) p-4">
+        <div className="rounded-md border border-dashed border-(--border) p-4">
           {addingModule ? (
             <CourseModuleForm
               courseId={course.id}
