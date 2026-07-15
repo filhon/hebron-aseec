@@ -4066,14 +4066,14 @@ Páginas do hóspede: catálogo de flats (fotos, disponibilidade). Formulário d
 
 **Critérios de aceite:**
 
-- [ ] Catálogo com fotos e disponibilidade por flat
-- [ ] Formulário completo: dados pessoais, acompanhantes, veículo, 3 períodos, critérios
-- [ ] Status da reserva com timeline visual
-- [ ] Calendário consolidado (admin) com ambos os flats
-- [ ] Fila de aprovação ordenada por score
-- [ ] Responsivo
-- [ ] Lint passa
-- [ ] Types passam
+- [x] Catálogo com fotos e disponibilidade por flat
+- [x] Formulário completo: dados pessoais, acompanhantes, veículo, 3 períodos, critérios
+- [x] Status da reserva com timeline visual
+- [x] Calendário consolidado (admin) com ambos os flats
+- [x] Fila de aprovação ordenada por score
+- [x] Responsivo
+- [x] Lint passa
+- [x] Types passam
 
 ---
 

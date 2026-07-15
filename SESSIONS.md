@@ -143,6 +143,7 @@
 | S-120  | 2026-07-14 | P-6.15 — Upload de Mídia da Plataforma (capa de curso, anexo de aula)         | concluido                            |
 | S-121  | 2026-07-15 | P-7.1 — Schema de Tipos Flats                                                 | concluido                            |
 | S-122  | 2026-07-15 | P-7.2 — Componentes UI Flats                                                  | concluido                            |
+| S-123  | 2026-07-15 | P-7.3 — Telas e Páginas Flats                                                 | concluido                            |
 
 ---
 
@@ -7882,4 +7883,123 @@ existem), com `score-indicator.tsx` (Projetos), `progress-bar.tsx`
   scaffold)
 - `pnpm-lock.yaml`
 - `PROMPTS.md` (checklist de P-7.2 marcado)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+### S-123 — 2026-07-15 — P-7.3 — Telas e Páginas Flats
+
+**Prompt:** P-7.3
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Criadas as 8 páginas do módulo Flats (catálogo, formulário de reserva,
+minhas reservas, calendário admin, fila de aprovação, detalhe da reserva)
+sobre os tipos/mocks de P-7.1 e componentes de P-7.2. `design-refs/flats/`
+não existe — seguida a linguagem visual e o padrão estrutural já usado em
+`financeiro`/`documentos`/`admin` (layout.tsx + shell.tsx com `AppShell`,
+`MOCK_USER` local, página inteira `"use client"` quando há estado local,
+Server Component quando não há). Escopo mantido estritamente ao que
+P-7.3 pede — o formulário de reserva é uma tela única com os campos
+exigidos (dados pessoais, acompanhantes, veículo, 3 períodos, critérios
+brutos de scoring), **não** o wizard multi-step com consentimento LGPD e
+upload de documento, que é escopo explícito de P-7.4 (linha 4092-4108 de
+PROMPTS.md); o mesmo vale para o formulário de check-in/check-out, que em
+P-7.3 é só a transição de status via botão (sem `checkin-form.tsx`,
+criado em P-7.4).
+
+**Suposições e correções registradas (G1):**
+
+- **Infra raiz ausente:** `apps/flats/src/app/layout.tsx`, `globals.css` e
+  `postcss.config.mjs` não existiam (scaffold de P-7.1/P-7.2 não incluiu
+  infraestrutura de app Next.js) — criados replicando o padrão exato de
+  `apps/financeiro` (Parkinsans + Titillium via `next/font`, import dos
+  tokens de `packages/ui`).
+- **`apps/flats/eslint.config.mjs` sem ignore de `next-env.d.ts`:** todos
+  os outros apps têm `{ ignores: ["next-env.d.ts", ".next/**"] }`; sem
+  isso o lint falhava no arquivo autogerado do Next. Corrigido para o
+  mesmo padrão.
+- **Colisão de rotas `(admin)` × `(hospede)`:** a lista de arquivos
+  permitidos do prompt usa `apps/flats/src/app/(admin)/...`, mas dois
+  route groups não podem resolver o mesmo path — `(admin)/page.tsx` e
+  `(hospede)/page.tsx` colidiam em `/` (`next build` falha com erro
+  explícito). Corrigido convertendo `(admin)` em um segmento real
+  `admin/` (sem parênteses), seguindo o precedente de `plataforma`
+  ((aluno)`na raiz +`instrutor/`como segmento real para o segundo
+papel). Rotas admin passam a viver em`/admin`, `/admin/aprovacao`e`/admin/reserva/[id]`; todos os `href`/`Link`internos foram ajustados.`pnpm turbo build` confirmado verde após a correção.
+- **`shell.tsx` para `(hospede)` e `admin`:** não listados nos arquivos
+  permitidos, mas necessários para o `layout.tsx` renderizar o
+  `AppShell` — mesmo padrão de débito já registrado em S-\* anteriores
+  (financeiro/tarefas também criaram `shell.tsx` fora da lista formal).
+  Usam `MOCK_USER` local (`Filipe Honório` / e-mail do dev) até a
+  integração de auth em P-7.9.
+- **Página `reserva/[id]` com ação de check-in/check-out:** para não
+  quebrar o build com `"use client"` + `params` assíncrono no mesmo
+  arquivo (lição de sessões anteriores — ver `feedback_dynamic_route_client_params`
+  em memória), `page.tsx` ficou como Server Component
+  (`async function` + `await params`) e a interação (`Registrar
+check-in`/`check-out`) foi isolada em `status-actions.tsx` colocado no
+  mesmo diretório, um Client Component com estado local (não persiste —
+  aguarda Server Action de P-7.8).
+- **"Hóspede logado" simulado:** sem autenticação nesta fase, a página
+  `minhas-reservas` usa `guest-01` (Pr. Josué Andrade) como hóspede
+  fixo. Nos dados mock de P-7.1 cada guest tem exatamente 1 reserva, então
+  a seção "Histórico" nunca renderiza itens com o fixture atual — o
+  código suporta múltiplas reservas por guest corretamente, só não há
+  dado de exemplo para demonstrar.
+- **Critérios de scoring no formulário de reserva:** o hóspede informa as
+  respostas brutas (`scoringAnswersSchema` de `@hebron/validators`), nunca
+  os pontos — a pontuação é 100% calculada pelo sistema (Respostas9
+  Q150). O cálculo em tempo real e o wizard com consentimento ficam para
+  P-7.4, conforme escopo do prompt.
+- Formulário de reserva valida com `createReservationRequestSchema` no
+  submit (sem `react-hook-form`, ainda não é dependência do app — isso é
+  introduzido em P-7.4 para o wizard) e navega para `/minhas-reservas`
+  em caso de sucesso; erros de schema são mapeados por path e exibidos
+  nos campos correspondentes.
+
+**Critérios de aceite verificados:**
+
+- [x] Catálogo com fotos e disponibilidade por flat — `(hospede)/page.tsx`
+      usa `UnitCard` + cálculo de próxima ocupação a partir dos mocks.
+- [x] Formulário completo: dados pessoais, acompanhantes, veículo, 3
+      períodos, critérios — `(hospede)/reservar/page.tsx`.
+- [x] Status da reserva com timeline visual —
+      `(hospede)/minhas-reservas/page.tsx` (`ReservationTimeline` local).
+- [x] Calendário consolidado (admin) com ambos os flats — `admin/page.tsx`
+      usa `AvailabilityCalendar`.
+- [x] Fila de aprovação ordenada por score — `admin/aprovacao/page.tsx`
+      usa `ApprovalQueue`.
+- [x] Responsivo — grids `sm:`/`lg:` em todas as páginas, formulário em
+      coluna única no mobile.
+- [x] Lint passa — `pnpm turbo lint --filter=@hebron/flats`.
+- [x] Types passam — `pnpm turbo typecheck --filter=@hebron/flats`.
+- [x] `pnpm turbo build --filter=@hebron/flats` verde (não é critério
+      formal do prompt, mas rodado para validar a correção da colisão de
+      rotas — todas as 8 rotas compilam e uma requisição real a
+      `/admin/reserva/[id]` foi testada via dev server).
+
+**Arquivos criados:**
+
+- `apps/flats/src/app/layout.tsx`
+- `apps/flats/src/app/globals.css`
+- `apps/flats/postcss.config.mjs`
+- `apps/flats/src/app/(hospede)/layout.tsx`
+- `apps/flats/src/app/(hospede)/shell.tsx`
+- `apps/flats/src/app/(hospede)/page.tsx`
+- `apps/flats/src/app/(hospede)/reservar/page.tsx`
+- `apps/flats/src/app/(hospede)/minhas-reservas/page.tsx`
+- `apps/flats/src/app/admin/layout.tsx`
+- `apps/flats/src/app/admin/shell.tsx`
+- `apps/flats/src/app/admin/page.tsx`
+- `apps/flats/src/app/admin/aprovacao/page.tsx`
+- `apps/flats/src/app/admin/reserva/[id]/page.tsx`
+- `apps/flats/src/app/admin/reserva/[id]/status-actions.tsx`
+
+**Arquivos modificados:**
+
+- `apps/flats/eslint.config.mjs` (ignore de `next-env.d.ts`, faltante do
+  scaffold)
+- `PROMPTS.md` (checklist de P-7.3 marcado)
 - `SESSIONS.md` (esta entrada + linha no índice)
