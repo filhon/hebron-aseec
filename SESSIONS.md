@@ -141,6 +141,7 @@
 | S-118  | 2026-07-14 | P-6.13 — Gestão de Instrutores (Plataforma)                                   | concluido                            |
 | S-119  | 2026-07-14 | P-6.14 — Verificação Pública de Certificado (Plataforma)                      | concluido                            |
 | S-120  | 2026-07-14 | P-6.15 — Upload de Mídia da Plataforma (capa de curso, anexo de aula)         | concluido                            |
+| S-121  | 2026-07-15 | P-7.1 — Schema de Tipos Flats                                                 | concluido                            |
 
 ---
 
@@ -7677,9 +7678,9 @@ catalog:` (não listado nos arquivos permitidos, mas obrigatório — o
       o upload, nunca submetido) e um uso não relacionado em
       `certificate-card.tsx` (download de PDF gerado)
 - [x] Lint passa — `pnpm turbo lint --filter=@hebron/plataforma
-    --filter=@hebron/db`
+  --filter=@hebron/db`
 - [x] Types passam — `pnpm turbo typecheck --filter=@hebron/plataforma
-    --filter=@hebron/db`
+  --filter=@hebron/db`
 - Migration aplicada com sucesso em banco de dev real (`pnpm db:migrate`)
   e verificada via `pg_policies`; suíte de testes existente do módulo
   (21 testes, `rls.test.ts`/`progress.test.ts`/`certificates.test.ts`)
@@ -7700,4 +7701,105 @@ de policy/bucket, não clique-a-clique no browser.
 - `apps/plataforma/src/components/lesson-form.tsx`
 - `apps/plataforma/package.json` (`@supabase/supabase-js`)
 - `pnpm-lock.yaml`
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+### S-121 — 2026-07-15 — P-7.1 — Schema de Tipos Flats
+
+**Prompt:** P-7.1
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Primeiro prompt da Fase 7 (Flats). Criados os tipos, schemas Zod e mock data
+para o módulo, seguindo BRAIN §6.8 e o edital em
+`.docs/EDITAL PARA SOLICITAÇÕES DE RESERVA NO FLAT.md`. `apps/flats` já
+existia como scaffold (package.json/tsconfig/eslint de uma sessão anterior,
+sem `src/`) — este prompt cria `src/lib/mock-data.ts`, o restante de
+`src/app/` fica para o primeiro prompt de telas (padrão já registrado em
+memória: "New app scaffold gap").
+
+**Decisão tomada (pergunta feita ao Filipe antes de implementar):**
+
+- **Inconsistência no total máximo do scoring.** BRAIN §6.8 abre com
+  "Scoring automático (máx. 80 pontos)" e o critério de aceite deste prompt
+  repete "max 80", mas a soma dos 10 critérios documentados logo abaixo
+  (a10+b10+c10+d5+e5+f10+g10+h5+i5+j5) é **75**, não 80. Rastreado a causa:
+  `.docs/Respostas10.md` Q156 mostra que o critério d) "situação de saúde"
+  tinha 3 níveis no edital original (com laudo=10, autodeclarado=5,
+  nenhum=0, somando 80), e o Filipe determinou remover o nível "com laudo"
+  por exigir dado médico confidencial — d) virou binário (5/0). O texto
+  "máx. 80" do BRAIN nunca foi atualizado para refletir essa mudança.
+  Perguntado diretamente, o Filipe confirmou: **usar 75 como máximo real**
+  (soma dos critérios já decididos), tratando "80" como rótulo desatualizado.
+  Refletido em `packages/types/src/flats/index.ts` como constante exportada
+  `SCORING_MAX_POINTS = 75`, com o histórico documentado em comentário no
+  tipo `ScoringCriteria`. **BRAIN.md não foi editado** (fora da lista de
+  arquivos permitidos deste prompt); a correção do texto "máx. 80 pontos"
+  em BRAIN §6.8 fica como débito para quem tiver BRAIN.md na lista de
+  arquivos permitidos (ou PATCH dedicado).
+
+**Suposições registradas (G1):**
+
+- `packages/types/package.json` e `packages/validators/package.json` não
+  estavam na lista de arquivos permitidos, mas precisaram da entrada
+  `"./flats"` no mapa `exports` — mesmo padrão de todo módulo anterior
+  (P-6.1, P-5.1, P-4.1 etc.), sem isso `@hebron/types/flats` e
+  `@hebron/validators/flats` não resolvem.
+- `Reservation.status` (workflow solicitada → aprovada/rejeitada →
+  confirmada → em_curso → concluida, + cancelada) não está explicitamente
+  no escopo textual do prompt, mas é infraestrutura óbvia — sem um campo de
+  status a entidade não é utilizável nos prompts seguintes de Fase 7 (fila
+  de aprovação, calendário). Workflow copiado de `.docs/Claude.md §4.8`
+  (documento complementar, não contradiz BRAIN neste ponto); "cancelada"
+  incluído por ser citado como funcionalidade específica ("política de
+  cancelamento configurável").
+  Regra "máx. 7 dias consecutivos por período de 12 meses por indivíduo"
+  (BRAIN §6.8): a parte "≤ 7 dias por período" é validável estaticamente e
+  foi implementada em `preferredPeriodSchema` (Zod refine); a parte
+  "por 12 meses/indivíduo" depende do histórico de reservas do hóspede no
+  banco e não é representável só com tipos/mock — documentada em comentário
+  e fica para a camada de Server Action (Bloco B, P-7.6+).
+- Campos de `Guest`/`Companion` (CPF, data de nascimento, documento do
+  responsável) seguem literalmente `.docs/Respostas10.md` Q158 (resposta
+  direta do Filipe sobre os campos do formulário de reserva), não inventados.
+- Mock data: 2 unidades, 5 hóspedes, 5 reservas cobrindo os status
+  solicitada/aprovada/confirmada/rejeitada, com um cenário de empate de
+  pontuação (`reservation-02` vs. `reservation-03`, 43 pts cada) resolvido
+  pelo critério de desempate 1 (idade) — narrado em `managerNotes` de
+  ambas as reservas.
+
+**Critérios de aceite verificados:**
+
+- [x] Unit: nome, capacidade (6), quartos (2), fotos, amenidades —
+      `packages/types/src/flats/index.ts` (`Unit`).
+- [x] Reservation com 3 preferred_periods — `Reservation.preferredPeriods`
+      (tupla de 3 `PreferredPeriod`).
+- [x] Guest: responsável + até 6 acompanhantes + 2 menores de 3 anos —
+      `Guest.companions`/`Guest.youngChildren`, limites em `guestSchema`
+      (`packages/validators/src/flats/index.ts`).
+- [x] Vehicle: placa, cor, modelo, marca, obrigatório se `arrivesByCar` —
+      `vehicleSchema` + refine em `createReservationRequestSchema`.
+- [x] ScoringCriteria: 10 critérios (a-j), pontuação automática — máx. real
+      75 pontos, não 80 (ver decisão acima) — `ScoringCriteria` +
+      `SCORING_MAX_POINTS`.
+- [x] Regra dos 7 dias — `preferredPeriodSchema` (refine); parte de 12
+      meses/indivíduo documentada como pendente de Server Action.
+- [x] AidRequest: diária, transporte (aéreo R$1.000/pessoa ou combustível) —
+      `AidRequest` + `aidRequestSchema`.
+- [x] Lint passa — `pnpm turbo lint` (monorepo completo, 38/38 tasks).
+- [x] Types passam — `pnpm turbo typecheck` (monorepo completo, 38/38 tasks).
+
+**Arquivos criados:**
+
+- `packages/types/src/flats/index.ts`
+- `packages/validators/src/flats/index.ts`
+- `apps/flats/src/lib/mock-data.ts`
+
+**Arquivos modificados:**
+
+- `packages/types/package.json` (entrada `./flats` no `exports`)
+- `packages/validators/package.json` (entrada `./flats` no `exports`)
+- `PROMPTS.md` (checklist de P-7.1 marcado, com nota sobre o max 75/80)
 - `SESSIONS.md` (esta entrada + linha no índice)

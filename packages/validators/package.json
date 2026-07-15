@@ -6,6 +6,7 @@
     ".": "./src/index.ts",
     "./documentos": "./src/documentos/index.ts",
     "./financeiro": "./src/financeiro/index.ts",
+    "./flats": "./src/flats/index.ts",
     "./intranet": "./src/intranet/index.ts",
     "./plataforma": "./src/plataforma/index.ts",
     "./projetos": "./src/projetos/index.ts",

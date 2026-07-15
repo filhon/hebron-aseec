@@ -3986,15 +3986,17 @@ Tipos e schemas Zod: Unit (2 flats fixos), Reservation (com 3 períodos de prefe
 
 **Critérios de aceite:**
 
-- [ ] Unit: nome, capacidade (6), quartos (2), fotos, amenidades
-- [ ] Reservation com 3 preferred_periods: [{start, end}, {start, end}, {start, end}]
-- [ ] Guest: responsável + até 6 acompanhantes + 2 menores de 3 anos
-- [ ] Vehicle: placa, cor, modelo, marca (obrigatório se vier de carro)
-- [ ] ScoringCriteria: 10 critérios (a-j) com pontuação automática (max 80)
-- [ ] Regra: max 7 dias por 12 meses por indivíduo
-- [ ] AidRequest: diária, transporte (aéreo R$1.000/pessoa ou combustível)
-- [ ] Lint passa
-- [ ] Types passam
+- [x] Unit: nome, capacidade (6), quartos (2), fotos, amenidades
+- [x] Reservation com 3 preferred_periods: [{start, end}, {start, end}, {start, end}]
+- [x] Guest: responsável + até 6 acompanhantes + 2 menores de 3 anos
+- [x] Vehicle: placa, cor, modelo, marca (obrigatório se vier de carro)
+- [x] ScoringCriteria: 10 critérios (a-j) com pontuação automática (max 75 — ver
+      decisão em SESSIONS.md; "max 80" do enunciado e do cabeçalho BRAIN §6.8
+      não bate com a soma real dos 10 critérios documentados)
+- [x] Regra: max 7 dias por 12 meses por indivíduo
+- [x] AidRequest: diária, transporte (aéreo R$1.000/pessoa ou combustível)
+- [x] Lint passa
+- [x] Types passam
 
 **Notas:**
 Ref: BRAIN.md seção 6.8 e edital de flats em `.docs/EDITAL PARA SOLICITAÇÕES DE RESERVA NO FLAT.md`.
