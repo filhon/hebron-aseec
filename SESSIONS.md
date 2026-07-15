@@ -144,6 +144,7 @@
 | S-121  | 2026-07-15 | P-7.1 — Schema de Tipos Flats                                                 | concluido                            |
 | S-122  | 2026-07-15 | P-7.2 — Componentes UI Flats                                                  | concluido                            |
 | S-123  | 2026-07-15 | P-7.3 — Telas e Páginas Flats                                                 | concluido                            |
+| S-124  | 2026-07-15 | P-7.4 — Formulários Flats                                                     | concluido                            |
 
 ---
 
@@ -8002,4 +8003,161 @@ check-in`/`check-out`) foi isolada em `status-actions.tsx` colocado no
 - `apps/flats/eslint.config.mjs` (ignore de `next-env.d.ts`, faltante do
   scaffold)
 - `PROMPTS.md` (checklist de P-7.3 marcado)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+### S-124 — 2026-07-15 — P-7.4 — Formulários Flats
+
+**Prompt:** P-7.4
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Criados os 9 arquivos do wizard de reserva multi-step (consentimento →
+responsável + upload de documento → acompanhantes → veículo → 3 períodos →
+scoring → auxílio → revisão), o `approval-form.tsx` do gestor e o
+`checkin-form.tsx` de transição de status, evoluindo o formulário único de
+P-7.3 (`(hospede)/reservar/page.tsx`) para o wizard completo pedido aqui.
+`react-hook-form` foi adicionado como dependência de `apps/flats` (previsto
+em S-123: "ainda não é dependência do app — isso é introduzido em P-7.4").
+Nenhum resolver Zod (`@hookform/resolvers`) foi adicionado: os schemas de
+`@hebron/validators/flats` usam `z.coerce.date()` em vários campos, o que
+gera conflito de tipo entrada(string)/saída(Date) com `zodResolver` do
+react-hook-form; optou-se por manter os valores do formulário como string e
+validar cada passo manualmente com `schema.safeParse()` + `form.setError()`
+(mesmo padrão de mapeamento de path já usado em `reservar/page.tsx` de
+P-7.3, só que agora usando o estado de erros do react-hook-form em vez de um
+`Record` manual). `react-hook-form` é usado principalmente para
+`useFieldArray` (acompanhantes/crianças) e gestão de estado entre os passos
+via `FormProvider`/`useFormContext`.
+
+**Suposições e decisões registradas (G1):**
+
+- **Upload de documento (bucket `flats-documentos`) é real, não mockado:**
+  a policy RLS e o bucket já existem desde P-0.12 (`packages/db/src/migrations/0020_storage_buckets.sql`,
+  comentário explícito "P-7.4/P-7.6 devem substituir..."). `step-guest.tsx`
+  chama `supabase.storage.from("flats-documentos").upload()` diretamente do
+  cliente (Pattern B — mesmo padrão de `apps/financeiro/import-wizard.tsx`),
+  autorizado pela policy `flats_documentos_insert_own` (dono grava na
+  própria pasta `{user_id}/{uuid}.{ext}`). Validação client-side de
+  tipo (pdf/jpeg/png) e tamanho (10 MB) replica os limites do bucket.
+- **Consentimento (`public.consents`) é gravado de verdade, não mockado:**
+  a tabela, RLS (`consents_insert_own`/`consents_update_own`) e o enum
+  `consent_purpose` já existem desde P-0.13. Como P-7.4 não lista nenhum
+  arquivo de Server Action nos "Arquivos permitidos" e o helper rico
+  `packages/db/src/consents.ts#setConsent` é server-only (usa `db` do
+  Drizzle), o wizard grava os 3 consentimentos (`dados_reserva`,
+  `dado_saude`, `comunicacao`) via `upsert` direto do cliente
+  (`onConflict: "user_id,purpose"`), autorizado pela mesma RLS. É uma
+  versão mais simples do que `setConsent()` (não preserva `grantedAt`
+  anterior em revogações repetidas nem grava audit log) — aceitável para o
+  primeiro consentimento de uma reserva; o backoffice administrativo de
+  consentimento continua usando `setConsent()`.
+- **Criação da própria reserva permanece mockada:** não existe schema/tabela
+  de `flats.reservations` ainda (só chega em Bloco B, P-7.6+). O envio final
+  do wizard valida contra `createReservationRequestSchema` (defesa em
+  profundidade, redundante com as validações por passo) e navega para
+  `/minhas-reservas` em caso de sucesso — mesmo comportamento mock de
+  P-7.3, sem persistência real da reserva em si. Resumindo o critério misto
+  desta sessão: infraestrutura de plataforma já existente (storage,
+  consentimento) é usada de verdade; dados de domínio específicos do módulo
+  (a reserva) continuam mockados até o Bloco B, seguindo G1 "Bloco A: UI
+  com dados mockados".
+- **`reservation-wizard.tsx` não foi conectado a `(hospede)/reservar/page.tsx`:**
+  esse arquivo não está na lista de arquivos permitidos do P-7.4 (só os 9
+  componentes estão). O wizard foi construído como página completa e
+  autocontida (inclui seu próprio `PageHeader` + container), pronta para
+  substituir o corpo de `reservar/page.tsx` num prompt de integração
+  futuro. Mesmo raciocínio para `approval-form.tsx` e `checkin-form.tsx`:
+  não foram conectados a `admin/aprovacao/page.tsx` nem a
+  `admin/reserva/[id]/page.tsx` (que continua usando o `status-actions.tsx`
+  de P-7.3) — a integração fica para o próximo prompt de páginas/integração
+  do módulo Flats (G5 aplica-se a partir de P-7.9).
+- **Score em tempo real (step-scoring) só soma critérios determinísticos:**
+  dos 10 critérios do BRAIN §6.8, os critérios `e` (situação familiar
+  especial) e `j` (participação em projetos Hebron) dependem de avaliação
+  da gestão/sistema após o envio (`e` é subjetivo, avaliado pelo gestor;
+  `j` é "auto-calculado via módulo Projetos", fora do formulário do
+  hóspede). O preview de pontuação soma apenas os 8 critérios
+  determinísticos (a,b,c,d,f,g,h,i — máximo 65 de 75) e exibe uma nota
+  explicando que os outros 2 são avaliados depois — evita prometer uma
+  precisão que o formulário não tem.
+- **Campo de saúde (critério d) gated por consentimento específico:** o
+  select "Possui condição de saúde a declarar" só é renderizado em
+  `step-scoring.tsx` quando `consent.dadoSaude` (de `step-consent.tsx`) é
+  `true`; se não consentido, o payload final força
+  `healthDeclared: false` (nunca lê o valor do campo oculto) — atende ao
+  critério de aceite "só exibido/persistido com consentimento específico".
+- **Validação de disponibilidade dos 3 períodos é um aviso, não um bloqueio:**
+  `step-periods.tsx` verifica sobreposição do período informado contra
+  reservas mock com status `confirmada`/`em_curso`; se todas as unidades
+  ativas já estiverem ocupadas no trecho, mostra um aviso mas permite o
+  envio — BRAIN §6.8 deixa a escolha final (unidade + conflitos de
+  calendário) para o diretor gestor na aprovação, não para uma trava no
+  formulário do hóspede.
+- **Ajuda de custo não coleta "valor" do hóspede:** `aidRequestSchema` (de
+  P-7.1, `packages/validators/src/flats/index.ts`) só tem
+  `requestsDailyAllowance`, `transportMode` e `transportPassengerCount` —
+  nenhum campo de valor monetário para o hóspede preencher. Isso é
+  consistente com BRAIN §6.8 ("Aprovado caso a caso"): o valor
+  (`dailyAllowanceAmount`/`transportAmount`) é definido pelo gestor na
+  aprovação (`reviewAidRequestSchema`), não pelo hóspede. `StepAid` (dentro
+  de `reservation-wizard.tsx`, sem arquivo próprio — não está na lista de
+  arquivos permitidos) segue exatamente o schema existente.
+- **`ajuda de custo` e `revisão` não têm arquivo próprio:** a lista de
+  arquivos permitidos do P-7.4 não inclui um step file para esses dois
+  passos do wizard descrito no escopo — implementados como componentes
+  internos (`StepAid`, `StepReview`) não exportados dentro de
+  `reservation-wizard.tsx`.
+- **`getSupabaseBrowserClient`/`getSession` de `@hebron/auth/client`**
+  reutilizados para obter o usuário autenticado (upload e consentimento
+  usam a pasta/linha do usuário logado) — mesmo padrão de
+  `apps/financeiro/import-wizard.tsx`.
+
+**Critérios de aceite verificados:**
+
+- [x] Wizard com step inicial de consentimento; sem consentimento de reserva
+      não prossegue — `validateConsentStep()` em `reservation-wizard.tsx`
+      bloqueia avanço sem `consent.dadosReserva`.
+- [x] Campo de saúde (critério d) só exibido/persistido com consentimento
+      específico — `step-scoring.tsx` (renderização condicional) +
+      `toScoringAnswersPayload()` (força `false` sem consentimento).
+- [x] Upload de documento de identidade para o bucket `flats-documentos` com
+      policy restrita (P-0.12) — `step-guest.tsx`, upload real via RLS.
+- [x] Check-in form registra transição + timestamp + observações; nenhum
+      checklist de inventário — `checkin-form.tsx`.
+- [x] Acompanhantes: dinâmico (adicionar/remover), max 6+2 menores —
+      `step-companions.tsx` (`useFieldArray` + limites).
+- [x] 3 períodos de preferência com validação de disponibilidade —
+      `step-periods.tsx`.
+- [x] Critérios de scoring: inputs por tipo (anos, seleção, boolean, texto)
+      — `step-scoring.tsx` (data→anos calculado, selects, textarea).
+- [x] Ajuda de custo: toggle + tipo (aéreo/combustível) + valor — `StepAid`
+      (valor é definido pelo gestor na aprovação, conforme
+      `aidRequestSchema`/BRAIN §6.8, ver suposição acima).
+- [x] Score calculado automaticamente em tempo real no formulário —
+      `step-scoring.tsx` (`useMemo` sobre os valores observados).
+- [x] Lint passa — `pnpm turbo lint --filter=@hebron/flats` e
+      `pnpm turbo lint` (monorepo) verdes.
+- [x] Types passam — `pnpm turbo typecheck --filter=@hebron/flats` e
+      `pnpm turbo typecheck` (monorepo) verdes.
+
+**Arquivos criados:**
+
+- `apps/flats/src/components/reservation-wizard.tsx`
+- `apps/flats/src/components/reservation-wizard-steps/step-consent.tsx`
+- `apps/flats/src/components/reservation-wizard-steps/step-guest.tsx`
+- `apps/flats/src/components/reservation-wizard-steps/step-companions.tsx`
+- `apps/flats/src/components/reservation-wizard-steps/step-vehicle.tsx`
+- `apps/flats/src/components/reservation-wizard-steps/step-periods.tsx`
+- `apps/flats/src/components/reservation-wizard-steps/step-scoring.tsx`
+- `apps/flats/src/components/approval-form.tsx`
+- `apps/flats/src/components/checkin-form.tsx`
+
+**Arquivos modificados:**
+
+- `apps/flats/package.json` (dependência `react-hook-form`, prevista em
+  S-123)
+- `PROMPTS.md` (checklist de P-7.4 marcado)
 - `SESSIONS.md` (esta entrada + linha no índice)

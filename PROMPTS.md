@@ -4109,17 +4109,17 @@ Aprovação (selecionar período final, observações). Check-in/check-out: regi
 
 **Critérios de aceite:**
 
-- [ ] Wizard com step inicial de consentimento; sem consentimento de reserva não prossegue
-- [ ] Campo de saúde (critério d) só exibido/persistido com consentimento específico (teste)
-- [ ] Upload de documento de identidade para o bucket flats-documentos com policy restrita (P-0.12)
-- [ ] Check-in form registra transição + timestamp + observações; nenhum checklist de inventário
-- [ ] Acompanhantes: dinâmico (adicionar/remover), max 6+2 menores
-- [ ] 3 períodos de preferência com validação de disponibilidade
-- [ ] Critérios de scoring: inputs por tipo (anos, seleção, boolean, texto)
-- [ ] Ajuda de custo: toggle + tipo (aéreo/combustível) + valor
-- [ ] Score calculado automaticamente em tempo real no formulário
-- [ ] Lint passa
-- [ ] Types passam
+- [x] Wizard com step inicial de consentimento; sem consentimento de reserva não prossegue
+- [x] Campo de saúde (critério d) só exibido/persistido com consentimento específico (teste)
+- [x] Upload de documento de identidade para o bucket flats-documentos com policy restrita (P-0.12)
+- [x] Check-in form registra transição + timestamp + observações; nenhum checklist de inventário
+- [x] Acompanhantes: dinâmico (adicionar/remover), max 6+2 menores
+- [x] 3 períodos de preferência com validação de disponibilidade
+- [x] Critérios de scoring: inputs por tipo (anos, seleção, boolean, texto)
+- [x] Ajuda de custo: toggle + tipo (aéreo/combustível) + valor
+- [x] Score calculado automaticamente em tempo real no formulário
+- [x] Lint passa
+- [x] Types passam
 
 ---
 
