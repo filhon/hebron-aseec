@@ -334,6 +334,9 @@ importers:
       "@hebron/validators":
         specifier: workspace:*
         version: link:../../packages/validators
+      lucide-react:
+        specifier: ^0.460.0
+        version: 0.460.0(react@19.2.6)
       next:
         specifier: ^15.3.0
         version: 15.5.18(@opentelemetry/api@1.9.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)

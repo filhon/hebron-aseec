@@ -4029,13 +4029,13 @@ Componentes: UnitCard (fotos, capacidade, status). AvailabilityCalendar (timelin
 
 **Critérios de aceite:**
 
-- [ ] AvailabilityCalendar: timeline horizontal com reservas coloridas por status
-- [ ] ScoringPanel: 10 critérios com barra de pontuação e total
-- [ ] PeriodPicker: 3 seletores de range de data com validação (max 7 dias cada)
-- [ ] ApprovalQueue: lista ordenada por score com desempate visível
-- [ ] Responsivo
-- [ ] Lint passa
-- [ ] Types passam
+- [x] AvailabilityCalendar: timeline horizontal com reservas coloridas por status
+- [x] ScoringPanel: 10 critérios com barra de pontuação e total
+- [x] PeriodPicker: 3 seletores de range de data com validação (max 7 dias cada)
+- [x] ApprovalQueue: lista ordenada por score com desempate visível
+- [x] Responsivo
+- [x] Lint passa
+- [x] Types passam
 
 ---
 

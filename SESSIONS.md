@@ -142,6 +142,7 @@
 | S-119  | 2026-07-14 | P-6.14 — Verificação Pública de Certificado (Plataforma)                      | concluido                            |
 | S-120  | 2026-07-14 | P-6.15 — Upload de Mídia da Plataforma (capa de curso, anexo de aula)         | concluido                            |
 | S-121  | 2026-07-15 | P-7.1 — Schema de Tipos Flats                                                 | concluido                            |
+| S-122  | 2026-07-15 | P-7.2 — Componentes UI Flats                                                  | concluido                            |
 
 ---
 
@@ -7678,9 +7679,9 @@ catalog:` (não listado nos arquivos permitidos, mas obrigatório — o
       o upload, nunca submetido) e um uso não relacionado em
       `certificate-card.tsx` (download de PDF gerado)
 - [x] Lint passa — `pnpm turbo lint --filter=@hebron/plataforma
-  --filter=@hebron/db`
+--filter=@hebron/db`
 - [x] Types passam — `pnpm turbo typecheck --filter=@hebron/plataforma
-  --filter=@hebron/db`
+--filter=@hebron/db`
 - Migration aplicada com sucesso em banco de dev real (`pnpm db:migrate`)
   e verificada via `pg_policies`; suíte de testes existente do módulo
   (21 testes, `rls.test.ts`/`progress.test.ts`/`certificates.test.ts`)
@@ -7802,4 +7803,83 @@ memória: "New app scaffold gap").
 - `packages/types/package.json` (entrada `./flats` no `exports`)
 - `packages/validators/package.json` (entrada `./flats` no `exports`)
 - `PROMPTS.md` (checklist de P-7.1 marcado, com nota sobre o max 75/80)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+### S-122 — 2026-07-15 — P-7.2 — Componentes UI Flats
+
+**Prompt:** P-7.2
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Criados os 7 componentes de UI do módulo Flats sobre os tipos/mocks de
+P-7.1. `design-refs/flats/` **não existe** (só há referência para admin,
+documentos, financeiro) — seguida a linguagem visual dos apps já
+implementados (padrão de card local com `cn` inline + tokens `--hb-*`, sem
+`Card`/`Badge`/`Progress` compartilhados em `packages/ui`, que ainda não
+existem), com `score-indicator.tsx` (Projetos), `progress-bar.tsx`
+(Plataforma), `calendar-widget.tsx` (Intranet) e `payable-card.tsx`
+(Financeiro) como precedentes diretos.
+
+**Suposições registradas (G1):**
+
+- `lucide-react` não estava nas dependências de `apps/flats/package.json`
+  (scaffold de P-7.1 não incluiu ícones) — adicionado na mesma versão
+  usada por todos os outros apps (`^0.460.0`); sem isso `unit-card.tsx`,
+  `reservation-card.tsx` e `scoring-panel.tsx` não compilam.
+- `AvailabilityCalendar` só posiciona na timeline reservas com `unitId` e
+  `confirmedPeriod` preenchidos (status `confirmada`/`em_curso`/
+  `concluida`) — reservas `solicitada`/`rejeitada`/`aprovada` sem unidade
+  definida não têm data confirmada para plotar; comportamento consistente
+  com o fluxo de `Reservation` de P-7.1 (unidade só é atribuída na
+  aprovação).
+- `ApprovalQueue` implementa o desempate completo do BRAIN §6.8 (idade →
+  tempo sem descanso fora → nunca usou o flat → sorteio) como comparador de
+  ordenação, e anota visualmente qual critério decidiu cada empate
+  adjacente na lista ordenada (não há como representar "sorteio" de forma
+  determinística na UI — fica com um rótulo "aguardando sorteio").
+- `PeriodPicker` trabalha com strings ISO (`yyyy-mm-dd`, formato nativo de
+  `<input type="date">`) em vez de `Date`, deixando a conversão para
+  `Date`/parsing Zod a cargo do formulário que consumir o componente em
+  P-7.4; valida localmente `end > start` e máx. 7 dias (mesma regra de
+  `preferredPeriodSchema`, não importada por não ser exportada do
+  validators).
+- `unit-card.tsx`, `reservation-card.tsx`, `approval-queue.tsx` e
+  `period-picker.tsx` levaram `"use client"` por usarem handlers de evento
+  (`onClick`/`onChange`); `availability-calendar.tsx`, `scoring-panel.tsx`
+  e `guest-list.tsx` ficaram como Server Components (sem interatividade).
+
+**Critérios de aceite verificados:**
+
+- [x] AvailabilityCalendar: timeline horizontal com reservas coloridas por
+      status — `availability-calendar.tsx`.
+- [x] ScoringPanel: 10 critérios com barra de pontuação e total (máx. real
+      75, ver S-121) — `scoring-panel.tsx`.
+- [x] PeriodPicker: 3 seletores de range de data com validação (máx. 7 dias
+      cada) — `period-picker.tsx`.
+- [x] ApprovalQueue: lista ordenada por score com desempate visível —
+      `approval-queue.tsx`.
+- [x] Responsivo — mobile-first, breakpoints `sm:` nos componentes com
+      layout de duas colunas (`period-picker.tsx`, `availability-calendar.tsx`).
+- [x] Lint passa — `pnpm turbo lint --filter=@hebron/flats`.
+- [x] Types passam — `pnpm turbo typecheck --filter=@hebron/flats`.
+
+**Arquivos criados:**
+
+- `apps/flats/src/components/unit-card.tsx`
+- `apps/flats/src/components/availability-calendar.tsx`
+- `apps/flats/src/components/reservation-card.tsx`
+- `apps/flats/src/components/scoring-panel.tsx`
+- `apps/flats/src/components/guest-list.tsx`
+- `apps/flats/src/components/approval-queue.tsx`
+- `apps/flats/src/components/period-picker.tsx`
+
+**Arquivos modificados:**
+
+- `apps/flats/package.json` (dependência `lucide-react`, faltante do
+  scaffold)
+- `pnpm-lock.yaml`
+- `PROMPTS.md` (checklist de P-7.2 marcado)
 - `SESSIONS.md` (esta entrada + linha no índice)
