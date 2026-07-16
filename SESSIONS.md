@@ -149,6 +149,7 @@
 | S-126  | 2026-07-16 | P-7.1b — Correção do máximo de scoring em BRAIN §6.8 (CORRETIVO)                   | concluido                            |
 | S-127  | 2026-07-16 | P-7.5b — Fiação das telas do Bloco A Flats para validação da diretoria (CORRETIVO) | concluido                            |
 | S-128  | 2026-07-16 | P-7.6 — Schema do Banco Flats                                                      | concluido                            |
+| S-129  | 2026-07-16 | P-7.7 — RLS Policies Flats                                                         | concluido                            |
 
 ---
 
@@ -8535,3 +8536,112 @@ preenchido falha (CHECK), com `health_self_declared` preenchido insere OK.
 - `packages/db/src/migrations/0021_flats.sql`
 - `packages/db/src/migrations/0022_flats_audit_actions.sql`
 - `packages/db/src/migrations/meta/0021_snapshot.json` (gerado por `drizzle-kit generate`)
+
+### S-129 — 2026-07-16 — P-7.7 — RLS Policies Flats
+
+**Prompt:** P-7.7 (`PROMPTS.md:4288`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Habilita RLS nas 9 tabelas do schema `flats` (pendente desde P-7.6) e define
+as policies por papel: hóspede CRUD na própria reserva (`reservations` +
+tabelas vinculadas via `reservation_id`); diretor gestor
+(`public.has_role('diretor') AND public.has_designation('gestor')` — helper
+de P-3.7 reaproveitado, G6.1, nenhum helper novo) com SELECT em tudo +
+UPDATE para aprovar/rejeitar `reservations` e `aid_requests`; super_admin
+full access via policy `FOR ALL` própria em cada tabela; diretor/conselheiro
+bloqueados de INSERT em `reservations` mesmo quando `requested_by =
+auth.uid()` (conflito de interesse). `units`: SELECT liberado a qualquer
+autenticado, mutação só super_admin. `guests`/`scoring_responses` (PII/dado
+de saúde): hóspede grava (INSERT/UPDATE/DELETE) mas **sem** policy de
+SELECT — leitura restrita a gestor/super_admin, decisão já anunciada nos
+comentários de `schema/flats.ts` em P-7.6. `document_files`: mesma regra já
+aplicada ao bucket `flats-documentos` (`0020_storage_buckets.sql`/BRAIN
+§5) — dono CRUD próprio, qualquer diretor (não só gestor) SELECT.
+GRANTs incluídos na própria migration (schema `flats` nasceu depois de
+`0014_grants_authenticated.sql`, mesmo padrão de
+`0033_tarefas_rls.sql`/`0020_plataforma_rls.sql`).
+
+Migration gerada com `drizzle-kit generate --custom --name=flats_rls`
+(G6.4) — vazia por padrão, preenchida à mão com `ALTER TABLE ... ENABLE
+ROW LEVEL SECURITY`, `CREATE POLICY` e `GRANT` (RLS não é representável em
+`schema/flats.ts`, mesmo padrão de `0011_financeiro_rls.sql`/
+`0003_admin_rls.sql`).
+
+**Suposições registradas (G1 — ambiguidade resolvida pela opção mais simples):**
+
+- **`guests`/`scoring_responses` SELECT exclui o próprio hóspede dono.**
+  O critério de aceite diz literalmente "SELECT restrito a gestor de flats
+  e super_admin" — lido ao pé da letra (G1: "seja literal, não abstraia"),
+  não como uma generalização do "hóspede CRUD" que abriria exceção para o
+  dono. Essa leitura já era a decisão anunciada nos comentários de
+  `schema/flats.ts`/`0021_flats.sql` escritos em P-7.6 ("acesso restrito a
+  gestor/super_admin via RLS (P-7.7)"), então não é uma suposição nova
+  desta sessão — só a materialização da decisão anterior. Hóspede continua
+  com INSERT/UPDATE/DELETE nessas duas tabelas (submete o formulário, só
+  não lê de volta via RLS bruto); o acesso "Meus Dados" da LGPD (P-9.2)
+  é um caminho separado.
+- **Sem policy de DELETE em `flats.reservations`.** O prompt diz "CRUD",
+  mas a tabela não tem `deleted_at` e o enum de status já tem `cancelada`
+  — BRAIN "Imutabilidade: soft-delete e estornos, nunca hard delete" vence
+  sobre a leitura literal de "D" em CRUD. Cancelamento é UPDATE de status.
+  Demais tabelas (dados de apoio da reserva, sem exigência de audit trail
+  própria) recebem DELETE completo para o hóspede dono.
+- **Gestor recebe SELECT+UPDATE também em `flats.aid_requests`**, não só
+  em `reservations`. O prompt não lista `aid_requests` explicitamente no
+  bullet de gestor, mas o schema já modela um fluxo de aprovação idêntico
+  (`aid_request_status`: solicitado/aprovado/rejeitado, comentário "aprovado
+  caso a caso" em `schema/flats.ts`) — sem essa extensão, nenhum papel além
+  de super_admin poderia aprovar/rejeitar auxílio, o que contradiz o
+  desenho já validado do módulo (P-7.1/P-7.6).
+- **`document_files` usa "diretor" (qualquer) para SELECT, não
+  "diretor gestor".** Decisão já registrada em BRAIN §5 para o bucket
+  `flats-documentos` ("dono lê/escreve a própria pasta; super_admin/diretor
+  leem tudo") — replicada aqui para a tabela correspondente por
+  consistência com uma regra de negócio já existente, não inventada nesta
+  sessão.
+- **`usage_history`: sem UPDATE/DELETE para qualquer papel** (só
+  SELECT/INSERT) — histórico imutável, mesmo padrão de `admin.audit_log`.
+  INSERT restrito a gestor/super_admin (registrado ao concluir a
+  estadia); não testado nesta sessão por não haver fluxo de conclusão
+  ainda (fica para o Server Action de P-7.9+).
+
+**Verificação:** `pnpm typecheck`, `pnpm lint` e `drizzle-kit check` verdes
+em `packages/db`. `pnpm db:migrate` aplicou `0022_flats_rls.sql` sem erros
+contra o banco real (Supabase) — confirmado via `pg_class.relrowsecurity`
+(9/9 tabelas com RLS habilitado) e `pg_policies` (36 policies criadas).
+Script ad-hoc (`postgres.js` + Supabase Admin API para criar 6 usuários
+reais — hóspede A/B, diretor, diretor+designation gestor, conselheiro,
+super_admin — e `SET LOCAL ROLE authenticated` + `request.jwt.claims` para
+simular cada um, mesmo padrão de `apps/financeiro/src/__tests__/
+rls.test.ts`; usuários e dados de teste removidos ao final) validou as 18
+combinações papel×operação dos critérios de aceite, todas verdes: hóspede
+insere/lê só a própria reserva; diretor, conselheiro e diretor-gestor são
+todos bloqueados de INSERT em `reservations`; gestor lê as 2 reservas e
+aprova a própria (UPDATE); diretor comum (sem designation) não lê nem
+atualiza reserva alheia; hóspede insere `guests`/`scoring_responses` mas
+não consegue ler de volta (nem o próprio dado de saúde); gestor lê e
+atualiza (`points`) `scoring_responses`, lê `guests`; diretor comum não lê
+nenhuma das duas; super_admin lê tudo.
+
+**Critérios de aceite verificados:**
+
+- [x] Hóspede: CRUD apenas nas próprias reservas (testado)
+- [x] Diretor gestor: SELECT all + UPDATE para aprovar/rejeitar (testado)
+- [x] Super_admin: full access (testado)
+- [x] Diretores/conselheiros: sem INSERT em reservations (testado — inclui diretor gestor)
+- [x] Units: SELECT para todos os autenticados
+- [x] guests/scoring_responses (PII/saúde): SELECT restrito a gestor de flats e super_admin (testado)
+- [x] Types passam (`pnpm typecheck`)
+
+**Arquivos modificados:**
+
+- `packages/db/src/migrations/meta/_journal.json` (resincronizado por `drizzle-kit generate --custom`)
+- `PROMPTS.md` (checklist de P-7.7 marcado)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+**Arquivos criados:**
+
+- `packages/db/src/migrations/0022_flats_rls.sql`
+- `packages/db/src/migrations/meta/0022_snapshot.json` (gerado por `drizzle-kit generate`, idêntico ao 0021 — migration não altera schema Drizzle, só RLS/GRANT)

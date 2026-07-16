@@ -4305,13 +4305,13 @@ RLS para schema flats. Hóspede: CRUD apenas nas próprias reservas. Diretor ges
 
 **Critérios de aceite:**
 
-- [ ] Hóspede: CRUD apenas nas próprias reservas
-- [ ] Diretor gestor: SELECT all + UPDATE (aprovar/rejeitar)
-- [ ] Super_admin: full access
-- [ ] Diretores/conselheiros: sem INSERT em reservations (conflito de interesse)
-- [ ] Units: SELECT para todos os autenticados
-- [ ] guests/scoring_responses (PII/saúde): SELECT restrito a gestor de flats e super_admin (teste)
-- [ ] Types passam
+- [x] Hóspede: CRUD apenas nas próprias reservas
+- [x] Diretor gestor: SELECT all + UPDATE (aprovar/rejeitar)
+- [x] Super_admin: full access
+- [x] Diretores/conselheiros: sem INSERT em reservations (conflito de interesse)
+- [x] Units: SELECT para todos os autenticados
+- [x] guests/scoring_responses (PII/saúde): SELECT restrito a gestor de flats e super_admin (teste)
+- [x] Types passam
 
 ---
 
