@@ -4271,17 +4271,17 @@ Auditoria central: incluir ALTER TYPE admin.audit_action ADD VALUE IF NOT EXISTS
 
 **Critérios de aceite:**
 
-- [ ] units: 2 registros seed (flat 1, flat 2)
-- [ ] reservations: status (solicitada, aprovada, rejeitada, confirmada, em_curso, concluida, cancelada)
-- [ ] preferred_periods: 3 por reserva (constraint)
-- [ ] scoring_responses: 10 critérios com pontuação calculada
-- [ ] usage_history: user_id, reservation_id, days_used, period (para regra 7d/12m)
-- [ ] EXCLUDE USING gist impede duas reservas ocupantes com períodos sobrepostos no mesmo flat (teste: INSERT sobreposto falha; períodos adjacentes não colidem; reserva rejeitada não bloqueia)
-- [ ] Colunas de PII/saúde identificadas em comentário SQL e cobertas por RLS restrita (P-7.7)
-- [ ] Enum de audit com os valores do módulo
-- [ ] drizzle-kit check limpo
-- [ ] Migration aplica sem erros
-- [ ] Types passam
+- [x] units: 2 registros seed (flat 1, flat 2)
+- [x] reservations: status (solicitada, aprovada, rejeitada, confirmada, em_curso, concluida, cancelada)
+- [x] preferred_periods: 3 por reserva (constraint)
+- [x] scoring_responses: 10 critérios com pontuação calculada
+- [x] usage_history: user_id, reservation_id, days_used, period (para regra 7d/12m)
+- [x] EXCLUDE USING gist impede duas reservas ocupantes com períodos sobrepostos no mesmo flat (teste: INSERT sobreposto falha; períodos adjacentes não colidem; reserva rejeitada não bloqueia)
+- [x] Colunas de PII/saúde identificadas em comentário SQL e cobertas por RLS restrita (P-7.7)
+- [x] Enum de audit com os valores do módulo
+- [x] drizzle-kit check limpo
+- [x] Migration aplica sem erros
+- [x] Types passam
 
 ---
 

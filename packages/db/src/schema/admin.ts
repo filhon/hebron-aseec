@@ -114,6 +114,15 @@ export const auditActionEnum = adminSchema.enum("audit_action", [
   // added via ALTER TYPE in the P-6.6 migration
   "course.published",
   "certificate.issued",
+  // Flats — ciclo de vida da reserva e auxílio (P-7.6), added via ALTER
+  // TYPE in the P-7.6 migration (G6.3)
+  "reservation.submitted",
+  "reservation.approved",
+  "reservation.rejected",
+  "reservation.checked_in",
+  "reservation.checked_out",
+  "aid.requested",
+  "aid.approved",
 ]);
 
 export const meetingTypeEnum = adminSchema.enum("meeting_type", [

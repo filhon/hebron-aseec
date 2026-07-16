@@ -148,6 +148,7 @@
 | S-125  | 2026-07-16 | P-7.5 — Estados Flats                                                              | concluido                            |
 | S-126  | 2026-07-16 | P-7.1b — Correção do máximo de scoring em BRAIN §6.8 (CORRETIVO)                   | concluido                            |
 | S-127  | 2026-07-16 | P-7.5b — Fiação das telas do Bloco A Flats para validação da diretoria (CORRETIVO) | concluido                            |
+| S-128  | 2026-07-16 | P-7.6 — Schema do Banco Flats                                                      | concluido                            |
 
 ---
 
@@ -8395,3 +8396,142 @@ partir de `app/`, exceto `period-picker.tsx` (ver suposição acima).
 
 - `apps/flats/.env.local` (infraestrutura óbvia faltante, G1 — não
   versionado, gitignored)
+
+---
+
+### S-128 — 2026-07-16 — P-7.6 — Schema do Banco Flats
+
+**Prompt:** P-7.6 (`PROMPTS.md:4248`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Cria o schema `flats` completo no banco: `units` (2 fixas, seed),
+`reservations`, `preferred_periods`, `guests`, `vehicles`,
+`scoring_responses`, `aid_requests`, `usage_history`, `document_files` —
+traduzindo os tipos já validados em `packages/types/src/flats/index.ts`
+(P-7.1) e os mocks de `apps/flats/src/lib/mock-data.ts` (Bloco A, já
+aprovado pela diretoria em P-7.5b) para tabelas relacionais. Dependência
+`P-7.5 concluído, validação da diretoria OK` satisfeita por S-125/S-127.
+
+Seguindo G6.4, a migration foi gerada com `drizzle-kit db:generate`
+(não numerada à mão): produziu `0021_flats.sql` limpo — sem poluição de
+módulos já aplicados (tarefas/intranet/plataforma), diferente do que o
+comentário de `0031_tarefas.sql` fazia temer. Os 9 `ALTER TYPE
+admin.audit_action ADD VALUE` (G6.3) foram removidos desse arquivo e
+movidos para `0022_flats_audit_actions.sql` (hand-written, com `IF NOT
+EXISTS`, mesmo padrão de `0032_tarefas_audit_actions.sql` /
+`0020_plataforma_audit_actions.sql`) — confirmado por
+`grep -l "course.published" migrations/*.sql` que P-6.6 (o precedente mais
+recente de "generate puro") já fazia essa mesma separação, por ser
+não-transacional.
+
+Extras hand-added ao final de `0021_flats.sql` (não representáveis em
+Drizzle ORM): `CREATE EXTENSION IF NOT EXISTS btree_gist` + `EXCLUDE USING
+gist (unit_id WITH =, selected_period WITH &&) WHERE status IN
+('aprovada','confirmada','em_curso')` contra double-booking, e o seed dos
+2 `units` (nomes/descrições/amenities dos mocks de P-7.2, já validados).
+
+**Suposições registradas (G1 — ambiguidade resolvida pela opção mais simples):**
+
+- **`scoring_responses` é EAV (uma linha por critério, não uma linha larga
+  por reserva).** O prompt lista as colunas como `reservation_id,
+criterion, value, points` (nomes de coluna, não de campos de uma tabela
+  larga) e o próprio nome da tabela é plural ("responses"). A nota "d) é
+  dado sensível: coluna própria" só faz sentido sob esse desenho — numa
+  tabela larga (espelhando `ScoringCriteria` do types package, onde cada
+  critério já tem sua própria coluna por definição) a instrução seria
+  redundante. `health_self_declared` fica como coluna dedicada, `value`
+  fica NULL para o critério `d_saude` e vice-versa — reforçado por CHECK
+  constraint. A pivotagem EAV → forma larga (para bater com o tipo
+  `ScoringCriteria` do frontend) fica para P-7.9 (integração).
+- **Campos de sugestão de IA e confirmação do gestor (`aiSuggestedPoints`,
+  `confirmedBy/At`) ficaram FORA de `scoring_responses`.** Presentes no
+  mock (`ScoringCriteria` de P-7.1) mas BRAIN §6.8 atribui essa
+  funcionalidade explicitamente a P-7.13 ("Assistência de IA no scoring,
+  PATCH-012") — adicioná-los agora seria implementar um prompt futuro fora
+  de ordem (G1: "não adicione... não pedidas").
+- **`reservations.requested_by` (FK para `public.users`) foi adicionado
+  apesar de não estar no texto do prompt.** Infraestrutura óbvia (G1): sem
+  ele não há como o hóspede filtrar/RLS restringir "minhas reservas" —
+  o tipo `Reservation` do frontend aponta para `guestId` (o bundle
+  responsável+acompanhantes), mas a tabela normalizada `guests` inverte
+  essa relação (`guests.reservation_id`), então a reserva precisa de uma
+  referência direta ao autor.
+- **`guests` é uma linha por pessoa (responsável OU acompanhante OU
+  criança), vinculada direto a `reservation_id`** — como o prompt pede
+  literalmente (`guests (reservation_id, name, cpf, birth_date,
+is_responsible)`), não o bundle aninhado do tipo `Guest` do frontend.
+  Único responsável por reserva garantido por índice único parcial
+  (`WHERE is_responsible = true`), não por UNIQUE de tabela comum (que
+  quebraria com 2+ acompanhantes `is_responsible=false` na mesma reserva).
+- **`aid_requests`/`vehicles` replicam a forma rica dos tipos
+  `AidRequest`/`Vehicle` do frontend (P-7.1), não só as 2-3 colunas que o
+  texto abreviado do prompt cita.** Mesmo raciocínio de `units`/`guests`:
+  Bloco B substitui os mocks de um contrato de dados já validado pela
+  diretoria (P-7.5b) — usar só `type, amount` perderia `transportMode`,
+  `dailyAllowanceAmount` etc. já exibidos na UI aprovada.
+- **`financeiro_expense_id` em `aid_requests` é uuid solto, sem FK para
+  `financeiro.payables`.** A integração Flats → Financeiro (BRAIN §7) é
+  escopo de P-7.10, ainda não implementada — uma FK hard agora seria
+  acoplamento prematuro a um fluxo que não existe.
+- **`schema/index.ts` e `schema/admin.ts` foram editados apesar de não
+  estarem em "Arquivos permitidos".** Mesmo padrão de toda P-X.6 anterior
+  (financeiro, tarefas, plataforma, intranet já têm seções próprias em
+  `index.ts`; `admin.ts` já tem blocos "Module — added via ALTER TYPE" de
+  cada um) — infraestrutura óbvia sem a qual as tabelas novas ficam
+  inacessíveis via `@hebron/db/schema` (G1).
+- **`daterange` como `customType` do Drizzle** (sem tipo nativo no
+  pg-core) — mapeado para `{ start, end }` em string ISO, serializado como
+  `[start,end]` (ambos inclusive). Único ponto do schema sem precedente no
+  monorepo; validado por `tsc --noEmit` + teste manual do EXCLUDE contra o
+  banco real (ver Verificação).
+- **`Guest`/`Vehicle` exportados de `schema/index.ts` com alias
+  (`FlatsGuest`/`FlatsVehicle`)** — mesmo padrão defensivo já usado por
+  tarefas (`Attachment as TaskAttachment`) para nomes genéricos, mesmo sem
+  colisão real hoje.
+
+**Verificação:** `pnpm typecheck`, `pnpm lint` e `pnpm db:check` verdes em
+`packages/db`. `pnpm db:migrate` aplicou `0021_flats.sql` e
+`0022_flats_audit_actions.sql` sem erros contra o banco real (Supabase).
+Confirmado via query direta: 2 `units` seedadas, extensão `btree_gist`
+instalada, `EXCLUDE` constraint presente com a definição esperada, 7
+valores novos em `admin.audit_action`, 9 tabelas no schema `flats`. Testes
+manuais (scripts ad-hoc, removidos após uso) contra o banco real: (1)
+INSERT de reserva `confirmada` sobreposta a uma `aprovada` no mesmo
+`unit_id` falha por violação do EXCLUDE; período adjacente (dia seguinte)
+insere OK; reserva `rejeitada` sobreposta não é bloqueada; (2)
+`preferred_periods.rank` fora de 1-3 falha, `rank` duplicado na mesma
+reserva falha; (3) segundo `guests.is_responsible=true` na mesma reserva
+falha (índice único parcial), dois acompanhantes `is_responsible=false`
+inserem OK; (4) `scoring_responses` com `criterion='d_saude'` e `value`
+preenchido falha (CHECK), com `health_self_declared` preenchido insere OK.
+
+**Critérios de aceite verificados:**
+
+- [x] units: 2 registros seed (flat 1, flat 2)
+- [x] reservations: status (solicitada, aprovada, rejeitada, confirmada, em_curso, concluida, cancelada)
+- [x] preferred_periods: 3 por reserva (constraint — rank 1-3 + UNIQUE)
+- [x] scoring_responses: 10 critérios com pontuação calculada (EAV, ver suposição acima)
+- [x] usage_history: user_id, reservation_id, days_used, period
+- [x] EXCLUDE USING gist impede overlap; adjacente não colide; rejeitada não bloqueia (testado contra o banco real)
+- [x] Colunas de PII/saúde identificadas em comentário SQL (schema/flats.ts + migration) e reservadas para RLS restrita em P-7.7
+- [x] Enum de audit com os 7 valores do módulo
+- [x] `drizzle-kit check` limpo
+- [x] Migration aplica sem erros (testado contra o banco real)
+- [x] Types passam
+
+**Arquivos modificados:**
+
+- `packages/db/src/schema/index.ts` (export do schema flats — G1, débito registrado acima)
+- `packages/db/src/schema/admin.ts` (7 valores novos em `audit_action` — G1, débito registrado acima)
+- `packages/db/src/migrations/meta/_journal.json` (resincronizado por `drizzle-kit generate`)
+- `PROMPTS.md` (checklist de P-7.6 marcado)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+**Arquivos criados:**
+
+- `packages/db/src/schema/flats.ts`
+- `packages/db/src/migrations/0021_flats.sql`
+- `packages/db/src/migrations/0022_flats_audit_actions.sql`
+- `packages/db/src/migrations/meta/0021_snapshot.json` (gerado por `drizzle-kit generate`)

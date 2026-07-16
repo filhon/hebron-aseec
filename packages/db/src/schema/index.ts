@@ -352,3 +352,42 @@ export type {
   KpiSnapshotHistory,
   NewKpiSnapshotHistory,
 } from "./intranet";
+
+// Flats schema (P-7.6)
+export {
+  reservationStatusEnum,
+  ministryTypeEnum as flatsMinistryTypeEnum,
+  scoringCriterionEnum,
+  transportModeEnum,
+  aidRequestStatusEnum,
+  units,
+  reservations,
+  preferredPeriods,
+  guests as flatsGuests,
+  vehicles as flatsVehicles,
+  scoringResponses,
+  aidRequests,
+  usageHistory,
+  documentFiles,
+} from "./flats";
+
+export type {
+  Unit,
+  NewUnit,
+  Reservation,
+  NewReservation,
+  PreferredPeriod,
+  NewPreferredPeriod,
+  Guest as FlatsGuest,
+  NewGuest as NewFlatsGuest,
+  Vehicle as FlatsVehicle,
+  NewVehicle as NewFlatsVehicle,
+  ScoringResponse,
+  NewScoringResponse,
+  AidRequest,
+  NewAidRequest,
+  UsageHistory,
+  NewUsageHistory,
+  DocumentFile,
+  NewDocumentFile,
+} from "./flats";
