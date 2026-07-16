@@ -325,6 +325,9 @@ importers:
       "@hebron/db":
         specifier: workspace:*
         version: link:../../packages/db
+      "@hebron/integrations":
+        specifier: workspace:*
+        version: link:../../packages/integrations
       "@hebron/types":
         specifier: workspace:*
         version: link:../../packages/types
@@ -334,12 +337,18 @@ importers:
       "@hebron/validators":
         specifier: workspace:*
         version: link:../../packages/validators
+      drizzle-orm:
+        specifier: "catalog:"
+        version: 0.36.4(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)(@types/react@19.2.15)(postgres@3.4.9)(react@19.2.6)
       lucide-react:
         specifier: ^0.460.0
         version: 0.460.0(react@19.2.6)
       next:
         specifier: ^15.3.0
         version: 15.5.18(@opentelemetry/api@1.9.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      next-safe-action:
+        specifier: ^7.9.0
+        version: 7.10.8(next@15.5.18(@opentelemetry/api@1.9.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6))(react-dom@19.2.6(react@19.2.6))(react@19.2.6)(zod@3.25.76)
       react:
         specifier: ^19.0.0
         version: 19.2.6
@@ -349,6 +358,9 @@ importers:
       react-hook-form:
         specifier: ^7.76.0
         version: 7.76.0(react@19.2.6)
+      zod:
+        specifier: "catalog:"
+        version: 3.25.76
     devDependencies:
       "@hebron/eslint-config":
         specifier: workspace:*

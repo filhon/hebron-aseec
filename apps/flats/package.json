@@ -13,14 +13,18 @@
     "@hebron/auth": "workspace:*",
     "@hebron/config": "workspace:*",
     "@hebron/db": "workspace:*",
+    "@hebron/integrations": "workspace:*",
     "@hebron/types": "workspace:*",
     "@hebron/ui": "workspace:*",
     "@hebron/validators": "workspace:*",
+    "drizzle-orm": "catalog:",
     "lucide-react": "^0.460.0",
     "next": "^15.3.0",
+    "next-safe-action": "^7.9.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-hook-form": "^7.76.0"
+    "react-hook-form": "^7.76.0",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@hebron/eslint-config": "workspace:*",

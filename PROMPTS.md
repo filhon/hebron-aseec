@@ -4339,18 +4339,18 @@ Server Actions: criar reserva (com validação de elegibilidade, limite 7d/12m, 
 
 **Critérios de aceite:**
 
-- [ ] Validação de elegibilidade: pastores/missionários (via papel hospede)
-- [ ] Validação: max 7 dias nos últimos 12 meses por indivíduo
-- [ ] Score: 10 critérios; b de usage_history; j via packages/integrations (teste)
-- [ ] Aprovar/rejeitar exige designation gestor de flats — diretor sem designation falha (teste)
-- [ ] Ajuda aprovada cria payables NÃO aprovados no Financeiro, com data = dia anterior ao início (teste cross-schema); payables entram no fluxo de lote normal
-- [ ] Audit central em toda mutação, abortando em falha (teste)
-- [ ] Actions via kit de @hebron/auth (grep)
-- [ ] (demais critérios inalterados: elegibilidade, 7d/12m, desempate, soft-delete)
-- [ ] Desempate: idade → tempo sem descanso → nunca usou → sorteio (nesta ordem)
-- [ ] Aprovação: diretor gestor seleciona 1 dos 3 períodos
-- [ ] Lint passa
-- [ ] Types passam
+- [x] Validação de elegibilidade: pastores/missionários (via papel hospede)
+- [x] Validação: max 7 dias nos últimos 12 meses por indivíduo
+- [x] Score: 10 critérios; b de usage_history; j via packages/integrations (teste)
+- [x] Aprovar/rejeitar exige designation gestor de flats — diretor sem designation falha (teste)
+- [x] Ajuda aprovada cria payables NÃO aprovados no Financeiro, com data = dia anterior ao início (teste cross-schema); payables entram no fluxo de lote normal
+- [x] Audit central em toda mutação, abortando em falha (teste)
+- [x] Actions via kit de @hebron/auth (grep)
+- [x] (demais critérios inalterados: elegibilidade, 7d/12m, desempate, soft-delete)
+- [x] Desempate: idade → tempo sem descanso → nunca usou → sorteio (nesta ordem)
+- [x] Aprovação: diretor gestor seleciona 1 dos 3 períodos
+- [x] Lint passa
+- [x] Types passam
 
 ---
 

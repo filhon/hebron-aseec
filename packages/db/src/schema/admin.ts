@@ -123,6 +123,11 @@ export const auditActionEnum = adminSchema.enum("audit_action", [
   "reservation.checked_out",
   "aid.requested",
   "aid.approved",
+  // Flats — confirmação/cancelamento de reserva e rejeição de auxílio
+  // (P-7.8), added via ALTER TYPE in the P-7.8 migration
+  "reservation.confirmed",
+  "reservation.cancelled",
+  "aid.rejected",
 ]);
 
 export const meetingTypeEnum = adminSchema.enum("meeting_type", [

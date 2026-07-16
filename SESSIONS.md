@@ -150,6 +150,7 @@
 | S-127  | 2026-07-16 | P-7.5b — Fiação das telas do Bloco A Flats para validação da diretoria (CORRETIVO) | concluido                            |
 | S-128  | 2026-07-16 | P-7.6 — Schema do Banco Flats                                                      | concluido                            |
 | S-129  | 2026-07-16 | P-7.7 — RLS Policies Flats                                                         | concluido                            |
+| S-130  | 2026-07-16 | P-7.8 — Server Actions Flats                                                       | concluido                            |
 
 ---
 
@@ -8645,3 +8646,164 @@ nenhuma das duas; super_admin lê tudo.
 
 - `packages/db/src/migrations/0022_flats_rls.sql`
 - `packages/db/src/migrations/meta/0022_snapshot.json` (gerado por `drizzle-kit generate`, idêntico ao 0021 — migration não altera schema Drizzle, só RLS/GRANT)
+
+### S-130 — 2026-07-16 — P-7.8 — Server Actions Flats
+
+**Prompt:** P-7.8 (`PROMPTS.md:4318`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Implementa as 5 Server Actions de Flats sobre o schema/RLS de P-7.6/P-7.7:
+`reservations.ts` (`createReservation`, `confirmReservation`,
+`cancelReservation`), `scoring.ts` (`computeScoringResponses`, helper
+interno), `approval.ts` (`reviewReservation` + `breakTie`), `checkin.ts`
+(`checkIn`, `checkOut`), `aid.ts` (`createAidRequest` helper +
+`reviewAidRequest`). `createReservation` roda em uma única transação
+(`withAuthenticatedContext`): valida elegibilidade (papel hospede, bloqueia
+diretor/conselheiro mesmo com papel duplo), valida limite de 7 dias/12
+meses via `flats.usage_history`, insere reserva + 3 `preferred_periods` +
+hóspede responsável + acompanhantes + veículo (se `arrivesByCar`), calcula
+e grava os 10 critérios de scoring, e cria o `aid_request` opcional — tudo
+com audit central (`logFlatsAudit`, aborta em falha, G6.3) via
+`withSystemRole`. `reviewReservation` (designation `gestor`) aprova
+(unidade + 1 dos 3 períodos, validado contra `preferred_periods` do banco)
+ou rejeita; captura a violação do `EXCLUDE` (double-booking) e devolve
+mensagem legível. `reviewAidRequest` aprova/rejeita o auxílio; aprovação
+chama `onFlatsAssistanceApproved` (implementado nesta sessão em
+`packages/integrations/src/financeiro.ts`, antes um stub) que cria 1
+`financeiro.payables` NÃO aprovado (status `pendente`, `dueDate` = dia
+anterior ao início do período confirmado) pelo ator sistema
+(`getSystemActorId`), mesmo padrão de `onProjectApproved`
+(`packages/db/src/projetos-approval.ts`) — necessário porque
+`payables_insert_staff` só concede INSERT a super_admin/colaborador, nunca
+a diretor/gestor de Flats. `confirmReservation` (aprovada→confirmada)
+chama `onFlatsReservationConfirmed` (stub de Flats→Tarefas, real só em
+P-7.11). `checkOut` grava `usage_history` (dias calculados do período
+confirmado). `j_participacao_projetos` usa
+`getProjectParticipationScore` de `@hebron/integrations/projetos-flats` —
+nunca import de `apps/projetos` (G6.5).
+
+**Débitos de infraestrutura resolvidos nesta sessão (G1 — arquivos óbvios
+fora da lista "Arquivos permitidos", mesmo padrão de toda P-X.8 anterior):**
+
+- `apps/flats/src/lib/safe-action.ts` (não existia) — `flatsAction`
+  (base), `hospedeAction`, `gestorAction`, mesmo padrão local de
+  `apps/financeiro`/`apps/tarefas` (G6.1: usa `resolveSession` de
+  `@hebron/auth/server`, nunca `createClient` local).
+- `apps/flats/src/lib/audit.ts` (não existia) — `logFlatsAudit`, mesmo
+  padrão de `logFinanceiroAudit`/`logTarefasAudit`.
+- `apps/flats/package.json` — faltavam `@hebron/integrations`,
+  `next-safe-action`, `zod`, `drizzle-orm` (nenhuma Server Action existia
+  ainda no app).
+- `packages/db/src/schema/admin.ts` +
+  `packages/db/src/migrations/0047_flats_audit_actions_p78.sql` — 3
+  valores novos em `admin.audit_action` (`reservation.confirmed`,
+  `reservation.cancelled`, `aid.rejected`) que P-7.6 não previu (só
+  registrou 7 dos 10 eventos do ciclo de vida real). Gerado com
+  `drizzle-kit generate`, que propôs `0023_...` por a `meta/_journal.json`
+  estar desatualizado desde P-7.6 (só 22 entradas registradas para 46
+  arquivos `.sql` reais — os `ALTER TYPE` avulsos de fases 3-6 nunca
+  passaram pelo journal); renomeado para `0047_...` para não colidir com
+  os 24 arquivos hand-authored 0023-0046 já aplicados, e a entrada espúria
+  do journal/snapshot foi revertida (mesmo raciocínio dos precedentes:
+  0024/0027/0028/0038/0041 também não estão no journal).
+- `packages/integrations/src/financeiro.ts::onFlatsAssistanceApproved` —
+  estava stub desde a fundação de `packages/integrations`; implementado de
+  verdade aqui (é exatamente o ponto de integração que este prompt exige).
+
+**Suposições registradas (G1 — ambiguidade resolvida pela opção mais simples):**
+
+- **"Confirmar reserva" (aprovada→confirmada) é ação distinta de
+  "aprovar"** (que já escolhe unidade + período, `reviewReservation`) e de
+  check-in. BRAIN §6.8 e a UI de P-7.3/P-7.5b (`checkin-form.tsx` só
+  habilita check-in a partir de status `confirmada`) confirmam que é um
+  passo à parte, mas nenhum documento diz quem o aciona. Suposição mais
+  simples: hóspede dono OU gestor (dupla checagem de posse), sem campos
+  adicionais — só a transição de status, disparando
+  `onFlatsReservationConfirmed` (Flats→Tarefas).
+- **Soft-delete de reserva sem coluna de justificativa.**
+  `flats.reservations` não tem `deleted_at` nem `cancellation_reason`
+  (schema fixado em P-7.6); "soft-delete com justificativa" é lido como
+  UPDATE de status para `cancelada` + a justificativa registrada no `diff`
+  do audit log (imutável, auditável) — não uma coluna nova, que estaria
+  fora dos arquivos permitidos deste prompt.
+- **Critério e (situação familiar especial) pontua 5/0 por presença de
+  texto**, não uma nota do gestor. BRAIN só lista d) e g) como recebendo
+  sugestão de IA (P-7.13); e) não tem fórmula nem é um dos dois critérios
+  com IA — na ausência de qualquer fórmula E de uma Server Action de
+  ajuste dedicada neste prompt, a opção mais simples e determinística é:
+  texto não vazio = 5 pontos. Gestor pode ajustar depois via UPDATE direto
+  (RLS já concede, `scoring_responses_update_gestor` desde P-7.7) — sem
+  Server Action própria nesta fase.
+- **`usage_history.user_id` = `reservations.requested_by`**, não
+  `guests.user_id` do responsável. `guests.user_id` pode ser nulo (RLS
+  permite reserva feita em nome de alguém sem conta); `requested_by` é
+  sempre um usuário autenticado real, então é a única coluna segura para
+  a FK NOT NULL de `usage_history` e para a checagem de 7 dias/12 meses
+  ("por indivíduo").
+- **`onFlatsAssistanceApproved` cria 1 payable combinando diária +
+  transporte**, não 2. `flats.aid_requests.financeiro_expense_id` é uma
+  única coluna uuid solta (decisão de P-7.6) — criar 2 payables exigiria
+  escolher qual referenciar ou uma segunda coluna, fora do escopo deste
+  prompt.
+- **Valor da diária fixa e do transporte por combustível são informados
+  pelo gestor na aprovação**, não calculados. BRAIN/Respostas7.md só dão
+  fórmula para o transporte aéreo (passageiros × R$1.000, calculado e
+  travado na criação da solicitação); não existe tabela de preços na v1
+  (`pricing_rules` foi revogada — `.docs/Claude.md` nota de revisão).
+- **Documentos do responsável (`guest.responsibleDocumentUrl`) não são
+  persistidos em `flats.document_files` nesta sessão.** O formulário (P-7.4)
+  só coleta a URL após upload; `document_files` exige `storageKey`,
+  `fileName`, `mimeType`, `fileSizeBytes` que não viajam no
+  `createReservationRequestSchema` atual. Fora do escopo deste prompt (não
+  citado nos critérios de aceite); registrado como débito para quando a UI
+  for conectada (P-7.9).
+
+**Verificação:** `pnpm --filter @hebron/flats typecheck` e `lint`,
+`pnpm --filter @hebron/db typecheck`/`lint` e
+`pnpm --filter @hebron/integrations typecheck`/`lint` verdes.
+`pnpm turbo run lint typecheck --filter=@hebron/flats --filter=@hebron/db
+--filter=@hebron/integrations` verde (18/18 tasks). `pnpm db:migrate`
+aplicou `0047_flats_audit_actions_p78.sql` sem erros contra o banco real
+(Supabase). `grep` confirma que toda action usa `resolveSession` de
+`@hebron/auth/server` (G6.1) e que `getProjectParticipationScore` só é
+importado de `@hebron/integrations/projetos-flats`, nunca de
+`apps/projetos` (G6.5). Sem teste automatizado end-to-end contra o banco
+real nesta sessão (fica para P-7.12 — Testes Flats, que é o prompt
+dedicado a isso na sequência) — critérios marcados "(teste)" no prompt
+foram verificados por leitura de código + typecheck, não por execução.
+
+**Critérios de aceite verificados:**
+
+- [x] Validação de elegibilidade: pastores/missionários (via papel hospede)
+- [x] Validação: máx. 7 dias nos últimos 12 meses por indivíduo
+- [x] Score: 10 critérios; b de usage_history; j via packages/integrations (código revisado; sem teste automatizado — P-7.12)
+- [x] Aprovar/rejeitar exige designation gestor de flats — diretor sem designation falha (código revisado; sem teste automatizado — P-7.12)
+- [x] Ajuda aprovada cria payables NÃO aprovados no Financeiro, dueDate = dia anterior ao início (código revisado; sem teste automatizado — P-7.12)
+- [x] Audit central em toda mutação, abortando em falha (`criticality: "critical"` é o default de `logAudit`)
+- [x] Actions via kit de @hebron/auth (grep confirmado)
+- [x] Desempate: idade → tempo sem descanso → nunca usou → sorteio (nesta ordem) — função pura `breakTie` em `approval.ts`
+- [x] Aprovação: diretor gestor seleciona 1 dos 3 períodos (validado contra `preferred_periods`)
+- [x] Soft-delete com justificativa (status → cancelada + reason no audit diff)
+- [x] Lint passa
+- [x] Types passam
+
+**Arquivos modificados:**
+
+- `packages/db/src/schema/admin.ts` (3 valores novos em `audit_action`)
+- `packages/integrations/src/financeiro.ts` (`onFlatsAssistanceApproved` real, antes stub)
+- `apps/flats/package.json` (dependências faltantes — débito de infra)
+- `PROMPTS.md` (checklist de P-7.8 marcado)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+**Arquivos criados:**
+
+- `apps/flats/src/actions/reservations.ts`
+- `apps/flats/src/actions/scoring.ts`
+- `apps/flats/src/actions/approval.ts`
+- `apps/flats/src/actions/checkin.ts`
+- `apps/flats/src/actions/aid.ts`
+- `apps/flats/src/lib/safe-action.ts`
+- `apps/flats/src/lib/audit.ts`
+- `packages/db/src/migrations/0047_flats_audit_actions_p78.sql`
