@@ -27,27 +27,27 @@
 
 Corpo integral no próprio arquivo (as 4 originais) ou em `AUDIT/04-prompts-pendentes.md` §4 (as 15 da auditoria de 2026-07 — convenção registrada em cada sessão de SESSIONS.md a partir de S-54; transcrever o texto para dentro deste arquivo é trabalho mecânico à parte, não feito em P-0.16 para não misturar prompts na mesma sessão).
 
-| Corretivo | Motivo                                                      | Corpo do prompt                  | Sessão |
-| --------- | ----------------------------------------------------------- | -------------------------------- | ------ |
-| P-0.2b    | Unificação do design system (tokens `--hb-*`)               | neste arquivo                    | S-20   |
-| P-0.3b    | Pipeline de migrations                                      | neste arquivo                    | S-22   |
-| P-1.12b   | Reconciliação do Admin ao design system unificado           | neste arquivo                    | S-22b¹ |
-| P-2.9b    | Usuário real no header de Projetos                          | neste arquivo                    | S-44   |
-| P-0.7     | Resgate do banco (partições, enum de audit, 0000 duplicada) | AUDIT/04-prompts-pendentes.md §4 | S-54   |
-| P-0.8     | Kit de backend compartilhado (sessão/audit/notificações)    | AUDIT/04-prompts-pendentes.md §4 | S-55   |
-| P-0.9     | CI mínimo                                                   | AUDIT/04-prompts-pendentes.md §4 | S-56   |
-| P-0.10    | Decisão B: RLS ativa (grants + policies + adoção)           | AUDIT/04-prompts-pendentes.md §4 | S-57   |
-| P-0.11    | drizzle-kit reconciliado                                    | AUDIT/04-prompts-pendentes.md §4 | S-58   |
-| P-1.25    | Admin: leitura protegida e fiação completa                  | AUDIT/04-prompts-pendentes.md §4 | S-59   |
-| P-1.26    | Onboarding: convite, auto-signup e MFA bloqueante           | AUDIT/04-prompts-pendentes.md §4 | S-60   |
-| P-1.27    | Documentos: visibilidade e área editorial verdadeiras       | AUDIT/04-prompts-pendentes.md §4 | S-61   |
-| P-2.9c    | Projetos: operável de ponta a ponta                         | AUDIT/04-prompts-pendentes.md §4 | S-62   |
-| P-3.8b    | Financeiro: governança e conciliação verdadeiras            | AUDIT/04-prompts-pendentes.md §4 | S-63   |
-| P-0.12    | Storage: buckets e policies                                 | AUDIT/04-prompts-pendentes.md §4 | S-64   |
-| P-0.13    | LGPD: fundação                                              | AUDIT/04-prompts-pendentes.md §4 | S-65   |
-| P-0.14    | Jobs: Inngest de verdade                                    | AUDIT/04-prompts-pendentes.md §4 | S-66   |
-| P-0.15    | packages/integrations + contrato de settings                | AUDIT/04-prompts-pendentes.md §4 | S-67   |
-| P-0.16    | Registro retroativo (este próprio corretivo)                | AUDIT/04-prompts-pendentes.md §4 | S-68   |
+| Corretivo | Motivo                                                      | Corpo do prompt                  | Sessão   |
+| --------- | ----------------------------------------------------------- | -------------------------------- | -------- |
+| P-0.2b    | Unificação do design system (tokens `--hb-*`)               | neste arquivo                    | S-20     |
+| P-0.3b    | Pipeline de migrations                                      | neste arquivo                    | S-22     |
+| P-1.12b   | Reconciliação do Admin ao design system unificado           | neste arquivo                    | S-22b¹   |
+| P-2.9b    | Usuário real no header de Projetos                          | neste arquivo                    | S-44     |
+| P-0.7     | Resgate do banco (partições, enum de audit, 0000 duplicada) | AUDIT/04-prompts-pendentes.md §4 | S-54     |
+| P-0.8     | Kit de backend compartilhado (sessão/audit/notificações)    | AUDIT/04-prompts-pendentes.md §4 | S-55     |
+| P-0.9     | CI mínimo                                                   | AUDIT/04-prompts-pendentes.md §4 | S-56     |
+| P-0.10    | Decisão B: RLS ativa (grants + policies + adoção)           | AUDIT/04-prompts-pendentes.md §4 | S-57     |
+| P-0.11    | drizzle-kit reconciliado                                    | AUDIT/04-prompts-pendentes.md §4 | S-58     |
+| P-1.25    | Admin: leitura protegida e fiação completa                  | AUDIT/04-prompts-pendentes.md §4 | S-59     |
+| P-1.26    | Onboarding: convite, auto-signup e MFA bloqueante           | AUDIT/04-prompts-pendentes.md §4 | S-60     |
+| P-1.27    | Documentos: visibilidade e área editorial verdadeiras       | AUDIT/04-prompts-pendentes.md §4 | S-61     |
+| P-2.9c    | Projetos: operável de ponta a ponta                         | AUDIT/04-prompts-pendentes.md §4 | S-62     |
+| P-3.8b    | Financeiro: governança e conciliação verdadeiras            | AUDIT/04-prompts-pendentes.md §4 | S-63     |
+| P-0.12    | Storage: buckets e policies                                 | AUDIT/04-prompts-pendentes.md §4 | S-64     |
+| P-0.13    | LGPD: fundação                                              | AUDIT/04-prompts-pendentes.md §4 | S-65     |
+| P-0.14    | Jobs: Inngest de verdade                                    | AUDIT/04-prompts-pendentes.md §4 | S-66     |
+| P-0.15    | packages/integrations + contrato de settings                | AUDIT/04-prompts-pendentes.md §4 | S-67     |
+| P-0.16    | Registro retroativo (este próprio corretivo)                | AUDIT/04-prompts-pendentes.md §4 | S-68     |
 | P-7.1b    | Flats: máximo de scoring em BRAIN §6.8 (80 → 75)            | neste arquivo                    | pendente |
 | P-7.5b    | Flats: fiação das telas do Bloco A para validação diretoria | neste arquivo                    | pendente |
 
@@ -4221,13 +4221,13 @@ O wizard de reserva (P-7.4), o `approval-form`, o `checkin-form` (P-7.4) e o `ap
 
 **Critérios de aceite:**
 
-- [ ] `/reservar` renderiza o wizard de P-7.4 (step de consentimento presente; campo de saúde só exibido com consentimento específico; upload de documento presente)
-- [ ] Formulário single-page de P-7.3 removido; sem duplicação de superfície de reserva
-- [ ] `approval-form` alcançável pela fila de aprovação (seleção de período final + observações, mock)
-- [ ] Check-in/check-out pelo detalhe da reserva via `checkin-form`; `status-actions.tsx` removido
-- [ ] `ApprovalQueueSkeleton` conectado como loading da fila
-- [ ] `grep`: nenhum componente do Bloco A (P-7.2/P-7.4/P-7.5) sem import a partir de `app/`
-- [ ] Lint passa · Types passam · `next build` verde (sanidade dos route groups)
+- [x] `/reservar` renderiza o wizard de P-7.4 (step de consentimento presente; campo de saúde só exibido com consentimento específico; upload de documento presente)
+- [x] Formulário single-page de P-7.3 removido; sem duplicação de superfície de reserva
+- [x] `approval-form` alcançável pela fila de aprovação (seleção de período final + observações, mock)
+- [x] Check-in/check-out pelo detalhe da reserva via `checkin-form`; `status-actions.tsx` removido
+- [x] `ApprovalQueueSkeleton` conectado como loading da fila
+- [x] `grep`: nenhum componente do Bloco A (P-7.2/P-7.4/P-7.5) sem import a partir de `app/` (exceto `period-picker.tsx`, órfão pré-existente — ver S-127)
+- [x] Lint passa · Types passam · `next build` verde (sanidade dos route groups)
 
 **Notas:**
 

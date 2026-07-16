@@ -1,17 +1,32 @@
 "use client";
 
-import { useState } from "react";
-import { PageHeader } from "@hebron/ui";
+import { useEffect, useState } from "react";
+import { ArrowLeft } from "lucide-react";
+import { Button, PageHeader } from "@hebron/ui";
+import { ApprovalForm } from "../../../components/approval-form";
 import {
   ApprovalQueue,
   type ApprovalQueueItem,
 } from "../../../components/approval-queue";
-import { mockGuests, mockReservations } from "../../../lib/mock-data";
+import { ApprovalQueueSkeleton } from "../../../components/approval-queue-skeleton";
+import {
+  mockGuests,
+  mockReservations,
+  mockUnits,
+} from "../../../lib/mock-data";
+import type { ReviewReservationInput } from "@hebron/validators/flats";
 
 export default function AprovacaoPage() {
+  const [loading, setLoading] = useState(true);
   const [decisions, setDecisions] = useState<
     Record<string, "aprovada" | "rejeitada">
   >({});
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 500);
+    return () => clearTimeout(timer);
+  }, []);
 
   const pending: ApprovalQueueItem[] = mockReservations
     .filter(
@@ -24,6 +39,36 @@ export default function AprovacaoPage() {
     });
 
   const decidedCount = Object.keys(decisions).length;
+  const selected = pending.find((item) => item.reservation.id === selectedId);
+
+  function handleDecision(data: ReviewReservationInput) {
+    setDecisions((prev) => ({ ...prev, [data.reservationId]: data.decision }));
+    setSelectedId(null);
+  }
+
+  if (selected) {
+    return (
+      <div className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-8 sm:px-6">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="w-fit"
+          onClick={() => setSelectedId(null)}
+        >
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
+          Voltar à fila
+        </Button>
+
+        <ApprovalForm
+          reservation={selected.reservation}
+          guest={selected.guest}
+          units={mockUnits}
+          onSubmit={handleDecision}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-8 sm:px-6">
@@ -32,15 +77,15 @@ export default function AprovacaoPage() {
         description="Ordenada por pontuação de scoring, com desempate visível conforme BRAIN §6.8."
       />
 
-      <ApprovalQueue
-        items={pending}
-        onApprove={(id) =>
-          setDecisions((prev) => ({ ...prev, [id]: "aprovada" }))
-        }
-        onReject={(id) =>
-          setDecisions((prev) => ({ ...prev, [id]: "rejeitada" }))
-        }
-      />
+      {loading ? (
+        <ApprovalQueueSkeleton />
+      ) : (
+        <ApprovalQueue
+          items={pending}
+          onApprove={(id) => setSelectedId(id)}
+          onReject={(id) => setSelectedId(id)}
+        />
+      )}
 
       {decidedCount > 0 && (
         <p className="text-xs text-(--fg-muted)">
