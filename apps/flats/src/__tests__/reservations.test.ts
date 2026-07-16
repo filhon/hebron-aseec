@@ -69,14 +69,12 @@ function isoDateOnly(date: Date): string {
 }
 
 /**
- * Postgres canonicaliza `daterange` (tipo discreto) para a forma
- * `[início,fim)` — o `end` lido de volta é sempre "literal inserido + 1
- * dia" (mesma descoberta de SESSIONS.md S-133/P-7.11). `reviewReservation`
- * compara o `confirmedPeriod` recebido contra as linhas de
- * `preferred_periods` já lidas do banco (portanto já canonicalizadas) — por
- * isso o período de confirmação usado nos testes precisa vir de uma leitura
- * real da tabela, não do literal original passado a `createReservation`,
- * senão a comparação de datas nunca bate.
+ * `reviewReservation` compara o `confirmedPeriod` recebido contra as linhas
+ * de `preferred_periods` lidas do banco — usamos uma leitura real da tabela
+ * (em vez do literal original passado a `createReservation`) para exercitar
+ * o mesmo caminho de dados que o formulário de aprovação usa em produção.
+ * Desde a correção de `daterange.fromDriver` (P-7.6b), esse valor lido bate
+ * exatamente com o literal informado — sem deslocamento de canonicalização.
  */
 async function fetchStoredPeriod(
   reservationId: string,
@@ -535,14 +533,14 @@ describe("Fluxo completo da reserva", () => {
       .from(reservations)
       .where(eq(reservations.id, reservationId));
     expect(row?.status).toBe("aprovada");
-    // O `selectedPeriod` gravado já reflete a canonicalização de `daterange`
-    // do Postgres (fim exclusivo — mesma descoberta de SESSIONS.md S-133) —
-    // o dias-de-uso esperado no check-out é derivado deste valor real, não
-    // recalculado a partir do literal original passado a `createReservation`.
     const selectedPeriod = requireDefined(
       row?.selectedPeriod,
       "selectedPeriod",
     );
+    // Sem deslocamento de canonicalização (P-7.6b): o período gravado bate
+    // exatamente com o literal de preferência escolhido pelo hóspede.
+    expect(selectedPeriod.start).toBe(isoDateOnly(flowPeriod.start));
+    expect(selectedPeriod.end).toBe(isoDateOnly(flowPeriod.end));
     const expectedDaysUsed = Math.round(
       (new Date(`${selectedPeriod.end}T00:00:00Z`).getTime() -
         new Date(`${selectedPeriod.start}T00:00:00Z`).getTime()) /
@@ -588,6 +586,32 @@ describe("Fluxo completo da reserva", () => {
       .where(eq(usageHistory.reservationId, reservationId));
     expect(historyRows).toHaveLength(1);
     expect(historyRows[0]?.daysUsed).toBe(expectedDaysUsed);
+  });
+});
+
+// ── daterange — round-trip write→read (P-7.6b) ─────────────────────────────
+
+describe("daterange — round-trip write→read", () => {
+  it("db.insert(period) → select devolve exatamente {start,end}, sem deslocamento", async () => {
+    const inputPeriod = { start: "2027-03-01", end: "2027-03-05" };
+    const [inserted] = await db
+      .insert(reservations)
+      .values({
+        requestedBy: IDS.users.flow,
+        purpose: "Teste de round-trip do daterange",
+        status: "solicitada",
+        selectedPeriod: inputPeriod,
+      })
+      .returning({ id: reservations.id });
+    const reservationId = requireDefined(inserted?.id, "reservationId");
+    createdReservationIds.push(reservationId);
+
+    const [row] = await db
+      .select()
+      .from(reservations)
+      .where(eq(reservations.id, reservationId));
+
+    expect(row?.selectedPeriod).toEqual(inputPeriod);
   });
 });
 

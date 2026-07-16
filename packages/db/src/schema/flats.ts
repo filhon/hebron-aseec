@@ -32,6 +32,16 @@ export interface DateRange {
   end: string;
 }
 
+// toDriver grava com o limite superior INCLUSIVO (`[start,end]`), mas
+// `daterange` é um tipo discreto — o Postgres canonicaliza toda gravação
+// para a forma exclusiva `[start,end+1)` antes de persistir. Sem a
+// correção abaixo, `fromDriver` devolveria `end+1` para todo período lido de
+// volta, corrompendo silenciosamente exibição, o cron de check-out e o
+// `daysUsed` do check-out (achado S-133/S-134/P-7.6b — não editar sem reler
+// esse histórico). A correção é só de LEITURA: quando o bracket superior for
+// exclusivo `)` (sempre, na prática, para dado gravado por este customType),
+// subtraímos 1 dia para recuperar o `end` inclusivo que o chamador informou.
+// Round-trip write→read fica estável: `{start,end}` volta exatamente igual.
 export const daterange = customType<{ data: DateRange; driverData: string }>({
   dataType() {
     return "daterange";
@@ -40,11 +50,19 @@ export const daterange = customType<{ data: DateRange; driverData: string }>({
     return `[${value.start},${value.end}]`;
   },
   fromDriver(value) {
-    const match = /^[[(]([^,]*),([^,)\]]*)[)\]]$/.exec(value);
+    const match = /^([[(])([^,]*),([^,)\]]*)([)\]])$/.exec(value);
     if (!match) {
       throw new Error(`Formato inesperado de daterange: ${value}`);
     }
-    return { start: match[1] ?? "", end: match[2] ?? "" };
+    const [, , rawStart, rawEnd, upperBracket] = match;
+    const start = rawStart ?? "";
+    let end = rawEnd ?? "";
+    if (upperBracket === ")" && end !== "") {
+      const exclusiveEnd = new Date(`${end}T00:00:00Z`);
+      exclusiveEnd.setUTCDate(exclusiveEnd.getUTCDate() - 1);
+      end = exclusiveEnd.toISOString().split("T")[0] ?? end;
+    }
+    return { start, end };
   },
 });
 

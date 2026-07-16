@@ -93,7 +93,7 @@ export function StepGuest() {
 
   return (
     <section className="flex flex-col gap-4">
-      <h2 className="font-(--font-display) text-lg font-semibold text-(--fg)">
+      <h2 className="font-(--font-display) text-lg text-(--fg)">
         Dados do responsável
       </h2>
 
@@ -254,7 +254,7 @@ export function StepGuest() {
                   });
                   setFileName(null);
                 }}
-                className="shrink-0 rounded-(--radius-sm) p-1.5 text-(--fg-muted) transition-colors duration-(--transition-fast) hover:bg-(--surface-alt) hover:text-(--color-destructive)"
+                className="shrink-0 rounded-sm p-1.5 text-(--fg-muted) transition-colors duration-(--transition-fast) hover:bg-(--surface-alt) hover:text-(--color-destructive)"
                 aria-label="Remover documento"
               >
                 <Trash2 className="h-4 w-4" aria-hidden="true" />

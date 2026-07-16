@@ -462,6 +462,8 @@ a) Tempo de ministério: 1pt/ano, max 10 | b) Frequência de uso: nunca (10), >1
 
 **Check-in:** presencial na recepção do condomínio (sem smart locks ou check-in autônomo na v1).
 
+**Semântica de período (P-7.6b):** períodos (preferências, `selected_period`, `usage_history.period`) são armazenados como `daterange` do Postgres com **`end` inclusivo no domínio** — o custom type (`packages/db/src/schema/flats.ts`) corrige na leitura a canonicalização exclusiva (`[start,end+1)`) que o Postgres aplica na gravação, devolvendo sempre o `end` inclusivo originalmente informado.
+
 ### 6.9. Tarefas
 
 **Workspaces fixos:** Administrativo, Financeiro, Contábil e Fiscal, Eclesiástico, Comunicação, Tecnologia e Inovação

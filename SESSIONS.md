@@ -155,6 +155,7 @@
 | S-132  | 2026-07-16 | P-7.10 — Notificações e Emails Flats                                               | concluido                            |
 | S-133  | 2026-07-16 | P-7.11 — Integrações Cross-App Flats                                               | concluido                            |
 | S-134  | 2026-07-16 | P-7.12 — Testes Flats                                                              | concluido                            |
+| S-135  | 2026-07-16 | P-7.6b — Canonicalização estável do `daterange` (CORRETIVO)                        | concluido                            |
 
 ---
 
@@ -9379,3 +9380,90 @@ inteiro).
   `dotenv`, `postgres`)
 - `PROMPTS.md` (checklist de P-7.12 marcado)
 - `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+### S-135 — 2026-07-16 — P-7.6b — Canonicalização estável do `daterange` (CORRETIVO)
+
+**Status:** concluido
+**Prompt:** P-7.6b (Flats — Correções de Bloco B, auditoria pós-P-7.12)
+
+**Contexto do bug (achado em S-133/S-134):** `daterange.fromDriver`
+(`packages/db/src/schema/flats.ts`) lia o limite superior canonicalizado
+pelo Postgres (`[start,end)`, tipo discreto) sem subtrair 1 dia — todo
+`end` voltava do banco 1 dia à frente do informado. A aprovação
+(`approval.ts`) reconfirma o `selectedPeriod` a partir de
+`preferred_periods` já relidos (já +1), então o valor gravado sofria uma
+segunda canonicalização e acumulava **+2 dias**. S-133/S-134 documentaram o
+sintoma e compensaram nos fixtures de teste em vez de corrigir a raiz.
+
+**Correção (só leitura, nenhuma migração de dados):**
+
+- `daterange.fromDriver`: quando o bracket superior vem exclusivo `)`,
+  subtrai 1 dia do `end` antes de devolver — round-trip write→read fica
+  estável. `toDriver` (`[start,end]` inclusivo) permanece igual. Decisão
+  documentada em comentário no próprio custom type.
+- Removidas as compensações de `-1 dia` que mascaravam o bug em
+  `packages/integrations/src/__tests__/flats.test.ts` (fixture
+  `SELECTED_PERIOD`) e `apps/flats/src/__tests__/reservations.test.ts`
+  (comentário de `fetchStoredPeriod`, agora só descreve o caminho de dados,
+  não mais uma compensação necessária).
+- `checkin.ts` (`daysUsed`), `queries.ts` (`toPeriod`) e
+  `packages/jobs/src/crons/flats.ts` (comparação `selectedPeriod.end ===
+targetDate`) **não precisaram de alteração** — todos leem
+  `selectedPeriod`/`period` diretamente da coluna via Drizzle, então se
+  autocorrigem com o fix em `fromDriver` (verificado por leitura de código,
+  não só por inferência).
+- Nota de semântica adicionada em BRAIN.md §6.8: períodos são `daterange`
+  com `end` inclusivo no domínio.
+
+**Testes adicionados/ajustados:**
+
+- Novo `describe("daterange — round-trip write→read")` em
+  `reservations.test.ts`: insere um período literal em
+  `flats.reservations.selected_period` e confirma que o `select` devolve
+  exatamente `{start,end}`, sem deslocamento.
+- `Fluxo completo da reserva`: nova asserção explícita — `selectedPeriod`
+  pós-aprovação bate exatamente com o `flowPeriod` de preferência escolhido
+  (start e end), antes do cálculo de `daysUsed`.
+- `flats.test.ts` (integrations): fixture `SELECTED_PERIOD.end` corrigida de
+  `"2026-08-14"` (compensado) para `"2026-08-15"` (literal real) — as datas
+  de tarefa esperadas (`preTask`/`postTask`) não mudaram, porque já eram
+  derivadas do valor lido (agora correto, antes mascarado pelo bug).
+
+**Verificação:** `pnpm --filter @hebron/flats test` — 3 arquivos, 50/50
+testes verdes (incluindo o novo teste de round-trip). `pnpm --filter
+@hebron/integrations test -- flats.test.ts` — 1/1 verde. `pnpm turbo lint
+typecheck --filter=@hebron/db --filter=@hebron/integrations
+--filter=@hebron/flats` — 18/18 tasks verdes.
+
+**Critérios de aceite verificados:**
+
+- [x] Round-trip `db.insert(period) → select` devolve exatamente
+      `{start,end}` (teste novo)
+- [x] Após aprovação, `selectedPeriod` lido bate com o período de
+      preferência escolhido, sem deslocamento (asserção nova no fluxo
+      completo)
+- [x] Testes de P-7.11/P-7.12 passam sem os fixtures compensatórios de -1 dia
+- [x] `daysUsed` no check-out corresponde ao período real informado (fluxo
+      completo: `expectedDaysUsed` bate com o literal de 3 dias do
+      `flowPeriod`)
+- [x] Cron de check-out (`runFlatsCheckoutReminders`) compara
+      `selectedPeriod.end` já lido corretamente — nenhuma mudança de código
+      necessária, comportamento verificado por leitura
+- [x] `EXCLUDE USING gist` de double-booking permanece correto (teste
+      existente de double-booking continua verde)
+- [x] Lint passa · Types passam
+
+**Arquivos modificados:**
+
+- `packages/db/src/schema/flats.ts` (custom type `daterange` — `fromDriver`
+  - comentário)
+- `packages/integrations/src/__tests__/flats.test.ts` (fixture corrigida)
+- `apps/flats/src/__tests__/reservations.test.ts` (comentários atualizados,
+  asserção de deslocamento, novo teste de round-trip)
+- `BRAIN.md` (§6.8 — nota de semântica de período, `end` inclusivo)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+**Nota:** `checkin.ts` e `packages/jobs/src/crons/flats.ts` estavam na lista
+de arquivos permitidos do prompt "se necessário" — não precisaram de edição.

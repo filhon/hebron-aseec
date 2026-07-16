@@ -19,14 +19,10 @@ const REQUESTER_ID = "f7110000-0000-0000-0000-000000000001";
 const REQUESTER_EMAIL = "flats-cross-test-requester@test.hebron";
 const RESERVATION_ID = "f7110000-0000-0000-0000-0000000000f1";
 
-// O customType `daterange` (packages/db/src/schema/flats.ts) grava com
-// limites inclusivos ("[start,end]"), mas o Postgres sempre canonicaliza
-// daterange para a forma [início,fim) — o limite superior lido de volta do
-// banco é sempre "end + 1 dia" em relação ao valor inserido. Para que
-// `onFlatsReservationConfirmed` leia `selectedPeriod.end` = "2026-08-15"
-// (o check-out esperado neste teste), o valor inserido precisa ser
-// "2026-08-14".
-const SELECTED_PERIOD = { start: "2026-08-10", end: "2026-08-14" };
+// O customType `daterange` (packages/db/src/schema/flats.ts) já corrige a
+// canonicalização do Postgres na leitura (P-7.6b) — o round-trip
+// write→read é estável, então o literal aqui é o check-out real esperado.
+const SELECTED_PERIOD = { start: "2026-08-10", end: "2026-08-15" };
 
 beforeAll(async () => {
   await seedFlatsCleaningTemplates();

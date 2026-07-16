@@ -4501,6 +4501,147 @@ Testes: RLS (hóspede vê apenas próprias, diretor/conselheiro não cria reserv
 
 ---
 
+## Flats — Correções de Bloco B (auditoria pós-P-7.12)
+
+> Débitos identificados cruzando os prompts P-7.6–7.12 com a codebase (S-128–S-134). Rodar após P-7.12, antes da Fase 8. Ordem recomendada: P-7.6b (bug de dados que os testes atuais mascaram) → P-7.9b → P-7.9c.
+
+---
+
+### P-7.6b — Canonicalização estável do custom type `daterange` (CORRETIVO)
+
+**Fase:** 7
+**Módulo:** flats
+**Tipo:** schema
+**Pré-condições:**
+
+- Branch: `feat/P-7.6b-daterange-canonical`
+- Dependências: P-7.12 concluído
+- Env vars: `DATABASE_URL`
+
+**Problema que este prompt resolve (contexto):**
+O custom type `daterange` (`packages/db/src/schema/flats.ts`) grava limites inclusivos (`toDriver` → `[start,end]`), mas o Postgres canonicaliza `daterange` de tipo discreto para `[start,end+1)`. O `fromDriver` lê essa forma exclusiva **sem subtrair o dia**, então todo `end` volta do banco 1 dia à frente do que o hóspede informou. Pior: a aprovação (`approval-form.tsx` → `approval.ts`) seleciona o período a partir dos `preferredPeriods` **já relidos do banco** (já +1) e o regrava como `selectedPeriod`, sofrendo uma segunda canonicalização — `selectedPeriod.end` acumula **+2 dias**. Isso corrompe: (a) a exibição do período no detalhe da reserva e em "Minhas reservas"; (b) o cron de lembrete de check-out (`selectedPeriod.end === hoje`, dispara 2 dias tarde); (c) `daysUsed` no check-out, que grava `usage_history` e alimenta a regra de elegibilidade 7d/12m (superestima o consumo, podendo bloquear reservas futuras legítimas). S-133 e S-134 descreveram o sintoma como "armadilha de teste" e ajustaram os _fixtures_ para acomodar o deslocamento, em vez de corrigir a raiz. A correção é no mapeamento de leitura (JS), não no dado armazenado nem no `EXCLUDE` de double-booking (que opera server-side sobre a forma canônica e permanece correto).
+
+**Escopo:**
+
+1. `daterange.fromDriver` (`packages/db/src/schema/flats.ts`): quando o limite superior vier com bracket exclusivo `)` (forma canônica do Postgres), subtrair 1 dia para recuperar o `end` inclusivo original — tornando o round-trip write→read estável. Manter `toDriver` como está (`[start,end]`). Documentar a decisão em comentário destacado no próprio custom type (fonte permanente pedida em S-133/S-134).
+2. Remover as compensações de `-1 dia` nos _fixtures_ dos testes que mascaravam o bug: `packages/integrations/src/__tests__/flats.test.ts` e `apps/flats/src/__tests__/reservations.test.ts` (`fetchStoredPeriod`/`daysUsed` esperados passam a bater com o literal informado).
+3. Verificar e, se necessário, ajustar os consumidores de leitura: exibição em `admin/reserva/[id]/page.tsx` e `minhas-reservas`, o cron `runFlatsCheckoutReminders` (`packages/jobs/src/crons/flats.ts`) e o cálculo `daysUsed` em `checkin.ts` — fixando a semântica de contagem de dias (definir se `daysUsed = end − start` conta noites ou dias inclusivos, e alinhar à regra "7 dias" de BRAIN §6.8).
+4. Nota curta em BRAIN §6.8 registrando que períodos são armazenados como `daterange` com `end` inclusivo no domínio.
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/db/src/schema/flats.ts` (só o custom type `daterange` + comentário)
+- `packages/integrations/src/__tests__/flats.test.ts`
+- `apps/flats/src/__tests__/reservations.test.ts`
+- `apps/flats/src/actions/checkin.ts` (só o cálculo de `daysUsed`, se o ajuste de semântica exigir)
+- `packages/jobs/src/crons/flats.ts` (só a comparação de data, se necessário)
+- `BRAIN.md` (§6.8, nota de semântica de período)
+
+**Critérios de aceite:**
+
+- [x] Round-trip `db.insert(period {start,end}) → select` devolve exatamente `{start,end}` (teste)
+- [x] Após aprovação, `selectedPeriod` lido bate com o período de preferência escolhido, sem deslocamento (teste)
+- [x] Testes de P-7.11/P-7.12 passam **sem** os _fixtures_ compensatórios de `-1 dia`
+- [x] `daysUsed` no check-out corresponde ao período real informado; regra 7d/12m testada com o valor correto
+- [x] Cron de check-out dispara no dia real do `end`
+- [x] `EXCLUDE USING gist` de double-booking permanece correto (adjacência e overlap) (teste)
+- [x] Lint passa · Types passam
+
+**Notas:**
+Correção puramente de leitura — nenhuma migração de dados: linhas já gravadas (`[x,y)` no banco) passam a ser lidas com `end = y−1`, que é o valor inclusivo pretendido. Fechar em SESSIONS.md a armadilha registrada em S-133/S-134.
+
+---
+
+### P-7.9b — Fiação do ciclo de vida pós-aprovação e revisão de auxílio (CORRETIVO)
+
+**Fase:** 7
+**Módulo:** flats
+**Tipo:** ui
+**Pré-condições:**
+
+- Branch: `feat/P-7.9b-flats-lifecycle-ui`
+- Dependências: P-7.12 concluído (recomendado após P-7.6b)
+- Env vars: `SUPABASE_URL`, `SUPABASE_ANON_KEY`
+- Skill `/impeccable` obrigatória antes de escrever qualquer JSX (G2 + CLAUDE.md)
+
+**Problema que este prompt resolve (contexto):**
+Três Server Actions de P-7.8 estão implementadas, testadas (P-7.12) e sem **nenhum acionador na UI**: `confirmReservation` (aprovada→confirmada), `cancelReservation` (soft-delete) e `reviewAidRequest` (gestor aprova/rejeita auxílio). Consequências em cascata em uso real: (a) uma reserva aprovada **nunca chega a `confirmada`**, logo o `CheckinForm` (que só habilita a partir de `confirmada`) é inalcançável, a integração Flats→Tarefas (`onFlatsReservationConfirmed`, disparada só por `confirmReservation`) **nunca roda**, e `usage_history` nunca é escrito — a regra 7d/12m não acumula; (b) não há caminho de cancelamento; (c) o auxílio pode ser **solicitado** pelo hóspede (wizard) mas **nunca aprovado/rejeitado** pelo gestor, então o fluxo Flats→Financeiro / governança dual D-4 (testado em P-7.11) **nunca gera payable** em produção. S-131 registrou confirm/cancel como adiados "para um prompt futuro que desenhe a UI correspondente"; a revisão de auxílio nunca foi sinalizada.
+
+**Escopo:**
+
+1. **Detalhe da reserva (gestor)** `admin/reserva/[id]/page.tsx`: quando `status = aprovada`, expor botão **Confirmar reserva** (`confirmReservation`); em qualquer status não-terminal, botão **Cancelar** com campo de justificativa (`cancelReservation`, mín. 10 caracteres, schema já existente). Quando houver `aidRequest` com status `solicitado`, expor **Aprovar / Rejeitar auxílio** (`reviewAidRequest`), coletando valor da diária e/ou do transporte (combustível) conforme o schema exige. Extrair a interatividade para Client Components colocados (padrão de `aprovacao-client.tsx`), já que a página é Server Component async.
+2. **Minhas reservas (hóspede)** `minhas-reservas/page.tsx`: no cartão da reserva atual, quando `status = aprovada`, botão **Confirmar** (dono confirma presença — `confirmReservation` já autoriza dono OU gestor); em status não-terminal, **Cancelar** com justificativa.
+3. **Robustez:** envolver a chamada de `onFlatsAssistanceApproved` em `aid.ts` em try/catch best-effort com log estruturado (mesmo padrão de `reservations.ts`/`approval.ts`), para não deixar o auxílio `aprovado` sem payable derrubar a resposta ao gestor.
+4. `router.refresh()` após cada transição para refletir o novo status (padrão de `checkin-form.tsx`).
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/flats/src/app/admin/reserva/[id]/page.tsx`
+- `apps/flats/src/app/admin/reserva/[id]/lifecycle-actions.tsx` (novo — confirmar/cancelar/revisar auxílio, Client)
+- `apps/flats/src/app/(hospede)/minhas-reservas/page.tsx`
+- `apps/flats/src/app/(hospede)/minhas-reservas/reservation-actions.tsx` (novo — confirmar/cancelar, Client)
+- `apps/flats/src/actions/aid.ts` (apenas o try/catch da chamada de integração)
+- `apps/flats/src/lib/queries.ts` (apenas se faltar expor `aidRequest.id`/status para a UI)
+
+**Critérios de aceite:**
+
+- [ ] Reserva `aprovada` confirmável pelo detalhe (gestor) e por "Minhas reservas" (hóspede dono); status vai a `confirmada` e dispara as 2 tarefas de limpeza (teste de fluxo já cobre `onFlatsReservationConfirmed`)
+- [ ] Check-in/check-out passam a ser alcançáveis de ponta a ponta pela UI (confirmar → check-in → check-out)
+- [ ] Cancelamento executável (dono ou gestor) com justificativa; status vai a `cancelada`; bloqueado em status terminal
+- [ ] Auxílio `solicitado` aprovável/rejeitável pelo gestor no detalhe; aprovação gera payable `pendente` no Financeiro (D-4)
+- [ ] Falha da integração Financeiro não derruba a resposta de `reviewAidRequest` (best-effort, log estruturado)
+- [ ] Gates de papel respeitados (hóspede não vê ações de gestor e vice-versa); `next build` verde
+- [ ] Lint passa · Types passam
+
+**Notas:**
+Não reescrever `CheckinForm`/`ApprovalForm` — apenas adicionar os acionadores que faltam. Fechar em SESSIONS.md os débitos de confirm/cancel (S-131) e o de revisão de auxílio.
+
+---
+
+### P-7.9c — Persistência do documento do responsável em `flats.document_files` (CORRETIVO)
+
+**Fase:** 7
+**Módulo:** flats
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-7.9c-flats-document-persist`
+- Dependências: P-7.12 concluído
+- Env vars: `SUPABASE_URL`, `SUPABASE_ANON_KEY`
+
+**Problema que este prompt resolve (contexto):**
+O wizard (P-7.4, `step-guest.tsx`) faz upload do documento do responsável ao bucket `flats-documentos` e grava o path em `guest.responsibleDocumentUrl` (validado por `createReservationRequestSchema`), mas `createReservation` **nunca lê esse campo**: a referência é descartada no servidor, `flats.document_files` (tabela e RLS prontas desde P-7.6/P-7.7, com `document_files_owner_all` concedendo INSERT ao dono) **nunca é escrita**, e `queries.ts` fixa `responsibleDocumentUrl: null`. Resultado: o gestor nunca acessa o documento exigido pelo edital, e cada upload vira um objeto órfão no storage. Débito registrado em S-130 ("para quando a UI for conectada, P-7.9") e no comentário de `queries.ts` — **não resolvido em P-7.9**. `document_files` exige `storageKey`, `fileName`, `mimeType`, `fileSizeBytes`, que o payload atual não carrega (só o path).
+
+**Escopo:**
+
+1. **Payload:** estender `createReservationRequestSchema` (`packages/validators/src/flats`) para o documento do responsável carregar metadados (`storageKey`, `fileName`, `mimeType`, `fileSizeBytes`) além do path — ou um sub-objeto `responsibleDocument`. `step-guest.tsx` já tem o `File` no handler de upload; capturar `name/type/size` no estado do formulário; `reservation-wizard.tsx` inclui no payload final.
+2. **Persistência:** em `createReservation`, após inserir o `guests` responsável, inserir 1 linha em `document_files` (`reservationId`, `guestId` = responsável, `uploadedBy` = `ctx.actorId`) dentro da mesma `withAuthenticatedContext` (RLS `document_files_owner_all` já concede). Auditar (`document.uploaded` ou reaproveitar o diff de `reservation.submitted`).
+3. **Leitura:** `queries.ts` passa a ler `document_files` da reserva e devolver uma URL assinada (Supabase `createSignedUrl`, bucket privado) em `responsibleDocumentUrl`, em vez de `null`.
+4. **Exibição:** o detalhe da reserva (gestor) e/ou `GuestList` mostram um link "Ver documento" quando presente.
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/validators/src/flats/index.ts`
+- `apps/flats/src/components/reservation-wizard-steps/step-guest.tsx`
+- `apps/flats/src/components/reservation-wizard.tsx`
+- `apps/flats/src/actions/reservations.ts`
+- `apps/flats/src/lib/queries.ts`
+- `apps/flats/src/app/admin/reserva/[id]/page.tsx` (ou `components/guest-list.tsx`) — só a exibição do link
+
+**Critérios de aceite:**
+
+- [ ] Enviar o wizard com documento persiste 1 linha em `flats.document_files` vinculada ao `guest` responsável e à reserva (teste)
+- [ ] `uploadedBy` = requerente; RLS permite o INSERT do próprio hóspede
+- [ ] Gestor abre o documento via URL assinada a partir do detalhe da reserva
+- [ ] Reserva sem documento continua válida (campo opcional preservado)
+- [ ] `responsibleDocumentUrl` deixa de ser `null` fixo quando há documento
+- [ ] Lint passa · Types passam
+
+**Notas:**
+Escopo mínimo de "fechar o loop" do upload já existente — sem novos buckets nem colunas. Fechar em SESSIONS.md o débito de S-130.
+
+---
+
 # Fase 8 — Rádio
 
 ---
