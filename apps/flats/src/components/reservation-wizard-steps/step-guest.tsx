@@ -42,10 +42,9 @@ export function StepGuest() {
   const [uploadErrorMessage, setUploadErrorMessage] = useState<string | null>(
     null,
   );
-  const [fileName, setFileName] = useState<string | null>(null);
 
   const ministryType = watch("guest.ministryType");
-  const documentUrl = watch("guest.responsibleDocumentUrl");
+  const responsibleDocument = watch("guest.responsibleDocument");
   const guestErrors = errors.guest;
 
   async function handleFileSelected(file: File) {
@@ -78,10 +77,16 @@ export function StepGuest() {
         .upload(path, file, { contentType: file.type });
       if (storageError) throw new Error(storageError.message);
 
-      setValue("guest.responsibleDocumentUrl", data.path, {
-        shouldValidate: true,
-      });
-      setFileName(file.name);
+      setValue(
+        "guest.responsibleDocument",
+        {
+          storageKey: data.path,
+          fileName: file.name,
+          mimeType: file.type,
+          fileSizeBytes: file.size,
+        },
+        { shouldValidate: true },
+      );
       setUploadStatus("idle");
     } catch (err) {
       setUploadStatus("error");
@@ -215,12 +220,12 @@ export function StepGuest() {
       </div>
 
       <FormField
-        id="guest.responsibleDocumentUrl"
+        id="guest.responsibleDocument"
         label="Documento de identidade do responsável"
         required
         hint="PDF, JPEG ou PNG, até 10 MB. Armazenado com acesso restrito."
         error={
-          guestErrors?.responsibleDocumentUrl?.message ??
+          guestErrors?.responsibleDocument?.message ??
           uploadErrorMessage ??
           undefined
         }
@@ -238,21 +243,18 @@ export function StepGuest() {
             }}
           />
 
-          {documentUrl ? (
+          {responsibleDocument ? (
             <div className="flex items-center justify-between gap-2 rounded-(--radius) border border-(--border) bg-(--surface) px-3 py-2">
               <span className="flex min-w-0 items-center gap-2 text-sm text-(--fg)">
                 <FileText className="h-4 w-4 shrink-0" aria-hidden="true" />
-                <span className="truncate">
-                  {fileName ?? "Documento enviado"}
-                </span>
+                <span className="truncate">{responsibleDocument.fileName}</span>
               </span>
               <button
                 type="button"
                 onClick={() => {
-                  setValue("guest.responsibleDocumentUrl", null, {
+                  setValue("guest.responsibleDocument", null, {
                     shouldValidate: true,
                   });
-                  setFileName(null);
                 }}
                 className="shrink-0 rounded-sm p-1.5 text-(--fg-muted) transition-colors duration-(--transition-fast) hover:bg-(--surface-alt) hover:text-(--color-destructive)"
                 aria-label="Remover documento"

@@ -4630,12 +4630,12 @@ O wizard (P-7.4, `step-guest.tsx`) faz upload do documento do responsável ao bu
 
 **Critérios de aceite:**
 
-- [ ] Enviar o wizard com documento persiste 1 linha em `flats.document_files` vinculada ao `guest` responsável e à reserva (teste)
-- [ ] `uploadedBy` = requerente; RLS permite o INSERT do próprio hóspede
-- [ ] Gestor abre o documento via URL assinada a partir do detalhe da reserva
-- [ ] Reserva sem documento continua válida (campo opcional preservado)
-- [ ] `responsibleDocumentUrl` deixa de ser `null` fixo quando há documento
-- [ ] Lint passa · Types passam
+- [x] Enviar o wizard com documento persiste 1 linha em `flats.document_files` vinculada ao `guest` responsável e à reserva (teste)
+- [x] `uploadedBy` = requerente; RLS permite o INSERT do próprio hóspede
+- [x] Gestor abre o documento via URL assinada a partir do detalhe da reserva
+- [x] Reserva sem documento continua válida (campo opcional preservado)
+- [x] `responsibleDocumentUrl` deixa de ser `null` fixo quando há documento
+- [x] Lint passa · Types passam
 
 **Notas:**
 Escopo mínimo de "fechar o loop" do upload já existente — sem novos buckets nem colunas. Fechar em SESSIONS.md o débito de S-130.

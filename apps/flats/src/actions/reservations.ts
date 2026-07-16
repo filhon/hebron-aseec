@@ -15,6 +15,7 @@ import {
   scoringResponses,
   usageHistory,
   consents,
+  documentFiles,
 } from "@hebron/db/schema";
 import { onFlatsReservationConfirmed } from "@hebron/integrations/flats";
 import { createReservationRequestSchema } from "@hebron/validators/flats";
@@ -181,6 +182,22 @@ export const createReservation = hospedeAction
 
         if (!responsible) throw new Error("Falha ao criar hóspede responsável");
 
+        // Persistência do documento do responsável em flats.document_files
+        // (P-7.9c, CORRETIVO) — antes desta linha o upload feito pelo wizard
+        // (step-guest.tsx, flats-documentos) nunca era referenciado no banco;
+        // o objeto no storage ficava órfão e o gestor não tinha como acessá-lo.
+        if (input.guest.responsibleDocument) {
+          await tx.insert(documentFiles).values({
+            reservationId: reservation.id,
+            guestId: responsible.id,
+            storageKey: input.guest.responsibleDocument.storageKey,
+            fileName: input.guest.responsibleDocument.fileName,
+            mimeType: input.guest.responsibleDocument.mimeType,
+            fileSizeBytes: input.guest.responsibleDocument.fileSizeBytes,
+            uploadedBy: ctx.actorId,
+          });
+        }
+
         const companionRows = [
           ...input.guest.companions,
           ...input.guest.youngChildren,
@@ -249,6 +266,8 @@ export const createReservation = hospedeAction
                 scoreTotal: totalPoints,
                 preferredPeriodsCount: input.preferredPeriods.length,
                 hasAidRequest: input.aidRequest !== null,
+                hasResponsibleDocument:
+                  input.guest.responsibleDocument !== null,
               },
             },
             sysTx,

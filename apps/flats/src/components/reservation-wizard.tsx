@@ -72,7 +72,12 @@ export interface ReservationWizardValues {
     responsibleEmail: string;
     responsiblePhone: string;
     responsibleBirthDate: string;
-    responsibleDocumentUrl: string | null;
+    responsibleDocument: {
+      storageKey: string;
+      fileName: string;
+      mimeType: string;
+      fileSizeBytes: number;
+    } | null;
     ministryType: MinistryType | "";
     ministryStartDate: string;
   };
@@ -113,7 +118,7 @@ const defaultValues: ReservationWizardValues = {
     responsibleEmail: "",
     responsiblePhone: "",
     responsibleBirthDate: "",
-    responsibleDocumentUrl: null,
+    responsibleDocument: null,
     ministryType: "",
     ministryStartDate: "",
   },
@@ -515,7 +520,7 @@ export function ReservationWizard() {
         "guest.responsibleEmail",
         "guest.responsiblePhone",
         "guest.responsibleBirthDate",
-        "guest.responsibleDocumentUrl",
+        "guest.responsibleDocument",
         "guest.ministryType",
         "guest.ministryStartDate",
       ],
@@ -663,7 +668,7 @@ export function ReservationWizard() {
         responsibleEmail: values.guest.responsibleEmail,
         responsiblePhone: values.guest.responsiblePhone,
         responsibleBirthDate: values.guest.responsibleBirthDate,
-        responsibleDocumentUrl: values.guest.responsibleDocumentUrl,
+        responsibleDocument: values.guest.responsibleDocument,
         ministryType: values.guest.ministryType || undefined,
         ministryStartDate: values.guest.ministryStartDate,
         companions: values.companions.map((c) => ({ ...c, isUnder3: false })),

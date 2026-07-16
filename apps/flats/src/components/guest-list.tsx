@@ -1,3 +1,4 @@
+import { FileText } from "lucide-react";
 import { Avatar } from "@hebron/ui";
 import type { Companion, Guest, MinistryType } from "@hebron/types/flats";
 
@@ -67,6 +68,17 @@ export function GuestList({ guest, className }: GuestListProps) {
           <p className="text-xs text-(--fg-muted)">
             {guest.responsibleEmail} · {guest.responsiblePhone}
           </p>
+          {guest.responsibleDocumentUrl && (
+            <a
+              href={guest.responsibleDocumentUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-1 inline-flex items-center gap-1.5 text-xs font-medium text-(--brand) transition-colors duration-(--transition-fast) hover:text-(--hb-blue-deep)"
+            >
+              <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+              Ver documento
+            </a>
+          )}
         </div>
       </div>
 

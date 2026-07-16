@@ -33,6 +33,8 @@ import {
   consents,
   reservations,
   preferredPeriods,
+  flatsGuests as guests,
+  documentFiles,
   aidRequests,
   usageHistory,
   scoringResponses,
@@ -112,6 +114,7 @@ const IDS = {
     flow: "f7140000-0000-0000-0000-00000000000a",
     aid: "f7140000-0000-0000-0000-00000000000b",
     gestor: "f7140000-0000-0000-0000-00000000000c",
+    documentUpload: "f7140000-0000-0000-0000-00000000000d",
   },
   seedReservations: {
     limitOver: "f7141000-0000-0000-0000-000000000001",
@@ -150,7 +153,7 @@ function buildInput(
       responsibleEmail: "fulano@test.hebron",
       responsiblePhone: "11999999999",
       responsibleBirthDate: new Date("1980-01-01"),
-      responsibleDocumentUrl: null,
+      responsibleDocument: null,
       ministryType: "pastor",
       ministryStartDate: new Date("2015-01-01"),
       companions: [],
@@ -209,6 +212,7 @@ beforeAll(async () => {
       { userId: IDS.users.flow, role: "hospede" },
       { userId: IDS.users.aid, role: "hospede" },
       { userId: IDS.users.gestor, role: "diretor" },
+      { userId: IDS.users.documentUpload, role: "hospede" },
     ])
     .onConflictDoNothing();
 
@@ -232,6 +236,7 @@ beforeAll(async () => {
     IDS.users.dbB,
     IDS.users.flow,
     IDS.users.aid,
+    IDS.users.documentUpload,
   ]) {
     await grantConsent(id, "dados_reserva");
   }
@@ -374,6 +379,77 @@ describe("createReservation — consentimento LGPD", () => {
     const d = rows.find((r) => r.criterion === "d_saude");
     expect(d?.points).toBe(5);
     expect(d?.healthSelfDeclared).toBe(true);
+  });
+});
+
+// ── Persistência do documento do responsável (P-7.9c, CORRETIVO) ───────────
+
+describe("createReservation — persistência do documento do responsável (P-7.9c)", () => {
+  it("reserva com documento anexado persiste 1 linha em flats.document_files vinculada ao guest responsável", async () => {
+    asActor(IDS.users.documentUpload, ["hospede"]);
+    const { createReservation } = await import("../actions/reservations");
+    const baseInput = buildInput();
+    const result = await createReservation({
+      ...baseInput,
+      guest: {
+        ...baseInput.guest,
+        responsibleDocument: {
+          storageKey: `${IDS.users.documentUpload}/documento-teste.pdf`,
+          fileName: "rg-responsavel.pdf",
+          mimeType: "application/pdf",
+          fileSizeBytes: 123456,
+        },
+      },
+    });
+
+    expect(result?.serverError).toBeUndefined();
+    const reservationId = requireDefined(
+      result?.data?.reservationId,
+      "reservationId",
+    );
+    createdReservationIds.push(reservationId);
+
+    const guestRows = await db
+      .select()
+      .from(guests)
+      .where(eq(guests.reservationId, reservationId));
+    const responsible = requireDefined(
+      guestRows.find((g) => g.isResponsible),
+      "responsible guest",
+    );
+
+    const docRows = await db
+      .select()
+      .from(documentFiles)
+      .where(eq(documentFiles.reservationId, reservationId));
+    expect(docRows).toHaveLength(1);
+    expect(docRows[0]?.guestId).toBe(responsible.id);
+    expect(docRows[0]?.uploadedBy).toBe(IDS.users.documentUpload);
+    expect(docRows[0]?.storageKey).toBe(
+      `${IDS.users.documentUpload}/documento-teste.pdf`,
+    );
+    expect(docRows[0]?.fileName).toBe("rg-responsavel.pdf");
+  });
+
+  it("reserva sem documento continua válida — nenhuma linha em document_files", async () => {
+    asActor(IDS.users.dbA, ["hospede"]);
+    const { createReservation } = await import("../actions/reservations");
+    const result = await createReservation(
+      buildInput({ preferredPeriods: [period(700), period(730), period(760)] }),
+    );
+
+    expect(result?.serverError).toBeUndefined();
+    const reservationId = requireDefined(
+      result?.data?.reservationId,
+      "reservationId",
+    );
+    createdReservationIds.push(reservationId);
+
+    const docRows = await db
+      .select()
+      .from(documentFiles)
+      .where(eq(documentFiles.reservationId, reservationId));
+    expect(docRows).toHaveLength(0);
   });
 });
 

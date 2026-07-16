@@ -57,6 +57,24 @@ export const vehicleSchema = z.object({
   brand: z.string().min(1, "Informe a marca do veículo").max(100),
 });
 
+// ─── responsibleDocumentSchema ─────────────────────────────────────────────
+// Metadados exigidos por flats.document_files (P-7.9c, CORRETIVO) — o
+// upload em si (step-guest.tsx) já grava o arquivo em `flats-documentos` e
+// só repassa aqui o path resultante (storageKey) + os metadados do File que
+// o browser já tem no momento do upload. Continua opcional: nem toda
+// reserva tem documento anexado nesta fase.
+
+const responsibleDocumentSchema = z.object({
+  storageKey: z.string().min(1, "Documento inválido"),
+  fileName: z.string().min(1).max(255),
+  mimeType: z.enum(["application/pdf", "image/jpeg", "image/png"]),
+  fileSizeBytes: z
+    .number()
+    .int()
+    .positive()
+    .max(10 * 1024 * 1024, "Arquivo deve ter no máximo 10 MB"),
+});
+
 // ─── guestSchema ───────────────────────────────────────────────────────────
 // Até 6 acompanhantes e até 2 crianças menores de 3 anos (P-7.1, critério de
 // aceite).
@@ -69,9 +87,7 @@ export const guestSchema = z.object({
   responsibleBirthDate: z.coerce.date({
     invalid_type_error: "Data de nascimento inválida",
   }),
-  responsibleDocumentUrl: z
-    .string()
-    .url("Envie o documento do responsável")
+  responsibleDocument: responsibleDocumentSchema
     .nullable()
     .optional()
     .default(null),

@@ -18,6 +18,7 @@ import {
   flatsVehicles,
   scoringResponses,
   aidRequests,
+  documentFiles,
   users,
 } from "@hebron/db/schema";
 import type {
@@ -26,6 +27,7 @@ import type {
   ScoringResponse as ScoringResponseRow,
   AidRequest as AidRequestRow,
   Reservation as ReservationRow,
+  DocumentFile,
 } from "@hebron/db/schema";
 import type {
   AidRequest,
@@ -181,7 +183,10 @@ function mapCompanion(row: FlatsGuest): Companion {
  * tiver responsável (não deveria acontecer — createReservation sempre
  * insere um; defensivo).
  */
-function mapGuest(rows: FlatsGuest[]): Guest | null {
+function mapGuest(
+  rows: FlatsGuest[],
+  documentUrlByGuestId: Map<string, string>,
+): Guest | null {
   const responsible = rows.find((row) => row.isResponsible);
   if (!responsible) return null;
 
@@ -201,11 +206,7 @@ function mapGuest(rows: FlatsGuest[]): Guest | null {
       "Guest responsável sem telefone",
     ),
     responsibleBirthDate: toDate(responsible.birthDate),
-    // Upload de documento do responsável não é persistido em
-    // flats.document_files nesta fase — débito registrado em SESSIONS.md
-    // desde P-7.8 (createReservationRequestSchema não carrega os campos de
-    // storage exigidos por document_files).
-    responsibleDocumentUrl: null,
+    responsibleDocumentUrl: documentUrlByGuestId.get(responsible.id) ?? null,
     ministryType: assertNonNull(
       responsible.ministryType,
       "Guest responsável sem ministryType",
@@ -326,6 +327,58 @@ function buildScoring(
   };
 }
 
+// Leitura pontual por carregamento de página — não precisa durar além do
+// tempo de vida da resposta do servidor (diferente do padrão de 10 anos de
+// apps/plataforma/src/actions/uploads.ts, feito para <img>/<a> de conteúdo
+// público reaproveitado entre requests).
+const DOCUMENT_URL_EXPIRES_IN_SECONDS = 60 * 60;
+
+/**
+ * Assina os paths de `flats.document_files` via Supabase Storage
+ * (`flats-documentos`, bucket privado). Usa o client de sessão com os
+ * cookies da requisição — a policy `flats_documentos_select_own_or_staff`
+ * (0020_storage_buckets.sql) já cobre tanto o dono do arquivo quanto
+ * super_admin/diretor, mesma dupla camada de RLS de flats.document_files
+ * (0022_flats_rls.sql).
+ */
+async function buildDocumentUrlByGuestId(
+  documentRows: DocumentFile[],
+): Promise<Map<string, string>> {
+  if (documentRows.length === 0) return new Map();
+
+  const cookieStore = await cookies();
+  const supabase = createSupabaseServerActionClient({
+    getAll: () => cookieStore.getAll(),
+    setAll: (cookiesToSet) => {
+      try {
+        cookiesToSet.forEach(({ name, value, options }) =>
+          cookieStore.set(name, value, options),
+        );
+      } catch {
+        // Server Component — não pode setar cookies, ignorar
+      }
+    },
+  });
+
+  const entries = await Promise.all(
+    documentRows
+      .filter(
+        (row): row is DocumentFile & { guestId: string } =>
+          row.guestId !== null,
+      )
+      .map(async (row) => {
+        const { data } = await supabase.storage
+          .from("flats-documentos")
+          .createSignedUrl(row.storageKey, DOCUMENT_URL_EXPIRES_IN_SECONDS);
+        return data ? ([row.guestId, data.signedUrl] as const) : null;
+      }),
+  );
+
+  return new Map(
+    entries.filter((entry): entry is [string, string] => entry !== null),
+  );
+}
+
 export interface ReservationWithGuest {
   reservation: Reservation;
   guest: Guest;
@@ -345,29 +398,41 @@ async function loadReservationsWithGuests(
   const ids = reservationRows.map((row) => row.id);
   if (ids.length === 0) return [];
 
-  const [periodRows, guestRows, vehicleRows, scoringRows, aidRows] =
-    await Promise.all([
-      tx
-        .select()
-        .from(preferredPeriods)
-        .where(inArray(preferredPeriods.reservationId, ids)),
-      tx
-        .select()
-        .from(flatsGuests)
-        .where(inArray(flatsGuests.reservationId, ids)),
-      tx
-        .select()
-        .from(flatsVehicles)
-        .where(inArray(flatsVehicles.reservationId, ids)),
-      tx
-        .select()
-        .from(scoringResponses)
-        .where(inArray(scoringResponses.reservationId, ids)),
-      tx
-        .select()
-        .from(aidRequests)
-        .where(inArray(aidRequests.reservationId, ids)),
-    ]);
+  const [
+    periodRows,
+    guestRows,
+    vehicleRows,
+    scoringRows,
+    aidRows,
+    documentRows,
+  ] = await Promise.all([
+    tx
+      .select()
+      .from(preferredPeriods)
+      .where(inArray(preferredPeriods.reservationId, ids)),
+    tx
+      .select()
+      .from(flatsGuests)
+      .where(inArray(flatsGuests.reservationId, ids)),
+    tx
+      .select()
+      .from(flatsVehicles)
+      .where(inArray(flatsVehicles.reservationId, ids)),
+    tx
+      .select()
+      .from(scoringResponses)
+      .where(inArray(scoringResponses.reservationId, ids)),
+    tx
+      .select()
+      .from(aidRequests)
+      .where(inArray(aidRequests.reservationId, ids)),
+    tx
+      .select()
+      .from(documentFiles)
+      .where(inArray(documentFiles.reservationId, ids)),
+  ]);
+
+  const documentUrlByGuestId = await buildDocumentUrlByGuestId(documentRows);
 
   const reviewerIds = [
     ...new Set(
@@ -394,6 +459,7 @@ async function loadReservationsWithGuests(
   for (const row of reservationRows) {
     const guest = mapGuest(
       guestRows.filter((guestRow) => guestRow.reservationId === row.id),
+      documentUrlByGuestId,
     );
     if (!guest) continue;
 
