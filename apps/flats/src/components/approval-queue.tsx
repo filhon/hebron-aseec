@@ -160,7 +160,7 @@ export function ApprovalQueue({
             </div>
 
             {reason && (
-              <p className="rounded-(--radius-sm) bg-(--hb-orange-muted) px-3 py-1.5 text-xs text-(--hb-orange-deep)">
+              <p className="rounded-sm bg-(--hb-orange-muted) px-3 py-1.5 text-xs text-(--hb-orange-deep)">
                 {reason}
               </p>
             )}

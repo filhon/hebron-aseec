@@ -145,6 +145,7 @@
 | S-122  | 2026-07-15 | P-7.2 — Componentes UI Flats                                                  | concluido                            |
 | S-123  | 2026-07-15 | P-7.3 — Telas e Páginas Flats                                                 | concluido                            |
 | S-124  | 2026-07-15 | P-7.4 — Formulários Flats                                                     | concluido                            |
+| S-125  | 2026-07-16 | P-7.5 — Estados Flats                                                         | concluido                            |
 
 ---
 
@@ -8160,4 +8161,90 @@ via `FormProvider`/`useFormContext`.
 - `apps/flats/package.json` (dependência `react-hook-form`, prevista em
   S-123)
 - `PROMPTS.md` (checklist de P-7.4 marcado)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+### S-125 — 2026-07-16 — P-7.5 — Estados Flats
+
+**Prompt:** P-7.5 (`PROMPTS.md:4126`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Criados os 2 skeletons listados no escopo (`CalendarSkeleton`,
+`ApprovalQueueSkeleton`), mais os estados de loading/vazio das duas páginas
+permitidas (`(hospede)/page.tsx` — catálogo — e `admin/page.tsx` —
+calendário consolidado).
+
+**Suposições registradas (G1 — ambiguidade resolvida pela opção mais simples):**
+
+- **`(admin)/page.tsx` do prompt mapeado para `apps/flats/src/app/admin/page.tsx`.**
+  O app não tem grupo de rota `(admin)` (só `admin/`, criado em P-7.3) — mesmo
+  padrão de mismatch nome-vs-estrutura já visto em outros módulos; a página
+  real de calendário consolidado do admin é o alvo óbvio ("adicionar
+  estados" + escopo cita "calendário").
+- **`ApprovalQueueSkeleton` ainda não está wireado em tela nenhuma.** O
+  escopo pede "Skeletons para catálogo, calendário, fila de aprovação", mas
+  a página que usa `ApprovalQueue` (`admin/aprovacao/page.tsx`) não está na
+  lista de Arquivos permitidos deste prompt — só `calendar-skeleton.tsx` e
+  `approval-queue-skeleton.tsx` foram listados como arquivos de skeleton, e
+  nenhum arquivo de página de aprovação. Mesmo padrão e mesmo raciocínio já
+  registrados em S-77/P-4.5 (Tarefas: `KanbanSkeleton`/`CalendarSkeleton`
+  órfãos) e S-107/P-6.5 (Plataforma: `PlayerSkeleton` órfão). Construído
+  fielmente à estrutura de `ApprovalQueue` (posição, avatar, nome/pontuação,
+  ações), pronto para consumo em P-7.9.
+- **Skeleton de catálogo sem arquivo próprio.** O escopo cita "Skeletons
+  para catálogo, calendário, fila de aprovação", mas a lista de Arquivos
+  permitidos só define 2 arquivos de skeleton (calendário/fila) — sem
+  catálogo. Mesmo raciocínio de S-77 (`TreeViewSkeleton` sem arquivo
+  próprio): em vez de criar `unit-card-skeleton.tsx` fora da lista, o
+  skeleton do catálogo (`UnitCardSkeleton`) foi definido inline em
+  `(hospede)/page.tsx`, único lugar que o consome.
+- **Loading simulado via `setTimeout`, não `loading.tsx` de rota.** As duas
+  páginas eram Server Components com dado mockado estático (sem fronteira
+  assíncrona real) — convertidas para Client Components com
+  `useState(true)` + `useEffect(setTimeout(..., 500))` para demonstrar os
+  skeletons. Mesmo padrão já registrado em S-77/P-4.5 (Tarefas) e
+  S-107/P-6.5 (Plataforma); será substituído por Suspense real quando a
+  integração com backend (P-7.9) trocar os mocks por Server Actions/RSC.
+- **Estados vazios já existentes ganharam citação bíblica contextual e
+  ícone.** `(hospede)/page.tsx` (catálogo sem flats ativos) e `admin/page.tsx`
+  (sem reservas confirmadas nos próximos 30 dias) já tinham `EmptyState` de
+  P-7.3, mas sem `quote` customizado (caindo no default de
+  `packages/ui/empty-state.tsx`). Adicionadas citações sobre descanso —
+  Mateus 11:28 (catálogo) e Êxodo 33:14 (calendário) — seguindo BRAIN.md §5
+  e o precedente de S-12 (citações por tela, não a citação default
+  genérica). A copy literal do critério de aceite ("Sem reservas nos
+  próximos 30 dias") já estava correta desde P-7.3 e foi mantida.
+- **Sem `design-refs/flats`** (mesma situação já registrada em
+  S-121/S-122/S-123/S-124). Seguida a linguagem visual já estabelecida
+  pelos skeletons de `tarefas`/`plataforma` (bones com `animate-pulse`
+  sobre `var(--surface-alt)`) e pela estrutura real de
+  `availability-calendar.tsx`/`approval-queue.tsx` (P-7.2).
+
+**Verificação:** `pnpm turbo lint typecheck --filter=@hebron/flats` verde
+(16/16 tasks). Servidor dev já ativo localmente na porta 3007; `curl` em
+`/` e `/admin` confirmou HTTP 200 e presença de `animate-pulse` no HTML
+SSR (skeleton renderizado antes da hidratação) nas duas rotas.
+
+**Critérios de aceite verificados:**
+
+- [x] Skeletons por tela (catálogo → `UnitCardSkeleton` inline; calendário →
+      `CalendarSkeleton`; fila de aprovação → `ApprovalQueueSkeleton`, órfão
+      — ver suposição acima)
+- [x] Estados vazios contextuais (citações bíblicas + ícone por tela)
+- [x] Lint passa (`pnpm turbo lint --filter=@hebron/flats`)
+- [x] Types passam (`pnpm turbo typecheck --filter=@hebron/flats`)
+
+**Arquivos criados:**
+
+- `apps/flats/src/components/calendar-skeleton.tsx`
+- `apps/flats/src/components/approval-queue-skeleton.tsx`
+
+**Arquivos modificados:**
+
+- `apps/flats/src/app/(hospede)/page.tsx`
+- `apps/flats/src/app/admin/page.tsx`
+- `PROMPTS.md` (checklist de P-7.5 marcado)
 - `SESSIONS.md` (esta entrada + linha no índice)

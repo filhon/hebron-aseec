@@ -107,7 +107,7 @@ export function AvailabilityCalendar({
               <div className="w-full shrink-0 text-sm font-medium text-(--fg) sm:w-32">
                 {unit.name}
               </div>
-              <div className="relative h-9 w-full overflow-hidden rounded-(--radius-sm) bg-(--surface-alt)">
+              <div className="relative h-9 w-full overflow-hidden rounded-sm bg-(--surface-alt)">
                 <div
                   className="absolute top-0 h-full w-px bg-(--brand)"
                   style={{ left: `${todayPercent}%` }}
@@ -137,7 +137,7 @@ export function AvailabilityCalendar({
                   return (
                     <div
                       key={reservation.id}
-                      className="absolute top-1 bottom-1 rounded-(--radius-xs)"
+                      className="absolute top-1 bottom-1 rounded-xs"
                       style={{
                         left: `${leftPercent}%`,
                         width: `${widthPercent}%`,

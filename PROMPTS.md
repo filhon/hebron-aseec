@@ -4146,10 +4146,10 @@ Loading, empty e error states. Skeletons para catálogo, calendário, fila de ap
 
 **Critérios de aceite:**
 
-- [ ] Skeletons por tela
-- [ ] Estados vazios contextuais
-- [ ] Lint passa
-- [ ] Types passam
+- [x] Skeletons por tela
+- [x] Estados vazios contextuais
+- [x] Lint passa
+- [x] Types passam
 
 ---
 
