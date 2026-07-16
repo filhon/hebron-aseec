@@ -154,6 +154,7 @@
 | S-131  | 2026-07-16 | P-7.9 — Integração UI ↔ Backend Flats                                              | concluido                            |
 | S-132  | 2026-07-16 | P-7.10 — Notificações e Emails Flats                                               | concluido                            |
 | S-133  | 2026-07-16 | P-7.11 — Integrações Cross-App Flats                                               | concluido                            |
+| S-134  | 2026-07-16 | P-7.12 — Testes Flats                                                              | concluido                            |
 
 ---
 
@@ -9253,4 +9254,128 @@ todos verdes (inclui os 3 novos). `pnpm --filter @hebron/flats build`
 - `apps/flats/src/actions/approval.ts` (fiação de
   `notifyReservationDecision`)
 - `PROMPTS.md` (checklist de P-7.11 marcado)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+### S-134 — 2026-07-16 — P-7.12 — Testes Flats
+
+**Prompt:** P-7.12 (`PROMPTS.md:4469`)
+
+Escritos os 3 arquivos de teste do módulo Flats cobrindo os 8 critérios de
+negócio do prompt (RLS, scoring, desempate, 7d/12m, double-booking, fluxo
+completo, consentimento, auxílio/governança dual).
+
+**Gap descoberto e corrigido (autorizado por Filipe, fora da lista literal
+de arquivos permitidos do prompt):** `createReservation`
+(`actions/reservations.ts`) não verificava consentimento algum antes de
+persistir — o critério "campo saúde exige consentimento específico" e o
+bloqueio de `dados_reserva` só existiam no client (`reservation-wizard.tsx`,
+P-7.4), que grava `public.consents` e bloqueia o envio do formulário, mas a
+Server Action em si aceitaria a chamada direta sem nenhum consentimento.
+Perguntado a Filipe antes de agir (BRAIN "Sem suposições"); ele autorizou
+expandir o escopo desta sessão para corrigir. Adicionado `loadReservationConsents`
+(consulta `public.consents` dentro da própria `withAuthenticatedContext`,
+RLS `consents_select_own` já concede) — sem `dados_reserva` concedido a
+action lança erro antes de qualquer INSERT; sem `dado_saude` concedido, a
+resposta de saúde é zerada no servidor mesmo que o input peça `true`
+(defense in depth, CLAUDE.md — o client já fazia isso, mas a Server Action
+não podia confiar nisso sozinha).
+
+**Infraestrutura de teste ausente, criada (G1 — "infra óbvia faltando",
+mesmo racional de `layout.tsx`):** `apps/flats` nunca teve suíte de testes
+(nenhum prompt anterior do módulo criou um). Adicionados, seguindo o mesmo
+padrão de `apps/projetos`:
+
+- `apps/flats/vitest.config.ts`
+- `apps/flats/src/__tests__/setup-env.ts` (carrega `.env.local` via dotenv)
+- `apps/flats/package.json`: scripts `test`/`test:watch`; devDependencies
+  `vitest`, `dotenv`; dependency `postgres` (necessária para `rls.test.ts`,
+  mesmo padrão de conexão direta usado em `apps/projetos/src/__tests__/rls.test.ts`)
+
+**Armadilha de canonicalização de `daterange` (mesma descoberta de S-133,
+reencontrada aqui):** Postgres canonicaliza `daterange` para `[início,fim)`
+— o `end` lido de volta é sempre "literal inserido + 1 dia". Isso quebrou
+inicialmente os 3 testes que chamam `reviewReservation` (double-booking,
+fluxo completo, auxílio): o `confirmedPeriod` não podia ser o literal
+original passado a `createReservation`, porque `matchesPreference` compara
+contra `preferred_periods` já lido do banco (já canonicalizado). Corrigido
+com um helper `fetchStoredPeriod` que relê o período gravado antes de
+confirmar. O `daysUsed` esperado no check-out também passou a ser derivado
+do `selectedPeriod` real gravado (não de um cálculo do literal original),
+já que a própria gravação de `selectedPeriod` sofre a mesma canonicalização.
+Vale registrar esta armadilha de forma mais permanente (possível candidato a
+nota em BRAIN.md ou comentário mais visível em `schema/flats.ts`) para não
+ser redescoberta uma terceira vez em P-7.13+.
+
+**Testes escritos:**
+
+- `apps/flats/src/__tests__/rls.test.ts` (17 testes): `flats.reservations`
+  — hóspede só vê a própria; gestor (diretor+designation `gestor`) e
+  super_admin veem tudo; diretor sem designation não vê nada; INSERT
+  bloqueado para diretor/conselheiro mesmo com `requested_by` = si mesmos
+  (controle positivo com hóspede incluído). `flats.guests`/
+  `flats.scoring_responses` — SELECT restrito a dono/gestor/super_admin.
+  `anon` sem `USAGE` no schema `flats`.
+- `apps/flats/src/__tests__/scoring.test.ts` (22 testes):
+  `computeScoringResponses` — soma máxima bate com `SCORING_MAX_POINTS`
+  (75, não 80 — divergência do cabeçalho do BRAIN §6.8 já confirmada com
+  Filipe em S-121/P-7.1b, nunca corrigida no próprio texto do BRAIN) e soma
+  mínima 0; cada um dos 10 critérios testado isoladamente, incluindo b)
+  (derivado de `flats.usage_history`, não da resposta autodeclarada) e j)
+  (via `getProjectParticipationScore`, Projetos → Flats, sem mock, banco
+  real). `breakTie` — as 4 etapas de desempate (idade → tempo sem descanso →
+  nunca usou → sorteio, este último verificado por pertencimento ao grupo
+  empatado, já que usa `Math.random`).
+- `apps/flats/src/__tests__/reservations.test.ts` (10 testes, `resolveSession`
+  mockado por ator + RLS real via `withAuthenticatedContext`, mesmo padrão de
+  `apps/financeiro/src/__tests__/audit-abort.test.ts`): consentimento (3),
+  elegibilidade diretor/conselheiro com papel hóspede também presente (2),
+  limite 7d/12m com controle positivo (2), double-booking via
+  `EXCLUDE USING gist` (1), fluxo completo submeter→aprovar→confirmar→
+  check-in→check-out (1), auxílio nascendo `solicitado`→payable `pendente`
+  no Financeiro (1, D-4).
+
+**Nota sobre mensagens de erro (`next-safe-action`):** o client base de
+`apps/flats/src/lib/safe-action.ts` não define `handleServerError`, então o
+`serverError` recebido nos testes é sempre a mensagem genérica
+`"Something went wrong while executing the operation."` — a mensagem real
+lançada pela action não é exposta. Os testes verificam `serverError`
+definido/indefinido e o efeito no banco (nenhuma linha criada, status
+inalterado), nunca o texto da mensagem — mesmo padrão já usado em
+`payables-override-block.test.ts`/`audit-abort.test.ts`.
+
+**Verificação:** `pnpm --filter @hebron/flats test` — 3 arquivos, 49/49
+testes verdes. `pnpm turbo lint typecheck` — 38/38 tasks verdes (monorepo
+inteiro).
+
+**Critérios de aceite verificados:**
+
+- [x] RLS: diretor/conselheiro não cria reserva (conflito de interesse)
+- [x] Scoring: 10 critérios somam corretamente (max real 75)
+- [x] Desempate: ordem correta (idade → tempo → nunca usou → sorteio)
+- [x] 7d/12m: reserva que excede limite é bloqueada
+- [x] Double-booking: duas reservas no mesmo flat/período retorna erro
+- [x] Fluxo completo funciona end-to-end
+- [x] Consentimento: reserva sem consentimento de dados não persiste; campo
+      saúde exige consentimento específico (gap corrigido nesta sessão,
+      autorizado por Filipe)
+- [x] Auxílio: payables nascem não aprovados e entram na governança dual (D-4)
+- [x] Testes passam
+- [x] Lint passa
+
+**Arquivos criados:**
+
+- `apps/flats/src/__tests__/rls.test.ts`
+- `apps/flats/src/__tests__/scoring.test.ts`
+- `apps/flats/src/__tests__/reservations.test.ts`
+- `apps/flats/vitest.config.ts`
+- `apps/flats/src/__tests__/setup-env.ts`
+
+**Arquivos modificados:**
+
+- `apps/flats/src/actions/reservations.ts` (checagem server-side de
+  `public.consents` antes de persistir a reserva; gating de
+  `healthDeclared` por consentimento `dado_saude`)
+- `apps/flats/package.json` (scripts `test`/`test:watch`; deps `vitest`,
+  `dotenv`, `postgres`)
+- `PROMPTS.md` (checklist de P-7.12 marcado)
 - `SESSIONS.md` (esta entrada + linha no índice)

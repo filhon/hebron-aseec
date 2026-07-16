@@ -86,7 +86,7 @@ export function StepConsent() {
   return (
     <section className="flex flex-col gap-4">
       <div>
-        <h2 className="font-(--font-display) text-lg font-semibold text-(--fg)">
+        <h2 className="font-(--font-display) text-lg text-(--fg)">
           Consentimento para uso dos dados
         </h2>
         <p className="mt-1 text-sm text-(--fg-muted)">

@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { AuthenticatedTx } from "@hebron/db/authenticated";
 import {
   withAuthenticatedContext,
@@ -14,6 +14,7 @@ import {
   flatsVehicles as vehicles,
   scoringResponses,
   usageHistory,
+  consents,
 } from "@hebron/db/schema";
 import { onFlatsReservationConfirmed } from "@hebron/integrations/flats";
 import { createReservationRequestSchema } from "@hebron/validators/flats";
@@ -68,6 +69,37 @@ async function usedDaysInLast12Months(
   }, 0);
 }
 
+/**
+ * Consentimento LGPD (BRAIN §6.8 / P-0.13): o wizard (P-7.4) já grava
+ * public.consents e bloqueia o envio no client sem "dados_reserva", mas a
+ * Server Action não pode confiar só nisso — defense in depth (CLAUDE.md
+ * "Defense in depth: RBAC + RLS sempre, nunca apenas um") exige a mesma
+ * checagem aqui, para o caso de a action ser chamada diretamente. "dado_saude"
+ * segue a mesma lógica do client (toScoringAnswersPayload,
+ * reservation-wizard.tsx): sem o consentimento específico, o campo nunca é
+ * considerado — a resposta é zerada no servidor, não apenas rejeitada.
+ */
+async function loadReservationConsents(
+  tx: AuthenticatedTx,
+  userId: string,
+): Promise<{ dadosReserva: boolean; dadoSaude: boolean }> {
+  const rows = await tx
+    .select({ purpose: consents.purpose, granted: consents.granted })
+    .from(consents)
+    .where(
+      and(
+        eq(consents.userId, userId),
+        inArray(consents.purpose, ["dados_reserva", "dado_saude"]),
+      ),
+    );
+
+  return {
+    dadosReserva:
+      rows.find((r) => r.purpose === "dados_reserva")?.granted ?? false,
+    dadoSaude: rows.find((r) => r.purpose === "dado_saude")?.granted ?? false,
+  };
+}
+
 export const createReservation = hospedeAction
   .schema(createReservationRequestSchema)
   .action(async ({ parsedInput: input, ctx }) => {
@@ -87,6 +119,19 @@ export const createReservation = hospedeAction
     const result = await withAuthenticatedContext(
       { actorId: ctx.actorId },
       async (tx) => {
+        const reservationConsents = await loadReservationConsents(
+          tx,
+          ctx.actorId,
+        );
+        if (!reservationConsents.dadosReserva) {
+          throw new Error(
+            "Consentimento para processamento dos dados da reserva é obrigatório antes de enviar a solicitação",
+          );
+        }
+        const scoringAnswers = reservationConsents.dadoSaude
+          ? input.scoringAnswers
+          : { ...input.scoringAnswers, healthDeclared: false };
+
         const usedDays = await usedDaysInLast12Months(tx, ctx.actorId, now);
         if (usedDays >= MAX_DAYS_PER_12_MONTHS) {
           throw new Error(
@@ -168,7 +213,7 @@ export const createReservation = hospedeAction
           tx,
           userId: ctx.actorId,
           ministryStartDate: input.guest.ministryStartDate,
-          answers: input.scoringAnswers,
+          answers: scoringAnswers,
           referenceDate: now,
         });
 

@@ -4488,16 +4488,16 @@ Testes: RLS (hóspede vê apenas próprias, diretor/conselheiro não cria reserv
 
 **Critérios de aceite:**
 
-- [ ] RLS: diretor/conselheiro não cria reserva (conflito de interesse)
-- [ ] Scoring: 10 critérios somam corretamente (max 80)
-- [ ] Desempate: ordem correta (idade → tempo → nunca usou → sorteio)
-- [ ] 7d/12m: reserva que excede limite é bloqueada
-- [ ] Double-booking: duas reservas no mesmo flat/período retorna erro
-- [ ] Fluxo completo funciona end-to-end
-- [ ] Consentimento: reserva sem consentimento de dados não persiste; campo saúde exige consentimento específico (P-7.4)
-- [ ] Auxílio: payables nascem não aprovados e entram na governança dual (D-4)
-- [ ] Testes passam
-- [ ] Lint passa
+- [x] RLS: diretor/conselheiro não cria reserva (conflito de interesse)
+- [x] Scoring: 10 critérios somam corretamente (max real 75 — ver nota de S-121/PROMPTS P-7.1, cabeçalho do BRAIN §6.8 nunca foi corrigido)
+- [x] Desempate: ordem correta (idade → tempo → nunca usou → sorteio)
+- [x] 7d/12m: reserva que excede limite é bloqueada
+- [x] Double-booking: duas reservas no mesmo flat/período retorna erro
+- [x] Fluxo completo funciona end-to-end
+- [x] Consentimento: reserva sem consentimento de dados não persiste; campo saúde exige consentimento específico (P-7.4)
+- [x] Auxílio: payables nascem não aprovados e entram na governança dual (D-4)
+- [x] Testes passam
+- [x] Lint passa
 
 ---
 
