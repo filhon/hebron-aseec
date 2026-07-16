@@ -15,6 +15,7 @@ import {
   CheckCircle,
   BedDouble,
 } from "lucide-react";
+import { logoutAction } from "../../actions/auth";
 
 const SECTIONS: NavSection[] = [
   {
@@ -92,10 +93,11 @@ const APPS: AppShortcut[] = [
 ];
 
 interface ShellProps {
+  user: { fullName: string | null; email: string | null };
   children: React.ReactNode;
 }
 
-export default function HospedeShell({ children }: ShellProps) {
+export default function HospedeShell({ user, children }: ShellProps) {
   const path = usePathname();
 
   return (
@@ -103,11 +105,11 @@ export default function HospedeShell({ children }: ShellProps) {
       sections={SECTIONS}
       apps={APPS}
       user={{
-        name: "Filipe Honório",
-        email: "fcbfilipesantos@gmail.com",
+        name: user.fullName ?? user.email ?? "",
+        email: user.email ?? "",
       }}
       profileHref="/"
-      onLogout={() => {}}
+      onLogout={() => void logoutAction()}
       currentPath={path}
       appName="Flats"
       logo={

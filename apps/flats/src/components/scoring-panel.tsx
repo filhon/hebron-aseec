@@ -172,7 +172,7 @@ export function ScoringPanel({ scoring, className }: ScoringPanelProps) {
       </div>
 
       {!scoring.confirmedAt && (
-        <p className="rounded-(--radius-sm) bg-(--hb-orange-muted) px-3 py-2 text-xs text-(--hb-orange-deep)">
+        <p className="rounded-sm bg-(--hb-orange-muted) px-3 py-2 text-xs text-(--hb-orange-deep)">
           Aguardando confirmação do gestor para os critérios com sugestão de IA.
         </p>
       )}

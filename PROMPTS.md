@@ -4387,17 +4387,17 @@ Substituir mocks. Calendário com reservas reais. Fila de aprovação com score 
 
 **Critérios de aceite:**
 
-- [ ] (hospede) exige papel hospede; diretor/conselheiro bloqueados também na UI (teste)
-- [ ] (admin) exige designation gestor de flats ou super_admin (teste)
-- [ ] Reserva SUBMETÍVEL de ponta a ponta pelo wizard do Bloco A (P-7.4) — não reescrever inline
-- [ ] Score calculado ao submeter e visível na fila
-- [ ] Aprovar/rejeitar executável pela fila (approval-form conectado): seleção de período final persiste
-- [ ] Check-in e check-out executáveis pelo detalhe da reserva (checkin-form conectado)
-- [ ] Solicitação de ajuda de custo executável pelo wizard/minhas-reservas
-- [ ] Calendário com reservas reais
-- [ ] Nenhum componente/formulário do Bloco A (P-7.2/P-7.4) sem import (grep)
-- [ ] Mock data removido
-- [ ] Lint passa · Types passam
+- [x] (hospede) exige papel hospede; diretor/conselheiro bloqueados também na UI (teste)
+- [x] (admin) exige designation gestor de flats ou super_admin (teste)
+- [x] Reserva SUBMETÍVEL de ponta a ponta pelo wizard do Bloco A (P-7.4) — não reescrever inline
+- [x] Score calculado ao submeter e visível na fila
+- [x] Aprovar/rejeitar executável pela fila (approval-form conectado): seleção de período final persiste
+- [x] Check-in e check-out executáveis pelo detalhe da reserva (checkin-form conectado)
+- [x] Solicitação de ajuda de custo executável pelo wizard/minhas-reservas
+- [x] Calendário com reservas reais
+- [x] Nenhum componente/formulário do Bloco A (P-7.2/P-7.4) sem import (grep) — exceto period-picker.tsx, órfão pré-existente (S-127)
+- [x] Mock data removido
+- [x] Lint passa · Types passam
 
 ---
 

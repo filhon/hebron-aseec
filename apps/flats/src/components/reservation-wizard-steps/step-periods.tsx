@@ -2,9 +2,7 @@
 
 import { useFormContext } from "react-hook-form";
 import type { FieldPath } from "react-hook-form";
-import { AlertTriangle } from "lucide-react";
 import { FormField, Label } from "@hebron/ui";
-import { mockReservations, mockUnits } from "../../lib/mock-data";
 import type { ReservationWizardValues } from "../reservation-wizard";
 
 const MAX_PERIOD_DAYS = 7;
@@ -32,46 +30,6 @@ function validatePeriodRange(start: string, end: string): string | null {
   return null;
 }
 
-// Aviso de disponibilidade: reservas já confirmadas/em curso ocupam uma
-// unidade durante o período confirmado. Se todas as unidades já estiverem
-// ocupadas em qualquer trecho do período informado, avisamos o hóspede —
-// mas não bloqueamos o envio, pois a escolha final é do diretor gestor
-// (BRAIN §6.8: scoring + conflitos de calendário).
-const OCCUPYING_STATUSES = new Set(["confirmada", "em_curso"]);
-
-function overlaps(aStart: Date, aEnd: Date, bStart: Date, bEnd: Date): boolean {
-  return aStart < bEnd && bStart < aEnd;
-}
-
-function availabilityWarning(start: string, end: string): string | null {
-  if (!start || !end) return null;
-  const startDate = new Date(`${start}T00:00:00`);
-  const endDate = new Date(`${end}T00:00:00`);
-  if (endDate <= startDate) return null;
-
-  const occupiedUnitIds = new Set<string>();
-  for (const reservation of mockReservations) {
-    if (!OCCUPYING_STATUSES.has(reservation.status)) continue;
-    if (!reservation.confirmedPeriod || !reservation.unitId) continue;
-    if (
-      overlaps(
-        startDate,
-        endDate,
-        reservation.confirmedPeriod.start,
-        reservation.confirmedPeriod.end,
-      )
-    ) {
-      occupiedUnitIds.add(reservation.unitId);
-    }
-  }
-
-  const activeUnits = mockUnits.filter((u) => u.isActive);
-  if (occupiedUnitIds.size >= activeUnits.length) {
-    return "Nenhum flat está disponível neste período — sua preferência será avaliada, mas pode não ser confirmada.";
-  }
-  return null;
-}
-
 export function StepPeriods() {
   const {
     register,
@@ -84,7 +42,7 @@ export function StepPeriods() {
 
   return (
     <section className="flex flex-col gap-4">
-      <h2 className="font-(--font-display) text-lg font-semibold text-(--fg)">
+      <h2 className="font-(--font-display) text-lg text-(--fg)">
         Períodos de preferência
       </h2>
       <p className="text-sm text-(--fg-muted)">
@@ -99,9 +57,6 @@ export function StepPeriods() {
           const fieldError =
             errors.preferredPeriods?.[index]?.start?.message ??
             errors.preferredPeriods?.[index]?.end?.message;
-          const warning = !rangeError
-            ? availabilityWarning(period.start, period.end)
-            : null;
           const startPath =
             `preferredPeriods.${index}.start` as FieldPath<ReservationWizardValues>;
           const endPath =
@@ -139,15 +94,6 @@ export function StepPeriods() {
               {(rangeError || fieldError) && (
                 <p className="mt-2 text-xs text-(--color-destructive)">
                   {rangeError ?? fieldError}
-                </p>
-              )}
-              {warning && (
-                <p className="mt-2 flex items-center gap-1.5 text-xs text-(--hb-orange-deep)">
-                  <AlertTriangle
-                    className="h-3.5 w-3.5 shrink-0"
-                    aria-hidden="true"
-                  />
-                  {warning}
                 </p>
               )}
             </div>

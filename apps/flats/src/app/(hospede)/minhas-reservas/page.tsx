@@ -2,15 +2,11 @@ import { CheckCircle2, Circle, XCircle } from "lucide-react";
 import { PageHeader, EmptyState } from "@hebron/ui";
 import { ReservationCard } from "../../../components/reservation-card";
 import {
-  mockGuests,
-  mockReservations,
-  mockUnits,
-} from "../../../lib/mock-data";
+  getActiveUnits,
+  getMyReservations,
+  requireHospedeSession,
+} from "../../../lib/queries";
 import type { Reservation, ReservationStatus } from "@hebron/types/flats";
-
-// Suposição (G1): sem autenticação nesta fase, o hóspede logado é
-// representado pelo primeiro guest do mock (guest-01).
-const CURRENT_GUEST_ID = "guest-01";
 
 const FLOW_STEPS: { status: ReservationStatus; label: string }[] = [
   { status: "solicitada", label: "Solicitada" },
@@ -105,21 +101,22 @@ function ReservationTimeline({ reservation }: { reservation: Reservation }) {
   );
 }
 
-export default function MinhasReservasPage() {
-  const guest = mockGuests.find((g) => g.id === CURRENT_GUEST_ID) ?? null;
-  const reservations = mockReservations
-    .filter((r) => r.guestId === CURRENT_GUEST_ID)
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+export default async function MinhasReservasPage() {
+  const session = await requireHospedeSession();
+  const [items, unitsList] = await Promise.all([
+    getMyReservations(session.actorId),
+    getActiveUnits(session.actorId),
+  ]);
 
-  const [current, ...history] = reservations;
+  const [current, ...history] = items;
 
   return (
     <div className="mx-auto flex max-w-3xl flex-col gap-8 px-4 py-8 sm:px-6">
       <PageHeader
         title="Minhas reservas"
         description={
-          guest
-            ? `Acompanhe o status da sua solicitação, ${guest.responsibleName}.`
+          current
+            ? `Acompanhe o status da sua solicitação, ${current.guest.responsibleName}.`
             : "Acompanhe o status da sua solicitação."
         }
       />
@@ -132,39 +129,40 @@ export default function MinhasReservasPage() {
       ) : (
         <section className="flex flex-col gap-4 rounded-(--radius) border border-(--border) bg-(--surface) p-5">
           <div className="flex items-center justify-between gap-2">
-            <h2 className="font-(--font-display) text-lg font-semibold text-(--fg)">
+            <h2 className="font-(--font-display) text-lg text-(--fg)">
               Reserva atual
             </h2>
             <span className="text-xs text-(--fg-muted)">
-              Solicitada em {fmtDateTime(current.createdAt)}
+              Solicitada em {fmtDateTime(current.reservation.createdAt)}
             </span>
           </div>
 
-          <ReservationTimeline reservation={current} />
+          <ReservationTimeline reservation={current.reservation} />
 
-          {guest && (
-            <ReservationCard
-              reservation={current}
-              guest={guest}
-              unit={mockUnits.find((u) => u.id === current.unitId) ?? null}
-            />
-          )}
+          <ReservationCard
+            reservation={current.reservation}
+            guest={current.guest}
+            unit={
+              unitsList.find((u) => u.id === current.reservation.unitId) ?? null
+            }
+          />
         </section>
       )}
 
-      {history.length > 0 && guest && (
+      {history.length > 0 && (
         <section className="flex flex-col gap-4">
-          <h2 className="font-(--font-display) text-lg font-semibold text-(--fg)">
+          <h2 className="font-(--font-display) text-lg text-(--fg)">
             Histórico
           </h2>
           <div className="flex flex-col gap-3">
-            {history.map((reservation) => (
+            {history.map((item) => (
               <ReservationCard
-                key={reservation.id}
-                reservation={reservation}
-                guest={guest}
+                key={item.reservation.id}
+                reservation={item.reservation}
+                guest={item.guest}
                 unit={
-                  mockUnits.find((u) => u.id === reservation.unitId) ?? null
+                  unitsList.find((u) => u.id === item.reservation.unitId) ??
+                  null
                 }
               />
             ))}

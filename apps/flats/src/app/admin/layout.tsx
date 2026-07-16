@@ -1,9 +1,17 @@
+import { redirect } from "next/navigation";
+import { CANONICAL_LOGIN_URL } from "@hebron/auth";
+import { requireGestorSession, getAuthUser } from "../../lib/queries";
 import AdminShell from "./shell";
 
-export default function AdminLayout({
+export default async function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return <AdminShell>{children}</AdminShell>;
+  await requireGestorSession();
+
+  const user = await getAuthUser();
+  if (!user) redirect(CANONICAL_LOGIN_URL);
+
+  return <AdminShell user={user}>{children}</AdminShell>;
 }

@@ -18,6 +18,7 @@ import {
   type ReviewReservationInput,
 } from "@hebron/validators/flats";
 import type { Guest, Reservation, Unit } from "@hebron/types/flats";
+import { reviewReservation } from "../actions/approval";
 
 export interface ApprovalFormProps {
   reservation: Reservation;
@@ -108,6 +109,15 @@ export function ApprovalForm({
     setSubmitError(null);
     setSubmitting(true);
     try {
+      const actionResult = await reviewReservation(result.data);
+      if (actionResult?.serverError) {
+        throw new Error(actionResult.serverError);
+      }
+      if (actionResult?.validationErrors) {
+        throw new Error(
+          "Dados inválidos — revise os campos e tente novamente.",
+        );
+      }
       await onSubmit?.(result.data);
     } catch (err) {
       setSubmitError(

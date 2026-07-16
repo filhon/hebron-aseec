@@ -5,10 +5,10 @@ import { GuestList } from "../../../../components/guest-list";
 import { ScoringPanel } from "../../../../components/scoring-panel";
 import { CheckinForm } from "../../../../components/checkin-form";
 import {
-  mockGuests,
-  mockReservations,
-  mockUnits,
-} from "../../../../lib/mock-data";
+  getActiveUnits,
+  getReservationDetail,
+  requireGestorSession,
+} from "../../../../lib/queries";
 import type { ReservationStatus } from "@hebron/types/flats";
 
 const STATUS_LABEL: Record<ReservationStatus, string> = {
@@ -35,14 +35,16 @@ export default async function ReservaDetalhePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const session = await requireGestorSession();
 
-  const reservation = mockReservations.find((r) => r.id === id);
-  if (!reservation) notFound();
+  const [detail, unitsList] = await Promise.all([
+    getReservationDetail(session.actorId, id),
+    getActiveUnits(session.actorId),
+  ]);
+  if (!detail) notFound();
 
-  const guest = mockGuests.find((g) => g.id === reservation.guestId);
-  if (!guest) notFound();
-
-  const unit = mockUnits.find((u) => u.id === reservation.unitId);
+  const { reservation, guest } = detail;
+  const unit = unitsList.find((u) => u.id === reservation.unitId);
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-6 px-4 py-8 sm:px-6">

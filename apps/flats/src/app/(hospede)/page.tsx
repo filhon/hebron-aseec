@@ -1,42 +1,9 @@
-"use client";
-
-import * as React from "react";
+import { Suspense } from "react";
 import Link from "next/link";
 import { CalendarPlus, Home } from "lucide-react";
 import { PageHeader, Button, EmptyState } from "@hebron/ui";
 import { UnitCard } from "../../components/unit-card";
-import { mockUnits, mockReservations } from "../../lib/mock-data";
-import type { Reservation, Unit } from "@hebron/types/flats";
-
-const RELEVANT_STATUSES = new Set<Reservation["status"]>([
-  "confirmada",
-  "em_curso",
-]);
-
-function fmtDate(date: Date): string {
-  return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
-}
-
-function nextAvailability(unit: Unit): string {
-  const upcoming = mockReservations
-    .filter(
-      (reservation) =>
-        reservation.unitId === unit.id &&
-        reservation.confirmedPeriod &&
-        RELEVANT_STATUSES.has(reservation.status),
-    )
-    .sort(
-      (a, b) =>
-        (a.confirmedPeriod?.start.getTime() ?? 0) -
-        (b.confirmedPeriod?.start.getTime() ?? 0),
-    );
-
-  const next = upcoming[0]?.confirmedPeriod;
-  if (!next)
-    return "Sem reservas confirmadas — disponível para os próximos períodos";
-
-  return `Ocupado de ${fmtDate(next.start)} a ${fmtDate(next.end)}`;
-}
+import { getActiveUnits, requireHospedeSession } from "../../lib/queries";
 
 function UnitCardSkeleton() {
   return (
@@ -65,15 +32,34 @@ function UnitCardSkeleton() {
   );
 }
 
-export default function CatalogoPage() {
-  const [loading, setLoading] = React.useState(true);
+async function CatalogContent({ actorId }: { actorId: string }) {
+  const units = await getActiveUnits(actorId);
 
-  React.useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 500);
-    return () => clearTimeout(timer);
-  }, []);
+  if (units.length === 0) {
+    return (
+      <EmptyState
+        icon={Home}
+        title="Nenhum flat disponível no momento"
+        description="Os flats estão temporariamente indisponíveis para novas solicitações."
+        quote={{
+          text: "Vinde a mim, todos os que estais cansados e sobrecarregados, e eu vos aliviarei.",
+          reference: "Mateus 11:28",
+        }}
+      />
+    );
+  }
 
-  const units = mockUnits.filter((unit) => unit.isActive);
+  return (
+    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+      {units.map((unit) => (
+        <UnitCard key={unit.id} unit={unit} />
+      ))}
+    </div>
+  );
+}
+
+export default async function CatalogoPage() {
+  const session = await requireHospedeSession();
 
   return (
     <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-8 sm:px-6">
@@ -90,33 +76,16 @@ export default function CatalogoPage() {
         }
       />
 
-      {loading ? (
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-          <UnitCardSkeleton />
-          <UnitCardSkeleton />
-        </div>
-      ) : units.length === 0 ? (
-        <EmptyState
-          icon={Home}
-          title="Nenhum flat disponível no momento"
-          description="Os flats estão temporariamente indisponíveis para novas solicitações."
-          quote={{
-            text: "Vinde a mim, todos os que estais cansados e sobrecarregados, e eu vos aliviarei.",
-            reference: "Mateus 11:28",
-          }}
-        />
-      ) : (
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-          {units.map((unit) => (
-            <div key={unit.id} className="flex flex-col gap-2">
-              <UnitCard unit={unit} />
-              <p className="px-1 text-xs text-(--fg-muted)">
-                {nextAvailability(unit)}
-              </p>
-            </div>
-          ))}
-        </div>
-      )}
+      <Suspense
+        fallback={
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <UnitCardSkeleton />
+            <UnitCardSkeleton />
+          </div>
+        }
+      >
+        <CatalogContent actorId={session.actorId} />
+      </Suspense>
     </div>
   );
 }

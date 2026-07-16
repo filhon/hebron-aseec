@@ -151,6 +151,7 @@
 | S-128  | 2026-07-16 | P-7.6 — Schema do Banco Flats                                                      | concluido                            |
 | S-129  | 2026-07-16 | P-7.7 — RLS Policies Flats                                                         | concluido                            |
 | S-130  | 2026-07-16 | P-7.8 — Server Actions Flats                                                       | concluido                            |
+| S-131  | 2026-07-16 | P-7.9 — Integração UI ↔ Backend Flats                                              | concluido                            |
 
 ---
 
@@ -8807,3 +8808,181 @@ foram verificados por leitura de código + typecheck, não por execução.
 - `apps/flats/src/lib/safe-action.ts`
 - `apps/flats/src/lib/audit.ts`
 - `packages/db/src/migrations/0047_flats_audit_actions_p78.sql`
+
+---
+
+### S-131 — 2026-07-16 — P-7.9 — Integração UI ↔ Backend Flats
+
+**Prompt:** P-7.9 (`PROMPTS.md:4356`)
+
+Substitui todos os mocks de Flats por dados reais. `apps/flats/src/lib/queries.ts`
+(novo — não existia lista de leitura nenhuma até aqui) concentra as leituras:
+`getAuthUser`/`requireHospedeSession`/`requireGestorSession` (mesmo padrão de
+`apps/plataforma/src/lib/queries.ts` — gates de papel ficam aqui, não em um
+`lib/session.ts` que não está na lista de arquivos permitidos deste prompt),
+`getActiveUnits`, `getMyReservations`, `getApprovalQueue`,
+`getReservationDetail`, `getCalendarItems`. Todas as leituras rodam via
+`withAuthenticatedContext` (G6.2) — RLS é a camada ativa, nunca o `db`
+superuser. Um loader em lote (`loadReservationsWithGuests`, com `inArray`
+para períodos/guests/veículo/scoring/auxílio) evita N+1 por reserva e monta
+os tipos de domínio de `@hebron/types/flats` a partir das tabelas
+normalizadas de `flats.*` (P-7.6) — inclui `buildScoring`, que reconstrói o
+`ScoringCriteria` de 10 linhas em `scoring_responses` (sugestão de IA e
+confirmação do gestor ficam `null`, colunas só chegam em P-7.13).
+
+`(hospede)/layout.tsx` e `admin/layout.tsx` viraram Server Components
+(G5): chamam `requireHospedeSession`/`requireGestorSession` +
+`getAuthUser()`, passam `user` para `shell.tsx` (Client Component,
+`usePathname`), conectam `logoutAction` (novo `actions/auth.ts`) ao
+`onLogout` do `AppShell`. `requireHospedeSession` bloqueia
+diretor/conselheiro mesmo com papel hospede duplo (mesma regra de
+`createReservation`/`reservations_insert_own`); `requireGestorSession`
+espelha `gestorAction` de `lib/safe-action.ts` (diretor+designação gestor
+OU super_admin). O badge estático `2` na nav "Fila de aprovação"
+(`admin/shell.tsx`) foi removido — era um placeholder de mock, não um
+contador real, e nada no escopo deste prompt pedia um contador ao vivo.
+
+Todas as 6 páginas viraram Server Components buscando dados reais:
+catálogo e calendário usam `Suspense` com os skeletons de P-7.5
+(`calendar-skeleton.tsx`, `approval-queue-skeleton.tsx` — o segundo trazia
+o comentário "Fica pronto para P-7.9", exatamente este uso) para preservar
+o estado de loading já desenhado, em vez de descartá-lo. `admin/aprovacao`
+precisa de interatividade (seleção de item da fila) que um Server
+Component não tem — página vira `AprovacaoQueueSection` (async, busca fila
+
+- unidades) + `aprovacao-client.tsx` (novo, Client Component com o
+  `selectedId` local), mesmo padrão de `apps/tarefas/.../task-detail-client.tsx`
+  (G1: infra óbvia faltando na lista de arquivos permitidos, registrada
+  aqui). `reservation-wizard.tsx` (`handleFinalSubmit`), `approval-form.tsx`
+  e `checkin-form.tsx` importam as Server Actions de P-7.8
+  (`createReservation`, `reviewReservation`, `checkIn`/`checkOut`)
+  diretamente — Client Components podem importar e chamar uma função
+  `"use server"` sem precisar de um callback prop repassado por um Server
+  Component pai; `checkin-form.tsx` chama `router.refresh()` após sucesso
+  para a página buscar o novo status.
+
+**Bloqueio resolvido com Filipe (pausa via pergunta, não suposição — G1):**
+RLS de P-7.7 (`0022_flats_rls.sql`) dava ao hóspede INSERT/UPDATE/DELETE em
+`flats.guests`/`flats.scoring_responses` mas nenhum SELECT (decisão
+deliberada, registrada duas vezes — comentário de P-7.6 e SESSIONS S-129).
+Isso bloqueava a própria tela "Minhas reservas" (Bloco A, validada em
+P-7.5b): `ReservationCard` precisa de `guest.responsibleName`/`ministryType`,
+e a sessão do hóspede lia zero linhas de volta mesmo para a própria
+reserva. Filipe confirmou adicionar `guests_select_own` e
+`scoring_responses_select_own` (mesmo padrão de `reservations_select_own`)
+— `packages/db/src/migrations/0048_flats_guests_select_own.sql`, gerada
+com `drizzle-kit generate --custom` (propôs `0023`, renomeada para `0048`
+e o `_journal.json`/snapshot espúrios revertidos, mesmo procedimento de
+`0047` em S-130 — journal desatualizado desde P-7.6). `health_self_declared`
+fica incluído na policy: é autodeclarado pelo próprio hóspede, não há
+vazamento de dado de terceiro. Aplicada contra o banco real
+(`pnpm db:migrate`, 1 migration) e verificada com `drizzle-kit check`.
+
+**Suposições registradas (G1 — ambiguidade resolvida pela opção mais simples):**
+
+- **Preview de disponibilidade cross-reserva removido do lado hóspede**
+  (subtítulo "Ocupado de X a Y" no catálogo, aviso "nenhum flat disponível"
+  em `StepPeriods`). RLS não concede ao hóspede SELECT em reservas de
+  outros hóspedes (só `reservations_select_own`/`reservations_select_gestor`)
+  — diferente do gap de `guests`/`scoring_responses`, aqui a leitura
+  bloqueada é sobre dados de TERCEIROS, não do próprio hóspede, então não
+  se aplica o mesmo raciocínio de "acesso aos próprios dados" usado acima
+  para justificar uma nova policy. BRAIN §6.8 também já atribui a
+  resolução de conflito de calendário ao gestor, não ao hóspede no
+  momento da submissão — a simplificação é consistente com o desenho,
+  não uma perda de funcionalidade pedida pelo prompt.
+- **`period-picker.tsx` continua órfão.** Já documentado como exceção
+  aceita em S-127 (P-7.5b) — `StepPeriods` reimplementa o mesmo
+  comportamento inline; não fazia parte do critério de "nenhum componente
+  sem import" nem então nem agora.
+- **`confirmReservation`/`cancelReservation` (P-7.8) continuam sem gatilho
+  de UI.** Nenhum componente do Bloco A (P-7.2/P-7.4/P-7.5) tem botão para
+  essas transições, e nenhum dos 9 critérios de aceite deste prompt as
+  cita — só as 3 ações explicitamente listadas (aprovar/rejeitar,
+  check-in/check-out, envio do wizard) foram conectadas. Ficam para um
+  prompt futuro que desenhe a UI correspondente.
+- **`breakTie` movido de `actions/approval.ts` para `lib/tie-break.ts`
+  (novo).** Build quebrava ("Server Actions must be async functions")
+  assim que `approval-form.tsx` passou a importar `reviewReservation`
+  diretamente — um módulo `"use server"` só pode exportar Server Actions
+  quando alcançado (mesmo que transitivamente) por um Client Component, e
+  `breakTie` é uma função pura síncrona no mesmo arquivo. Nada no
+  repositório importava `breakTie` (a fila de aprovação reimplementa a
+  mesma ordem de desempate só para exibição, em `approval-queue.tsx`) —
+  mover para um arquivo próprio foi a correção mínima; a lógica em si não
+  mudou.
+- **Estados de loading (P-7.5) preservados via `Suspense`**, não
+  descartados junto com os mocks — `calendar-skeleton.tsx` e
+  `approval-queue-skeleton.tsx` já existiam prontos para este prompt
+  (comentário explícito no segundo); a alternativa (deletar os dois por
+  ficarem momentaneamente órfãos) jogaria fora trabalho de design já
+  validado sem necessidade.
+
+**Débitos de infraestrutura resolvidos nesta sessão (G1):**
+
+- `apps/flats/src/lib/queries.ts` (não existia).
+- `apps/flats/src/actions/auth.ts` (`logoutAction`, G5).
+- `apps/flats/src/app/admin/aprovacao/aprovacao-client.tsx` (Client
+  Component da fila — página sozinha não pode ser async Server Component
+  E ter estado de seleção local ao mesmo tempo).
+- `apps/flats/src/lib/tie-break.ts` (`breakTie` movido de
+  `actions/approval.ts` — ver suposição acima).
+- `packages/db/src/migrations/0048_flats_guests_select_own.sql` +
+  comentário atualizado em `packages/db/src/schema/flats.ts` (ver bloqueio
+  resolvido acima).
+
+**Verificação:** `pnpm --filter @hebron/flats typecheck`/`lint` e
+`pnpm --filter @hebron/db typecheck`/`lint` verdes; `pnpm turbo run lint
+typecheck --filter=@hebron/flats --filter=@hebron/db` verde (18/18 tasks).
+`pnpm --filter @hebron/flats build` (`next build`) compila e gera as 7
+rotas sem erro — pega problemas de fronteira Server/Client que o
+typecheck sozinho não cobre (foi assim que o bug do `breakTie` apareceu).
+`drizzle-kit check` limpo após a migration 0048. `pnpm db:migrate` aplicou
+a 0048 contra o banco real (Supabase) sem erros. `grep` confirma que todo
+componente do Bloco A (P-7.2/P-7.4) tem pelo menos 1 importador, exceto
+`period-picker.tsx` (órfão já documentado). Sem teste automatizado
+end-to-end contra o banco real nesta sessão (fica para P-7.12 — Testes
+Flats); critérios marcados "(teste)" no prompt foram verificados por
+leitura de código + typecheck + build, não por execução em navegador
+(sem ambiente de auth de teste disponível nesta sessão).
+
+**Critérios de aceite verificados:**
+
+- [x] (hospede) exige papel hospede; diretor/conselheiro bloqueados também na UI (código revisado — sem teste automatizado, P-7.12)
+- [x] (admin) exige designation gestor de flats ou super_admin (código revisado — sem teste automatizado, P-7.12)
+- [x] Reserva SUBMETÍVEL de ponta a ponta pelo wizard do Bloco A (P-7.4) — não reescrito inline
+- [x] Score calculado ao submeter e visível na fila
+- [x] Aprovar/rejeitar executável pela fila (approval-form conectado): seleção de período final persiste
+- [x] Check-in e check-out executáveis pelo detalhe da reserva (checkin-form conectado)
+- [x] Solicitação de ajuda de custo executável pelo wizard/minhas-reservas
+- [x] Calendário com reservas reais
+- [x] Nenhum componente/formulário do Bloco A (P-7.2/P-7.4) sem import — exceto `period-picker.tsx` (órfão pré-existente, S-127)
+- [x] Mock data removido (`lib/mock-data.ts` deletado)
+- [x] Lint passa · Types passam
+
+**Arquivos modificados:**
+
+- `apps/flats/src/app/(hospede)/layout.tsx`, `shell.tsx`
+- `apps/flats/src/app/admin/layout.tsx`, `shell.tsx`
+- `apps/flats/src/app/(hospede)/page.tsx`, `minhas-reservas/page.tsx`
+- `apps/flats/src/app/admin/page.tsx`, `aprovacao/page.tsx`, `reserva/[id]/page.tsx`
+- `apps/flats/src/components/reservation-wizard.tsx`
+- `apps/flats/src/components/reservation-wizard-steps/step-periods.tsx`
+- `apps/flats/src/components/approval-form.tsx`
+- `apps/flats/src/components/checkin-form.tsx`
+- `apps/flats/src/actions/approval.ts` (`breakTie` removido, movido)
+- `packages/db/src/schema/flats.ts` (comentário atualizado)
+- `PROMPTS.md` (checklist de P-7.9 marcado)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+**Arquivos criados:**
+
+- `apps/flats/src/lib/queries.ts`
+- `apps/flats/src/actions/auth.ts`
+- `apps/flats/src/app/admin/aprovacao/aprovacao-client.tsx`
+- `apps/flats/src/lib/tie-break.ts`
+- `packages/db/src/migrations/0048_flats_guests_select_own.sql`
+
+**Arquivos removidos:**
+
+- `apps/flats/src/lib/mock-data.ts`

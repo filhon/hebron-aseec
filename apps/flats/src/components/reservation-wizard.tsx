@@ -22,6 +22,7 @@ import {
   scoringAnswersSchema,
   vehicleSchema,
 } from "@hebron/validators/flats";
+import { createReservation } from "../actions/reservations";
 import type {
   LastRestOutsideCity,
   MinistryIntensity,
@@ -331,7 +332,7 @@ function StepAid() {
 
   return (
     <section className="flex flex-col gap-4">
-      <h2 className="font-(--font-display) text-lg font-semibold text-(--fg)">
+      <h2 className="font-(--font-display) text-lg text-(--fg)">
         Auxílio opcional
       </h2>
       <label className="flex items-center gap-2 text-sm text-(--fg)">
@@ -410,9 +411,7 @@ function StepReview() {
 
   return (
     <section className="flex flex-col gap-4">
-      <h2 className="font-(--font-display) text-lg font-semibold text-(--fg)">
-        Revisão
-      </h2>
+      <h2 className="font-(--font-display) text-lg text-(--fg)">Revisão</h2>
       <p className="text-sm text-(--fg-muted)">
         Confira os dados antes de enviar. Você pode voltar a qualquer passo para
         corrigir.
@@ -728,6 +727,17 @@ export function ReservationWizard() {
         );
       }
       await saveReservationConsents(session.user.id, values.consent);
+
+      const actionResult = await createReservation(result.data);
+      if (actionResult?.serverError) {
+        throw new Error(actionResult.serverError);
+      }
+      if (actionResult?.validationErrors) {
+        throw new Error(
+          "Dados inválidos — revise os passos anteriores e tente novamente.",
+        );
+      }
+
       router.push("/minhas-reservas");
     } catch (err) {
       setSubmitError(

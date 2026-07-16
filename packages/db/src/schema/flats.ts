@@ -191,7 +191,9 @@ export const preferredPeriods = flatsSchema.table(
 // ---------------------------------------------------------------------------
 // flats.guests — uma linha por pessoa (responsável, acompanhante ou criança
 // menor de 3 anos) vinculada à reserva. PII: name, cpf, birth_date, email,
-// phone — acesso restrito a gestor/super_admin via RLS (P-7.7).
+// phone — leitura restrita a gestor/super_admin e ao próprio hóspede dono
+// da reserva via RLS (P-7.7, SELECT-own adicionado em P-7.9/0048 para a
+// tela "Minhas reservas" — ver 0048_flats_guests_select_own.sql).
 // email/phone/ministry_type/ministry_start_date só se aplicam ao
 // responsável (is_responsible = true); is_under_3 só a acompanhantes.
 // ---------------------------------------------------------------------------

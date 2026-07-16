@@ -1,10 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { LogIn, LogOut } from "lucide-react";
 import { Button, FormField } from "@hebron/ui";
 import type { ReservationStatus } from "@hebron/types/flats";
+import { checkIn, checkOut } from "../actions/checkin";
 
 export type CheckinTransitionType = "checkin" | "checkout";
 
@@ -44,6 +46,7 @@ export function CheckinForm({
   onSubmit,
   className,
 }: CheckinFormProps) {
+  const router = useRouter();
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [confirmedNote, setConfirmedNote] = useState<string | null>(null);
@@ -68,6 +71,22 @@ export function CheckinForm({
     setSubmitError(null);
     setSubmitting(true);
     try {
+      const payload = {
+        reservationId,
+        occurredAt: new Date(values.occurredAt),
+        notes: values.notes || null,
+      };
+      const actionResult =
+        type === "checkin" ? await checkIn(payload) : await checkOut(payload);
+      if (actionResult?.serverError) {
+        throw new Error(actionResult.serverError);
+      }
+      if (actionResult?.validationErrors) {
+        throw new Error(
+          "Dados inválidos — revise os campos e tente novamente.",
+        );
+      }
+
       await onSubmit?.({
         reservationId,
         type,
@@ -79,6 +98,7 @@ export function CheckinForm({
           ? `Check-in registrado em ${new Date(values.occurredAt).toLocaleString("pt-BR")}.`
           : `Check-out registrado em ${new Date(values.occurredAt).toLocaleString("pt-BR")}.`,
       );
+      router.refresh();
     } catch (err) {
       setSubmitError(
         err instanceof Error ? err.message : "Falha ao registrar a transição.",
