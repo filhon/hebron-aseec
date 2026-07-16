@@ -29,7 +29,7 @@ export function CalendarSkeleton() {
               <div className="w-full shrink-0 sm:w-32">
                 <Bone className="h-4 w-20" />
               </div>
-              <Bone className="h-9 w-full rounded-(--radius-sm)" />
+              <Bone className="h-9 w-full rounded-sm" />
             </div>
           ))}
         </div>

@@ -229,7 +229,7 @@ export default function ReservarPage() {
       <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-10">
         {/* Dados do responsável */}
         <section className="flex flex-col gap-4">
-          <h2 className="font-(--font-display) text-lg font-semibold text-(--fg)">
+          <h2 className="font-(--font-display) text-lg text-(--fg)">
             Dados do responsável
           </h2>
 
@@ -356,7 +356,7 @@ export default function ReservarPage() {
         {/* Acompanhantes */}
         <section className="flex flex-col gap-4">
           <div className="flex items-center justify-between">
-            <h2 className="font-(--font-display) text-lg font-semibold text-(--fg)">
+            <h2 className="font-(--font-display) text-lg text-(--fg)">
               Acompanhantes
             </h2>
             <Button
@@ -544,7 +544,7 @@ export default function ReservarPage() {
 
         {/* Veículo */}
         <section className="flex flex-col gap-4">
-          <h2 className="font-(--font-display) text-lg font-semibold text-(--fg)">
+          <h2 className="font-(--font-display) text-lg text-(--fg)">
             Veículo
           </h2>
           <label className="flex items-center gap-2 text-sm text-(--fg)">
@@ -614,7 +614,7 @@ export default function ReservarPage() {
 
         {/* Períodos de preferência */}
         <section className="flex flex-col gap-4">
-          <h2 className="font-(--font-display) text-lg font-semibold text-(--fg)">
+          <h2 className="font-(--font-display) text-lg text-(--fg)">
             Períodos de preferência
           </h2>
           <p className="text-sm text-(--fg-muted)">
@@ -646,7 +646,7 @@ export default function ReservarPage() {
 
         {/* Critérios de scoring */}
         <section className="flex flex-col gap-4">
-          <h2 className="font-(--font-display) text-lg font-semibold text-(--fg)">
+          <h2 className="font-(--font-display) text-lg text-(--fg)">
             Critérios de avaliação
           </h2>
           <p className="text-sm text-(--fg-muted)">
@@ -839,7 +839,7 @@ export default function ReservarPage() {
 
         {/* Auxílio opcional */}
         <section className="flex flex-col gap-4">
-          <h2 className="font-(--font-display) text-lg font-semibold text-(--fg)">
+          <h2 className="font-(--font-display) text-lg text-(--fg)">
             Auxílio opcional
           </h2>
           <label className="flex items-center gap-2 text-sm text-(--fg)">

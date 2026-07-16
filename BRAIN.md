@@ -451,7 +451,7 @@ Todo o estilo visual compartilhado vive em **`packages/ui`**. O arquivo **`packa
 - Hóspede submete 3 PERÍODOS DE PREFERÊNCIA (faixas de data abertas, não blocos fixos de 7 dias)
 - Diretor gestor escolhe com base em scoring + conflitos de calendário
 
-**Scoring automático (máx. 80 pontos):**
+**Scoring automático (máx. 75 pontos)** — corrigido em S-121: o critério d) perdeu o nível "com laudo" (10 pts) por exigir dado médico confidencial e virou binário (autodeclarado, 5/0); máximo real é 75, não 80 (ver `.docs/Respostas10.md` Q156):
 a) Tempo de ministério: 1pt/ano, max 10 | b) Frequência de uso: nunca (10), >1 ano (5), <12 meses (0) | c) Localização: remota (10), periferia (5), centro (0) | d) Saúde: autodeclarada sim (5), não (0) — sem laudos nem dados confidenciais | e) Situação familiar especial: até 5 | f) Último descanso fora da cidade: >2 anos (10), 1-2 (5), <1 (0) | g) Intensidade ministerial: alta (10), média (5), baixa (0) | h) Carta de recomendação: sim (5), não (0) | i) Tipo de sustento: dependente (5), parcial (3), autossustentado (0) | j) Participação em projetos Hebron: sim (5), não (0) — auto-calculado
 
 **Assistência de IA no scoring (v1, P-7.13 — PATCH-012):** para os critérios subjetivos (d — saúde autodeclarada, g — intensidade ministerial), o sistema sugere uma pontuação a partir do texto livre do formulário; o gestor sempre confirma ou ajusta antes de salvar — a IA nunca decide sozinha, e a pontuação final permanece 100% determinística pela tabela acima.

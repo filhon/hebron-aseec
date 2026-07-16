@@ -146,6 +146,7 @@
 | S-123  | 2026-07-15 | P-7.3 — Telas e Páginas Flats                                                 | concluido                            |
 | S-124  | 2026-07-15 | P-7.4 — Formulários Flats                                                     | concluido                            |
 | S-125  | 2026-07-16 | P-7.5 — Estados Flats                                                         | concluido                            |
+| S-126  | 2026-07-16 | P-7.1b — Correção do máximo de scoring em BRAIN §6.8 (CORRETIVO)              | concluido                            |
 
 ---
 
@@ -8247,4 +8248,46 @@ SSR (skeleton renderizado antes da hidratação) nas duas rotas.
 - `apps/flats/src/app/(hospede)/page.tsx`
 - `apps/flats/src/app/admin/page.tsx`
 - `PROMPTS.md` (checklist de P-7.5 marcado)
+
+---
+
+### S-126 — 2026-07-16 — P-7.1b — Correção do máximo de scoring em BRAIN §6.8 (CORRETIVO)
+
+**Prompt:** P-7.1b
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Prompt corretivo puramente documental. Fecha o débito aberto em S-121: BRAIN
+§6.8 abria com "Scoring automático (máx. 80 pontos)", mas a soma dos 10
+critérios documentados logo abaixo é 75 — o critério d) "situação de saúde"
+perdeu o nível "com laudo" (10 pts) por exigir dado médico confidencial e
+virou binário (autodeclarado 5/0), conforme `.docs/Respostas10.md` Q156. Em
+S-121 o Filipe já havia confirmado 75 como máximo real e o código já usava
+`SCORING_MAX_POINTS = 75` (`packages/types/src/flats/index.ts`); só o texto
+do BRAIN ficou defasado por não estar na lista de arquivos permitidos
+daquele prompt.
+
+**Mudança:**
+`BRAIN.md` §6.8, linha do cabeçalho do scoring: "máx. 80 pontos" → "máx. 75
+pontos", com nota curta remetendo à decisão de S-121 (remoção do nível "com
+laudo" do critério d, ver `.docs/Respostas10.md` Q156). Varredura do
+restante do BRAIN por outras menções a "80" ligadas ao scoring de flats:
+nenhuma outra ocorrência encontrada (única outra ocorrência de "80" no
+arquivo é a faixa de peso da fonte Parkinsans, sem relação).
+
+**Verificação:** nenhuma mudança de código/tipos — `SCORING_MAX_POINTS = 75`
+já estava correto desde P-7.1 (S-121). Correção documental pura, sem
+mudança de comportamento.
+
+**Critérios de aceite verificados:**
+
+- [x] §6.8 diz "máx. 75 pontos" com nota da decisão
+- [x] Nenhuma outra menção a "80 pontos" no scoring de flats no BRAIN
+- [x] Nenhuma mudança de código/tipos
+
+**Arquivos modificados:**
+
+- `BRAIN.md` (§6.8)
+- `SESSIONS.md` (esta entrada + linha no índice; fecha débito de S-121)
 - `SESSIONS.md` (esta entrada + linha no índice)

@@ -23,7 +23,7 @@
 | 8    | Rádio      | P-8.1 a P-8.12  | P-8.1–8.5   | P-8.6–8.12  |
 | 9    | Polimento  | P-9.1 a P-9.5   | —           | —           |
 
-### Correções (S1-26 — cabeçalho antigo dizia "3 correções"; eram 4; hoje são 19)
+### Correções (S1-26 — cabeçalho antigo dizia "3 correções"; eram 4; hoje são 19 + 2 corretivos de Flats pendentes: P-7.1b, P-7.5b)
 
 Corpo integral no próprio arquivo (as 4 originais) ou em `AUDIT/04-prompts-pendentes.md` §4 (as 15 da auditoria de 2026-07 — convenção registrada em cada sessão de SESSIONS.md a partir de S-54; transcrever o texto para dentro deste arquivo é trabalho mecânico à parte, não feito em P-0.16 para não misturar prompts na mesma sessão).
 
@@ -48,6 +48,8 @@ Corpo integral no próprio arquivo (as 4 originais) ou em `AUDIT/04-prompts-pend
 | P-0.14    | Jobs: Inngest de verdade                                    | AUDIT/04-prompts-pendentes.md §4 | S-66   |
 | P-0.15    | packages/integrations + contrato de settings                | AUDIT/04-prompts-pendentes.md §4 | S-67   |
 | P-0.16    | Registro retroativo (este próprio corretivo)                | AUDIT/04-prompts-pendentes.md §4 | S-68   |
+| P-7.1b    | Flats: máximo de scoring em BRAIN §6.8 (80 → 75)            | neste arquivo                    | pendente |
+| P-7.5b    | Flats: fiação das telas do Bloco A para validação diretoria | neste arquivo                    | pendente |
 
 ¹ Sessão referenciada retroativamente como S-22b em SESSIONS.md S-68 (ponto 2 da entrada retificadora) — o bloco original nunca recebeu número.
 
@@ -4003,6 +4005,40 @@ Ref: BRAIN.md seção 6.8 e edital de flats em `.docs/EDITAL PARA SOLICITAÇÕES
 
 ---
 
+### P-7.1b — Correção do máximo de scoring em BRAIN §6.8 (CORRETIVO)
+
+**Fase:** 7
+**Módulo:** flats
+**Tipo:** doc
+**Pré-condições:**
+
+- Branch: `feat/P-7.1b-brain-scoring-max`
+- Dependências: P-7.1 concluído
+- Env vars: nenhuma
+
+**Problema que este prompt resolve (contexto):**
+BRAIN §6.8 abre com "Scoring automático (máx. 80 pontos)", mas a soma dos 10 critérios documentados logo abaixo é **75** — o critério d) "situação de saúde" perdeu o nível "com laudo" (10 pts) por exigir dado médico confidencial e virou binário (5/0), conforme `.docs/Respostas10.md` Q156. Em S-121 o Filipe confirmou 75 como máximo real e o código já usa `SCORING_MAX_POINTS = 75` (`packages/types/src/flats/index.ts`); apenas o texto do BRAIN (fonte da verdade) ficou defasado. Débito deixado explicitamente em S-121 para "PATCH dedicado".
+
+**Escopo:**
+
+1. BRAIN.md §6.8: trocar "Scoring automático (máx. 80 pontos)" por "Scoring automático (máx. 75 pontos)", com nota curta remetendo à decisão de S-121 (remoção do nível "com laudo" do critério d).
+2. Varrer o restante do BRAIN por outras menções a "80" ligadas ao scoring de flats e alinhar para 75 (não tocar em scoring de outros módulos).
+
+**Arquivos permitidos para criação/edição:**
+
+- `BRAIN.md` (apenas §6.8 e referências cruzadas ao máximo de scoring de flats)
+
+**Critérios de aceite:**
+
+- [x] §6.8 diz "máx. 75 pontos" com nota da decisão
+- [x] Nenhuma outra menção a "80 pontos" no scoring de flats no BRAIN
+- [x] Nenhuma mudança de código/tipos (já corretos — `SCORING_MAX_POINTS = 75`)
+
+**Notas:**
+Correção documental pura, sem mudança de comportamento. Fechar em SESSIONS.md o débito aberto em S-121.
+
+---
+
 ### P-7.2 — Componentes UI Flats
 
 **Fase:** 7
@@ -4150,6 +4186,54 @@ Loading, empty e error states. Skeletons para catálogo, calendário, fila de ap
 - [x] Estados vazios contextuais
 - [x] Lint passa
 - [x] Types passam
+
+---
+
+### P-7.5b — Fiação das telas do Bloco A Flats para validação da diretoria (CORRETIVO)
+
+**Fase:** 7
+**Módulo:** flats
+**Tipo:** ui
+**Pré-condições:**
+
+- Branch: `feat/P-7.5b-flats-wiring`
+- Dependências: P-7.5 concluído
+- Env vars: nenhuma
+- Skill `/impeccable` obrigatória antes de escrever qualquer JSX (G2 + CLAUDE.md)
+
+**Problema que este prompt resolve (contexto):**
+O wizard de reserva (P-7.4), o `approval-form`, o `checkin-form` (P-7.4) e o `approval-queue-skeleton` (P-7.5) foram construídos como componentes autocontidos mas **nunca conectados a nenhuma página** — as páginas não estavam nos "arquivos permitidos" de P-7.4/P-7.5 (registrado em S-124/S-125). Resultado: a rota `/reservar` ainda serve o formulário single-page de P-7.3, **sem o step de consentimento LGPD, sem upload de documento e com o campo de saúde (critério d) exibido incondicionalmente** — contrariando BRAIN §6.8 ("o campo de saúde só aparece se consentido"). Como a PAUSA de validação com a diretoria vem logo após P-7.5, ela revisaria telas incompletas e uma superfície de reserva não conforme à LGPD. Este prompt antecipa para o Bloco A (ainda com mocks) a fiação que P-7.9 faria só no Bloco B, satisfazendo desde já o critério de P-7.9 "Nenhum componente do Bloco A sem import".
+
+**Escopo:**
+
+1. `(hospede)/reservar/page.tsx`: substituir o corpo pelo `<ReservationWizard />` de P-7.4 (mantendo mocks). O formulário single-page de P-7.3 é aposentado — a reserva passa a ter uma única superfície (wizard: consentimento → responsável + upload → acompanhantes → veículo → 3 períodos → scoring → auxílio → revisão).
+2. `admin/aprovacao/page.tsx`: manter a `ApprovalQueue` e conectar o `approval-form.tsx` (selecionar reserva → abrir o form de aprovação com seleção de período final + observações; submit mock). Usar `ApprovalQueueSkeleton` como estado de loading da fila.
+3. `admin/reserva/[id]/page.tsx`: na seção de check-in/check-out, substituir `status-actions.tsx` pelo `checkin-form.tsx` (transição + timestamp + observações, mock). Remover `status-actions.tsx`.
+4. Rodar `grep` garantindo que nenhum componente/skeleton de P-7.2/P-7.4/P-7.5 fique sem import a partir de `app/`.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/flats/src/app/(hospede)/reservar/page.tsx`
+- `apps/flats/src/app/admin/aprovacao/page.tsx`
+- `apps/flats/src/app/admin/reserva/[id]/page.tsx`
+- `apps/flats/src/app/admin/reserva/[id]/status-actions.tsx` (remover)
+- `apps/flats/src/components/reservation-wizard.tsx`, `approval-form.tsx`, `checkin-form.tsx` — apenas ajustes mínimos de props (callback de submit mock) se necessário para o wiring, sem alterar layout/visual
+
+**Critérios de aceite:**
+
+- [ ] `/reservar` renderiza o wizard de P-7.4 (step de consentimento presente; campo de saúde só exibido com consentimento específico; upload de documento presente)
+- [ ] Formulário single-page de P-7.3 removido; sem duplicação de superfície de reserva
+- [ ] `approval-form` alcançável pela fila de aprovação (seleção de período final + observações, mock)
+- [ ] Check-in/check-out pelo detalhe da reserva via `checkin-form`; `status-actions.tsx` removido
+- [ ] `ApprovalQueueSkeleton` conectado como loading da fila
+- [ ] `grep`: nenhum componente do Bloco A (P-7.2/P-7.4/P-7.5) sem import a partir de `app/`
+- [ ] Lint passa · Types passam · `next build` verde (sanidade dos route groups)
+
+**Notas:**
+
+- Continua **Bloco A**: os dados de domínio (a reserva em si) permanecem mockados; P-7.9 troca mock→real e adiciona o gating de auth (G5). Este prompt NÃO cria Server Actions nem toca no schema.
+- Ao chegar em **P-7.9**, corrigir a lista de arquivos permitidos (hoje aponta para `apps/flats/src/app/(admin)/...`): o grupo `(admin)` não existe — a estrutura real é `admin/...` (segmento real, decidido em P-7.3/S-123).
+- Registrar em SESSIONS.md, fechando os débitos de fiação abertos em S-124/S-125.
 
 ---
 
