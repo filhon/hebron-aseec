@@ -4425,13 +4425,13 @@ Notificações: reserva submetida (in_app ao diretor gestor). Reserva aprovada/r
 
 **Critérios de aceite:**
 
-- [ ] Reserva submetida: in_app ao diretor gestor + email
-- [ ] Aprovada: email ao hóspede com período final e instruções
-- [ ] Rejeitada: email ao hóspede com motivo
-- [ ] Check-in: email 3 dias antes com todas as instruções
-- [ ] Check-out: lembrete no dia
-- [ ] Lint passa
-- [ ] Types passam
+- [x] Reserva submetida: in_app ao diretor gestor + email
+- [x] Aprovada: email ao hóspede com período final e instruções
+- [x] Rejeitada: email ao hóspede com motivo
+- [x] Check-in: email 3 dias antes com todas as instruções
+- [x] Check-out: lembrete no dia
+- [x] Lint passa
+- [x] Types passam
 
 ---
 

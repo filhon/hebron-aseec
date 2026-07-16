@@ -25,21 +25,6 @@ export interface PlannedJob {
 
 export const PLANNED_JOBS: PlannedJob[] = [
   {
-    id: "flats-checkin-reminder",
-    name: "Flats: instruções de check-in (3 dias antes)",
-    cron: "0 8 * * *",
-    sourcePrompt: "P-7.10",
-    description:
-      "Envia instruções de check-in 3 dias antes da reserva. Aguarda P-7.10.",
-  },
-  {
-    id: "flats-checkout-reminder",
-    name: "Flats: lembrete de check-out (no dia)",
-    cron: "0 6 * * *",
-    sourcePrompt: "P-7.10",
-    description: "Lembrete de check-out no dia da saída. Aguarda P-7.10.",
-  },
-  {
     id: "radio-audiencia-snapshot",
     name: "Rádio: snapshot de audiência",
     cron: "*/15 * * * *",

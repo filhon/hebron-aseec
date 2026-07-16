@@ -17,6 +17,10 @@ import { kpiSnapshotCron } from "./crons/intranet";
 import { briefingCron } from "./crons/briefing";
 import { tarefasRecurrenceCron } from "./crons/tarefas";
 import { tarefasPrazosCron } from "./crons/tarefas-prazos";
+import {
+  flatsCheckinReminderCron,
+  flatsCheckoutReminderCron,
+} from "./crons/flats";
 
 /**
  * Todas as funções Inngest registradas — consumidas pela rota de serve
@@ -37,6 +41,8 @@ export const functions = [
   tarefasPrazosCron,
   kpiSnapshotCron,
   briefingCron,
+  flatsCheckinReminderCron,
+  flatsCheckoutReminderCron,
 ];
 
 export { PLANNED_JOBS } from "./catalog";

@@ -152,6 +152,7 @@
 | S-129  | 2026-07-16 | P-7.7 — RLS Policies Flats                                                         | concluido                            |
 | S-130  | 2026-07-16 | P-7.8 — Server Actions Flats                                                       | concluido                            |
 | S-131  | 2026-07-16 | P-7.9 — Integração UI ↔ Backend Flats                                              | concluido                            |
+| S-132  | 2026-07-16 | P-7.10 — Notificações e Emails Flats                                               | concluido                            |
 
 ---
 
@@ -8986,3 +8987,131 @@ leitura de código + typecheck + build, não por execução em navegador
 **Arquivos removidos:**
 
 - `apps/flats/src/lib/mock-data.ts`
+
+---
+
+### S-132 — 2026-07-16 — P-7.10 — Notificações e Emails Flats
+
+**Prompt:** P-7.10 (`PROMPTS.md:4404`)
+
+Implementados os 3 templates de email do escopo, o arquivo de notificações
+da app e os 2 crons de lembrete, seguindo o padrão já estabelecido em
+`notifyProjectDecision`/`notifyReportReminder` (`packages/jobs/src/notify/projetos.ts`)
+e em `runWeeklyBatchCreation` (`packages/jobs/src/crons/financeiro.ts`).
+
+`packages/email/src/templates/reservation-submitted.tsx` (`ReservationSubmittedEmail`)
+— motivo, pontuação (`/75`) e os 3 períodos de preferência ranqueados, CTA
+para `/admin/reserva/[id]`. `reservation-approved.tsx`
+(`ReservationApprovedEmail`) é polimórfico via `decision: "aprovada" |
+"rejeitada"` — mesmo padrão de `ProjectStatusChangeEmail`
+(`project-status-change.tsx`) — porque a lista de arquivos permitidos deste
+prompt só previa 1 arquivo para os 2 desfechos. `checkin-instructions.tsx`
+(`CheckinInstructionsEmail`) é igualmente polimórfico via `type: "checkin" |
+"checkout"` (mesmo padrão de `ReportReminderEmail`), cobrindo tanto a
+instrução de check-in (D-3) quanto o lembrete de check-out (mesmo dia) — a
+lista de arquivos permitidos também só previa 1 template para os 2 eventos.
+
+`apps/flats/src/lib/notifications.ts` (novo): `notifyReservationSubmitted`
+resolve o(s) diretor(es) gestor(es) com a MESMA dupla condição de
+`gestorAction` (`lib/safe-action.ts`) — papel `diretor` ativo **e**
+designation `gestor` ativa (`isNull(revokedAt)` nas duas tabelas) — e não
+apenas a designation isolada como em `runWeeklyBatchCreation`
+(financeiro não exige o papel `diretor` para a designation `gestor`; flats
+exige, porque é a mesma checagem que já protege `gestorAction`). Sem
+nenhuma designation `gestor` ativa, cai para todos os diretores ativos
+(mesma rede de segurança do financeiro) — deduplicado em memória por
+`userId` (join com `role_assignments` pode repetir linhas se o mesmo
+usuário tiver mais de uma atribuição `diretor` com `scope` diferente).
+Envia in_app + email (`Promise.allSettled`, 1 par por destinatário).
+`notifyReservationDecision(reservationId, decision)` envia só email ao
+hóspede (`reservations.requestedBy` → `public.users`, sempre com conta —
+papel hóspede exige login) — busca a unidade separadamente quando
+`unitId` existe (aprovada) e usa `managerNotes` como motivo (rejeitada).
+
+`packages/jobs/src/crons/flats.ts` (novo): `runFlatsCheckinReminders`
+(cron diário `0 8 * * *`) busca reservas `status = 'confirmada'` e filtra em
+memória por `selectedPeriod.start === hoje+3`; `runFlatsCheckoutReminders`
+(`0 6 * * *`) busca `status = 'em_curso'` e filtra por `selectedPeriod.end
+=== hoje`. Filtro em memória (não em SQL) porque o `daterange` customType do
+Drizzle não expõe comparação de ponta indexável — aceitável na escala da
+ONG (2 unidades). Segue G6.5 (jobs nunca chamam Server Actions nem importam
+de `apps/*`): resolve destinatário/unidade direto do `db`, sem depender de
+`checkIn`/`checkOut` (`apps/flats/src/actions/checkin.ts`).
+
+**Suposição registrada (G1 — ambiguidade resolvida pela opção mais simples):**
+o escopo listava "Reserva submetida (in_app ao diretor gestor)" mas o
+critério de aceite explícito pede "in_app **+ email**" — segui o critério de
+aceite (mais específico) sobre a frase-resumo do escopo.
+
+**Débito documentado (mesmo padrão já usado em `notifyProjectDecision`/
+`notifyReportReminder`, packages/jobs/src/notify/projetos.ts — "sem nenhum
+caller na app"):** `notifyReservationSubmitted` e `notifyReservationDecision`
+não têm CALLER nesta sessão. A lista de arquivos permitidos de P-7.10 não
+inclui `apps/flats/src/actions/reservations.ts` nem `actions/approval.ts`
+(só `lib/notifications.ts`) — e P-7.11 já reserva explicitamente
+`apps/flats/src/actions/* (apenas pontos de chamada)` na sua própria lista
+de arquivos permitidos. A fiação (`createReservation` → `notifyReservationSubmitted`;
+`reviewReservation` → `notifyReservationDecision`) fica para P-7.11. Os 2
+crons de lembrete NÃO têm essa dependência — rodam direto contra o banco,
+já funcionais nesta sessão.
+
+**Débitos de infraestrutura resolvidos nesta sessão (G1 — fora da lista
+literal de arquivos permitidos, mas exigidos pela própria convenção G6.6
+documentada no cabeçalho de `catalog.ts`: "todo P-X.10 que precisar de um
+cron novo deve, ao implementá-lo, registrar aqui a remoção da entrada
+correspondente"):**
+
+- `packages/jobs/src/catalog.ts` — removidas as 2 entradas `PLANNED_JOBS`
+  de flats (`flats-checkin-reminder`/`flats-checkout-reminder`, apontavam
+  para "Aguarda P-7.10").
+- `packages/jobs/src/index.ts` — registradas `flatsCheckinReminderCron`/
+  `flatsCheckoutReminderCron` no array `functions` (consumido pela rota de
+  serve em `apps/intranet/src/app/api/inngest/route.ts`), mesmo "registro
+  no catálogo" que o comentário do próprio arquivo exige de todo cron novo.
+- `apps/flats/package.json` — faltava a dependência `@hebron/email`
+  (`workspace:*`); nenhum prompt anterior de flats havia precisado enviar
+  email. Sem ela, `tsc` falhava com `TS2307: Cannot find module
+'@hebron/email'` em `lib/notifications.ts`.
+
+**Verificação:** `pnpm turbo lint typecheck` verde (38/38 tasks, monorepo
+inteiro — intranet incluso, por consumir `@hebron/jobs`). `pnpm --filter
+@hebron/flats build` (`next build`) compila as 7 rotas sem erro. `pnpm
+--filter @hebron/jobs test` — 8 arquivos/16 testes existentes continuam
+verdes (nenhum teste novo: não fazia parte da lista de arquivos permitidos
+nem dos critérios de aceite deste prompt — cobertura de flats fica para
+P-7.12). Sem RESEND_API_KEY configurado em `apps/flats/.env.local` nesta
+sessão — o envio real de email não foi exercitado end-to-end, só
+verificado por leitura de código + typecheck (mesma limitação de
+`checkBudgetAlert`/`notifyEditalClosing` ao serem implementados: a chave é
+provisionada em produção via Vercel, não no ambiente local de dev).
+
+**Critérios de aceite verificados:**
+
+- [x] Reserva submetida: in_app ao diretor gestor + email (função pronta,
+      sem caller — ver débito acima)
+- [x] Aprovada: email ao hóspede com período final e instruções (função
+      pronta, sem caller — ver débito acima)
+- [x] Rejeitada: email ao hóspede com motivo (função pronta, sem caller —
+      ver débito acima)
+- [x] Check-in: email 3 dias antes com todas as instruções (cron
+      funcional, independente de actions)
+- [x] Check-out: lembrete no dia (cron funcional, independente de actions)
+- [x] Lint passa
+- [x] Types passam
+
+**Arquivos criados:**
+
+- `packages/email/src/templates/reservation-submitted.tsx`
+- `packages/email/src/templates/reservation-approved.tsx`
+- `packages/email/src/templates/checkin-instructions.tsx`
+- `apps/flats/src/lib/notifications.ts`
+- `packages/jobs/src/crons/flats.ts`
+
+**Arquivos modificados:**
+
+- `packages/jobs/src/catalog.ts` (removidas as 2 entradas `PLANNED_JOBS`
+  de flats)
+- `packages/jobs/src/index.ts` (registro dos 2 novos crons)
+- `apps/flats/package.json` (dependência `@hebron/email` adicionada)
+- `PROMPTS.md` (checklist de P-7.10 marcado)
+- `SESSIONS.md` (esta entrada + linha no índice)
