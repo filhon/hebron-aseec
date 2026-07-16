@@ -4585,13 +4585,13 @@ Três Server Actions de P-7.8 estão implementadas, testadas (P-7.12) e sem **ne
 
 **Critérios de aceite:**
 
-- [ ] Reserva `aprovada` confirmável pelo detalhe (gestor) e por "Minhas reservas" (hóspede dono); status vai a `confirmada` e dispara as 2 tarefas de limpeza (teste de fluxo já cobre `onFlatsReservationConfirmed`)
-- [ ] Check-in/check-out passam a ser alcançáveis de ponta a ponta pela UI (confirmar → check-in → check-out)
-- [ ] Cancelamento executável (dono ou gestor) com justificativa; status vai a `cancelada`; bloqueado em status terminal
-- [ ] Auxílio `solicitado` aprovável/rejeitável pelo gestor no detalhe; aprovação gera payable `pendente` no Financeiro (D-4)
-- [ ] Falha da integração Financeiro não derruba a resposta de `reviewAidRequest` (best-effort, log estruturado)
-- [ ] Gates de papel respeitados (hóspede não vê ações de gestor e vice-versa); `next build` verde
-- [ ] Lint passa · Types passam
+- [x] Reserva `aprovada` confirmável pelo detalhe (gestor) e por "Minhas reservas" (hóspede dono); status vai a `confirmada` e dispara as 2 tarefas de limpeza (teste de fluxo já cobre `onFlatsReservationConfirmed`)
+- [x] Check-in/check-out passam a ser alcançáveis de ponta a ponta pela UI (confirmar → check-in → check-out)
+- [x] Cancelamento executável (dono ou gestor) com justificativa; status vai a `cancelada`; bloqueado em status terminal
+- [x] Auxílio `solicitado` aprovável/rejeitável pelo gestor no detalhe; aprovação gera payable `pendente` no Financeiro (D-4)
+- [x] Falha da integração Financeiro não derruba a resposta de `reviewAidRequest` (best-effort, log estruturado)
+- [x] Gates de papel respeitados (hóspede não vê ações de gestor e vice-versa); `next build` verde
+- [x] Lint passa · Types passam
 
 **Notas:**
 Não reescrever `CheckinForm`/`ApprovalForm` — apenas adicionar os acionadores que faltam. Fechar em SESSIONS.md os débitos de confirm/cancel (S-131) e o de revisão de auxílio.

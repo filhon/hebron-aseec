@@ -1,6 +1,7 @@
 import { CheckCircle2, Circle, XCircle } from "lucide-react";
 import { PageHeader, EmptyState } from "@hebron/ui";
 import { ReservationCard } from "../../../components/reservation-card";
+import { ReservationActions } from "./reservation-actions";
 import {
   getActiveUnits,
   getMyReservations,
@@ -145,6 +146,11 @@ export default async function MinhasReservasPage() {
             unit={
               unitsList.find((u) => u.id === current.reservation.unitId) ?? null
             }
+          />
+
+          <ReservationActions
+            reservationId={current.reservation.id}
+            status={current.reservation.status}
           />
         </section>
       )}

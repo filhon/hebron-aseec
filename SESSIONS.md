@@ -156,6 +156,7 @@
 | S-133  | 2026-07-16 | P-7.11 — Integrações Cross-App Flats                                               | concluido                            |
 | S-134  | 2026-07-16 | P-7.12 — Testes Flats                                                              | concluido                            |
 | S-135  | 2026-07-16 | P-7.6b — Canonicalização estável do `daterange` (CORRETIVO)                        | concluido                            |
+| S-136  | 2026-07-16 | P-7.9b — Fiação do ciclo de vida pós-aprovação e revisão de auxílio (CORRETIVO)    | concluido                            |
 
 ---
 
@@ -9467,3 +9468,82 @@ typecheck --filter=@hebron/db --filter=@hebron/integrations
 
 **Nota:** `checkin.ts` e `packages/jobs/src/crons/flats.ts` estavam na lista
 de arquivos permitidos do prompt "se necessário" — não precisaram de edição.
+
+---
+
+### S-136 — 2026-07-16 — P-7.9b — Fiação do ciclo de vida pós-aprovação e revisão de auxílio (CORRETIVO)
+
+**Prompt:** P-7.9b (`PROMPTS.md:4555`)
+
+Fecha o débito registrado em S-131: `confirmReservation`, `cancelReservation`
+(P-7.8) e `reviewAidRequest` (P-7.8/aid.ts) estavam implementadas e testadas
+(P-7.12) mas sem nenhum acionador na UI, o que travava o fluxo real de
+ponta a ponta (reserva aprovada nunca chegava a `confirmada`,
+check-in/check-out inalcançáveis, `onFlatsReservationConfirmed` nunca
+disparava, auxílio nunca aprovado/rejeitado, `onFlatsAssistanceApproved`
+nunca disparava).
+
+Dois novos Client Components, colocados junto às páginas que os usam
+(mesmo padrão de `checkin-form.tsx`/`approval-form.tsx` — não reescritos):
+
+- `admin/reserva/[id]/lifecycle-actions.tsx` (gestor): seção "Ações da
+  reserva" com **Confirmar reserva** (`status === "aprovada"`) e
+  **Cancelar** (qualquer status não-terminal, `Dialog` com textarea de
+  justificativa, validação client de 10 caracteres — o schema de
+  `cancelReservation` é local a `reservations.ts`, não exportado, mesma
+  suposição simples já usada em `checkin-form.tsx` para `checkinTransitionSchema`)
+  e seção "Revisar auxílio" (visível apenas quando
+  `aidRequest.status === "solicitado"`) com Aprovar/Rejeitar
+  (`reviewAidRequest`), campo de valor da diária fixa quando
+  `requestsDailyAllowance` e campo de valor de transporte quando
+  `transportMode === "combustivel"` (aéreo mantém o valor calculado na
+  criação, sem input).
+- `(hospede)/minhas-reservas/reservation-actions.tsx` (hóspede): mesmos
+  botões Confirmar/Cancelar, sem a seção de auxílio (fora do escopo do
+  papel hóspede) — renderizado só no cartão da "reserva atual"
+  (`page.tsx`), não no histórico.
+
+Ambos chamam `router.refresh()` após sucesso (padrão de `checkin-form.tsx`)
+e tratam `serverError`/`validationErrors` do `next-safe-action` da mesma
+forma que `ApprovalForm`/`CheckinForm`. Gate de papel já vem das páginas
+(`requireGestorSession`/`requireHospedeSession`) — `confirmReservation`/
+`cancelReservation` já autorizam dono OU gestor (P-7.8), reforçando defense
+in depth mesmo que a UI erre.
+
+**Bug interno corrigido durante a implementação:** a primeira versão de
+`handleAidApprove`/`handleAidReject` lia a decisão de uma state var
+(`aidDecision`) dentro do callback passado a `handleSubmit`, mas o closure
+capturava o valor **anterior** ao `setAidDecision` (atualização de estado
+assíncrona) — clicar "Aprovar" de fato enviava `decision: "rejeitado"`.
+Corrigido passando a decisão como parâmetro explícito
+(`submitAidReview(decision, values)`) em vez de depender do estado.
+
+`aid.ts::reviewAidRequest` — chamada a `onFlatsAssistanceApproved` movida
+para try/catch best-effort com log estruturado (mesmo padrão de
+`reservations.ts`/`approval.ts`), para uma falha na integração Financeiro
+não derrubar a resposta ao gestor.
+
+`lib/queries.ts` não precisou de alteração — `mapAidRequest` (P-7.9) já
+expõe `aidRequest.id`/`status`.
+
+- [x] Reserva aprovada confirmável pelo detalhe (gestor) e por "Minhas
+      reservas" (hóspede dono)
+- [x] Check-in/check-out alcançáveis de ponta a ponta (confirmar → check-in
+      → check-out)
+- [x] Cancelamento executável (dono ou gestor) com justificativa; bloqueado
+      em status terminal
+- [x] Auxílio solicitado aprovável/rejeitável pelo gestor; aprovação
+      dispara `onFlatsAssistanceApproved` (best-effort)
+- [x] Falha da integração Financeiro não derruba a resposta de
+      `reviewAidRequest`
+- [x] Gates de papel respeitados; `next build` verde
+- [x] Lint passa · Types passam
+
+**Arquivos modificados:**
+
+- `apps/flats/src/app/admin/reserva/[id]/page.tsx`
+- `apps/flats/src/app/admin/reserva/[id]/lifecycle-actions.tsx` (novo)
+- `apps/flats/src/app/(hospede)/minhas-reservas/page.tsx`
+- `apps/flats/src/app/(hospede)/minhas-reservas/reservation-actions.tsx` (novo)
+- `apps/flats/src/actions/aid.ts` (try/catch best-effort)
+- `SESSIONS.md` (esta entrada + linha no índice)

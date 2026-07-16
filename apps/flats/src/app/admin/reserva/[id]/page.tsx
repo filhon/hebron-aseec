@@ -4,6 +4,7 @@ import { ChevronLeft, Car, Gift } from "lucide-react";
 import { GuestList } from "../../../../components/guest-list";
 import { ScoringPanel } from "../../../../components/scoring-panel";
 import { CheckinForm } from "../../../../components/checkin-form";
+import { LifecycleActions } from "./lifecycle-actions";
 import {
   getActiveUnits,
   getReservationDetail,
@@ -145,6 +146,12 @@ export default async function ReservaDetalhePage({
         </div>
 
         <div className="flex flex-col gap-6">
+          <LifecycleActions
+            reservationId={reservation.id}
+            status={reservation.status}
+            aidRequest={reservation.aidRequest}
+          />
+
           {reservation.scoring && (
             <ScoringPanel scoring={reservation.scoring} />
           )}

@@ -213,12 +213,25 @@ export const reviewAidRequest = gestorAction
     );
 
     if (result.approved) {
-      await onFlatsAssistanceApproved({
-        reservationId: result.reservationId,
-        aidRequestId: result.aidRequestId,
-        dailyAllowanceAmount: result.dailyAllowanceAmount,
-        transportAmount: result.transportAmount,
-      });
+      try {
+        await onFlatsAssistanceApproved({
+          reservationId: result.reservationId,
+          aidRequestId: result.aidRequestId,
+          dailyAllowanceAmount: result.dailyAllowanceAmount,
+          transportAmount: result.transportAmount,
+        });
+      } catch (err) {
+        console.error(
+          JSON.stringify({
+            event: "cross_app_integration_failure",
+            integration: "financeiro.onFlatsAssistanceApproved",
+            caller: "flats/actions/aid.ts::reviewAidRequest",
+            reservationId: result.reservationId,
+            aidRequestId: result.aidRequestId,
+            message: err instanceof Error ? err.message : String(err),
+          }),
+        );
+      }
     }
 
     return result;
