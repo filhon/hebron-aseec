@@ -153,6 +153,7 @@
 | S-130  | 2026-07-16 | P-7.8 — Server Actions Flats                                                       | concluido                            |
 | S-131  | 2026-07-16 | P-7.9 — Integração UI ↔ Backend Flats                                              | concluido                            |
 | S-132  | 2026-07-16 | P-7.10 — Notificações e Emails Flats                                               | concluido                            |
+| S-133  | 2026-07-16 | P-7.11 — Integrações Cross-App Flats                                               | concluido                            |
 
 ---
 
@@ -9114,4 +9115,142 @@ provisionada em produção via Vercel, não no ambiente local de dev).
 - `packages/jobs/src/index.ts` (registro dos 2 novos crons)
 - `apps/flats/package.json` (dependência `@hebron/email` adicionada)
 - `PROMPTS.md` (checklist de P-7.10 marcado)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+### S-133 — 2026-07-16 — P-7.11 — Integrações Cross-App Flats
+
+**Prompt:** P-7.11 (`PROMPTS.md:4438`)
+
+Implementada a integração real Flats → Tarefas (limpeza pré/pós-estadia,
+stub substituído) e escritos os testes de integração exigidos pelos 3
+critérios de aceite que dependiam de código já pronto de P-7.8
+(Flats → Financeiro, Projetos ← Flats).
+
+**Flats → Tarefas** (`packages/integrations/src/flats.ts`,
+`onFlatsReservationConfirmed`): resolve os 2 templates de limpeza por NOME
+estável (`packages/db/src/seed/tarefas-templates.ts`::`seedFlatsCleaningTemplates`,
+novo — "limpeza-pre-estadia"/"limpeza-pos-estadia"), nunca por UUID.
+`tarefas.task_templates` não tem coluna `slug` própria e alterar o schema
+estava fora da lista de arquivos permitidos deste prompt — `name` faz esse
+papel aqui. Cada template tem exatamente 1 `template_items`; `due_offset_days`
+é interpretado em relação ao check-in (pré-estadia) ou ao check-out
+(pós-estadia) da reserva confirmada, não a "agora" — por isso
+`createAutoTask` é chamado diretamente (2x), em vez de
+`createAutoTaskChecklist` (que assume uma única âncora de data para todas
+as tarefas de um template e não serviria aqui, já que as duas tarefas têm
+âncoras diferentes entre si). Mesmo padrão de mutação-não-bloqueante de
+`onProjectSubmitted` (`projetos-tarefas.ts`): loga estruturado + notifica
+todo super_admin (`flats.tarefas_limpeza_falhou`) antes de relançar; o
+chamador (`confirmReservation`) captura o erro e não desfaz a confirmação
+já commitada.
+
+**Descoberta durante os testes — canonicalização de `daterange`:** o
+customType `daterange` (`packages/db/src/schema/flats.ts`) grava limites
+inclusivos (`"[start,end]"`), mas o Postgres sempre canonicaliza
+`daterange` de tipo discreto para a forma `[início,fim)` — o valor de `end`
+lido de volta do banco é sempre "end + 1 dia" em relação ao literal
+inserido. Isso é transparente e autoconsistente para o resto do sistema
+(toda escrita/leitura de período passa pelo mesmo arredondamento), mas
+exigiu ajuste nos dados de fixture do teste de `onFlatsReservationConfirmed`
+(inserir `end` um dia antes do check-out pretendido, já que o valor
+efetivamente lido por `selectedPeriod.end` é sempre canonicalizado). Não é
+um bug do código de produção — só uma armadilha ao escrever reservas
+diretamente via `db.insert` num teste, pulando o fluxo normal
+(`approval.ts`) que já opera nessa mesma realidade "deslocada" dos dois
+lados (grava e lê o mesmo formato).
+
+**Débito de P-7.10 resolvido nesta sessão (autorizado por Filipe):**
+`notifyReservationSubmitted`/`notifyReservationDecision`
+(`apps/flats/src/lib/notifications.ts`, prontas desde P-7.10 mas sem
+caller, porque a lista de arquivos permitidos daquele prompt não incluía
+`actions/reservations.ts` nem `actions/approval.ts`) foram conectadas:
+`createReservation` chama `notifyReservationSubmitted` após o commit;
+`reviewReservation` (`approval.ts`) foi reestruturado para capturar o
+resultado de `withAuthenticatedContext` numa variável e chamar
+`notifyReservationDecision(reservationId, status)` depois, fora da
+transação. As duas chamadas são best-effort (try/catch só com log
+estruturado) — mesma decisão de não bloquear o fluxo principal por falha
+de notificação.
+
+**Testes** (todos sem mock, contra o banco real —
+`packages/integrations/src/__tests__/`):
+
+- `flats.test.ts` (novo): reserva `confirmada` com `selectedPeriod` gera as
+  2 tarefas, `needsManualAssignment=true`, `source="auto"`, datas batendo
+  com o offset de cada template.
+- `financeiro.test.ts` (novo): `onFlatsAssistanceApproved` cria o payable
+  com `status="pendente"` (default do schema — nunca já aprovado, D-4),
+  `dueDate` um dia antes do check-in, e atualiza
+  `aid_requests.financeiro_expense_id`.
+- `projetos-flats.test.ts` (novo): `getProjectParticipationScore` retorna
+  `totalApprovedOrExecuted > 0` para usuário com projeto `aprovado` — o
+  mesmo dado que `apps/flats/src/actions/scoring.ts` usa para o critério j
+  (`participated = totalApprovedOrExecuted > 0`).
+
+**Débitos de infraestrutura resolvidos nesta sessão (G1 — fora da lista
+literal de arquivos permitidos, mas exigidos pelo próprio prompt: os 3
+critérios com "(teste)" não são satisfazíveis sem arquivo de teste, mesmo
+padrão já aceito em P-5.11/P-3.11 para `tarefas.test.ts`/`feed.test.ts`):**
+
+- `packages/integrations/src/__tests__/flats.test.ts`,
+  `financeiro.test.ts`, `projetos-flats.test.ts` — novos.
+- `packages/db/package.json` — adicionado o export
+  `"./seed/tarefas-templates"` (sem ele, `packages/integrations/src/flats.ts`
+  e os testes não conseguem importar o módulo novo) e o script
+  `db:seed:flats-tarefas` (paridade com `db:seed`/`db:seed:*` existentes,
+  para provisionar os templates fora do fluxo de teste).
+
+**Observação (não corrigida — fora da lista de arquivos permitidos e sem
+relação com o escopo deste prompt):** `pnpm --filter @hebron/db test`
+(suíte completa) falha de forma intermitente em
+`packages/db/src/__tests__/system-actor.test.ts` — o `afterAll` tenta
+apagar o usuário ator-sistema, mas `admin.audit_log` já acumulou linhas
+reais referenciando esse ator (gravadas por outros testes do próprio
+pacote — `seed.test.ts`, `projetos-approval.test.ts`, `meetings.test.ts` —
+e, em produção, por qualquer cron real) e o FK `audit_log_actor_id_fkey`
+bloqueia o DELETE. Rodar o pacote inteiro deixa o ator sistema sem
+`role_assignments` (o DELETE de `role_assignments` roda antes do DELETE de
+`users`, que é o que falha) — restaurado manualmente nesta sessão
+(`INSERT` do papel `super_admin` de volta) para não deixar o ambiente de
+dev quebrado para as próximas sessões. Este teste pressupõe um banco de
+dev "limpo" que não existe mais desde que o projeto acumulou histórico de
+auditoria real (Imutabilidade, BRAIN.md) — pré-existente, não introduzido
+por P-7.11, e fora do escopo/arquivos permitidos deste prompt corrigir.
+
+**Verificação:** `pnpm turbo lint typecheck` verde (38/38 tasks, monorepo
+inteiro). `pnpm --filter @hebron/integrations test` — 6 arquivos/8 testes,
+todos verdes (inclui os 3 novos). `pnpm --filter @hebron/flats build`
+(`next build`) compila as 7 rotas sem erro.
+
+**Critérios de aceite verificados:**
+
+- [x] Templates de limpeza seedados com nome estável; integração resolve
+      por nome, não por UUID
+- [x] Reserva confirmada cria as 2 tarefas sem assignee, datas derivadas do
+      período (teste)
+- [x] Ajuda aprovada → payable `pendente` no Financeiro (teste, D-4)
+- [x] Critério j auto-calculado (teste)
+- [x] Zero imports app→app (checado por grep — nenhuma ocorrência)
+- [x] Lint passa
+- [x] Types passam
+
+**Arquivos criados:**
+
+- `packages/db/src/seed/tarefas-templates.ts`
+- `packages/integrations/src/__tests__/flats.test.ts`
+- `packages/integrations/src/__tests__/financeiro.test.ts`
+- `packages/integrations/src/__tests__/projetos-flats.test.ts`
+
+**Arquivos modificados:**
+
+- `packages/integrations/src/flats.ts` (stub substituído pela integração
+  real)
+- `packages/db/package.json` (export `./seed/tarefas-templates` + script
+  `db:seed:flats-tarefas`)
+- `apps/flats/src/actions/reservations.ts` (chamada real de
+  `onFlatsReservationConfirmed` com try/catch; fiação de
+  `notifyReservationSubmitted`)
+- `apps/flats/src/actions/approval.ts` (fiação de
+  `notifyReservationDecision`)
+- `PROMPTS.md` (checklist de P-7.11 marcado)
 - `SESSIONS.md` (esta entrada + linha no índice)

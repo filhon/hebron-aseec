@@ -15,7 +15,8 @@
     "./system-actor": "./src/system-actor.ts",
     "./meetings": "./src/meetings.ts",
     "./projetos-approval": "./src/projetos-approval.ts",
-    "./seed": "./src/seed.ts"
+    "./seed": "./src/seed.ts",
+    "./seed/tarefas-templates": "./src/seed/tarefas-templates.ts"
   },
   "scripts": {
     "lint": "eslint .",
@@ -24,6 +25,7 @@
     "test:watch": "vitest",
     "db:migrate": "tsx src/migrate.ts",
     "db:seed": "tsx src/seed.ts",
+    "db:seed:flats-tarefas": "tsx src/seed/tarefas-templates.ts",
     "db:generate": "drizzle-kit generate",
     "db:check": "drizzle-kit check",
     "db:push": "drizzle-kit push",

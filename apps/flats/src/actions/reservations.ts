@@ -19,6 +19,7 @@ import { onFlatsReservationConfirmed } from "@hebron/integrations/flats";
 import { createReservationRequestSchema } from "@hebron/validators/flats";
 import { flatsAction, hospedeAction } from "../lib/safe-action";
 import { logFlatsAudit } from "../lib/audit";
+import { notifyReservationSubmitted } from "../lib/notifications";
 import { computeScoringResponses } from "./scoring";
 import { createAidRequest } from "./aid";
 
@@ -213,6 +214,25 @@ export const createReservation = hospedeAction
       },
     );
 
+    // Notificação ao(s) diretor(es) gestor (in_app + email, P-7.10) — fiação
+    // que faltava desde P-7.10 (lista de arquivos permitidos daquele prompt
+    // não incluía este arquivo; registrado em SESSIONS.md como débito de
+    // P-7.11). Best-effort: uma falha aqui não desfaz a reserva já
+    // submetida, só fica registrada no log estruturado.
+    try {
+      await notifyReservationSubmitted(result.reservationId);
+    } catch (err) {
+      console.error(
+        JSON.stringify({
+          event: "cross_app_integration_failure",
+          integration: "flats.notifyReservationSubmitted",
+          caller: "flats/actions/reservations.ts::createReservation",
+          reservationId: result.reservationId,
+          message: err instanceof Error ? err.message : String(err),
+        }),
+      );
+    }
+
     return result;
   });
 
@@ -223,7 +243,12 @@ export const createReservation = hospedeAction
 // approval.ts) e de check-in; a ação mais simples é o próprio hóspede (ou o
 // gestor, em nome dele) confirmar que comparecerá, travando o período antes
 // do check-in presencial. Dispara onFlatsReservationConfirmed (Flats →
-// Tarefas, stub — implementação real em P-7.11).
+// Tarefas — implementação real em packages/integrations/src/flats.ts,
+// P-7.11): cria as 2 tarefas de limpeza pré/pós-estadia. Best-effort: a
+// reserva já foi commitada como "confirmada" antes deste ponto, então uma
+// falha aqui não desfaz a confirmação — só fica registrada no log
+// estruturado (a própria integração já notifica todo super_admin antes de
+// relançar, mesmo padrão de onProjectSubmitted/submitProject).
 // ---------------------------------------------------------------------------
 
 const confirmReservationSchema = z.object({
@@ -284,7 +309,19 @@ export const confirmReservation = flatsAction
       },
     );
 
-    await onFlatsReservationConfirmed(reservationId);
+    try {
+      await onFlatsReservationConfirmed(reservationId);
+    } catch (err) {
+      console.error(
+        JSON.stringify({
+          event: "cross_app_integration_failure",
+          integration: "flats.onFlatsReservationConfirmed",
+          caller: "flats/actions/reservations.ts::confirmReservation",
+          reservationId,
+          message: err instanceof Error ? err.message : String(err),
+        }),
+      );
+    }
 
     return { reservationId };
   });

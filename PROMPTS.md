@@ -4457,12 +4457,12 @@ Conectar integrações via packages/integrations. Flats → Tarefas: reserva con
 
 **Critérios de aceite:**
 
-- [ ] Templates de limpeza seedados com slugs estáveis; integração os resolve por slug, não por UUID
-- [ ] Reserva confirmada cria as 2 tarefas SEM assignee, com datas derivadas do período (teste)
-- [ ] Ajuda aprovada → payables não aprovados no Financeiro (teste, cobre D-4)
-- [ ] Critério j auto-calculado (teste)
-- [ ] Zero imports app→app (verificação do CI)
-- [ ] Lint passa · Types passam
+- [x] Templates de limpeza seedados com slugs estáveis; integração os resolve por slug, não por UUID
+- [x] Reserva confirmada cria as 2 tarefas SEM assignee, com datas derivadas do período (teste)
+- [x] Ajuda aprovada → payables não aprovados no Financeiro (teste, cobre D-4)
+- [x] Critério j auto-calculado (teste)
+- [x] Zero imports app→app (verificação do CI)
+- [x] Lint passa · Types passam
 
 ---
 
