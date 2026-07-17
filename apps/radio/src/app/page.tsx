@@ -1,7 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowRight, Disc3, Radio, Users2 } from "lucide-react";
+import {
+  AlertTriangle,
+  ArrowRight,
+  Disc3,
+  Music,
+  Radio,
+  Users2,
+} from "lucide-react";
 import { AuthorCard } from "../components/author-card";
+import { CatalogSkeleton } from "../components/catalog-skeleton";
+import { PlayerSkeleton } from "../components/player-skeleton";
 import {
   mockAuthors,
   mockNowPlaying,
@@ -14,23 +23,34 @@ export const metadata: Metadata = {
     "Ouça pregações e séries de ensino da Hebron Aseec, 24 horas por dia — sem cadastro.",
 };
 
+interface PageProps {
+  searchParams: Promise<{ state?: string }>;
+}
+
 function formatDuration(totalSeconds: number): string {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = Math.floor(totalSeconds % 60);
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
-export default function HomePage() {
+export default async function HomePage({ searchParams }: PageProps) {
+  const { state } = await searchParams;
+  const isLoading = state === "loading";
+  const isError = state === "error";
+  const isEmpty = state === "empty";
+
   const nowPlayingTrack = mockTracks.find(
     (t) => t.id === mockNowPlaying.trackId,
   );
-  const progress = nowPlayingTrack
-    ? Math.min(
-        100,
-        (mockNowPlaying.positionSeconds / nowPlayingTrack.durationSeconds) *
+  const hasNowPlaying = !isEmpty && Boolean(nowPlayingTrack);
+  const progress =
+    hasNowPlaying && nowPlayingTrack
+      ? Math.min(
           100,
-      )
-    : 0;
+          (mockNowPlaying.positionSeconds / nowPlayingTrack.durationSeconds) *
+            100,
+        )
+      : 0;
 
   return (
     <>
@@ -58,7 +78,33 @@ export default function HomePage() {
             </Link>
           </div>
 
-          {nowPlayingTrack && (
+          {isLoading ? (
+            <PlayerSkeleton />
+          ) : isError ? (
+            <div className="w-full max-w-sm rounded-(--radius-lg) border border-white/10 bg-white/5 p-6">
+              <span className="flex items-center gap-2 text-xs font-(--font-weight-semibold) tracking-(--tracking-eyebrow) text-(--hb-cyan) uppercase">
+                <Radio className="h-3.5 w-3.5" aria-hidden="true" />
+                Tocando agora
+              </span>
+
+              <div className="mt-4 flex items-center gap-3">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white/10">
+                  <AlertTriangle
+                    className="h-6 w-6 text-(--hb-orange)"
+                    aria-hidden="true"
+                  />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-(--font-weight-semibold) text-(--fg-invert)">
+                    Não foi possível carregar o áudio.
+                  </p>
+                  <p className="text-sm text-(--fg-invert-muted)">
+                    Tentando novamente...
+                  </p>
+                </div>
+              </div>
+            </div>
+          ) : hasNowPlaying && nowPlayingTrack ? (
             <div className="w-full max-w-sm rounded-(--radius-lg) border border-white/10 bg-white/5 p-6">
               <span className="flex items-center gap-2 text-xs font-(--font-weight-semibold) tracking-(--tracking-eyebrow) text-(--hb-cyan) uppercase">
                 <Radio className="h-3.5 w-3.5" aria-hidden="true" />
@@ -96,6 +142,25 @@ export default function HomePage() {
                 <span>{formatDuration(nowPlayingTrack.durationSeconds)}</span>
               </div>
             </div>
+          ) : (
+            <div className="w-full max-w-sm rounded-(--radius-lg) border border-white/10 bg-white/5 p-6">
+              <span className="flex items-center gap-2 text-xs font-(--font-weight-semibold) tracking-(--tracking-eyebrow) text-(--hb-cyan) uppercase">
+                <Radio className="h-3.5 w-3.5" aria-hidden="true" />
+                Tocando agora
+              </span>
+
+              <div className="mt-4 flex items-center gap-3">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white/10">
+                  <Music
+                    className="h-6 w-6 text-(--fg-invert-muted)"
+                    aria-hidden="true"
+                  />
+                </div>
+                <p className="text-sm text-(--fg-invert-muted)">
+                  Nenhuma faixa disponível.
+                </p>
+              </div>
+            </div>
           )}
         </div>
       </section>
@@ -124,15 +189,19 @@ export default function HomePage() {
             </Link>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {mockAuthors.map((author) => (
-              <AuthorCard
-                key={author.id}
-                author={author}
-                series={mockSeries.filter((s) => s.authorId === author.id)}
-              />
-            ))}
-          </div>
+          {isLoading ? (
+            <CatalogSkeleton />
+          ) : (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {mockAuthors.map((author) => (
+                <AuthorCard
+                  key={author.id}
+                  author={author}
+                  series={mockSeries.filter((s) => s.authorId === author.id)}
+                />
+              ))}
+            </div>
+          )}
         </section>
 
         {/* ── Sobre a rádio ── */}

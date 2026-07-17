@@ -4822,10 +4822,10 @@ Loading, empty e error states. Skeleton para player, catálogo, materiais. Estad
 
 **Critérios de aceite:**
 
-- [ ] Skeletons por tela
-- [ ] Player error state: "Não foi possível carregar o áudio. Tentando novamente..."
-- [ ] Lint passa
-- [ ] Types passam
+- [x] Skeletons por tela
+- [x] Player error state: "Não foi possível carregar o áudio. Tentando novamente..."
+- [x] Lint passa
+- [x] Types passam
 
 ---
 

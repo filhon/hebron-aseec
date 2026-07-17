@@ -162,6 +162,7 @@
 | S-139  | 2026-07-17 | P-8.2 — Componentes UI Rádio                                                            | concluido                            |
 | S-140  | 2026-07-17 | P-8.3 — Telas e Páginas Rádio                                                           | concluido                            |
 | S-141  | 2026-07-17 | P-8.4 — Formulários Rádio                                                               | concluido                            |
+| S-142  | 2026-07-17 | P-8.5 — Estados Rádio                                                                   | concluido                            |
 
 ---
 
@@ -10087,4 +10088,102 @@ HTML sem erro de render.
   `zod`)
 - `pnpm-lock.yaml` (via `pnpm install`)
 - `PROMPTS.md` (checklist de P-8.4 marcado)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+### S-142 — 2026-07-17 — P-8.5 — Estados Rádio
+
+**Prompt:** P-8.5 (`PROMPTS.md:4803`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Criados os 2 skeletons listados no escopo (`PlayerSkeleton`, `CatalogSkeleton`
+
+- `MaterialListSkeleton` como segundo export do mesmo arquivo), mais os
+  estados de loading/vazio/erro da home (`page.tsx`) — único arquivo de tela
+  na lista de Arquivos permitidos deste prompt.
+
+**Suposições registradas (G1 — ambiguidade resolvida pela opção mais simples):**
+
+- **Skeleton de materiais sem arquivo próprio.** O escopo pede "Skeletons
+  para player, catálogo, materiais", mas a lista de Arquivos permitidos só
+  define 2 arquivos de skeleton (player/catálogo — sem materiais). Seguindo
+  G1 ao pé da letra, `MaterialListSkeleton` foi adicionado como segundo
+  export dentro de `catalog-skeleton.tsx`, fiel à estrutura de `MaterialCard`
+  (P-8.2) — mesmo padrão de `TreeViewSkeleton`/`CourseSidebarSkeleton` já
+  registrado em S-77/P-4.5 e S-107/P-6.5.
+- **`MaterialListSkeleton` ainda não está wireado em tela nenhuma.** A tela
+  onde faria sentido como fallback de loading (`materiais/page.tsx`, P-8.3)
+  não está na lista de Arquivos permitidos deste prompt. Fica pronto para
+  consumo em P-8.9 (mesmo padrão de componente órfão já registrado em
+  P-4.5/P-6.5 — G5).
+- **Estados demonstrados via `?state=` na URL, não via `setTimeout`
+  client-side.** `page.tsx` é Server Component e exporta `metadata` (não
+  pode virar Client Component sem perder o export). Sem fronteira
+  assíncrona real (dado mockado síncrono), `Suspense` não produziria efeito
+  visual — mesmo problema já resolvido de duas formas diferentes em sessões
+  anteriores: Tarefas/Plataforma (S-77/S-107, Client Components) usaram
+  `useState` + `useEffect(setTimeout(...))`; Admin (S-12/P-1.5, Server
+  Component com `metadata`) usou `?state=error` na URL via `searchParams`
+  com `<form method="get">` para o retry, sem JS. Radio segue o padrão do
+  Admin — mais adequado aqui por ser também Server Component com
+  `metadata` — estendido para os 3 estados do escopo: `?state=loading`,
+  `?state=error`, `?state=empty` (Admin só precisou de `error`, pois o
+  loading real já vem do `Suspense` em cima de queries de banco reais).
+- **"Estado vazio: Nenhuma faixa disponível" mapeado ao card "Tocando
+  agora" da hero.** É o único trecho de `page.tsx` que exibe uma faixa
+  (`nowPlayingTrack`); a grade de Autores não é sobre faixas e não tem
+  critério de vazio pedido neste prompt. Antes, o card era simplesmente
+  omitido quando `nowPlayingTrack` não existia (`{nowPlayingTrack && (...)}`)
+  — passou a exibir a copy literal do critério de aceite em vez de
+  desaparecer, tanto no caso real (mock sem faixa) quanto forçado via
+  `?state=empty` para validação com a diretoria.
+- **"Player error state" mapeado ao mesmo card "Tocando agora".** O
+  componente `Player` real (`player.tsx`, com o elemento `<audio>`) não
+  está na lista de Arquivos permitidos e não é renderizado na home (a home
+  só tem o card de preview estático). Sem um `<audio>` real não há falha de
+  carregamento real para capturar — o estado foi implementado como
+  demonstração visual (copy literal do critério, ícone de alerta) no card
+  da hero, forçável via `?state=error`, seguindo a mesma lógica de "estado
+  demonstrável para validação" já usada em P-1.5.
+- **Sem `design-refs/radio`** (não está na lista de módulos com referência —
+  G3). Seguida a linguagem visual já estabelecida pelos skeletons de
+  `financeiro`/`plataforma`/`tarefas` (bones com `animate-pulse` sobre
+  `var(--surface-alt)`) e pela própria estrutura do card escuro "Tocando
+  agora" já existente em `page.tsx` (P-8.3) para os estados de erro/vazio.
+
+**Verificação visual:** Instalado Playwright + Chromium sob demanda
+(`npm install playwright` + `playwright install chromium` no diretório de
+scratchpad, fora do monorepo — mesmo padrão de S-77/P-4.5). Capturados
+screenshots reais dos 4 estados da home (`/`, `?state=loading`,
+`?state=error`, `?state=empty`) com `next dev`, confirmando visualmente o
+card "Tocando agora" real, o `PlayerSkeleton`/`CatalogSkeleton` (grade de 3
+cards), a mensagem de erro ("Não foi possível carregar o áudio. Tentando
+novamente...") e a mensagem de vazio ("Nenhuma faixa disponível."). Nenhuma
+dependência foi adicionada ao monorepo para isso.
+
+**Critérios de aceite verificados:**
+
+- [x] Skeletons por tela (player → `PlayerSkeleton`; catálogo →
+      `CatalogSkeleton`; materiais → `MaterialListSkeleton`, órfão — ver
+      suposição acima)
+- [x] Player error state: "Não foi possível carregar o áudio. Tentando
+      novamente..." — card "Tocando agora" da home, via `?state=error`
+- [x] Estado vazio "Nenhuma faixa disponível" — card "Tocando agora" da
+      home, real (sem faixa atual) e forçável via `?state=empty`
+- [x] Lint passa (`pnpm turbo lint --filter=@hebron/radio`)
+- [x] Types passam (`pnpm turbo typecheck --filter=@hebron/radio`)
+
+**Arquivos criados:**
+
+- `apps/radio/src/components/player-skeleton.tsx`
+- `apps/radio/src/components/catalog-skeleton.tsx` (`CatalogSkeleton` +
+  `MaterialListSkeleton`)
+
+**Arquivos modificados:**
+
+- `apps/radio/src/app/page.tsx`
+- `PROMPTS.md` (checklist de P-8.5 marcado)
 - `SESSIONS.md` (esta entrada + linha no índice)
