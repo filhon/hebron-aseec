@@ -5049,10 +5049,10 @@ Notificações mínimas: novo material exclusivo disponível (email para usuári
 
 **Critérios de aceite:**
 
-- [ ] Novo material exclusivo: email para quem tem termo aceito E consentimento de comunicação de novidades (P-0.13) — termo de responsabilidade não é opt-in de email
-- [ ] Template com layout institucional
-- [ ] Lint passa
-- [ ] Types passam
+- [x] Novo material exclusivo: email para quem tem termo aceito E consentimento de comunicação de novidades (P-0.13) — termo de responsabilidade não é opt-in de email
+- [x] Template com layout institucional
+- [x] Lint passa
+- [x] Types passam
 
 ---
 

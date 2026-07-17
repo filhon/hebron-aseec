@@ -12,6 +12,7 @@ import { createExclusiveMaterialSchema } from "@hebron/validators/radio";
 import { radioAction, superAdminAction } from "../lib/safe-action";
 import { logRadioAudit } from "../lib/audit";
 import { getR2DownloadUrl, getR2UploadUrl } from "../lib/r2";
+import { notifyNewMaterialAvailable } from "../lib/notifications";
 
 // ---------------------------------------------------------------------------
 // Materiais exclusivos (BRAIN §6.4): upload/criação são admin-only; o
@@ -49,28 +50,38 @@ export const getMaterialUploadUrl = superAdminAction
 export const createMaterial = superAdminAction
   .schema(createExclusiveMaterialSchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    return withAuthenticatedContext({ actorId: ctx.actorId }, async (tx) => {
-      const [material] = await tx
-        .insert(exclusiveMaterials)
-        .values(input)
-        .returning();
-      if (!material) throw new Error("Falha ao criar material");
+    const { material } = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const [material] = await tx
+          .insert(exclusiveMaterials)
+          .values(input)
+          .returning();
+        if (!material) throw new Error("Falha ao criar material");
 
-      await withSystemRole(tx, (sysTx) =>
-        logRadioAudit(
-          {
-            actorId: ctx.actorId,
-            action: "material.created",
-            entity: "exclusive_material",
-            entityId: material.id,
-            diff: { after: { title: material.title } },
-          },
-          sysTx,
-        ),
-      );
+        await withSystemRole(tx, (sysTx) =>
+          logRadioAudit(
+            {
+              actorId: ctx.actorId,
+              action: "material.created",
+              entity: "exclusive_material",
+              entityId: material.id,
+              diff: { after: { title: material.title } },
+            },
+            sysTx,
+          ),
+        );
 
-      return { material };
-    });
+        return { material };
+      },
+    );
+
+    // Notificação best-effort, fora da transação (P-8.10) — só a usuários
+    // com termo aceito E opt-in de newsletter/novidades (P-0.13);
+    // notifyNewMaterialAvailable já filtra os dois.
+    await notifyNewMaterialAvailable(material.id);
+
+    return { material };
   });
 
 const DOWNLOAD_URL_EXPIRES_IN_SECONDS = 60 * 60; // 1h — critério de aceite

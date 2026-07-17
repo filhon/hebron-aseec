@@ -169,6 +169,7 @@
 | S-146  | 2026-07-17 | P-8.7 — RLS Policies Rádio                                                              | concluido                            |
 | S-147  | 2026-07-17 | P-8.8 — Server Actions Rádio                                                            | concluido                            |
 | S-148  | 2026-07-17 | P-8.9 — Integração UI ↔ Backend Rádio                                                   | concluido                            |
+| S-149  | 2026-07-17 | P-8.10 — Notificações Rádio                                                             | concluido                            |
 
 ---
 
@@ -10930,3 +10931,99 @@ da própria definição.
 **Arquivos removidos:**
 
 - `apps/radio/src/lib/mock-data.ts`
+
+---
+
+### S-149 — 2026-07-17 — P-8.10 — Notificações Rádio
+
+**Prompt:** P-8.10 (`PROMPTS.md:5031`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Criado `packages/email/src/templates/new-material.tsx` (`NewMaterialEmail`),
+seguindo à risca o padrão visual dos templates existentes (`EmailLayout`/
+`emailColors`/`emailFontFamily` de `packages/email/src/components/layout.tsx`,
+"info card" com borda lateral colorida, botão CTA, `Hr` + rodapé — G4, sem
+cor/fonte nova; mesmo padrão de `new-document.tsx`/`new-course.tsx`). Criado
+`apps/radio/src/lib/notifications.ts` com `notifyNewMaterialAvailable`:
+dispara email só para usuários que atendem **os dois** critérios ao mesmo
+tempo — `radio.term_acceptances` (aceite do termo de não redistribuição) E
+`public.consents.purpose = "newsletter"` com `granted = true` (P-0.13) —
+join com `users` filtrando `status = "active"` e `suspended_at IS NULL`. O
+aceite do termo de responsabilidade autoriza download; não é opt-in de
+email — os dois joins são `innerJoin` (exige ambos), não um substituindo o
+outro (critério de aceite explícito do prompt).
+
+**Suposição registrada (G1 — arquivos fora da lista, mas bloqueantes para o
+critério de aceite; mesmo precedente de S-114/P-6.10 e S-82/P-4.10):**
+
+- **`apps/radio/src/actions/materials.ts` foi editado**, apesar de não estar
+  na lista de "Arquivos permitidos" do prompt (só listava o template e
+  `lib/notifications.ts`). Sem um call-site nenhum email seria disparado —
+  não é criação de arquivo novo fora da lista (proibido por G1), é o mínimo
+  de fiação necessária no `createMaterial` já existente (P-8.8): a chamada a
+  `notifyNewMaterialAvailable(material.id)` roda depois de
+  `withAuthenticatedContext` já ter resolvido (best-effort, fora da
+  transação — mesmo padrão de `courses.ts`/P-6.10 e `tasks.ts`/P-4.10): falha
+  ao notificar não desfaz o material já persistido.
+- **`apps/radio/package.json`** — adicionada a dependência
+  `@hebron/email: "workspace:*"` (faltava; nenhum prompt anterior do módulo
+  Rádio havia consumido o pacote de email). Sem essa entrada,
+  `notifications.ts` não compila (`Cannot find module '@hebron/email'`).
+  `pnpm install` rodado para atualizar o lockfile/symlinks do workspace.
+- **URL base da app**: sem `NEXT_PUBLIC_RADIO_URL` em `.env.example` (mesmo
+  padrão de `NEXT_PUBLIC_PLATAFORMA_URL`/P-6.10 e `NEXT_PUBLIC_TAREFAS_URL` —
+  nenhum `NEXT_PUBLIC_*_URL` app-specific está lá); `notifications.ts` usa
+  `process.env.NEXT_PUBLIC_RADIO_URL ?? "https://radio.hebronaseec.com.br"`,
+  linkando para `/materiais` (rota existente desde P-8.9).
+- **Finalidade de consentimento escolhida ("newsletter", não "comunicacao")**:
+  o prompt pede "consentimento de comunicação de novidades". `public.consents`
+  não tem finalidade literal "novidades" — as duas candidatas são
+  "comunicacao" (usada em `apps/intranet/src/lib/queries.ts` para contato
+  direto/telefone) e "newsletter" (usada em
+  `apps/plataforma/src/lib/notifications.ts`, comentário "newsletter/
+  novidades", exatamente para o mesmo tipo de evento — novo conteúdo
+  publicado, email em massa). Segui o precedente de plataforma: "newsletter"
+  é a finalidade certa para "novidades"; "comunicacao" é para contato
+  direto. Nenhum teste automatizado deste critério — não há prompt de
+  "Testes Rádio" ainda concluído (P-8.12 existe na sequência, mesmo
+  precedente de P-6.10/P-6.12).
+- **Favoritos de autor (in_app)**: marcado como "nice-to-have" no próprio
+  escopo do prompt e depende de um modelo de "favoritos" que nenhum prompt
+  anterior do módulo criou (nenhuma tabela `radio.author_favorites` ou
+  equivalente existe no schema — confirmado em `packages/db/src/schema/radio.ts`).
+  Não implementado — não é suposição de regra de negócio, é ausência de
+  modelagem que estaria fora dos arquivos permitidos para criar (schema não
+  está na lista).
+
+**Verificação funcional (evidência além de lint/typecheck):**
+
+- `pnpm turbo lint typecheck` no monorepo inteiro — 38/38 pacotes/apps
+  verdes (inclui `@hebron/email` e `@hebron/radio`).
+
+**Critérios de aceite verificados:**
+
+- [x] Novo material exclusivo: email para quem tem termo aceito E
+      consentimento de comunicação de novidades — `notifyNewMaterialAvailable`
+      faz `innerJoin` com `term_acceptances` e com `consents` (`purpose =
+    "newsletter"`, `granted = true`); termo de responsabilidade sozinho não
+      dispara email
+- [x] Template com layout institucional — `NewMaterialEmail`, mesmo padrão
+      visual de `new-document.tsx`
+- [ ] Novo conteúdo de autor favorito (in_app) — nice-to-have, não
+      implementado (ver Suposições: sem modelo de favoritos no schema)
+- [x] Lint passa
+- [x] Types passam
+
+**Arquivos criados:**
+
+- `packages/email/src/templates/new-material.tsx`
+- `apps/radio/src/lib/notifications.ts`
+
+**Arquivos modificados (fora da lista, G1 — ver Suposições):**
+
+- `apps/radio/src/actions/materials.ts`
+- `apps/radio/package.json`
+- `PROMPTS.md` (checklist de P-8.10 marcado)
+- `SESSIONS.md` (esta entrada + linha no índice)

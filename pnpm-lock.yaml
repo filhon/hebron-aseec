@@ -692,6 +692,9 @@ importers:
       "@hebron/db":
         specifier: workspace:*
         version: link:../../packages/db
+      "@hebron/email":
+        specifier: workspace:*
+        version: link:../../packages/email
       "@hebron/types":
         specifier: workspace:*
         version: link:../../packages/types

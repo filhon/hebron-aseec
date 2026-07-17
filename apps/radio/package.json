@@ -15,6 +15,7 @@
     "@hebron/auth": "workspace:*",
     "@hebron/config": "workspace:*",
     "@hebron/db": "workspace:*",
+    "@hebron/email": "workspace:*",
     "@hebron/types": "workspace:*",
     "@hebron/ui": "workspace:*",
     "@hebron/validators": "workspace:*",
