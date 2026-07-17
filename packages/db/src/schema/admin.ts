@@ -128,6 +128,22 @@ export const auditActionEnum = adminSchema.enum("audit_action", [
   "reservation.confirmed",
   "reservation.cancelled",
   "aid.rejected",
+  // Radio — CRUD de autores/séries/faixas/playlists, material exclusivo e
+  // aceite de termo (P-8.8), added via ALTER TYPE in
+  // 0051_radio_audit_actions.sql
+  "author.created",
+  "author.updated",
+  "author.deleted",
+  "series.created",
+  "series.updated",
+  "series.deleted",
+  "track.created",
+  "playlist.created",
+  "playlist.updated",
+  "playlist.deleted",
+  "playlist.activated",
+  "material.created",
+  "term.accepted",
 ]);
 
 export const meetingTypeEnum = adminSchema.enum("meeting_type", [

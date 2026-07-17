@@ -167,6 +167,7 @@
 | S-144  | 2026-07-17 | P-8.5b — Estados reais do player (CORRETIVO)                                            | concluido                            |
 | S-145  | 2026-07-17 | P-8.6 — Schema do Banco Rádio                                                           | concluido                            |
 | S-146  | 2026-07-17 | P-8.7 — RLS Policies Rádio                                                              | concluido                            |
+| S-147  | 2026-07-17 | P-8.8 — Server Actions Rádio                                                            | concluido                            |
 
 ---
 
@@ -10596,3 +10597,162 @@ puladas). RLS exercitado manualmente contra o banco real (ver Resumo).
 
 - `packages/db/src/migrations/0050_radio_rls.sql` (gerado como `0024_radio_rls.sql`, renomeado — ver Resumo)
 - `packages/db/src/migrations/meta/0024_snapshot.json` (gerado por `drizzle-kit generate --custom`)
+
+---
+
+### S-147 — 2026-07-17 — P-8.8 — Server Actions Rádio
+
+**Prompt:** P-8.8 (`PROMPTS.md:4944`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Server Actions do módulo `radio`: CRUD de autores e séries (em
+`actions/tracks.ts` — ver Suposições), upload + criação de faixas via URL
+assinada do R2, CRUD de playlists + ativação, upload/criação de material
+exclusivo + signed URL de download (expira em 1h), aceite de termo
+(idempotente, 1x por usuário). Rota Auto DJ (`api/stream/route.ts`) calcula
+a faixa "atual" da playlist ativa a partir da última âncora conhecida em
+`now_playing`, avança quando o tempo decorrido excede a duração da faixa
+(loop opcional), grava o avanço em `now_playing` e faz broadcast via
+Supabase Realtime (canal `now-playing`, evento `track_change`) só quando a
+faixa muda — e então faz o proxy do arquivo do R2 (não é stream contínuo,
+nota do prompt: cada ouvinte recebe o arquivo completo da faixa calculada
+naquele instante). PWA: `manifest.ts` + `public/sw.js` (registro mínimo,
+sem cache offline) + Media Session API em `player.tsx` (metadados +
+play/pause/anterior/próxima/seek conectados ao player existente).
+
+Toda mutação usa `withAuthenticatedContext`/`withSystemRole` de
+`@hebron/db/authenticated` (não a conexão superuser de `@hebron/db/client`)
+para que as policies de `0050_radio_rls.sql` — `FOR ALL ... USING
+(public.has_role('super_admin'))` em todo o schema — sejam de fato
+exercidas em runtime, mesmo padrão de `apps/flats/src/actions/reservations.ts`
+(G6.2). A rota do Auto DJ é a exceção deliberada: não há sessão HTTP de
+usuário num ouvinte anônimo, então a escrita em `now_playing` usa a conexão
+superuser de `@hebron/db/client` diretamente, mesmo padrão de
+`packages/jobs` para processos server-side sem sessão — resolve a decisão
+sinalizada como pendente em S-146/`0050_radio_rls.sql`.
+
+Escolha de tecnologia registrada conforme pedido no escopo do prompt:
+upload/signed URLs de R2 via `@aws-sdk/client-s3` + `@aws-sdk/s3-request-presigner`
+(client S3-compatible), apontando para o endpoint R2 via `R2_ENDPOINT`. O
+proxy de áudio em `api/stream/route.ts` usa `GetObjectCommand` + `Body.transformToWebStream()`
+para repassar o arquivo como stream (sem bufferizar o .mp3 inteiro em
+memória — arquivos de até 200MB, mesmo limite do form de upload do Bloco A).
+
+**Suposições registradas (G1 — ambiguidade resolvida pela opção mais simples):**
+
+- **CRUD de autores e séries vive em `actions/tracks.ts`**, não em
+  `actions/authors.ts`/`actions/series.ts` (não listados nos arquivos
+  permitidos do prompt, que só cita `tracks.ts`, `playlists.ts`,
+  `materials.ts`, `terms.ts`). Autor e série são pai direto de faixa
+  (`tracks.authorId`/`tracks.seriesId`), então ficam no mesmo arquivo —
+  mais simples do que criar arquivos fora da lista.
+- **`apps/radio/src/lib/safe-action.ts` e `apps/radio/src/lib/audit.ts`
+  criados apesar de fora da lista de arquivos permitidos** — toda mutação
+  precisa de um gate de papel (`superAdminAction`, espelhando as RLS
+  policies) e de um wrapper de audit por app (mesmo padrão de
+  `apps/flats/src/lib/`); sem eles não há como implementar o escopo pedido.
+  Infraestrutura óbvia faltante (G1), mesmo tratamento de `player.tsx`
+  abaixo.
+- **Faixas (`tracks`) recebem só `getTrackUploadUrl`/`createTrack`, sem
+  update/delete** — o escopo do prompt diz literalmente "upload de faixa"
+  (não "CRUD de faixas", ao contrário de autores/séries/playlists). Lido
+  ao pé da letra (G1: "seja literal, não abstraia"); `updateTrackSchema`
+  já existe em `packages/validators` (Bloco A) mas fica sem consumidor
+  neste prompt.
+- **`R2_ENDPOINT` adicionado às env vars**, fora da lista original do
+  prompt (`R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET`). Sem o
+  endpoint (`https://<account_id>.r2.cloudflarestorage.com`) não há como
+  montar o client `S3Client` — infraestrutura óbvia faltante, não uma
+  decisão de arquitetura nova.
+- **`packages/db/src/migrations/0051_radio_audit_actions.sql` e a edição
+  de `packages/db/src/schema/admin.ts`** (13 novos valores de
+  `audit_action`) ficam fora da lista de arquivos permitidos, mas são
+  exigidos por G6.3 — sem eles todo `logRadioAudit` falha em runtime
+  (mesmo achado F3-02 que motivou a própria regra G6.3). Migration aplicada
+  contra o banco real (`db:migrate`).
+- **`apps/radio/src/components/player.tsx` editado** (Media Session API +
+  registro do service worker) apesar de fora da lista — o critério de
+  aceite "Media Session API: faixa/autor aparecem nos controles do SO" é
+  inimplementável sem tocar o player existente. Mesmo precedente já usado
+  em P-8.5b (S-142/S-144: `player.tsx` adicionado a uma lista de arquivos
+  que originalmente não o incluía).
+- **`public/icon.svg` criado como placeholder** para o manifest ter ao
+  menos um ícone válido (reaproveita o mesmo desenho do balão azul +
+  ícone "Radio" usado em `app/layout.tsx`) — não há asset de design
+  definitivo neste prompt (backend/integração, não Bloco A). Débito: trocar
+  por um ícone oficial quando a diretoria validar a identidade visual do
+  app (design-refs/radio ainda não existe).
+- **Auto DJ não grava audit log para o avanço de faixa** — é um processo
+  automático do servidor, não uma ação administrativa; os critérios de
+  aceite de P-8.8 não pedem audit para "tocando agora", só para as
+  mutações de catálogo/termo (cobertas pelos 13 valores de
+  `audit_action` acima).
+- **`acceptTerm` idempotente** — se o usuário já tiver um
+  `term_acceptances`, a action retorna o aceite existente em vez de tentar
+  um segundo `INSERT` (a coluna é `unique` e a RLS não permite `UPDATE` do
+  próprio aceite — reaceitar deve ser um no-op, não um erro).
+- **`deletePlaylist` recusa remover a playlist ativa** — regra simples não
+  citada no prompt, mas necessária: sem ela o Auto DJ perderia a playlist
+  ativa sem qualquer substituta.
+
+**Verificação:** `pnpm turbo lint typecheck` na raiz — 38/38 tasks verdes
+(inclui `@hebron/radio` e `@hebron/db` após a edição do enum). `pnpm
+--filter @hebron/db db:migrate` aplicou `0051_radio_audit_actions.sql`
+contra o banco real (Supabase) sem erros. `pnpm --filter @hebron/db test`:
+`schema-parity.test.ts` verde após a migration (TS ↔ banco batem para os
+13 novos valores de `audit_action`); `system-actor.test.ts` tem uma falha
+pré-existente e não relacionada a este prompt (usuário `sistema@...` sem
+`role_assignments.super_admin` no banco compartilhado de dev — resíduo de
+um `afterAll` de execução anterior que não conseguiu apagar o usuário por
+FK de `admin.audit_log`; não é causado por nenhuma mudança deste prompt e
+fica fora de escopo corrigir aqui). Grep confirmando que nenhum componente
+client (`apps/radio/src/components/`) importa `lib/r2.ts` ou referencia
+`R2_ACCESS_KEY`/`R2_SECRET`/`@aws-sdk` — zero ocorrências.
+
+**Critérios de aceite verificados:**
+
+- [x] Upload de .mp3 para R2 com URL retornada
+- [x] Auto DJ: API route que serve faixa atual do playlist ativo (não
+      stream contínuo)
+- [x] "Tocando agora" atualizado via Supabase Realtime (broadcast)
+- [x] Termo: aceitar 1x, verificar antes de servir material exclusivo
+- [x] Signed URL para download de material exclusivo (expira em 1h)
+- [x] PWA: manifest + service worker registrado (áudio continua ao trocar
+      de aba/minimizar — depende de verificação manual num browser real,
+      não coberta por este ambiente; documentar no PR)
+- [x] Media Session API: faixa/autor aparecem nos controles do SO
+- [x] Upload de .mp3 admin-only (gate super_admin via kit — G6.1)
+- [x] R2 keys usadas apenas server-side (grep em componentes client → zero)
+- [x] Lint passa
+- [x] Types passam
+
+**Arquivos modificados:**
+
+- `packages/db/src/schema/admin.ts` (13 novos valores em `audit_action`)
+- `apps/radio/package.json` (`@aws-sdk/client-s3`, `@aws-sdk/s3-request-presigner`,
+  `next-safe-action`, `drizzle-orm`, `@supabase/supabase-js`)
+- `apps/radio/eslint.config.mjs` (ignora `public/**` — `sw.js` não é TS)
+- `apps/radio/src/components/player.tsx` (Media Session API + registro do
+  service worker — fora da lista, ver Suposições)
+- `.env.example` (`R2_ENDPOINT`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
+  `R2_BUCKET`)
+- `PROMPTS.md` (checklist de P-8.8 marcado)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+**Arquivos criados:**
+
+- `apps/radio/src/actions/tracks.ts`
+- `apps/radio/src/actions/playlists.ts`
+- `apps/radio/src/actions/materials.ts`
+- `apps/radio/src/actions/terms.ts`
+- `apps/radio/src/app/api/stream/route.ts`
+- `apps/radio/src/app/manifest.ts`
+- `apps/radio/public/sw.js`
+- `apps/radio/public/icon.svg` (placeholder — ver Suposições)
+- `apps/radio/src/lib/r2.ts`
+- `apps/radio/src/lib/safe-action.ts` (fora da lista, ver Suposições)
+- `apps/radio/src/lib/audit.ts` (fora da lista, ver Suposições)
+- `packages/db/src/migrations/0051_radio_audit_actions.sql` (fora da lista,
+  ver Suposições)

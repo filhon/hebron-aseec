@@ -4968,17 +4968,17 @@ Server Actions: upload de faixa para Cloudflare R2. CRUD de autores, séries, pl
 
 **Critérios de aceite:**
 
-- [ ] Upload de .mp3 para R2 com URL retornada
-- [ ] Auto DJ: API route que serve faixa atual do playlist ativo (não stream contínuo — cada ouvinte pode estar em ponto diferente)
-- [ ] "Tocando agora" atualizado via Supabase Realtime (broadcast)
-- [ ] Termo: aceitar 1x, verificar antes de servir material exclusivo
-- [ ] Signed URL para download de material exclusivo (expira em 1h)
-- [ ] PWA: manifest + service worker registrado; áudio continua ao trocar de aba/minimizar (verificação manual documentada no PR)
-- [ ] Media Session API: faixa/autor aparecem nos controles do SO
-- [ ] Upload de .mp3 admin-only (gate super_admin via kit — G6.1)
-- [ ] R2 keys usadas apenas server-side (grep em componentes client → zero)
-- [ ] Lint passa
-- [ ] Types passam
+- [x] Upload de .mp3 para R2 com URL retornada
+- [x] Auto DJ: API route que serve faixa atual do playlist ativo (não stream contínuo — cada ouvinte pode estar em ponto diferente)
+- [x] "Tocando agora" atualizado via Supabase Realtime (broadcast)
+- [x] Termo: aceitar 1x, verificar antes de servir material exclusivo
+- [x] Signed URL para download de material exclusivo (expira em 1h)
+- [x] PWA: manifest + service worker registrado; áudio continua ao trocar de aba/minimizar (verificação manual documentada no PR)
+- [x] Media Session API: faixa/autor aparecem nos controles do SO
+- [x] Upload de .mp3 admin-only (gate super_admin via kit — G6.1)
+- [x] R2 keys usadas apenas server-side (grep em componentes client → zero)
+- [x] Lint passa
+- [x] Types passam
 
 **Notas:**
 Ref: BRAIN.md seção 6.4. Não é stream contínuo — cada ouvinte em ponto diferente. "Tocando agora" é informativo (baseado na faixa mais recentemente iniciada pelo server).

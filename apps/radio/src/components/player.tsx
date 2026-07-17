@@ -93,6 +93,56 @@ export function Player({ tracks, initialTrackId, className }: PlayerProps) {
 
   React.useEffect(() => clearPendingRetry, []);
 
+  // Registro do service worker (PWA, BRAIN §6.4) — feito aqui porque o
+  // Player é o único componente montado em toda página (app/layout.tsx),
+  // não há um Client Component de "app shell" próprio neste app ainda.
+  React.useEffect(() => {
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {
+        // Falha silenciosa: PWA/background play é um extra, não deve
+        // quebrar a reprodução normal do áudio.
+      });
+    }
+  }, []);
+
+  // Media Session API (critério de aceite de P-8.8): título/autor aparecem
+  // nos controles do SO/tela de bloqueio, com play/pause/anterior/próxima
+  // conectados às mesmas funções do player.
+  React.useEffect(() => {
+    if (!("mediaSession" in navigator) || !track) return;
+
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: track.title,
+      artist: track.authorName,
+      album: track.seriesName ?? "Rádio Hebron Aseec",
+    });
+
+    navigator.mediaSession.setActionHandler("play", () => togglePlay());
+    navigator.mediaSession.setActionHandler("pause", () => togglePlay());
+    navigator.mediaSession.setActionHandler("previoustrack", () =>
+      goToPrevious(),
+    );
+    navigator.mediaSession.setActionHandler("nexttrack", () => goToNext());
+    navigator.mediaSession.setActionHandler("seekto", (details) => {
+      if (details.seekTime === undefined || !audioRef.current) return;
+      audioRef.current.currentTime = details.seekTime;
+      setCurrentTime(details.seekTime);
+    });
+
+    return () => {
+      navigator.mediaSession.setActionHandler("play", null);
+      navigator.mediaSession.setActionHandler("pause", null);
+      navigator.mediaSession.setActionHandler("previoustrack", null);
+      navigator.mediaSession.setActionHandler("nexttrack", null);
+      navigator.mediaSession.setActionHandler("seekto", null);
+    };
+  }, [track?.id, isPlaying]);
+
+  React.useEffect(() => {
+    if (!("mediaSession" in navigator)) return;
+    navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
+  }, [isPlaying]);
+
   function handleAudioError() {
     setIsBuffering(false);
     if (retryCountRef.current < MAX_RETRIES) {
