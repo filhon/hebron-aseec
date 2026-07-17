@@ -163,6 +163,8 @@
 | S-140  | 2026-07-17 | P-8.3 — Telas e Páginas Rádio                                                           | concluido                            |
 | S-141  | 2026-07-17 | P-8.4 — Formulários Rádio                                                               | concluido                            |
 | S-142  | 2026-07-17 | P-8.5 — Estados Rádio                                                                   | concluido                            |
+| S-143  | 2026-07-17 | Auditoria Bloco A Rádio (P-8.1–8.5) — patch P-8.5b gerado                               | concluido                            |
+| S-144  | 2026-07-17 | P-8.5b — Estados reais do player (CORRETIVO)                                            | concluido                            |
 
 ---
 
@@ -10186,4 +10188,180 @@ dependência foi adicionada ao monorepo para isso.
 
 - `apps/radio/src/app/page.tsx`
 - `PROMPTS.md` (checklist de P-8.5 marcado)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+### S-143 — 2026-07-17 — Auditoria Bloco A Rádio (P-8.1–8.5) — patch P-8.5b gerado
+
+**Prompt:** Auditoria (não-execução) — cruzamento de P-8.1–8.5 (`PROMPTS.md`),
+S-138–S-142 (`SESSIONS.md`) e a codebase de `apps/radio` para localizar débitos
+técnicos, implementações parciais e lacunas, gerando patch corretivo quando
+necessário (mesmo modelo de P-7.6b/P-7.9b/P-7.9c).
+**Modelo:** claude-opus-4-8
+**Status:** concluido
+
+**Resumo:**
+Auditoria de fechamento do Bloco A da Rádio. Lidos os 5 prompts de UI, os 5
+registros de sessão correspondentes e todos os arquivos de `apps/radio/src`
+(tipos, validators, mock data, layout, páginas, componentes e formulários),
+mais `packages/ui/src/tokens.css` para validar tokens. Resultado: **um único
+débito real** exige correção antes da PAUSA de Bloco A → gerado o patch
+corretivo **P-8.5b** em `PROMPTS.md`. Todos os demais débitos registrados em
+S-138–S-142 foram confirmados como **deferrals corretos** (sequenciados para
+Bloco B / P-8.6 / P-8.9), não como esquecimentos. Nenhum código foi alterado
+nesta sessão — apenas `PROMPTS.md` (novo prompt) e `SESSIONS.md` (este
+registro).
+
+**Débito real encontrado (→ P-8.5b):**
+
+- **Estados do player só existem como demonstração na home, não no player
+  real.** O critério de P-8.5 "Estado de erro no player (falha ao carregar
+  áudio)" foi satisfeito apenas no card "Tocando agora" da home
+  (`page.tsx`, via `?state=error`). O componente `Player` real
+  (`player.tsx`) — montado de forma persistente no `layout.tsx` de todas as
+  páginas, único lugar com um `<audio>` que carrega áudio — não tem `onError`,
+  `onWaiting` nem estado vazio; `if (!track) return null` faz a barra fixa
+  sumir quando não há faixas. Como as `fileUrl` dos mocks são chaves R2
+  relativas (`radio-tracks/…mp3`) que não resolvem, o player real falha ao
+  carregar em toda página, sem feedback nem retry. S-142 reconheceu isso
+  (`player.tsx` fora dos arquivos permitidos de P-8.5). P-8.5b autoriza tocar
+  `player.tsx` e leva erro/carregamento/vazio para dentro do player real
+  (auto-retry limitado + "Tentar novamente", sem laço infinito). Posicionado
+  **antes** da PAUSA de Bloco A (correção de UI que a diretoria deve ver).
+
+**Débitos confirmados como deferral correto (sem patch):**
+
+- **`description` fora de `ExclusiveMaterial`/`createExclusiveMaterialSchema`**
+  (S-141): P-8.6 **já lista** `exclusive_materials.description` nos critérios —
+  `material-upload-form` compõe via `.omit()`/validação inline até lá.
+  Sequenciado, não esquecido.
+- **`MaterialListSkeleton` órfão** (S-142): padrão G5 aceito (precedente
+  P-4.5/P-6.5); só wireável com fronteira de loading real em P-8.9.
+- **Upload real / helper R2** (S-141): Bloco B (P-8.8).
+- **Sessão/termo mockados via `useState`** em `materiais/page.tsx` (S-140):
+  integração real em P-8.9.
+- **Forms sem `onClick` no admin** (S-140/S-141): fiação é P-8.9.
+
+**Riscos registrados para P-8.9 (sem patch — resolução pertence à integração):**
+
+- **UUID vs. slug-id.** Os validators exigem `.uuid()` em `authorId`/`seriesId`/
+  `trackIds` (`createSeriesSchema`, `createTrackSchema`, `createPlaylistSchema`),
+  mas os mocks de P-8.1 usam ids-slug (`author-01`, `series-01`, `track-01`).
+  Ex.: `series-form.tsx` faria `safeParse` falhar com "Selecione um autor"
+  mesmo com autor selecionado. **Não manifesta no Bloco A** (forms não estão
+  wired — S-141) e desaparece quando P-8.9 troca mocks por dados reais do banco
+  (UUIDs). Trocar os slugs por UUID quebraria o roteamento por slug
+  (`/series/series-01`, `/autores/author-01`) estabelecido em S-139/S-140 —
+  logo o certo é P-8.9 sourcear do DB, não mexer nos validators nem nos ids
+  agora.
+- **`CANONICAL_LOGIN_URL` replicado localmente** em `layout.tsx` porque o
+  barrel de `@hebron/auth` lança em module-scope sem `NEXT_PUBLIC_SUPABASE_*`
+  (S-140). Débito de infra transversal, com workaround documentado;
+  substituição pela importação real em P-8.9.
+
+**Verificações feitas:**
+
+- Todos os tokens `--*` usados por `apps/radio` existem em
+  `packages/ui/src/tokens.css` (surface/border/fg/brand/hb-blue-soft/
+  shadow-lg/radius-\*/bg-alt/z-sticky/tracking-eyebrow etc.) — zero token
+  quebrado.
+- `"use client"` presente em `playlist-view.tsx` e `material-card.tsx`
+  (correção de S-140 confirmada); `track-info.tsx` sem handlers, corretamente
+  sem a diretiva.
+- Escopo, arquivos criados e critérios de S-138–S-142 batem com a codebase.
+
+**Arquivos modificados:**
+
+- `PROMPTS.md` (novo prompt corretivo P-8.5b, inserido após P-8.5 e antes da
+  PAUSA de Bloco A)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+### S-144 — 2026-07-17 — P-8.5b — Estados reais do player (CORRETIVO)
+
+**Prompt:** P-8.5b (`PROMPTS.md:4832`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Fecha o débito real apontado em S-143: os três estados (erro, carregamento,
+vazio) agora vivem no `Player` real (`player.tsx`), não só na demonstração
+estática do card "Tocando agora" da home. Nenhuma lógica de reprodução/
+navegação existente (P-8.2) foi reescrita — apenas adicionados handlers do
+`<audio>` e um novo bloco condicional na área central da barra.
+
+- **Erro:** `onError`/`onStalled` disparam `handleAudioError`, que conta
+  tentativas num `useRef` (sem re-render por tentativa) e agenda retry via
+  `setTimeout` com backoff exponencial (1s/2s/4s, `audioRef.current.load()` +
+  `play()` se estava tocando). Ao esgotar `MAX_RETRIES = 3`, estado passa a
+  `"failed"`: mesma copy do critério ("Não foi possível carregar o áudio." +
+  "Tentando novamente..." durante retry / "Toque no botão para tentar de
+  novo." no estado terminal) com `AlertTriangle` em `--hb-orange`, mais botão
+  manual "Tentar novamente". Sem laço infinito — o `setTimeout` só é
+  reagendado dentro do teto de 3 tentativas.
+- **Carregamento:** `onWaiting`/`onLoadStart` ligam `isBuffering`;
+  `onCanPlay`/`onPlaying` desligam (e também zeram `errorState`, cobrindo o
+  caso de recuperação bem-sucedida no meio de um retry). Botão play/pause
+  fica `disabled` e troca o ícone por `Loader2` girando; a seek bar também
+  fica `disabled` enquanto busca.
+- **Vazio:** `if (!track) return null` virou um retorno antecipado que
+  mantém a barra fixa (`bg-(--surface)`, mesma moldura) só com ícone `Music`
+  - "Nenhuma faixa disponível.", sem `<audio>`, controles ou volume.
+- **Reset de tentativas:** `resetRetries()` roda no `useEffect` de troca de
+  faixa (`[currentIndex]`) e dentro de `togglePlay` quando o clique manual
+  inicia a reprodução (branch `else`) — cobre os dois gatilhos do critério.
+
+**Suposições registradas (G1 — ambiguidade resolvida pela opção mais
+simples):**
+
+- **Backoff exponencial simples (1s × 2^tentativa), sem jitter.** O critério
+  pede "auto-retry limitado (ex.: até 3 tentativas com backoff)" sem
+  especificar a curva; 1s/2s/4s é a opção mais direta que ainda evita
+  martelar a URL quebrada.
+- **`onStalled` tratado como erro (mesmo handler de `onError`), não como
+  estado de buffering.** O escopo lista `onStalled` explicitamente na lista
+  de erro ("erro (`onError`/`onStalled`") — seguido ao pé da letra, mesmo
+  sabendo que browsers também disparam `stalled` em conexões lentas sem
+  falha real. Aceitável porque o retry com backoff já absorve falsos
+  positivos (recupera sozinho se a rede voltar).
+- **Estado de erro substitui os dois blocos centrais (botões + seek), não
+  sobrepõe.** Evita pulo de altura na barra e mantém `TrackInfo` (esquerda)
+  e volume (direita, desktop) intactos — só a área central alterna entre
+  "controles normais" e "aviso".
+
+**Verificação:** `pnpm turbo lint typecheck --filter=@hebron/radio` — ambos
+verdes. Sem browser automatizado disponível neste ambiente para dirigir a
+reprodução real de erro/retry/recuperação; o dev server já em execução
+(`localhost:3003`) foi usado para confirmar via `curl` que a barra renderiza
+(SSR) com a classe/moldura esperada — os três estados client-side (erro,
+retry, recuperação, vazio) foram verificados por leitura de código e pelos
+tipos/lint, não por interação visual real no navegador.
+
+**Critérios de aceite verificados:**
+
+- [x] `<audio>` com `onError`/`onStalled` → estado de erro inline "Não foi
+      possível carregar o áudio. Tentando novamente..." no player real
+- [x] Auto-retry limitado (3 tentativas, backoff 1s/2s/4s) + fallback manual
+      "Tentar novamente" ao esgotar
+- [x] Estado de carregamento (`onWaiting`/`onCanPlay`) com play/pause
+      desabilitado enquanto busca
+- [x] `tracks.length === 0` mantém a barra visível com "Nenhuma faixa
+      disponível." em vez de sumir
+- [x] Contador de tentativas reseta ao trocar de faixa e ao play manual
+- [x] Nenhuma regressão em navegação/volume/progresso (P-8.2 intocado)
+- [x] Responsivo (bloco de erro/carregamento ocupa a mesma área central que
+      já colapsa graciosamente no mobile)
+- [x] Lint passa · Types passam
+
+**Débito fechado:** S-142/S-143 — "Player error state" e "estado vazio"
+deixam de existir só como demonstração no card da home; agora fecham no
+componente que de fato carrega áudio (`player.tsx`), coberto em toda página
+via `layout.tsx`.
+
+**Arquivos modificados:**
+
+- `apps/radio/src/components/player.tsx`
+- `PROMPTS.md` (checklist de P-8.5b marcado)
 - `SESSIONS.md` (esta entrada + linha no índice)

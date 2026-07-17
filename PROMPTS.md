@@ -4829,6 +4829,49 @@ Loading, empty e error states. Skeleton para player, catálogo, materiais. Estad
 
 ---
 
+### P-8.5b — Estados reais do player: erro, carregamento e vazio (CORRETIVO)
+
+**Fase:** 8
+**Módulo:** radio
+**Tipo:** ui
+**Pré-condições:**
+
+- Branch: `feat/P-8.5b-radio-player-states`
+- Dependências: P-8.5 concluído
+- Env vars: nenhuma
+- Skill `/impeccable` obrigatória antes de escrever qualquer JSX (G2 + CLAUDE.md)
+
+**Problema que este prompt resolve (contexto):**
+O critério de aceite de P-8.5 "Estado de erro no player (falha ao carregar áudio)" foi satisfeito **apenas como demonstração estática** no card "Tocando agora" da home (`page.tsx`), acionável por `?state=error`. O componente `Player` real (`player.tsx`) — montado de forma persistente no `layout.tsx` de **todas** as páginas, e o único lugar com um elemento `<audio>` que de fato carrega áudio — **não tem nenhum tratamento de erro, carregamento ou vazio**: o `<audio>` não tem `onError`/`onStalled`/`onWaiting`, e `if (!track) return null` faz a barra fixa do player **desaparecer** silenciosamente quando não há faixas. S-142 registrou explicitamente que `player.tsx` estava fora da lista de arquivos permitidos de P-8.5, então o estado foi feito só como demonstração visual no hero. Consequência concreta já visível no Bloco A: como as `fileUrl` dos mocks são chaves R2 relativas (`radio-tracks/…mp3`) que não resolvem, **o player real falha ao carregar em toda página e o ouvinte vê um player morto, sem feedback nem tentativa de recuperação** — exatamente o cenário que o critério de P-8.5 pedia para cobrir.
+
+**Escopo:**
+Levar os três estados (carregando, erro, vazio) para dentro do `Player` real, sem reescrever a lógica de reprodução/navegação já existente (P-8.2):
+
+1. **Erro (`onError`/`onStalled` do `<audio>`):** exibir inline na barra do player a copy literal do critério — "Não foi possível carregar o áudio. Tentando novamente..." (ícone `AlertTriangle`, tom `--hb-orange`). Auto-retry **limitado** (ex.: até 3 tentativas com backoff, via `key`/`load()`); ao esgotar, cair para um estado terminal com botão manual **"Tentar novamente"** — nunca um laço infinito de reload contra uma URL permanentemente quebrada.
+2. **Carregando (`onWaiting`/`onLoadStart`, limpar em `onCanPlay`/`onPlaying`):** indicador sutil de buffering (não trocar a barra inteira por skeleton — o `PlayerSkeleton` de P-8.5 é para o card da home, não para a barra fixa); play/pause desabilitado enquanto busca.
+3. **Vazio (`tracks.length === 0`):** em vez de `return null` (a barra some), manter a barra fixa visível com a copy "Nenhuma faixa disponível." (mesma do critério de vazio de P-8.5), sem controles ativos.
+4. Resetar o contador de tentativas ao trocar de faixa (`currentIndex`) e ao dar play manualmente.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/radio/src/components/player.tsx`
+
+**Critérios de aceite:**
+
+- [x] `<audio>` com `onError`/`onStalled` → estado de erro inline "Não foi possível carregar o áudio. Tentando novamente..." no player real (não só no card da home)
+- [x] Auto-retry limitado (sem laço infinito) + fallback manual "Tentar novamente" ao esgotar as tentativas
+- [x] Estado de carregamento (`onWaiting`/`onCanPlay`) com play/pause desabilitado enquanto busca
+- [x] `tracks.length === 0` mantém a barra visível com "Nenhuma faixa disponível." em vez de sumir
+- [x] Contador de tentativas reseta ao trocar de faixa e ao play manual
+- [x] Nenhuma regressão em navegação/volume/progresso já existentes (P-8.2)
+- [x] Responsivo (estados legíveis no mobile, onde anterior/próxima/volume já ficam ocultos)
+- [x] Lint passa · Types passam
+
+**Notas:**
+Não tocar em `page.tsx` — a demonstração de `?state=` de P-8.5 permanece válida para a validação com a diretoria. Escopo mínimo: apenas fechar erro/carregamento/vazio no componente que realmente carrega áudio. Fechar em SESSIONS.md o débito registrado em S-142 (estado de erro do player mapeado ao card da home porque `player.tsx` estava fora dos arquivos permitidos). Esta correção deve estar concluída **antes** da validação de Bloco A com a diretoria (PAUSA abaixo).
+
+---
+
 > **PAUSA — Bloco A Rádio concluído. Validar telas com diretoria antes de prosseguir para Bloco B.**
 
 ---
