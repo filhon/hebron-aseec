@@ -5115,6 +5115,93 @@ Testes: RLS (anon ouve, autenticado+termo acessa materiais). Upload de faixa par
 - [x] Testes passam
 - [x] Lint passa
 
+### P-8.9b — Persistência da descrição de material exclusivo (CORRETIVO)
+
+**Fase:** 8
+**Módulo:** radio
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-8.9b-radio-material-description`
+- Dependências: P-8.12 concluído
+- Env vars: nenhuma
+- Skill `/impeccable` obrigatória antes de editar `material-card.tsx`/`materials-admin-panel.tsx` (G2 + CLAUDE.md — edição de componentes com mudança visível)
+
+**Problema que este prompt resolve (contexto):**
+O formulário de material exclusivo (`material-upload-form.tsx`, P-8.4) coleta uma "Descrição" num `<textarea>` e a repassa em `MaterialUploadFormValues.description`; a coluna `exclusive_materials.description` existe no schema (P-8.6/S-145) e o critério de aceite de P-8.6 lista literalmente "exclusive_materials: title, file_url, description". Porém a descrição **é silenciosamente descartada e nunca persistida**: `createExclusiveMaterialSchema` (`packages/validators/src/radio/index.ts`) não tem o campo `description`, e `materials-admin-panel.tsx` (`handleSubmit`) chama `create({ title, fileUrl, requiresTerm })` omitindo-a. Consequência concreta: o admin digita uma descrição que desaparece no submit — um input morto —, a coluna fica sempre `NULL`, e nem o card público (`material-card.tsx`) nem a lista do admin exibem descrição alguma. Débito registrado em S-145 (P-8.6) e S-148 (P-8.9), adiado porque `packages/validators` estava fora dos arquivos permitidos daqueles prompts.
+
+**Escopo:**
+Fechar o fluxo da descrição de ponta a ponta, sem tocar em outras entidades:
+
+1. `createExclusiveMaterialSchema`: adicionar `description: z.string().max(2000).nullable().optional().default(null)` (mesmo idioma de `createAuthorSchema.bio`/`createSeriesSchema.description`).
+2. `ExclusiveMaterial` (`packages/types/src/radio`): adicionar `description: string | null` — hoje o tipo não expõe a coluna, então o card não tem como renderizá-la.
+3. `materials-admin-panel.tsx`: passar `description: values.description || null` na chamada `create({...})`. `createMaterial` (P-8.8) já insere o `input` inteiro — nenhuma mudança na action é necessária além do schema.
+4. Exibir a descrição onde ela é útil: `material-card.tsx` (abaixo do título, quando presente) e a lista do `materials-admin-panel.tsx`. Manter truncamento/estado ausente coerentes com o resto do card (G2 / `/impeccable`).
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/validators/src/radio/index.ts`
+- `packages/types/src/radio/index.ts`
+- `apps/radio/src/components/materials-admin-panel.tsx`
+- `apps/radio/src/components/material-card.tsx`
+
+**Critérios de aceite:**
+
+- [x] `createExclusiveMaterialSchema` aceita `description` (opcional, ≤2000, default null)
+- [x] Ao criar um material com descrição pela UI admin, `exclusive_materials.description` é persistida (não mais NULL)
+- [x] `ExclusiveMaterial` expõe `description`
+- [x] `material-card.tsx` exibe a descrição quando presente; ausência não quebra o layout
+- [x] Lista do admin mostra a descrição (ou indica ausência) sem regressão visual
+- [x] Nenhuma mudança de comportamento em título/arquivo/termo já existentes
+- [x] Lint passa · Types passam
+
+**Notas:**
+Escopo mínimo: apenas costurar a descrição que já é coletada. Não adicionar edição/remoção de material (fora de escopo — P-8.8 só expõe `createMaterial`). `material-upload-form.tsx` já coleta a descrição corretamente (state → `onSubmit`) e não precisa mudar. Fechar em SESSIONS.md o débito de S-145/S-148.
+
+---
+
+### P-8.11b — Fiação do heartbeat de audiência no player (CORRETIVO)
+
+**Fase:** 8
+**Módulo:** radio
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-8.11b-radio-heartbeat-wiring`
+- Dependências: P-8.12 concluído
+- Env vars: nenhuma
+- Skill `/impeccable`: `player.tsx` é um componente (G2 + CLAUDE.md), mas esta correção adiciona apenas um `useEffect` de efeito colateral, sem nenhum JSX/elemento visual novo — invocar o skill somente se o executor precisar tocar em markup visível (não deve)
+
+**Problema que este prompt resolve (contexto):**
+P-8.11 (S-150) construiu o pipeline de audiência **completo** — rota de ingestão anônima (`api/heartbeat/route.ts`), tabela bruta (`radio.listener_heartbeats`), cron de agregação diária (`packages/jobs/src/crons/radio-stats.ts` → `radio.listener_stats`) e o KPI cross-app (`packages/integrations/src/radio.ts::getRadioDashboardStatus`) —, MAS o `player.tsx` **nunca envia heartbeat**. A própria S-150 registrou isto como débito técnico explícito ("`player.tsx` NÃO foi editado… o endpoint `/api/heartbeat` existe mas nunca recebe tráfego real do player", candidato a "um novo P-8.9b/P-8.13, ou incluído no escopo de P-8.12"), porque `player.tsx` estava fora dos arquivos permitidos de P-8.11 (que só listava os 3 arquivos de backend) e editá-lo entraria em G2. S-151 (P-8.12) confirmou que o débito seguia aberto. Consequência concreta: `radio.listener_heartbeats` fica sempre vazia em produção → o cron agrega zero → `radio.listener_stats` nunca recebe dados reais → o KPI de audiência da Intranet é permanentemente nulo. Todo o feature de P-8.11 está inerte de ponta a ponta.
+
+**Escopo:**
+Fiar o único emissor que faltava, sem reescrever a reprodução/estados já existentes (P-8.2 / P-8.5b / P-8.9):
+
+1. Gerar um `session_id` **efêmero, sem PII**, uma vez por montagem do player (ex.: `crypto.randomUUID()` em `useRef`/`sessionStorage`) — nunca derivado de usuário, cookie ou qualquer identificador estável (LGPD / D-3).
+2. Enquanto o player estiver de fato reproduzindo (`isPlaying`, com `track` válido e sem estado de erro terminal), enviar `POST /api/heartbeat` com `{ sessionId, trackId: track.id }` a cada 60s (D-3: "heartbeat anônimo a cada 60s enquanto reproduz"). Enviar também o primeiro heartbeat ao iniciar a reprodução, de modo que uma sessão que ouve >= ~1 min gere os >= 2 heartbeats que a semântica D-3 exige para contar como "ouvinte".
+3. Parar o intervalo ao pausar, ao entrar em estado de erro terminal e ao desmontar; retomar ao voltar a tocar. `fetch` best-effort — falha de rede não pode quebrar a reprodução (mesmo espírito do registro do service worker em `player.tsx`).
+4. Sem novo elemento visual — o heartbeat é invisível ao ouvinte.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/radio/src/components/player.tsx`
+- `apps/radio/src/lib/use-listener-heartbeat.ts` (hook client dedicado — opcional, para não inflar o player; separa o efeito de audiência da lógica de reprodução)
+
+**Critérios de aceite:**
+
+- [ ] `player.tsx` envia `POST /api/heartbeat` a cada 60s enquanto reproduz, parando ao pausar/erro/desmontar
+- [ ] Payload sem PII: apenas `sessionId` efêmero (gerado no client) + `trackId` — verificado (grep: nenhum e-mail/user id/cookie no payload)
+- [ ] `session_id` não é derivado de nenhum identificador estável de usuário
+- [ ] Uma sessão que reproduz >= ~1 min gera >= 2 heartbeats (contável como "ouvinte" por D-3)
+- [ ] Falha do `fetch` não interrompe a reprodução (best-effort)
+- [ ] Nenhuma regressão em play/pause/volume/progresso/erro (P-8.2/P-8.5b) — verificação manual documentada no PR
+- [ ] Nenhuma mudança visual no player
+- [ ] Lint passa · Types passam
+
+**Notas:**
+Este é o elo que faltava para o feature de audiência de P-8.11 funcionar de ponta a ponta; sem ele, `listener_stats`/KPI ficam permanentemente vazios. Verificação de ponta a ponta sugerida no PR: reproduzir > 2 min, confirmar linhas em `radio.listener_heartbeats`, rodar `runRadioStatsAggregation` e conferir a linha do dia em `radio.listener_stats`. A retenção/base legal desses heartbeats já está no escopo de auditoria de P-9.2. Fechar em SESSIONS.md o débito de S-150/S-151 (`player.tsx` sem heartbeat).
+
 ---
 
 # Fase 9 — Polimento

@@ -75,6 +75,7 @@ export interface NowPlaying {
 export interface ExclusiveMaterial {
   id: string;
   title: string;
+  description: string | null;
   fileUrl: string;
   requiresTerm: boolean;
   createdAt: Date;

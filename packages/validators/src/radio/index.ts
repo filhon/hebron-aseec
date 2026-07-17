@@ -82,6 +82,7 @@ export type UpdatePlaylistInput = z.infer<typeof updatePlaylistSchema>;
 
 export const createExclusiveMaterialSchema = z.object({
   title: z.string().min(2, "Título é obrigatório").max(200),
+  description: z.string().max(2000).nullable().optional().default(null),
   fileUrl: z.string().min(1, "Arquivo é obrigatório"),
   requiresTerm: z.boolean().optional().default(true),
 });

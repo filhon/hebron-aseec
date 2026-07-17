@@ -75,6 +75,7 @@ export function MaterialsAdminPanel({ materials }: MaterialsAdminPanelProps) {
       });
       create({
         title: values.title,
+        description: values.description || null,
         fileUrl: uploadResult.data.key,
         requiresTerm: values.requiresTerm,
       });
@@ -117,9 +118,14 @@ export function MaterialsAdminPanel({ materials }: MaterialsAdminPanelProps) {
         <ul className="flex flex-col divide-y divide-(--divider) rounded-(--radius-md) border border-(--border)">
           {materials.map((material) => (
             <li key={material.id} className="flex items-center gap-4 px-5 py-3">
-              <p className="min-w-0 flex-1 truncate text-sm font-(--font-weight-semibold) text-(--fg)">
-                {material.title}
-              </p>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-(--font-weight-semibold) text-(--fg)">
+                  {material.title}
+                </p>
+                <p className="truncate text-xs text-(--fg-muted)">
+                  {material.description || "Sem descrição"}
+                </p>
+              </div>
               <span className="shrink-0 text-xs text-(--fg-muted)">
                 {material.requiresTerm
                   ? "Requer aceite do termo"

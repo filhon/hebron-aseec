@@ -172,6 +172,7 @@
 | S-149  | 2026-07-17 | P-8.10 — Notificações Rádio                                                             | concluido                            |
 | S-150  | 2026-07-17 | P-8.11 — Integração Cross-App Rádio                                                     | concluido                            |
 | S-151  | 2026-07-17 | P-8.12 — Testes Rádio                                                                   | concluido                            |
+| S-152  | 2026-07-17 | P-8.9b — Persistência da descrição de material exclusivo (CORRETIVO)                    | concluido                            |
 
 ---
 
@@ -11280,7 +11281,7 @@ TYPE` hand-escritas fora das listas de arquivos permitidos em quase todo
       banco; ver Suposições sobre a idempotência da action).
 - [x] Audiência: agregação diária calcula sessões/horas conforme D-3
       (fixtures) — já coberto por `packages/jobs/src/__tests__/
-    radio-stats.test.ts` (P-8.11/S-150); ver Suposições.
+  radio-stats.test.ts` (P-8.11/S-150); ver Suposições.
 - [x] Testes passam
 - [x] Lint passa
 
@@ -11297,4 +11298,86 @@ TYPE` hand-escritas fora das listas de arquivos permitidos em quase todo
 - `apps/radio/package.json` (scripts `test`/`test:watch`; devDependencies
   `vitest`/`dotenv`; dependency `postgres`)
 - `PROMPTS.md` (checklist de P-8.12 marcado)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+### S-152 — 2026-07-17 — P-8.9b — Persistência da descrição de material exclusivo (CORRETIVO)
+
+**Prompt:** P-8.9b (`PROMPTS.md:5118`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Fechado o débito registrado em S-145 (P-8.6) e S-148 (P-8.9): a descrição
+coletada por `material-upload-form.tsx` (P-8.4) era descartada no submit —
+`createExclusiveMaterialSchema` não tinha o campo, então o Zod nunca a via,
+e `materials-admin-panel.tsx` chamava `create({ title, fileUrl,
+requiresTerm })` sem ela. A coluna `exclusive_materials.description` (schema
+desde P-8.6) ficava sempre `NULL`.
+
+- `createExclusiveMaterialSchema` (`packages/validators/src/radio/index.ts`):
+  adicionado `description: z.string().max(2000).nullable().optional()
+.default(null)`, mesmo idioma de `createAuthorSchema.bio`/
+  `createSeriesSchema.description`.
+- `ExclusiveMaterial` (`packages/types/src/radio/index.ts`): adicionado
+  `description: string | null`. A query (`getExclusiveMaterialsList`,
+  `packages/db`/`lib/queries.ts`, fora da lista de arquivos permitidos) já
+  fazia `select()` de todas as colunas — só faltava o tipo expor o campo.
+- `materials-admin-panel.tsx`: `handleSubmit` agora passa `description:
+values.description || null` para `create(...)`. Nenhuma mudança em
+  `actions/materials.ts` foi necessária — `createMaterial` (P-8.8) já
+  insere `input` inteiro via `.values(input)`, então o campo novo do schema
+  passa a ser persistido automaticamente.
+- `material-card.tsx`: descrição exibida abaixo do título (texto secundário,
+  truncado, `--fg-muted`), só quando presente — mesmo padrão título/subtítulo
+  de `track-info.tsx`/estado de erro de `player.tsx`.
+- `materials-admin-panel.tsx` (lista): item convertido de `<p>` único (só
+  título) para bloco título+descrição, mesmo padrão já usado em
+  `authors-admin-panel.tsx`/`series-admin-panel.tsx`/`tracks-admin-panel.tsx`
+  (`<div className="min-w-0 flex-1">` com título semibold + subtítulo
+  `text-xs text-(--fg-muted)`); mantido o badge de status
+  (`requiresTerm`) como `<span>` à direita, sem mudança de comportamento.
+
+**Suposições/débitos registrados (G1):**
+
+- `material-upload-form.tsx` não foi tocado — já coletava a descrição
+  corretamente (`MaterialUploadFormValues.description`, state → `onSubmit`)
+  desde P-8.4; o campo só se perdia depois, no schema/action de criação.
+  Confirmado por leitura antes de implementar, conforme nota do prompt.
+- Nenhuma edição/remoção de material foi adicionada — fora de escopo
+  (`actions/materials.ts` só expõe `createMaterial`, P-8.8).
+
+**Verificação funcional (evidência além de lint/typecheck):**
+
+- `pnpm turbo lint typecheck --filter=@hebron/validators
+--filter=@hebron/types --filter=@hebron/radio` — 16/16 tasks verdes.
+- Leitura de `actions/materials.ts::createMaterial` confirmou
+  `.values(input)` (insert do objeto inteiro validado pelo schema) — sem
+  necessidade de listar o campo campo a campo na action.
+- Leitura de `apps/radio/src/__tests__/materials.test.ts` confirmou que o
+  teste existente (`createMaterial` sem `description`) continua válido —
+  campo é opcional com default `null`.
+
+**Critérios de aceite verificados:**
+
+- [x] `createExclusiveMaterialSchema` aceita `description` (opcional, ≤2000,
+      default null)
+- [x] Ao criar material com descrição pela UI admin, `description` é
+      persistida (via `.values(input)` em `createMaterial`, sem mudança na
+      action)
+- [x] `ExclusiveMaterial` expõe `description`
+- [x] `material-card.tsx` exibe a descrição quando presente; ausência não
+      quebra layout (`{material.description && (...)}`)
+- [x] Lista do admin mostra a descrição (fallback "Sem descrição" quando
+      ausente) sem regressão visual — mesmo padrão de outros painéis admin
+      do módulo
+- [x] Nenhuma mudança de comportamento em título/arquivo/termo já existentes
+- [x] Lint passa · Types passam
+
+**Arquivos modificados:**
+
+- `packages/validators/src/radio/index.ts`
+- `packages/types/src/radio/index.ts`
+- `apps/radio/src/components/materials-admin-panel.tsx`
+- `apps/radio/src/components/material-card.tsx`
+- `PROMPTS.md` (checklist de P-8.9b marcado)
 - `SESSIONS.md` (esta entrada + linha no índice)

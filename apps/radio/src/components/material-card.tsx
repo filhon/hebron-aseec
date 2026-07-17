@@ -41,6 +41,11 @@ export function MaterialCard({
         <p className="truncate text-sm font-(--font-weight-semibold) text-(--fg)">
           {material.title}
         </p>
+        {material.description && (
+          <p className="mt-0.5 truncate text-xs text-(--fg-muted)">
+            {material.description}
+          </p>
+        )}
         {material.requiresTerm && (
           <p className="mt-0.5 flex items-center gap-1 text-xs text-(--fg-muted)">
             <Lock className="h-3 w-3" aria-hidden="true" />
