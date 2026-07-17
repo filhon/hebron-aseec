@@ -4672,16 +4672,16 @@ Tipos e schemas Zod para o escopo REDUZIDO da Rádio. Tipos: Track (mp3 pré-gra
 
 **Critérios de aceite:**
 
-- [ ] Track: title, author_id, series_id, file_url (R2), duration_seconds
-- [ ] Playlist: name, tracks (ordered), loop
-- [ ] Author: name, bio, photo
-- [ ] Series: name, author_id, description
-- [ ] NowPlaying: track_id, started_at, position_seconds
-- [ ] ExclusiveMaterial: title, file_url, requires_term
-- [ ] TermAcceptance: user_id, accepted_at (aceito 1 vez)
-- [ ] SEM tipos para DJs, grade, podcast, pedidos musicais
-- [ ] Lint passa
-- [ ] Types passam
+- [x] Track: title, author_id, series_id, file_url (R2), duration_seconds
+- [x] Playlist: name, tracks (ordered), loop
+- [x] Author: name, bio, photo
+- [x] Series: name, author_id, description
+- [x] NowPlaying: track_id, started_at, position_seconds
+- [x] ExclusiveMaterial: title, file_url, requires_term
+- [x] TermAcceptance: user_id, accepted_at (aceito 1 vez)
+- [x] SEM tipos para DJs, grade, podcast, pedidos musicais
+- [x] Lint passa
+- [x] Types passam
 
 **Notas:**
 Ref: BRAIN.md seção 6.4 (escopo REDUZIDO). Auto DJ 24/7 tocando .mp3 do R2. Sem live streaming.

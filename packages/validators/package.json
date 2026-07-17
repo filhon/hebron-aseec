@@ -10,6 +10,7 @@
     "./intranet": "./src/intranet/index.ts",
     "./plataforma": "./src/plataforma/index.ts",
     "./projetos": "./src/projetos/index.ts",
+    "./radio": "./src/radio/index.ts",
     "./tarefas": "./src/tarefas/index.ts",
     "./*": "./src/*.ts"
   },

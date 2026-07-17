@@ -158,6 +158,7 @@
 | S-135  | 2026-07-16 | P-7.6b — Canonicalização estável do `daterange` (CORRETIVO)                             | concluido                            |
 | S-136  | 2026-07-16 | P-7.9b — Fiação do ciclo de vida pós-aprovação e revisão de auxílio (CORRETIVO)         | concluido                            |
 | S-137  | 2026-07-16 | P-7.9c — Persistência do documento do responsável em `flats.document_files` (CORRETIVO) | concluido                            |
+| S-138  | 2026-07-17 | P-8.1 — Schema de Tipos Rádio                                                           | concluido                            |
 
 ---
 
@@ -9638,4 +9639,88 @@ testes verdes contra o banco real (50 pré-existentes + 2 novos).
 - `apps/flats/src/__tests__/reservations.test.ts` (fora da lista literal —
   teste exigido pelo próprio critério de aceite do prompt)
 - `PROMPTS.md` (checklist de P-7.9c marcado)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+### S-138 — 2026-07-17 — P-8.1 — Schema de Tipos Rádio
+
+**Prompt:** P-8.1
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Primeiro prompt da Fase 8 (Rádio). Criados os tipos, schemas Zod e mock data
+para o escopo REDUZIDO da Rádio (BRAIN §6.4): Auto DJ 24/7 tocando sermões
+pré-gravados (.mp3) do Cloudflare R2, sem DJs ao vivo, grade programada,
+podcasts ou pedidos musicais. Branch `feat/P-8.1-radio-types` já existia
+localmente e no remoto no início da sessão, sem nenhum arquivo do módulo
+criado ainda — reaproveitada em vez de criar uma nova.
+
+**Suposições registradas (G1):**
+
+- `packages/types/package.json` e `packages/validators/package.json` não
+  estavam na lista de arquivos permitidos, mas precisaram da entrada
+  `"./radio"` no mapa `exports` — mesmo padrão de todo módulo anterior
+  (P-7.1, P-6.1, P-5.1 etc.), sem isso `@hebron/types/radio` e
+  `@hebron/validators/radio` não resolvem.
+- `NowPlaying` no enunciado lista apenas `track_id, started_at,
+position_seconds`; foram acrescentados `trackTitle` e `authorName`
+  (denormalizados) seguindo o padrão já usado em todo o resto do
+  ecossistema (`Course.instructorName`, `Certificate.courseName`, etc.) —
+  evita um round-trip extra só para exibir "tocando agora" no player.
+- `Playlist.tracks` foi modelado como array de `Track` embutido (não
+  `trackIds`), pois o critério de aceite lista literalmente "tracks
+  (ordered)" como campo da entidade; a ordem de reprodução é a posição no
+  array. O schema Zod de criação (`createPlaylistSchema`), por sua vez, usa
+  `trackIds: string[]` (referência a faixas já existentes), já que é o
+  formato natural de um formulário de montagem de playlist.
+- `Track.seriesId` é opcional (`string | null`) — nem toda pregação avulsa
+  pertence a uma série; mock data inclui um autor (Pr. Josué Andrade) só
+  com faixas avulsas para exercitar esse caso.
+- Adicionados schemas Zod de criação/atualização (`createAuthorSchema`,
+  `createSeriesSchema`, `createTrackSchema`, `createPlaylistSchema`,
+  `createExclusiveMaterialSchema`, `acceptTermSchema`) não citados
+  literalmente no enunciado, mas seguindo o padrão de todo prompt anterior
+  do tipo `schema` (P-6.1/Plataforma, P-7.1/Flats) — o Bloco B (P-8.6+)
+  reaproveita esses schemas em vez de recriá-los.
+- Mock data: 3 autores, 3 séries (2 do mesmo autor, 1 de outro autor, 1
+  autor sem série), 12 faixas, 2 playlists (uma sequencial por série, uma
+  de rotação geral mesclando autores), 1 `NowPlaying`, 2 materiais
+  exclusivos (um com `requiresTerm: true`, outro `false`, para exercitar a
+  variação do campo) e 2 aceites de termo.
+- `no-non-null-assertion` (regra do projeto, ver memória): os helpers de
+  lookup do mock data (`authorById`, `seriesById`, `tracksByIds`,
+  `nowPlayingTrack`) usam um helper `findOrThrow` que lança erro explícito
+  em vez de `!`.
+
+**Critérios de aceite verificados:**
+
+- [x] Track: title, author_id, series_id, file_url (R2), duration_seconds —
+      `packages/types/src/radio/index.ts` (`Track`).
+- [x] Playlist: name, tracks (ordered), loop — `Playlist`.
+- [x] Author: name, bio, photo — `Author` (`photoUrl`).
+- [x] Series: name, author_id, description — `Series`.
+- [x] NowPlaying: track_id, started_at, position_seconds — `NowPlaying`
+      (+ `trackTitle`/`authorName` denormalizados, ver suposições).
+- [x] ExclusiveMaterial: title, file_url, requires_term —
+      `ExclusiveMaterial`.
+- [x] TermAcceptance: user_id, accepted_at — `TermAcceptance`.
+- [x] SEM tipos para DJs, grade, podcast, pedidos musicais — confirmado,
+      nenhum desses tipos existe no arquivo.
+- [x] Lint passa — `pnpm turbo lint` (monorepo completo, 38/38 tasks).
+- [x] Types passam — `pnpm turbo typecheck` (monorepo completo, 38/38
+      tasks).
+
+**Arquivos criados:**
+
+- `packages/types/src/radio/index.ts`
+- `packages/validators/src/radio/index.ts`
+- `apps/radio/src/lib/mock-data.ts`
+
+**Arquivos modificados:**
+
+- `packages/types/package.json` (entrada `./radio` no `exports`)
+- `packages/validators/package.json` (entrada `./radio` no `exports`)
+- `PROMPTS.md` (checklist de P-8.1 marcado)
 - `SESSIONS.md` (esta entrada + linha no índice)
