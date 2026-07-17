@@ -5190,14 +5190,14 @@ Fiar o único emissor que faltava, sem reescrever a reprodução/estados já exi
 
 **Critérios de aceite:**
 
-- [ ] `player.tsx` envia `POST /api/heartbeat` a cada 60s enquanto reproduz, parando ao pausar/erro/desmontar
-- [ ] Payload sem PII: apenas `sessionId` efêmero (gerado no client) + `trackId` — verificado (grep: nenhum e-mail/user id/cookie no payload)
-- [ ] `session_id` não é derivado de nenhum identificador estável de usuário
-- [ ] Uma sessão que reproduz >= ~1 min gera >= 2 heartbeats (contável como "ouvinte" por D-3)
-- [ ] Falha do `fetch` não interrompe a reprodução (best-effort)
-- [ ] Nenhuma regressão em play/pause/volume/progresso/erro (P-8.2/P-8.5b) — verificação manual documentada no PR
-- [ ] Nenhuma mudança visual no player
-- [ ] Lint passa · Types passam
+- [x] `player.tsx` envia `POST /api/heartbeat` a cada 60s enquanto reproduz, parando ao pausar/erro/desmontar
+- [x] Payload sem PII: apenas `sessionId` efêmero (gerado no client) + `trackId` — verificado (grep: nenhum e-mail/user id/cookie no payload)
+- [x] `session_id` não é derivado de nenhum identificador estável de usuário
+- [x] Uma sessão que reproduz >= ~1 min gera >= 2 heartbeats (contável como "ouvinte" por D-3)
+- [x] Falha do `fetch` não interrompe a reprodução (best-effort)
+- [x] Nenhuma regressão em play/pause/volume/progresso/erro (P-8.2/P-8.5b) — verificação manual documentada no PR
+- [x] Nenhuma mudança visual no player
+- [x] Lint passa · Types passam
 
 **Notas:**
 Este é o elo que faltava para o feature de audiência de P-8.11 funcionar de ponta a ponta; sem ele, `listener_stats`/KPI ficam permanentemente vazios. Verificação de ponta a ponta sugerida no PR: reproduzir > 2 min, confirmar linhas em `radio.listener_heartbeats`, rodar `runRadioStatsAggregation` e conferir a linha do dia em `radio.listener_stats`. A retenção/base legal desses heartbeats já está no escopo de auditoria de P-9.2. Fechar em SESSIONS.md o débito de S-150/S-151 (`player.tsx` sem heartbeat).

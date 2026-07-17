@@ -11,6 +11,7 @@ import {
   VolumeX,
 } from "lucide-react";
 import { TrackInfo } from "./track-info";
+import { useListenerHeartbeat } from "../lib/use-listener-heartbeat";
 
 const MAX_RETRIES = 3;
 const RETRY_BASE_DELAY_MS = 1000;
@@ -139,6 +140,11 @@ export function Player({ track, className }: PlayerProps) {
     if (!("mediaSession" in navigator)) return;
     navigator.mediaSession.playbackState = isPlaying ? "playing" : "paused";
   }, [isPlaying]);
+
+  useListenerHeartbeat({
+    trackId: track?.id ?? null,
+    active: isPlaying && !!track && errorState !== "failed",
+  });
 
   function handleAudioError() {
     setIsBuffering(false);

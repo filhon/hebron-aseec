@@ -173,6 +173,7 @@
 | S-150  | 2026-07-17 | P-8.11 — Integração Cross-App Rádio                                                     | concluido                            |
 | S-151  | 2026-07-17 | P-8.12 — Testes Rádio                                                                   | concluido                            |
 | S-152  | 2026-07-17 | P-8.9b — Persistência da descrição de material exclusivo (CORRETIVO)                    | concluido                            |
+| S-153  | 2026-07-17 | P-8.11b — Fiação do heartbeat de audiência no player (CORRETIVO)                        | concluido                            |
 
 ---
 
@@ -11281,7 +11282,7 @@ TYPE` hand-escritas fora das listas de arquivos permitidos em quase todo
       banco; ver Suposições sobre a idempotência da action).
 - [x] Audiência: agregação diária calcula sessões/horas conforme D-3
       (fixtures) — já coberto por `packages/jobs/src/__tests__/
-  radio-stats.test.ts` (P-8.11/S-150); ver Suposições.
+radio-stats.test.ts` (P-8.11/S-150); ver Suposições.
 - [x] Testes passam
 - [x] Lint passa
 
@@ -11380,4 +11381,87 @@ values.description || null` para `create(...)`. Nenhuma mudança em
 - `apps/radio/src/components/materials-admin-panel.tsx`
 - `apps/radio/src/components/material-card.tsx`
 - `PROMPTS.md` (checklist de P-8.9b marcado)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+### S-153 — 2026-07-17 — P-8.11b — Fiação do heartbeat de audiência no player (CORRETIVO)
+
+**Prompt:** P-8.11b (`PROMPTS.md:5163`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Fechado o débito registrado em S-150 (P-8.11) e confirmado ainda aberto em
+S-151 (P-8.12): o pipeline de audiência inteiro (rota `api/heartbeat`,
+tabela `radio.listener_heartbeats`, cron de agregação, KPI cross-app) estava
+pronto desde P-8.11, mas `player.tsx` nunca chamava o endpoint — ficava
+inerte de ponta a ponta porque editar `player.tsx` estava fora do escopo de
+arquivos permitidos daquele prompt.
+
+- `apps/radio/src/lib/use-listener-heartbeat.ts` (novo, arquivo opcional
+  listado no prompt): hook client `useListenerHeartbeat({ trackId, active })`.
+  Gera `sessionId` via `crypto.randomUUID()` uma única vez por montagem
+  (guardado em `useRef`, nunca derivado de usuário/cookie), dispara o
+  primeiro heartbeat imediatamente quando `active` fica `true` e depois a
+  cada 60s (`setInterval`). `fetch` para `/api/heartbeat` é best-effort —
+  `.catch()` silencioso, `keepalive: true`. Efeito limpa o `setInterval` a
+  cada mudança de `active`/`trackId` e ao desmontar, o que cobre pausar,
+  trocar de faixa, erro terminal e unmount na mesma lógica.
+- `player.tsx`: uma linha de chamada ao hook
+  (`useListenerHeartbeat({ trackId: track?.id ?? null, active: isPlaying &&
+!!track && errorState !== "failed" })`), inserida depois do efeito de
+  `mediaSession.playbackState`. Nenhum JSX/markup visível foi tocado —
+  reprodução, play/pause, volume, progresso e estados de erro
+  (P-8.2/P-8.5b/P-8.9) permanecem com o código exatamente como estavam.
+
+**Suposições/débitos registrados (G1):**
+
+- "Estado de erro terminal" foi lido literalmente como `errorState ===
+"failed"` (não `"retrying"`), conforme a redação do prompt
+  ("`isPlaying`, com `track` válido e sem estado de erro terminal") — não
+  há um segundo campo de "terminal" no player, e `"retrying"` já implica
+  `isPlaying` controlado pelo fluxo de retry existente.
+- Skill `/impeccable` não foi invocada — pré-condição do próprio prompt
+  isenta explicitamente porque a mudança não toca markup visível.
+- Verificação de ponta a ponta com banco real (linhas em
+  `radio.listener_heartbeats`, execução de `runRadioStatsAggregation`,
+  linha em `radio.listener_stats`) **não foi possível nesta sessão** —
+  sem acesso a um Supabase autenticado no ambiente. Fica como verificação
+  manual pendente para quem fizer o merge/deploy (sugerida nas notas do
+  próprio prompt).
+
+**Verificação funcional (evidência além de lint/typecheck):**
+
+- `pnpm turbo lint typecheck --filter=@hebron/radio` — 16/16 tasks verdes
+  (inclui dependências `@hebron/db`, `@hebron/auth`, etc., todas cache
+  hit exceto `@hebron/radio`).
+- Leitura completa de `player.tsx` antes e depois da edição: nenhuma
+  função/estado/handler existente foi alterado, apenas uma chamada de hook
+  adicionada — confirma ausência de regressão em play/pause/volume/
+  progresso/erro por inspeção de diff (`git diff --stat`: 6 inserções, 0
+  remoções no arquivo).
+- Grep no payload do hook (`sessionId`/`trackId`) e no schema do endpoint
+  (`apps/radio/src/app/api/heartbeat/route.ts`) confirma contrato idêntico
+  nos dois lados e ausência de qualquer campo de e-mail/user id/cookie.
+
+**Critérios de aceite verificados:**
+
+- [x] `player.tsx` envia `POST /api/heartbeat` a cada 60s enquanto
+      reproduz, parando ao pausar/erro/desmontar
+- [x] Payload sem PII: apenas `sessionId` efêmero + `trackId`
+- [x] `session_id` não é derivado de identificador estável de usuário
+- [x] Sessão que reproduz >= ~1 min gera >= 2 heartbeats (heartbeat
+      imediato ao iniciar + heartbeat aos 60s)
+- [x] Falha do `fetch` não interrompe a reprodução (`.catch()` silencioso,
+      `keepalive: true`)
+- [x] Nenhuma regressão em play/pause/volume/progresso/erro — verificado
+      por inspeção de diff, sem teste manual em browser real nesta sessão
+      (ver débito acima)
+- [x] Nenhuma mudança visual no player
+- [x] Lint passa · Types passam
+
+**Arquivos modificados:**
+
+- `apps/radio/src/lib/use-listener-heartbeat.ts` (novo)
+- `apps/radio/src/components/player.tsx`
+- `PROMPTS.md` (checklist de P-8.11b marcado)
 - `SESSIONS.md` (esta entrada + linha no índice)
