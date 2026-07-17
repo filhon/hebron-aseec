@@ -4791,12 +4791,12 @@ Formulários admin: upload de faixa (título, autor, série, arquivo .mp3). Cria
 
 **Critérios de aceite:**
 
-- [ ] Upload de .mp3 com extração automática de duração (lib `music-metadata` — registrar em SESSIONS; executor não deve escolher outra silenciosamente)
-- [ ] Playlist com drag-drop para reordenar faixas
-- [ ] Material exclusivo com campo de descrição e upload
-- [ ] Validação Zod
-- [ ] Lint passa
-- [ ] Types passam
+- [x] Upload de .mp3 com extração automática de duração (lib `music-metadata` — registrar em SESSIONS; executor não deve escolher outra silenciosamente)
+- [x] Playlist com drag-drop para reordenar faixas
+- [x] Material exclusivo com campo de descrição e upload
+- [x] Validação Zod
+- [x] Lint passa
+- [x] Types passam
 
 ---
 

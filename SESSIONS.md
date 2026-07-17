@@ -161,6 +161,7 @@
 | S-138  | 2026-07-17 | P-8.1 — Schema de Tipos Rádio                                                           | concluido                            |
 | S-139  | 2026-07-17 | P-8.2 — Componentes UI Rádio                                                            | concluido                            |
 | S-140  | 2026-07-17 | P-8.3 — Telas e Páginas Rádio                                                           | concluido                            |
+| S-141  | 2026-07-17 | P-8.4 — Formulários Rádio                                                               | concluido                            |
 
 ---
 
@@ -9951,4 +9952,139 @@ geradas) e smoke test HTTP (`curl`) em todas as rotas via `next dev`.
 - `apps/radio/src/components/playlist-view.tsx` (correção: `"use client"`)
 - `apps/radio/src/components/material-card.tsx` (correção: `"use client"`)
 - `PROMPTS.md` (checklist de P-8.3 marcado)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+### S-141 — 2026-07-17 — P-8.4 — Formulários Rádio
+
+**Prompt:** P-8.4
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Criados os 5 formulários admin do escopo: upload de faixa (.mp3, com extração
+automática de duração via `music-metadata`), criar/editar autor (nome, bio,
+foto), criar/editar série (nome, autor, descrição), criar/editar playlist
+(nome, faixas reordenáveis por drag-drop nativo — sem lib externa — e toggle
+de repetição) e upload de material exclusivo (título, descrição, arquivo,
+termo de uso). Seguido o padrão mais recente de formulário single-entity do
+monorepo (`apps/plataforma/src/components/course-form.tsx`/`lesson-form.tsx`,
+P-6.4): `useState` por campo + `zod.safeParse` no submit + prop `onSubmit`
+recebendo os valores validados, em vez do padrão React Hook Form usado em
+`financeiro`/`admin`/`flats` — este último existe para formulários já
+integrados a Server Actions (Bloco B) ou a um wizard multi-step com
+`FormContext` compartilhado (flats), nenhum dos dois é o caso aqui (Bloco A,
+5 formulários independentes).
+
+**Suposições registradas (G1 — ambiguidade resolvida pela opção mais simples):**
+
+- **Nenhum upload real para storage.** `packages/validators/src/radio/index.ts`
+  já documenta que `Track.fileUrl` é "a chave resultante do upload para o
+  bucket R2, repassada pelo client após o upload" — mas, diferente de
+  `plataforma-capas`/`flats-documentos` (buckets Supabase Storage
+  provisionados desde P-0.12, ver BRAIN.md linha 209), o bucket R2 de áudio
+  da Rádio não tem infraestrutura de upload nenhuma ainda (sem
+  `apps/radio/src/actions/uploads.ts`, sem helper de R2 em `packages/*`) —
+  isso é Bloco B (P-8.6+, schema/actions do banco ainda não rodaram). Os 3
+  formulários com arquivo (`track-upload-form`, `author-form`,
+  `material-upload-form`) mantêm o `File` bruto em estado local e o expõem
+  via `onSubmit` (`file`/`photoFile`), em vez de simular uma URL fake só
+  para satisfazer o schema — a integração real do upload é escopo de uma
+  prompt de Bloco B futura.
+- **Schemas de `fileUrl`/`photoUrl` compostos localmente via `.omit()`.**
+  Como os 3 formulários acima não têm uma URL de arquivo real para validar
+  ainda (ver item anterior), cada formulário usa
+  `createXSchema.omit({ fileUrl: true })` (ou `photoUrl`) e valida os demais
+  campos com o schema canônico de `@hebron/validators/radio`, validando o
+  arquivo em si (mime/tamanho) separadamente no handler de seleção. Nenhuma
+  mudança em `packages/validators` (fora da lista de arquivos permitidos
+  desta prompt).
+- **`description` do material exclusivo não existe em `createExclusiveMaterialSchema`
+  nem em `ExclusiveMaterial` (`packages/types`), mas o Escopo da prompt pede
+  explicitamente "arquivo, descrição".** Campo `description` adicionado
+  localmente em `MaterialUploadFormValues` (validado inline, `max(2000)`,
+  fora do schema compartilhado) — gap a ser fechado em `packages/validators`/
+  `packages/types` quando o schema do banco da Rádio for criado em P-8.6
+  (`exclusive_materials.description`).
+- **Drag-drop de playlist implementado com a API nativa de HTML5
+  (`draggable`/`onDragStart`/`onDragOver`/`onDragEnd`), sem lib externa
+  (`dnd-kit` etc.).** Mesmo padrão já usado em
+  `apps/tarefas/src/components/kanban-board.tsx` — reordena o array
+  `selectedIds` a cada `dragover` sobre outro item da lista de faixas
+  selecionadas. Nenhuma dependência nova para isso (diferente de
+  `music-metadata`, que é lib obrigatória pelo critério de aceite).
+- **Faixas/materiais de Bloco A são apenas "criar" (sem prop `track`/
+  `material` para edição), enquanto autor/série/playlist são "criar/editar".**
+  Literal ao Escopo: "Upload de faixa..." e "Upload de material exclusivo..."
+  (sem "editar"), vs. "Criar/editar autor", "Criar/editar série",
+  "Criar/editar playlist" — `updateTrackSchema`/`updateExclusiveMaterialSchema`
+  existem em `@hebron/validators/radio` para quando a edição desses dois for
+  pedida em prompt futura.
+- **Limites de tamanho/mime de arquivo sem respaldo explícito em BRAIN.md/
+  PROMPTS.md** (BRAIN §6.4 não especifica): faixa .mp3 até 200 MB
+  (`audio/mpeg`); foto de autor até 5 MB (`image/jpeg|png|webp`, mesmo teto
+  de `plataforma-capas`); material exclusivo até 20 MB
+  (`application/pdf|msword|...wordprocessingml.document|zip`, mesmos tipos e
+  teto do anexo de aula em `apps/plataforma/src/components/lesson-form.tsx`).
+  Ajustável quando a diretoria validar os mocks.
+- **Formulários não conectados a `admin/page.tsx`.** Os botões "Nova
+  faixa"/"Nova playlist"/"Novo material" de `admin/page.tsx` (P-8.3)
+  continuam sem `onClick` — `admin/page.tsx` não está na lista de arquivos
+  permitidos desta prompt. Fiação (dialog/rota + mocks locais) é P-8.9,
+  mesmo padrão já usado em Flats (wizard de P-7.4 só ligado ao `/reservar`
+  em P-7.5b/P-7.9).
+
+**Débitos / correções de infraestrutura (G1 — "arquivo óbvio faltando"):**
+
+- `music-metadata@^11.14.0` adicionado a `apps/radio/package.json`
+  (`dependencies`) — biblioteca exigida nominalmente pelo critério de
+  aceite ("lib `music-metadata`"); usa a build de browser do pacote
+  (`parseBlob`, export `default`/`core.js`) diretamente no client component,
+  sem Server Action. `zod` também adicionado a `apps/radio/package.json`
+  (`"catalog:"`, mesmo padrão de `plataforma`/`documentos`/`flats`) — os 5
+  formulários importam `type { z }` para o helper `fieldErrors`, e o app
+  não tinha essa dependência direta até aqui (só via `@hebron/validators`).
+  `pnpm install --filter @hebron/radio` rodado para atualizar o lockfile.
+
+**Critérios de aceite verificados:**
+
+- [x] Upload de .mp3 com extração automática de duração —
+      `track-upload-form.tsx`, `parseBlob` do `music-metadata` no
+      `onChange` do input de arquivo; duração exibida em `mm:ss` assim que
+      a análise termina.
+- [x] Playlist com drag-drop para reordenar faixas — `playlist-form.tsx`,
+      lista de faixas selecionadas com `draggable` nativo.
+- [x] Material exclusivo com campo de descrição e upload —
+      `material-upload-form.tsx` (ver suposição sobre `description` fora do
+      schema compartilhado).
+- [x] Validação Zod — todos os 5 formulários usam os schemas de
+      `@hebron/validators/radio` (integralmente ou compostos via `.omit()`
+      quando o campo de arquivo ainda não existe).
+- [x] Lint passa — `pnpm --filter @hebron/radio lint`.
+- [x] Types passam — `pnpm --filter @hebron/radio typecheck`.
+
+**Verificado além do critério:** `pnpm --filter @hebron/radio build`
+completo (7/7 páginas, sem erro de bundling do `music-metadata` no client).
+Smoke test manual: página temporária (`apps/radio/src/app/smoketest/`, fora
+da lista de arquivos permitidos, criada e removida nesta mesma sessão)
+montando os 5 formulários com os mocks de P-8.1, servida via `next dev` e
+verificada com `curl` — os 5 títulos e todos os textos/hints principais
+(labels, placeholders de select, empty states da playlist) presentes no
+HTML sem erro de render.
+
+**Arquivos criados:**
+
+- `apps/radio/src/components/track-upload-form.tsx`
+- `apps/radio/src/components/author-form.tsx`
+- `apps/radio/src/components/series-form.tsx`
+- `apps/radio/src/components/playlist-form.tsx`
+- `apps/radio/src/components/material-upload-form.tsx`
+
+**Arquivos modificados:**
+
+- `apps/radio/package.json` (débito de infraestrutura: `music-metadata` +
+  `zod`)
+- `pnpm-lock.yaml` (via `pnpm install`)
+- `PROMPTS.md` (checklist de P-8.4 marcado)
 - `SESSIONS.md` (esta entrada + linha no índice)
