@@ -23,14 +23,8 @@ export interface PlannedJob {
   description: string;
 }
 
-export const PLANNED_JOBS: PlannedJob[] = [
-  {
-    id: "radio-audiencia-snapshot",
-    name: "Rádio: snapshot de audiência",
-    cron: "*/15 * * * *",
-    sourcePrompt: "P-8.11",
-    description:
-      "Agrega heartbeats do player (D-3: sessões únicas/dia + horas " +
-      "ouvidas) em `radio.listener_stats`. Aguarda P-8.11.",
-  },
-];
+// P-8.11 implementou "radio-audiencia-snapshot" (agora
+// `radioStatsAggregationCron`, src/crons/radio-stats.ts) — removido daqui
+// por já estar registrado em `functions` (src/index.ts), conforme convenção
+// de G6.6.
+export const PLANNED_JOBS: PlannedJob[] = [];

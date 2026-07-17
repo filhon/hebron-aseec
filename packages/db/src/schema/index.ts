@@ -363,6 +363,7 @@ export {
   nowPlaying,
   exclusiveMaterials,
   termAcceptances,
+  listenerHeartbeats,
   listenerStats,
 } from "./radio";
 
@@ -383,6 +384,8 @@ export type {
   NewExclusiveMaterial,
   TermAcceptance,
   NewTermAcceptance,
+  ListenerHeartbeat,
+  NewListenerHeartbeat,
   ListenerStat,
   NewListenerStat,
 } from "./radio";

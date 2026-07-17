@@ -21,6 +21,7 @@ import {
   flatsCheckinReminderCron,
   flatsCheckoutReminderCron,
 } from "./crons/flats";
+import { radioStatsAggregationCron } from "./crons/radio-stats";
 
 /**
  * Todas as funções Inngest registradas — consumidas pela rota de serve
@@ -43,6 +44,7 @@ export const functions = [
   briefingCron,
   flatsCheckinReminderCron,
   flatsCheckoutReminderCron,
+  radioStatsAggregationCron,
 ];
 
 export { PLANNED_JOBS } from "./catalog";

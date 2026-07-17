@@ -1,8 +1,10 @@
 import {
   boolean,
   check,
+  date,
   index,
   integer,
+  numeric,
   primaryKey,
   text,
   timestamp,
@@ -189,19 +191,55 @@ export const termAcceptances = radioSchema.table("term_acceptances", {
 });
 
 // ---------------------------------------------------------------------------
-// radio.listener_stats — snapshot periódico de audiência, consumido pelo
-// dashboard da Intranet (BRAIN §6.6/§6.9: "Rádio → Intranet: audiência").
+// radio.listener_heartbeats — heartbeat anônimo enviado pelo player a cada
+// 60s enquanto reproduz (D-3, PROMPTS.md P-8.11: session_id efêmero gerado
+// no client, sem PII, + track_id). Armazenamento bruto de curtíssima duração
+// — o cron diário de packages/jobs/src/crons/radio-stats.ts agrega essas
+// linhas em radio.listener_stats e apaga todas em seguida (LGPD: sem rastro
+// individual de audiência).
+// ---------------------------------------------------------------------------
+export const listenerHeartbeats = radioSchema.table(
+  "listener_heartbeats",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    sessionId: text("session_id").notNull(),
+    trackId: uuid("track_id")
+      .notNull()
+      .references(() => tracks.id, { onDelete: "cascade" }),
+    receivedAt: timestamp("received_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("listener_heartbeats_received_at_idx").on(table.receivedAt),
+    index("listener_heartbeats_session_id_idx").on(table.sessionId),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// radio.listener_stats — snapshot diário agregado de audiência, consumido
+// pelo dashboard da Intranet (BRAIN §6.6/§6.9: "Rádio → Intranet:
+// audiência"). Semântica D-3 (PROMPTS.md P-8.11): "ouvinte" = sessão com >= 2
+// heartbeats; uniqueSessions conta sessões-ouvinte do dia; hoursListened soma
+// todos os heartbeats do dia (1 heartbeat ≈ 60s). 1 linha por dia — o cron
+// faz upsert por `date` para permitir reprocessamento idempotente do mesmo
+// dia.
 // ---------------------------------------------------------------------------
 export const listenerStats = radioSchema.table(
   "listener_stats",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    listenerCount: integer("listener_count").notNull(),
+    date: date("date", { mode: "string" }).notNull(),
+    uniqueSessions: integer("unique_sessions").notNull(),
+    hoursListened: numeric("hours_listened", {
+      precision: 10,
+      scale: 2,
+    }).notNull(),
     capturedAt: timestamp("captured_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
   },
-  (table) => [index("listener_stats_captured_at_idx").on(table.capturedAt)],
+  (table) => [uniqueIndex("listener_stats_date_uniq").on(table.date)],
 );
 
 // ---------------------------------------------------------------------------
@@ -223,5 +261,7 @@ export type ExclusiveMaterial = typeof exclusiveMaterials.$inferSelect;
 export type NewExclusiveMaterial = typeof exclusiveMaterials.$inferInsert;
 export type TermAcceptance = typeof termAcceptances.$inferSelect;
 export type NewTermAcceptance = typeof termAcceptances.$inferInsert;
+export type ListenerHeartbeat = typeof listenerHeartbeats.$inferSelect;
+export type NewListenerHeartbeat = typeof listenerHeartbeats.$inferInsert;
 export type ListenerStat = typeof listenerStats.$inferSelect;
 export type NewListenerStat = typeof listenerStats.$inferInsert;

@@ -170,6 +170,7 @@
 | S-147  | 2026-07-17 | P-8.8 — Server Actions Rádio                                                            | concluido                            |
 | S-148  | 2026-07-17 | P-8.9 — Integração UI ↔ Backend Rádio                                                   | concluido                            |
 | S-149  | 2026-07-17 | P-8.10 — Notificações Rádio                                                             | concluido                            |
+| S-150  | 2026-07-17 | P-8.11 — Integração Cross-App Rádio                                                     | concluido                            |
 
 ---
 
@@ -11007,7 +11008,7 @@ critério de aceite; mesmo precedente de S-114/P-6.10 e S-82/P-4.10):**
 - [x] Novo material exclusivo: email para quem tem termo aceito E
       consentimento de comunicação de novidades — `notifyNewMaterialAvailable`
       faz `innerJoin` com `term_acceptances` e com `consents` (`purpose =
-    "newsletter"`, `granted = true`); termo de responsabilidade sozinho não
+"newsletter"`, `granted = true`); termo de responsabilidade sozinho não
       dispara email
 - [x] Template com layout institucional — `NewMaterialEmail`, mesmo padrão
       visual de `new-document.tsx`
@@ -11026,4 +11027,130 @@ critério de aceite; mesmo precedente de S-114/P-6.10 e S-82/P-4.10):**
 - `apps/radio/src/actions/materials.ts`
 - `apps/radio/package.json`
 - `PROMPTS.md` (checklist de P-8.10 marcado)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+### S-150 — 2026-07-17 — P-8.11 — Integração Cross-App Rádio
+
+**Prompt:** P-8.11 (`PROMPTS.md:5059`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Implementada a semântica D-3 (opção recomendada, já registrada em
+`AUDIT/patches/P-8.11.md`): heartbeat anônimo do player a cada 60s
+(`session_id` efêmero + `track_id`, sem PII) → `radio.listener_heartbeats`
+(bruto, curtíssima duração) → agregação diária em
+`packages/jobs/src/crons/radio-stats.ts` → `radio.listener_stats` (1 linha/
+dia: `unique_sessions` + `hours_listened`) → heartbeats brutos apagados
+incondicionalmente após cada execução (LGPD, sem rastro individual).
+"Ouvinte" = sessão com >= 2 heartbeats; `hoursListened` soma TODOS os
+heartbeats (1 heartbeat ≈ 60s), não só os de sessões-ouvinte, para refletir
+tempo de reprodução real. Cron roda 1x/dia às 01:00 UTC e agrega sob a data
+de ONTEM (o dia que acabou de fechar), com upsert idempotente por `date`.
+`packages/integrations/src/radio.ts::getRadioDashboardStatus` substituído:
+lê o snapshot mais recente de `listener_stats` (campo `audience`); `nowPlaying`
+permanece stub (fora do escopo deste prompt, que só lista "KPI de
+audiência" nos arquivos permitidos).
+
+**Suposições/débitos registrados (G1):**
+
+- **`packages/db/src/schema/radio.ts` e `schema/index.ts` foram editados**,
+  apesar de não estarem na lista de "Arquivos permitidos" (que só lista os 3
+  arquivos de aplicação). Sem isso não há como representar
+  `listener_heartbeats` nem o novo formato diário de `listener_stats`
+  (antes: `listenerCount`/`capturedAt` — um snapshot pontual que nenhum cron
+  jamais chegou a popular, já que o job era só "planejado"). Tratado como
+  infraestrutura óbvia faltante — mesmo precedente das migrations de RLS
+  (0011/0050) e dos `ALTER TYPE` de audit_action (0022/0032/0038/0047/0051).
+- **3 migrations novas** em `packages/db/src/migrations/`: `0052_radio_
+listener_stats_add_columns.sql` (passo 1/2 — mantém `listener_count`
+  nullable só para o gerador não pedir confirmação interativa de "create or
+  rename column"; tabela confirmada vazia em produção antes de gerar),
+  `0053_radio_listener_stats_finalize.sql` (passo 2/2 — cria
+  `listener_heartbeats`, remove `listener_count`) e
+  `0054_radio_listener_heartbeats_rls.sql` (RLS custom — `FOR ALL` restrito
+  a `super_admin`, sem SELECT público: dado bruto efêmero, sem motivo de
+  negócio para qualquer outro papel acessar). Journal do drizzle-kit
+  nomeou os arquivos internamente como `0025`/`0026`/`0027` (mesmo drift
+  pré-existente documentado em `0050_radio_rls.sql`, parado em idx 24);
+  renomeados em disco para `0052`/`0053`/`0054` seguindo a numeração
+  sequencial real — o runner (`migrate.ts`) lê por nome de arquivo, não pelo
+  journal, então isso é seguro. As 3 migrations foram aplicadas ao banco de
+  dev e `schema-parity.test.ts` (`packages/db/src/__tests__/`) confirma TS ↔
+  banco em ambas as direções.
+- **`packages/jobs/src/index.ts` e `catalog.ts` foram editados** (fora da
+  lista) para registrar `radioStatsAggregationCron` em `functions` e remover
+  a entrada `"radio-audiencia-snapshot"` de `PLANNED_JOBS` — exigido
+  literalmente por G6.6 ("todo cron novo... registrar aqui a remoção da
+  entrada correspondente como parte do seu critério de aceite"), não é uma
+  suposição, é a instrução explícita das Instruções Globais.
+- **Escrita do heartbeat via conexão superuser** (`@hebron/db/client`, não
+  RLS/`authenticated`): mesma decisão já tomada em
+  `apps/radio/src/app/api/stream/route.ts` para `now_playing` — ouvinte
+  anônimo não tem sessão HTTP de usuário. Consistente, não uma decisão nova.
+- **`apps/radio/src/components/player.tsx` NÃO foi editado.** A semântica
+  do prompt descreve "o player envia heartbeat a cada 60s", mas o
+  componente do player não está na lista de "Arquivos permitidos" (que
+  lista só os 3 arquivos de backend) — e editá-lo entraria no escopo de G2
+  (qualquer prompt que edite componentes exige `/impeccable`), o que não se
+  aplica a este prompt tipo `integration`. Sem essa fiação, o endpoint
+  `/api/heartbeat` existe mas nunca recebe tráfego real do player em
+  produção — registrado aqui como **débito técnico pendente**, a ser
+  resolvido em um prompt futuro que inclua `player.tsx` nos arquivos
+  permitidos (candidato natural: um novo P-8.9b/P-8.13, ou incluído no
+  escopo de P-8.12 — Testes Rádio, se o Filipe preferir).
+- **Forma do KPI em `getRadioDashboardStatus`**: a interface antiga
+  (`currentListeners`/`nowPlaying`) não cabe mais na semântica diária —
+  substituída por `audience: { date, uniqueSessions, hoursListened } | null`
+  - `nowPlaying` (mantido, ainda stub). Nenhuma tela da Intranet consome
+    esta função hoje (`grep` em `apps/intranet/src` não encontrou nenhum
+    import de `getRadioDashboardStatus`) — o dashboard real que a exibirá
+    ainda não foi construído; a forma escolhida segue a semântica de dados
+    real disponível, não uma tela existente.
+
+**Verificação funcional (evidência além de lint/typecheck):**
+
+- `pnpm turbo lint typecheck` (`@hebron/db`, `@hebron/jobs`,
+  `@hebron/integrations`, `@hebron/radio`) — 20/20 tasks verdes.
+- `vitest run` em `@hebron/jobs` (suíte completa) — 9 arquivos/19 testes
+  verdes, incluindo os 3 novos de `radio-stats.test.ts` (cálculo de
+  sessões/horas com fixtures, idempotência, registro no catálogo Inngest).
+- `vitest run` em `@hebron/integrations` (suíte completa) — 6 arquivos/8
+  testes verdes (nenhuma regressão nas integrações existentes).
+- `vitest run src/__tests__/schema-parity.test.ts` em `@hebron/db` — TS ↔
+  banco batem em ambas as direções (tabelas/colunas/enums), confirmando que
+  as 3 migrations novas foram aplicadas corretamente ao banco de dev.
+
+**Critérios de aceite verificados:**
+
+- [x] Heartbeat sem PII (payload: `session_id` efêmero + `track_id`) —
+      `heartbeatSchema` (Zod) só aceita esses 2 campos; verificado por
+      leitura do schema/rota.
+- [x] KPI: sessões únicas/dia e horas ouvidas/dia calculadas corretamente
+      (teste com fixtures) — `radio-stats.test.ts`.
+- [x] Cron de agregação registrado em `packages/jobs`; brutos removidos
+      após agregar (teste) — `radio-stats.test.ts` + `index.ts`/`catalog.ts`.
+- [x] Stub da Intranet substituído via `packages/integrations` —
+      `getRadioDashboardStatus` lê `listener_stats` real.
+- [x] Lint passa · Types passam
+
+**Arquivos criados:**
+
+- `apps/radio/src/app/api/heartbeat/route.ts`
+- `packages/jobs/src/crons/radio-stats.ts`
+- `packages/jobs/src/__tests__/radio-stats.test.ts`
+- `packages/db/src/migrations/0052_radio_listener_stats_add_columns.sql`
+- `packages/db/src/migrations/0053_radio_listener_stats_finalize.sql`
+- `packages/db/src/migrations/0054_radio_listener_heartbeats_rls.sql`
+
+**Arquivos modificados (fora da lista, G1 — ver Suposições):**
+
+- `packages/db/src/schema/radio.ts`
+- `packages/db/src/schema/index.ts`
+- `packages/jobs/src/index.ts`
+- `packages/jobs/src/catalog.ts`
+- `packages/integrations/src/radio.ts` (na lista — reescrito)
+- `PROMPTS.md` (checklist de P-8.11 marcado)
 - `SESSIONS.md` (esta entrada + linha no índice)

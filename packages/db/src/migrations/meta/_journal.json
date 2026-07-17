@@ -78,6 +78,27 @@
       "when": 1784303511149,
       "tag": "0024_radio_rls",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1784315304941,
+      "tag": "0025_radio_listener_stats_add_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1784315461573,
+      "tag": "0026_radio_listener_stats_finalize",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1784315501361,
+      "tag": "0027_radio_listener_heartbeats_rls",
+      "breakpoints": true
     }
   ]
 }

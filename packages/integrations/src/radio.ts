@@ -1,15 +1,23 @@
 // ---------------------------------------------------------------------------
 // getRadioDashboardStatus — Rádio → Intranet
 //
-// Stub: a integração real nasce quando o módulo Rádio for construído (Fase
-// 8). Comportamento esperado (BRAIN.md, tabela de integrações cross-app
-// §"Rádio → Intranet"):
-//   Audiência atual (ouvintes) e "tocando agora" (autor/série/faixa em
-//   reprodução no Auto DJ) alimentam o widget do dashboard da Intranet.
+// KPI de audiência real (BRAIN.md, tabela de integrações cross-app §"Rádio →
+// Intranet"), semântica D-3 (PROMPTS.md P-8.11): lê o snapshot diário mais
+// recente de radio.listener_stats, agregado por
+// packages/jobs/src/crons/radio-stats.ts a partir dos heartbeats anônimos do
+// player (sessões únicas/dia + horas ouvidas/dia).
+//
+// "Tocando agora" (autor/série/faixa) permanece stub — fora do escopo de
+// P-8.11 (que só cobre "KPI de audiência" nos arquivos permitidos); registrado
+// como pendência em SESSIONS.md.
 //
 // Vive em packages/integrations (P-0.15) — o dashboard da Intranet nunca
 // importa direto de apps/radio (G6.5, PROMPTS.md).
 // ---------------------------------------------------------------------------
+
+import { desc } from "drizzle-orm";
+import { db } from "@hebron/db/client";
+import { listenerStats } from "@hebron/db/schema";
 
 export interface RadioNowPlaying {
   author: string;
@@ -17,15 +25,37 @@ export interface RadioNowPlaying {
   trackTitle: string;
 }
 
+export interface RadioAudienceKpi {
+  /** Dia (YYYY-MM-DD) do snapshot mais recente agregado. */
+  date: string;
+  uniqueSessions: number;
+  hoursListened: number;
+}
+
 export interface RadioDashboardStatus {
-  currentListeners: number;
+  audience: RadioAudienceKpi | null;
   nowPlaying: RadioNowPlaying | null;
 }
 
 export async function getRadioDashboardStatus(): Promise<RadioDashboardStatus> {
-  // Stub — nenhum dado real até que o módulo Rádio exista (Fase 8).
+  const [latest] = await db
+    .select()
+    .from(listenerStats)
+    .orderBy(desc(listenerStats.date))
+    .limit(1);
+
   console.info(
-    "[integrations/radio] stub — audiência/tocando agora pendentes (Fase 8)",
+    "[integrations/radio] tocando agora — stub, fora do escopo de P-8.11",
   );
-  return { currentListeners: 0, nowPlaying: null };
+
+  return {
+    audience: latest
+      ? {
+          date: latest.date,
+          uniqueSessions: latest.uniqueSessions,
+          hoursListened: Number(latest.hoursListened),
+        }
+      : null,
+    nowPlaying: null,
+  };
 }

@@ -5078,11 +5078,11 @@ Rádio → Intranet: KPI de audiência via packages/integrations. SEMÂNTICA (D-
 
 **Critérios de aceite:**
 
-- [ ] Heartbeat sem PII (payload: session_id efêmero + track_id) — verificado
-- [ ] KPI: sessões únicas/dia e horas ouvidas/dia calculadas corretamente (teste com fixtures)
-- [ ] Cron de agregação registrado em packages/jobs; brutos removidos após agregar (teste)
-- [ ] Stub da Intranet substituído via packages/integrations
-- [ ] Lint passa · Types passam
+- [x] Heartbeat sem PII (payload: session_id efêmero + track_id) — verificado
+- [x] KPI: sessões únicas/dia e horas ouvidas/dia calculadas corretamente (teste com fixtures)
+- [x] Cron de agregação registrado em packages/jobs; brutos removidos após agregar (teste)
+- [x] Stub da Intranet substituído via packages/integrations
+- [x] Lint passa · Types passam
 
 ---
 
