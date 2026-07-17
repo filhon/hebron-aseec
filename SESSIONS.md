@@ -168,6 +168,7 @@
 | S-145  | 2026-07-17 | P-8.6 — Schema do Banco Rádio                                                           | concluido                            |
 | S-146  | 2026-07-17 | P-8.7 — RLS Policies Rádio                                                              | concluido                            |
 | S-147  | 2026-07-17 | P-8.8 — Server Actions Rádio                                                            | concluido                            |
+| S-148  | 2026-07-17 | P-8.9 — Integração UI ↔ Backend Rádio                                                   | concluido                            |
 
 ---
 
@@ -10756,3 +10757,176 @@ client (`apps/radio/src/components/`) importa `lib/r2.ts` ou referencia
 - `apps/radio/src/lib/audit.ts` (fora da lista, ver Suposições)
 - `packages/db/src/migrations/0051_radio_audit_actions.sql` (fora da lista,
   ver Suposições)
+
+---
+
+### S-148 — 2026-07-17 — P-8.9 — Integração UI ↔ Backend Rádio
+
+**Prompt:** P-8.9 (`PROMPTS.md:4988`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Substituídos os mocks de `apps/radio/src/lib/mock-data.ts` (removido) por
+dados reais em todo o app: catálogo (autores/séries/faixas) via
+`lib/queries.ts` novo (G1 — mesmo precedente de `apps/flats`/`apps/plataforma`
+`lib/queries.ts`, fora da lista de arquivos permitidos mas infraestrutura
+óbvia faltante), lendo sempre via `withAuthenticatedContext` (anon para
+conteúdo público, `{actorId}` para materiais/admin) para exercer de fato as
+policies de `0050_radio_rls.sql` (G6.2).
+
+Player real: `player.tsx` reescrito para tocar `/api/stream` (URL fixa, Auto
+DJ server-side de P-8.8) em vez de `track.fileUrl` por faixa — a navegação
+Skip anterior/próxima de P-8.2 foi removida (o Auto DJ real não é navegável
+pelo ouvinte, só pelo servidor; BRAIN §6.4 "player simples"), documentada
+como mudança funcional necessária, não estética. Persistência entre
+navegações: `app/layout.tsx` virou Server Component assíncrono (busca
+`now_playing` + catálogo a cada request — `export const dynamic =
+"force-dynamic"` adicionado, sem isso o Next pré-renderizaria "/"
+estaticamente no build e congelaria o Player nesse estado para sempre, achado
+só visível rodando `next build` de verdade) que envolve os children num novo
+`app/shell.tsx` (Client Component, arquivo já previsto na lista de
+permitidos) — único ponto de inscrição no canal Realtime `now-playing`
+(broadcast `track_change` de `api/stream/route.ts`), expõe o estado atual via
+Context para o card "tocando agora" da home (`components/now-playing-card.tsx`,
+novo) sem abrir uma segunda inscrição redundante.
+
+Materiais exclusivos: fluxo real login wall → aceite de termo → download.
+Descoberta importante ao implementar: `exclusive_materials_select_term_accepted`
+(0050_radio_rls.sql) bloqueia o SELECT inteiro sem nenhum `term_acceptances`
+do usuário — não dá para listar título/estado por item antes do aceite como
+o protótipo de P-8.1 mostrava (cadeado por card). `materiais/page.tsx`
+resolve isso checando `hasAcceptedTerm` ANTES de tentar listar; sem aceite,
+`components/materials-panel.tsx` (novo) renderiza o `TermsAcceptDialog`
+(P-8.2) como gate de página inteira, chama `acceptTerm` (P-8.8) e usa
+`router.refresh()` para re-executar o Server Component com os dados reais —
+sem precisar de uma Server Action de listagem adicional.
+
+Admin: `admin/layout.tsx` ganhou gate real (`requireSuperAdminSession`,
+G5) + `admin/shell.tsx` com `logoutAction` (novo `actions/auth.ts`, G5).
+`admin/page.tsx` reescrito com 5 painéis client novos em `components/`
+(`authors-admin-panel.tsx`, `series-admin-panel.tsx`,
+`tracks-admin-panel.tsx`, `playlists-admin-panel.tsx`,
+`materials-admin-panel.tsx`) conectando os 5 formulários de P-8.4 às Server
+Actions de P-8.8 via `useAction` (`next-safe-action/hooks`, mesmo padrão de
+`apps/plataforma/src/components/instructor-table.tsx`). CRUD respeita
+literalmente o escopo de P-8.8: autores/séries/playlists têm CRUD completo,
+faixas e materiais só criação (sem update/delete — não existe action para
+isso, G1).
+
+**Suposições registradas (G1 — ambiguidade resolvida pela opção mais simples):**
+
+- **`(admin)` da lista de arquivos permitidos tratado como `admin/` literal**
+  (sem parênteses) — decisão já registrada em P-8.3/S-140: um route group
+  `(admin)` sem segmento próprio colidiria com `app/page.tsx` (ambos
+  resolveriam `/`). Não revertida aqui.
+- **`apps/radio/src/lib/queries.ts` criado fora da lista de arquivos
+  permitidos** — toda leitura real precisa de um ponto central de acesso ao
+  banco com o `actorId` da sessão; mesmo precedente de
+  `apps/flats`/`apps/plataforma` `lib/queries.ts` (que também não estavam nas
+  listas originais dos respectivos P-X.9).
+- **Upload de foto de autor: `getAuthorPhotoUploadUrl` (novo, em
+  `actions/tracks.ts`) + `getR2PublicUrl` (novo, em `lib/r2.ts`)** — P-8.8 não
+  criou nenhuma infraestrutura de upload para `authors.photoUrl` (só
+  tracks/materiais). `R2_PUBLIC_URL` já estava nas env vars deste prompt sem
+  nenhum consumidor até aqui — é para isto: `authors.photoUrl` é a única
+  mídia do módulo servida direto do bucket (sem proxy nem signed URL),
+  então precisa de uma URL pública completa (`createAuthorSchema.photoUrl`
+  exige `z.string().url()`), diferente da key crua usada por
+  tracks/materiais.
+- **`getPlaylistsWithTracks` (novo, em `lib/queries.ts`)** — o admin precisa
+  listar playlists com faixas ordenadas para o `PlaylistForm` (edição) e para
+  ativar/desativar; não existia leitura equivalente fora do Auto DJ
+  (`api/stream/route.ts`, que não expõe isso para o client).
+- **`components/player-skeleton.tsx` (P-8.5) permanece órfão** — o critério
+  de aceite deste prompt cobre explicitamente só P-8.2/P-8.4
+  ("Nenhum componente/formulário do Bloco A (P-8.2/P-8.4) sem import"). A
+  home page não tem mais uma fase "loading" simulável por query string (o
+  `?state=` de P-8.5 era só para a validação de Bloco A com a diretoria;
+  os dados reais do Player vêm resolvidos no Server Component antes do
+  primeiro paint, sem uma janela real de carregamento para mostrar o
+  skeleton). `catalog-skeleton.tsx` continua em uso (Suspense real em torno
+  de `AuthorsGrid` na home).
+- **`MaterialUploadFormValues.description` continua sem persistir** — débito
+  já registrado em S-145/P-8.6: `createExclusiveMaterialSchema`
+  (`packages/validators`) nunca ganhou o campo `description` apesar de a
+  coluna existir em `exclusive_materials` e o formulário de P-8.4 coletá-lo;
+  fora da lista de arquivos permitidos deste prompt (`packages/validators`
+  não está em "Arquivos permitidos" de P-8.9), não corrigido aqui.
+- **PWA (manifest + service worker) reaproveitado sem alteração** — já
+  registrado/testado em P-8.8; a verificação manual de instalação +
+  reprodução em segundo plano num navegador real não é possível neste
+  ambiente (mesma ressalva de S-147) — fica documentada aqui e deve ser
+  confirmada manualmente no PR antes do merge.
+
+**Verificação:** `pnpm turbo lint typecheck` na raiz — 38/38 tasks verdes.
+`pnpm --filter @hebron/radio build` (produção) verde após adicionar
+`export const dynamic = "force-dynamic"` ao layout raiz — sem isso o Next
+pré-renderizava "/" estaticamente no build (rota aparecia como `○` estática
+na tabela de rotas), o que congelaria o estado inicial do Player/`now_playing`
+na primeira build para sempre; corrigido e reconfirmado (rota "/" passou a
+`ƒ` dinâmica). Grep confirmando zero referências a `mock-data`/`mockAuthors`/
+`mockTracks`/etc. fora do próprio arquivo antes de removê-lo. Grep
+confirmando import de todos os componentes/formulários de P-8.2/P-8.4
+(`author-card`, `material-card`, `playlist-view`, `terms-accept-dialog`,
+`track-info`, `author-form`, `series-form`, `playlist-form`,
+`material-upload-form`, `track-upload-form`) em pelo menos um arquivo fora
+da própria definição.
+
+**Critérios de aceite verificados:**
+
+- [x] Player toca áudio real do R2 (via `/api/stream`) e PERSISTE entre
+      navegações — `app/shell.tsx` é montado uma única vez pelo layout raiz,
+      fora da árvore de `children`, então nunca remonta em navegação
+      client-side
+- [x] "Tocando agora" via Supabase Realtime (broadcast `track_change`,
+      canal `now-playing`) — consumido em `app/shell.tsx` (Player) e
+      `components/now-playing-card.tsx` (home)
+- [x] Catálogos com dados do banco (`autores/page.tsx`,
+      `autores/[slug]/page.tsx`, `series/[slug]/page.tsx`, home)
+- [x] Material exclusivo: anônimo → login wall; sem termo → dialog de
+      aceite (gate de página inteira, ver Resumo); com termo → download via
+      signed URL que expira em 1h (`getMaterialDownloadUrl`, P-8.8)
+- [x] Admin: upload de faixa, criação de playlist (drag-drop, `PlaylistForm`
+      já tinha a interação de P-8.4) e material exclusivo operáveis pela UI;
+      `admin/layout.tsx` bloqueia não-super_admin via
+      `requireSuperAdminSession` (redirect para `CANONICAL_LOGIN_URL`)
+- [x] PWA: manifest + service worker reaproveitados de P-8.8 (verificação
+      manual pendente — ver Suposições)
+- [x] Nenhum componente/formulário do Bloco A (P-8.2/P-8.4) sem import (grep)
+- [x] Mock data removido (`apps/radio/src/lib/mock-data.ts` deletado)
+- [x] Lint passa · Types passam
+
+**Arquivos modificados:**
+
+- `apps/radio/src/actions/tracks.ts` (`getAuthorPhotoUploadUrl`)
+- `apps/radio/src/lib/r2.ts` (`getR2PublicUrl`)
+- `apps/radio/src/app/layout.tsx`
+- `apps/radio/src/app/page.tsx`
+- `apps/radio/src/app/autores/page.tsx`
+- `apps/radio/src/app/autores/[slug]/page.tsx`
+- `apps/radio/src/app/series/[slug]/page.tsx`
+- `apps/radio/src/app/materiais/page.tsx`
+- `apps/radio/src/app/admin/layout.tsx`
+- `apps/radio/src/app/admin/shell.tsx`
+- `apps/radio/src/app/admin/page.tsx`
+- `apps/radio/src/components/player.tsx`
+- `PROMPTS.md` (checklist de P-8.9 marcado)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+**Arquivos criados:**
+
+- `apps/radio/src/lib/queries.ts` (fora da lista, ver Suposições)
+- `apps/radio/src/actions/auth.ts`
+- `apps/radio/src/app/shell.tsx`
+- `apps/radio/src/components/now-playing-card.tsx`
+- `apps/radio/src/components/materials-panel.tsx`
+- `apps/radio/src/components/authors-admin-panel.tsx`
+- `apps/radio/src/components/series-admin-panel.tsx`
+- `apps/radio/src/components/tracks-admin-panel.tsx`
+- `apps/radio/src/components/playlists-admin-panel.tsx`
+- `apps/radio/src/components/materials-admin-panel.tsx`
+
+**Arquivos removidos:**
+
+- `apps/radio/src/lib/mock-data.ts`

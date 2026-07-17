@@ -5016,15 +5016,15 @@ Substituir mocks. Player tocando áudio real do R2. "Tocando agora" via Supabase
 
 **Critérios de aceite:**
 
-- [ ] Player toca áudio real do R2 e PERSISTE entre navegações (não reinicia ao trocar de página)
-- [ ] "Tocando agora" via Supabase Realtime
-- [ ] Catálogos com dados do banco
-- [ ] Material exclusivo: anônimo → login wall; sem termo → dialog de aceite; com termo → download via signed URL que expira (fluxo completo testável)
-- [ ] Admin: upload de faixa, criação de playlist (drag-drop) e material exclusivo operáveis pela UI (forms de P-8.4 conectados); anônimo/não-admin bloqueado no (admin) (teste)
-- [ ] PWA instala e toca em background (verificação manual documentada)
-- [ ] Nenhum componente/formulário do Bloco A (P-8.2/P-8.4) sem import (grep)
-- [ ] Mock data removido
-- [ ] Lint passa · Types passam
+- [x] Player toca áudio real do R2 e PERSISTE entre navegações (não reinicia ao trocar de página)
+- [x] "Tocando agora" via Supabase Realtime
+- [x] Catálogos com dados do banco
+- [x] Material exclusivo: anônimo → login wall; sem termo → dialog de aceite; com termo → download via signed URL que expira (fluxo completo testável)
+- [x] Admin: upload de faixa, criação de playlist (drag-drop) e material exclusivo operáveis pela UI (forms de P-8.4 conectados); anônimo/não-admin bloqueado no (admin) (teste)
+- [x] PWA instala e toca em background (verificação manual documentada)
+- [x] Nenhum componente/formulário do Bloco A (P-8.2/P-8.4) sem import (grep)
+- [x] Mock data removido
+- [x] Lint passa · Types passam
 
 ---
 

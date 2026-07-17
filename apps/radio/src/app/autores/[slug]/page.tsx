@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ChevronRight, User } from "lucide-react";
 import { PlaylistView } from "../../../components/playlist-view";
-import { mockAuthors, mockSeries, mockTracks } from "../../../lib/mock-data";
+import { getRadioCatalog } from "../../../lib/queries";
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -13,17 +13,19 @@ export async function generateMetadata({
   params,
 }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const author = mockAuthors.find((a) => a.id === slug);
+  const { authors } = await getRadioCatalog();
+  const author = authors.find((a) => a.id === slug);
   return { title: author?.name ?? "Autor" };
 }
 
 export default async function AutorPage({ params }: PageProps) {
   const { slug } = await params;
-  const author = mockAuthors.find((a) => a.id === slug);
+  const { authors, series, tracks } = await getRadioCatalog();
+  const author = authors.find((a) => a.id === slug);
   if (!author) notFound();
 
-  const series = mockSeries.filter((s) => s.authorId === author.id);
-  const avulsas = mockTracks.filter(
+  const authorSeries = series.filter((s) => s.authorId === author.id);
+  const avulsas = tracks.filter(
     (t) => t.authorId === author.id && t.seriesId === null,
   );
 
@@ -71,7 +73,7 @@ export default async function AutorPage({ params }: PageProps) {
       </header>
 
       <div className="flex flex-col gap-10 pt-8">
-        {series.length > 0 && (
+        {authorSeries.length > 0 && (
           <section aria-labelledby="series-heading">
             <h2
               id="series-heading"
@@ -80,8 +82,8 @@ export default async function AutorPage({ params }: PageProps) {
               Séries
             </h2>
             <ul className="flex flex-col divide-y divide-(--divider) rounded-(--radius-md) border border-(--border)">
-              {series.map((item) => {
-                const trackCount = mockTracks.filter(
+              {authorSeries.map((item) => {
+                const trackCount = tracks.filter(
                   (t) => t.seriesId === item.id,
                 ).length;
                 return (

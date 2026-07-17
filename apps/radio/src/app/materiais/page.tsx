@@ -1,28 +1,23 @@
-"use client";
-
-import * as React from "react";
+import type { Metadata } from "next";
 import { Lock } from "lucide-react";
 import { Button, PageHeader } from "@hebron/ui";
-import { MaterialCard } from "../../components/material-card";
-import { TermsAcceptDialog } from "../../components/terms-accept-dialog";
+import { CANONICAL_LOGIN_URL } from "@hebron/auth";
+import { MaterialsPanel } from "../../components/materials-panel";
 import {
-  mockExclusiveMaterials,
-  mockTermAcceptances,
-} from "../../lib/mock-data";
+  getAuthUser,
+  getExclusiveMaterialsList,
+  hasAcceptedTerm,
+} from "../../lib/queries";
 
-// Sessão simulada em estado local — sem backend nesta fase (Bloco A). Permite
-// validar visualmente a jornada completa (parede de login → aceite de termo →
-// download). Integração real de sessão/Supabase acontece em P-8.9.
-const MOCK_USER_ID = "user-ouvinte-03";
+export const metadata: Metadata = {
+  title: "Materiais exclusivos",
+  description: "Apostilas e roteiros de apoio às séries da rádio.",
+};
 
-export default function MateriaisPage() {
-  const [loggedIn, setLoggedIn] = React.useState(false);
-  const [termAccepted, setTermAccepted] = React.useState(() =>
-    mockTermAcceptances.some((t) => t.userId === MOCK_USER_ID),
-  );
-  const [dialogOpen, setDialogOpen] = React.useState(false);
+export default async function MateriaisPage() {
+  const user = await getAuthUser();
 
-  if (!loggedIn) {
+  if (!user) {
     return (
       <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
         <PageHeader
@@ -43,13 +38,16 @@ export default function MateriaisPage() {
               mediante aceite do termo de uso.
             </p>
           </div>
-          <Button type="button" onClick={() => setLoggedIn(true)}>
-            Entrar
+          <Button asChild>
+            <a href={CANONICAL_LOGIN_URL}>Entrar</a>
           </Button>
         </div>
       </div>
     );
   }
+
+  const accepted = await hasAcceptedTerm(user.id);
+  const materials = accepted ? await getExclusiveMaterialsList(user.id) : [];
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10 sm:px-6">
@@ -58,26 +56,7 @@ export default function MateriaisPage() {
         description="Apostilas e roteiros de apoio às séries da rádio."
       />
 
-      <div className="flex flex-col gap-3">
-        {mockExclusiveMaterials.map((material) => (
-          <MaterialCard
-            key={material.id}
-            material={material}
-            termAccepted={termAccepted}
-            onRequestTermAcceptance={() => setDialogOpen(true)}
-            onDownload={() => undefined}
-          />
-        ))}
-      </div>
-
-      <TermsAcceptDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        onAccept={() => {
-          setTermAccepted(true);
-          setDialogOpen(false);
-        }}
-      />
+      <MaterialsPanel initialAccepted={accepted} materials={materials} />
     </div>
   );
 }

@@ -7,8 +7,6 @@ import {
   Music,
   Pause,
   Play,
-  SkipBack,
-  SkipForward,
   Volume2,
   VolumeX,
 } from "lucide-react";
@@ -17,6 +15,14 @@ import { TrackInfo } from "./track-info";
 const MAX_RETRIES = 3;
 const RETRY_BASE_DELAY_MS = 1000;
 
+// Auto DJ (BRAIN §6.4): URL fixa, servida por apps/radio/src/app/api/stream —
+// não há navegação de faixa no client, o servidor decide o que está tocando.
+// A troca de faixa chega via evento Realtime "track_change" (Shell, que
+// atualiza `track` aqui) ou pelo próprio fim do arquivo (`onEnded`), nunca
+// por escolha do ouvinte (P-8.2 tinha Skip anterior/próxima; removido nesta
+// integração — Auto DJ real não permite pular faixa, BRAIN "player simples").
+const STREAM_URL = "/api/stream";
+
 type ErrorState = "none" | "retrying" | "failed";
 
 export interface PlayerTrack {
@@ -24,13 +30,12 @@ export interface PlayerTrack {
   title: string;
   authorName: string;
   seriesName: string | null;
-  fileUrl: string;
   durationSeconds: number;
 }
 
 export interface PlayerProps {
-  tracks: PlayerTrack[];
-  initialTrackId?: string;
+  /** Faixa tocando agora, segundo o Auto DJ — `null` enquanto não há playlist ativa. */
+  track: PlayerTrack | null;
   className?: string;
 }
 
@@ -45,20 +50,14 @@ function formatDuration(totalSeconds: number): string {
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
 }
 
-export function Player({ tracks, initialTrackId, className }: PlayerProps) {
+export function Player({ track, className }: PlayerProps) {
   const audioRef = React.useRef<HTMLAudioElement>(null);
-  const [currentIndex, setCurrentIndex] = React.useState(() => {
-    const initialIndex = tracks.findIndex((t) => t.id === initialTrackId);
-    return initialIndex >= 0 ? initialIndex : 0;
-  });
   const [isPlaying, setIsPlaying] = React.useState(false);
   const [currentTime, setCurrentTime] = React.useState(0);
   const [volume, setVolume] = React.useState(1);
   const [muted, setMuted] = React.useState(false);
   const [isBuffering, setIsBuffering] = React.useState(false);
   const [errorState, setErrorState] = React.useState<ErrorState>("none");
-
-  const track = tracks[currentIndex] ?? null;
 
   const wasPlayingRef = React.useRef(isPlaying);
   wasPlayingRef.current = isPlaying;
@@ -81,20 +80,24 @@ export function Player({ tracks, initialTrackId, className }: PlayerProps) {
     setErrorState("none");
   }
 
+  // Faixa mudou (broadcast Realtime do Shell) — recarrega o proxy do Auto DJ
+  // (o `src` do <audio> é sempre a mesma URL; sem `.load()` o browser não
+  // refaz o request e continuaria tocando o conteúdo antigo em cache).
   React.useEffect(() => {
     setCurrentTime(0);
     resetRetries();
     setIsBuffering(false);
+    audioRef.current?.load();
     if (wasPlayingRef.current) {
-      void audioRef.current?.play();
+      void audioRef.current?.play().catch(() => {});
     }
     return clearPendingRetry;
-  }, [currentIndex]);
+  }, [track?.id]);
 
   React.useEffect(() => clearPendingRetry, []);
 
   // Registro do service worker (PWA, BRAIN §6.4) — feito aqui porque o
-  // Player é o único componente montado em toda página (app/layout.tsx),
+  // Player é o único componente montado em toda página (app/shell.tsx),
   // não há um Client Component de "app shell" próprio neste app ainda.
   React.useEffect(() => {
     if ("serviceWorker" in navigator) {
@@ -105,9 +108,9 @@ export function Player({ tracks, initialTrackId, className }: PlayerProps) {
     }
   }, []);
 
-  // Media Session API (critério de aceite de P-8.8): título/autor aparecem
-  // nos controles do SO/tela de bloqueio, com play/pause/anterior/próxima
-  // conectados às mesmas funções do player.
+  // Media Session API: título/autor aparecem nos controles do SO/tela de
+  // bloqueio, com play/pause conectados ao player. Sem anterior/próxima —
+  // o Auto DJ não é navegável (ver nota de `STREAM_URL` acima).
   React.useEffect(() => {
     if (!("mediaSession" in navigator) || !track) return;
 
@@ -119,10 +122,6 @@ export function Player({ tracks, initialTrackId, className }: PlayerProps) {
 
     navigator.mediaSession.setActionHandler("play", () => togglePlay());
     navigator.mediaSession.setActionHandler("pause", () => togglePlay());
-    navigator.mediaSession.setActionHandler("previoustrack", () =>
-      goToPrevious(),
-    );
-    navigator.mediaSession.setActionHandler("nexttrack", () => goToNext());
     navigator.mediaSession.setActionHandler("seekto", (details) => {
       if (details.seekTime === undefined || !audioRef.current) return;
       audioRef.current.currentTime = details.seekTime;
@@ -132,8 +131,6 @@ export function Player({ tracks, initialTrackId, className }: PlayerProps) {
     return () => {
       navigator.mediaSession.setActionHandler("play", null);
       navigator.mediaSession.setActionHandler("pause", null);
-      navigator.mediaSession.setActionHandler("previoustrack", null);
-      navigator.mediaSession.setActionHandler("nexttrack", null);
       navigator.mediaSession.setActionHandler("seekto", null);
     };
   }, [track?.id, isPlaying]);
@@ -172,6 +169,17 @@ export function Player({ tracks, initialTrackId, className }: PlayerProps) {
     setErrorState("none");
   }
 
+  // Faixa terminou no cliente — o servidor já decidiu qual é a próxima
+  // (`api/stream` recalcula a cada request), então basta recarregar o
+  // proxy; a metadata visual é corrigida pelo próximo broadcast Realtime.
+  function handleAudioEnded() {
+    setIsBuffering(true);
+    audioRef.current?.load();
+    if (wasPlayingRef.current) {
+      void audioRef.current?.play().catch(() => {});
+    }
+  }
+
   React.useEffect(() => {
     if (audioRef.current) {
       audioRef.current.volume = volume;
@@ -189,16 +197,6 @@ export function Player({ tracks, initialTrackId, className }: PlayerProps) {
       void audioRef.current.play();
       setIsPlaying(true);
     }
-  }
-
-  function goToPrevious() {
-    if (tracks.length === 0) return;
-    setCurrentIndex((i) => (i - 1 + tracks.length) % tracks.length);
-  }
-
-  function goToNext() {
-    if (tracks.length === 0) return;
-    setCurrentIndex((i) => (i + 1) % tracks.length);
   }
 
   function handleSeek(event: React.ChangeEvent<HTMLInputElement>) {
@@ -228,9 +226,9 @@ export function Player({ tracks, initialTrackId, className }: PlayerProps) {
     <div className={barClassName}>
       <audio
         ref={audioRef}
-        src={track.fileUrl}
+        src={STREAM_URL}
         onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
-        onEnded={goToNext}
+        onEnded={handleAudioEnded}
         onError={handleAudioError}
         onStalled={handleAudioError}
         onWaiting={() => setIsBuffering(true)}
@@ -283,21 +281,6 @@ export function Player({ tracks, initialTrackId, className }: PlayerProps) {
             <div className="flex items-center justify-center gap-2">
               <button
                 type="button"
-                onClick={goToPrevious}
-                disabled={tracks.length < 2}
-                aria-label="Faixa anterior"
-                className={cn(
-                  "hidden h-9 w-9 items-center justify-center rounded-full sm:flex",
-                  "text-(--fg-muted) transition-colors duration-(--transition-fast)",
-                  "hover:bg-(--surface-alt) hover:text-(--fg)",
-                  "disabled:pointer-events-none disabled:opacity-40",
-                )}
-              >
-                <SkipBack className="h-4 w-4" aria-hidden="true" />
-              </button>
-
-              <button
-                type="button"
                 onClick={togglePlay}
                 disabled={isBuffering}
                 aria-label={
@@ -324,21 +307,6 @@ export function Player({ tracks, initialTrackId, className }: PlayerProps) {
                     aria-hidden="true"
                   />
                 )}
-              </button>
-
-              <button
-                type="button"
-                onClick={goToNext}
-                disabled={tracks.length < 2}
-                aria-label="Próxima faixa"
-                className={cn(
-                  "hidden h-9 w-9 items-center justify-center rounded-full sm:flex",
-                  "text-(--fg-muted) transition-colors duration-(--transition-fast)",
-                  "hover:bg-(--surface-alt) hover:text-(--fg)",
-                  "disabled:pointer-events-none disabled:opacity-40",
-                )}
-              >
-                <SkipForward className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
 

@@ -17,7 +17,7 @@ import {
 } from "@hebron/validators/radio";
 import { superAdminAction } from "../lib/safe-action";
 import { logRadioAudit } from "../lib/audit";
-import { getR2UploadUrl } from "../lib/r2";
+import { getR2PublicUrl, getR2UploadUrl } from "../lib/r2";
 
 // ---------------------------------------------------------------------------
 // CRUD de autores e séries (escopo de P-8.8: "CRUD de autores, séries,
@@ -35,6 +35,32 @@ import { getR2UploadUrl } from "../lib/r2";
 // ---------------------------------------------------------------------------
 
 // ─── Autores ────────────────────────────────────────────────────────────────
+
+const AUTHOR_PHOTO_ALLOWED_CONTENT_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+] as const;
+
+const getAuthorPhotoUploadUrlSchema = z.object({
+  fileName: z.string().min(1).max(255),
+  contentType: z.enum(AUTHOR_PHOTO_ALLOWED_CONTENT_TYPES),
+});
+
+/**
+ * URL assinada de upload + URL pública final da foto (`authors.photoUrl` é
+ * `z.string().url()` em `createAuthorSchema` — precisa ser uma URL completa,
+ * não a key crua do bucket como em tracks/materiais). Infraestrutura óbvia
+ * faltante para o `AuthorForm` de P-8.4 (G1, ver lib/r2.ts).
+ */
+export const getAuthorPhotoUploadUrl = superAdminAction
+  .schema(getAuthorPhotoUploadUrlSchema)
+  .action(async ({ parsedInput: input }) => {
+    const ext = input.fileName.split(".").pop() ?? "bin";
+    const key = `authors/${randomUUID()}.${ext}`;
+    const uploadUrl = await getR2UploadUrl(key, input.contentType);
+    return { uploadUrl, publicUrl: getR2PublicUrl(key) };
+  });
 
 export const createAuthor = superAdminAction
   .schema(createAuthorSchema)

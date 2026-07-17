@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Parkinsans, Titillium_Web } from "next/font/google";
 import { Radio, Users, FileDown } from "lucide-react";
-import { Player } from "../components/player";
-import { mockPlaylists, mockNowPlaying } from "../lib/mock-data";
+import { CANONICAL_LOGIN_URL } from "@hebron/auth";
+import { getNowPlayingSnapshot, getRadioCatalog } from "../lib/queries";
+import { Shell, type NowPlayingState, type TrackLookupEntry } from "./shell";
 import "./globals.css";
 
 const parkinsans = Parkinsans({
@@ -20,6 +21,12 @@ const titillium = Titillium_Web({
   display: "swap",
 });
 
+// O layout raiz lê `now_playing`/catálogo do banco a cada request (Auto DJ,
+// BRAIN §6.4) — sem isso o Next tentaria pré-renderizar "/" estaticamente no
+// build e congelaria o estado inicial do Player para sempre (nenhum dado
+// dinâmico é usado pela própria home page.tsx, só pelo layout que a envolve).
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: {
     default: "Rádio Hebron Aseec",
@@ -29,27 +36,38 @@ export const metadata: Metadata = {
     "Pregações e ensino da Palavra, 24 horas por dia, organizadas por autor e série.",
 };
 
-// Réplica local de CANONICAL_LOGIN_URL (@hebron/auth): o barrel da package
-// reexporta client.ts, que lança em module-scope se as env vars
-// NEXT_PUBLIC_SUPABASE_* não estiverem definidas — quebraria o build do
-// Bloco A, que não tem env vars (precondição do prompt). Substituir pela
-// importação real em P-8.9.
-const CANONICAL_LOGIN_URL =
-  process.env.NODE_ENV === "production"
-    ? "https://app.hebronaseec.com.br/login"
-    : "http://localhost:3005/login";
-
-// Rotação geral do Auto DJ — mesma playlist ouvida por quem chega em
-// qualquer página (BRAIN §6.4: player persistente, sem live streaming).
-const ROTATION_TRACKS =
-  (mockPlaylists.find((p) => p.id === "playlist-02") ?? mockPlaylists[0])
-    ?.tracks ?? [];
-
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const [nowPlaying, catalog] = await Promise.all([
+    getNowPlayingSnapshot(),
+    getRadioCatalog(),
+  ]);
+
+  const trackLookup: Record<string, TrackLookupEntry> = {};
+  for (const track of catalog.tracks) {
+    trackLookup[track.id] = {
+      authorName: track.authorName,
+      seriesName: track.seriesName,
+      durationSeconds: track.durationSeconds,
+    };
+  }
+
+  const initialNowPlaying: NowPlayingState | null = nowPlaying
+    ? {
+        startedAt: nowPlaying.startedAt.toISOString(),
+        track: {
+          id: nowPlaying.trackId,
+          title: nowPlaying.trackTitle,
+          authorName: nowPlaying.authorName,
+          seriesName: nowPlaying.seriesName,
+          durationSeconds: nowPlaying.durationSeconds,
+        },
+      }
+    : null;
+
   return (
     <html
       lang="pt-BR"
@@ -99,14 +117,9 @@ export default function RootLayout({
           </div>
         </nav>
 
-        <main className="pb-24">{children}</main>
-
-        <div className="fixed inset-x-0 bottom-0 z-(--z-sticky)">
-          <Player
-            tracks={ROTATION_TRACKS}
-            initialTrackId={mockNowPlaying.trackId}
-          />
-        </div>
+        <Shell initialNowPlaying={initialNowPlaying} trackLookup={trackLookup}>
+          <main className="pb-24">{children}</main>
+        </Shell>
       </body>
     </html>
   );

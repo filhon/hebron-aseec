@@ -14,6 +14,7 @@ import {
   CheckCircle,
   Radio,
 } from "lucide-react";
+import { logoutAction } from "../../actions/auth";
 
 const SECTIONS: NavSection[] = [
   {
@@ -81,7 +82,7 @@ const APPS: AppShortcut[] = [
 ];
 
 interface ShellProps {
-  user: { name: string; email: string };
+  user: { fullName: string | null; email: string | null };
   children: React.ReactNode;
 }
 
@@ -92,9 +93,12 @@ export default function AdminShell({ user, children }: ShellProps) {
     <AppShell
       sections={SECTIONS}
       apps={APPS}
-      user={user}
+      user={{
+        name: user.fullName ?? user.email ?? "",
+        email: user.email ?? "",
+      }}
       profileHref="/admin"
-      onLogout={() => {}}
+      onLogout={() => void logoutAction()}
       currentPath={path}
       appName="Rádio — Gestão"
       logo={

@@ -80,6 +80,20 @@ export async function getR2DownloadUrl(
   });
 }
 
+/**
+ * Monta a URL pública final de um objeto do bucket via R2_PUBLIC_URL — usado
+ * apenas para `authors.photoUrl` (a única mídia deste módulo servida direto
+ * do bucket, sem proxy do servidor nem signed URL; tracks passam por
+ * `api/stream`, materiais exclusivos por `getR2DownloadUrl`). R2_PUBLIC_URL
+ * está nas env vars do prompt de P-8.9 mas não tinha nenhum consumidor até
+ * aqui — infraestrutura óbvia faltante para o upload de foto do
+ * `AuthorForm` (P-8.4), G1.
+ */
+export function getR2PublicUrl(key: string): string {
+  const base = requireEnv("R2_PUBLIC_URL").replace(/\/$/, "");
+  return `${base}/${key}`;
+}
+
 export interface R2Object {
   body: ReadableStream<Uint8Array>;
   contentType: string;

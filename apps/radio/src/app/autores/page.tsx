@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ChevronRight, Search, Users2 } from "lucide-react";
 import { EmptyState, Input, PageHeader } from "@hebron/ui";
 import { AuthorCard } from "../../components/author-card";
-import { mockAuthors, mockSeries, mockTracks } from "../../lib/mock-data";
+import { getRadioCatalog } from "../../lib/queries";
 
 export const metadata: Metadata = {
   title: "Autores e séries",
@@ -24,14 +24,16 @@ export default async function AutoresPage({ searchParams }: PageProps) {
   const query = q.trim().toLowerCase();
   const isSeriesView = view === "serie";
 
-  const filteredAuthors = mockAuthors.filter((author) =>
+  const { authors, series, tracks } = await getRadioCatalog();
+
+  const filteredAuthors = authors.filter((author) =>
     query ? author.name.toLowerCase().includes(query) : true,
   );
 
-  const filteredSeries = mockSeries.filter((series) =>
+  const filteredSeries = series.filter((s) =>
     query
-      ? series.name.toLowerCase().includes(query) ||
-        series.authorName.toLowerCase().includes(query)
+      ? s.name.toLowerCase().includes(query) ||
+        s.authorName.toLowerCase().includes(query)
       : true,
   );
 
@@ -87,14 +89,14 @@ export default async function AutoresPage({ searchParams }: PageProps) {
         {isSeriesView ? (
           filteredSeries.length > 0 ? (
             <ul className="flex flex-col divide-y divide-(--divider) rounded-(--radius-md) border border-(--border)">
-              {filteredSeries.map((series) => {
-                const trackCount = mockTracks.filter(
-                  (t) => t.seriesId === series.id,
+              {filteredSeries.map((s) => {
+                const trackCount = tracks.filter(
+                  (t) => t.seriesId === s.id,
                 ).length;
                 return (
-                  <li key={series.id}>
+                  <li key={s.id}>
                     <Link
-                      href={`/series/${series.id}`}
+                      href={`/series/${s.id}`}
                       className="flex items-center gap-4 px-5 py-4 transition-colors duration-(--transition-fast) hover:bg-(--surface-alt)"
                     >
                       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-(--radius) bg-(--brand-muted)">
@@ -105,10 +107,10 @@ export default async function AutoresPage({ searchParams }: PageProps) {
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="truncate font-(--font-display) text-sm font-(--font-weight-semibold) text-(--fg)">
-                          {series.name}
+                          {s.name}
                         </p>
                         <p className="truncate text-xs text-(--fg-muted)">
-                          {series.authorName} · {trackCount}{" "}
+                          {s.authorName} · {trackCount}{" "}
                           {trackCount === 1 ? "faixa" : "faixas"}
                         </p>
                       </div>
@@ -133,7 +135,7 @@ export default async function AutoresPage({ searchParams }: PageProps) {
               <AuthorCard
                 key={author.id}
                 author={author}
-                series={mockSeries.filter((s) => s.authorId === author.id)}
+                series={series.filter((s) => s.authorId === author.id)}
               />
             ))}
           </div>
