@@ -1,0 +1,340 @@
+/**
+ * security-audit.test.ts — P-9.1 (Revisão de Segurança / RLS Audit)
+ *
+ * Verificação automatizada, por introspecção do catálogo + testes por papel, dos
+ * invariantes de segurança do estado final do ecossistema. Este arquivo é a
+ * codificação executável da auditoria: cada `it` corresponde a um critério de
+ * aceite de P-9.1. Achados que exigem refatoração de código de app (S-02, S-05)
+ * estão documentados em SESSIONS.md — não são fixáveis dentro dos arquivos
+ * permitidos deste prompt e portanto não são assertados aqui como PASS/FAIL.
+ *
+ * Requer: DATABASE_URL (superuser, para introspecção/seed) e esquema migrado com
+ * a migration 0055_p91_security_grants_lockdown.sql aplicada.
+ */
+
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import postgres from "postgres";
+import { eq, sql as drizzleSql } from "drizzle-orm";
+import { db } from "@hebron/db/client";
+import { withAuthenticatedContext } from "@hebron/db/authenticated";
+import { users, roleAssignments } from "@hebron/db/schema";
+import {
+  serializeImpersonationState,
+  parseImpersonationState,
+  type ImpersonationState,
+} from "@hebron/auth/impersonation";
+
+// ── Conexão direta para introspecção / queries por papel ───────────────────────
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL)
+  throw new Error("DATABASE_URL is required for security audit");
+const sql = postgres(DATABASE_URL, { prepare: false, max: 3 });
+
+/** Schemas de aplicação sob nosso controle (exclui schemas do Supabase:
+ * storage/auth/realtime/vault etc., que mantêm defaults da plataforma). */
+const APP_SCHEMAS = [
+  "public",
+  "admin",
+  "documentos",
+  "projetos",
+  "financeiro",
+  "plataforma",
+  "flats",
+  "tarefas",
+  "intranet",
+  "radio",
+] as const;
+
+/** Tabela de bookkeeping do runner de migrations: sem RLS por design; travada no
+ * nível de GRANT (nenhum privilégio para anon/authenticated). */
+const MIGRATIONS_TABLE = { schema: "public", name: "_migrations" };
+
+// ── Fixture: um "ouvinte" puro para provar isolamento cross-schema ─────────────
+const OUVINTE_ID = "a9000000-0000-0000-0000-000000000091";
+
+beforeAll(async () => {
+  await db
+    .insert(users)
+    .values({
+      id: OUVINTE_ID,
+      email: "sec-audit-ouvinte@test.hebron",
+      fullName: "Sec Audit Ouvinte",
+    })
+    .onConflictDoNothing();
+  await db
+    .insert(roleAssignments)
+    .values({ userId: OUVINTE_ID, role: "ouvinte", grantedBy: OUVINTE_ID })
+    .onConflictDoNothing();
+});
+
+afterAll(async () => {
+  await db
+    .delete(roleAssignments)
+    .where(eq(roleAssignments.userId, OUVINTE_ID));
+  await db.delete(users).where(eq(users.id, OUVINTE_ID));
+  await sql.end();
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 1. RLS DENY-by-default em toda tabela (introspecção)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe("RLS habilitado em toda tabela dos schemas de app (DENY-by-default)", () => {
+  it("nenhuma base table (exceto public._migrations) roda sem RLS", async () => {
+    const rows = await sql<{ schema: string; tbl: string; rls: boolean }[]>`
+      SELECT n.nspname AS schema, c.relname AS tbl, c.relrowsecurity AS rls
+      FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE c.relkind IN ('r', 'p')
+        AND n.nspname = ANY(${APP_SCHEMAS as unknown as string[]})
+      ORDER BY 1, 2`;
+
+    const withoutRls = rows
+      .filter((r) => !r.rls)
+      .filter(
+        (r) =>
+          !(
+            r.schema === MIGRATIONS_TABLE.schema &&
+            r.tbl === MIGRATIONS_TABLE.name
+          ),
+      )
+      .map((r) => `${r.schema}.${r.tbl}`);
+
+    expect(withoutRls).toEqual([]);
+  });
+
+  it("as partições de adm.audit_log também têm RLS habilitado (S-03)", async () => {
+    const parts = await sql<{ tbl: string; rls: boolean }[]>`
+      SELECT c.relname AS tbl, c.relrowsecurity AS rls
+      FROM pg_inherits i
+      JOIN pg_class c ON c.oid = i.inhrelid
+      WHERE i.inhparent = 'admin.audit_log'::regclass`;
+    expect(parts.length).toBeGreaterThan(0);
+    expect(parts.filter((p) => !p.rls)).toEqual([]);
+  });
+
+  it("nenhuma tabela com RLS habilitado fica sem policy (deny-all silencioso)", async () => {
+    const rows = await sql<{ schema: string; tbl: string }[]>`
+      SELECT n.nspname AS schema, c.relname AS tbl
+      FROM pg_class c
+      JOIN pg_namespace n ON n.oid = c.relnamespace
+      WHERE c.relkind = 'r'
+        AND c.relrowsecurity = true
+        AND n.nspname = ANY(${APP_SCHEMAS as unknown as string[]})
+        AND NOT EXISTS (
+          SELECT 1 FROM pg_policy p WHERE p.polrelid = c.oid
+        )
+        -- partições herdam a policy da tabela-pai; não precisam de policy própria
+        AND NOT EXISTS (
+          SELECT 1 FROM pg_inherits i WHERE i.inhrelid = c.oid
+        )`;
+    expect(rows.map((r) => `${r.schema}.${r.tbl}`)).toEqual([]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 2. GRANTs ↔ policies: nenhum GRANT mais largo que a policy correspondente
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe("Reconciliação GRANTs ↔ policies", () => {
+  it("anon/authenticated NÃO têm TRUNCATE/TRIGGER/REFERENCES em nenhum schema de app (S-01)", async () => {
+    const rows = await sql<
+      { schema: string; tbl: string; grantee: string; priv: string }[]
+    >`
+      SELECT table_schema AS schema, table_name AS tbl, grantee, privilege_type AS priv
+      FROM information_schema.role_table_grants
+      WHERE grantee = ANY(ARRAY['anon','authenticated'])
+        AND table_schema = ANY(${APP_SCHEMAS as unknown as string[]})
+        AND privilege_type = ANY(ARRAY['TRUNCATE','TRIGGER','REFERENCES'])`;
+    expect(
+      rows.map((r) => `${r.schema}.${r.tbl} ${r.grantee} ${r.priv}`),
+    ).toEqual([]);
+  });
+
+  it("anon NÃO tem INSERT/UPDATE/DELETE em tabelas sensíveis de public (S-01)", async () => {
+    const sensitive = [
+      "users",
+      "role_assignments",
+      "designations",
+      "consents",
+      "notifications",
+    ];
+    const rows = await sql<{ tbl: string; priv: string }[]>`
+      SELECT table_name AS tbl, privilege_type AS priv
+      FROM information_schema.role_table_grants
+      WHERE grantee = 'anon'
+        AND table_schema = 'public'
+        AND table_name = ANY(${sensitive})
+        AND privilege_type = ANY(ARRAY['INSERT','UPDATE','DELETE'])`;
+    expect(rows.map((r) => `${r.tbl} ${r.priv}`)).toEqual([]);
+  });
+
+  it("public._migrations não tem privilégio algum para anon/authenticated (S-01)", async () => {
+    const rows = await sql<{ grantee: string; priv: string }[]>`
+      SELECT grantee, privilege_type AS priv
+      FROM information_schema.role_table_grants
+      WHERE table_schema = 'public' AND table_name = '_migrations'
+        AND grantee = ANY(ARRAY['anon','authenticated'])`;
+    expect(rows).toEqual([]);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 3. Sem cross-schema leak — um "ouvinte" não lê dados de outros schemas
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe("Cross-schema leak — ouvinte não acessa financeiro/flats/projetos/admin", () => {
+  const foreignTables = [
+    "financeiro.accounts",
+    "financeiro.transactions",
+    "flats.reservations",
+    "projetos.projects",
+    "admin.audit_log",
+  ];
+
+  for (const table of foreignTables) {
+    it(`ouvinte lê 0 linhas de ${table} (RLS ativa via client autenticado)`, async () => {
+      const rows = await withAuthenticatedContext(
+        { actorId: OUVINTE_ID },
+        async (tx) => {
+          const r = await tx.execute(
+            sqlUnsafe(`SELECT 1 FROM ${table} LIMIT 5`),
+          );
+          return Array.from(r);
+        },
+      );
+      expect(rows).toHaveLength(0);
+    });
+  }
+
+  it("anon (sem sessão) não enxerga schemas privados — permission denied em admin.*", async () => {
+    await expect(
+      withAuthenticatedContext(null, async (tx) =>
+        tx.execute(sqlUnsafe("SELECT 1 FROM admin.audit_log LIMIT 1")),
+      ),
+    ).rejects.toThrow(/permission denied for schema admin/i);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 4. Conflito de interesse enforced em RLS (diretor/conselheiro não criam reserva)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe("Conflito de interesse — RLS bloqueia diretor/conselheiro em flats.reservations", () => {
+  it("a policy de INSERT de reservas exclui diretor/conselheiro no WITH CHECK", async () => {
+    const rows = await sql<{ check_expr: string | null }[]>`
+      SELECT pg_get_expr(p.polwithcheck, p.polrelid) AS check_expr
+      FROM pg_policy p
+      WHERE p.polrelid = 'flats.reservations'::regclass
+        AND p.polcmd = 'a'`; /* 'a' = INSERT */
+    const checks = rows.map((r) => r.check_expr ?? "").join(" | ");
+    expect(checks).toMatch(/requested_by/);
+    expect(checks).toMatch(/has_role/);
+    expect(checks).toMatch(/diretor/);
+    expect(checks).toMatch(/conselheiro/);
+    expect(checks).toMatch(/\bNOT\b/);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 5. Cookie de impersonação assinado/infalsificável (F3-13)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe("Impersonação — cookie HMAC-assinado (F3-13)", () => {
+  const state: ImpersonationState = {
+    actorId: "11111111-1111-1111-1111-111111111111",
+    actorName: "Super Admin",
+    impersonatedId: "22222222-2222-2222-2222-222222222222",
+    impersonatedName: "Alvo",
+    startedAt: new Date().toISOString(),
+  };
+
+  beforeAll(() => {
+    process.env["IMPERSONATION_COOKIE_SECRET"] = "test-secret-p91-audit";
+  });
+
+  it("roundtrip válido: serialize → parse recupera o estado", () => {
+    const parsed = parseImpersonationState(serializeImpersonationState(state));
+    expect(parsed).toEqual(state);
+  });
+
+  it("cookie no formato legado (base64url sem assinatura) é REJEITADO", () => {
+    const legacy = Buffer.from(JSON.stringify(state), "utf-8").toString(
+      "base64url",
+    );
+    expect(parseImpersonationState(legacy)).toBeNull();
+  });
+
+  it("payload adulterado (assinatura não confere) é REJEITADO", () => {
+    const cookie = serializeImpersonationState(state);
+    const [, sig] = cookie.split(".");
+    const forgedPayload = Buffer.from(
+      JSON.stringify({ ...state, impersonatedId: "victim" }),
+      "utf-8",
+    ).toString("base64url");
+    expect(parseImpersonationState(`${forgedPayload}.${sig}`)).toBeNull();
+  });
+
+  it("cookie assinado com outro segredo é REJEITADO", () => {
+    const cookie = serializeImpersonationState(state);
+    process.env["IMPERSONATION_COOKIE_SECRET"] = "attacker-secret";
+    const forged = serializeImpersonationState(state);
+    process.env["IMPERSONATION_COOKIE_SECRET"] = "test-secret-p91-audit";
+    // O cookie forjado (assinado com "attacker-secret") não valida sob o segredo real.
+    expect(parseImpersonationState(forged)).toBeNull();
+    // O cookie legítimo continua válido.
+    expect(parseImpersonationState(cookie)).toEqual(state);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 6. Signed URLs — TTL adequado (guarda de regressão sobre os TTLs corretos)
+// ═══════════════════════════════════════════════════════════════════════════════
+// Nota: plataforma usa TTL de 10 anos (S-05) — achado documentado em SESSIONS.md,
+// não fixável nos arquivos permitidos deste prompt; por isso não é assertado aqui.
+
+describe("Signed URLs — expiração adequada nos módulos já corretos", () => {
+  const REPO = resolve(__dirname, "../../../..");
+  const oneHour = 60 * 60;
+
+  const readNumber = (relPath: string, constName: string): number => {
+    const src = readFileSync(resolve(REPO, relPath), "utf-8");
+    const m = src.match(new RegExp(`${constName}\\s*=\\s*([0-9*\\s]+?)\\s*;`));
+    const expr = m?.[1];
+    if (!expr) throw new Error(`${constName} não encontrado em ${relPath}`);
+    // Avalia a expressão aritmética simples (ex.: "60 * 60").
+    return expr
+      .split("*")
+      .map((n) => Number(n.trim()))
+      .reduce((a, b) => a * b, 1);
+  };
+
+  it("flats: URL de documento expira em ≤ 1h", () => {
+    const ttl = readNumber(
+      "apps/flats/src/lib/queries.ts",
+      "DOCUMENT_URL_EXPIRES_IN_SECONDS",
+    );
+    expect(ttl).toBeLessThanOrEqual(oneHour);
+  });
+
+  it("radio: URL de download expira em ≤ 1h e upload em ≤ 15min", () => {
+    const download = readNumber(
+      "apps/radio/src/actions/materials.ts",
+      "DOWNLOAD_URL_EXPIRES_IN_SECONDS",
+    );
+    const upload = readNumber(
+      "apps/radio/src/lib/r2.ts",
+      "UPLOAD_URL_EXPIRES_IN_SECONDS",
+    );
+    expect(download).toBeLessThanOrEqual(oneHour);
+    expect(upload).toBeLessThanOrEqual(15 * 60);
+  });
+});
+
+// ── helper: SQL cru para introspecção via drizzle tx.execute ───────────────────
+// Só é usado com literais hardcoded neste arquivo (nunca input de usuário).
+function sqlUnsafe(query: string) {
+  return drizzleSql.raw(query);
+}

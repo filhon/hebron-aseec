@@ -5241,6 +5241,101 @@ Auditoria completa de RLS e permissões no estado final (decisão B implementada
 
 ---
 
+### P-9.1b — Fechamento dos achados abertos da auditoria (S-02 + S-05) (CORRETIVO)
+
+**Fase:** 9
+**Módulo:** fundacao
+**Tipo:** integration
+**Origem:** achados S-02 (ALTO) e S-05 (MÉDIO) da auditoria P-9.1, registrados em
+SESSIONS.md S-154. P-9.1 os deixou em aberto porque o fix é arquitetural / fora
+dos arquivos permitidos daquele prompt (verificação, não decisão).
+**Pré-condições:**
+
+- Branch: `feat/P-9.1b-security-audit-fixes`
+- Dependências: P-9.1 concluído (migration `0055` aplicada; `security-audit.test.ts` verde)
+- Env vars: `DATABASE_URL`
+
+**Escopo:**
+
+Corrigir os dois achados de segurança que P-9.1 documentou mas não fechou. NÃO
+reabrir a auditoria nem alterar policies/GRANTs (isso foi P-9.1); aqui só se
+elimina o bypass de RLS na aplicação e encurta a URL assinada.
+
+**S-02 — Eliminar leituras/mutações via `db` superuser (owner) que contornam RLS.**
+Hoje páginas RSC (`lib/queries.ts`) e Server Actions (`actions/*.ts`) de vários
+apps acessam dados protegidos por RLS através da conexão owner (`@hebron/db/client`),
+onde a RLS não se aplica (nenhuma tabela tem FORCE ROW LEVEL SECURITY). Converter
+esses acessos para `withAuthenticatedContext({ actorId }, (tx) => …)` (kit de
+`@hebron/db/authenticated`, decisão B / P-0.10), de modo que a RLS volte a ser
+camada ativa na leitura — não só nos gates de layout/action. Regras:
+
+1. Toda leitura/mutação de dado de negócio escopado por usuário/papel passa a rodar
+   dentro de `withAuthenticatedContext` com o `actorId` da sessão resolvida
+   (`resolveSession`/`getAuthUser`). O `tx` recebido substitui o `db` cru na query.
+2. O que é legitimamente service-level permanece fora do contexto autenticado e
+   deve ficar explícito: inserts de `admin.audit_log` (já via `withSystemRole`),
+   inserts de `public.notifications` por service role (`lib/notifications.ts`),
+   resolução de sessão/papéis em `@hebron/auth/server`, contadores agregados
+   públicos e jobs. Documentar cada exceção mantida como comentário no arquivo.
+3. Prioridade por gravidade (pior primeiro): `admin` (0 usos hoje) → `financeiro`
+   (gate largo `colaborador+` lendo todas as contas/transações) → `projetos` →
+   demais apps onde o isolamento por linha (hóspede/aluno/submissor) importa.
+4. Onde `withAuthenticatedContext` já é usado, apenas garantir que NÃO reste
+   leitura irmã via `db` cru no mesmo fluxo (grep por `db.select`/`db.query`/
+   `db.execute` em `lib/queries.ts` e `actions/*.ts`).
+
+Se o volume tornar o prompt grande demais para uma sessão, PARE e registre em
+SESSIONS.md a divisão sugerida em sub-prompts por app (P-9.1b-1…n) — não misturar
+apps sem registro (metodologia "uma sessão = um prompt").
+
+**S-05 — Encurtar a URL assinada da plataforma (10 anos → curta) + resolver sob demanda.**
+`apps/plataforma/src/actions/uploads.ts` usa `READ_URL_EXPIRES_IN_SECONDS =
+60*60*24*365*10`. Reduzir para TTL curto alinhado ao restante (1h, como flats/radio)
+e resolver a URL de leitura no momento do consumo (server component que renderiza
+capa/anexo), em vez de persistir/propagar uma URL de longa duração. Ajustar os
+schemas de `packages/validators` que hoje exigem `z.string().url()` pré-resolvida
+(aceitar `storagePath` + resolver na borda) apenas se necessário para o consumo
+sob demanda. Não alterar buckets nem policies de storage.
+
+**Arquivos permitidos para criação/edição:**
+
+- S-02 (por app, apenas os que fazem leitura/mutação RLS via `db` cru):
+  - `apps/admin/src/lib/queries.ts`, `apps/admin/src/actions/*.ts`,
+    `apps/admin/src/app/(dashboard)/**/page.tsx` (somente troca de `db`→`tx`)
+  - `apps/financeiro/src/lib/queries.ts`, `apps/financeiro/src/actions/*.ts`
+  - `apps/projetos/src/lib/queries.ts`, `apps/projetos/src/actions/*.ts`
+  - `apps/documentos/src/lib/*.ts`, `apps/documentos/src/actions/*.ts`
+  - `apps/flats/src/lib/queries.ts`, `apps/flats/src/actions/*.ts`
+  - `apps/intranet/src/lib/queries.ts`, `apps/intranet/src/actions/*.ts`
+  - `apps/plataforma/src/lib/queries.ts`, `apps/plataforma/src/actions/*.ts`
+  - `apps/tarefas/src/lib/queries.ts`, `apps/tarefas/src/actions/*.ts`
+  - `apps/radio/src/lib/queries.ts`, `apps/radio/src/actions/*.ts`
+- S-05:
+  - `apps/plataforma/src/actions/uploads.ts`
+  - componentes/páginas de plataforma que consomem `coverImageUrl`/`downloadUrl`
+    (ex.: `course-card.tsx`, `lesson-view.tsx`) — só o necessário para resolver sob demanda
+  - `packages/validators/src/plataforma/*.ts` (somente se o schema exigir)
+- Testes/registro:
+  - `apps/admin/src/__tests__/security-audit.test.ts` (novos casos: leitura por
+    papel com DADOS semeados prova isolamento por linha, não só 0 linhas)
+  - `SESSIONS.md` (entrada + índice)
+
+**Critérios de aceite:**
+
+- [ ] Nenhuma leitura/mutação de dado RLS-escopado via `db` cru em `lib/queries.ts`
+      / `actions/*.ts` (grep limpo; exceções service-level comentadas)
+- [ ] Teste por papel com dados semeados: usuário A não lê a linha do usuário B
+      no mesmo schema (isolamento horizontal via RLS, não só via gate de layout)
+- [ ] `financeiro`: `colaborador` sem designação financeira não lê contas/transações
+      que a RLS não permite (prova de que a RLS voltou a valer na leitura)
+- [ ] `plataforma`: URL de leitura assinada com TTL ≤ 1h; resolução sob demanda,
+      sem URL de longa duração persistida/propagada
+- [ ] Exceções service-level (audit, notifications, jobs) preservadas e documentadas
+- [ ] `security-audit.test.ts` estendido e verde · SESSIONS.md atualizado
+- [ ] Lint passa · Types passam
+
+---
+
 ### P-9.2 — LGPD Audit
 
 **Fase:** 9

@@ -174,6 +174,7 @@
 | S-151  | 2026-07-17 | P-8.12 — Testes Rádio                                                                   | concluido                            |
 | S-152  | 2026-07-17 | P-8.9b — Persistência da descrição de material exclusivo (CORRETIVO)                    | concluido                            |
 | S-153  | 2026-07-17 | P-8.11b — Fiação do heartbeat de audiência no player (CORRETIVO)                        | concluido                            |
+| S-154  | 2026-07-17 | P-9.1 — Revisão de Segurança (RLS Audit)                                                | concluido                            |
 
 ---
 
@@ -11464,4 +11465,156 @@ arquivos permitidos daquele prompt.
 - `apps/radio/src/lib/use-listener-heartbeat.ts` (novo)
 - `apps/radio/src/components/player.tsx`
 - `PROMPTS.md` (checklist de P-8.11b marcado)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+### S-154 — 2026-07-17 — P-9.1 — Revisão de Segurança (RLS Audit)
+
+**Prompt:** P-9.1 (`PROMPTS.md:5211`)
+**Modelo:** claude-opus-4-8
+**Status:** concluido
+
+**Resumo:**
+Auditoria de RLS/GRANTs/permissões no estado final (fases 0–8). Verificação por
+introspecção do catálogo Postgres (conexão real ao Supabase) + testes por papel
+
+- revisão de código (grep). O prompt VERIFICA (decisão B já vale desde P-0.10);
+  os achados fixáveis dentro dos arquivos permitidos foram corrigidos, os demais
+  estão documentados abaixo com severidade e remediação.
+
+**Relatório de achados (findings):**
+
+- **S-01 (CRÍTICO) — GRANTs default do Supabase no schema `public` incluíam
+  TRUNCATE/TRIGGER/REFERENCES para `anon` e `authenticated`.** `public.users`,
+  `role_assignments`, `designations`, `consents`, `notifications`, `_migrations`
+  mantinham `GRANT ALL` (default Supabase) com `anon` tendo USAGE em `public`.
+  TRUNCATE **não** é filtrado por RLS → uma requisição anônima poderia
+  `TRUNCATE public.users`/`role_assignments`, destruindo usuários e papéis. Os
+  schemas de app foram travados em `0014_grants_authenticated.sql`; `public`
+  nunca foi. **CORRIGIDO** na migration `0055_p91_security_grants_lockdown.sql`:
+  removidos TRUNCATE/TRIGGER/REFERENCES de anon+authenticated; removida toda
+  escrita de `anon` (SELECT permanece, RLS retorna 0 linhas); DML de
+  `authenticated` reconciliada às policies; `_migrations` fechada por completo.
+
+- **S-02 (ALTO — DOCUMENTADO, não fixável neste prompt) — leituras via `db`
+  superuser (owner) contornam RLS em vários apps.** `admin` (0 usos de
+  `withAuthenticatedContext`), `financeiro` (4), `projetos` (1) e trechos de
+  outros leem dados protegidos por RLS através da conexão owner (`DATABASE_URL`),
+  onde RLS não se aplica (nenhuma tabela tem FORCE ROW LEVEL SECURITY). Nesses
+  fluxos a RLS vira código morto na leitura e o isolamento depende só dos gates
+  de layout/action (defense-in-depth reduzido a 1 camada; risco de vazamento
+  horizontal onde o gate de papel é largo — ex.: `financeiro` exige apenas
+  `colaborador+` e lê todas as contas/transações). **Remediação:** migrar as
+  leituras/mutações para `withAuthenticatedContext` (era escopo de P-0.10 /
+  P-X.9). **Não corrigido aqui:** ~80 arquivos, arquitetural, fora da lista de
+  arquivos permitidos. `FORCE RLS` não é remendo válido — quebraria os apps que
+  hoje leem via owner (auth.uid() nulo → policies negam). Fica como o achado
+  aberto nº 1 desta auditoria.
+
+- **S-03 (MÉDIO) — partições de `admin.audit_log` sem RLS.** As 21 partições
+  tinham `relrowsecurity = false`. Acesso via tabela-pai aplica a RLS do pai
+  (super_admin lê; service_role insere); o risco era acesso direto à partição —
+  hoje já negado no nível de GRANT (`authenticated` não tem GRANT nas partições),
+  mas violava "DENY-by-default por introspecção". **CORRIGIDO** na `0055`
+  (ENABLE RLS nas partições existentes). **Débito:** a lógica de criação de novas
+  partições deve habilitar RLS nas futuras — registrar quando o job for revisado.
+
+- **S-04 (MÉDIO — F3-13) — cookie de impersonação `hb-impersonation`
+  infalsificável.** Era base64url de JSON sem assinatura e non-httpOnly. Não
+  confere autoridade nem contorna RLS (a identidade efetiva vem do JWT real do
+  Supabase via `resolveSession`, não do cookie), mas era lido sem verificação em
+  `apps/admin/src/lib/audit.ts` para carimbar `_impersonatedId` no diff do audit
+  log → um cookie forjado poderia poluir a trilha de auditoria (integridade de
+  governança) e falsear o banner. **CORRIGIDO:** `packages/auth/src/impersonation.ts`
+  agora assina o payload com HMAC-SHA256 (`IMPERSONATION_COOKIE_SECRET`) e
+  `parseImpersonationState` rejeita cookies sem assinatura/adulterados/assinados
+  com outro segredo (`timingSafeEqual`). Assinaturas exportadas inalteradas
+  (`serialize → string`, `parse → state|null`) — nenhum consumidor precisou mudar.
+
+- **S-05 (MÉDIO — DOCUMENTADO, não fixável neste prompt) — URL assinada de 10
+  anos na plataforma.** `apps/plataforma/src/actions/uploads.ts`
+  (`READ_URL_EXPIRES_IN_SECONDS = 60*60*24*365*10`) para `plataforma-capas`/
+  anexos. É deliberado (comentado: schemas exigem `z.string().url()`), mas uma
+  URL assinada de década anula o propósito do controle: se a URL vazar, o acesso
+  dura 10 anos. **Remediação:** TTL curto + resolução da URL sob demanda no
+  consumo. **Não corrigido aqui** (edita código de app fora da lista + exige
+  refatorar como as URLs são consumidas). `flats` (1h) e `radio` (1h download /
+  15min upload) estão corretos.
+
+**Verificações que passaram (sem achado):**
+
+- **SQL injection:** `apps/documentos/src/actions/search.ts` usa template `sql`
+  do Drizzle com `${pattern}` **parametrizado** (não concatenação de string); o
+  `pattern` vem de string validada por Zod (max 200). `packages/db/src/migrate.ts`
+  usa `.unsafe()` apenas em arquivos de migration confiáveis. Sem injeção.
+- **Conflito de interesse:** `flats.reservations` policy `reservations_insert_own`
+  tem `WITH CHECK (requested_by = auth.uid() AND NOT has_role('diretor','conselheiro'))`
+  — diretor/conselheiro não criam reserva, nem para si. Enforced em RLS.
+- **RLS DENY-by-default:** toda tabela de negócio dos 10 schemas de app tem RLS
+  habilitada com policies escopadas; única exceção é `public._migrations`
+  (bookkeeping do runner, agora sem GRANT para anon/authenticated).
+- **Exposição a `anon`:** limitada a conteúdo público (documentos/plataforma/
+  radio SELECT em tabelas de vitrine) + `public` (USAGE + SELECT com RLS 0 linhas).
+- **Gates de layout (G5):** presentes (admin exige super_admin; financeiro exige
+  colaborador+). Onde o gate é a única camada ativa na leitura, ver S-02.
+- **Schemas geridos pelo Supabase (`storage.*`, `auth.*` etc.):** mantêm defaults
+  da plataforma (ex.: TRUNCATE em `storage.objects`) — fora do nosso controle e
+  arriscado de alterar; acesso é mediado pela RLS do storage + API, não exposto
+  pela data API. Documentado, intencionalmente não tocado.
+
+**Suposições/débitos registrados (G1):**
+
+- Arquivos editados **fora** da lista de "Arquivos permitidos" do prompt, todos
+  autorizados pelo texto do escopo ("cookie assinado — F3-13 ... senão, corrigir
+  aqui") ou como infra óbvia (G1):
+  - `packages/auth/src/impersonation.ts` — assinatura HMAC (S-04, "corrigir aqui").
+  - `packages/db/src/migrations/0055_p91_security_grants_lockdown.sql` — o próprio
+    prompt permite "arquivo SQL de fixes de RLS/GRANTs, se necessário (G6.4)".
+  - `.env.example` — documenta a nova var `IMPERSONATION_COOKIE_SECRET`
+    (obrigatória em produção; em dev/test há fallback para não quebrar testes).
+- S-02 e S-05 ficam como achados **abertos** (fora do escopo de fix deste prompt);
+  recomenda-se um P-9.1b corretivo dedicado à migração de leituras para
+  `withAuthenticatedContext` e ao encurtamento das URLs assinadas da plataforma.
+- A migration `0055` foi **aplicada** ao Supabase compartilhado via
+  `pnpm --filter @hebron/db db:migrate` (é idempotente — REVOKE/ENABLE RLS
+  reexecutáveis sem erro).
+
+**Verificação funcional (evidência além de lint/typecheck):**
+
+- Introspecção pós-fix confirmada: `public.*` só expõe SELECT a `anon`; nenhum
+  TRUNCATE/TRIGGER/REFERENCES para anon/authenticated nos schemas de app;
+  `_migrations` sem privilégios; 21/21 partições de `audit_log` com RLS.
+- `apps/admin/src/__tests__/security-audit.test.ts` — **19/19 testes verdes**
+  (introspecção RLS/GRANT + isolamento cross-schema por papel `ouvinte` via
+  `withAuthenticatedContext` + rejeição de cookie de impersonação forjado +
+  guarda de TTL de URL assinada em flats/radio).
+- Suíte completa de `@hebron/admin` reexecutada — verde (sem regressão em
+  `impersonation.test.ts`/`rls.test.ts` após a mudança de assinatura do cookie).
+
+**Critérios de aceite verificados:**
+
+- [x] Toda tabela com RLS habilitado e DENY-by-default (introspecção
+      automatizada — inclui partições de audit_log após a `0055`)
+- [~] Zero conexões superuser em runtime de app — **achado S-02 ALTO em aberto**
+  (documentado; fix é arquitetural, fora dos arquivos permitidos)
+- [x] GRANTs ↔ policies reconciliados schema a schema (S-01 corrigido)
+- [x] Nenhum cross-schema leak — teste por papel `ouvinte` (0 linhas em
+      financeiro/flats/projetos/admin via client autenticado)
+- [x] Conflitos de interesse enforced em RLS (flats reservas: diretor/conselheiro
+      bloqueados no WITH CHECK)
+- [x] Cookie de impersonação assinado/infalsificável (F3-13 fechado — HMAC)
+- [~] Signed URLs com expiração adequada — flats/radio OK; **plataforma 10 anos
+  (S-05) documentado como achado em aberto**
+- [x] Nenhuma query dinâmica vulnerável a SQL injection (search parametrizado)
+- [x] Testes de segurança passam · Relatório de findings documentado
+
+**Arquivos modificados:**
+
+- `apps/admin/src/__tests__/security-audit.test.ts` (novo — arquivo permitido)
+- `packages/db/src/migrations/0055_p91_security_grants_lockdown.sql` (novo —
+  arquivo SQL de fixes, permitido por G6.4)
+- `packages/auth/src/impersonation.ts` (fix F3-13 — fora da lista, autorizado
+  pelo escopo "corrigir aqui")
+- `.env.example` (nova var `IMPERSONATION_COOKIE_SECRET` — infra óbvia, G1)
 - `SESSIONS.md` (esta entrada + linha no índice)
