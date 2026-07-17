@@ -4933,11 +4933,11 @@ RLS para schema radio. Anon: SELECT em tracks, authors, series, playlists, now_p
 
 **Critérios de aceite:**
 
-- [ ] Anon: SELECT em tracks, authors, series, now_playing
-- [ ] Autenticado: SELECT em exclusive_materials SE term_acceptances existe
-- [ ] Super_admin: full CRUD
-- [ ] term_acceptances: INSERT próprio, SELECT próprio
-- [ ] Types passam
+- [x] Anon: SELECT em tracks, authors, series, now_playing
+- [x] Autenticado: SELECT em exclusive_materials SE term_acceptances existe
+- [x] Super_admin: full CRUD
+- [x] term_acceptances: INSERT próprio, SELECT próprio
+- [x] Types passam
 
 ---
 

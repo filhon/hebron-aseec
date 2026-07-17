@@ -166,6 +166,7 @@
 | S-143  | 2026-07-17 | Auditoria Bloco A Rádio (P-8.1–8.5) — patch P-8.5b gerado                               | concluido                            |
 | S-144  | 2026-07-17 | P-8.5b — Estados reais do player (CORRETIVO)                                            | concluido                            |
 | S-145  | 2026-07-17 | P-8.6 — Schema do Banco Rádio                                                           | concluido                            |
+| S-146  | 2026-07-17 | P-8.7 — RLS Policies Rádio                                                              | concluido                            |
 
 ---
 
@@ -10488,3 +10489,110 @@ já refletem authors/series/tracks/... corretamente para o próximo
 - `packages/db/src/schema/radio.ts`
 - `packages/db/src/migrations/0049_radio.sql` (gerado como `0023_cute_spiral.sql`, renomeado — ver Resumo)
 - `packages/db/src/migrations/meta/0023_snapshot.json` (gerado por `drizzle-kit generate`)
+
+---
+
+### S-146 — 2026-07-17 — P-8.7 — RLS Policies Rádio
+
+**Prompt:** P-8.7 (`PROMPTS.md:4916`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Habilita RLS nas 9 tabelas do schema `radio` (pendente desde P-8.6) via
+`0050_radio_rls.sql`: conteúdo público (`authors`, `series`, `tracks`,
+`playlists`, `playlist_tracks`, `now_playing`) com `SELECT` sem `TO`
+(aplica a `anon` + `authenticated`, "ouvir sem cadastro" — BRAIN §6.4),
+mutação restrita a `super_admin`; `exclusive_materials` com `SELECT` para
+qualquer `authenticated` que tenha ao menos um `term_acceptances` (aceite
+cobre todos os materiais, P-8.6); `term_acceptances` com `INSERT`/`SELECT`
+próprio, sem `UPDATE`/`DELETE` (imutabilidade do aceite); `listener_stats`
+com `SELECT` restrito a `diretor`/`conselheiro` (métrica interna, não
+"ouvir sem cadastro"). `super_admin` tem `FOR ALL` própria em toda tabela.
+GRANTs incluídos na própria migration (schema `radio` nasceu depois de
+`0014_grants_authenticated.sql`, mesmo padrão de
+`0033_tarefas_rls.sql`/`0020_plataforma_rls.sql`/`0022_flats_rls.sql`) —
+`anon` só recebe `GRANT USAGE`/`SELECT` nas 6 tabelas públicas;
+`exclusive_materials`/`term_acceptances`/`listener_stats` ficam fora do
+grant de `anon` (escopo do prompt, literal).
+
+Migration gerada com `drizzle-kit generate --custom --name=radio_rls`
+(G6.4) — vazia por padrão, preenchida à mão com `ALTER TABLE ... ENABLE
+ROW LEVEL SECURITY`, `CREATE POLICY` e `GRANT` (RLS não é representável em
+`schema/radio.ts`, mesmo padrão de `0011_financeiro_rls.sql`). Mesmo drift
+de bookkeeping já documentado em P-8.6/S-145 (`meta/_journal.json` parado
+em `idx 23`): o kit produziu `0024_radio_rls.sql`, colidindo com
+`0024_lgpd_audit_actions.sql` já existente. Renomeado para
+`0050_radio_rls.sql` (posição real seguinte a `0049_radio.sql`); journal
+deixado como o kit gerou (drift pré-existente, não corrigido à mão — mesmo
+precedente de `0031_tarefas.sql`/`0036_intranet.sql`).
+
+Migration aplicada com sucesso contra o banco real (`db:migrate`) e
+verificada manualmente com queries diretas dentro de transações com
+rollback explícito (`SET LOCAL ROLE anon`/`authenticated` +
+`set_config('request.jwt.claims', ...)`, mesmo padrão de `rls.test.ts`
+mencionado em sessões anteriores): `anon` lê as 6 tabelas públicas e é
+negado em `exclusive_materials`/`term_acceptances`/`INSERT authors`;
+`authenticated` não-admin lê o conteúdo público, é negado ao tentar
+`INSERT` em `authors` (RLS violation) e ao tentar aceitar termo em nome de
+outro usuário, consegue `INSERT` do próprio `term_acceptances` e a partir
+daí enxerga `exclusive_materials`, e um `UPDATE` no próprio
+`term_acceptances` afeta 0 linhas (sem policy de UPDATE — imutabilidade
+confirmada).
+
+**Suposições registradas (G1 — ambiguidade resolvida pela opção mais simples):**
+
+- **`playlist_tracks` incluída no SELECT público**, apesar de o escopo do
+  prompt só citar "tracks, authors, series, playlists, now_playing". Sem
+  ela, um ouvinte anônimo não tem como saber qual faixa toca a seguir na
+  playlist ativa — a junção é infraestrutura óbvia para o Auto DJ
+  funcionar sem cadastro (G1), não uma tabela nova de escopo.
+- **`listener_stats` restrita a `diretor`/`conselheiro` (+ `super_admin`
+  via `FOR ALL`), não pública.** Não listada por papel no escopo do
+  prompt nem nos critérios de aceite; tratada por analogia ao mesmo
+  precedente de `intranet.kpi_snapshots` (P-5.7/S-91) — é métrica de
+  audiência consumida pelo dashboard executivo (BRAIN §6.6/§6.9), não
+  conteúdo de "ouvir sem cadastro". O mecanismo de escrita automática
+  (cron via `packages/jobs`, P-8.11/BRAIN linha 5071) fica fora do escopo
+  deste prompt — por ora só `super_admin` grava via RLS.
+- **`now_playing`: apenas `super_admin` tem `INSERT`/`UPDATE`/`DELETE`
+  via RLS**, seguindo literalmente "Super_admin: full CRUD" do escopo.
+  Como a rota Auto DJ que efetivamente avança a faixa tocada (P-8.8, fora
+  deste prompt) provavelmente não roda com uma sessão de `super_admin`
+  autenticado, esse mecanismo pode exigir um client `service_role` ou
+  função `SECURITY DEFINER` dedicada — decisão adiada para P-8.8, sinalizada
+  aqui para não ser redescoberta do zero.
+- **`exclusive_materials_select_term_accepted` ignora a coluna
+  `requires_term`** (não filtra por material) — o critério de aceite diz
+  literalmente "Autenticado: SELECT em exclusive_materials SE
+  term_acceptances existe", sem nuance por linha. Lido ao pé da letra
+  (G1: "seja literal, não abstraia"): qualquer aceite existente libera
+  SELECT em todos os materiais, independentemente do valor de
+  `requires_term` naquela linha.
+
+**Verificação:** `pnpm --filter @hebron/db typecheck` verde; `pnpm turbo
+lint typecheck` na raiz — 38/38 tasks verdes; `schema-parity.test.ts`
+verde (2/2). `pnpm --filter @hebron/db db:migrate` aplicou
+`0050_radio_rls.sql` contra o banco real (Supabase) sem erros (as 49
+migrations anteriores já registradas em `public._migrations`, corretamente
+puladas). RLS exercitado manualmente contra o banco real (ver Resumo).
+
+**Critérios de aceite verificados:**
+
+- [x] Anon: SELECT em tracks, authors, series, now_playing (+ playlists,
+      playlist_tracks — ver Suposições)
+- [x] Autenticado: SELECT em exclusive_materials SE term_acceptances existe
+- [x] Super_admin: full CRUD
+- [x] term_acceptances: INSERT próprio, SELECT próprio
+- [x] Types passam
+
+**Arquivos modificados:**
+
+- `packages/db/src/migrations/meta/_journal.json` (resincronizado por `drizzle-kit generate --custom`)
+- `PROMPTS.md` (checklist de P-8.7 marcado)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+**Arquivos criados:**
+
+- `packages/db/src/migrations/0050_radio_rls.sql` (gerado como `0024_radio_rls.sql`, renomeado — ver Resumo)
+- `packages/db/src/migrations/meta/0024_snapshot.json` (gerado por `drizzle-kit generate --custom`)
