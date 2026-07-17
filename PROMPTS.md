@@ -5108,12 +5108,12 @@ Testes: RLS (anon ouve, autenticado+termo acessa materiais). Upload de faixa par
 
 **Critérios de aceite:**
 
-- [ ] RLS: anon acessa tracks; sem termo não acessa materials
-- [ ] Playlist: apenas 1 ativa por vez
-- [ ] Termo: duplo aceite retorna erro
-- [ ] Audiência: agregação diária calcula sessões/horas conforme D-3 (fixtures)
-- [ ] Testes passam
-- [ ] Lint passa
+- [x] RLS: anon acessa tracks; sem termo não acessa materials
+- [x] Playlist: apenas 1 ativa por vez
+- [x] Termo: duplo aceite retorna erro
+- [x] Audiência: agregação diária calcula sessões/horas conforme D-3 (fixtures)
+- [x] Testes passam
+- [x] Lint passa
 
 ---
 

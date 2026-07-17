@@ -171,6 +171,7 @@
 | S-148  | 2026-07-17 | P-8.9 — Integração UI ↔ Backend Rádio                                                   | concluido                            |
 | S-149  | 2026-07-17 | P-8.10 — Notificações Rádio                                                             | concluido                            |
 | S-150  | 2026-07-17 | P-8.11 — Integração Cross-App Rádio                                                     | concluido                            |
+| S-151  | 2026-07-17 | P-8.12 — Testes Rádio                                                                   | concluido                            |
 
 ---
 
@@ -11153,4 +11154,147 @@ listener_stats_add_columns.sql` (passo 1/2 — mantém `listener_count`
 - `packages/jobs/src/catalog.ts`
 - `packages/integrations/src/radio.ts` (na lista — reescrito)
 - `PROMPTS.md` (checklist de P-8.11 marcado)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+### S-151 — 2026-07-17 — P-8.12 — Testes Rádio
+
+**Prompt:** P-8.12 (`PROMPTS.md:5089`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Escritos os 3 arquivos de teste do escopo, exercitando o Bloco B de rádio
+(P-8.6–P-8.11) de ponta a ponta contra o banco de dev real (mesmo padrão
+`postgres.js` + `SET LOCAL ROLE`/`request.jwt.claims` usado em
+`apps/flats`/`apps/plataforma`/demais `rls.test.ts` do monorepo, e Server
+Actions chamadas diretamente com `@hebron/auth/server` mockado, padrão de
+`apps/documentos/src/__tests__/actions.test.ts`):
+
+- `rls.test.ts`: anon SELECT em `radio.tracks`/`radio.authors` (ouvir sem
+  cadastro); anon bloqueado em `radio.exclusive_materials` (permission
+  denied — sem GRANT, `0050_radio_rls.sql`); autenticado sem
+  `term_acceptances` não vê nenhuma linha de `exclusive_materials` (RLS
+  filtra, não erro); autenticado com termo aceito vê; e a constraint
+  `term_acceptances.user_id` UNIQUE (schema/radio.ts) rejeita uma segunda
+  linha para o mesmo usuário inserida diretamente via SQL.
+- `playlist.test.ts`: o índice único parcial `playlists_active_uniq`
+  rejeita uma segunda linha com `is_active = true` inserida diretamente;
+  a Server Action `activatePlaylist` ativa uma playlist e desativa todas
+  as outras num único UPDATE, comprovado trocando o alvo repetidas vezes;
+  `deletePlaylist` recusa remover a playlist ativa.
+- `materials.test.ts`: `getTrackUploadUrl` (super_admin) retorna signed
+  upload URL + key `tracks/*.mp3`, encadeado com `createTrack` gravando a
+  faixa apontando pra key; não-super_admin é recusado; `acceptTerm` grava
+  o aceite na primeira chamada; `getMaterialDownloadUrl` recusa usuário
+  sem termo e, com termo, devolve a signed URL do mock de
+  `../lib/r2` chamado com `expiresIn = 3600` (1h, critério de aceite de
+  P-8.8).
+
+**Suposições/débitos registrados (G1):**
+
+- **Infraestrutura de teste do app criada** (fora da lista de "Arquivos
+  permitidos", que só lista os 3 `.test.ts`): `apps/radio/vitest.config.ts`
+  e `apps/radio/src/__tests__/setup-env.ts` (cópia literal do padrão de
+  `apps/flats`/`apps/plataforma` — `pool: forks`/`singleFork` para evitar
+  concorrência contra o banco real compartilhado, `setupFiles` carregando
+  `.env.local`), mais os scripts `test`/`test:watch` e as devDependencies
+  `vitest`/`dotenv` e a dependency `postgres` (usada por `rls.test.ts` para
+  a conexão direta com `SET LOCAL ROLE`) em `apps/radio/package.json`.
+  `apps/radio` era o único app com Bloco B concluído que ainda não tinha
+  nenhuma dessas 3 peças — sem elas, `pnpm test`/`pnpm turbo test` não
+  reconhecem nem executam os arquivos pedidos pelo prompt. Mesmo precedente
+  de "infra óbvia faltante" já usado em `feedback_new_app_scaffold_gap`
+  (primeiro prompt de UI de um app novo) e nas migrations de RLS/`ALTER
+TYPE` hand-escritas fora das listas de arquivos permitidos em quase todo
+  prompt de Bloco B deste módulo.
+- **"Termo: duplo aceite retorna erro" — reconciliado com o comportamento
+  real da Server Action.** O critério de aceite deste prompt pede
+  literalmente um erro no duplo aceite; porém `actions/terms.ts::acceptTerm`
+  (P-8.8, já implementado e em produção) é **deliberadamente idempotente**
+  — no segundo aceite, retorna o registro existente em vez de tentar um
+  novo INSERT (comentário no próprio arquivo: evita um erro cru sendo
+  exposto ao usuário por clicar "aceitar" duas vezes). Reescrever essa
+  Server Action para passar a lançar erro contrariaria uma decisão de
+  design já tomada e não está nos arquivos permitidos deste prompt (que só
+  lista os 3 `.test.ts`). Resolução adotada: o critério é satisfeito na
+  camada que **de fato** impede duas linhas para o mesmo usuário — a
+  constraint `term_acceptances.user_id` UNIQUE — testada em `rls.test.ts`
+  via um segundo INSERT bruto (contornando o guard de idempotência da
+  action), que rejeita com "duplicate key value violates unique
+  constraint". `materials.test.ts` cobre, em paralelo e sem contradição, o
+  comportamento real e intencional da action (idempotente, mesma linha,
+  sem duplicar). Se o Filipe preferir que a própria action passe a
+  lançar erro no segundo aceite, é uma mudança de design a decidir/aplicar
+  em `actions/terms.ts` num prompt à parte.
+- **Critério "Audiência: agregação diária calcula sessões/horas conforme
+  D-3 (fixtures)" NÃO duplicado em `apps/radio`.** Essa lógica
+  (`runRadioStatsAggregation`) vive em `packages/jobs`, não em
+  `apps/radio` — `apps/radio/package.json` nem depende de `@hebron/jobs` —
+  e já tem cobertura própria em
+  `packages/jobs/src/__tests__/radio-stats.test.ts` (criado em P-8.11/
+  S-150: sessões-ouvinte com fixtures de 1/2/3 heartbeats, cálculo de
+  horas, idempotência do upsert por `date`, limpeza incondicional dos
+  heartbeats brutos). Duplicar esse teste dentro de `apps/radio` exigiria
+  sair da lista de "Arquivos permitidos" (que só lista `rls`/`playlist`/
+  `materials.test.ts`, nenhum deles em `packages/jobs`) para um resultado
+  idêntico ao que já passa. Critério considerado satisfeito pela suíte
+  existente, não uma lacuna deste prompt.
+- **`apps/radio/src/components/player.tsx` continua sem enviar heartbeat
+  real** — débito já registrado em S-150 (P-8.11) como pendente para um
+  prompt futuro que inclua `player.tsx` nos arquivos permitidos. P-8.12 é
+  tipo `integration`/teste de backend, não teve esse arquivo liberado, e
+  editá-lo entraria em G2 (exige `/impeccable`). Não resolvido aqui.
+- **Testes rodam contra o banco de dev real e compartilhado** (mesmo
+  padrão de todo `rls.test.ts`/`actions.test.ts` do monorepo — não há banco
+  de teste isolado nem Docker/pgTAP). `playlist.test.ts` toca a constraint
+  global `playlists_active_uniq`: captura a playlist ativa pré-existente
+  (se houver) em `beforeAll`, neutraliza-a para poder testar a constraint
+  de forma determinística, e restaura em `afterAll` — verificado após a
+  suíte que a tabela `radio.playlists` ficou vazia (nenhuma playlist ativa
+  pré-existia neste banco de dev) e nenhum usuário/linha de teste ficou
+  órfão (`SELECT` manual pós-suíte confirmou 0 linhas residuais com os
+  prefixos de e-mail usados: `rls-radio-*`, `playlist-test-*`,
+  `materials-test-*`).
+
+**Verificação funcional (evidência além de lint/typecheck):**
+
+- `pnpm test` em `@hebron/radio` — 3 arquivos / 19 testes verdes
+  (`rls.test.ts` 7, `playlist.test.ts` 5, `materials.test.ts` 7).
+- `pnpm turbo test --filter=@hebron/radio` — mesmo resultado, confirmando
+  que o novo script `test` está corretamente reconhecido pelo pipeline
+  Turborepo.
+- `pnpm turbo lint typecheck --filter=@hebron/radio` — 16/16 tasks verdes
+  (inclui as dependências do workspace).
+- Consulta manual pós-suíte a `radio.playlists` e `public.users` (filtrado
+  pelos prefixos de e-mail dos 3 arquivos) confirmou 0 linhas residuais —
+  cleanup de `afterAll` funcionando em todos os 3 arquivos.
+
+**Critérios de aceite verificados:**
+
+- [x] RLS: anon acessa tracks; sem termo não acessa materials —
+      `rls.test.ts`.
+- [x] Playlist: apenas 1 ativa por vez — `playlist.test.ts`.
+- [x] Termo: duplo aceite retorna erro — `rls.test.ts` (constraint de
+      banco; ver Suposições sobre a idempotência da action).
+- [x] Audiência: agregação diária calcula sessões/horas conforme D-3
+      (fixtures) — já coberto por `packages/jobs/src/__tests__/
+    radio-stats.test.ts` (P-8.11/S-150); ver Suposições.
+- [x] Testes passam
+- [x] Lint passa
+
+**Arquivos criados:**
+
+- `apps/radio/src/__tests__/rls.test.ts`
+- `apps/radio/src/__tests__/playlist.test.ts`
+- `apps/radio/src/__tests__/materials.test.ts`
+- `apps/radio/vitest.config.ts`
+- `apps/radio/src/__tests__/setup-env.ts`
+
+**Arquivos modificados (fora da lista, G1 — ver Suposições):**
+
+- `apps/radio/package.json` (scripts `test`/`test:watch`; devDependencies
+  `vitest`/`dotenv`; dependency `postgres`)
+- `PROMPTS.md` (checklist de P-8.12 marcado)
 - `SESSIONS.md` (esta entrada + linha no índice)
