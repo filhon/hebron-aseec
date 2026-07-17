@@ -159,6 +159,7 @@
 | S-136  | 2026-07-16 | P-7.9b — Fiação do ciclo de vida pós-aprovação e revisão de auxílio (CORRETIVO)         | concluido                            |
 | S-137  | 2026-07-16 | P-7.9c — Persistência do documento do responsável em `flats.document_files` (CORRETIVO) | concluido                            |
 | S-138  | 2026-07-17 | P-8.1 — Schema de Tipos Rádio                                                           | concluido                            |
+| S-139  | 2026-07-17 | P-8.2 — Componentes UI Rádio                                                            | concluido                            |
 
 ---
 
@@ -9723,4 +9724,95 @@ position_seconds`; foram acrescentados `trackTitle` e `authorName`
 - `packages/types/package.json` (entrada `./radio` no `exports`)
 - `packages/validators/package.json` (entrada `./radio` no `exports`)
 - `PROMPTS.md` (checklist de P-8.1 marcado)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+### S-139 — 2026-07-17 — P-8.2 — Componentes UI Rádio
+
+**Prompt:** P-8.2
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Construídos os 6 componentes de UI listados no escopo (Player, TrackInfo,
+PlaylistView, AuthorCard, MaterialCard, TermsAcceptDialog) consumindo os
+tipos/mock data de P-8.1. `design-refs/radio/` não existe — seguido BRAIN.md
+§5 (tokens canônicos) e o vocabulário visual de `@hebron/ui` já usado nos
+demais módulos (Button, Dialog, EmptyState-style), sem inventar telas fora
+do escopo.
+
+**Suposições registradas (G1):**
+
+- `apps/radio/package.json` não estava na lista de arquivos permitidos, mas
+  faltava `lucide-react` como dependência direta do app (usado em todo
+  componente com ícone, ver `apps/flats/package.json` como referência de
+  padrão) — pnpm não resolve dependências fantasma, então o import
+  quebraria sem essa entrada. Adicionado na mesma versão `^0.460.0` usada
+  nos demais apps e registrado aqui como débito de infraestrutura.
+- `SeriesList` (citado no escopo do prompt) não tem arquivo próprio na
+  lista de "Arquivos permitidos" — implementado como lista inline dentro de
+  `author-card.tsx` (`AuthorCard` já lista "nome, bio, foto, séries" no
+  seu próprio critério de aceite), em vez de criar um arquivo novo fora da
+  lista.
+- `Series`/`Author` não têm campo `slug` no tipo (P-8.1) — os links de
+  `AuthorCard` para a página de série usam `id` como slug (`/series/{id}`,
+  ex.: `/series/series-01`), mesmo padrão dos `id`s mockados
+  (`author-01`, `series-01`). Se um campo `slug` for introduzido depois,
+  as rotas de P-8.3 precisam ajustar esse link.
+- `Player` gerencia o próprio estado de reprodução internamente (índice da
+  faixa atual, play/pause, tempo, volume) via um elemento `<audio>` real,
+  em vez de receber esse estado do componente pai — é o único jeito do
+  player continuar tocando entre navegações de página quando for montado
+  uma única vez no layout raiz em P-8.3 (critério "Player persistente no
+  footer"). Navegação entre faixas (próxima/anterior) percorre o array
+  `tracks` recebido via prop, dando a volta ao chegar no fim/início.
+- `MaterialCard` e `TermsAcceptDialog` são desacoplados por design: o card
+  expõe `onRequestTermAcceptance` e o pai decide quando abrir o diálogo
+  (controle de estado `open` fica na página, não no card) — evita cada
+  card ter sua própria cópia do texto do termo.
+- Nenhum componente usa cor hex nem redefine tokens; ícones via
+  `lucide-react`; `cn()` local (join simples, sem `clsx`/`tailwind-merge`)
+  seguindo o padrão de componentes de app já existente (ex.:
+  `apps/flats/src/components/reservation-card.tsx`), não o padrão CVA de
+  `packages/ui`.
+
+**Critérios de aceite verificados:**
+
+- [x] Player persistente no footer (continua tocando entre páginas) —
+      estado interno sobrevive a re-renders, pronto para ser montado uma
+      vez no layout raiz em P-8.3.
+- [x] Player com: play/pause, próxima, anterior, volume, barra de progresso
+      — `player.tsx`.
+- [x] "Tocando agora" com nome da faixa, autor e série — `track-info.tsx`,
+      usado dentro do `Player`.
+- [x] PlaylistView com faixas ordenadas e indicador de faixa atual —
+      `playlist-view.tsx` (`aria-current` + destaque visual na faixa
+      tocando).
+- [x] MaterialCard: download disponível apenas com termo aceito —
+      `material-card.tsx` (botão "Aceitar termo" substitui "Baixar" quando
+      `requiresTerm && !termAccepted`).
+- [x] TermsAcceptDialog: texto do termo + checkbox + botão aceitar —
+      `terms-accept-dialog.tsx` (botão desabilitado até marcar o
+      checkbox).
+- [x] Responsivo (player adapta no mobile) — anterior/próxima e volume
+      ocultos abaixo do breakpoint `sm`, mantendo play/pause, info da
+      faixa e barra de progresso sempre visíveis.
+- [x] Lint passa — `pnpm turbo lint` (monorepo completo, 38/38 tasks).
+- [x] Types passam — `pnpm turbo typecheck` (monorepo completo, 38/38
+      tasks).
+
+**Arquivos criados:**
+
+- `apps/radio/src/components/player.tsx`
+- `apps/radio/src/components/track-info.tsx`
+- `apps/radio/src/components/playlist-view.tsx`
+- `apps/radio/src/components/author-card.tsx`
+- `apps/radio/src/components/material-card.tsx`
+- `apps/radio/src/components/terms-accept-dialog.tsx`
+
+**Arquivos modificados:**
+
+- `apps/radio/package.json` (adicionada dependência `lucide-react`)
+- `PROMPTS.md` (checklist de P-8.2 marcado)
 - `SESSIONS.md` (esta entrada + linha no índice)

@@ -4713,15 +4713,15 @@ Componentes: Player (persistente, background play, tocando agora). TrackInfo (au
 
 **Critérios de aceite:**
 
-- [ ] Player persistente no footer (continua tocando entre páginas)
-- [ ] Player com: play/pause, próxima, anterior, volume, barra de progresso
-- [ ] "Tocando agora" com nome da faixa, autor e série
-- [ ] PlaylistView com faixas ordenadas e indicador de faixa atual
-- [ ] MaterialCard: download disponível apenas com termo aceito
-- [ ] TermsAcceptDialog: texto do termo + checkbox + botão aceitar
-- [ ] Responsivo (player adapta no mobile)
-- [ ] Lint passa
-- [ ] Types passam
+- [x] Player persistente no footer (continua tocando entre páginas)
+- [x] Player com: play/pause, próxima, anterior, volume, barra de progresso
+- [x] "Tocando agora" com nome da faixa, autor e série
+- [x] PlaylistView com faixas ordenadas e indicador de faixa atual
+- [x] MaterialCard: download disponível apenas com termo aceito
+- [x] TermsAcceptDialog: texto do termo + checkbox + botão aceitar
+- [x] Responsivo (player adapta no mobile)
+- [x] Lint passa
+- [x] Types passam
 
 ---
 
