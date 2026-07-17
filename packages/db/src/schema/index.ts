@@ -353,6 +353,40 @@ export type {
   NewKpiSnapshotHistory,
 } from "./intranet";
 
+// Radio schema (P-8.6)
+export {
+  authors,
+  series as radioSeries,
+  tracks,
+  playlists,
+  playlistTracks,
+  nowPlaying,
+  exclusiveMaterials,
+  termAcceptances,
+  listenerStats,
+} from "./radio";
+
+export type {
+  Author,
+  NewAuthor,
+  Series as RadioSeries,
+  NewSeries as NewRadioSeries,
+  Track,
+  NewTrack,
+  Playlist,
+  NewPlaylist,
+  PlaylistTrack,
+  NewPlaylistTrack,
+  NowPlaying,
+  NewNowPlaying,
+  ExclusiveMaterial,
+  NewExclusiveMaterial,
+  TermAcceptance,
+  NewTermAcceptance,
+  ListenerStat,
+  NewListenerStat,
+} from "./radio";
+
 // Flats schema (P-7.6)
 export {
   reservationStatusEnum,

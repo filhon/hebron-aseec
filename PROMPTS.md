@@ -4901,15 +4901,15 @@ Criar tabelas no schema `radio`: tracks, authors, series, playlists, playlist_tr
 
 **Critérios de aceite:**
 
-- [ ] tracks: title, author_id, series_id, file_url, duration_seconds, uploaded_at
-- [ ] playlists: name, is_active (apenas 1 ativa por vez)
-- [ ] playlist_tracks: playlist_id, track_id, position
-- [ ] now_playing: singleton (1 row), track_id, started_at
-- [ ] exclusive_materials: title, file_url, description
-- [ ] term_acceptances: user_id (unique), accepted_at
-- [ ] SEM tabelas de DJs, grade, podcast, pedidos
-- [ ] Migration aplica sem erros
-- [ ] Types passam
+- [x] tracks: title, author_id, series_id, file_url, duration_seconds, uploaded_at
+- [x] playlists: name, is_active (apenas 1 ativa por vez)
+- [x] playlist_tracks: playlist_id, track_id, position
+- [x] now_playing: singleton (1 row), track_id, started_at
+- [x] exclusive_materials: title, file_url, description
+- [x] term_acceptances: user_id (unique), accepted_at
+- [x] SEM tabelas de DJs, grade, podcast, pedidos
+- [x] Migration aplica sem erros
+- [x] Types passam
 
 ---
 

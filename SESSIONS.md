@@ -165,6 +165,7 @@
 | S-142  | 2026-07-17 | P-8.5 — Estados Rádio                                                                   | concluido                            |
 | S-143  | 2026-07-17 | Auditoria Bloco A Rádio (P-8.1–8.5) — patch P-8.5b gerado                               | concluido                            |
 | S-144  | 2026-07-17 | P-8.5b — Estados reais do player (CORRETIVO)                                            | concluido                            |
+| S-145  | 2026-07-17 | P-8.6 — Schema do Banco Rádio                                                           | concluido                            |
 
 ---
 
@@ -10365,3 +10366,125 @@ via `layout.tsx`.
 - `apps/radio/src/components/player.tsx`
 - `PROMPTS.md` (checklist de P-8.5b marcado)
 - `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+### S-145 — 2026-07-17 — P-8.6 — Schema do Banco Rádio
+
+**Prompt:** P-8.6 (`PROMPTS.md:4883`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Cria o schema `radio` completo no banco: `authors`, `series`, `tracks`,
+`playlists`, `playlist_tracks` (ordenada), `now_playing` (singleton),
+`exclusive_materials`, `term_acceptances`, `listener_stats` (snapshot) —
+traduzindo os tipos já validados em `packages/types/src/radio/index.ts`
+(P-8.1), os schemas Zod de `packages/validators/src/radio/index.ts` e os
+formulários já construídos em P-8.4 (`author-form.tsx`, `series-form.tsx`,
+`track-upload-form.tsx`, `playlist-form.tsx`,
+`material-upload-form.tsx`) para tabelas relacionais. Sem `shows`,
+`schedule_slots`, `song_requests`, `podcast_subscribers` (fora de escopo,
+BRAIN §6.4). Dependência `P-8.5 concluído, validação da diretoria OK`
+satisfeita por S-142/S-144.
+
+Seguindo G6.4, a migration foi gerada com `drizzle-kit generate` (não
+numerada à mão), mas o resultado bruto veio com 2 problemas causados por
+drift pré-existente no bookkeeping do próprio drizzle-kit (não relacionado
+a este prompt): (1) o kit produziu `0023_cute_spiral.sql` — o journal
+interno (`meta/_journal.json`) só tinha entradas até `idx 22`
+(`0022_flats_rls`), sem registro de nenhuma das ~25 migrations reais
+`0023..0048` já aplicadas na pasta (adicionadas à mão em sessões
+anteriores, ex. RLS/grants/funções não representáveis em Drizzle), então o
+kit recalculou "0023" como próximo número livre — colidindo com o
+`0023_documentos_views_retention.sql` já existente. Renomeado para
+`0049_radio.sql` (posição real seguinte a `0048_flats_guests_select_own.sql`),
+mesmo precedente do mecanismo `ID_RENAMES` em `migrate.ts` para corrigir
+numeração pós-geração; como o arquivo nunca foi aplicado em lugar nenhum,
+não foi necessário registrar renomeação ali. (2) o diff também trouxe de
+volta 3 `ALTER TYPE admin.audit_action ADD VALUE` (`reservation.confirmed`,
+`reservation.cancelled`, `aid.rejected`) sem `IF NOT EXISTS` — valores de
+um módulo alheio (flats), já aplicados via `0047_flats_audit_actions_p78.sql`
+(que usa `IF NOT EXISTS`); mantê-los quebraria `db:migrate` em qualquer
+banco onde `0047` já rodou. Removidos do arquivo final — nenhum valor novo
+de audit_action pertence a este prompt (escopo de P-8.6 não menciona
+auditoria, diferente de P-7.6/flats). `meta/0023_snapshot.json` e
+`meta/_journal.json` (o registro interno do kit, indexado por `idx`, não
+pelo nome do arquivo de migration) foram deixados como o kit gerou —
+já refletem authors/series/tracks/... corretamente para o próximo
+`generate`.
+
+**Suposições registradas (G1 — ambiguidade resolvida pela opção mais simples):**
+
+- **`tracks.uploaded_at` em vez de `created_at`.** O critério de aceite lista
+  literalmente "tracks: title, author_id, series_id, file_url,
+  duration_seconds, uploaded_at" — nome diferente do `createdAt` que o mock
+  `Track` (P-8.1) já usa. G3.5 (PROMPTS.md vence sobre o protótipo/mock para
+  nome de campo/regra) aplicado por analogia: mantido `uploadedAt` como
+  pedido, com `updatedAt` adicional (não citado no critério, mas
+  `updateTrackSchema` já existe em `packages/validators` — sem ele, uma
+  edição de faixa não teria como registrar quando ocorreu).
+- **`exclusive_materials.description` incluído** apesar de ausente do mock
+  `ExclusiveMaterial` (P-8.1) — está no critério de aceite literal
+  ("exclusive_materials: title, file_url, description") e já é consumido
+  por `MaterialUploadFormValues.description` (P-8.4). Mock desatualizado
+  em relação ao prompt; este último vence (G3.5).
+- **FKs de autoria sem `onDelete` (restrict por padrão)** em
+  `series.authorId` e `tracks.authorId` — mesmo padrão de
+  `plataforma.courses.instructorId` (sem onDelete), impede apagar um autor
+  com série/faixa vinculada em vez de cascatear a remoção do catálogo
+  inteiro. `tracks.seriesId` mantém `onDelete: "set null"`, espelhando
+  `courses.seriesId`.
+- **"Apenas 1 playlist ativa por vez" via índice único parcial**
+  (`playlists_active_uniq` em `is_active` `WHERE is_active = true`) — mesmo
+  idioma de `flats.guests_reservation_responsible_uniq`, não uma constraint
+  de aplicação.
+- **`now_playing` como singleton real** (PK booleana fixa em `true` + CHECK
+  `id = true`), não uma linha em `admin.system_settings` (que já existe para
+  config genérica). Sem precedente de singleton no monorepo; escolhido
+  porque o critério pede explicitamente "singleton (1 row)" e uma tabela
+  própria mantém `trackId`/`startedAt` tipados (em vez de `jsonb`).
+- **`listener_stats` com apenas `listener_count` + `captured_at`** — não
+  havia mock/tipo prévio para essa entidade (fora do escopo de P-8.1); forma
+  mínima inferida só do texto do escopo ("snapshot") + BRAIN §6.6/§6.9
+  ("Rádio → Intranet: audiência"), sem inventar campos além do que a
+  palavra "snapshot" já implica.
+- **`series` (radio) reexportado de `schema/index.ts` como `radioSeries` /
+  `RadioSeries`** (e `NewSeries` → `NewRadioSeries`) para não colidir com o
+  `series`/`Series` já exportado de `plataforma.ts` — mesmo padrão
+  defensivo de `Guest as FlatsGuest` em flats.
+- **`schema/index.ts` editado apesar de não estar em "Arquivos
+  permitidos"** — infraestrutura óbvia (G1), mesmo padrão de toda P-X.6
+  anterior (sem isso as tabelas novas ficam inacessíveis via
+  `@hebron/db/schema`).
+
+**Verificação:** `pnpm --filter @hebron/db typecheck` e `lint` verdes;
+`pnpm turbo lint typecheck` na raiz — 38/38 tasks verdes. `pnpm --filter
+@hebron/db db:migrate` aplicou `0049_radio.sql` contra o banco real
+(Supabase) sem erros (todas as 49 migrations anteriores já registradas em
+`public._migrations`, corretamente puladas).
+
+**Critérios de aceite verificados:**
+
+- [x] tracks: title, author_id, series_id, file_url, duration_seconds, uploaded_at
+- [x] playlists: name, is_active (índice único parcial garante só 1 ativa)
+- [x] playlist_tracks: playlist_id, track_id, position (PK composta + UNIQUE em playlist_id+position)
+- [x] now_playing: singleton (PK booleana + CHECK), track_id, started_at
+- [x] exclusive_materials: title, file_url, description
+- [x] term_acceptances: user_id (unique), accepted_at
+- [x] SEM tabelas de DJs, grade, podcast, pedidos
+- [x] Migration aplica sem erros (testado contra o banco real)
+- [x] Types passam
+
+**Arquivos modificados:**
+
+- `packages/db/src/schema/index.ts` (export do schema radio, `series` aliasado — G1, débito registrado acima)
+- `packages/db/src/migrations/meta/_journal.json` (resincronizado por `drizzle-kit generate`)
+- `PROMPTS.md` (checklist de P-8.6 marcado)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+**Arquivos criados:**
+
+- `packages/db/src/schema/radio.ts`
+- `packages/db/src/migrations/0049_radio.sql` (gerado como `0023_cute_spiral.sql`, renomeado — ver Resumo)
+- `packages/db/src/migrations/meta/0023_snapshot.json` (gerado por `drizzle-kit generate`)
