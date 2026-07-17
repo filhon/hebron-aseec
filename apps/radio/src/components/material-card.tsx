@@ -1,3 +1,5 @@
+"use client";
+
 import { Download, FileText, Lock } from "lucide-react";
 import { Button } from "@hebron/ui";
 import type { ExclusiveMaterial } from "@hebron/types/radio";

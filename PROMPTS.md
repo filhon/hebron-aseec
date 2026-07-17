@@ -4752,15 +4752,15 @@ Páginas: Home com player principal e "tocando agora". Catálogo por autor. Cat�
 
 **Critérios de aceite:**
 
-- [ ] Home com player em destaque e "tocando agora"
-- [ ] Catálogos por autor e por série com busca
-- [ ] Página de autor: bio, foto, lista de séries
-- [ ] Materiais exclusivos: login wall + aceite de termo antes do download
-- [ ] Admin: upload de faixas, criar playlists, gerenciar materiais
-- [ ] Player persistente em TODAS as páginas (não recarrega)
-- [ ] Responsivo
-- [ ] Lint passa
-- [ ] Types passam
+- [x] Home com player em destaque e "tocando agora"
+- [x] Catálogos por autor e por série com busca
+- [x] Página de autor: bio, foto, lista de séries
+- [x] Materiais exclusivos: login wall + aceite de termo antes do download
+- [x] Admin: upload de faixas, criar playlists, gerenciar materiais
+- [x] Player persistente em TODAS as páginas (não recarrega)
+- [x] Responsivo
+- [x] Lint passa
+- [x] Types passam
 
 **Notas:**
 Home pública (sem login para ouvir). PWA será configurada no Bloco B.

@@ -1,3 +1,5 @@
+"use client";
+
 import { Play, Volume2 } from "lucide-react";
 import type { Track } from "@hebron/types/radio";
 

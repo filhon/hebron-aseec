@@ -160,6 +160,7 @@
 | S-137  | 2026-07-16 | P-7.9c — Persistência do documento do responsável em `flats.document_files` (CORRETIVO) | concluido                            |
 | S-138  | 2026-07-17 | P-8.1 — Schema de Tipos Rádio                                                           | concluido                            |
 | S-139  | 2026-07-17 | P-8.2 — Componentes UI Rádio                                                            | concluido                            |
+| S-140  | 2026-07-17 | P-8.3 — Telas e Páginas Rádio                                                           | concluido                            |
 
 ---
 
@@ -9815,4 +9816,139 @@ do escopo.
 
 - `apps/radio/package.json` (adicionada dependência `lucide-react`)
 - `PROMPTS.md` (checklist de P-8.2 marcado)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+### S-140 — 2026-07-17 — P-8.3 — Telas e Páginas Rádio
+
+**Prompt:** P-8.3
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Criada a infraestrutura de `src/app/` do app `radio` (inexistente até aqui —
+só havia `components/` e `lib/mock-data.ts` de P-8.1/P-8.2) e implementadas
+as 8 páginas do escopo: home com "tocando agora" + destaque de autores +
+seção "sobre", catálogo de autores/séries com busca, página de autor, página
+de série, materiais exclusivos (parede de login + termo), e painel admin
+(layout + shell + página única com faixas/playlists/materiais). Player
+persistente montado uma única vez no `layout.tsx` raiz (Server Component
+importando o `Player` client de P-8.2 diretamente), garantindo que a mesma
+tag `<audio>` sobrevive à navegação entre páginas sem reiniciar — a extração
+para um `shell.tsx` client dedicado é o próprio P-8.9 (`PROMPTS.md` linha
+4961-4962), não antecipada aqui. `design-refs/radio/` não existe — seguida a
+linguagem visual já estabelecida pelos componentes de P-8.2 (utilitários
+Tailwind + tokens `--hb-*`/semânticos em vez das classes `.hb-*` de
+`patterns.css` usadas em documentos/financeiro), mantendo consistência
+dentro do próprio módulo.
+
+**Suposições registradas (G1 — ambiguidade resolvida pela opção mais simples):**
+
+- **`(admin)/layout.tsx` e `(admin)/page.tsx` do prompt mapeados para
+  `apps/radio/src/app/admin/`.** Route group `(admin)` sem segmento próprio
+  colidiria com `apps/radio/src/app/page.tsx` (ambos resolveriam `/`) — erro
+  de build. Mesmo precedente já registrado para `flats` (S-123/S-127,
+  "Colisão de rotas `(admin)` × `(hospede)`") e `plataforma`: convertido em
+  segmento real `admin/`, dando `/admin`.
+- **Sem `sobre/page.tsx` dedicado.** O texto do prompt menciona "Sobre a
+  rádio" no Escopo, mas nenhum arquivo de página "sobre" está na lista de
+  Arquivos permitidos, e o critério de aceite também não cobra uma página
+  própria. Conteúdo institucional (Auto DJ 24/7, sem DJs/podcast/pedidos,
+  ouvir sem cadastro) dobrado como seção da home (`#sobre-heading`) em vez
+  de inventar um arquivo fora da lista.
+- **"Catálogo por série" sem arquivo de listagem próprio.** A lista de
+  Arquivos permitidos só tem `autores/page.tsx` (não um `series/page.tsx`)
+  — implementado como uma segunda aba ("Por série") dentro da mesma página
+  `autores/page.tsx`, com o estado de aba e a busca via `searchParams` (GET
+  form + links), sem `"use client"` na página.
+- **`materiais/page.tsx`: sessão e aceite de termo simulados inteiramente em
+  estado local (`useState`), sem qualquer import de `@hebron/auth`.** Nesta
+  fase (Bloco A, precondição "Env vars: nenhuma") não há sessão real —
+  a parede de login é o estado inicial (`loggedIn = false`, o caso mais
+  comum/realista para um visitante anônimo da rádio); o botão "Entrar"
+  alterna o estado local (em vez de navegar para fora) para permitir
+  validar visualmente a jornada completa (parede → aceite de termo →
+  download) com a diretoria nesta fase de mocks. Usuário mock
+  (`user-ouvinte-03`) escolhido por não constar em `mockTermAcceptances`,
+  exercitando o diálogo de aceite (em vez de um usuário que já aceitou).
+  Integração real de sessão/Supabase Realtime é P-8.9.
+- **`CANONICAL_LOGIN_URL` de `@hebron/auth` não importado — replicado
+  localmente em `layout.tsx`.** O barrel de `@hebron/auth`
+  (`export * from "./client"`) executa `resolveEnv(NEXT_PUBLIC_SUPABASE_URL)`
+  em module-scope; sem `.env.local` (não previsto nesta fase) isso quebra
+  `next build` em qualquer página que sequer importe `CANONICAL_LOGIN_URL`
+  do barrel, mesmo sem usar nada do client Supabase. Fora do escopo desta
+  prompt corrigir o barrel da package compartilhada — reproduzida a mesma
+  constante (`NODE_ENV === "production" ? ".../login" : "localhost:3005/login"`)
+  localmente, com comentário apontando a substituição pela importação real
+  em P-8.9.
+- **Botões "Nova faixa"/"Nova playlist"/"Novo material" do admin sem
+  `onClick`.** Os formulários (`track-upload-form.tsx` etc.) são escopo de
+  P-8.4, ainda não existem — os botões ficam como afordance visual válida
+  para a validação de design, sem simular uma ação que ainda não existe.
+
+**Débitos / correções de infraestrutura (G1 — "arquivo óbvio faltando"):**
+
+- Criados `apps/radio/src/app/globals.css` e `apps/radio/postcss.config.mjs`
+  (nenhum dos dois existia — o app não tinha `src/app/` algum até este
+  prompt), espelhando exatamente o padrão de `apps/flats`.
+- `apps/radio/eslint.config.mjs` não tinha o `{ ignores: ["next-env.d.ts",
+".next/**"] }` presente em todo outro app do monorepo (`flats`,
+  `documentos` etc.) — sem ele, `next-env.d.ts` (autogerado pelo Next,
+  "não deve ser editado") falhava `@typescript-eslint/triple-slash-reference`
+  no lint. Corrigido para o mesmo padrão.
+- `playlist-view.tsx` e `material-card.tsx` (P-8.2) usam `onClick` sem a
+  diretiva `"use client"` — funciona quando renderizados a partir de um
+  componente cliente (como `materiais/page.tsx`), mas quebra
+  `next build` ("Event handlers cannot be passed to Client Component
+  props") quando renderizados a partir de um Server Component estático
+  (`admin/page.tsx`, `autores/[slug]/page.tsx`, `series/[slug]/page.tsx`).
+  Adicionada a diretiva nos dois arquivos — mudança de uma linha, sem
+  alterar props/comportamento.
+
+**Critérios de aceite verificados:**
+
+- [x] Home com player em destaque e "tocando agora" — `page.tsx` (hero com
+      card "Tocando agora" lendo `mockNowPlaying` + `mockTracks`).
+- [x] Catálogos por autor e por série com busca — `autores/page.tsx` (abas
+      "Por autor"/"Por série" + busca via `searchParams`, ver suposições).
+- [x] Página de autor: bio, foto, lista de séries — `autores/[slug]/page.tsx`.
+- [x] Materiais exclusivos: login wall + aceite de termo antes do download
+      — `materiais/page.tsx` (ver suposições sobre mock de sessão).
+- [x] Admin: upload de faixas, criar playlists, gerenciar materiais —
+      `admin/page.tsx` (listas de P-8.1 mock data + CTAs; formulários reais
+      chegam em P-8.4).
+- [x] Player persistente em TODAS as páginas (não recarrega) — montado uma
+      única vez em `layout.tsx` raiz; confirmado via `curl` em `/`,
+      `/materiais` e `/admin` (mesmo markup do player nas três).
+- [x] Responsivo — grids `sm`/`lg`, player já responsivo desde P-8.2.
+- [x] Lint passa — `pnpm --filter @hebron/radio lint`.
+- [x] Types passam — `pnpm --filter @hebron/radio typecheck`.
+
+**Verificado além do critério:** `next build` completo (7/7 páginas
+geradas) e smoke test HTTP (`curl`) em todas as rotas via `next dev`.
+
+**Arquivos criados:**
+
+- `apps/radio/src/app/layout.tsx`
+- `apps/radio/src/app/page.tsx`
+- `apps/radio/src/app/autores/page.tsx`
+- `apps/radio/src/app/autores/[slug]/page.tsx`
+- `apps/radio/src/app/series/[slug]/page.tsx`
+- `apps/radio/src/app/materiais/page.tsx`
+- `apps/radio/src/app/admin/layout.tsx`
+- `apps/radio/src/app/admin/page.tsx`
+- `apps/radio/src/app/admin/shell.tsx` (fora da lista formal — mesmo débito
+  já registrado em outros módulos: layout Server precisa de um wrapper
+  client para `AppShell`/`usePathname`)
+- `apps/radio/src/app/globals.css` (débito de infraestrutura)
+- `apps/radio/postcss.config.mjs` (débito de infraestrutura)
+
+**Arquivos modificados:**
+
+- `apps/radio/eslint.config.mjs` (correção: ignore de `next-env.d.ts`)
+- `apps/radio/src/components/playlist-view.tsx` (correção: `"use client"`)
+- `apps/radio/src/components/material-card.tsx` (correção: `"use client"`)
+- `PROMPTS.md` (checklist de P-8.3 marcado)
 - `SESSIONS.md` (esta entrada + linha no índice)
