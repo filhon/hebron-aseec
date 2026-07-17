@@ -175,6 +175,7 @@
 | S-152  | 2026-07-17 | P-8.9b — Persistência da descrição de material exclusivo (CORRETIVO)                    | concluido                            |
 | S-153  | 2026-07-17 | P-8.11b — Fiação do heartbeat de audiência no player (CORRETIVO)                        | concluido                            |
 | S-154  | 2026-07-17 | P-9.1 — Revisão de Segurança (RLS Audit)                                                | concluido                            |
+| S-155  | 2026-07-17 | P-9.1b — Fechamento dos achados abertos da auditoria (S-02 + S-05) (CORRETIVO)          | parcial                              |
 
 ---
 
@@ -11618,3 +11619,77 @@ introspecção do catálogo Postgres (conexão real ao Supabase) + testes por pa
   pelo escopo "corrigir aqui")
 - `.env.example` (nova var `IMPERSONATION_COOKIE_SECRET` — infra óbvia, G1)
 - `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+### S-155 — 2026-07-17 — P-9.1b — Fechamento dos achados abertos da auditoria (S-02 + S-05)
+
+**Prompt:** P-9.1b (`PROMPTS.md:5244`)
+**Modelo:** claude-sonnet-5
+**Status:** parcial
+
+**Resumo:**
+Antes de implementar, foi feito um levantamento (grep completo por app) do
+volume real de call-sites `db` cru em `lib/queries.ts`/`actions/*.ts` nos 9
+apps, para dimensionar o fix de S-02. O levantamento confirmou a estimativa da
+auditoria original (~80 arquivos, arquitetural) e excede o que cabe numa
+sessão. Seguindo a própria cláusula de contingência do prompt P-9.1b ("se o
+volume tornar o prompt grande demais para uma sessão, PARE e registre a
+divisão sugerida em sub-prompts por app"), esta sessão **parou sem alterar
+código de app** e registrou a divisão em `PROMPTS.md` como 7 novos prompts
+corretivos (`P-9.1b-1` a `P-9.1b-7`, inseridos logo após P-9.1b).
+
+**Levantamento (por app, arquivos de negócio apenas — exclui testes/infra):**
+
+| App                        | Status hoje                       | Call-sites raw a migrar                                                                                                                                                                                             | Observação                                                                                                        |
+| -------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| admin                      | 0% migrado                        | ~43 (`queries.ts` 1, `impersonation.ts` 2, `invitations.ts` 3, `meetings.ts` 3, `roles.ts` 9, `settings.ts` 8, `users.ts` 17)                                                                                       | Prioridade 1 — inclui CRUD de `users`/`role_assignments` gated só por `super_admin` no safe-action, sem RLS ativa |
+| financeiro                 | 1 arquivo migrado (`payables.ts`) | ~55 (`queries.ts` 21 + `accounts/categories/conciliation/import/organization-budgets` não migrados + `approval/reports/transactions` mixed, com helpers `getPayableOrThrow`/`getTransactionOrThrow` duplicados raw) | Prioridade 2 — o exemplo citado na auditoria (`colaborador+` lê todas contas/transações)                          |
+| projetos                   | leituras migradas, mutações não   | ~48 (`evaluations` 6, `organizations` 8, `projects` 21, `reports` 8, `voting` 5)                                                                                                                                    | Prioridade 3                                                                                                      |
+| documentos                 | 0% migrado, sem `lib/queries.ts`  | ~47 (`categories` 10, `documents` 19, `editals` 6, `search` 3, `subscriptions` 6, `tags` 3) + `lib/notifications.ts` 6 a avaliar                                                                                    | Prioridade 4                                                                                                      |
+| intranet                   | mixed                             | ~24 (`queries.ts` 9, `announcements/briefing/dashboard/decisions` mixed, `invitations` 3 não migrado) + `kpis.ts` 5 (candidato a exceção — agregados org-wide)                                                      | Prioridade 5                                                                                                      |
+| tarefas                    | mixed                             | ~37 (`queries.ts` 21 + `approvals/comments/recurrence/tasks/templates/time-tracking` mixed)                                                                                                                         | Prioridade 6                                                                                                      |
+| flats / plataforma / radio | quase 100% migrado                | 1 call-site cada (`getAuthUser` self-lookup) + `isInstructor()` em plataforma                                                                                                                                       | Agrupados numa sessão só (baixo volume) + S-05                                                                    |
+
+Padrão cross-cutting identificado: 7 dos 9 apps duplicam um `getAuthUser()`
+raw idêntico em `lib/queries.ts` (self-lookup de `fullName` pelo id já
+retornado por `supabase.auth.getUser()`). Como o `actorId` já é conhecido
+nesse ponto, não é um bootstrap sem sessão — decisão registrada nos
+sub-prompts: migrar normalmente, não tratar como exceção.
+
+Exceções service-level candidatas identificadas (a confirmar/documentar em
+cada sub-prompt, não migrar para `withAuthenticatedContext`): inserts em
+`admin.audit_log` (já via `@hebron/db/audit`) e em `public.notifications`
+(fan-out de notificação) em vários módulos; `intranet/actions/kpis.ts`
+(agregados `count`/`sum` org-wide sem retorno de linha individual).
+
+**Divisão registrada em PROMPTS.md:**
+
+- P-9.1b-1 — admin
+- P-9.1b-2 — financeiro
+- P-9.1b-3 — projetos
+- P-9.1b-4 — documentos
+- P-9.1b-5 — intranet
+- P-9.1b-6 — tarefas
+- P-9.1b-7 — flats + plataforma + radio (residual) + S-05 (TTL da URL assinada
+  da plataforma), incluindo o fechamento formal do achado no índice da
+  auditoria ao final
+
+**Suposições/débitos registrados (G1):**
+
+- Nenhum arquivo de app foi criado/editado nesta sessão — apenas
+  `PROMPTS.md` (7 novos prompts) e `SESSIONS.md` (esta entrada + índice),
+  ambos fora da lista de "Arquivos permitidos" original de P-9.1b mas
+  cobertos pela própria cláusula de contingência do prompt (que pede
+  exatamente esse registro quando o volume excede uma sessão).
+- P-9.1b permanece **parcial**: fecha quando P-9.1b-1 a P-9.1b-7 estiverem
+  todos `concluido`.
+
+**Critérios de aceite verificados:**
+
+- [x] Volume levantado e dimensionado por app (grep completo, não estimativa)
+- [x] Divisão em sub-prompts registrada em PROMPTS.md (P-9.1b-1..7)
+- [x] Ordem de prioridade preservada do escopo original (admin → financeiro →
+      projetos → demais apps)
+- [ ] S-02 corrigido (pendente — ver sub-prompts)
+- [ ] S-05 corrigido (pendente — P-9.1b-7)

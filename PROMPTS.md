@@ -5229,15 +5229,15 @@ Auditoria completa de RLS e permissões no estado final (decisão B implementada
 
 **Critérios de aceite:**
 
-- [ ] Toda tabela com RLS habilitado e DENY-by-default (verificação automatizada por introspecção)
-- [ ] Zero conexões superuser em runtime de app (grep + teste)
-- [ ] GRANTs ↔ policies reconciliados schema a schema
-- [ ] Nenhum cross-schema leak (testes por papel)
-- [ ] Conflitos de interesse enforced em RLS
-- [ ] Cookie de impersonação assinado/inforjável (F3-13 fechado)
-- [ ] Signed URLs com expiração adequada
-- [ ] Nenhuma query dinâmica vulnerável a SQL injection
-- [ ] Testes de segurança passam · Relatório de findings documentado
+- [x] Toda tabela com RLS habilitado e DENY-by-default (verificação automatizada por introspecção)
+- [~] Zero conexões superuser em runtime de app (grep + teste)
+- [x] GRANTs ↔ policies reconciliados schema a schema
+- [x] Nenhum cross-schema leak (testes por papel)
+- [x] Conflitos de interesse enforced em RLS
+- [x] Cookie de impersonação assinado/inforjável (F3-13 fechado)
+- [~] Signed URLs com expiração adequada
+- [x] Nenhuma query dinâmica vulnerável a SQL injection
+- [x] Testes de segurança passam · Relatório de findings documentado
 
 ---
 
@@ -5333,6 +5333,363 @@ sob demanda. Não alterar buckets nem policies de storage.
 - [ ] Exceções service-level (audit, notifications, jobs) preservadas e documentadas
 - [ ] `security-audit.test.ts` estendido e verde · SESSIONS.md atualizado
 - [ ] Lint passa · Types passam
+
+> **Nota (S-155):** o volume real (~80 arquivos em 9 apps, levantado por
+> varredura antes da implementação) excede uma sessão. Seguindo a cláusula de
+> contingência do próprio P-9.1b ("se o volume tornar o prompt grande demais
+> ... registrar a divisão sugerida em sub-prompts por app"), o fix de S-02 foi
+> dividido nos sub-prompts **P-9.1b-1 a P-9.1b-7** abaixo, um app (ou grupo de
+> apps de baixo volume) por sessão, na ordem de prioridade indicada no escopo
+> original (admin → financeiro → projetos → demais apps onde o isolamento por
+> linha importa). S-05 (URL assinada da plataforma) foi anexado ao sub-prompt
+> da plataforma (P-9.1b-7). Nenhum código de app foi alterado nesta sessão —
+> apenas o levantamento e o registro da divisão.
+
+---
+
+### P-9.1b-1 — Fechamento do achado S-02 em `admin` (CORRETIVO)
+
+**Fase:** 9
+**Módulo:** admin
+**Tipo:** integration
+**Origem:** divisão de P-9.1b (S-155) — prioridade #1: único app com **zero** usos
+de `withAuthenticatedContext` hoje, incluindo CRUD de `users`/`role_assignments`
+(alta sensibilidade) gated apenas por `super_admin` no safe-action, sem RLS ativa.
+**Pré-condições:**
+
+- Branch: `feat/P-9.1b-1-admin-rls`
+- Dependências: `withAuthenticatedContext`/`withSystemRole` (`@hebron/db/authenticated`,
+  P-0.10); `lib/safe-action.ts` do admin já resolve `ctx.actorId` via `resolveSession`
+- Env vars: `DATABASE_URL`
+
+**Escopo:**
+
+Migrar todo acesso a dado de negócio em `admin` de `db` cru (`@hebron/db/client`)
+para `withAuthenticatedContext({ actorId: ctx.actorId }, (tx) => …)`:
+
+1. `src/lib/queries.ts` — `getDirectors()`.
+2. `src/actions/impersonation.ts` — leituras de `users.fullName` (ator + alvo).
+3. `src/actions/invitations.ts`, `meetings.ts` — CRUD.
+4. `src/actions/roles.ts` — CRUD de `role_assignments` (grants de papel).
+5. `src/actions/settings.ts` — CRUD de configurações.
+6. `src/actions/users.ts` (maior arquivo — 17 call-sites): `createUser`,
+   `updateUser`, `suspendUser`/`unsuspendUser`, `resetPassword`, `approveUser`,
+   `approveSignup` (inclui `db.insert(roleAssignments)` — grant de papel),
+   `rejectSignup`.
+
+`db.insert(notifications)` dentro dos helpers de notificação e qualquer escrita
+em `admin.audit_log` (já via `@hebron/db/audit`) permanecem como exceção
+service-level — não migrar, apenas comentar a exceção no arquivo (regra G6.3 /
+regra 2 do escopo original de P-9.1b).
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/admin/src/lib/queries.ts`
+- `apps/admin/src/actions/impersonation.ts`, `invitations.ts`, `meetings.ts`,
+  `roles.ts`, `settings.ts`, `users.ts`
+- `apps/admin/src/__tests__/security-audit.test.ts` (novo caso: usuário
+  autenticado sem `super_admin` não lê/edita `users`/`role_assignments` de
+  outro registro via RLS — dados semeados, não só 0 linhas)
+- `SESSIONS.md`
+
+**Critérios de aceite:**
+
+- [ ] Grep limpo de `db.select`/`db.query`/`db.execute`/`db.insert`/`db.update`
+      em `lib/queries.ts` e nos 6 arquivos de `actions/*.ts` listados (exceções
+      de notificação/audit comentadas)
+- [ ] Teste com dados semeados prova isolamento horizontal em `users`/`role_assignments`
+- [ ] `security-audit.test.ts` estendido e verde
+- [ ] Lint passa · Types passam · SESSIONS.md atualizado
+
+---
+
+### P-9.1b-2 — Fechamento do achado S-02 em `financeiro` (CORRETIVO)
+
+**Fase:** 9
+**Módulo:** financeiro
+**Tipo:** integration
+**Origem:** divisão de P-9.1b (S-155) — prioridade #2: gate `colaborador+` lê
+todas as contas/transações da organização sem RLS ativa na leitura (achado
+original de S-02, o exemplo citado explicitamente na auditoria P-9.1).
+**Pré-condições:**
+
+- Branch: `feat/P-9.1b-2-financeiro-rls`
+- Dependências: P-9.1b-1 concluído (mesmo padrão, primeiro app já validado);
+  `apps/financeiro/src/actions/payables.ts` já migrado — usar como template
+- Env vars: `DATABASE_URL`
+
+**Escopo:**
+
+1. `src/lib/queries.ts` (maior superfície de leitura do módulo, 21 call-sites) —
+   `getBankAccounts`, `getCategories`, `getCostCenterOptions`, `getTransactions`,
+   `getPayables`, `getReceivables`, `getBudgets`, `getBatchApprovals`,
+   `getLatestBankImport`, `getTransactionsForAccount`, `getUsersMap`: todas para
+   `withAuthenticatedContext`.
+2. `src/actions/accounts.ts`, `categories.ts`, `conciliation.ts`, `import.ts`,
+   `organization-budgets.ts` — totalmente não migrados, migrar por completo.
+3. `src/actions/approval.ts`, `reports.ts`, `transactions.ts` — mixed (já usam
+   `withAuthenticatedContext` para parte do fluxo): eliminar os call-sites raw
+   restantes, incluindo os helpers duplicados `getPayableOrThrow`/
+   `getTransactionOrThrow` (hoje raw e repetidos em `approval.ts` e
+   `transactions.ts` — consolidar em `lib/queries.ts` como uma função só,
+   recebendo `tx: AuthenticatedTx`, e importar dos dois arquivos).
+4. O `db.insert(notifications)` de alerta de autorização em `approval.ts`
+   permanece exceção service-level (documentar).
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/financeiro/src/lib/queries.ts`
+- `apps/financeiro/src/actions/accounts.ts`, `categories.ts`, `conciliation.ts`,
+  `import.ts`, `organization-budgets.ts`, `approval.ts`, `reports.ts`,
+  `transactions.ts`
+- `apps/admin/src/__tests__/security-audit.test.ts` (novo caso: `colaborador`
+  sem designação financeira não lê `bankAccounts`/`transactions`/`payables`/
+  `receivables` do schema `financeiro` — dados semeados)
+- `SESSIONS.md`
+
+**Critérios de aceite:**
+
+- [ ] Grep limpo de `db` cru em `lib/queries.ts` e nos 8 arquivos de `actions/*.ts`
+      (exceção de notificação comentada)
+- [ ] Helpers `getPayableOrThrow`/`getTransactionOrThrow` consolidados (sem
+      duplicação entre `approval.ts` e `transactions.ts`)
+- [ ] Teste prova que `colaborador` sem designação financeira não lê
+      contas/transações (RLS volta a valer na leitura — critério original de
+      P-9.1b)
+- [ ] Lint passa · Types passam · SESSIONS.md atualizado
+
+---
+
+### P-9.1b-3 — Fechamento do achado S-02 em `projetos` (CORRETIVO)
+
+**Fase:** 9
+**Módulo:** projetos
+**Tipo:** integration
+**Origem:** divisão de P-9.1b (S-155) — prioridade #3. `lib/queries.ts` já roda
+em `withAuthenticatedContext` (leituras migradas); as mutações em `actions/*.ts`
+ainda usam `db` cru.
+**Pré-condições:**
+
+- Branch: `feat/P-9.1b-3-projetos-rls`
+- Dependências: P-9.1b-2 concluído
+- Env vars: `DATABASE_URL`
+
+**Escopo:**
+
+Migrar `src/actions/evaluations.ts`, `organizations.ts`, `projects.ts` (maior
+arquivo do módulo — 21 call-sites, ciclo de vida completo do projeto),
+`reports.ts`, `voting.ts` de `db` cru para `withAuthenticatedContext`. O
+`db.insert(notifications)` em `projects.ts` permanece exceção service-level.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/projetos/src/actions/evaluations.ts`, `organizations.ts`, `projects.ts`,
+  `reports.ts`, `voting.ts`
+- `apps/admin/src/__tests__/security-audit.test.ts` (novo caso: `submissor`
+  não lê/edita projeto de organização à qual não pertence — dados semeados)
+- `SESSIONS.md`
+
+**Critérios de aceite:**
+
+- [ ] Grep limpo de `db` cru nos 5 arquivos de `actions/*.ts`
+- [ ] Teste prova isolamento horizontal por organização em `projects`
+- [ ] Lint passa · Types passam · SESSIONS.md atualizado
+
+---
+
+### P-9.1b-4 — Fechamento do achado S-02 em `documentos` (CORRETIVO)
+
+**Fase:** 9
+**Módulo:** documentos
+**Tipo:** integration
+**Origem:** divisão de P-9.1b (S-155) — prioridade #4. `documentos` não tem
+`lib/queries.ts`; a lógica de leitura vive inline em `actions/*.ts`, 100% via
+`db` cru.
+**Pré-condições:**
+
+- Branch: `feat/P-9.1b-4-documentos-rls`
+- Dependências: P-9.1b-3 concluído
+- Env vars: `DATABASE_URL`
+
+**Escopo:**
+
+Migrar `src/actions/categories.ts`, `documents.ts` (maior arquivo — 19
+call-sites), `editals.ts`, `search.ts`, `subscriptions.ts`, `tags.ts` de `db`
+cru para `withAuthenticatedContext`. Avaliar `src/lib/notifications.ts` (6
+call-sites): se for fan-out de notificação genuinamente service-level (mesmo
+padrão de exceção de outros módulos), documentar como exceção; se depender de
+papel/escopo do destinatário, migrar.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/documentos/src/actions/categories.ts`, `documents.ts`, `editals.ts`,
+  `search.ts`, `subscriptions.ts`, `tags.ts`
+- `apps/documentos/src/lib/notifications.ts` (só se decidido migrar, ver escopo)
+- `apps/admin/src/__tests__/security-audit.test.ts` (novo caso: usuário sem
+  papel editorial não lê/edita documento fora do seu escopo — dados semeados)
+- `SESSIONS.md`
+
+**Critérios de aceite:**
+
+- [ ] Grep limpo de `db` cru nos 6 arquivos de `actions/*.ts` (decisão sobre
+      `lib/notifications.ts` registrada em SESSIONS.md)
+- [ ] Teste prova isolamento de documento por papel/escopo
+- [ ] Lint passa · Types passam · SESSIONS.md atualizado
+
+---
+
+### P-9.1b-5 — Fechamento do achado S-02 em `intranet` (CORRETIVO)
+
+**Fase:** 9
+**Módulo:** intranet
+**Tipo:** integration
+**Origem:** divisão de P-9.1b (S-155) — prioridade #5.
+**Pré-condições:**
+
+- Branch: `feat/P-9.1b-5-intranet-rls`
+- Dependências: P-9.1b-4 concluído
+- Env vars: `DATABASE_URL`
+
+**Escopo:**
+
+1. `src/lib/queries.ts` (9 call-sites) — migrar para `withAuthenticatedContext`.
+2. `src/actions/announcements.ts`, `briefing.ts`, `dashboard.ts`, `decisions.ts`
+   (mixed — já usam `withAuthenticatedContext` parcialmente) — eliminar os
+   call-sites raw restantes, incluindo a leitura de permissão
+   `meetingSessions.chairUserId` em `decisions.ts`.
+3. `src/actions/invitations.ts` — não migrado, migrar por completo (inclui
+   `db.insert(roleAssignments)` — grant de papel).
+4. `src/actions/kpis.ts` (5 call-sites): os agregados (`count`/`sum` org-wide
+   sobre `projects`/`financialCategories`+`transactions`/`tasks`) são
+   candidatos a exceção service-level (não retornam linha individual). Decidir
+   e documentar — se migrado, confirmar que o agregado não vaza contagem que a
+   RLS do schema de origem negaria a um `authenticated` sem designação.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/intranet/src/lib/queries.ts`
+- `apps/intranet/src/actions/announcements.ts`, `briefing.ts`, `dashboard.ts`,
+  `decisions.ts`, `invitations.ts`, `kpis.ts`
+- `apps/admin/src/__tests__/security-audit.test.ts` (novo caso: colaborador
+  não lê anúncio/decisão fora do seu escopo — dados semeados)
+- `SESSIONS.md`
+
+**Critérios de aceite:**
+
+- [ ] Grep limpo de `db` cru nos arquivos listados (decisão sobre `kpis.ts`
+      registrada em SESSIONS.md)
+- [ ] Teste prova isolamento em pelo menos uma tabela de `intranet`
+- [ ] Lint passa · Types passam · SESSIONS.md atualizado
+
+---
+
+### P-9.1b-6 — Fechamento do achado S-02 em `tarefas` (CORRETIVO)
+
+**Fase:** 9
+**Módulo:** tarefas
+**Tipo:** integration
+**Origem:** divisão de P-9.1b (S-155) — prioridade #6.
+**Pré-condições:**
+
+- Branch: `feat/P-9.1b-6-tarefas-rls`
+- Dependências: P-9.1b-5 concluído
+- Env vars: `DATABASE_URL`
+
+**Escopo:**
+
+1. `src/lib/queries.ts` (21 call-sites — `getAuthUser`, `getTasks`,
+   `getTasksByWorkspace`, `getTaskById`, `getAssignedTasks`, `getTaskTemplates`,
+   `getRecurrenceRuleViews`, `getAssignableUsers`, `getApprovers`, `getTags`)
+   — migrar todas para `withAuthenticatedContext`.
+2. `src/actions/approvals.ts`, `comments.ts`, `recurrence.ts`, `tasks.ts`,
+   `templates.ts`, `time-tracking.ts` (todos mixed) — eliminar os call-sites
+   raw restantes.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/tarefas/src/lib/queries.ts`
+- `apps/tarefas/src/actions/approvals.ts`, `comments.ts`, `recurrence.ts`,
+  `tasks.ts`, `templates.ts`, `time-tracking.ts`
+- `apps/admin/src/__tests__/security-audit.test.ts` (novo caso: usuário não lê
+  tarefa de workspace ao qual não pertence — dados semeados)
+- `SESSIONS.md`
+
+**Critérios de aceite:**
+
+- [ ] Grep limpo de `db` cru em `lib/queries.ts` e nos 6 arquivos de
+      `actions/*.ts`
+- [ ] Teste prova isolamento por workspace em `tasks`
+- [ ] Lint passa · Types passam · SESSIONS.md atualizado
+
+---
+
+### P-9.1b-7 — Fechamento residual de S-02 (flats/plataforma/radio) + S-05 (CORRETIVO)
+
+**Fase:** 9
+**Módulo:** fundacao (flats, plataforma, radio)
+**Tipo:** integration
+**Origem:** divisão de P-9.1b (S-155) — os três apps já estão quase totalmente
+migrados (auditoria P-9.1/P-X.9 anteriores); resta apenas o call-site raw
+residual de cada um, mais o achado S-05 (mesma app: plataforma). Agrupados numa
+única sessão por baixo volume (3 apps, ≤2 call-sites cada + S-05).
+**Pré-condições:**
+
+- Branch: `feat/P-9.1b-7-flats-plataforma-radio-rls`
+- Dependências: P-9.1b-6 concluído
+- Env vars: `DATABASE_URL`
+
+**Escopo:**
+
+**S-02 residual:**
+
+1. `apps/flats/src/lib/queries.ts`, `apps/plataforma/src/lib/queries.ts`,
+   `apps/radio/src/lib/queries.ts` — cada um tem um único `getAuthUser()` que
+   faz `db.select({ fullName: users.fullName })` cru pelo id já retornado por
+   `supabase.auth.getUser()`. Como o `actorId` já é conhecido nesse ponto (não é
+   bootstrap sem sessão), migrar para `withAuthenticatedContext({ actorId }, …)`
+   como nos demais módulos — não tratar como exceção.
+2. `apps/plataforma/src/lib/queries.ts` — `isInstructor()` (leitura raw de
+   `instructors`) — migrar igualmente.
+
+**S-05 — TTL da URL assinada da plataforma:**
+
+3. `apps/plataforma/src/actions/uploads.ts` — reduzir
+   `READ_URL_EXPIRES_IN_SECONDS` de 10 anos para ≤1h (mesmo padrão de
+   flats/radio) e resolver a URL de leitura sob demanda no momento do consumo
+   (server component que renderiza capa/anexo), em vez de persistir/propagar
+   uma URL de longa duração.
+4. Componentes/páginas de plataforma que consomem `coverImageUrl`/`downloadUrl`
+   (ex.: `course-card.tsx`, `lesson-view.tsx`) — só o necessário para resolver
+   a URL sob demanda.
+5. `packages/validators/src/plataforma/*.ts` — ajustar apenas se o schema
+   exigir `z.string().url()` pré-resolvida e isso bloquear a resolução sob
+   demanda (aceitar `storagePath` + resolver na borda).
+
+Não alterar buckets nem policies de storage (regra original de P-9.1b).
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/flats/src/lib/queries.ts`, `apps/plataforma/src/lib/queries.ts`,
+  `apps/radio/src/lib/queries.ts`
+- `apps/plataforma/src/actions/uploads.ts`
+- componentes/páginas de plataforma que consomem `coverImageUrl`/`downloadUrl`
+  (apenas o necessário)
+- `packages/validators/src/plataforma/*.ts` (somente se o schema exigir)
+- `apps/admin/src/__tests__/security-audit.test.ts` (guarda de TTL ≤1h para
+  plataforma, mesmo formato do teste já existente para flats/radio)
+- `SESSIONS.md`
+
+**Critérios de aceite:**
+
+- [ ] Grep limpo de `db` cru nos 3 `lib/queries.ts` (flats, plataforma, radio)
+- [ ] URL de leitura da plataforma com TTL ≤1h; resolução sob demanda, sem URL
+      de longa duração persistida/propagada
+- [ ] `security-audit.test.ts` estendido (guarda de TTL da plataforma) e verde
+- [ ] Lint passa · Types passam · SESSIONS.md atualizado
+- [ ] **Fechamento de P-9.1b:** com P-9.1b-1..7 concluídos, os achados S-02 e
+      S-05 de S-154 podem ser marcados como corrigidos no índice da auditoria
+      (atualizar a entrada S-154 ou registrar entrada de fechamento em
+      SESSIONS.md referenciando os 7 sub-prompts)
 
 ---
 
