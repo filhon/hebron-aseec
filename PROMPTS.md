@@ -5449,14 +5449,14 @@ original de S-02, o exemplo citado explicitamente na auditoria P-9.1).
 
 **Critérios de aceite:**
 
-- [ ] Grep limpo de `db` cru em `lib/queries.ts` e nos 8 arquivos de `actions/*.ts`
+- [x] Grep limpo de `db` cru em `lib/queries.ts` e nos 8 arquivos de `actions/*.ts`
       (exceção de notificação comentada)
-- [ ] Helpers `getPayableOrThrow`/`getTransactionOrThrow` consolidados (sem
+- [x] Helpers `getPayableOrThrow`/`getTransactionOrThrow` consolidados (sem
       duplicação entre `approval.ts` e `transactions.ts`)
-- [ ] Teste prova que `colaborador` sem designação financeira não lê
+- [x] Teste prova que `colaborador` sem designação financeira não lê
       contas/transações (RLS volta a valer na leitura — critério original de
       P-9.1b)
-- [ ] Lint passa · Types passam · SESSIONS.md atualizado
+- [x] Lint passa · Types passam · SESSIONS.md atualizado
 
 ---
 

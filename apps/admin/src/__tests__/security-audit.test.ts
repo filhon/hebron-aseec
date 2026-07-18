@@ -4,9 +4,11 @@
  * Verificação automatizada, por introspecção do catálogo + testes por papel, dos
  * invariantes de segurança do estado final do ecossistema. Este arquivo é a
  * codificação executável da auditoria: cada `it` corresponde a um critério de
- * aceite de P-9.1. Achados que exigem refatoração de código de app (S-02, S-05)
- * estão documentados em SESSIONS.md — não são fixáveis dentro dos arquivos
- * permitidos deste prompt e portanto não são assertados aqui como PASS/FAIL.
+ * aceite de P-9.1. S-02 foi fechado em duas partes (P-9.1b-1: public.users/
+ * role_assignments em admin; P-9.1b-2: leitura do schema financeiro) e agora é
+ * assertado abaixo. S-05 (TTL de signed URL em plataforma) segue documentado em
+ * SESSIONS.md — não é fixável dentro dos arquivos permitidos deste prompt e
+ * portanto não é assertado aqui como PASS/FAIL.
  *
  * Requer: DATABASE_URL (superuser, para introspecção/seed) e esquema migrado com
  * a migration 0055_p91_security_grants_lockdown.sql aplicada.
@@ -19,7 +21,13 @@ import postgres from "postgres";
 import { and, eq, sql as drizzleSql } from "drizzle-orm";
 import { db } from "@hebron/db/client";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
-import { users, roleAssignments } from "@hebron/db/schema";
+import {
+  users,
+  roleAssignments,
+  bankAccounts,
+  payables,
+  receivables,
+} from "@hebron/db/schema";
 import {
   serializeImpersonationState,
   parseImpersonationState,
@@ -314,6 +322,81 @@ describe("Isolamento horizontal — ouvinte não lê/edita o registro de terceir
       );
     expect(escalated).toHaveLength(0);
   });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 3c. RLS do schema financeiro volta a valer na leitura (S-02, P-9.1b-2) —
+// apps/financeiro/src/lib/queries.ts e as actions do módulo liam com `db`
+// (conexão superuser de DATABASE_URL, que ignora RLS por completo) em vez de
+// withAuthenticatedContext — o gate "colaborador+" da UI nunca era de fato
+// aplicado no banco. Usa dados semeados (não "0 linhas numa tabela vazia")
+// para provar tanto o lado negativo (ouvinte não lê) quanto o positivo
+// (colaborador lê) — a policy tem que filtrar por papel, não zerar geral.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe("RLS financeiro na leitura — colaborador lê, ouvinte não lê (S-02)", () => {
+  const FIN_ACCOUNT_ID = "a9000000-0000-0000-0000-000000000093";
+  const FIN_PAYABLE_ID = "a9000000-0000-0000-0000-000000000094";
+  const FIN_RECEIVABLE_ID = "a9000000-0000-0000-0000-000000000095";
+
+  beforeAll(async () => {
+    await db.insert(bankAccounts).values({
+      id: FIN_ACCOUNT_ID,
+      bankName: "Banco Sec Audit",
+      createdBy: TARGET_ID,
+    });
+    await db.insert(payables).values({
+      id: FIN_PAYABLE_ID,
+      description: "Sec audit payable",
+      amount: "10.00",
+      dueDate: "2026-12-31",
+      createdBy: TARGET_ID,
+    });
+    await db.insert(receivables).values({
+      id: FIN_RECEIVABLE_ID,
+      description: "Sec audit receivable",
+      amount: "10.00",
+      createdBy: TARGET_ID,
+    });
+  });
+
+  afterAll(async () => {
+    await db.delete(payables).where(eq(payables.id, FIN_PAYABLE_ID));
+    await db.delete(receivables).where(eq(receivables.id, FIN_RECEIVABLE_ID));
+    await db.delete(bankAccounts).where(eq(bankAccounts.id, FIN_ACCOUNT_ID));
+  });
+
+  // financeiro.transactions fica fora deste seed: é ledger imutável (trigger
+  // financeiro.forbid_transaction_mutation bloqueia DELETE incondicionalmente,
+  // até para a conexão superuser de `db` — não há como desfazer uma linha de
+  // teste). O caso "ouvinte lê 0 linhas de financeiro.transactions" já é
+  // coberto, sem seed, na seção 3 acima; getTransactions() usa o mesmo
+  // withAuthenticatedContext validado pelos casos abaixo.
+  const cases = [
+    { label: "financeiro.accounts", table: bankAccounts, id: FIN_ACCOUNT_ID },
+    { label: "financeiro.payables", table: payables, id: FIN_PAYABLE_ID },
+    {
+      label: "financeiro.receivables",
+      table: receivables,
+      id: FIN_RECEIVABLE_ID,
+    },
+  ] as const;
+
+  for (const { label, table, id } of cases) {
+    it(`colaborador lê a linha semeada de ${label}; ouvinte lê 0 linhas`, async () => {
+      const asColaborador = await withAuthenticatedContext(
+        { actorId: TARGET_ID },
+        (tx) => tx.select({ id: table.id }).from(table).where(eq(table.id, id)),
+      );
+      expect(asColaborador).toHaveLength(1);
+
+      const asOuvinte = await withAuthenticatedContext(
+        { actorId: OUVINTE_ID },
+        (tx) => tx.select({ id: table.id }).from(table).where(eq(table.id, id)),
+      );
+      expect(asOuvinte).toHaveLength(0);
+    });
+  }
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════

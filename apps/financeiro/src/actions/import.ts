@@ -2,7 +2,10 @@
 
 import { z } from "zod";
 import { eq, sql } from "drizzle-orm";
-import { db } from "@hebron/db/client";
+import {
+  withAuthenticatedContext,
+  withSystemRole,
+} from "@hebron/db/authenticated";
 import { bankImports, bankImportRows, transactions } from "@hebron/db/schema";
 import { colaboradorAction } from "../lib/safe-action";
 import { logFinanceiroAudit } from "../lib/audit";
@@ -66,78 +69,93 @@ export const confirmImport = colaboradorAction
       );
     }
 
-    // Create the import record
-    const importInserted = await db
-      .insert(bankImports)
-      .values({
-        accountId: input.bankAccountId,
-        fileUrl: input.fileUrl,
-        format: input.format,
-        importedBy: ctx.actorId,
-        rowCount: rows.length,
-        matchedCount: 0,
-      })
-      .returning();
-
-    const bankImport = importInserted[0];
-    if (!bankImport) throw new Error("Falha ao criar registro de import");
-
-    // Bulk-insert import rows
-    const rowValues = rows.map((row) => ({
-      bankImportId: bankImport.id,
-      date: row.date,
-      amount: row.amount.toString(),
-      description: row.description,
-      status: "unmatched" as const,
-    }));
-
-    await db.insert(bankImportRows).values(rowValues);
-
-    // Auto-match: compare each row against existing transactions for the account
-    let matchedCount = 0;
-
-    if (input.runAutoMatch) {
-      const accountTxs = await db
-        .select()
-        .from(transactions)
-        .where(eq(transactions.accountId, input.bankAccountId));
-
-      const txMap = new Map(
-        accountTxs.map((tx) => [
-          `${tx.date}|${parseFloat(tx.amount).toFixed(2)}`,
-          tx.id,
-        ]),
-      );
-
-      const insertedRows = await db
-        .select()
-        .from(bankImportRows)
-        .where(eq(bankImportRows.bankImportId, bankImport.id));
-
-      for (const row of insertedRows) {
-        const rowAmount = parseFloat(row.amount);
-        // Check exact date + amount match
-        const key = `${row.date}|${Math.abs(rowAmount).toFixed(2)}`;
-        const matchedTxId = txMap.get(key);
-
-        if (matchedTxId) {
-          await db
-            .update(bankImportRows)
-            .set({ matchTransactionId: matchedTxId, status: "matched" })
-            .where(eq(bankImportRows.id, row.id));
-          matchedCount++;
-        }
-      }
-
-      if (matchedCount > 0) {
-        await db
-          .update(bankImports)
-          .set({
-            matchedCount: sql`${bankImports.matchedCount} + ${matchedCount}`,
+    const { bankImport, matchedCount } = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        // Create the import record
+        const importInserted = await tx
+          .insert(bankImports)
+          .values({
+            accountId: input.bankAccountId,
+            fileUrl: input.fileUrl,
+            format: input.format,
+            importedBy: ctx.actorId,
+            rowCount: rows.length,
+            matchedCount: 0,
           })
-          .where(eq(bankImports.id, bankImport.id));
-      }
-    }
+          .returning();
+
+        const bankImport = importInserted[0];
+        if (!bankImport) throw new Error("Falha ao criar registro de import");
+
+        // Bulk-insert import rows
+        const rowValues = rows.map((row) => ({
+          bankImportId: bankImport.id,
+          date: row.date,
+          amount: row.amount.toString(),
+          description: row.description,
+          status: "unmatched" as const,
+        }));
+
+        await tx.insert(bankImportRows).values(rowValues);
+
+        // Auto-match: compare each row against existing transactions for the account
+        let matchedCount = 0;
+
+        if (input.runAutoMatch) {
+          const accountTxs = await tx
+            .select()
+            .from(transactions)
+            .where(eq(transactions.accountId, input.bankAccountId));
+
+          const txMap = new Map(
+            accountTxs.map((t) => [
+              `${t.date}|${parseFloat(t.amount).toFixed(2)}`,
+              t.id,
+            ]),
+          );
+
+          const insertedRows = await tx
+            .select()
+            .from(bankImportRows)
+            .where(eq(bankImportRows.bankImportId, bankImport.id));
+
+          for (const row of insertedRows) {
+            const rowAmount = parseFloat(row.amount);
+            // Check exact date + amount match
+            const key = `${row.date}|${Math.abs(rowAmount).toFixed(2)}`;
+            const matchedTxId = txMap.get(key);
+
+            if (matchedTxId) {
+              await tx
+                .update(bankImportRows)
+                .set({ matchTransactionId: matchedTxId, status: "matched" })
+                .where(eq(bankImportRows.id, row.id));
+              matchedCount++;
+            }
+          }
+
+          if (matchedCount > 0) {
+            // withSystemRole: "financeiro"."bank_imports" nunca teve GRANT de
+            // UPDATE para authenticated (0014_grants_authenticated.sql só dá
+            // SELECT/INSERT) nem policy de UPDATE (0010_financeiro.sql) —
+            // nenhum papel, nem super_admin, conseguiria este UPDATE via
+            // authenticated. Débito de RLS/GRANT registrado em SESSIONS.md,
+            // não corrigido aqui (fora de escopo alterar migration).
+            await withSystemRole(tx, (sysTx) =>
+              sysTx
+                .update(bankImports)
+                .set({
+                  matchedCount: sql`${bankImports.matchedCount} + ${matchedCount}`,
+                })
+                .where(eq(bankImports.id, bankImport.id)),
+            );
+          }
+        }
+
+        return { bankImport, matchedCount };
+      },
+    );
 
     await logFinanceiroAudit({
       actorId: ctx.actorId,

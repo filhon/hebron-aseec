@@ -15,7 +15,6 @@ import {
   Text,
   View,
 } from "@react-pdf/renderer";
-import { db } from "@hebron/db/client";
 import {
   withAuthenticatedContext,
   withSystemRole,
@@ -319,58 +318,65 @@ export const exportMonthlyReport = superAdminAction
     // em financeiro.attachments).
     const txIds = monthTransactions.map((t) => t.id);
 
-    const paidPayableRows = await db
-      .select({ id: payables.id })
-      .from(payables)
-      .where(
-        and(gte(payables.paidAt, rangeStart), lte(payables.paidAt, rangeEnd)),
-      );
-    const paidPayableIds = paidPayableRows.map((r) => r.id);
+    const attachmentRows = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const paidPayableRows = await tx
+          .select({ id: payables.id })
+          .from(payables)
+          .where(
+            and(
+              gte(payables.paidAt, rangeStart),
+              lte(payables.paidAt, rangeEnd),
+            ),
+          );
+        const paidPayableIds = paidPayableRows.map((r) => r.id);
 
-    const receivedRows = await db
-      .select({ id: receivables.id })
-      .from(receivables)
-      .where(
-        and(
-          gte(receivables.receivedDate, dateStartStr),
-          lte(receivables.receivedDate, dateEndStr),
-        ),
-      );
-    const receivedReceivableIds = receivedRows.map((r) => r.id);
+        const receivedRows = await tx
+          .select({ id: receivables.id })
+          .from(receivables)
+          .where(
+            and(
+              gte(receivables.receivedDate, dateStartStr),
+              lte(receivables.receivedDate, dateEndStr),
+            ),
+          );
+        const receivedReceivableIds = receivedRows.map((r) => r.id);
 
-    const attachmentConditions = [];
-    if (txIds.length > 0) {
-      attachmentConditions.push(
-        and(
-          eq(financialAttachments.refType, "transaction"),
-          inArray(financialAttachments.refId, txIds),
-        ),
-      );
-    }
-    if (paidPayableIds.length > 0) {
-      attachmentConditions.push(
-        and(
-          eq(financialAttachments.refType, "payable"),
-          inArray(financialAttachments.refId, paidPayableIds),
-        ),
-      );
-    }
-    if (receivedReceivableIds.length > 0) {
-      attachmentConditions.push(
-        and(
-          eq(financialAttachments.refType, "receivable"),
-          inArray(financialAttachments.refId, receivedReceivableIds),
-        ),
-      );
-    }
+        const attachmentConditions = [];
+        if (txIds.length > 0) {
+          attachmentConditions.push(
+            and(
+              eq(financialAttachments.refType, "transaction"),
+              inArray(financialAttachments.refId, txIds),
+            ),
+          );
+        }
+        if (paidPayableIds.length > 0) {
+          attachmentConditions.push(
+            and(
+              eq(financialAttachments.refType, "payable"),
+              inArray(financialAttachments.refId, paidPayableIds),
+            ),
+          );
+        }
+        if (receivedReceivableIds.length > 0) {
+          attachmentConditions.push(
+            and(
+              eq(financialAttachments.refType, "receivable"),
+              inArray(financialAttachments.refId, receivedReceivableIds),
+            ),
+          );
+        }
 
-    const attachmentRows =
-      attachmentConditions.length > 0
-        ? await db
-            .select()
-            .from(financialAttachments)
-            .where(or(...attachmentConditions))
-        : [];
+        return attachmentConditions.length > 0
+          ? tx
+              .select()
+              .from(financialAttachments)
+              .where(or(...attachmentConditions))
+          : [];
+      },
+    );
 
     const supabase = getSupabaseAdmin();
     const receiptEntries: { name: string; content: Buffer }[] = [];

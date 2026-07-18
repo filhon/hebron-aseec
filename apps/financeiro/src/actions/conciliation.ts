@@ -2,7 +2,10 @@
 
 import { z } from "zod";
 import { eq, and, sql } from "drizzle-orm";
-import { db } from "@hebron/db/client";
+import {
+  withAuthenticatedContext,
+  withSystemRole,
+} from "@hebron/db/authenticated";
 import {
   bankImportRows,
   bankImports,
@@ -29,60 +32,87 @@ const autoMatchSchema = z.object({
 export const autoMatchImport = colaboradorAction
   .schema(autoMatchSchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    // Load unmatched rows for this import
-    const unmatchedRows = await db
-      .select()
-      .from(bankImportRows)
-      .where(
-        and(
-          eq(bankImportRows.bankImportId, input.bankImportId),
-          eq(bankImportRows.status, "unmatched"),
-        ),
-      );
+    const {
+      unmatchedRows,
+      bankImport,
+      accountTxs,
+      pendingPayables,
+      pendingReceivables,
+    } = await withAuthenticatedContext({ actorId: ctx.actorId }, async (tx) => {
+      // Load unmatched rows for this import
+      const unmatchedRows = await tx
+        .select()
+        .from(bankImportRows)
+        .where(
+          and(
+            eq(bankImportRows.bankImportId, input.bankImportId),
+            eq(bankImportRows.status, "unmatched"),
+          ),
+        );
+
+      if (unmatchedRows.length === 0) {
+        return {
+          unmatchedRows,
+          bankImport: null,
+          accountTxs: [],
+          pendingPayables: [],
+          pendingReceivables: [],
+        };
+      }
+
+      // Load the import to know the account
+      const importRecord = await tx
+        .select()
+        .from(bankImports)
+        .where(eq(bankImports.id, input.bankImportId))
+        .limit(1);
+
+      const bankImport = importRecord[0];
+      if (!bankImport) throw new Error("Import não encontrado");
+
+      // Load recent transactions for the same account (last 90 days)
+      // We cast date comparison via sql for portability
+      const ninetyDaysAgo = new Date();
+      ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+      const ninetyDaysAgoStr = ninetyDaysAgo.toISOString().split("T")[0] ?? "";
+
+      const accountTxs = await tx
+        .select()
+        .from(transactions)
+        .where(
+          and(
+            eq(transactions.accountId, bankImport.accountId),
+            sql`${transactions.date} >= ${ninetyDaysAgoStr}`,
+          ),
+        );
+
+      // Also load pending payables and receivables for suggestion
+      const pendingPayables = await tx
+        .select()
+        .from(payables)
+        .where(
+          and(
+            eq(payables.accountId, bankImport.accountId),
+            eq(payables.status, "autorizado"),
+          ),
+        );
+
+      const pendingReceivables = await tx
+        .select()
+        .from(receivables)
+        .where(eq(receivables.accountId, bankImport.accountId));
+
+      return {
+        unmatchedRows,
+        bankImport,
+        accountTxs,
+        pendingPayables,
+        pendingReceivables,
+      };
+    });
 
     if (unmatchedRows.length === 0) return { matched: 0, suggestions: [] };
-
-    // Load the import to know the account
-    const importRecord = await db
-      .select()
-      .from(bankImports)
-      .where(eq(bankImports.id, input.bankImportId))
-      .limit(1);
-
-    const bankImport = importRecord[0];
     if (!bankImport) throw new Error("Import não encontrado");
-
-    // Load recent transactions for the same account (last 90 days)
-    // We cast date comparison via sql for portability
-    const ninetyDaysAgo = new Date();
-    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
-    const ninetyDaysAgoStr = ninetyDaysAgo.toISOString().split("T")[0] ?? "";
-
-    const accountTxs = await db
-      .select()
-      .from(transactions)
-      .where(
-        and(
-          eq(transactions.accountId, bankImport.accountId),
-          sql`${transactions.date} >= ${ninetyDaysAgoStr}`,
-        ),
-      );
-
-    // Also load pending payables and receivables for suggestion
-    const pendingPayables = await db
-      .select()
-      .from(payables)
-      .where(
-        and(
-          eq(payables.accountId, bankImport.accountId),
-          eq(payables.status, "autorizado"),
-        ),
-      );
-
-    const pendingReceivables = await db
-      .select()
-      .from(receivables)
-      .where(eq(receivables.accountId, bankImport.accountId));
 
     type Suggestion = {
       rowId: string;
@@ -169,22 +199,34 @@ export const autoMatchImport = colaboradorAction
       }
     }
 
-    // Apply high-confidence matches immediately
-    for (const update of rowsToUpdate) {
-      await db
-        .update(bankImportRows)
-        .set({ matchTransactionId: update.transactionId, status: "matched" })
-        .where(eq(bankImportRows.id, update.id));
-    }
-
-    // Update import matched count
+    // Apply high-confidence matches immediately + update import matched count
     if (rowsToUpdate.length > 0) {
-      await db
-        .update(bankImports)
-        .set({
-          matchedCount: sql`${bankImports.matchedCount} + ${rowsToUpdate.length}`,
-        })
-        .where(eq(bankImports.id, input.bankImportId));
+      await withAuthenticatedContext({ actorId: ctx.actorId }, async (tx) => {
+        for (const update of rowsToUpdate) {
+          await tx
+            .update(bankImportRows)
+            .set({
+              matchTransactionId: update.transactionId,
+              status: "matched",
+            })
+            .where(eq(bankImportRows.id, update.id));
+        }
+
+        // withSystemRole: "financeiro"."bank_imports" nunca teve GRANT de
+        // UPDATE para authenticated (0014_grants_authenticated.sql só dá
+        // SELECT/INSERT) nem policy de UPDATE (0010_financeiro.sql) — nenhum
+        // papel, nem super_admin, conseguiria este UPDATE via authenticated.
+        // Débito de RLS/GRANT registrado em SESSIONS.md, não corrigido aqui
+        // (fora de escopo alterar migration).
+        await withSystemRole(tx, (sysTx) =>
+          sysTx
+            .update(bankImports)
+            .set({
+              matchedCount: sql`${bankImports.matchedCount} + ${rowsToUpdate.length}`,
+            })
+            .where(eq(bankImports.id, input.bankImportId)),
+        );
+      });
     }
 
     if (rowsToUpdate.length > 0) {
@@ -212,145 +254,161 @@ export const reconcileRow = colaboradorAction
   .schema(reconcileItemSchema)
   .action(async ({ parsedInput: input, ctx }) => {
     const rowId = input.bankImportItemId;
-
-    const rowRows = await db
-      .select()
-      .from(bankImportRows)
-      .where(eq(bankImportRows.id, rowId))
-      .limit(1);
-
-    const row = rowRows[0];
-    if (!row) throw new Error("Linha de import não encontrada");
-
-    if (row.status === "matched") {
-      throw new Error("Esta linha já está conciliada");
-    }
-
     const now = new Date();
 
-    switch (input.action) {
-      case "vincular_payable": {
-        if (!input.payableId) throw new Error("Selecione uma conta a pagar");
-
-        const payable = await db
+    const { createdTransactionId } = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (dbTx) => {
+        const rowRows = await dbTx
           .select()
-          .from(payables)
-          .where(eq(payables.id, input.payableId))
+          .from(bankImportRows)
+          .where(eq(bankImportRows.id, rowId))
           .limit(1);
 
-        if (!payable[0]) throw new Error("Conta a pagar não encontrada");
+        const row = rowRows[0];
+        if (!row) throw new Error("Linha de import não encontrada");
 
-        // Find or verify there's a transaction for this payable
-        const txRows = await db
-          .select()
-          .from(transactions)
-          .where(
-            and(
-              eq(transactions.referenceType, "payable"),
-              eq(transactions.referenceId, input.payableId),
-            ),
-          )
-          .limit(1);
+        if (row.status === "matched") {
+          throw new Error("Esta linha já está conciliada");
+        }
 
-        const matchTx = txRows[0];
+        let createdTransactionId: string | null = null;
 
-        await db
-          .update(bankImportRows)
-          .set({
-            matchTransactionId: matchTx?.id ?? null,
-            status: "matched",
-          })
-          .where(eq(bankImportRows.id, rowId));
+        switch (input.action) {
+          case "vincular_payable": {
+            if (!input.payableId)
+              throw new Error("Selecione uma conta a pagar");
 
-        break;
-      }
+            const payable = await dbTx
+              .select()
+              .from(payables)
+              .where(eq(payables.id, input.payableId))
+              .limit(1);
 
-      case "vincular_receivable": {
-        if (!input.receivableId)
-          throw new Error("Selecione uma conta a receber");
+            if (!payable[0]) throw new Error("Conta a pagar não encontrada");
 
-        const txRows = await db
-          .select()
-          .from(transactions)
-          .where(
-            and(
-              eq(transactions.referenceType, "receivable"),
-              eq(transactions.referenceId, input.receivableId),
-            ),
-          )
-          .limit(1);
+            // Find or verify there's a transaction for this payable
+            const txRows = await dbTx
+              .select()
+              .from(transactions)
+              .where(
+                and(
+                  eq(transactions.referenceType, "payable"),
+                  eq(transactions.referenceId, input.payableId),
+                ),
+              )
+              .limit(1);
 
-        await db
-          .update(bankImportRows)
-          .set({
-            matchTransactionId: txRows[0]?.id ?? null,
-            status: "matched",
-          })
-          .where(eq(bankImportRows.id, rowId));
+            const matchTx = txRows[0];
 
-        break;
-      }
+            await dbTx
+              .update(bankImportRows)
+              .set({
+                matchTransactionId: matchTx?.id ?? null,
+                status: "matched",
+              })
+              .where(eq(bankImportRows.id, rowId));
 
-      case "ignorar": {
-        await db
-          .update(bankImportRows)
-          .set({ status: "ignored" })
-          .where(eq(bankImportRows.id, rowId));
+            break;
+          }
 
-        break;
-      }
+          case "vincular_receivable": {
+            if (!input.receivableId)
+              throw new Error("Selecione uma conta a receber");
 
-      case "criar_novo": {
-        // Create a new transaction directly from the import row data
-        const importRecord = await db
-          .select()
-          .from(bankImports)
-          .where(eq(bankImports.id, row.bankImportId))
-          .limit(1);
+            const txRows = await dbTx
+              .select()
+              .from(transactions)
+              .where(
+                and(
+                  eq(transactions.referenceType, "receivable"),
+                  eq(transactions.referenceId, input.receivableId),
+                ),
+              )
+              .limit(1);
 
-        const bankImport = importRecord[0];
-        if (!bankImport) throw new Error("Import não encontrado");
+            await dbTx
+              .update(bankImportRows)
+              .set({
+                matchTransactionId: txRows[0]?.id ?? null,
+                status: "matched",
+              })
+              .where(eq(bankImportRows.id, rowId));
 
-        const rowAmount = parseFloat(row.amount);
-        const txType = rowAmount >= 0 ? "credito" : "debito";
+            break;
+          }
 
-        const newTx = await db
-          .insert(transactions)
-          .values({
-            type: txType,
-            amount: Math.abs(rowAmount).toString(),
-            description: row.description ?? "Lançamento importado",
-            date: row.date,
-            accountId: bankImport.accountId,
-            createdBy: ctx.actorId,
-          })
-          .returning();
+          case "ignorar": {
+            await dbTx
+              .update(bankImportRows)
+              .set({ status: "ignored" })
+              .where(eq(bankImportRows.id, rowId));
 
-        const tx = newTx[0];
-        if (!tx) throw new Error("Falha ao criar transação");
+            break;
+          }
 
-        await db
-          .update(bankImportRows)
-          .set({ matchTransactionId: tx.id, status: "matched" })
-          .where(eq(bankImportRows.id, rowId));
+          case "criar_novo": {
+            // Create a new transaction directly from the import row data
+            const importRecord = await dbTx
+              .select()
+              .from(bankImports)
+              .where(eq(bankImports.id, row.bankImportId))
+              .limit(1);
 
-        await logFinanceiroAudit({
-          actorId: ctx.actorId,
-          action: "financeiro.transaction.created",
-          entity: "transaction",
-          entityId: tx.id,
-          diff: { source: "import_reconciliation", bankImportRowId: rowId },
-        });
+            const bankImport = importRecord[0];
+            if (!bankImport) throw new Error("Import não encontrado");
 
-        break;
-      }
+            const rowAmount = parseFloat(row.amount);
+            const txType = rowAmount >= 0 ? "credito" : "debito";
+
+            const newTx = await dbTx
+              .insert(transactions)
+              .values({
+                type: txType,
+                amount: Math.abs(rowAmount).toString(),
+                description: row.description ?? "Lançamento importado",
+                date: row.date,
+                accountId: bankImport.accountId,
+                createdBy: ctx.actorId,
+              })
+              .returning();
+
+            const insertedTx = newTx[0];
+            if (!insertedTx) throw new Error("Falha ao criar transação");
+            createdTransactionId = insertedTx.id;
+
+            await dbTx
+              .update(bankImportRows)
+              .set({ matchTransactionId: insertedTx.id, status: "matched" })
+              .where(eq(bankImportRows.id, rowId));
+
+            break;
+          }
+        }
+
+        // Update matched count on the import
+        // withSystemRole: mesmo débito de GRANT/RLS ausente de autoMatchImport
+        // acima ("financeiro"."bank_imports" nunca teve UPDATE para authenticated).
+        await withSystemRole(dbTx, (sysTx) =>
+          sysTx
+            .update(bankImports)
+            .set({ matchedCount: sql`${bankImports.matchedCount} + 1` })
+            .where(eq(bankImports.id, row.bankImportId)),
+        );
+
+        return { bankImportId: row.bankImportId, createdTransactionId };
+      },
+    );
+
+    if (createdTransactionId) {
+      await logFinanceiroAudit({
+        actorId: ctx.actorId,
+        action: "financeiro.transaction.created",
+        entity: "transaction",
+        entityId: createdTransactionId,
+        diff: { source: "import_reconciliation", bankImportRowId: rowId },
+      });
     }
-
-    // Update matched count on the import
-    await db
-      .update(bankImports)
-      .set({ matchedCount: sql`${bankImports.matchedCount} + 1` })
-      .where(eq(bankImports.id, row.bankImportId));
 
     await logFinanceiroAudit({
       actorId: ctx.actorId,

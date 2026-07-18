@@ -1,7 +1,15 @@
 import { cookies } from "next/headers";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@hebron/db/client";
-import { createSupabaseServerActionClient } from "@hebron/auth/server";
+import {
+  createSupabaseServerActionClient,
+  resolveSession,
+} from "@hebron/auth/server";
+import {
+  withAuthenticatedContext,
+  withSystemRole,
+  type AuthenticatedTx,
+} from "@hebron/db/authenticated";
 import {
   bankAccounts,
   financialCategories,
@@ -70,10 +78,25 @@ export async function getAuthUser(): Promise<{
   };
 }
 
+async function getActorId(): Promise<string> {
+  const cookieStore = await cookies();
+  const { actorId } = await resolveSession(cookieStore);
+  return actorId;
+}
+
+// public.users só tem policy de SELECT "auth.uid() = id" (self) ou
+// super_admin/diretor (0000_initial.sql) — colaborador não tem policy para
+// ler o nome de terceiros. getUsersMap só expõe fullName (não é dado
+// sensível) para rotular approvedByName/authorizedByName/createdBy em telas
+// que colaborador já pode ver via payables_select_staff etc. — mesmo padrão
+// de exceção service-level documentado em admin/actions (F3-15/S-57).
 async function getUsersMap(): Promise<Map<string, string>> {
-  const rows = await db
-    .select({ id: users.id, fullName: users.fullName })
-    .from(users);
+  const actorId = await getActorId();
+  const rows = await withAuthenticatedContext({ actorId }, (tx) =>
+    withSystemRole(tx, (sysTx) =>
+      sysTx.select({ id: users.id, fullName: users.fullName }).from(users),
+    ),
+  );
   return new Map(rows.map((r) => [r.id, r.fullName ?? "—"]));
 }
 
@@ -83,15 +106,23 @@ async function getUsersMap(): Promise<Map<string, string>> {
 // ---------------------------------------------------------------------------
 
 export async function getBankAccounts(): Promise<BankAccount[]> {
-  const accounts = await db.select().from(bankAccounts);
+  const actorId = await getActorId();
+  const { accounts, balanceRows } = await withAuthenticatedContext(
+    { actorId },
+    async (tx) => {
+      const accounts = await tx.select().from(bankAccounts);
 
-  const balanceRows = await db
-    .select({
-      accountId: transactions.accountId,
-      delta: sql<string>`sum(case when ${transactions.type} = 'credito' then ${transactions.amount} else -${transactions.amount} end)`,
-    })
-    .from(transactions)
-    .groupBy(transactions.accountId);
+      const balanceRows = await tx
+        .select({
+          accountId: transactions.accountId,
+          delta: sql<string>`sum(case when ${transactions.type} = 'credito' then ${transactions.amount} else -${transactions.amount} end)`,
+        })
+        .from(transactions)
+        .groupBy(transactions.accountId);
+
+      return { accounts, balanceRows };
+    },
+  );
 
   const deltaByAccount = new Map(
     balanceRows.map((r) => [r.accountId, parseFloat(r.delta ?? "0")]),
@@ -118,7 +149,10 @@ export async function getBankAccounts(): Promise<BankAccount[]> {
 // ---------------------------------------------------------------------------
 
 export async function getCategories(): Promise<AccountCategory[]> {
-  const rows = await db.select().from(financialCategories);
+  const actorId = await getActorId();
+  const rows = await withAuthenticatedContext({ actorId }, (tx) =>
+    tx.select().from(financialCategories),
+  );
 
   return rows.map((c) => ({
     id: c.id,
@@ -148,14 +182,17 @@ export interface CostCenterOption {
 }
 
 export async function getCostCenterOptions(): Promise<CostCenterOption[]> {
-  const rows = await db
-    .select({
-      id: costCenters.id,
-      code: costCenters.code,
-      name: costCenters.name,
-      projectId: costCenters.projectId,
-    })
-    .from(costCenters);
+  const actorId = await getActorId();
+  const rows = await withAuthenticatedContext({ actorId }, (tx) =>
+    tx
+      .select({
+        id: costCenters.id,
+        code: costCenters.code,
+        name: costCenters.name,
+        projectId: costCenters.projectId,
+      })
+      .from(costCenters),
+  );
   return rows;
 }
 
@@ -167,21 +204,28 @@ export async function getCostCenterOptions(): Promise<CostCenterOption[]> {
 // ---------------------------------------------------------------------------
 
 export async function getTransactions(): Promise<Transaction[]> {
-  const rows = await db.select().from(transactions);
+  const actorId = await getActorId();
+  const { rows, reversalRows, matchedRows } = await withAuthenticatedContext(
+    { actorId },
+    async (tx) => {
+      const rows = await tx.select().from(transactions);
+      const reversalRows = await tx.select().from(transactionReversals);
+      const matchedRows = await tx
+        .select({
+          transactionId: bankImportRows.matchTransactionId,
+          bankImportId: bankImportRows.bankImportId,
+        })
+        .from(bankImportRows)
+        .where(eq(bankImportRows.status, "matched"));
 
-  const reversalRows = await db.select().from(transactionReversals);
+      return { rows, reversalRows, matchedRows };
+    },
+  );
+
   const reversedIds = new Set(reversalRows.map((r) => r.originalTransactionId));
   const reversalOfByTx = new Map(
     reversalRows.map((r) => [r.reversalTransactionId, r.originalTransactionId]),
   );
-
-  const matchedRows = await db
-    .select({
-      transactionId: bankImportRows.matchTransactionId,
-      bankImportId: bankImportRows.bankImportId,
-    })
-    .from(bankImportRows)
-    .where(eq(bankImportRows.status, "matched"));
 
   const matchByTx = new Map(
     matchedRows
@@ -219,23 +263,33 @@ export async function getTransactions(): Promise<Transaction[]> {
 // ---------------------------------------------------------------------------
 
 export async function getPayables(): Promise<Payable[]> {
-  const rows = await db.select().from(payables);
+  const actorId = await getActorId();
   const usersMap = await getUsersMap();
 
-  const ccRows = await db
-    .select({ id: costCenters.id, projectId: costCenters.projectId })
-    .from(costCenters);
+  const { rows, ccRows, batchItemRows, paidTxRows } =
+    await withAuthenticatedContext({ actorId }, async (tx) => {
+      const rows = await tx.select().from(payables);
+
+      const ccRows = await tx
+        .select({ id: costCenters.id, projectId: costCenters.projectId })
+        .from(costCenters);
+
+      const batchItemRows = await tx.select().from(batchApprovalItems);
+
+      const paidTxRows = await tx
+        .select({ id: transactions.id, referenceId: transactions.referenceId })
+        .from(transactions)
+        .where(eq(transactions.referenceType, "payable"));
+
+      return { rows, ccRows, batchItemRows, paidTxRows };
+    });
+
   const projectByCc = new Map(ccRows.map((c) => [c.id, c.projectId]));
 
-  const batchItemRows = await db.select().from(batchApprovalItems);
   const batchByPayable = new Map(
     batchItemRows.map((b) => [b.payableId, b.batchApprovalId]),
   );
 
-  const paidTxRows = await db
-    .select({ id: transactions.id, referenceId: transactions.referenceId })
-    .from(transactions)
-    .where(eq(transactions.referenceType, "payable"));
   const paidTxByPayable = new Map(
     paidTxRows
       .filter((r) => r.referenceId !== null)
@@ -298,26 +352,29 @@ export interface ReceivableRow {
 }
 
 export async function getReceivables(): Promise<ReceivableRow[]> {
-  const rows = await db
-    .select({
-      id: receivables.id,
-      description: receivables.description,
-      amount: receivables.amount,
-      expectedDate: receivables.expectedDate,
-      receivedDate: receivables.receivedDate,
-      status: receivables.status,
-      categoryId: receivables.categoryId,
-      categoryName: financialCategories.name,
-      costCenterId: receivables.costCenterId,
-      bankAccountId: receivables.accountId,
-      notes: receivables.notes,
-      createdAt: receivables.createdAt,
-    })
-    .from(receivables)
-    .leftJoin(
-      financialCategories,
-      eq(financialCategories.id, receivables.categoryId),
-    );
+  const actorId = await getActorId();
+  const rows = await withAuthenticatedContext({ actorId }, (tx) =>
+    tx
+      .select({
+        id: receivables.id,
+        description: receivables.description,
+        amount: receivables.amount,
+        expectedDate: receivables.expectedDate,
+        receivedDate: receivables.receivedDate,
+        status: receivables.status,
+        categoryId: receivables.categoryId,
+        categoryName: financialCategories.name,
+        costCenterId: receivables.costCenterId,
+        bankAccountId: receivables.accountId,
+        notes: receivables.notes,
+        createdAt: receivables.createdAt,
+      })
+      .from(receivables)
+      .leftJoin(
+        financialCategories,
+        eq(financialCategories.id, receivables.categoryId),
+      ),
+  );
 
   return rows.map((r) => ({
     id: r.id,
@@ -342,21 +399,32 @@ export async function getReceivables(): Promise<ReceivableRow[]> {
 // ---------------------------------------------------------------------------
 
 export async function getBudgets(): Promise<Budget[]> {
-  const budgetRows = await db.select().from(budgets);
-  const itemRows = await db
-    .select({
-      id: budgetItems.id,
-      budgetId: budgetItems.budgetId,
-      categoryId: budgetItems.categoryId,
-      categoryName: financialCategories.name,
-      plannedAmount: budgetItems.plannedAmount,
-      description: budgetItems.description,
-    })
-    .from(budgetItems)
-    .leftJoin(
-      financialCategories,
-      eq(financialCategories.id, budgetItems.categoryId),
-    );
+  const actorId = await getActorId();
+  const { budgetRows, itemRows, ccRows } = await withAuthenticatedContext(
+    { actorId },
+    async (tx) => {
+      const budgetRows = await tx.select().from(budgets);
+      const itemRows = await tx
+        .select({
+          id: budgetItems.id,
+          budgetId: budgetItems.budgetId,
+          categoryId: budgetItems.categoryId,
+          categoryName: financialCategories.name,
+          plannedAmount: budgetItems.plannedAmount,
+          description: budgetItems.description,
+        })
+        .from(budgetItems)
+        .leftJoin(
+          financialCategories,
+          eq(financialCategories.id, budgetItems.categoryId),
+        );
+      const ccRows = await tx
+        .select({ id: costCenters.id, projectId: costCenters.projectId })
+        .from(costCenters);
+
+      return { budgetRows, itemRows, ccRows };
+    },
+  );
 
   const itemsByBudget = new Map<string, Budget["items"]>();
   for (const item of itemRows) {
@@ -374,9 +442,6 @@ export async function getBudgets(): Promise<Budget[]> {
     itemsByBudget.set(item.budgetId, list);
   }
 
-  const ccRows = await db
-    .select({ id: costCenters.id, projectId: costCenters.projectId })
-    .from(costCenters);
   const projectByCc = new Map(ccRows.map((c) => [c.id, c.projectId]));
 
   return budgetRows.map((b) => {
@@ -412,11 +477,19 @@ export async function getBudgets(): Promise<Budget[]> {
 // ---------------------------------------------------------------------------
 
 export async function getBatchApprovals(): Promise<BatchApproval[]> {
-  const batchRows = await db.select().from(batchApprovals);
+  const actorId = await getActorId();
   const allPayables = await getPayables();
   const usersMap = await getUsersMap();
 
-  const itemRows = await db.select().from(batchApprovalItems);
+  const { batchRows, itemRows } = await withAuthenticatedContext(
+    { actorId },
+    async (tx) => {
+      const batchRows = await tx.select().from(batchApprovals);
+      const itemRows = await tx.select().from(batchApprovalItems);
+      return { batchRows, itemRows };
+    },
+  );
+
   const payableIdsByBatch = new Map<string, string[]>();
   for (const item of itemRows) {
     const list = payableIdsByBatch.get(item.batchApprovalId) ?? [];
@@ -475,10 +548,13 @@ export async function getLatestBankImport(): Promise<{
   bankImport: BankImport;
   bankAccount: BankAccount;
 } | null> {
-  const allImports = await db
-    .select()
-    .from(bankImports)
-    .orderBy(sql`${bankImports.importedAt} desc`);
+  const actorId = await getActorId();
+  const allImports = await withAuthenticatedContext({ actorId }, (tx) =>
+    tx
+      .select()
+      .from(bankImports)
+      .orderBy(sql`${bankImports.importedAt} desc`),
+  );
 
   if (allImports.length === 0) return null;
 
@@ -490,10 +566,12 @@ export async function getLatestBankImport(): Promise<{
   const bankAccount = accounts.find((a) => a.id === chosen.accountId);
   if (!bankAccount) return null;
 
-  const rows = await db
-    .select()
-    .from(bankImportRows)
-    .where(eq(bankImportRows.bankImportId, chosen.id));
+  const rows = await withAuthenticatedContext({ actorId }, (tx) =>
+    tx
+      .select()
+      .from(bankImportRows)
+      .where(eq(bankImportRows.bankImportId, chosen.id)),
+  );
 
   const ignoredCount = rows.filter((r) => r.status === "ignored").length;
   const matchedCount = rows.filter((r) => r.status === "matched").length;
@@ -548,4 +626,42 @@ export async function getTransactionsForAccount(
 ): Promise<Transaction[]> {
   const all = await getTransactions();
   return all.filter((t) => t.bankAccountId === accountId);
+}
+
+// ---------------------------------------------------------------------------
+// getPayableOrThrow / getTransactionOrThrow — helpers de lookup usados pelas
+// actions de governança (approval.ts, transactions.ts). Recebem `tx` (o
+// AuthenticatedTx já aberto pelo chamador via withAuthenticatedContext) em
+// vez de abrirem seu próprio contexto — antes duplicados como funções locais
+// rodando sobre `db` cru em cada arquivo (P-9.1b-2/S-02).
+// ---------------------------------------------------------------------------
+
+export async function getPayableOrThrow(
+  tx: AuthenticatedTx,
+  payableId: string,
+) {
+  const rows = await tx
+    .select()
+    .from(payables)
+    .where(and(eq(payables.id, payableId), isNull(payables.deletedAt)))
+    .limit(1);
+
+  const payable = rows[0];
+  if (!payable) throw new Error("Conta a pagar não encontrada");
+  return payable;
+}
+
+export async function getTransactionOrThrow(
+  tx: AuthenticatedTx,
+  transactionId: string,
+) {
+  const rows = await tx
+    .select()
+    .from(transactions)
+    .where(eq(transactions.id, transactionId))
+    .limit(1);
+
+  const transaction = rows[0];
+  if (!transaction) throw new Error("Transação não encontrada");
+  return transaction;
 }

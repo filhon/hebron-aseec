@@ -74,33 +74,41 @@ export const createWeeklyBatch = superAdminAction
     const { weekStart, weekEnd } = getISOWeekBounds(referenceDate);
 
     // Check if batch already exists for this week
-    const existing = await db
-      .select()
-      .from(batchApprovals)
-      .where(
-        and(
-          eq(batchApprovals.weekStart, weekStart),
-          eq(batchApprovals.weekEnd, weekEnd),
-        ),
-      )
-      .limit(1);
+    const existing = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      (tx) =>
+        tx
+          .select()
+          .from(batchApprovals)
+          .where(
+            and(
+              eq(batchApprovals.weekStart, weekStart),
+              eq(batchApprovals.weekEnd, weekEnd),
+            ),
+          )
+          .limit(1),
+    );
 
     if (existing[0]) {
       return { batch: existing[0], isNew: false };
     }
 
     // Find pending payables with dueDate within the week
-    const pendingPayables = await db
-      .select()
-      .from(payables)
-      .where(
-        and(
-          eq(payables.status, "pendente"),
-          isNull(payables.deletedAt),
-          sql`${payables.dueDate} >= ${weekStart}`,
-          sql`${payables.dueDate} <= ${weekEnd}`,
-        ),
-      );
+    const pendingPayables = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      (tx) =>
+        tx
+          .select()
+          .from(payables)
+          .where(
+            and(
+              eq(payables.status, "pendente"),
+              isNull(payables.deletedAt),
+              sql`${payables.dueDate} >= ${weekStart}`,
+              sql`${payables.dueDate} <= ${weekEnd}`,
+            ),
+          ),
+    );
 
     if (pendingPayables.length === 0) {
       throw new Error(
@@ -133,33 +141,38 @@ export const createWeeklyBatch = superAdminAction
     // gestor (To), com o(s) autorizador(es) em cópia. Se nenhuma designation
     // "gestor" estiver configurada ainda, cai de volta para todos os
     // diretores — rede de segurança para não deixar o lote sem notificados.
-    const gestorRows = await db
-      .select({
-        userId: designations.userId,
-        email: users.email,
-        fullName: users.fullName,
-      })
-      .from(designations)
-      .innerJoin(users, eq(users.id, designations.userId))
-      .where(eq(designations.type, "gestor"));
+    const { gestorRows, autorizadorEmails, diretorRows } =
+      await withAuthenticatedContext({ actorId: ctx.actorId }, async (tx) => {
+        const gestorRows = await tx
+          .select({
+            userId: designations.userId,
+            email: users.email,
+            fullName: users.fullName,
+          })
+          .from(designations)
+          .innerJoin(users, eq(users.id, designations.userId))
+          .where(eq(designations.type, "gestor"));
 
-    const autorizadorEmails = (
-      await db
-        .select({ email: users.email })
-        .from(designations)
-        .innerJoin(users, eq(users.id, designations.userId))
-        .where(eq(designations.type, "autorizador"))
-    ).map((r) => r.email);
+        const autorizadorEmails = (
+          await tx
+            .select({ email: users.email })
+            .from(designations)
+            .innerJoin(users, eq(users.id, designations.userId))
+            .where(eq(designations.type, "autorizador"))
+        ).map((r) => r.email);
 
-    const diretorRows = await db
-      .select({
-        userId: roleAssignments.userId,
-        email: users.email,
-        fullName: users.fullName,
-      })
-      .from(roleAssignments)
-      .innerJoin(users, eq(users.id, roleAssignments.userId))
-      .where(eq(roleAssignments.role, "diretor"));
+        const diretorRows = await tx
+          .select({
+            userId: roleAssignments.userId,
+            email: users.email,
+            fullName: users.fullName,
+          })
+          .from(roleAssignments)
+          .innerJoin(users, eq(users.id, roleAssignments.userId))
+          .where(eq(roleAssignments.role, "diretor"));
+
+        return { gestorRows, autorizadorEmails, diretorRows };
+      });
 
     const usingGestorRecipients = gestorRows.length > 0;
     const recipients = usingGestorRecipients ? gestorRows : diretorRows;
@@ -309,12 +322,21 @@ export const approveBatch = diretorWithDesignationAction("gestor")
     // Notify super_admins for authorization — best-effort, outside the
     // governance transaction (a notification failure must not undo an
     // already-audited approval).
-    const superAdminRows = await db
-      .select({ userId: roleAssignments.userId })
-      .from(roleAssignments)
-      .where(eq(roleAssignments.role, "super_admin"));
+    const superAdminRows = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      (tx) =>
+        tx
+          .select({ userId: roleAssignments.userId })
+          .from(roleAssignments)
+          .where(eq(roleAssignments.role, "super_admin")),
+    );
 
     if (superAdminRows.length > 0) {
+      // Exceção service-level (G6.3/F3-15): "notifications_insert_service"
+      // (0014_grants_authenticated.sql) só concede INSERT a service_role —
+      // authenticated não tem GRANT nenhum na tabela. db (superuser) é o
+      // único caminho possível aqui, igual ao padrão já usado em
+      // admin/actions/users.ts para o mesmo motivo.
       await db.insert(notifications).values(
         superAdminRows.map((sa) => ({
           userId: sa.userId,

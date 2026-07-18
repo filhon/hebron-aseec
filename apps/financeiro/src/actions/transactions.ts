@@ -1,8 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { eq, and, isNull } from "drizzle-orm";
-import { db } from "@hebron/db/client";
+import { and, eq, isNull } from "drizzle-orm";
 import {
   withAuthenticatedContext,
   withSystemRole,
@@ -23,6 +22,7 @@ import {
 import { colaboradorAction, superAdminAction } from "../lib/safe-action";
 import { logFinanceiroAudit } from "../lib/audit";
 import { checkBudgetAlert } from "../lib/notifications";
+import { getPayableOrThrow, getTransactionOrThrow } from "../lib/queries";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -30,30 +30,6 @@ import { checkBudgetAlert } from "../lib/notifications";
 
 function toDateString(d: Date): string {
   return d.toISOString().split("T")[0] ?? "";
-}
-
-async function getPayableOrThrow(payableId: string) {
-  const rows = await db
-    .select()
-    .from(payables)
-    .where(and(eq(payables.id, payableId), isNull(payables.deletedAt)))
-    .limit(1);
-
-  const payable = rows[0];
-  if (!payable) throw new Error("Conta a pagar não encontrada");
-  return payable;
-}
-
-async function getTransactionOrThrow(transactionId: string) {
-  const rows = await db
-    .select()
-    .from(transactions)
-    .where(eq(transactions.id, transactionId))
-    .limit(1);
-
-  const tx = rows[0];
-  if (!tx) throw new Error("Transação não encontrada");
-  return tx;
 }
 
 // ---------------------------------------------------------------------------
@@ -122,24 +98,27 @@ export const createPayable = colaboradorAction
 export const cancelPayable = colaboradorAction
   .schema(cancelPayableSchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    const payable = await getPayableOrThrow(input.payableId);
-
-    if (payable.status === "pago") {
-      throw new Error(
-        "Não é possível cancelar uma conta já paga. Use o estorno de transação.",
-      );
-    }
-
-    const isDiretor = ctx.roles.includes("diretor");
-    const isSuperAdmin = ctx.roles.includes("super_admin");
-    const isCreator = payable.createdBy === ctx.actorId;
-
-    if (!isSuperAdmin && !isDiretor && !isCreator) {
-      throw new Error("Apenas o criador da conta ou a diretoria pode cancelar");
-    }
-
     const now = new Date();
+
     await withAuthenticatedContext({ actorId: ctx.actorId }, async (tx) => {
+      const payable = await getPayableOrThrow(tx, input.payableId);
+
+      if (payable.status === "pago") {
+        throw new Error(
+          "Não é possível cancelar uma conta já paga. Use o estorno de transação.",
+        );
+      }
+
+      const isDiretor = ctx.roles.includes("diretor");
+      const isSuperAdmin = ctx.roles.includes("super_admin");
+      const isCreator = payable.createdBy === ctx.actorId;
+
+      if (!isSuperAdmin && !isDiretor && !isCreator) {
+        throw new Error(
+          "Apenas o criador da conta ou a diretoria pode cancelar",
+        );
+      }
+
       await tx
         .update(payables)
         .set({ status: "cancelado", deletedAt: now, updatedAt: now })
@@ -233,30 +212,30 @@ const markReceivableReceivedSchema = z.object({
 export const markReceivableReceived = colaboradorAction
   .schema(markReceivableReceivedSchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    const rows = await db
-      .select()
-      .from(receivables)
-      .where(
-        and(
-          eq(receivables.id, input.receivableId),
-          isNull(receivables.deletedAt),
-        ),
-      )
-      .limit(1);
-
-    const receivable = rows[0];
-    if (!receivable) throw new Error("Conta a receber não encontrada");
-
-    if (receivable.status !== "pendente") {
-      throw new Error(`Conta já está com status "${receivable.status}"`);
-    }
-
     const now = new Date();
     const dateStr = toDateString(input.receivedDate);
 
     const tx = await withAuthenticatedContext(
       { actorId: ctx.actorId },
       async (authTx) => {
+        const rows = await authTx
+          .select()
+          .from(receivables)
+          .where(
+            and(
+              eq(receivables.id, input.receivableId),
+              isNull(receivables.deletedAt),
+            ),
+          )
+          .limit(1);
+
+        const receivable = rows[0];
+        if (!receivable) throw new Error("Conta a receber não encontrada");
+
+        if (receivable.status !== "pendente") {
+          throw new Error(`Conta já está com status "${receivable.status}"`);
+        }
+
         // Create immutable credit transaction
         const txInserted = await authTx
           .insert(transactions)
@@ -401,30 +380,33 @@ export const createManualTransaction = colaboradorAction
 export const createReversal = superAdminAction
   .schema(createReversalSchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    const original = await getTransactionOrThrow(input.originalTransactionId);
-
-    // Guard: cannot reverse an already-reversed transaction
-    const existingReversal = await db
-      .select({ id: transactionReversals.id })
-      .from(transactionReversals)
-      .where(
-        eq(
-          transactionReversals.originalTransactionId,
-          input.originalTransactionId,
-        ),
-      )
-      .limit(1);
-
-    if (existingReversal.length > 0) {
-      throw new Error("Esta transação já possui um estorno registrado");
-    }
-
-    // Counter-transaction: opposite type
-    const reversalType = original.type === "debito" ? "credito" : "debito";
-
     const { reversalTx, reversalRecord } = await withAuthenticatedContext(
       { actorId: ctx.actorId },
       async (tx) => {
+        const original = await getTransactionOrThrow(
+          tx,
+          input.originalTransactionId,
+        );
+
+        // Guard: cannot reverse an already-reversed transaction
+        const existingReversal = await tx
+          .select({ id: transactionReversals.id })
+          .from(transactionReversals)
+          .where(
+            eq(
+              transactionReversals.originalTransactionId,
+              input.originalTransactionId,
+            ),
+          )
+          .limit(1);
+
+        if (existingReversal.length > 0) {
+          throw new Error("Esta transação já possui um estorno registrado");
+        }
+
+        // Counter-transaction: opposite type
+        const reversalType = original.type === "debito" ? "credito" : "debito";
+
         const reversalTxInserted = await tx
           .insert(transactions)
           .values({

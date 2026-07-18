@@ -177,6 +177,7 @@
 | S-154  | 2026-07-17 | P-9.1 — Revisão de Segurança (RLS Audit)                                                | concluido                            |
 | S-155  | 2026-07-17 | P-9.1b — Fechamento dos achados abertos da auditoria (S-02 + S-05) (CORRETIVO)          | parcial                              |
 | S-156  | 2026-07-17 | P-9.1b-1 — Fechamento do achado S-02 em `admin` (CORRETIVO)                             | concluido                            |
+| S-157  | 2026-07-17 | P-9.1b-2 — Fechamento do achado S-02 em `financeiro` (CORRETIVO)                        | concluido                            |
 
 ---
 
@@ -11778,3 +11779,119 @@ resolvido rodando `pnpm db:seed` (idempotente, `onConflictDoUpdate`).
 - [x] Suíte completa do admin verde (89/89 testes, incluindo `rls.test.ts`,
       `actions.test.ts`, `roles-designations.test.ts`,
       `settings-actions.test.ts`)
+
+---
+
+### S-157 — 2026-07-17 — P-9.1b-2 — Fechamento do achado S-02 em `financeiro` (CORRETIVO)
+
+**Prompt:** P-9.1b-2 (`PROMPTS.md:5406`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Migrou toda leitura/escrita de dado de negócio em `financeiro` de `db` cru
+(`@hebron/db/client`, conexão superuser que ignora RLS por completo) para
+`withAuthenticatedContext` (`@hebron/db/authenticated`), usando
+`payables.ts` (já migrado em sessão anterior) como template. Escopo: `lib/
+queries.ts` (as 11 funções listadas no prompt — `getBankAccounts`,
+`getCategories`, `getCostCenterOptions`, `getTransactions`, `getPayables`,
+`getReceivables`, `getBudgets`, `getBatchApprovals`, `getLatestBankImport`,
+`getTransactionsForAccount`, `getUsersMap` — mais o helper interno
+`getActorId`, novo, que resolve `actorId` via `resolveSession`/cookies já
+que essas funções são chamadas de Server Components sem `ctx` de action);
+`accounts.ts`, `categories.ts`, `conciliation.ts`, `import.ts`,
+`organization-budgets.ts` (não migrados, migrados por completo); e
+`approval.ts`/`reports.ts`/`transactions.ts` (mixed — eliminados os
+call-sites raw restantes). Grep limpo de `db.` cru nos 9 arquivos — único
+hit remanescente é o `db.insert(notifications)` de alerta de autorização em
+`approval.ts`, exceção service-level documentada (ver achado abaixo).
+
+**Consolidação `getPayableOrThrow`/`getTransactionOrThrow` (item 3 do
+prompt):** as duas funções, antes duplicadas como locais `raw` em
+`transactions.ts` (e reimplementadas inline em `approval.ts`), viraram
+funções exportadas em `lib/queries.ts` recebendo `tx: AuthenticatedTx` como
+primeiro parâmetro (em vez de abrirem seu próprio contexto) — o chamador já
+está dentro de um `withAuthenticatedContext`. `transactions.ts` importa as
+duas; `cancelPayable` e `createReversal` foram reestruturados para abrir
+sua transação autenticada ANTES do lookup (antes o lookup rodava cru fora
+de qualquer contexto).
+
+**Achados técnicos durante a migração (RLS/GRANT mais estrito que o gate de
+aplicação — mesmo padrão de `withSystemRole` já documentado em P-9.1b-1
+para `public.users`; débitos registrados aqui por não terem alternativa
+dentro dos arquivos permitidos, que não incluem migrations):**
+
+1. `financeiro.accounts`/`categories`/`budgets`/`budget_items` só têm
+   policy `*_mutate_admin` (`FOR ALL USING(has_role('super_admin'))`,
+   `0010_financeiro.sql`) — não cobre `colaborador` (gate de
+   `createBankAccount`) nem `diretor` (gate de `createCategory`/
+   `updateCategory`/`createBudget`/`updateBudget`). Resolvido com
+   `withSystemRole` nas 5 actions, mesmo padrão de exceção.
+2. `financeiro.bank_imports` nunca teve GRANT de UPDATE para
+   `authenticated` (`0014_grants_authenticated.sql` só concede
+   `SELECT, INSERT`) nem policy de UPDATE (`0010_financeiro.sql` só criou
+   `select_admin`/`insert_admin`) — gap de privilégio a nível de tabela,
+   não de policy: nenhum papel, nem `super_admin`, conseguiria este UPDATE
+   via `authenticated`. Afeta o `matchedCount` de `bank_imports` em 3
+   pontos (`autoMatchImport` e `reconcileRow` em `conciliation.ts`,
+   `confirmImport` em `import.ts`) — só descoberto rodando a suíte de
+   testes completa (`conciliation.test.ts` falhou com "permission denied
+   for table bank_imports" antes do fix). Resolvido com `withSystemRole`
+   nos 3 pontos.
+3. `public.users` só tem policy de SELECT self ou `super_admin`/`diretor`
+   (`0000_initial.sql`) — `colaborador` não pode ler `fullName` de
+   terceiros via `authenticated`. `getUsersMap()` (usado para rotular
+   `approvedByName`/`authorizedByName` em telas que `colaborador` já vê
+   via `payables_select_staff`) usa `withSystemRole` para essa leitura
+   específica — mesmo padrão de exceção, agora aplicado a uma leitura em
+   vez de uma escrita.
+
+**Achado de fixture (durante a extensão de `security-audit.test.ts`):**
+`financeiro.transactions` é ledger imutável — o trigger
+`financeiro.forbid_transaction_mutation` bloqueia `DELETE` incondicionalmente,
+até para a conexão superuser de `db` usada no teardown de teste. A primeira
+tentativa de seed (linha real em `financeiro.transactions` com cleanup via
+`DELETE` no `afterAll`) deixou uma linha órfã permanente no banco de
+desenvolvimento real (Supabase, não um Postgres local descartável) quando o
+`afterAll` abortou no `DELETE` bloqueado pelo trigger — o que por sua vez
+impediu o `afterAll` de nível de arquivo de apagar o usuário-fixture
+`TARGET_ID` (FK `accounts.created_by`). Limpeza manual feita nesta sessão
+(`ALTER TABLE ... DISABLE TRIGGER` → `DELETE` → `ENABLE TRIGGER`, só para a
+linha de teste, via script ad-hoc) e teste corrigido: o caso de
+`financeiro.transactions` foi removido do seed-and-cleanup (não há como
+desfazer um INSERT nessa tabela) — a leitura de `transactions` via
+`withAuthenticatedContext` já é coberta, sem seed, pela seção 3
+("Cross-schema leak") pré-existente do mesmo arquivo. Os 3 casos restantes
+(`accounts`/`payables`/`receivables`, todos deletáveis) provam colaborador
+lê + ouvinte não lê com dados semeados reais.
+
+**Arquivos alterados:**
+
+- `apps/financeiro/src/lib/queries.ts` (as 11 funções + `getActorId` +
+  `getPayableOrThrow`/`getTransactionOrThrow` consolidados)
+- `apps/financeiro/src/actions/accounts.ts`, `categories.ts`,
+  `conciliation.ts`, `import.ts`, `organization-budgets.ts`, `approval.ts`,
+  `reports.ts`, `transactions.ts`
+- `apps/admin/src/__tests__/security-audit.test.ts` (novo describe "RLS
+  financeiro na leitura — colaborador lê, ouvinte não lê (S-02)": 3 casos
+  com dados semeados reais em `financeiro.accounts`/`payables`/
+  `receivables`; docstring do topo do arquivo atualizada — S-02 deixa de
+  ser "não fixável nesta sessão" e passa a ser assertado, só S-05 permanece
+  pendente)
+- `SESSIONS.md` (esta entrada + índice)
+
+**Critérios de aceite verificados:**
+
+- [x] Grep limpo de `db` cru em `lib/queries.ts` e nos 8 arquivos de
+      `actions/*.ts` (única exceção: `db.insert(notifications)` em
+      `approval.ts`, comentada)
+- [x] Helpers `getPayableOrThrow`/`getTransactionOrThrow` consolidados em
+      `lib/queries.ts` (sem duplicação entre `approval.ts` e
+      `transactions.ts`)
+- [x] Teste prova que `colaborador` lê e `ouvinte` não lê contas/payables/
+      receivables do schema `financeiro` (dados semeados) — RLS volta a
+      valer na leitura
+- [x] Lint passa · Types passam · SESSIONS.md atualizado
+- [x] Suíte completa do `financeiro` verde (11/11 arquivos, 49/49 testes)
+      e `security-audit.test.ts` do `admin` verde (11/11 describes, 26/26
+      testes)
