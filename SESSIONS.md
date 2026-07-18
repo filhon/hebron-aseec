@@ -180,6 +180,7 @@
 | S-157  | 2026-07-17 | P-9.1b-2 — Fechamento do achado S-02 em `financeiro` (CORRETIVO)                        | concluido                            |
 | S-158  | 2026-07-18 | P-9.1b-3 — Fechamento do achado S-02 em `projetos` (CORRETIVO)                          | parcial                              |
 | S-159  | 2026-07-18 | P-9.1b-3 — Causa raiz do drift de GRANT em `projetos` (CORRETIVO)                       | concluido                            |
+| S-160  | 2026-07-18 | P-9.1b-4 — Fechamento do achado S-02 em `documentos` (CORRETIVO)                        | concluido                            |
 
 ---
 
@@ -12123,3 +12124,97 @@ negócio pendente do Filipe, fora de escopo desta correção).
       consecutivas (105/107 — as 2 restantes são o achado secundário
       pré-existente de `close-voting.test.ts`, fora de escopo)
 - [x] P-9.1b-3 considerado definitivamente concluído
+
+---
+
+### S-160 — 2026-07-18 — P-9.1b-4 — Fechamento do achado S-02 em `documentos` (CORRETIVO)
+
+**Prompt:** P-9.1b-4 (`PROMPTS.md:5512`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Migrou toda leitura/escrita de `documentos` de `db` cru
+(`@hebron/db/client`, conexão superuser que ignora RLS) para
+`withAuthenticatedContext`/`withSystemRole` (`@hebron/db/authenticated`),
+usando `projetos/voting.ts` e `financeiro/categories.ts` como templates.
+Escopo: `categories.ts`, `documents.ts` (19 call-sites), `editals.ts`
+(usava `db.transaction` direto — substituído pelo `tx` de
+`withAuthenticatedContext`), `search.ts`, `subscriptions.ts`, `tags.ts`.
+Grep limpo de `db` cru nos 6 arquivos.
+
+**`lib/notifications.ts` — decisão: exceção service-level, não migrado.**
+`notifyNewDocument`/`notifyEditalOpen`/`resolveSubmissors` fazem fan-out de
+email para **todos** os inscritos de uma categoria ou **todos** os
+submissores ativos — não são escopados pelo papel/sessão do ator que
+publicou o documento, é leitura de audiência global para disparo em lote
+(mesmo padrão de exceção já aplicado a `db.insert(notifications)` em
+`financeiro/approval.ts` e ao cron de `packages/jobs`). Mantido em `db`
+cru; chamado depois do commit da transação autenticada em
+`publishDocument` (não dentro do `tx` de RLS — são preocupações
+independentes).
+
+**Achado crítico — soft delete de `documentos.documents` é irreversível via
+RLS para QUALQUER papel, não só para quem não tem permissão (débito de
+RLS, não corrigido nesta sessão — fora do escopo de arquivos permitidos,
+que não inclui migrations):** as 3 policies de SELECT do schema
+(`documents_select_public`/`_internal`/`_restricted`, `0005_documentos_rls.sql`)
+exigem `deleted_at IS NULL` nas 3. O Postgres exige que a linha resultante
+de um `UPDATE`/`INSERT` satisfaça pelo menos uma policy de SELECT aplicável
+— **mesmo sem `RETURNING`** — então `UPDATE documentos.documents SET
+deleted_at = now()` é rejeitado com "new row violates row-level security
+policy" para **qualquer** ator autenticado, incluindo `super_admin`
+(confirmado com script ad-hoc isolando policy por policy contra o banco
+real: `USING(true) WITH CHECK(true)` sozinho funciona, qualquer policy de
+SELECT que exija `deleted_at IS NULL` quebra o UPDATE). Isso não é
+regressão desta sessão — `deleteDocument`/`deleteEdital` sempre usaram `db`
+cru, então o bug estava mascarado (superuser ignora RLS). Contornado com
+`withSystemRole` nas duas actions (mesmo padrão de exceção de
+`financeiro/categories.ts` para papéis não cobertos por policy); o RBAC de
+`editorAction`/`adminDocAction` já valida o papel antes de chegar aqui, e a
+regra "author_id = ator" de `documents_update_own` nunca seria alcançável
+de qualquer forma. **Fica para o Filipe decidir**: adicionar uma policy de
+SELECT que permita ao autor/admin ver o próprio documento com
+`deleted_at IS NOT NULL` (ex.: `documents_select_own_deleted`), ou aceitar
+`withSystemRole` como solução permanente para este write específico.
+
+**Ajuste de escopo registrado (G1):** `apps/documentos/src/lib/audit.ts`
+não estava na lista de arquivos permitidos, mas `logDocumentAudit` só
+aceitava `params` (sem `dbHandle`) — impossível gravar o audit _dentro_ da
+mesma transação autenticada via `withSystemRole` (padrão usado em
+`radio`/`projetos`/`financeiro` para atomicidade escrita+audit). Adicionado
+parâmetro opcional `dbHandle?: AuditDbHandle` (mesma assinatura de
+`logRadioAudit`/`logFinanceiroAudit`), mudança aditiva e retrocompatível.
+
+**Teste de isolamento (S-02):** novo describe em
+`admin/security-audit.test.ts` — documento `restricted` semeado, autor
+`TARGET_ID` (papel `colaborador` da fixture pré-existente). `OUVINTE_ID`
+(sem papel editorial) não lê (0 linhas) nem edita (UPDATE afeta 0 linhas;
+título original confirmado intacto via conexão superuser). Concedendo
+`conselheiro` a `TARGET_ID` dentro do próprio describe (cleanup no
+`afterAll`), o mesmo documento passa a ser lido — prova que a policy
+filtra por papel, não zera geral.
+
+**Arquivos alterados:**
+
+- `apps/documentos/src/actions/categories.ts`, `documents.ts`, `editals.ts`,
+  `search.ts`, `subscriptions.ts`, `tags.ts`
+- `apps/documentos/src/lib/audit.ts` (fora da lista original — ver ajuste
+  de escopo acima)
+- `apps/admin/src/__tests__/security-audit.test.ts` (novo describe
+  "Isolamento horizontal — usuário sem papel editorial não lê/edita
+  documento fora do seu escopo": 3 casos com documento `restricted`
+  semeado)
+- `SESSIONS.md` (esta entrada + índice)
+
+**Critérios de aceite verificados:**
+
+- [x] Grep limpo de `db` cru nos 6 arquivos de `actions/*.ts` (decisão
+      sobre `lib/notifications.ts` registrada acima: exceção service-level,
+      não migrado)
+- [x] Teste prova isolamento de documento por papel/escopo (`restricted` —
+      ouvinte não lê/edita, conselheiro lê)
+- [x] Lint passa · Types passam · SESSIONS.md atualizado
+- [x] Suíte completa de `documentos` verde (5/5 arquivos, 48/48 testes) e
+      `security-audit.test.ts` do `admin` verde (12/12 describes, 32/32
+      testes)

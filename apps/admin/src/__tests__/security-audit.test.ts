@@ -30,6 +30,7 @@ import {
   organizations,
   organizationMembers,
   projects,
+  documents,
 } from "@hebron/db/schema";
 import {
   serializeImpersonationState,
@@ -505,6 +506,94 @@ describe("Isolamento horizontal — submissor não lê/edita projeto de organiza
       .from(projects)
       .where(eq(projects.id, PROJECT_ID));
     expect(row?.title).toBe(PROJECT_TITLE);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 3e. Isolamento horizontal em documentos.documents por papel/escopo (S-02,
+// P-9.1b-4) — apps/documentos/src/actions/*.ts liam/escreviam com `db`
+// (conexão superuser) em vez de withAuthenticatedContext; as policies
+// "documents_select_restricted"/"documents_update_own"/"documents_update_admin"
+// (0005_documentos_rls.sql) nunca eram de fato avaliadas nessas actions. Usa
+// dado semeado: um documento `restricted` cujo escopo é super_admin/diretor/
+// conselheiro — um usuário sem nenhum desses papéis (ouvinte) não lê nem
+// edita; concedendo o papel conselheiro ao mesmo usuário que fez upload
+// (TARGET_ID) prova que a policy filtra por papel, não zera geral.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe("Isolamento horizontal — usuário sem papel editorial não lê/edita documento fora do seu escopo", () => {
+  const DOC_ID = "a9000000-0000-0000-0000-000000000099";
+  const DOC_TITLE = "Sec Audit Documento Restrito";
+
+  beforeAll(async () => {
+    await db.insert(documents).values({
+      id: DOC_ID,
+      title: DOC_TITLE,
+      slug: "sec-audit-documento-restrito",
+      visibility: "restricted",
+      authorId: TARGET_ID,
+      publishedAt: new Date(),
+    });
+  });
+
+  afterAll(async () => {
+    await db.delete(documents).where(eq(documents.id, DOC_ID));
+    await db
+      .delete(roleAssignments)
+      .where(
+        and(
+          eq(roleAssignments.userId, TARGET_ID),
+          eq(roleAssignments.role, "conselheiro"),
+        ),
+      );
+  });
+
+  it("ouvinte (sem papel editorial) NÃO lê o documento restricted (0 linhas)", async () => {
+    const rows = await withAuthenticatedContext({ actorId: OUVINTE_ID }, (tx) =>
+      tx
+        .select({ id: documents.id })
+        .from(documents)
+        .where(eq(documents.id, DOC_ID)),
+    );
+    expect(rows).toHaveLength(0);
+  });
+
+  it("ouvinte NÃO consegue editar o documento (UPDATE afeta 0 linhas; título original permanece)", async () => {
+    const updatedRows = await withAuthenticatedContext(
+      { actorId: OUVINTE_ID },
+      (tx) =>
+        tx
+          .update(documents)
+          .set({ title: "Forjado Pelo Ouvinte" })
+          .where(eq(documents.id, DOC_ID))
+          .returning({ id: documents.id }),
+    );
+    expect(updatedRows).toHaveLength(0);
+
+    const [row] = await db
+      .select({ title: documents.title })
+      .from(documents)
+      .where(eq(documents.id, DOC_ID));
+    expect(row?.title).toBe(DOC_TITLE);
+  });
+
+  it("usuário com papel conselheiro lê o documento restricted (a policy filtra por papel, não zera geral)", async () => {
+    await db
+      .insert(roleAssignments)
+      .values({
+        userId: TARGET_ID,
+        role: "conselheiro",
+        grantedBy: TARGET_ID,
+      })
+      .onConflictDoNothing();
+
+    const rows = await withAuthenticatedContext({ actorId: TARGET_ID }, (tx) =>
+      tx
+        .select({ id: documents.id })
+        .from(documents)
+        .where(eq(documents.id, DOC_ID)),
+    );
+    expect(rows).toHaveLength(1);
   });
 });
 

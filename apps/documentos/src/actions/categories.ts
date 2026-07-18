@@ -3,10 +3,19 @@
 import { z } from "zod";
 import { and, eq, isNull } from "drizzle-orm";
 import crypto from "node:crypto";
-import { db } from "@hebron/db/client";
+import {
+  withAuthenticatedContext,
+  withSystemRole,
+  type AuthenticatedTx,
+} from "@hebron/db/authenticated";
 import { categories, documents } from "@hebron/db/schema";
 import { editorAction } from "../lib/safe-action";
 import { logDocumentAudit } from "../lib/audit";
+
+type DbExecutor = Pick<
+  AuthenticatedTx,
+  "select" | "insert" | "update" | "delete"
+>;
 
 function slugify(text: string): string {
   return text
@@ -23,8 +32,10 @@ function slugify(text: string): string {
 
 export const listCategories = editorAction
   .schema(z.object({ parentId: z.string().uuid().nullable().optional() }))
-  .action(async ({ parsedInput }) => {
-    const all = await db.select().from(categories);
+  .action(async ({ parsedInput, ctx }) => {
+    const all = await withAuthenticatedContext({ actorId: ctx.actorId }, (tx) =>
+      tx.select().from(categories),
+    );
 
     // Filtra por parentId se fornecido
     if (parsedInput.parentId !== undefined) {
@@ -50,24 +61,38 @@ export const createCategory = editorAction
     const baseSlug = slugify(parsedInput.name);
     const slug = `${baseSlug}-${crypto.randomUUID().slice(0, 8)}`;
 
-    const [category] = await db
-      .insert(categories)
-      .values({
-        name: parsedInput.name,
-        slug,
-        parentId: parsedInput.parentId ?? null,
-      })
-      .returning();
+    const category = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const [category] = await tx
+          .insert(categories)
+          .values({
+            name: parsedInput.name,
+            slug,
+            parentId: parsedInput.parentId ?? null,
+          })
+          .returning();
 
-    if (!category) throw new Error("Falha ao criar categoria");
+        if (!category) throw new Error("Falha ao criar categoria");
 
-    await logDocumentAudit({
-      actorId: ctx.actorId,
-      action: "category.created",
-      entity: "category",
-      entityId: category.id,
-      diff: { after: { name: category.name, parentId: category.parentId } },
-    });
+        await withSystemRole(tx, (sysTx) =>
+          logDocumentAudit(
+            {
+              actorId: ctx.actorId,
+              action: "category.created",
+              entity: "category",
+              entityId: category.id,
+              diff: {
+                after: { name: category.name, parentId: category.parentId },
+              },
+            },
+            sysTx,
+          ),
+        );
+
+        return category;
+      },
+    );
 
     return { category };
   });
@@ -85,48 +110,60 @@ export const updateCategory = editorAction
   .action(async ({ parsedInput, ctx }) => {
     const { id, name, parentId } = parsedInput;
 
-    const [before] = await db
-      .select()
-      .from(categories)
-      .where(eq(categories.id, id))
-      .limit(1);
+    const updated = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const [before] = await tx
+          .select()
+          .from(categories)
+          .where(eq(categories.id, id))
+          .limit(1);
 
-    if (!before) throw new Error("Categoria não encontrada");
+        if (!before) throw new Error("Categoria não encontrada");
 
-    // Previne ciclo: não deixa mover categoria para um de seus descendentes
-    if (parentId !== undefined && parentId !== null) {
-      const isDescendant = await checkIsDescendant(id, parentId);
-      if (isDescendant) {
-        throw new Error(
-          "Não é possível mover uma categoria para um de seus descendentes",
+        // Previne ciclo: não deixa mover categoria para um de seus descendentes
+        if (parentId !== undefined && parentId !== null) {
+          const isDescendant = await checkIsDescendant(tx, id, parentId);
+          if (isDescendant) {
+            throw new Error(
+              "Não é possível mover uma categoria para um de seus descendentes",
+            );
+          }
+        }
+
+        const updateValues: Partial<typeof categories.$inferInsert> = {
+          updatedAt: new Date(),
+        };
+        if (name !== undefined) updateValues.name = name;
+        if (parentId !== undefined) updateValues.parentId = parentId ?? null;
+
+        const [updated] = await tx
+          .update(categories)
+          .set(updateValues)
+          .where(eq(categories.id, id))
+          .returning();
+
+        if (!updated) throw new Error("Falha ao atualizar categoria");
+
+        await withSystemRole(tx, (sysTx) =>
+          logDocumentAudit(
+            {
+              actorId: ctx.actorId,
+              action: "category.updated",
+              entity: "category",
+              entityId: id,
+              diff: {
+                before: { name: before.name, parentId: before.parentId },
+                after: { name: updated.name, parentId: updated.parentId },
+              },
+            },
+            sysTx,
+          ),
         );
-      }
-    }
 
-    const updateValues: Partial<typeof categories.$inferInsert> = {
-      updatedAt: new Date(),
-    };
-    if (name !== undefined) updateValues.name = name;
-    if (parentId !== undefined) updateValues.parentId = parentId ?? null;
-
-    const [updated] = await db
-      .update(categories)
-      .set(updateValues)
-      .where(eq(categories.id, id))
-      .returning();
-
-    if (!updated) throw new Error("Falha ao atualizar categoria");
-
-    await logDocumentAudit({
-      actorId: ctx.actorId,
-      action: "category.updated",
-      entity: "category",
-      entityId: id,
-      diff: {
-        before: { name: before.name, parentId: before.parentId },
-        after: { name: updated.name, parentId: updated.parentId },
+        return updated;
       },
-    });
+    );
 
     return { category: updated };
   });
@@ -138,46 +175,55 @@ export const updateCategory = editorAction
 export const deleteCategory = editorAction
   .schema(z.object({ id: z.string().uuid() }))
   .action(async ({ parsedInput, ctx }) => {
-    const [category] = await db
-      .select()
-      .from(categories)
-      .where(eq(categories.id, parsedInput.id))
-      .limit(1);
+    await withAuthenticatedContext({ actorId: ctx.actorId }, async (tx) => {
+      const [category] = await tx
+        .select()
+        .from(categories)
+        .where(eq(categories.id, parsedInput.id))
+        .limit(1);
 
-    if (!category) throw new Error("Categoria não encontrada");
+      if (!category) throw new Error("Categoria não encontrada");
 
-    // Verifica documentos ativos vinculados
-    const [docRow] = await db
-      .select({ id: documents.id })
-      .from(documents)
-      .where(
-        and(
-          eq(documents.categoryId, parsedInput.id),
-          isNull(documents.deletedAt),
+      // Verifica documentos ativos vinculados
+      const [docRow] = await tx
+        .select({ id: documents.id })
+        .from(documents)
+        .where(
+          and(
+            eq(documents.categoryId, parsedInput.id),
+            isNull(documents.deletedAt),
+          ),
+        )
+        .limit(1);
+
+      if (docRow) {
+        throw new Error(
+          "Não é possível remover categoria com documentos ativos. Mova ou remova os documentos primeiro.",
+        );
+      }
+
+      // Filhos são reparentados para a raiz
+      await tx
+        .update(categories)
+        .set({ parentId: null, updatedAt: new Date() })
+        .where(eq(categories.parentId, parsedInput.id));
+
+      await tx.delete(categories).where(eq(categories.id, parsedInput.id));
+
+      await withSystemRole(tx, (sysTx) =>
+        logDocumentAudit(
+          {
+            actorId: ctx.actorId,
+            action: "category.deleted",
+            entity: "category",
+            entityId: parsedInput.id,
+            diff: {
+              deleted: { name: category.name, parentId: category.parentId },
+            },
+          },
+          sysTx,
         ),
-      )
-      .limit(1);
-
-    if (docRow) {
-      throw new Error(
-        "Não é possível remover categoria com documentos ativos. Mova ou remova os documentos primeiro.",
       );
-    }
-
-    // Filhos são reparentados para a raiz
-    await db
-      .update(categories)
-      .set({ parentId: null, updatedAt: new Date() })
-      .where(eq(categories.parentId, parsedInput.id));
-
-    await db.delete(categories).where(eq(categories.id, parsedInput.id));
-
-    await logDocumentAudit({
-      actorId: ctx.actorId,
-      action: "category.deleted",
-      entity: "category",
-      entityId: parsedInput.id,
-      diff: { deleted: { name: category.name, parentId: category.parentId } },
     });
 
     return { deleted: true };
@@ -196,30 +242,44 @@ export const moveCategoryInTree = editorAction
   .action(async ({ parsedInput, ctx }) => {
     const { id, newParentId } = parsedInput;
 
-    if (newParentId !== null) {
-      const isDescendant = await checkIsDescendant(id, newParentId);
-      if (isDescendant) {
-        throw new Error(
-          "Destino inválido: categoria não pode ser movida para um de seus descendentes",
+    const updated = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        if (newParentId !== null) {
+          const isDescendant = await checkIsDescendant(tx, id, newParentId);
+          if (isDescendant) {
+            throw new Error(
+              "Destino inválido: categoria não pode ser movida para um de seus descendentes",
+            );
+          }
+        }
+
+        const [updated] = await tx
+          .update(categories)
+          .set({ parentId: newParentId, updatedAt: new Date() })
+          .where(eq(categories.id, id))
+          .returning();
+
+        if (!updated) throw new Error("Categoria não encontrada");
+
+        await withSystemRole(tx, (sysTx) =>
+          logDocumentAudit(
+            {
+              actorId: ctx.actorId,
+              action: "category.updated",
+              entity: "category",
+              entityId: id,
+              diff: {
+                parentId: { before: updated.parentId, after: newParentId },
+              },
+            },
+            sysTx,
+          ),
         );
-      }
-    }
 
-    const [updated] = await db
-      .update(categories)
-      .set({ parentId: newParentId, updatedAt: new Date() })
-      .where(eq(categories.id, id))
-      .returning();
-
-    if (!updated) throw new Error("Categoria não encontrada");
-
-    await logDocumentAudit({
-      actorId: ctx.actorId,
-      action: "category.updated",
-      entity: "category",
-      entityId: id,
-      diff: { parentId: { before: updated.parentId, after: newParentId } },
-    });
+        return updated;
+      },
+    );
 
     return { category: updated };
   });
@@ -227,10 +287,11 @@ export const moveCategoryInTree = editorAction
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 async function checkIsDescendant(
+  executor: DbExecutor,
   ancestorId: string,
   candidateId: string,
 ): Promise<boolean> {
-  const all = await db
+  const all = await executor
     .select({ id: categories.id, parentId: categories.parentId })
     .from(categories);
 

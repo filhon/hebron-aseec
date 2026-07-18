@@ -3,7 +3,7 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import crypto from "node:crypto";
-import { db } from "@hebron/db/client";
+import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { tags } from "@hebron/db/schema";
 import { editorAction } from "../lib/safe-action";
 
@@ -20,10 +20,14 @@ function slugify(text: string): string {
 
 // ─── listTags ─────────────────────────────────────────────────────────────────
 
-export const listTags = editorAction.schema(z.object({})).action(async () => {
-  const all = await db.select().from(tags).orderBy(tags.name);
-  return { tags: all };
-});
+export const listTags = editorAction
+  .schema(z.object({}))
+  .action(async ({ ctx }) => {
+    const all = await withAuthenticatedContext({ actorId: ctx.actorId }, (tx) =>
+      tx.select().from(tags).orderBy(tags.name),
+    );
+    return { tags: all };
+  });
 
 // ─── createTag ────────────────────────────────────────────────────────────────
 // Idempotente por nome: se a tag já existe, retorna a existente em vez de
@@ -32,21 +36,28 @@ export const listTags = editorAction.schema(z.object({})).action(async () => {
 
 export const createTag = editorAction
   .schema(z.object({ name: z.string().min(1).max(60) }))
-  .action(async ({ parsedInput }) => {
-    const [existing] = await db
-      .select()
-      .from(tags)
-      .where(eq(tags.name, parsedInput.name))
-      .limit(1);
+  .action(async ({ parsedInput, ctx }) => {
+    const tag = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const [existing] = await tx
+          .select()
+          .from(tags)
+          .where(eq(tags.name, parsedInput.name))
+          .limit(1);
 
-    if (existing) return { tag: existing };
+        if (existing) return existing;
 
-    const slug = `${slugify(parsedInput.name)}-${crypto.randomUUID().slice(0, 6)}`;
-    const [tag] = await db
-      .insert(tags)
-      .values({ name: parsedInput.name, slug })
-      .returning();
+        const slug = `${slugify(parsedInput.name)}-${crypto.randomUUID().slice(0, 6)}`;
+        const [tag] = await tx
+          .insert(tags)
+          .values({ name: parsedInput.name, slug })
+          .returning();
 
-    if (!tag) throw new Error("Falha ao criar tag");
+        if (!tag) throw new Error("Falha ao criar tag");
+        return tag;
+      },
+    );
+
     return { tag };
   });

@@ -4,7 +4,10 @@ import { z } from "zod";
 import { and, desc, eq, isNull, max, sql } from "drizzle-orm";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "node:crypto";
-import { db } from "@hebron/db/client";
+import {
+  withAuthenticatedContext,
+  withSystemRole,
+} from "@hebron/db/authenticated";
 import {
   documents,
   documentTags,
@@ -78,47 +81,62 @@ export const createDocument = editorAction
     const baseSlug = slugify(parsedInput.title);
     const slug = `${baseSlug}-${crypto.randomUUID().slice(0, 8)}`;
 
-    const [document] = await db
-      .insert(documents)
-      .values({
-        title: parsedInput.title,
-        slug,
-        contentMd: parsedInput.contentMd ?? null,
-        fileUrl: parsedInput.storagePath ?? null,
-        visibility: parsedInput.visibility,
-        categoryId: parsedInput.categoryId ?? null,
-        authorId: ctx.actorId,
-      })
-      .returning();
+    const document = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const [document] = await tx
+          .insert(documents)
+          .values({
+            title: parsedInput.title,
+            slug,
+            contentMd: parsedInput.contentMd ?? null,
+            fileUrl: parsedInput.storagePath ?? null,
+            visibility: parsedInput.visibility,
+            categoryId: parsedInput.categoryId ?? null,
+            authorId: ctx.actorId,
+          })
+          .returning();
 
-    if (!document) throw new Error("Falha ao criar documento");
+        if (!document) throw new Error("Falha ao criar documento");
 
-    await db.insert(documentVersions).values({
-      documentId: document.id,
-      contentMd: parsedInput.contentMd ?? null,
-      fileUrl: parsedInput.storagePath ?? null,
-      versionNumber: 1,
-      createdBy: ctx.actorId,
-    });
-
-    if (parsedInput.tagIds?.length) {
-      await db.insert(documentTags).values(
-        parsedInput.tagIds.map((tagId) => ({
+        await tx.insert(documentVersions).values({
           documentId: document.id,
-          tagId,
-        })),
-      );
-    }
+          contentMd: parsedInput.contentMd ?? null,
+          fileUrl: parsedInput.storagePath ?? null,
+          versionNumber: 1,
+          createdBy: ctx.actorId,
+        });
 
-    await logDocumentAudit({
-      actorId: ctx.actorId,
-      action: "document.created",
-      entity: "document",
-      entityId: document.id,
-      diff: {
-        after: { title: document.title, visibility: document.visibility },
+        if (parsedInput.tagIds?.length) {
+          await tx.insert(documentTags).values(
+            parsedInput.tagIds.map((tagId) => ({
+              documentId: document.id,
+              tagId,
+            })),
+          );
+        }
+
+        await withSystemRole(tx, (sysTx) =>
+          logDocumentAudit(
+            {
+              actorId: ctx.actorId,
+              action: "document.created",
+              entity: "document",
+              entityId: document.id,
+              diff: {
+                after: {
+                  title: document.title,
+                  visibility: document.visibility,
+                },
+              },
+            },
+            sysTx,
+          ),
+        );
+
+        return document;
       },
-    });
+    );
 
     return { document };
   });
@@ -141,70 +159,82 @@ export const updateDocument = editorAction
   .action(async ({ parsedInput, ctx }) => {
     const { id, tagIds, ...fields } = parsedInput;
 
-    const [before] = await db
-      .select()
-      .from(documents)
-      .where(and(eq(documents.id, id), isNull(documents.deletedAt)))
-      .limit(1);
+    const { updated, nextVersion } = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const [before] = await tx
+          .select()
+          .from(documents)
+          .where(and(eq(documents.id, id), isNull(documents.deletedAt)))
+          .limit(1);
 
-    if (!before) throw new Error("Documento não encontrado");
+        if (!before) throw new Error("Documento não encontrado");
 
-    const updateValues: Partial<typeof documents.$inferInsert> = {};
-    if (fields.title !== undefined) updateValues.title = fields.title;
-    if (fields.contentMd !== undefined)
-      updateValues.contentMd = fields.contentMd;
-    if (fields.storagePath !== undefined)
-      updateValues.fileUrl = fields.storagePath;
-    if (fields.visibility !== undefined)
-      updateValues.visibility = fields.visibility;
-    if ("categoryId" in fields)
-      updateValues.categoryId = fields.categoryId ?? null;
+        const updateValues: Partial<typeof documents.$inferInsert> = {};
+        if (fields.title !== undefined) updateValues.title = fields.title;
+        if (fields.contentMd !== undefined)
+          updateValues.contentMd = fields.contentMd;
+        if (fields.storagePath !== undefined)
+          updateValues.fileUrl = fields.storagePath;
+        if (fields.visibility !== undefined)
+          updateValues.visibility = fields.visibility;
+        if ("categoryId" in fields)
+          updateValues.categoryId = fields.categoryId ?? null;
 
-    const [updated] = await db
-      .update(documents)
-      .set({ ...updateValues, updatedAt: new Date() })
-      .where(eq(documents.id, id))
-      .returning();
+        const [updated] = await tx
+          .update(documents)
+          .set({ ...updateValues, updatedAt: new Date() })
+          .where(eq(documents.id, id))
+          .returning();
 
-    if (!updated) throw new Error("Falha ao atualizar documento");
+        if (!updated) throw new Error("Falha ao atualizar documento");
 
-    // Determina próximo número de versão
-    const [maxRow] = await db
-      .select({ v: max(documentVersions.versionNumber) })
-      .from(documentVersions)
-      .where(eq(documentVersions.documentId, id));
+        // Determina próximo número de versão
+        const [maxRow] = await tx
+          .select({ v: max(documentVersions.versionNumber) })
+          .from(documentVersions)
+          .where(eq(documentVersions.documentId, id));
 
-    const nextVersion = (maxRow?.v ?? 0) + 1;
+        const nextVersion = (maxRow?.v ?? 0) + 1;
 
-    await db.insert(documentVersions).values({
-      documentId: id,
-      contentMd: fields.contentMd ?? before.contentMd,
-      fileUrl: fields.storagePath ?? before.fileUrl,
-      versionNumber: nextVersion,
-      createdBy: ctx.actorId,
-    });
+        await tx.insert(documentVersions).values({
+          documentId: id,
+          contentMd: fields.contentMd ?? before.contentMd,
+          fileUrl: fields.storagePath ?? before.fileUrl,
+          versionNumber: nextVersion,
+          createdBy: ctx.actorId,
+        });
 
-    // Atualiza tags se fornecidas
-    if (tagIds !== undefined) {
-      await db.delete(documentTags).where(eq(documentTags.documentId, id));
-      if (tagIds.length > 0) {
-        await db
-          .insert(documentTags)
-          .values(tagIds.map((tagId) => ({ documentId: id, tagId })));
-      }
-    }
+        // Atualiza tags se fornecidas
+        if (tagIds !== undefined) {
+          await tx.delete(documentTags).where(eq(documentTags.documentId, id));
+          if (tagIds.length > 0) {
+            await tx
+              .insert(documentTags)
+              .values(tagIds.map((tagId) => ({ documentId: id, tagId })));
+          }
+        }
 
-    await logDocumentAudit({
-      actorId: ctx.actorId,
-      action: "document.updated",
-      entity: "document",
-      entityId: id,
-      diff: {
-        before: { title: before.title, visibility: before.visibility },
-        after: { title: updated.title, visibility: updated.visibility },
-        version: nextVersion,
+        await withSystemRole(tx, (sysTx) =>
+          logDocumentAudit(
+            {
+              actorId: ctx.actorId,
+              action: "document.updated",
+              entity: "document",
+              entityId: id,
+              diff: {
+                before: { title: before.title, visibility: before.visibility },
+                after: { title: updated.title, visibility: updated.visibility },
+                version: nextVersion,
+              },
+            },
+            sysTx,
+          ),
+        );
+
+        return { updated, nextVersion };
       },
-    });
+    );
 
     return { document: updated, version: nextVersion };
   });
@@ -214,39 +244,56 @@ export const updateDocument = editorAction
 export const publishDocument = editorAction
   .schema(z.object({ id: z.string().uuid() }))
   .action(async ({ parsedInput, ctx }) => {
-    const [before] = await db
-      .select({ publishedAt: documents.publishedAt })
-      .from(documents)
-      .where(and(eq(documents.id, parsedInput.id), isNull(documents.deletedAt)))
-      .limit(1);
+    const { updated, isEdital } = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const [before] = await tx
+          .select({ publishedAt: documents.publishedAt })
+          .from(documents)
+          .where(
+            and(eq(documents.id, parsedInput.id), isNull(documents.deletedAt)),
+          )
+          .limit(1);
 
-    if (!before) throw new Error("Documento não encontrado");
-    if (before.publishedAt) throw new Error("Documento já está publicado");
+        if (!before) throw new Error("Documento não encontrado");
+        if (before.publishedAt) throw new Error("Documento já está publicado");
 
-    const now = new Date();
-    const [updated] = await db
-      .update(documents)
-      .set({ publishedAt: now, updatedAt: now })
-      .where(eq(documents.id, parsedInput.id))
-      .returning();
+        const now = new Date();
+        const [updated] = await tx
+          .update(documents)
+          .set({ publishedAt: now, updatedAt: now })
+          .where(eq(documents.id, parsedInput.id))
+          .returning();
 
-    if (!updated) throw new Error("Falha ao publicar documento");
+        if (!updated) throw new Error("Falha ao publicar documento");
 
-    await logDocumentAudit({
-      actorId: ctx.actorId,
-      action: "document.published",
-      entity: "document",
-      entityId: parsedInput.id,
-      diff: { publishedAt: { before: null, after: now } },
-    });
+        await withSystemRole(tx, (sysTx) =>
+          logDocumentAudit(
+            {
+              actorId: ctx.actorId,
+              action: "document.published",
+              entity: "document",
+              entityId: parsedInput.id,
+              diff: { publishedAt: { before: null, after: now } },
+            },
+            sysTx,
+          ),
+        );
 
-    const [editalRow] = await db
-      .select({ id: editals.id })
-      .from(editals)
-      .where(eq(editals.id, parsedInput.id))
-      .limit(1);
+        const [editalRow] = await tx
+          .select({ id: editals.id })
+          .from(editals)
+          .where(eq(editals.id, parsedInput.id))
+          .limit(1);
 
-    if (editalRow) {
+        return { updated, isEdital: !!editalRow };
+      },
+    );
+
+    // Notificação por email: fan-out para todos os inscritos/submissores,
+    // não escopado pelo papel/escopo do ator — mesmo padrão de exceção
+    // service-level de lib/notifications.ts (ver decisão em SESSIONS.md).
+    if (isEdital) {
       await notifyEditalOpen(parsedInput.id);
     } else {
       await notifyNewDocument(parsedInput.id);
@@ -260,30 +307,47 @@ export const publishDocument = editorAction
 export const unpublishDocument = editorAction
   .schema(z.object({ id: z.string().uuid() }))
   .action(async ({ parsedInput, ctx }) => {
-    const [before] = await db
-      .select({ publishedAt: documents.publishedAt })
-      .from(documents)
-      .where(and(eq(documents.id, parsedInput.id), isNull(documents.deletedAt)))
-      .limit(1);
+    const updated = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const [before] = await tx
+          .select({ publishedAt: documents.publishedAt })
+          .from(documents)
+          .where(
+            and(eq(documents.id, parsedInput.id), isNull(documents.deletedAt)),
+          )
+          .limit(1);
 
-    if (!before) throw new Error("Documento não encontrado");
-    if (!before.publishedAt) throw new Error("Documento não está publicado");
+        if (!before) throw new Error("Documento não encontrado");
+        if (!before.publishedAt)
+          throw new Error("Documento não está publicado");
 
-    const [updated] = await db
-      .update(documents)
-      .set({ publishedAt: null, updatedAt: new Date() })
-      .where(eq(documents.id, parsedInput.id))
-      .returning();
+        const [updated] = await tx
+          .update(documents)
+          .set({ publishedAt: null, updatedAt: new Date() })
+          .where(eq(documents.id, parsedInput.id))
+          .returning();
 
-    if (!updated) throw new Error("Falha ao despublicar documento");
+        if (!updated) throw new Error("Falha ao despublicar documento");
 
-    await logDocumentAudit({
-      actorId: ctx.actorId,
-      action: "document.unpublished",
-      entity: "document",
-      entityId: parsedInput.id,
-      diff: { publishedAt: { before: before.publishedAt, after: null } },
-    });
+        await withSystemRole(tx, (sysTx) =>
+          logDocumentAudit(
+            {
+              actorId: ctx.actorId,
+              action: "document.unpublished",
+              entity: "document",
+              entityId: parsedInput.id,
+              diff: {
+                publishedAt: { before: before.publishedAt, after: null },
+              },
+            },
+            sysTx,
+          ),
+        );
+
+        return updated;
+      },
+    );
 
     return { document: updated };
   });
@@ -294,31 +358,60 @@ export const unpublishDocument = editorAction
 export const deleteDocument = editorAction
   .schema(z.object({ id: z.string().uuid() }))
   .action(async ({ parsedInput, ctx }) => {
-    const [before] = await db
-      .select({ deletedAt: documents.deletedAt, title: documents.title })
-      .from(documents)
-      .where(eq(documents.id, parsedInput.id))
-      .limit(1);
+    const updated = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const [before] = await tx
+          .select()
+          .from(documents)
+          .where(eq(documents.id, parsedInput.id))
+          .limit(1);
 
-    if (!before) throw new Error("Documento não encontrado");
-    if (before.deletedAt) throw new Error("Documento já foi removido");
+        if (!before) throw new Error("Documento não encontrado");
+        if (before.deletedAt) throw new Error("Documento já foi removido");
 
-    const now = new Date();
-    const [updated] = await db
-      .update(documents)
-      .set({ deletedAt: now, updatedAt: now })
-      .where(eq(documents.id, parsedInput.id))
-      .returning();
+        const now = new Date();
 
-    if (!updated) throw new Error("Falha ao remover documento");
+        // RLS debt (0005_documentos_rls.sql): as 3 policies de SELECT em
+        // documentos.documents exigem deleted_at IS NULL — nenhuma permite
+        // ver a linha depois do soft delete. Postgres exige que a linha
+        // resultante satisfaça alguma policy de SELECT mesmo num UPDATE sem
+        // RETURNING, então SEM exceção NINGUÉM (nem super_admin) consegue
+        // hoje soft-deletar via client autenticado — não é específico de
+        // colaborador/autor. withSystemRole contorna (mesmo padrão de
+        // exceção documentado em apps/financeiro/src/actions/categories.ts);
+        // o RBAC de editorAction já validou o papel antes de chegar aqui.
+        // Débito registrado em SESSIONS.md — requer nova policy de SELECT
+        // para dono/admin de documento deletado.
+        const updated = await withSystemRole(tx, async (sysTx) => {
+          const [updated] = await sysTx
+            .update(documents)
+            .set({ deletedAt: now, updatedAt: now })
+            .where(eq(documents.id, parsedInput.id))
+            .returning();
 
-    await logDocumentAudit({
-      actorId: ctx.actorId,
-      action: "document.deleted",
-      entity: "document",
-      entityId: parsedInput.id,
-      diff: { deletedAt: { before: null, after: now }, title: before.title },
-    });
+          if (!updated) throw new Error("Falha ao remover documento");
+
+          await logDocumentAudit(
+            {
+              actorId: ctx.actorId,
+              action: "document.deleted",
+              entity: "document",
+              entityId: parsedInput.id,
+              diff: {
+                deletedAt: { before: null, after: now },
+                title: before.title,
+              },
+            },
+            sysTx,
+          );
+
+          return updated;
+        });
+
+        return updated;
+      },
+    );
 
     return { document: updated };
   });
@@ -328,24 +421,26 @@ export const deleteDocument = editorAction
 export const registerView = authenticatedAction
   .schema(z.object({ documentId: z.string().uuid() }))
   .action(async ({ parsedInput, ctx }) => {
-    // Verifica se o documento existe e está visível
-    const [doc] = await db
-      .select({ id: documents.id })
-      .from(documents)
-      .where(
-        and(
-          eq(documents.id, parsedInput.documentId),
-          isNull(documents.deletedAt),
-          sql`${documents.publishedAt} IS NOT NULL`,
-        ),
-      )
-      .limit(1);
+    await withAuthenticatedContext({ actorId: ctx.actorId }, async (tx) => {
+      // Verifica se o documento existe e está visível
+      const [doc] = await tx
+        .select({ id: documents.id })
+        .from(documents)
+        .where(
+          and(
+            eq(documents.id, parsedInput.documentId),
+            isNull(documents.deletedAt),
+            sql`${documents.publishedAt} IS NOT NULL`,
+          ),
+        )
+        .limit(1);
 
-    if (!doc) throw new Error("Documento não encontrado");
+      if (!doc) throw new Error("Documento não encontrado");
 
-    await db.insert(views).values({
-      documentId: parsedInput.documentId,
-      userId: ctx.actorId,
+      await tx.insert(views).values({
+        documentId: parsedInput.documentId,
+        userId: ctx.actorId,
+      });
     });
 
     return { recorded: true };
@@ -355,12 +450,16 @@ export const registerView = authenticatedAction
 
 export const listDocumentVersions = editorAction
   .schema(z.object({ documentId: z.string().uuid() }))
-  .action(async ({ parsedInput }) => {
-    const versions = await db
-      .select()
-      .from(documentVersions)
-      .where(eq(documentVersions.documentId, parsedInput.documentId))
-      .orderBy(desc(documentVersions.versionNumber));
+  .action(async ({ parsedInput, ctx }) => {
+    const versions = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      (tx) =>
+        tx
+          .select()
+          .from(documentVersions)
+          .where(eq(documentVersions.documentId, parsedInput.documentId))
+          .orderBy(desc(documentVersions.versionNumber)),
+    );
 
     return { versions };
   });

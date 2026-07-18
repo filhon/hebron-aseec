@@ -5543,10 +5543,10 @@ papel/escopo do destinatário, migrar.
 
 **Critérios de aceite:**
 
-- [ ] Grep limpo de `db` cru nos 6 arquivos de `actions/*.ts` (decisão sobre
+- [x] Grep limpo de `db` cru nos 6 arquivos de `actions/*.ts` (decisão sobre
       `lib/notifications.ts` registrada em SESSIONS.md)
-- [ ] Teste prova isolamento de documento por papel/escopo
-- [ ] Lint passa · Types passam · SESSIONS.md atualizado
+- [x] Teste prova isolamento de documento por papel/escopo
+- [x] Lint passa · Types passam · SESSIONS.md atualizado
 
 ---
 
