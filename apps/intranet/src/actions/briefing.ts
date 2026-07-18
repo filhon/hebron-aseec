@@ -2,7 +2,6 @@
 
 import { z } from "zod";
 import { eq } from "drizzle-orm";
-import { db } from "@hebron/db/client";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { briefingPreferences } from "@hebron/db/schema";
 import { staffAction } from "../lib/safe-action";
@@ -32,11 +31,15 @@ export type SaveBriefingPreferenceInput = z.infer<
 export const getBriefingPreference = staffAction
   .schema(z.object({}))
   .action(async ({ ctx }) => {
-    const rows = await db
-      .select()
-      .from(briefingPreferences)
-      .where(eq(briefingPreferences.userId, ctx.actorId))
-      .limit(1);
+    const rows = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      (tx) =>
+        tx
+          .select()
+          .from(briefingPreferences)
+          .where(eq(briefingPreferences.userId, ctx.actorId))
+          .limit(1),
+    );
 
     return { preference: rows[0] ?? null };
   });

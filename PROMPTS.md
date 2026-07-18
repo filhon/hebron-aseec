@@ -5588,10 +5588,10 @@ papel/escopo do destinatário, migrar.
 
 **Critérios de aceite:**
 
-- [ ] Grep limpo de `db` cru nos arquivos listados (decisão sobre `kpis.ts`
+- [x] Grep limpo de `db` cru nos arquivos listados (decisão sobre `kpis.ts`
       registrada em SESSIONS.md)
-- [ ] Teste prova isolamento em pelo menos uma tabela de `intranet`
-- [ ] Lint passa · Types passam · SESSIONS.md atualizado
+- [x] Teste prova isolamento em pelo menos uma tabela de `intranet`
+- [x] Lint passa · Types passam · SESSIONS.md atualizado
 
 ---
 

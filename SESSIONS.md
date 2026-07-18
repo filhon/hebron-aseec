@@ -181,6 +181,7 @@
 | S-158  | 2026-07-18 | P-9.1b-3 — Fechamento do achado S-02 em `projetos` (CORRETIVO)                          | parcial                              |
 | S-159  | 2026-07-18 | P-9.1b-3 — Causa raiz do drift de GRANT em `projetos` (CORRETIVO)                       | concluido                            |
 | S-160  | 2026-07-18 | P-9.1b-4 — Fechamento do achado S-02 em `documentos` (CORRETIVO)                        | concluido                            |
+| S-161  | 2026-07-18 | P-9.1b-5 — Fechamento do achado S-02 em `intranet` (CORRETIVO)                          | concluido                            |
 
 ---
 
@@ -12217,4 +12218,114 @@ filtra por papel, não zera geral.
 - [x] Lint passa · Types passam · SESSIONS.md atualizado
 - [x] Suíte completa de `documentos` verde (5/5 arquivos, 48/48 testes) e
       `security-audit.test.ts` do `admin` verde (12/12 describes, 32/32
+      testes)
+
+---
+
+### S-161 — 2026-07-18 — P-9.1b-5 — Fechamento do achado S-02 em `intranet` (CORRETIVO)
+
+**Prompt:** P-9.1b-5 (`PROMPTS.md:5553`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Migrou toda leitura/escrita restante de `intranet` de `db` cru
+(`@hebron/db/client`, conexão superuser que ignora RLS) para
+`withAuthenticatedContext`/`withSystemRole` (`@hebron/db/authenticated`).
+Escopo: `lib/queries.ts` (9 call-sites), `actions/announcements.ts`
+(3 restantes: `listAnnouncements`, autor de `createAnnouncement`, `existing`
+de `updateAnnouncement`), `briefing.ts`/`dashboard.ts` (1 cada — os únicos
+`GET` ainda crus), `decisions.ts` (a leitura de permissão
+`meetingSessions.chairUserId` em `assertCanMutateSessionDecisions`, movida
+para dentro da mesma transação da mutação, e o `existing` de
+`updateMeetingDecisionStatus`), `invitations.ts` (grant de papel +
+marcação de aceite). Grep limpo de `db` cru nos 7 arquivos de
+`actions`/`lib` (só resta 1 leitura documentada como exceção abaixo).
+
+**`invitations.ts::acceptInvitation` — duas decisões registradas:**
+
+1. **Leitura do convite por token (pré-conta) permanece em `db` cru** — já
+   documentado no próprio schema (`0003_admin_rls.sql`: "Fluxo de aceite
+   sem autenticação → Server Action usa service role (bypassa RLS)"). Não
+   há actorId neste ponto (é o convite que vai criar a conta), e `anon` não
+   tem policy/GRANT sobre `admin.invitations` desde que
+   `invitations_select_by_token` foi removida. Não é um call-site
+   esquecido — é a exceção que a migration 0003 já previu.
+2. **`db.insert(roleAssignments)` (grant de papel) + `UPDATE
+invitations.acceptedAt` migrados para `withAuthenticatedContext({actorId:
+userId}) + withSystemRole`**, não para RLS "normal": `role_assignments_write_super_admin`/
+   `invitations_write_super_admin` só permitem `super_admin`, e o usuário
+   recém-criado não tem papel nenhum ainda (é o que está recebendo o
+   primeiro). A autorização real é o token — assinado, single-use, com
+   expiração, e só existe porque um `super_admin` o criou via
+   `sendInvitation` (`adminAction`) com os papéis já decididos — não o
+   papel do ator no momento do aceite.
+
+**`kpis.ts` — decisão sobre os 3 agregados org-wide (`countProjetosAtivos`,
+`sumDoacoesDoMes`, `countTarefasAbertas`) + `latestHistoryPair`: mantidos
+como exceção service-level, via `withAuthenticatedContext({actorId:
+ctx.actorId}) + withSystemRole` (não RLS normal).** Motivo por agregado:
+
+- `countProjetosAtivos` (projetos.projects): `projects_select_own_or_org`
+  restringe colaborador/submissor a projetos próprios/da organização — sob
+  RLS normal um colaborador sem projeto veria uma contagem MENOR que a
+  real (valor errado do KPI, não apenas "menos dados"; diretor/conselheiro/
+  super_admin já veem o total correto via `projects_select_reviewer`/
+  `has_role('super_admin')`).
+- `sumDoacoesDoMes` (financeiro.categories/transactions):
+  `categories_select_staff`/`transactions_select_staff`
+  (0010_financeiro.sql) não incluem `conselheiro` — sob RLS normal um
+  conselheiro veria "R$ 0,00" em vez do valor real, métrica errada para um
+  papel de diretoria (BRAIN §3 — conselheiro tem função de supervisão).
+- `countTarefasAbertas`/`latestHistoryPair`: na prática já dariam o mesmo
+  resultado sob RLS normal (`tasks_select_staff`/`kpi_snapshot_history_select_staff`
+  cobrem todo o staff sem filtro por linha) — mantidos no mesmo
+  `withSystemRole` só por uniformidade de uma única transação por KPI, não
+  por necessidade de bypass.
+  Em todos os 4 casos só um número agregado (count/sum, nunca uma linha
+  individual) sai da action — nenhum dado que a RLS negaria a um papel
+  específico é devolvido em forma identificável. **Restrição adicional que
+  confirma a decisão:** `apps/intranet/src/__tests__/kpis.test.ts`
+  (pré-existente, fora da lista de arquivos permitidos deste prompt) usa um
+  `actorId` mockado que não é um UUID válido (`"kpis-test-actor"`) — sob RLS
+  normal, `auth.uid()` faria `cast` desse valor para `uuid` e lançaria
+  erro de sintaxe assim que qualquer policy chamasse `auth.uid()`;
+  `withSystemRole` (`RESET ROLE`) nunca chega a avaliar policy nenhuma, então
+  o teste continua passando. Confirmado rodando a suíte real contra o banco
+  de dev: `kpis.test.ts` 4/4 verde após a migração.
+
+**Teste de isolamento (S-02):** novo describe em `admin/security-audit.test.ts`
+— anúncio e decisão de reunião semeados (autor/responsável/chair =
+`TARGET_ID`, papel `colaborador` da fixture pré-existente).
+`announcements_select_staff` cobre todo o staff: colaborador lê o anúncio
+semeado, ouvinte lê 0 linhas. `meeting_decisions_select_board` exclui
+colaborador de propósito: `TARGET_ID` (só colaborador) lê 0 linhas da
+decisão semeada; concedendo `diretor` ao mesmo usuário dentro do describe
+(cleanup no `afterAll`), a mesma decisão passa a ser lida — prova que a
+policy filtra por papel, não zera geral.
+
+**Arquivos alterados:**
+
+- `apps/intranet/src/lib/queries.ts`
+- `apps/intranet/src/actions/announcements.ts`, `briefing.ts`,
+  `dashboard.ts`, `decisions.ts`, `invitations.ts`, `kpis.ts`
+- `apps/admin/src/__tests__/security-audit.test.ts` (novo describe "RLS
+  intranet na leitura — colaborador lê anúncio, mas não lê decisão de
+  reunião fora do seu escopo": 3 casos com anúncio + decisão de reunião
+  semeados)
+- `SESSIONS.md` (esta entrada + índice)
+
+**Critérios de aceite verificados:**
+
+- [x] Grep limpo de `db` cru nos arquivos listados (decisão sobre
+      `kpis.ts` e sobre a leitura pré-conta de `invitations.ts` registradas
+      acima)
+- [x] Teste prova isolamento em `intranet.announcements`
+      (colaborador lê, ouvinte não) e em `intranet.meeting_decisions`
+      (colaborador não lê fora do escopo, diretor lê)
+- [x] Lint passa · Types passam · SESSIONS.md atualizado
+- [x] Suítes de `intranet` verdes (`kpis.test.ts` 4/4,
+      `meeting-decisions.test.ts` 9/9, `invitations.test.ts` 3/3,
+      `rls.test.ts` 5/5, `runtime-rls.test.ts` 2/2, `search.test.ts` 3/3) e
+      `security-audit.test.ts` do `admin` verde (13/13 describes, 35/35
       testes)

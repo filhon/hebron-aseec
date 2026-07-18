@@ -2,10 +2,10 @@
 
 import { z } from "zod";
 import { eq } from "drizzle-orm";
-import { db } from "@hebron/db/client";
 import {
   withAuthenticatedContext,
   withSystemRole,
+  type AuthenticatedTx,
 } from "@hebron/db/authenticated";
 import { meetingDecisions, meetingSessions } from "@hebron/db/schema";
 import {
@@ -35,13 +35,14 @@ import { notifyMeetingDecisionCreated } from "../lib/notifications";
 // ---------------------------------------------------------------------------
 
 async function assertCanMutateSessionDecisions(
+  tx: AuthenticatedTx,
   actorId: string,
   roles: readonly string[],
   meetingSessionId: string,
 ): Promise<void> {
   if (roles.includes("super_admin")) return;
 
-  const [session] = await db
+  const [session] = await tx
     .select({ chairUserId: meetingSessions.chairUserId })
     .from(meetingSessions)
     .where(eq(meetingSessions.id, meetingSessionId));
@@ -60,15 +61,16 @@ const createMeetingDecisionActionSchema = createMeetingDecisionSchema.extend({
 export const createMeetingDecision = boardAction
   .schema(createMeetingDecisionActionSchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    await assertCanMutateSessionDecisions(
-      ctx.actorId,
-      ctx.roles,
-      input.meetingSessionId,
-    );
-
     const decision = await withAuthenticatedContext(
       { actorId: ctx.actorId },
       async (tx) => {
+        await assertCanMutateSessionDecisions(
+          tx,
+          ctx.actorId,
+          ctx.roles,
+          input.meetingSessionId,
+        );
+
         const [row] = await tx
           .insert(meetingDecisions)
           .values({
@@ -142,22 +144,23 @@ export const createMeetingDecision = boardAction
 export const updateMeetingDecisionStatus = boardAction
   .schema(updateMeetingDecisionStatusSchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    const [existing] = await db
-      .select({ meetingSessionId: meetingDecisions.meetingSessionId })
-      .from(meetingDecisions)
-      .where(eq(meetingDecisions.id, input.meetingDecisionId));
-
-    if (!existing) throw new Error("Decisão de reunião não encontrada");
-
-    await assertCanMutateSessionDecisions(
-      ctx.actorId,
-      ctx.roles,
-      existing.meetingSessionId,
-    );
-
     const decision = await withAuthenticatedContext(
       { actorId: ctx.actorId },
       async (tx) => {
+        const [existing] = await tx
+          .select({ meetingSessionId: meetingDecisions.meetingSessionId })
+          .from(meetingDecisions)
+          .where(eq(meetingDecisions.id, input.meetingDecisionId));
+
+        if (!existing) throw new Error("Decisão de reunião não encontrada");
+
+        await assertCanMutateSessionDecisions(
+          tx,
+          ctx.actorId,
+          ctx.roles,
+          existing.meetingSessionId,
+        );
+
         const [row] = await tx
           .update(meetingDecisions)
           .set({ status: input.status, updatedAt: new Date() })

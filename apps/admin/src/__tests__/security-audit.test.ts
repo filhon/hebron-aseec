@@ -31,6 +31,9 @@ import {
   organizationMembers,
   projects,
   documents,
+  announcements,
+  meetingSessions,
+  meetingDecisions,
 } from "@hebron/db/schema";
 import {
   serializeImpersonationState,
@@ -592,6 +595,113 @@ describe("Isolamento horizontal — usuário sem papel editorial não lê/edita 
         .select({ id: documents.id })
         .from(documents)
         .where(eq(documents.id, DOC_ID)),
+    );
+    expect(rows).toHaveLength(1);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 3f. RLS do schema intranet volta a valer na leitura (S-02, P-9.1b-5) —
+// apps/intranet/src/lib/queries.ts e as actions do módulo liam com `db`
+// (conexão superuser) em vez de withAuthenticatedContext; as policies
+// "announcements_select_staff" (todo o staff) e
+// "meeting_decisions_select_board"/"meeting_sessions_select_board" (só
+// diretor/conselheiro/super_admin — colaborador fica de fora de propósito)
+// nunca eram de fato avaliadas. Usa dados semeados: colaborador lê o
+// anúncio (positivo) mas NÃO lê a decisão de reunião fora do seu escopo
+// (negativo); concedendo o papel diretor ao mesmo usuário prova que a
+// policy de meeting_decisions filtra por papel, não zera geral.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe("RLS intranet na leitura — colaborador lê anúncio, mas não lê decisão de reunião fora do seu escopo", () => {
+  const ANNOUNCEMENT_ID = "a9000000-0000-0000-0000-000000000100";
+  const MEETING_SESSION_ID = "a9000000-0000-0000-0000-000000000101";
+  const MEETING_DECISION_ID = "a9000000-0000-0000-0000-000000000102";
+
+  beforeAll(async () => {
+    await db.insert(announcements).values({
+      id: ANNOUNCEMENT_ID,
+      title: "Sec audit announcement",
+      body: "Corpo do anúncio de teste",
+      priority: "normal",
+      authorId: TARGET_ID,
+      publishedAt: new Date(),
+    });
+    await db.insert(meetingSessions).values({
+      id: MEETING_SESSION_ID,
+      date: new Date(),
+      type: "mensal",
+      chairUserId: TARGET_ID,
+    });
+    await db.insert(meetingDecisions).values({
+      id: MEETING_DECISION_ID,
+      meetingSessionId: MEETING_SESSION_ID,
+      description: "Sec audit decision",
+      responsibleId: TARGET_ID,
+    });
+  });
+
+  afterAll(async () => {
+    await db
+      .delete(meetingDecisions)
+      .where(eq(meetingDecisions.id, MEETING_DECISION_ID));
+    await db
+      .delete(meetingSessions)
+      .where(eq(meetingSessions.id, MEETING_SESSION_ID));
+    await db.delete(announcements).where(eq(announcements.id, ANNOUNCEMENT_ID));
+    await db
+      .delete(roleAssignments)
+      .where(
+        and(
+          eq(roleAssignments.userId, TARGET_ID),
+          eq(roleAssignments.role, "diretor"),
+        ),
+      );
+  });
+
+  it("colaborador lê o anúncio semeado; ouvinte lê 0 linhas (announcements_select_staff)", async () => {
+    const asColaborador = await withAuthenticatedContext(
+      { actorId: TARGET_ID },
+      (tx) =>
+        tx
+          .select({ id: announcements.id })
+          .from(announcements)
+          .where(eq(announcements.id, ANNOUNCEMENT_ID)),
+    );
+    expect(asColaborador).toHaveLength(1);
+
+    const asOuvinte = await withAuthenticatedContext(
+      { actorId: OUVINTE_ID },
+      (tx) =>
+        tx
+          .select({ id: announcements.id })
+          .from(announcements)
+          .where(eq(announcements.id, ANNOUNCEMENT_ID)),
+    );
+    expect(asOuvinte).toHaveLength(0);
+  });
+
+  it("colaborador NÃO lê a decisão de reunião semeada (fora do seu escopo — meeting_decisions_select_board exige diretor/conselheiro)", async () => {
+    const rows = await withAuthenticatedContext({ actorId: TARGET_ID }, (tx) =>
+      tx
+        .select({ id: meetingDecisions.id })
+        .from(meetingDecisions)
+        .where(eq(meetingDecisions.id, MEETING_DECISION_ID)),
+    );
+    expect(rows).toHaveLength(0);
+  });
+
+  it("o mesmo usuário com papel diretor lê a decisão (a policy filtra por papel, não zera geral)", async () => {
+    await db
+      .insert(roleAssignments)
+      .values({ userId: TARGET_ID, role: "diretor", grantedBy: TARGET_ID })
+      .onConflictDoNothing();
+
+    const rows = await withAuthenticatedContext({ actorId: TARGET_ID }, (tx) =>
+      tx
+        .select({ id: meetingDecisions.id })
+        .from(meetingDecisions)
+        .where(eq(meetingDecisions.id, MEETING_DECISION_ID)),
     );
     expect(rows).toHaveLength(1);
   });

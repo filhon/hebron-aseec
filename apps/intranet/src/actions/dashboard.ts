@@ -2,7 +2,6 @@
 
 import { z } from "zod";
 import { eq } from "drizzle-orm";
-import { db } from "@hebron/db/client";
 import {
   withAuthenticatedContext,
   withSystemRole,
@@ -20,11 +19,15 @@ import { logIntranetAudit } from "../lib/audit";
 export const getDashboardConfig = staffAction
   .schema(z.object({}))
   .action(async ({ ctx }) => {
-    const rows = await db
-      .select()
-      .from(dashboardConfigs)
-      .where(eq(dashboardConfigs.userId, ctx.actorId))
-      .limit(1);
+    const rows = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      (tx) =>
+        tx
+          .select()
+          .from(dashboardConfigs)
+          .where(eq(dashboardConfigs.userId, ctx.actorId))
+          .limit(1),
+    );
 
     return { config: rows[0] ?? null };
   });

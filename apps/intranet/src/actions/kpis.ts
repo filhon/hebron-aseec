@@ -2,7 +2,11 @@
 
 import { z } from "zod";
 import { and, desc, eq, isNull, ne, sql } from "drizzle-orm";
-import { db } from "@hebron/db/client";
+import {
+  withAuthenticatedContext,
+  withSystemRole,
+  type AuthenticatedTx,
+} from "@hebron/db/authenticated";
 import {
   financialCategories,
   kpiSnapshotHistory,
@@ -41,10 +45,21 @@ function currentPeriodLabel(): string {
 // "Projetos ativos" — projetos em execução (projetos.projects.stage =
 // 'em_execucao'). Estágios anteriores ainda estão em pipeline de aprovação;
 // aprovado/reprovado/concluído não estão mais "em atividade".
+//
+// Exceção service-level (G6.2/P-9.1b-5, decisão sobre S-02 em kpis.ts —
+// registrada em SESSIONS.md): este KPI é um total ORG-WIDE, o mesmo número
+// para qualquer membro do staff que olhe o dashboard. `projects_select_own_or_org`
+// (0007_projetos_rls.sql) restringe colaborador/submissor a projetos próprios
+// ou da própria organização — sob RLS normal, um colaborador sem projeto/
+// organização veria uma contagem menor que a real, um valor errado, não
+// apenas "menos dados". Roda via withSystemRole (RESET ROLE, mesma
+// transação aberta por withAuthenticatedContext) para obter o total real; só
+// um número agregado sai daqui, nenhuma linha de projeto individual é
+// devolvida ao cliente.
 // ---------------------------------------------------------------------------
 
-async function countProjetosAtivos(): Promise<number> {
-  const [row] = await db
+async function countProjetosAtivos(tx: AuthenticatedTx): Promise<number> {
+  const [row] = await tx
     .select({ count: sql<number>`count(*)::int` })
     .from(projects)
     .where(eq(projects.stage, "em_execucao"));
@@ -57,17 +72,25 @@ async function countProjetosAtivos(): Promise<number> {
 // PATCH-008). O prompt P-5.8 descreve a categoria como "despesa", mas o
 // plano de contas seed (0010_financeiro.sql) e BRAIN §6.6 concordam que
 // Doações é receita — seguindo a fonte da verdade (BRAIN.md).
+//
+// Exceção service-level (mesma razão de countProjetosAtivos acima):
+// `transactions_select_staff`/`categories_select_staff`
+// (0010_financeiro.sql) não incluem conselheiro — sob RLS normal, um
+// conselheiro veria "R$ 0,00" em vez do valor real, o que é uma métrica
+// errada para um papel de diretoria, não uma restrição de acesso legítima
+// (conselheiro tem função de supervisão, BRAIN §3). Só a soma agregada sai
+// daqui, nenhuma transação individual.
 // ---------------------------------------------------------------------------
 
-async function sumDoacoesDoMes(): Promise<number> {
-  const [category] = await db
+async function sumDoacoesDoMes(tx: AuthenticatedTx): Promise<number> {
+  const [category] = await tx
     .select({ id: financialCategories.id })
     .from(financialCategories)
     .where(eq(financialCategories.name, "Doações"))
     .limit(1);
   if (!category) return 0;
 
-  const [row] = await db
+  const [row] = await tx
     .select({ total: sql<string>`coalesce(sum(${transactions.amount}), 0)` })
     .from(transactions)
     .where(
@@ -82,11 +105,17 @@ async function sumDoacoesDoMes(): Promise<number> {
 
 // ---------------------------------------------------------------------------
 // "Tarefas abertas" — não concluídas e não excluídas (mesmo filtro de
-// packages/jobs/src/crons/tarefas-prazos.ts).
+// packages/jobs/src/crons/tarefas-prazos.ts). `tasks_select_staff`
+// (0033_tarefas_rls.sql) já dá visibilidade total (sem filtro por
+// criador/assignee) a colaborador/diretor/conselheiro, e super_admin enxerga
+// tudo via `tasks_mutate_admin` — nenhum papel do staff veria uma contagem
+// diferente sob RLS normal. Roda sob o mesmo `withSystemRole` que os outros
+// dois agregados acima só por uniformidade de uma única transação/helper
+// para o KPI inteiro, não por necessidade de bypass.
 // ---------------------------------------------------------------------------
 
-async function countTarefasAbertas(): Promise<number> {
-  const [row] = await db
+async function countTarefasAbertas(tx: AuthenticatedTx): Promise<number> {
+  const [row] = await tx
     .select({ count: sql<number>`count(*)::int` })
     .from(tasks)
     .where(and(isNull(tasks.deletedAt), ne(tasks.status, "concluido")));
@@ -105,7 +134,7 @@ interface PersistableKpiConfig {
   name: string;
   unit: string;
   sourceModule: string;
-  computeLive: () => Promise<number>;
+  computeLive: (tx: AuthenticatedTx) => Promise<number>;
 }
 
 const PERSISTABLE_KPIS: PersistableKpiConfig[] = [
@@ -148,10 +177,14 @@ interface PersistableKpiResult {
 
 // Últimos 2 pontos da série (bucket atual + anterior) para calcular frescor
 // e tendência sem manter histórico em memória da app.
+// `kpi_snapshot_history_select_staff` (0043) já cobre todo o staff — roda
+// sob a mesma transação/tx passada pelo chamador por uniformidade com os
+// agregados live acima, não por necessidade de bypass.
 async function latestHistoryPair(
+  tx: AuthenticatedTx,
   metricName: string,
 ): Promise<PersistableKpiSample[]> {
-  return db
+  return tx
     .select({
       value: kpiSnapshotHistory.value,
       capturedAt: kpiSnapshotHistory.capturedAt,
@@ -163,9 +196,10 @@ async function latestHistoryPair(
 }
 
 async function loadPersistableKpiResult(
+  tx: AuthenticatedTx,
   config: PersistableKpiConfig,
 ): Promise<PersistableKpiResult> {
-  const [latest, previous] = await latestHistoryPair(config.metricName);
+  const [latest, previous] = await latestHistoryPair(tx, config.metricName);
   return { config, latest, previous };
 }
 
@@ -200,6 +234,7 @@ function kpiFromSnapshot(result: PersistableKpiResult, period: string): KPI {
 }
 
 async function kpiFromLive(
+  tx: AuthenticatedTx,
   config: PersistableKpiConfig,
   period: string,
   now: Date,
@@ -207,7 +242,7 @@ async function kpiFromLive(
   return {
     id: config.id,
     name: config.name,
-    value: await config.computeLive(),
+    value: await config.computeLive(tx),
     unit: config.unit,
     trend: "stable",
     period,
@@ -234,50 +269,69 @@ function requireKpi(kpiByMetric: Map<string, KPI>, metricName: string): KPI {
 // sempre calculado ao vivo via packages/integrations (P-6.11).
 // ---------------------------------------------------------------------------
 
-export const getKpis = staffAction.schema(z.object({})).action(async () => {
-  const now = new Date();
-  const period = currentPeriodLabel();
+export const getKpis = staffAction
+  .schema(z.object({}))
+  .action(async ({ ctx }) => {
+    const now = new Date();
+    const period = currentPeriodLabel();
 
-  const [results, studentMetrics] = await Promise.all([
-    Promise.all(PERSISTABLE_KPIS.map(loadPersistableKpiResult)),
-    getStudentKpiMetrics(),
-  ]);
-
-  const allFresh = results.every(
-    (r) => r.latest !== undefined && isFresh(r.latest.capturedAt, now),
-  );
-
-  const kpiEntries = allFresh
-    ? results.map(
-        (r) => [r.config.metricName, kpiFromSnapshot(r, period)] as const,
-      )
-    : await Promise.all(
-        results.map(
-          async (r) =>
-            [
-              r.config.metricName,
-              await kpiFromLive(r.config, period, now),
-            ] as const,
+    // Todo o cálculo dos 3 KPIs persistíveis roda dentro de um único
+    // withSystemRole (ver comentários de countProjetosAtivos/sumDoacoesDoMes
+    // acima) — decisão P-9.1b-5 sobre S-02, registrada em SESSIONS.md.
+    const [results, studentMetrics] = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      (tx) =>
+        withSystemRole(tx, (sysTx) =>
+          Promise.all([
+            Promise.all(
+              PERSISTABLE_KPIS.map((config) =>
+                loadPersistableKpiResult(sysTx, config),
+              ),
+            ),
+            getStudentKpiMetrics(),
+          ]),
         ),
-      );
+    );
 
-  const kpiByMetric = new Map(kpiEntries);
+    const allFresh = results.every(
+      (r) => r.latest !== undefined && isFresh(r.latest.capturedAt, now),
+    );
 
-  const kpis: KPI[] = [
-    requireKpi(kpiByMetric, "projetos_ativos"),
-    {
-      id: "kpi-alunos-plataforma",
-      name: "Alunos na Plataforma",
-      value: studentMetrics.totalEnrolled,
-      unit: "alunos",
-      trend: "stable",
-      period,
-      sourceModule: "plataforma",
-      updatedAt: now,
-    },
-    requireKpi(kpiByMetric, "doacoes_mes"),
-    requireKpi(kpiByMetric, "tarefas_abertas"),
-  ];
+    const kpiEntries = allFresh
+      ? results.map(
+          (r) => [r.config.metricName, kpiFromSnapshot(r, period)] as const,
+        )
+      : await withAuthenticatedContext({ actorId: ctx.actorId }, (tx) =>
+          withSystemRole(tx, (sysTx) =>
+            Promise.all(
+              results.map(
+                async (r) =>
+                  [
+                    r.config.metricName,
+                    await kpiFromLive(sysTx, r.config, period, now),
+                  ] as const,
+              ),
+            ),
+          ),
+        );
 
-  return { kpis };
-});
+    const kpiByMetric = new Map(kpiEntries);
+
+    const kpis: KPI[] = [
+      requireKpi(kpiByMetric, "projetos_ativos"),
+      {
+        id: "kpi-alunos-plataforma",
+        name: "Alunos na Plataforma",
+        value: studentMetrics.totalEnrolled,
+        unit: "alunos",
+        trend: "stable",
+        period,
+        sourceModule: "plataforma",
+        updatedAt: now,
+      },
+      requireKpi(kpiByMetric, "doacoes_mes"),
+      requireKpi(kpiByMetric, "tarefas_abertas"),
+    ];
+
+    return { kpis };
+  });

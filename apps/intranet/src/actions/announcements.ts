@@ -2,7 +2,6 @@
 
 import { z } from "zod";
 import { desc, eq } from "drizzle-orm";
-import { db } from "@hebron/db/client";
 import {
   withAuthenticatedContext,
   withSystemRole,
@@ -22,11 +21,18 @@ import { notifyUrgentAnnouncement } from "../lib/notifications";
 
 export const listAnnouncements = staffAction
   .schema(z.object({}))
-  .action(async () => {
-    const rows = await db
-      .select()
-      .from(announcements)
-      .orderBy(desc(announcements.publishedAt), desc(announcements.createdAt));
+  .action(async ({ ctx }) => {
+    const rows = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      (tx) =>
+        tx
+          .select()
+          .from(announcements)
+          .orderBy(
+            desc(announcements.publishedAt),
+            desc(announcements.createdAt),
+          ),
+    );
 
     return { announcements: rows };
   });
@@ -75,11 +81,17 @@ export const createAnnouncement = boardAction
     // Anúncio urgente: in_app + email imediato a todos os internos
     // (critério de aceite P-5.10). Normal/importante ficam só no feed.
     if (announcement.priority === "urgente") {
-      const [author] = await db
-        .select({ fullName: users.fullName, email: users.email })
-        .from(users)
-        .where(eq(users.id, announcement.authorId))
-        .limit(1);
+      // Autor é sempre o próprio ator autenticado (authorId = ctx.actorId
+      // acima) — leitura própria, coberta por users_select_own, sem exceção.
+      const [author] = await withAuthenticatedContext(
+        { actorId: ctx.actorId },
+        (tx) =>
+          tx
+            .select({ fullName: users.fullName, email: users.email })
+            .from(users)
+            .where(eq(users.id, announcement.authorId))
+            .limit(1),
+      );
 
       await notifyUrgentAnnouncement({
         id: announcement.id,
@@ -103,11 +115,15 @@ export const createAnnouncement = boardAction
 export const updateAnnouncement = superAdminAction
   .schema(updateAnnouncementSchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    const rows = await db
-      .select()
-      .from(announcements)
-      .where(eq(announcements.id, input.announcementId))
-      .limit(1);
+    const rows = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      (tx) =>
+        tx
+          .select()
+          .from(announcements)
+          .where(eq(announcements.id, input.announcementId))
+          .limit(1),
+    );
 
     const existing = rows[0];
     if (!existing) throw new Error("Anúncio não encontrado");
