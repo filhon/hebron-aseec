@@ -2,8 +2,8 @@
 
 import { z } from "zod";
 import { asc, eq } from "drizzle-orm";
-import { db } from "@hebron/db/client";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
+import type { AuthenticatedTx } from "@hebron/db/authenticated";
 import {
   taskTemplates,
   templateItems,
@@ -19,8 +19,11 @@ import {
 import type { Workspace } from "@hebron/types/tarefas";
 import { colaboradorAction } from "../lib/safe-action";
 
-async function resolveWorkspaceId(slug: Workspace): Promise<string> {
-  const [ws] = await db
+async function resolveWorkspaceId(
+  tx: AuthenticatedTx,
+  slug: Workspace,
+): Promise<string> {
+  const [ws] = await tx
     .select({ id: workspaces.id })
     .from(workspaces)
     .where(eq(workspaces.slug, slug))
@@ -43,11 +46,11 @@ function addDays(base: Date, days: number): Date {
 export const createTaskTemplate = colaboradorAction
   .schema(createTaskTemplateSchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    const workspaceId = await resolveWorkspaceId(input.workspace);
-
     const template = await withAuthenticatedContext(
       { actorId: ctx.actorId },
       async (tx) => {
+        const workspaceId = await resolveWorkspaceId(tx, input.workspace);
+
         const [row] = await tx
           .insert(taskTemplates)
           .values({
@@ -88,11 +91,11 @@ export const createTaskTemplate = colaboradorAction
 export const updateTaskTemplate = colaboradorAction
   .schema(updateTaskTemplateSchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    const workspaceId = await resolveWorkspaceId(input.workspace);
-
     const template = await withAuthenticatedContext(
       { actorId: ctx.actorId },
       async (tx) => {
+        const workspaceId = await resolveWorkspaceId(tx, input.workspace);
+
         const [row] = await tx
           .update(taskTemplates)
           .set({
@@ -167,26 +170,26 @@ const instantiateTaskTemplateSchema = z.object({
 export const instantiateTaskTemplate = colaboradorAction
   .schema(instantiateTaskTemplateSchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    const [template] = await db
-      .select()
-      .from(taskTemplates)
-      .where(eq(taskTemplates.id, input.templateId))
-      .limit(1);
-    if (!template) throw new Error("Template não encontrado");
-    if (!template.isActive) throw new Error("Template está inativo");
-
-    const items = await db
-      .select()
-      .from(templateItems)
-      .where(eq(templateItems.taskTemplateId, template.id))
-      .orderBy(asc(templateItems.order));
-    if (items.length === 0) {
-      throw new Error("Template não possui tarefas definidas");
-    }
-
     const createdTaskIds = await withAuthenticatedContext(
       { actorId: ctx.actorId },
       async (tx) => {
+        const [template] = await tx
+          .select()
+          .from(taskTemplates)
+          .where(eq(taskTemplates.id, input.templateId))
+          .limit(1);
+        if (!template) throw new Error("Template não encontrado");
+        if (!template.isActive) throw new Error("Template está inativo");
+
+        const items = await tx
+          .select()
+          .from(templateItems)
+          .where(eq(templateItems.taskTemplateId, template.id))
+          .orderBy(asc(templateItems.order));
+        if (items.length === 0) {
+          throw new Error("Template não possui tarefas definidas");
+        }
+
         const ids: string[] = [];
         for (const item of items) {
           const dueDate =

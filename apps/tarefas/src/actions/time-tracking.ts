@@ -2,7 +2,6 @@
 
 import { z } from "zod";
 import { and, eq, isNull } from "drizzle-orm";
-import { db } from "@hebron/db/client";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { timeEntries } from "@hebron/db/schema";
 import { createTimeEntrySchema } from "@hebron/validators/tarefas";
@@ -25,22 +24,25 @@ const startTimeEntrySchema = z.object({ taskId: z.string().uuid() });
 export const startTimeEntry = colaboradorAction
   .schema(startTimeEntrySchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    const [open] = await db
-      .select({ id: timeEntries.id })
-      .from(timeEntries)
-      .where(
-        and(eq(timeEntries.userId, ctx.actorId), isNull(timeEntries.endedAt)),
-      )
-      .limit(1);
-    if (open) {
-      throw new Error(
-        "Você já tem um cronômetro em andamento — pare-o antes de iniciar outro",
-      );
-    }
-
     const entry = await withAuthenticatedContext(
       { actorId: ctx.actorId },
       async (tx) => {
+        const [open] = await tx
+          .select({ id: timeEntries.id })
+          .from(timeEntries)
+          .where(
+            and(
+              eq(timeEntries.userId, ctx.actorId),
+              isNull(timeEntries.endedAt),
+            ),
+          )
+          .limit(1);
+        if (open) {
+          throw new Error(
+            "Você já tem um cronômetro em andamento — pare-o antes de iniciar outro",
+          );
+        }
+
         const [row] = await tx
           .insert(timeEntries)
           .values({
@@ -66,25 +68,27 @@ const stopTimeEntrySchema = z.object({ timeEntryId: z.string().uuid() });
 export const stopTimeEntry = colaboradorAction
   .schema(stopTimeEntrySchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    const [existing] = await db
-      .select()
-      .from(timeEntries)
-      .where(
-        and(
-          eq(timeEntries.id, input.timeEntryId),
-          eq(timeEntries.userId, ctx.actorId),
-        ),
-      )
-      .limit(1);
-    if (!existing) throw new Error("Registro de tempo não encontrado");
-    if (existing.endedAt) throw new Error("Este cronômetro já foi finalizado");
-
-    const endedAt = new Date();
-    const durationMinutes = diffMinutes(existing.startedAt, endedAt);
-
     const entry = await withAuthenticatedContext(
       { actorId: ctx.actorId },
       async (tx) => {
+        const [existing] = await tx
+          .select()
+          .from(timeEntries)
+          .where(
+            and(
+              eq(timeEntries.id, input.timeEntryId),
+              eq(timeEntries.userId, ctx.actorId),
+            ),
+          )
+          .limit(1);
+        if (!existing) throw new Error("Registro de tempo não encontrado");
+        if (existing.endedAt) {
+          throw new Error("Este cronômetro já foi finalizado");
+        }
+
+        const endedAt = new Date();
+        const durationMinutes = diffMinutes(existing.startedAt, endedAt);
+
         const [row] = await tx
           .update(timeEntries)
           .set({ endedAt, durationMinutes })

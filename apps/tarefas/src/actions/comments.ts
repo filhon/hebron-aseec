@@ -1,7 +1,6 @@
 "use server";
 
 import { and, eq, isNull } from "drizzle-orm";
-import { db } from "@hebron/db/client";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { comments, tasks } from "@hebron/db/schema";
 import { makeNotificationInserter } from "@hebron/db/notifications";
@@ -20,16 +19,16 @@ const insertNotification = makeNotificationInserter();
 export const createComment = staffAction
   .schema(createCommentSchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    const [task] = await db
-      .select({ id: tasks.id, title: tasks.title })
-      .from(tasks)
-      .where(and(eq(tasks.id, input.taskId), isNull(tasks.deletedAt)))
-      .limit(1);
-    if (!task) throw new Error("Tarefa não encontrada");
-
-    const comment = await withAuthenticatedContext(
+    const { comment, taskTitle } = await withAuthenticatedContext(
       { actorId: ctx.actorId },
       async (tx) => {
+        const [task] = await tx
+          .select({ id: tasks.id, title: tasks.title })
+          .from(tasks)
+          .where(and(eq(tasks.id, input.taskId), isNull(tasks.deletedAt)))
+          .limit(1);
+        if (!task) throw new Error("Tarefa não encontrada");
+
         const [row] = await tx
           .insert(comments)
           .values({
@@ -40,7 +39,8 @@ export const createComment = staffAction
           })
           .returning();
         if (!row) throw new Error("Falha ao criar comentário");
-        return row;
+
+        return { comment: row, taskTitle: task.title };
       },
     );
 
@@ -52,12 +52,12 @@ export const createComment = staffAction
           userId: mentionedUserId,
           channel: "in_app",
           type: "task.comment.mention",
-          title: `Você foi mencionado em "${task.title}"`,
+          title: `Você foi mencionado em "${taskTitle}"`,
           body: input.content,
           payload: {
-            taskId: task.id,
+            taskId: comment.taskId,
             commentId: comment.id,
-            href: `/tarefa/${task.id}`,
+            href: `/tarefa/${comment.taskId}`,
           },
         },
       });

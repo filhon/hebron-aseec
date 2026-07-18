@@ -34,6 +34,7 @@ import {
   announcements,
   meetingSessions,
   meetingDecisions,
+  tasks,
 } from "@hebron/db/schema";
 import {
   serializeImpersonationState,
@@ -702,6 +703,75 @@ describe("RLS intranet na leitura — colaborador lê anúncio, mas não lê dec
         .select({ id: meetingDecisions.id })
         .from(meetingDecisions)
         .where(eq(meetingDecisions.id, MEETING_DECISION_ID)),
+    );
+    expect(rows).toHaveLength(1);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 3g. RLS do schema tarefas volta a valer na leitura (S-02, P-9.1b-6) —
+// apps/tarefas/src/lib/queries.ts (21 call-sites) e as 6 actions do módulo
+// liam com `db` (conexão superuser) em vez de withAuthenticatedContext;
+// "tasks_select_staff" nunca era de fato avaliada. tarefas não tem
+// membership por workspace (0033_tarefas_rls.sql: colaborador/diretor/
+// conselheiro veem TODA tarefa dos 6 workspaces — transparência interna,
+// BRAIN §6.9), então o isolamento real é por PAPEL: quem não tem papel de
+// equipe (ouvinte) não lê tarefa de workspace nenhum, mesmo semeada num
+// workspace ao qual "pertenceria" se tivesse o papel. Dados semeados: tarefa
+// no workspace financeiro.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe("RLS tarefas na leitura — colaborador lê tarefa de qualquer workspace, ouvinte não lê nenhuma (S-02)", () => {
+  const TASK_ID = "a9000000-0000-0000-0000-000000000110";
+  const FINANCEIRO_WORKSPACE_ID = "00000000-0000-0000-0007-000000000002";
+
+  beforeAll(async () => {
+    await db.insert(tasks).values({
+      id: TASK_ID,
+      title: "Sec audit task",
+      workspaceId: FINANCEIRO_WORKSPACE_ID,
+      createdBy: TARGET_ID,
+    });
+  });
+
+  afterAll(async () => {
+    await db.delete(tasks).where(eq(tasks.id, TASK_ID));
+    await db
+      .delete(roleAssignments)
+      .where(
+        and(
+          eq(roleAssignments.userId, OUVINTE_ID),
+          eq(roleAssignments.role, "colaborador"),
+        ),
+      );
+  });
+
+  it("colaborador (TARGET_ID) lê a tarefa semeada no workspace financeiro, sem nenhuma relação de membership com o workspace (transparência interna)", async () => {
+    const rows = await withAuthenticatedContext({ actorId: TARGET_ID }, (tx) =>
+      tx.select({ id: tasks.id }).from(tasks).where(eq(tasks.id, TASK_ID)),
+    );
+    expect(rows).toHaveLength(1);
+  });
+
+  it("ouvinte (sem papel de equipe) NÃO lê a tarefa — tasks_select_staff exige colaborador/diretor/conselheiro", async () => {
+    const rows = await withAuthenticatedContext({ actorId: OUVINTE_ID }, (tx) =>
+      tx.select({ id: tasks.id }).from(tasks).where(eq(tasks.id, TASK_ID)),
+    );
+    expect(rows).toHaveLength(0);
+  });
+
+  it("o mesmo ouvinte, ao receber o papel colaborador, passa a ler a tarefa (a policy filtra por papel, não zera geral)", async () => {
+    await db
+      .insert(roleAssignments)
+      .values({
+        userId: OUVINTE_ID,
+        role: "colaborador",
+        grantedBy: OUVINTE_ID,
+      })
+      .onConflictDoNothing();
+
+    const rows = await withAuthenticatedContext({ actorId: OUVINTE_ID }, (tx) =>
+      tx.select({ id: tasks.id }).from(tasks).where(eq(tasks.id, TASK_ID)),
     );
     expect(rows).toHaveLength(1);
   });

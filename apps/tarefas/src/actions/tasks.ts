@@ -5,8 +5,8 @@ import { cookies } from "next/headers";
 import { z } from "zod";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { createSupabaseServerActionClient } from "@hebron/auth/server";
-import { db } from "@hebron/db/client";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
+import type { AuthenticatedTx } from "@hebron/db/authenticated";
 import {
   tasks,
   assignees,
@@ -25,7 +25,6 @@ import {
   createAttachmentSchema,
   taskPriorityEnum,
 } from "@hebron/validators/tarefas";
-import type { Workspace } from "@hebron/types/tarefas";
 import {
   colaboradorAction,
   staffAction,
@@ -37,30 +36,21 @@ import { notifyTaskAssigned } from "../lib/notifications";
 // Helpers
 // ---------------------------------------------------------------------------
 
-async function resolveWorkspaceId(slug: Workspace): Promise<string> {
-  const [ws] = await db
-    .select({ id: workspaces.id })
-    .from(workspaces)
-    .where(eq(workspaces.slug, slug))
-    .limit(1);
-  if (!ws) throw new Error("Módulo inválido");
-  return ws.id;
-}
-
 /** Espelha tarefas.can_manage_task (0033_tarefas_rls.sql) para dar um erro
  * amigável antes de a RLS simplesmente devolver 0 linhas atualizadas. */
 async function canManageTask(
+  tx: AuthenticatedTx,
   taskId: string,
   actorId: string,
 ): Promise<boolean> {
-  const [task] = await db
+  const [task] = await tx
     .select({ id: tasks.id, createdBy: tasks.createdBy })
     .from(tasks)
     .where(and(eq(tasks.id, taskId), isNull(tasks.deletedAt)))
     .limit(1);
   if (!task) return false;
   if (task.createdBy === actorId) return true;
-  const [assignee] = await db
+  const [assignee] = await tx
     .select({ id: assignees.id })
     .from(assignees)
     .where(and(eq(assignees.taskId, taskId), eq(assignees.userId, actorId)))
@@ -75,9 +65,9 @@ async function logTaskEvent(
     eventType: string;
     diff?: Record<string, unknown>;
   },
-  dbHandle: Pick<typeof db, "insert"> = db,
+  tx: AuthenticatedTx,
 ): Promise<void> {
-  await dbHandle.insert(taskEvents).values({
+  await tx.insert(taskEvents).values({
     taskId: params.taskId,
     actorId: params.actorId,
     eventType: params.eventType,
@@ -85,8 +75,11 @@ async function logTaskEvent(
   });
 }
 
-async function resolveCommentTaskId(commentId: string): Promise<string | null> {
-  const [row] = await db
+async function resolveCommentTaskId(
+  tx: AuthenticatedTx,
+  commentId: string,
+): Promise<string | null> {
+  const [row] = await tx
     .select({ taskId: comments.taskId })
     .from(comments)
     .where(eq(comments.id, commentId))
@@ -106,17 +99,22 @@ async function resolveCommentTaskId(commentId: string): Promise<string | null> {
 export const createTask = colaboradorAction
   .schema(createTaskSchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    const workspaceId = await resolveWorkspaceId(input.workspace);
-
     const task = await withAuthenticatedContext(
       { actorId: ctx.actorId },
       async (tx) => {
+        const [ws] = await tx
+          .select({ id: workspaces.id })
+          .from(workspaces)
+          .where(eq(workspaces.slug, input.workspace))
+          .limit(1);
+        if (!ws) throw new Error("Módulo inválido");
+
         const [row] = await tx
           .insert(tasks)
           .values({
             title: input.title,
             description: input.description,
-            workspaceId,
+            workspaceId: ws.id,
             priority: input.priority,
             dueDate: input.dueDate,
             source: "manual",
@@ -174,15 +172,6 @@ const updateTaskSchema = z.object({
 export const updateTask = colaboradorAction
   .schema(updateTaskSchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    if (
-      !ctx.roles.includes("super_admin") &&
-      !(await canManageTask(input.taskId, ctx.actorId))
-    ) {
-      throw new Error(
-        "Você só pode editar tarefas que criou ou das quais é responsável",
-      );
-    }
-
     const patch: Record<string, unknown> = { updatedAt: new Date() };
     if (input.title !== undefined) patch.title = input.title;
     if (input.description !== undefined) patch.description = input.description;
@@ -194,6 +183,15 @@ export const updateTask = colaboradorAction
     const task = await withAuthenticatedContext(
       { actorId: ctx.actorId },
       async (tx) => {
+        if (
+          !ctx.roles.includes("super_admin") &&
+          !(await canManageTask(tx, input.taskId, ctx.actorId))
+        ) {
+          throw new Error(
+            "Você só pode editar tarefas que criou ou das quais é responsável",
+          );
+        }
+
         const [row] = await tx
           .update(tasks)
           .set(patch)
@@ -262,19 +260,19 @@ export const updateTask = colaboradorAction
 export const updateTaskStatus = colaboradorAction
   .schema(updateTaskStatusSchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    if (
-      !ctx.roles.includes("super_admin") &&
-      !(await canManageTask(input.taskId, ctx.actorId))
-    ) {
-      throw new Error(
-        "Você só pode mover tarefas que criou ou das quais é responsável",
-      );
-    }
-
     const now = new Date();
     const task = await withAuthenticatedContext(
       { actorId: ctx.actorId },
       async (tx) => {
+        if (
+          !ctx.roles.includes("super_admin") &&
+          !(await canManageTask(tx, input.taskId, ctx.actorId))
+        ) {
+          throw new Error(
+            "Você só pode mover tarefas que criou ou das quais é responsável",
+          );
+        }
+
         const [row] = await tx
           .update(tasks)
           .set({
@@ -312,18 +310,18 @@ const deleteTaskSchema = z.object({ taskId: z.string().uuid() });
 export const deleteTask = colaboradorAction
   .schema(deleteTaskSchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    if (
-      !ctx.roles.includes("super_admin") &&
-      !(await canManageTask(input.taskId, ctx.actorId))
-    ) {
-      throw new Error(
-        "Você só pode remover tarefas que criou ou das quais é responsável",
-      );
-    }
-
     const task = await withAuthenticatedContext(
       { actorId: ctx.actorId },
       async (tx) => {
+        if (
+          !ctx.roles.includes("super_admin") &&
+          !(await canManageTask(tx, input.taskId, ctx.actorId))
+        ) {
+          throw new Error(
+            "Você só pode remover tarefas que criou ou das quais é responsável",
+          );
+        }
+
         const [row] = await tx
           .update(tasks)
           .set({ deletedAt: new Date() })
@@ -406,23 +404,23 @@ export const assignTaskManually = superAdminAction
 export const createSubtask = colaboradorAction
   .schema(createSubtaskSchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    if (
-      !ctx.roles.includes("super_admin") &&
-      !(await canManageTask(input.taskId, ctx.actorId))
-    ) {
-      throw new Error(
-        "Você só pode adicionar subtarefas em tarefas que criou ou das quais é responsável",
-      );
-    }
-
-    const [countRow] = await db
-      .select({ count: sql<number>`count(*)::int` })
-      .from(subtasks)
-      .where(eq(subtasks.taskId, input.taskId));
-
     const subtask = await withAuthenticatedContext(
       { actorId: ctx.actorId },
       async (tx) => {
+        if (
+          !ctx.roles.includes("super_admin") &&
+          !(await canManageTask(tx, input.taskId, ctx.actorId))
+        ) {
+          throw new Error(
+            "Você só pode adicionar subtarefas em tarefas que criou ou das quais é responsável",
+          );
+        }
+
+        const [countRow] = await tx
+          .select({ count: sql<number>`count(*)::int` })
+          .from(subtasks)
+          .where(eq(subtasks.taskId, input.taskId));
+
         const [row] = await tx
           .insert(subtasks)
           .values({
@@ -454,25 +452,25 @@ export const createSubtask = colaboradorAction
 export const toggleSubtask = colaboradorAction
   .schema(toggleSubtaskSchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    const [existing] = await db
-      .select({ taskId: subtasks.taskId })
-      .from(subtasks)
-      .where(eq(subtasks.id, input.subtaskId))
-      .limit(1);
-    if (!existing) throw new Error("Subtarefa não encontrada");
-
-    if (
-      !ctx.roles.includes("super_admin") &&
-      !(await canManageTask(existing.taskId, ctx.actorId))
-    ) {
-      throw new Error(
-        "Você só pode atualizar subtarefas de tarefas que criou ou das quais é responsável",
-      );
-    }
-
     const subtask = await withAuthenticatedContext(
       { actorId: ctx.actorId },
       async (tx) => {
+        const [existing] = await tx
+          .select({ taskId: subtasks.taskId })
+          .from(subtasks)
+          .where(eq(subtasks.id, input.subtaskId))
+          .limit(1);
+        if (!existing) throw new Error("Subtarefa não encontrada");
+
+        if (
+          !ctx.roles.includes("super_admin") &&
+          !(await canManageTask(tx, existing.taskId, ctx.actorId))
+        ) {
+          throw new Error(
+            "Você só pode atualizar subtarefas de tarefas que criou ou das quais é responsável",
+          );
+        }
+
         const [row] = await tx
           .update(subtasks)
           .set({
@@ -511,18 +509,29 @@ export const toggleSubtask = colaboradorAction
 export const createAttachment = staffAction
   .schema(createAttachmentSchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    const taskId =
-      input.parentType === "task"
-        ? input.parentId
-        : await resolveCommentTaskId(input.parentId);
-    if (!taskId) throw new Error("Referência inválida para anexo");
+    // Leitura de checagem (existência/visibilidade da tarefa-alvo) roda numa
+    // transação autenticada própria, separada da chamada de Storage (I/O
+    // externo, não pode viver dentro de uma transação SQL) e da transação de
+    // escrita abaixo.
+    const taskId = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const resolvedTaskId =
+          input.parentType === "task"
+            ? input.parentId
+            : await resolveCommentTaskId(tx, input.parentId);
+        if (!resolvedTaskId) throw new Error("Referência inválida para anexo");
 
-    const [task] = await db
-      .select({ id: tasks.id })
-      .from(tasks)
-      .where(and(eq(tasks.id, taskId), isNull(tasks.deletedAt)))
-      .limit(1);
-    if (!task) throw new Error("Tarefa não encontrada");
+        const [task] = await tx
+          .select({ id: tasks.id })
+          .from(tasks)
+          .where(and(eq(tasks.id, resolvedTaskId), isNull(tasks.deletedAt)))
+          .limit(1);
+        if (!task) throw new Error("Tarefa não encontrada");
+
+        return resolvedTaskId;
+      },
+    );
 
     const ext = input.fileName.split(".").pop() ?? "bin";
     const storageKey = `${ctx.actorId}/${crypto.randomUUID()}.${ext}`;

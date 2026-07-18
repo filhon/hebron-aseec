@@ -182,6 +182,7 @@
 | S-159  | 2026-07-18 | P-9.1b-3 — Causa raiz do drift de GRANT em `projetos` (CORRETIVO)                       | concluido                            |
 | S-160  | 2026-07-18 | P-9.1b-4 — Fechamento do achado S-02 em `documentos` (CORRETIVO)                        | concluido                            |
 | S-161  | 2026-07-18 | P-9.1b-5 — Fechamento do achado S-02 em `intranet` (CORRETIVO)                          | concluido                            |
+| S-162  | 2026-07-18 | P-9.1b-6 — Fechamento do achado S-02 em `tarefas` (CORRETIVO)                           | concluido                            |
 
 ---
 
@@ -12329,3 +12330,130 @@ policy filtra por papel, não zera geral.
       `rls.test.ts` 5/5, `runtime-rls.test.ts` 2/2, `search.test.ts` 3/3) e
       `security-audit.test.ts` do `admin` verde (13/13 describes, 35/35
       testes)
+
+### S-162 — 2026-07-18 — P-9.1b-6 — Fechamento do achado S-02 em `tarefas` (CORRETIVO)
+
+**Prompt:** P-9.1b-6 (`PROMPTS.md:5598`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Migrou toda leitura/escrita restante de `tarefas` de `db` cru
+(`@hebron/db/client`, conexão superuser que ignora RLS) para
+`withAuthenticatedContext`/`withSystemRole` (`@hebron/db/authenticated`).
+Escopo: `lib/queries.ts` (21 call-sites — `getAuthUser`, `getTasks`,
+`getTasksByWorkspace`, `getTaskById`, `getAssignedTasks`,
+`getTaskTemplates`, `getRecurrenceRuleViews`, `getAssignableUsers`,
+`getApprovers`, `getTags`) e os 6 arquivos de `actions/*.ts`
+(`approvals.ts`, `comments.ts`, `recurrence.ts`, `tasks.ts`,
+`templates.ts`, `time-tracking.ts`). Padrão geral: checagens/leituras que
+antes rodavam em `db` cru _antes_ de abrir a transação (resolução de
+workspace, `canManageTask`, existência de tarefa/template/subtarefa, pedido
+de aprovação já aberto etc.) foram movidas para **dentro** da mesma
+transação autenticada da mutação — não apenas trocadas de `db` para `tx`
+isoladamente — para que a checagem de permissão e a escrita rodem sob a
+mesma `SET LOCAL ROLE authenticated` / `request.jwt.claims`. Grep limpo de
+`db` cru nos 7 arquivos.
+
+**Sem membership por workspace — o que "isolamento" significa aqui:**
+0033_tarefas_rls.sql documenta semântica fechada de propósito:
+colaborador/diretor/conselheiro veem TODA tarefa dos 6 workspaces
+(transparência interna, BRAIN §6.9), sem conceito de "pertencer" a um
+workspace. O isolamento real é por PAPEL: quem não tem papel de equipe
+(submissor/aluno/hospede/ouvinte) não lê tarefa nenhuma, de workspace
+algum. O teste de S-02 abaixo prova exatamente isso, não uma restrição por
+workspace que a RLS não implementa.
+
+**Exceções service-level documentadas (mesmo padrão de `getDirectoryMembers`
+em `apps/intranet/src/lib/queries.ts`, F3-15/S-57):**
+
+1. `getUsersMap` (`lib/queries.ts`) — nome de assignee/autor de
+   comentário/uploader de anexo/aprovador/solicitante exibido em toda
+   tarefa. `users_select_own`/`users_select_admin` (0000_initial.sql) só
+   cobrem a própria linha ou super_admin/diretor — sob RLS normal um
+   colaborador veria "—" no lugar de qualquer nome de terceiro. Só
+   `fullName` sai daqui.
+2. `getUsersByRoles` (`lib/queries.ts`, usada por `getAssignableUsers`/
+   `getApprovers`) — mesma razão: `role_assignments_select_own`/`_admin`
+   não cobrem colaborador lendo o papel de terceiros, necessário para
+   montar a lista de possíveis responsáveis/aprovadores ao criar
+   tarefa/pedido de aprovação.
+3. `approvals.ts::requestApproval` — checagem de existência do aprovador
+   escolhido (`users` por id) tem a mesma razão de (1); só confirma
+   existência, nenhum dado de terceiro sai da action (reduzido para
+   selecionar só `id`, o `fullName` do código original não era usado).
+
+**Achado corrigido durante a própria migração (antes de rodar testes):**
+a primeira versão de `assembleTasks` (`lib/queries.ts`) colocou
+`getUsersMap(tx)` — que troca a ROLE da conexão via `withSystemRole`
+(`RESET ROLE` → query → `SET LOCAL ROLE authenticated`) — dentro do mesmo
+`Promise.all` que outras 8 queries concorrentes na **mesma** transação/
+conexão. Isso corrompe o estado de role da sessão para as queries
+concorrentes (correção, não só performance) e nos testes reais travou
+`getTaskById` até o timeout do vitest. Corrigido isolando
+`await getUsersMap(tx)` **antes** do `Promise.all`, mesma cautela que
+`apps/intranet/src/lib/queries.ts` já seguia (`getDirectoryMembers`/
+`getMeetingSessionsWithDecisions` nunca misturam `withSystemRole` dentro de
+um `Promise.all`) — registrado aqui porque é uma armadilha real do padrão
+`withAuthenticatedContext`/`withSystemRole` que vale a pena todo app novo
+evitar de saída.
+
+**Fora do escopo, deliberadamente não tocado:** `lib/notifications.ts`
+(`notifyTaskAssigned`/`notifyApprovalRequested`) continua em `db` cru —
+não está na lista de arquivos permitidos deste prompt, é sempre chamado
+_depois_ da transação de mutação já commitada (best-effort, side-effect de
+e-mail/in-app) e nunca é alcançável por um ator não autorizado sem antes
+passar por uma action já migrada. Mesmo critério de exceção usado em
+`kpis.ts` na sessão de `intranet` (S-161), mas aqui nem precisou de
+justificativa de dado exposto — é escrita, não leitura de terceiro.
+
+**Ajuste de escopo registrado (G1):** `apps/tarefas/src/__tests__/
+integrations.test.ts` não está na lista de arquivos permitidos, mas o teste
+"3/5 subtarefas concluídas" chamava `getTaskById` diretamente (fora de uma
+Server Action) sem preparar o mock de `resolveSession` — antes da migração
+`getTaskById` lia com `db` cru e não precisava de sessão nenhuma. Duas
+correções mínimas, mecânicas, sem mudar o que o teste verifica:
+
+1. Mais um `actingAs(...)` antes da chamada a `getTaskById` (o mock de
+   `resolveSession` é `mockResolvedValueOnce`, consumido um por chamada).
+2. Timeout do próprio `it` elevado de 30s (padrão de `vitest.config.ts`)
+   para 60s — a mesma `it` agora abre 9 transações autenticadas reais
+   (cada uma com round-trips extra de `SET LOCAL ROLE`/`RESET ROLE`) contra
+   o Supabase de dev compartilhado, em vez de leituras/escritas via pool
+   cru; mesma causa de latência/concorrência do pooler compartilhado já
+   documentada em S-33 (172 testes, `SESSIONS.md`), não falha de código.
+
+**Teste de isolamento (S-02):** novo describe em
+`admin/security-audit.test.ts` — tarefa semeada no workspace `financeiro`
+(`tarefas.tasks`), autor `TARGET_ID` (papel `colaborador` da fixture
+pré-existente). Três casos: (1) colaborador lê a tarefa semeada mesmo sem
+qualquer relação de membership com o workspace (prova a transparência
+interna); (2) ouvinte (sem papel de equipe) lê 0 linhas (`tasks_select_staff`
+exige colaborador/diretor/conselheiro); (3) o mesmo ouvinte, ao receber o
+papel colaborador dentro do describe (cleanup no `afterAll`), passa a ler a
+mesma tarefa — prova que a policy filtra por papel, não zera geral.
+
+**Arquivos alterados:**
+
+- `apps/tarefas/src/lib/queries.ts`
+- `apps/tarefas/src/actions/approvals.ts`, `comments.ts`, `recurrence.ts`,
+  `tasks.ts`, `templates.ts`, `time-tracking.ts`
+- `apps/tarefas/src/__tests__/integrations.test.ts` (fora da lista
+  original — ver ajuste de escopo acima)
+- `apps/admin/src/__tests__/security-audit.test.ts` (novo describe "RLS
+  tarefas na leitura — colaborador lê tarefa de qualquer workspace,
+  ouvinte não lê nenhuma (S-02)": 3 casos com tarefa semeada)
+- `SESSIONS.md` (esta entrada + índice)
+
+**Critérios de aceite verificados:**
+
+- [x] Grep limpo de `db` cru em `lib/queries.ts` e nos 6 arquivos de
+      `actions/*.ts`
+- [x] Teste prova isolamento por papel em `tasks` (não há membership por
+      workspace na RLS real — ver nota acima)
+- [x] Lint passa · Types passam · SESSIONS.md atualizado
+- [x] Suíte completa de `tarefas` verde (6/6 arquivos, 50/50 testes:
+      `rls.test.ts` 22/22, `integrations.test.ts` 8/8, `templates.test.ts`
+      7/7, `recurrence.test.ts` 6/6, `runtime-rls.test.ts` 4/4,
+      `attachments.test.ts` 3/3) e `security-audit.test.ts` do `admin`
+      verde (14/14 describes, 38/38 testes)

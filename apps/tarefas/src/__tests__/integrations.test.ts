@@ -182,9 +182,21 @@ describe("Subtarefas — completar atualiza o progresso agregado da tarefa-mãe"
       expect(result?.serverError).toBeUndefined();
     }
 
+    // getTaskById agora resolve a sessão via resolveSession (P-9.1b-6,
+    // mesmo padrão de apps/intranet/src/lib/queries.ts::getActorId) — o
+    // mock de resolveSession é mockResolvedValueOnce, então precisa de
+    // mais um actingAs para esta leitura fora de uma Server Action.
+    await actingAs(IDS.colaborador, ["colaborador"]);
     const task = await getTaskById(taskId);
     expect(task?.subtaskProgress).toEqual({ done: 3, total: 5 });
-  });
+  }, // 9 chamadas nesta única `it` agora abrem 9 transações autenticadas
+  // reais (cada uma com round-trips extra de SET LOCAL ROLE/RESET ROLE)
+  // contra o Supabase de dev compartilhado, em vez das leituras/escritas
+  // via pool cru de antes — acima do testTimeout padrão de 30s do
+  // vitest.config.ts sob latência de rede real (mesma causa documentada
+  // em SESSIONS.md S-33: concorrência/latência do pooler compartilhado,
+  // não falha de código).
+  60_000);
 });
 
 // ---------------------------------------------------------------------------

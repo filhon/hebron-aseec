@@ -1,13 +1,17 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
-import { db } from "@hebron/db/client";
 import { CANONICAL_LOGIN_URL } from "@hebron/auth";
 import {
   createSupabaseServerActionClient,
   resolveSession,
 } from "@hebron/auth/server";
 import type { ActionSession } from "@hebron/auth/server";
+import {
+  withAuthenticatedContext,
+  withSystemRole,
+} from "@hebron/db/authenticated";
+import type { AuthenticatedTx } from "@hebron/db/authenticated";
 import type { Role } from "@hebron/types/roles";
 import {
   users,
@@ -77,11 +81,15 @@ export async function getAuthUser(): Promise<{
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const rows = await db
-    .select({ fullName: users.fullName })
-    .from(users)
-    .where(eq(users.id, user.id))
-    .limit(1);
+  // Leitura própria (users_select_own, 0000_initial.sql) — sem exceção
+  // service-level, o próprio auth.uid() já é user.id.
+  const rows = await withAuthenticatedContext({ actorId: user.id }, (tx) =>
+    tx
+      .select({ fullName: users.fullName })
+      .from(users)
+      .where(eq(users.id, user.id))
+      .limit(1),
+  );
 
   return {
     id: user.id,
@@ -110,6 +118,17 @@ export async function requireStaffSession(): Promise<ActionSession> {
   return session;
 }
 
+/**
+ * Resolve o actorId da sessão corrente para as funções de leitura abaixo,
+ * que não recebem `ctx` de uma Server Action (são chamadas direto de Server
+ * Components) — mesmo padrão de apps/intranet/src/lib/queries.ts.
+ */
+async function getActorId(): Promise<string> {
+  const cookieStore = await cookies();
+  const { actorId } = await resolveSession(cookieStore);
+  return actorId;
+}
+
 // ---------------------------------------------------------------------------
 // Pessoas
 // ---------------------------------------------------------------------------
@@ -119,19 +138,40 @@ export interface Person {
   name: string;
 }
 
-async function getUsersMap(): Promise<Map<string, string>> {
-  const rows = await db
-    .select({ id: users.id, fullName: users.fullName })
-    .from(users);
+/**
+ * Exceção service-level (mesmo padrão de getDirectoryMembers em
+ * apps/intranet/src/lib/queries.ts, F3-15/S-57): `tasks_select_staff` e
+ * afins já dão a colaborador/diretor/conselheiro acesso a toda tarefa
+ * (transparência interna, BRAIN §6.9), mas o nome de quem é assignee/autor/
+ * uploader (public.users) só é visível via `users_select_own`/
+ * `users_select_admin` (super_admin/diretor) — sob RLS normal um
+ * colaborador veria "—" no lugar de qualquer nome de terceiro. Só fullName
+ * sai daqui.
+ */
+async function getUsersMap(tx: AuthenticatedTx): Promise<Map<string, string>> {
+  const rows = await withSystemRole(tx, (sysTx) =>
+    sysTx.select({ id: users.id, fullName: users.fullName }).from(users),
+  );
   return new Map(rows.map((r) => [r.id, r.fullName ?? "—"]));
 }
 
-async function getUsersByRoles(roles: Role[]): Promise<Person[]> {
-  const rows = await db
-    .selectDistinct({ id: users.id, fullName: users.fullName })
-    .from(roleAssignments)
-    .innerJoin(users, eq(users.id, roleAssignments.userId))
-    .where(inArray(roleAssignments.role, roles));
+/**
+ * Mesma exceção de getUsersMap acima: `role_assignments_select_own`/
+ * `role_assignments_select_admin` (0000_initial.sql) não cobrem colaborador
+ * lendo o papel de terceiros — necessário para montar a lista de possíveis
+ * responsáveis/aprovadores ao criar tarefa ou pedido de aprovação.
+ */
+async function getUsersByRoles(
+  tx: AuthenticatedTx,
+  roles: Role[],
+): Promise<Person[]> {
+  const rows = await withSystemRole(tx, (sysTx) =>
+    sysTx
+      .selectDistinct({ id: users.id, fullName: users.fullName })
+      .from(roleAssignments)
+      .innerJoin(users, eq(users.id, roleAssignments.userId))
+      .where(inArray(roleAssignments.role, roles)),
+  );
 
   return rows
     .map((r) => ({ id: r.id, name: r.fullName ?? "—" }))
@@ -141,13 +181,19 @@ async function getUsersByRoles(roles: Role[]): Promise<Person[]> {
 /** Colaborador OU super_admin — diretor/conselheiro nunca recebem tarefa
  * operacional (BRAIN §6.9). */
 export async function getAssignableUsers(): Promise<Person[]> {
-  return getUsersByRoles(["colaborador", "super_admin"]);
+  const actorId = await getActorId();
+  return withAuthenticatedContext({ actorId }, (tx) =>
+    getUsersByRoles(tx, ["colaborador", "super_admin"]),
+  );
 }
 
 /** Diretor, conselheiro OU super_admin — quem pode responder um pedido de
  * aprovação. */
 export async function getApprovers(): Promise<Person[]> {
-  return getUsersByRoles(["diretor", "conselheiro", "super_admin"]);
+  const actorId = await getActorId();
+  return withAuthenticatedContext({ actorId }, (tx) =>
+    getUsersByRoles(tx, ["diretor", "conselheiro", "super_admin"]),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -155,10 +201,10 @@ export async function getApprovers(): Promise<Person[]> {
 // ---------------------------------------------------------------------------
 
 export async function getTags(): Promise<Tag[]> {
-  const rows = await db
-    .select()
-    .from(taskTagLabels)
-    .orderBy(asc(taskTagLabels.name));
+  const actorId = await getActorId();
+  const rows = await withAuthenticatedContext({ actorId }, (tx) =>
+    tx.select().from(taskTagLabels).orderBy(asc(taskTagLabels.name)),
+  );
   return rows.map((r) => ({ id: r.id, name: r.name, color: r.color }));
 }
 
@@ -166,11 +212,11 @@ export async function getTags(): Promise<Tag[]> {
 // Workspaces — 6 fixos (BRAIN §6.9), seedados na migration.
 // ---------------------------------------------------------------------------
 
-async function getWorkspaceMaps(): Promise<{
+async function getWorkspaceMaps(tx: AuthenticatedTx): Promise<{
   idToSlug: Map<string, Workspace>;
   slugToId: Map<Workspace, string>;
 }> {
-  const rows = await db.select().from(workspaces);
+  const rows = await tx.select().from(workspaces);
   return {
     idToSlug: new Map(rows.map((w) => [w.id, w.slug as Workspace])),
     slugToId: new Map(rows.map((w) => [w.slug as Workspace, w.id])),
@@ -195,14 +241,23 @@ function groupBy<T, K>(rows: T[], key: (row: T) => K): Map<K, T[]> {
 }
 
 async function assembleTasks(
+  tx: AuthenticatedTx,
   taskRows: (typeof tasks.$inferSelect)[],
 ): Promise<Task[]> {
   if (taskRows.length === 0) return [];
   const ids = taskRows.map((t) => t.id);
 
+  // getUsersMap troca a ROLE da sessão (RESET ROLE / SET LOCAL ROLE
+  // authenticated via withSystemRole) — precisa terminar antes de qualquer
+  // outra query concorrente na MESMA conexão/transação (Promise.all abaixo),
+  // senão a troca de role de uma query vaza para as outras em andamento na
+  // mesma sessão Postgres. Mesma cautela de apps/intranet/src/lib/queries.ts
+  // (getDirectoryMembers/getMeetingSessionsWithDecisions nunca misturam
+  // withSystemRole dentro de um Promise.all).
+  const usersMap = await getUsersMap(tx);
+
   const [
     { idToSlug },
-    usersMap,
     assigneeRows,
     taskTagRows,
     subtaskRows,
@@ -212,17 +267,16 @@ async function assembleTasks(
     approvalRows,
     recurrenceRows,
   ] = await Promise.all([
-    getWorkspaceMaps(),
-    getUsersMap(),
-    db.select().from(assignees).where(inArray(assignees.taskId, ids)),
-    db
+    getWorkspaceMaps(tx),
+    tx.select().from(assignees).where(inArray(assignees.taskId, ids)),
+    tx
       .select({ taskId: taskTags.taskId, tag: taskTagLabels })
       .from(taskTags)
       .innerJoin(taskTagLabels, eq(taskTagLabels.id, taskTags.tagId))
       .where(inArray(taskTags.taskId, ids)),
-    db.select().from(subtasks).where(inArray(subtasks.taskId, ids)),
-    db.select().from(comments).where(inArray(comments.taskId, ids)),
-    db
+    tx.select().from(subtasks).where(inArray(subtasks.taskId, ids)),
+    tx.select().from(comments).where(inArray(comments.taskId, ids)),
+    tx
       .select()
       .from(taskAttachments)
       .where(
@@ -231,12 +285,12 @@ async function assembleTasks(
           inArray(taskAttachments.parentId, ids),
         ),
       ),
-    db.select().from(timeEntries).where(inArray(timeEntries.taskId, ids)),
-    db
+    tx.select().from(timeEntries).where(inArray(timeEntries.taskId, ids)),
+    tx
       .select()
       .from(approvalRequests)
       .where(inArray(approvalRequests.taskId, ids)),
-    db.select().from(recurrenceRules),
+    tx.select().from(recurrenceRules),
   ]);
 
   const assigneesByTask = groupBy(assigneeRows, (a) => a.taskId);
@@ -401,47 +455,59 @@ async function assembleTasks(
 
 /** Todas as tarefas visíveis à equipe (BRAIN §6.9 — transparência interna). */
 export async function getTasks(): Promise<Task[]> {
-  const rows = await db
-    .select()
-    .from(tasks)
-    .where(isNull(tasks.deletedAt))
-    .orderBy(desc(tasks.createdAt));
-  return assembleTasks(rows);
+  const actorId = await getActorId();
+  return withAuthenticatedContext({ actorId }, async (tx) => {
+    const rows = await tx
+      .select()
+      .from(tasks)
+      .where(isNull(tasks.deletedAt))
+      .orderBy(desc(tasks.createdAt));
+    return assembleTasks(tx, rows);
+  });
 }
 
 export async function getTasksByWorkspace(
   workspace: Workspace,
 ): Promise<Task[]> {
-  const { slugToId } = await getWorkspaceMaps();
-  const workspaceId = slugToId.get(workspace);
-  if (!workspaceId) return [];
+  const actorId = await getActorId();
+  return withAuthenticatedContext({ actorId }, async (tx) => {
+    const { slugToId } = await getWorkspaceMaps(tx);
+    const workspaceId = slugToId.get(workspace);
+    if (!workspaceId) return [];
 
-  const rows = await db
-    .select()
-    .from(tasks)
-    .where(and(eq(tasks.workspaceId, workspaceId), isNull(tasks.deletedAt)))
-    .orderBy(desc(tasks.createdAt));
-  return assembleTasks(rows);
+    const rows = await tx
+      .select()
+      .from(tasks)
+      .where(and(eq(tasks.workspaceId, workspaceId), isNull(tasks.deletedAt)))
+      .orderBy(desc(tasks.createdAt));
+    return assembleTasks(tx, rows);
+  });
 }
 
 export async function getTaskById(id: string): Promise<Task | null> {
-  const rows = await db
-    .select()
-    .from(tasks)
-    .where(and(eq(tasks.id, id), isNull(tasks.deletedAt)))
-    .limit(1);
-  const [assembled] = await assembleTasks(rows);
-  return assembled ?? null;
+  const actorId = await getActorId();
+  return withAuthenticatedContext({ actorId }, async (tx) => {
+    const rows = await tx
+      .select()
+      .from(tasks)
+      .where(and(eq(tasks.id, id), isNull(tasks.deletedAt)))
+      .limit(1);
+    const [assembled] = await assembleTasks(tx, rows);
+    return assembled ?? null;
+  });
 }
 
 /** Tarefas atribuídas ao usuário — usado pelo Modo foco (ferramenta pessoal,
  * não faz sentido mostrar a agenda de todo mundo — ambiguidade do mock
  * resolvida pela natureza do recurso; registrado em SESSIONS.md). */
 export async function getAssignedTasks(userId: string): Promise<Task[]> {
-  const rows = await db
-    .select({ taskId: assignees.taskId })
-    .from(assignees)
-    .where(eq(assignees.userId, userId));
+  const actorId = await getActorId();
+  const rows = await withAuthenticatedContext({ actorId }, (tx) =>
+    tx
+      .select({ taskId: assignees.taskId })
+      .from(assignees)
+      .where(eq(assignees.userId, userId)),
+  );
   const taskIds = new Set(rows.map((r) => r.taskId));
 
   const all = await getTasks();
@@ -453,47 +519,50 @@ export async function getAssignedTasks(userId: string): Promise<Task[]> {
 // ---------------------------------------------------------------------------
 
 export async function getTaskTemplates(): Promise<TaskTemplate[]> {
-  const { idToSlug } = await getWorkspaceMaps();
-  const usersMap = await getUsersMap();
+  const actorId = await getActorId();
+  return withAuthenticatedContext({ actorId }, async (tx) => {
+    const { idToSlug } = await getWorkspaceMaps(tx);
+    const usersMap = await getUsersMap(tx);
 
-  const templateRows = await db
-    .select()
-    .from(taskTemplates)
-    .orderBy(desc(taskTemplates.createdAt));
-  const ids = templateRows.map((t) => t.id);
+    const templateRows = await tx
+      .select()
+      .from(taskTemplates)
+      .orderBy(desc(taskTemplates.createdAt));
+    const ids = templateRows.map((t) => t.id);
 
-  const itemRows =
-    ids.length > 0
-      ? await db
-          .select()
-          .from(templateItems)
-          .where(inArray(templateItems.taskTemplateId, ids))
-          .orderBy(asc(templateItems.order))
-      : [];
-  const itemsByTemplate = groupBy(itemRows, (i) => i.taskTemplateId);
+    const itemRows =
+      ids.length > 0
+        ? await tx
+            .select()
+            .from(templateItems)
+            .where(inArray(templateItems.taskTemplateId, ids))
+            .orderBy(asc(templateItems.order))
+        : [];
+    const itemsByTemplate = groupBy(itemRows, (i) => i.taskTemplateId);
 
-  return templateRows.map((t) => ({
-    id: t.id,
-    name: t.name,
-    description: t.description,
-    workspace: idToSlug.get(t.workspaceId) as Workspace,
-    tasks: (itemsByTemplate.get(t.id) ?? []).map((i) => ({
-      title: i.title,
-      description: i.description,
-      priority: i.priority,
-      dueOffsetDays: i.dueOffsetDays,
-      subtasks: i.subtasks,
-    })),
-    trigger:
-      t.triggerSourceModule && t.triggerEvent
-        ? { sourceModule: t.triggerSourceModule, event: t.triggerEvent }
-        : null,
-    isActive: t.isActive,
-    createdBy: t.createdBy,
-    createdByName: usersMap.get(t.createdBy) ?? "—",
-    createdAt: t.createdAt,
-    updatedAt: t.updatedAt,
-  }));
+    return templateRows.map((t) => ({
+      id: t.id,
+      name: t.name,
+      description: t.description,
+      workspace: idToSlug.get(t.workspaceId) as Workspace,
+      tasks: (itemsByTemplate.get(t.id) ?? []).map((i) => ({
+        title: i.title,
+        description: i.description,
+        priority: i.priority,
+        dueOffsetDays: i.dueOffsetDays,
+        subtasks: i.subtasks,
+      })),
+      trigger:
+        t.triggerSourceModule && t.triggerEvent
+          ? { sourceModule: t.triggerSourceModule, event: t.triggerEvent }
+          : null,
+      isActive: t.isActive,
+      createdBy: t.createdBy,
+      createdByName: usersMap.get(t.createdBy) ?? "—",
+      createdAt: t.createdAt,
+      updatedAt: t.updatedAt,
+    }));
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -516,37 +585,40 @@ export interface RecurrenceRuleView {
 }
 
 export async function getRecurrenceRuleViews(): Promise<RecurrenceRuleView[]> {
-  const { idToSlug } = await getWorkspaceMaps();
-  const rows = await db
-    .select()
-    .from(recurrenceRules)
-    .orderBy(asc(recurrenceRules.nextRunAt));
+  const actorId = await getActorId();
+  return withAuthenticatedContext({ actorId }, async (tx) => {
+    const { idToSlug } = await getWorkspaceMaps(tx);
+    const rows = await tx
+      .select()
+      .from(recurrenceRules)
+      .orderBy(asc(recurrenceRules.nextRunAt));
 
-  const templateIds = rows.map((r) => r.taskTemplateId);
-  const templateRows =
-    templateIds.length > 0
-      ? await db
-          .select()
-          .from(taskTemplates)
-          .where(inArray(taskTemplates.id, templateIds))
-      : [];
-  const templateById = new Map(templateRows.map((t) => [t.id, t]));
+    const templateIds = rows.map((r) => r.taskTemplateId);
+    const templateRows =
+      templateIds.length > 0
+        ? await tx
+            .select()
+            .from(taskTemplates)
+            .where(inArray(taskTemplates.id, templateIds))
+        : [];
+    const templateById = new Map(templateRows.map((t) => [t.id, t]));
 
-  return rows.map((r) => {
-    const template = templateById.get(r.taskTemplateId);
-    return {
-      id: r.id,
-      taskTemplateId: r.taskTemplateId,
-      templateName: template?.name ?? "Template removido",
-      workspace: template
-        ? (idToSlug.get(template.workspaceId) as Workspace)
-        : "administrativo",
-      type: r.type,
-      interval: r.interval,
-      dayOfWeek: r.dayOfWeek,
-      dayOfMonth: r.dayOfMonth,
-      endDate: r.endDate,
-      nextRunAt: r.nextRunAt,
-    };
+    return rows.map((r) => {
+      const template = templateById.get(r.taskTemplateId);
+      return {
+        id: r.id,
+        taskTemplateId: r.taskTemplateId,
+        templateName: template?.name ?? "Template removido",
+        workspace: template
+          ? (idToSlug.get(template.workspaceId) as Workspace)
+          : "administrativo",
+        type: r.type,
+        interval: r.interval,
+        dayOfWeek: r.dayOfWeek,
+        dayOfMonth: r.dayOfMonth,
+        endDate: r.endDate,
+        nextRunAt: r.nextRunAt,
+      };
+    });
   });
 }

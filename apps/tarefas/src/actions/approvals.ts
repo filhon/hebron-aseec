@@ -1,7 +1,6 @@
 "use server";
 
 import { and, eq, isNull } from "drizzle-orm";
-import { db } from "@hebron/db/client";
 import {
   withAuthenticatedContext,
   withSystemRole,
@@ -29,23 +28,29 @@ const insertNotification = makeNotificationInserter();
 export const requestApproval = colaboradorAction
   .schema(requestApprovalSchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    const [task] = await db
-      .select({ id: tasks.id, title: tasks.title })
-      .from(tasks)
-      .where(and(eq(tasks.id, input.taskId), isNull(tasks.deletedAt)))
-      .limit(1);
-    if (!task) throw new Error("Tarefa não encontrada");
-
-    const [approver] = await db
-      .select({ id: users.id, fullName: users.fullName })
-      .from(users)
-      .where(eq(users.id, input.approverId))
-      .limit(1);
-    if (!approver) throw new Error("Aprovador não encontrado");
-
     const request = await withAuthenticatedContext(
       { actorId: ctx.actorId },
       async (tx) => {
+        const [task] = await tx
+          .select({ id: tasks.id, title: tasks.title })
+          .from(tasks)
+          .where(and(eq(tasks.id, input.taskId), isNull(tasks.deletedAt)))
+          .limit(1);
+        if (!task) throw new Error("Tarefa não encontrada");
+
+        // Exceção service-level (mesmo padrão de getUsersMap em
+        // apps/tarefas/src/lib/queries.ts): users_select_own/_admin não
+        // cobrem colaborador lendo a linha do aprovador escolhido — só
+        // confirma existência, nenhum dado de terceiro sai da action.
+        const [approver] = await withSystemRole(tx, (sysTx) =>
+          sysTx
+            .select({ id: users.id })
+            .from(users)
+            .where(eq(users.id, input.approverId))
+            .limit(1),
+        );
+        if (!approver) throw new Error("Aprovador não encontrado");
+
         const [row] = await tx
           .insert(approvalRequests)
           .values({

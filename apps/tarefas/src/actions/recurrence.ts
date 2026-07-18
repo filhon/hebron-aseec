@@ -2,7 +2,6 @@
 
 import { z } from "zod";
 import { eq } from "drizzle-orm";
-import { db } from "@hebron/db/client";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { recurrenceRules, taskTemplates } from "@hebron/db/schema";
 import { recurrenceRuleSchema } from "@hebron/validators/tarefas";
@@ -63,18 +62,18 @@ const createRecurrenceRuleSchema = z.object({
 export const createRecurrenceRule = colaboradorAction
   .schema(createRecurrenceRuleSchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    const [template] = await db
-      .select({ id: taskTemplates.id })
-      .from(taskTemplates)
-      .where(eq(taskTemplates.id, input.taskTemplateId))
-      .limit(1);
-    if (!template) throw new Error("Template não encontrado");
-
     const nextRunAt = computeNextRun(input.rule, new Date());
 
     const rule = await withAuthenticatedContext(
       { actorId: ctx.actorId },
       async (tx) => {
+        const [template] = await tx
+          .select({ id: taskTemplates.id })
+          .from(taskTemplates)
+          .where(eq(taskTemplates.id, input.taskTemplateId))
+          .limit(1);
+        if (!template) throw new Error("Template não encontrado");
+
         const [row] = await tx
           .insert(recurrenceRules)
           .values({

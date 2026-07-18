@@ -5628,10 +5628,10 @@ papel/escopo do destinatário, migrar.
 
 **Critérios de aceite:**
 
-- [ ] Grep limpo de `db` cru em `lib/queries.ts` e nos 6 arquivos de
+- [x] Grep limpo de `db` cru em `lib/queries.ts` e nos 6 arquivos de
       `actions/*.ts`
-- [ ] Teste prova isolamento por workspace em `tasks`
-- [ ] Lint passa · Types passam · SESSIONS.md atualizado
+- [x] Teste prova isolamento por workspace em `tasks`
+- [x] Lint passa · Types passam · SESSIONS.md atualizado
 
 ---
 
