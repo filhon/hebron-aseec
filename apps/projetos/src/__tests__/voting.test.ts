@@ -200,20 +200,9 @@ beforeAll(async () => {
       },
     ])
     .onConflictDoNothing();
-
-  // Grants para os testes de RLS de votos
-  await sql`GRANT USAGE ON SCHEMA projetos TO authenticated`;
-  await sql`GRANT SELECT ON projetos.votes TO authenticated`;
-  await sql`GRANT SELECT ON projetos.projects TO authenticated`;
-  await sql`GRANT SELECT ON projetos.organization_members TO authenticated`;
 });
 
 afterAll(async () => {
-  await sql`REVOKE SELECT ON projetos.organization_members FROM authenticated`;
-  await sql`REVOKE SELECT ON projetos.projects FROM authenticated`;
-  await sql`REVOKE SELECT ON projetos.votes FROM authenticated`;
-  await sql`REVOKE USAGE ON SCHEMA projetos FROM authenticated`;
-
   // Cascade delete votes, versions via project FK
   await db
     .delete(projects)

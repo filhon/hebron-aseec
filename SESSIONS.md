@@ -179,6 +179,7 @@
 | S-156  | 2026-07-17 | P-9.1b-1 — Fechamento do achado S-02 em `admin` (CORRETIVO)                             | concluido                            |
 | S-157  | 2026-07-17 | P-9.1b-2 — Fechamento do achado S-02 em `financeiro` (CORRETIVO)                        | concluido                            |
 | S-158  | 2026-07-18 | P-9.1b-3 — Fechamento do achado S-02 em `projetos` (CORRETIVO)                          | parcial                              |
+| S-159  | 2026-07-18 | P-9.1b-3 — Causa raiz do drift de GRANT em `projetos` (CORRETIVO)                       | concluido                            |
 
 ---
 
@@ -12068,3 +12069,57 @@ verdes para `@hebron/projetos` e `@hebron/admin`.
       (ver instrução acima) antes de reexecutar
       `pnpm turbo test --filter=@hebron/projetos` e considerar P-9.1b-3
       definitivamente concluído.
+
+---
+
+### S-159 — 2026-07-18 — P-9.1b-3 — Causa raiz do drift de GRANT em `projetos` (CORRETIVO)
+
+**Prompt:** P-9.1b-3 (`PROMPTS.md:5463`)
+**Modelo:** claude-sonnet-5
+**Status:** concluído — último critério de aceite fechado.
+
+**Resumo:**
+Causa raiz do drift descrito em S-158 identificada com o MCP
+`plugin:supabase:supabase` (agora autorizado). `get_logs` (serviço
+`postgres`) capturou, em texto puro, ciclos completos
+GRANT→(~9s)→REVOKE dos exatos 4 privilégios do achado (`GRANT/REVOKE
+USAGE ON SCHEMA projetos` + `SELECT` em
+`projects`/`votes`/`organization_members` para `authenticated`),
+repetindo-se a cada poucos minutos. Rastreado até
+`apps/projetos/src/__tests__/voting.test.ts:205-215`: o `afterAll`
+revogava esses grants como se fossem escopados ao teste (mesmo padrão
+correto usado nos testes de RLS do schema `admin`), mas para `projetos`
+esses grants são **permanentes** — instalados por `0025`/`0026`/`0056`
+porque o app depende deles em runtime (mesmo padrão de `documentos`,
+onde grants em `beforeAll` nunca são revogados em `afterAll`, per nota
+de S-121/1388). Rodando no banco **compartilhado** (não CI, que é
+Supabase local efêmero), qualquer execução da suíte por qualquer
+sessão/dev derrubava o acesso globalmente por ~2min — não era jobs
+agendados, "Exposed schemas" (hipótese já descartada em S-158) nem nada
+do lado da plataforma; era um teste com side-effect global escrito
+assumindo banco isolado por run.
+
+**Correção:** removidas as 8 linhas de `GRANT`/`REVOKE` de
+`voting.test.ts` (`beforeAll`/`afterAll`); grants restaurados
+manualmente ao estado de `0056` (idempotente, sem necessidade de nova
+migration). Suíte `@hebron/projetos` rodada 2x consecutivas: estável em
+105/107 nas duas — zero ocorrências de `permission denied for schema
+projetos`. As 2 falhas restantes são o achado secundário já documentado
+em S-158 (`close-voting.test.ts` conta `diretor`/`conselheiro` reais do
+banco compartilhado, não escopado por projeto/organização — decisão de
+negócio pendente do Filipe, fora de escopo desta correção).
+
+**Arquivos alterados:**
+
+- `apps/projetos/src/__tests__/voting.test.ts` (removido GRANT/REVOKE
+  temporário incorreto)
+- `PROMPTS.md` (último critério de P-9.1b-3 marcado `[x]`)
+- `SESSIONS.md` (esta entrada + índice)
+
+**Critérios de aceite verificados:**
+
+- [x] Causa raiz do drift de GRANT identificada e corrigida
+- [x] `pnpm turbo test --filter=@hebron/projetos` estável em 2 execuções
+      consecutivas (105/107 — as 2 restantes são o achado secundário
+      pré-existente de `close-voting.test.ts`, fora de escopo)
+- [x] P-9.1b-3 considerado definitivamente concluído

@@ -5494,20 +5494,18 @@ arquivo do módulo — 21 call-sites, ciclo de vida completo do projeto),
 - [x] Grep limpo de `db` cru nos 5 arquivos de `actions/*.ts`
 - [x] Teste prova isolamento horizontal por organização em `projects`
 - [x] Lint passa · Types passam
-- [ ] SESSIONS.md atualizado — **sessão não fechada 100% verde**: drift
-      ativo e recorrente de GRANT no schema `projetos` no banco
-      compartilhado bloqueia verificação estável da suíte (ver S-158 em
-      SESSIONS.md). Código migrado e correto (evidenciado em janelas
-      limpas). Hipótese "Exposed schemas" testada por Filipe e descartada
-      (não resolveu). Sessão encerrada por decisão do Filipe.
-      **Antes de retomar:** autorizar o MCP `plugin:supabase:supabase`
-      (`claude mcp` / `/mcp`, não dá em sessão não-interativa) e investigar
-      com as ferramentas dele o que revoga `GRANT USAGE ON SCHEMA projetos` + `SELECT` em `projects`/`votes`/`organization_members` de
-      `authenticated` num ciclo de ~2min — acesso via `DATABASE_URL` só
-      enxerga o catálogo, não a causa do lado da plataforma Supabase. Depois
-      de corrigido, rodar `pnpm --filter @hebron/db db:migrate` (migration
-      `0056` já está pronta) e `pnpm turbo test --filter=@hebron/projetos`
-      estável antes de marcar P-9.1b-3 como concluído.
+- [x] SESSIONS.md atualizado — causa raiz do drift de GRANT (S-158)
+      identificada via MCP `plugin:supabase:supabase`: `apps/projetos/src/__tests__/voting.test.ts`
+      tratava `GRANT USAGE ON SCHEMA projetos`/`SELECT` em
+      `projects`/`votes`/`organization_members` como temporário (`afterAll`
+      revogava), quando esses grants são permanentes (mesmo padrão de
+      `documentos`). Toda execução da suíte no banco compartilhado revogava
+      o acesso globalmente por ~2min. Corrigido: removido o
+      GRANT/REVOKE de `voting.test.ts`; grants restaurados
+      (idênticos a `0056`); suíte `@hebron/projetos` estável em 2 execuções
+      consecutivas (105/107 — as 2 restantes são o achado secundário
+      pré-existente e fora de escopo de `close-voting.test.ts`, já
+      documentado). Ver S-159 em SESSIONS.md.
 
 ---
 
