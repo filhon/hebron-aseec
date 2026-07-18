@@ -5394,12 +5394,12 @@ regra 2 do escopo original de P-9.1b).
 
 **Critérios de aceite:**
 
-- [ ] Grep limpo de `db.select`/`db.query`/`db.execute`/`db.insert`/`db.update`
+- [x] Grep limpo de `db.select`/`db.query`/`db.execute`/`db.insert`/`db.update`
       em `lib/queries.ts` e nos 6 arquivos de `actions/*.ts` listados (exceções
       de notificação/audit comentadas)
-- [ ] Teste com dados semeados prova isolamento horizontal em `users`/`role_assignments`
-- [ ] `security-audit.test.ts` estendido e verde
-- [ ] Lint passa · Types passam · SESSIONS.md atualizado
+- [x] Teste com dados semeados prova isolamento horizontal em `users`/`role_assignments`
+- [x] `security-audit.test.ts` estendido e verde
+- [x] Lint passa · Types passam · SESSIONS.md atualizado
 
 ---
 

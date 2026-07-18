@@ -176,6 +176,7 @@
 | S-153  | 2026-07-17 | P-8.11b — Fiação do heartbeat de audiência no player (CORRETIVO)                        | concluido                            |
 | S-154  | 2026-07-17 | P-9.1 — Revisão de Segurança (RLS Audit)                                                | concluido                            |
 | S-155  | 2026-07-17 | P-9.1b — Fechamento dos achados abertos da auditoria (S-02 + S-05) (CORRETIVO)          | parcial                              |
+| S-156  | 2026-07-17 | P-9.1b-1 — Fechamento do achado S-02 em `admin` (CORRETIVO)                             | concluido                            |
 
 ---
 
@@ -11693,3 +11694,87 @@ cada sub-prompt, não migrar para `withAuthenticatedContext`): inserts em
       projetos → demais apps)
 - [ ] S-02 corrigido (pendente — ver sub-prompts)
 - [ ] S-05 corrigido (pendente — P-9.1b-7)
+
+---
+
+### S-156 — 2026-07-17 — P-9.1b-1 — Fechamento do achado S-02 em `admin` (CORRETIVO)
+
+**Prompt:** P-9.1b-1 (`PROMPTS.md:5350`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Migrou todo acesso a dado de negócio em `admin` de `db` cru
+(`@hebron/db/client`, conexão superuser) para `withAuthenticatedContext`
+(`@hebron/db/authenticated`, P-0.10) nos 6 arquivos do escopo: `lib/queries.ts`
+(`getDirectors`), `actions/impersonation.ts`, `invitations.ts`, `meetings.ts`,
+`roles.ts`, `settings.ts` e `users.ts` (o maior, 17 call-sites). Grep limpo de
+`db.select`/`db.query`/`db.execute`/`db.insert`/`db.update` cru nos 7 arquivos
+— os únicos hits remanescentes são os 4 `db.insert(notifications)` explicitamente
+comentados como exceção service-level (G6.3).
+
+**Achado técnico durante a migração (decisão registrada aqui por não ter
+alternativa dentro dos arquivos permitidos — packages/db/migrations não está
+na lista):** `public.users` só tem policy de escrita `auth.uid() = id`
+(self-insert/self-update — pensada para o trigger de signup), sem nenhuma
+policy de "admin-write-all" equivalente às de `role_assignments`/
+`designations`/`meeting_sessions`/`feature_flags`/`system_settings` (todas
+`FOR ALL USING(has_role('super_admin'))`). Isso significa que, rodando sob
+`authenticated` puro, um super_admin NÃO consegue criar conta para outra
+pessoa (`createUser`) nem atualizar o registro de outro usuário
+(`updateUser`/`suspendUser`/`unsuspendUser`/`approveSignup`/`rejectSignup`) —
+a policy filtra a linha e a operação afeta 0 linhas. Resolvido replicando,
+para essas escritas específicas, o mesmo padrão já documentado em
+`withSystemRole` para `admin.audit_log` (F3-15/S-57: bypass de RLS dentro da
+mesma transação, para uma tabela deliberadamente não-gravável por
+`authenticated` para linhas de terceiros) — a leitura roda RLS-gated como
+`authenticated` (prova o isolamento horizontal), só a escrita privilegiada
+troca de papel via `withSystemRole`, sempre dentro da mesma transação atômica
+e sempre atrás do gate `adminAction` (super_admin) já existente na camada 2.
+`role_assignments`/`designations`/`meeting_sessions`/`feature_flags`/
+`system_settings`/`invitations` não precisaram desse bypass — já têm policy
+`write_super_admin` própria e rodam normalmente sob `authenticated`.
+
+**Achado de fixture (fora do escopo original, corrigido com autorização do
+Filipe):** `security-audit.test.ts` estendido conforme pedido, mas ao rodar a
+suíte completa `settings-actions.test.ts` (fora da lista de "Arquivos
+permitidos") quebrou — seu `beforeAll` nunca seedava um `role_assignments`
+real para o ator de teste, só mockava `roles: ["super_admin"]` na sessão
+(diferente de `actions.test.ts`, que já seedava corretamente). Sob `db` cru
+(superuser) isso não importava; sob RLS real, `has_role('super_admin')`
+passou a avaliar falso e a leitura de `task_templates` falhava. Perguntado ao
+Filipe, autorizado a corrigir o fixture (mesmo padrão de seed de
+`actions.test.ts`) apesar de fora da lista original — extensão de escopo
+registrada aqui em vez de silenciosa. Um segundo problema, não relacionado à
+RLS, apareceu em seguida: a linha de `admin.system_settings` para
+`projetos_analysis_checklist_template` não existia neste banco de
+desenvolvimento (gap de seed local, não introduzido por esta sessão) —
+resolvido rodando `pnpm db:seed` (idempotente, `onConflictDoUpdate`).
+
+**Arquivos alterados:**
+
+- `apps/admin/src/lib/queries.ts`
+- `apps/admin/src/actions/impersonation.ts`, `invitations.ts`, `meetings.ts`,
+  `roles.ts`, `settings.ts`, `users.ts`
+- `apps/admin/src/__tests__/security-audit.test.ts` (novo describe
+  "Isolamento horizontal": ouvinte não lê/edita `public.users`/
+  `public.role_assignments` de um usuário-alvo semeado com dados reais, nem
+  consegue INSERT de auto-escalação para `super_admin`)
+- `apps/admin/src/__tests__/settings-actions.test.ts` (fora da lista original
+  — seed de `role_assignments` para o ator de teste, autorizado pelo Filipe)
+- `SESSIONS.md` (esta entrada + índice)
+
+**Critérios de aceite verificados:**
+
+- [x] Grep limpo de `db.select`/`db.query`/`db.execute`/`db.insert`/
+      `db.update` em `lib/queries.ts` e nos 6 arquivos de `actions/*.ts`
+      listados (exceções de notificação comentadas — audit_log não aparece
+      porque já era via `@hebron/db/audit`, nenhum call-site cru neste app)
+- [x] Teste com dados semeados prova isolamento horizontal em
+      `users`/`role_assignments` (leitura E escrita, não só contagem de
+      linhas)
+- [x] `security-audit.test.ts` estendido e verde
+- [x] Lint passa · Types passam · SESSIONS.md atualizado
+- [x] Suíte completa do admin verde (89/89 testes, incluindo `rls.test.ts`,
+      `actions.test.ts`, `roles-designations.test.ts`,
+      `settings-actions.test.ts`)

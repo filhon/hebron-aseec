@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { eq } from "drizzle-orm";
-import { db } from "@hebron/db/client";
+import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { meetingSessions } from "@hebron/db/schema";
 import { ensureMonthlyMeetings } from "@hebron/db/meetings";
 import { adminAction } from "../lib/safe-action";
@@ -20,16 +20,20 @@ export const createMeeting = adminAction
     }),
   )
   .action(async ({ parsedInput, ctx }) => {
-    const inserted = await db
-      .insert(meetingSessions)
-      .values({
-        date: new Date(parsedInput.date),
-        type: parsedInput.type,
-        chairUserId: parsedInput.chairUserId ?? null,
-        notes: parsedInput.notes ?? null,
-        status: "scheduled",
-      })
-      .returning();
+    const inserted = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      (tx) =>
+        tx
+          .insert(meetingSessions)
+          .values({
+            date: new Date(parsedInput.date),
+            type: parsedInput.type,
+            chairUserId: parsedInput.chairUserId ?? null,
+            notes: parsedInput.notes ?? null,
+            status: "scheduled",
+          })
+          .returning(),
+    );
 
     const meeting = inserted[0];
     if (!meeting) throw new Error("Falha ao criar reunião");
@@ -67,33 +71,41 @@ export const updateMeeting = adminAction
     }),
   )
   .action(async ({ parsedInput, ctx }) => {
-    const beforeRows = await db
-      .select()
-      .from(meetingSessions)
-      .where(eq(meetingSessions.id, parsedInput.id));
+    const { before, updated } = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const beforeRows = await tx
+          .select()
+          .from(meetingSessions)
+          .where(eq(meetingSessions.id, parsedInput.id));
 
-    const before = beforeRows[0];
-    if (!before) throw new Error("Reunião não encontrada");
+        const before = beforeRows[0];
+        if (!before) throw new Error("Reunião não encontrada");
 
-    const patch: Partial<typeof meetingSessions.$inferInsert> = {
-      updatedAt: new Date(),
-    };
+        const patch: Partial<typeof meetingSessions.$inferInsert> = {
+          updatedAt: new Date(),
+        };
 
-    if (parsedInput.date !== undefined) patch.date = new Date(parsedInput.date);
-    if (parsedInput.type !== undefined) patch.type = parsedInput.type;
-    if (parsedInput.chairUserId !== undefined)
-      patch.chairUserId = parsedInput.chairUserId;
-    if (parsedInput.status !== undefined) patch.status = parsedInput.status;
-    if (parsedInput.notes !== undefined) patch.notes = parsedInput.notes;
+        if (parsedInput.date !== undefined)
+          patch.date = new Date(parsedInput.date);
+        if (parsedInput.type !== undefined) patch.type = parsedInput.type;
+        if (parsedInput.chairUserId !== undefined)
+          patch.chairUserId = parsedInput.chairUserId;
+        if (parsedInput.status !== undefined) patch.status = parsedInput.status;
+        if (parsedInput.notes !== undefined) patch.notes = parsedInput.notes;
 
-    const updatedRows = await db
-      .update(meetingSessions)
-      .set(patch)
-      .where(eq(meetingSessions.id, parsedInput.id))
-      .returning();
+        const updatedRows = await tx
+          .update(meetingSessions)
+          .set(patch)
+          .where(eq(meetingSessions.id, parsedInput.id))
+          .returning();
 
-    const updated = updatedRows[0];
-    if (!updated) throw new Error("Falha ao atualizar reunião");
+        const updated = updatedRows[0];
+        if (!updated) throw new Error("Falha ao atualizar reunião");
+
+        return { before, updated };
+      },
+    );
 
     await logAudit({
       actorId: ctx.actorId,

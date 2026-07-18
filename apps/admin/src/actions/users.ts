@@ -5,6 +5,10 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { createClient } from "@supabase/supabase-js";
 import { db } from "@hebron/db/client";
+import {
+  withAuthenticatedContext,
+  withSystemRole,
+} from "@hebron/db/authenticated";
 import { users, notifications, roleAssignments } from "@hebron/db/schema";
 import { createNotification } from "@hebron/email";
 import { PasswordResetEmail } from "@hebron/email/templates/password-reset";
@@ -58,21 +62,34 @@ export const createUser = adminAction
 
     if (authError) throw new Error(authError.message);
     if (!authData.user) throw new Error("Falha ao criar usuário no Auth");
+    const authUser = authData.user;
 
-    const inserted = await db
-      .insert(users)
-      .values({
-        id: authData.user.id,
-        email: parsedInput.email,
-        fullName: parsedInput.fullName,
-        phone: parsedInput.phone ?? null,
-        documentCpf: parsedInput.documentCpf ?? null,
-        suspendedModules: [],
-      })
-      .returning();
+    // public.users só tem policy de INSERT "auth.uid() = id" (self-insert,
+    // pensada para o trigger de signup) — não existe policy de admin-insert.
+    // O Admin criando conta para outra pessoa é privilégio legítimo, já
+    // gated por adminAction (super_admin); withSystemRole replica aqui o
+    // mesmo padrão de exceção documentado para admin.audit_log (F3-15/S-57).
+    const newUser = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      (tx) =>
+        withSystemRole(tx, async (sysTx) => {
+          const inserted = await sysTx
+            .insert(users)
+            .values({
+              id: authUser.id,
+              email: parsedInput.email,
+              fullName: parsedInput.fullName,
+              phone: parsedInput.phone ?? null,
+              documentCpf: parsedInput.documentCpf ?? null,
+              suspendedModules: [],
+            })
+            .returning();
 
-    const newUser = inserted[0];
-    if (!newUser) throw new Error("Falha ao inserir usuário no banco");
+          const newUser = inserted[0];
+          if (!newUser) throw new Error("Falha ao inserir usuário no banco");
+          return newUser;
+        }),
+    );
 
     await logAudit({
       actorId: ctx.actorId,
@@ -101,29 +118,44 @@ export const updateUser = adminAction
     }),
   )
   .action(async ({ parsedInput, ctx }) => {
-    const beforeRows = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, parsedInput.id));
+    // public.users só tem policy de UPDATE "auth.uid() = id" (self-update) —
+    // não existe policy de admin-write. withSystemRole replica aqui o mesmo
+    // padrão de exceção documentado para admin.audit_log (F3-15/S-57): a
+    // leitura roda RLS-gated como authenticated, só a escrita privilegiada
+    // troca de papel, dentro da mesma transação atômica.
+    const { before, updated } = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const beforeRows = await tx
+          .select()
+          .from(users)
+          .where(eq(users.id, parsedInput.id));
 
-    const before = beforeRows[0];
-    if (!before) throw new Error("Usuário não encontrado");
+        const before = beforeRows[0];
+        if (!before) throw new Error("Usuário não encontrado");
 
-    const patch: Partial<typeof users.$inferInsert> = {
-      updatedAt: new Date(),
-    };
-    if (parsedInput.fullName !== undefined)
-      patch.fullName = parsedInput.fullName;
-    if (parsedInput.phone !== undefined) patch.phone = parsedInput.phone;
+        const patch: Partial<typeof users.$inferInsert> = {
+          updatedAt: new Date(),
+        };
+        if (parsedInput.fullName !== undefined)
+          patch.fullName = parsedInput.fullName;
+        if (parsedInput.phone !== undefined) patch.phone = parsedInput.phone;
 
-    const updatedRows = await db
-      .update(users)
-      .set(patch)
-      .where(eq(users.id, parsedInput.id))
-      .returning();
+        const updated = await withSystemRole(tx, async (sysTx) => {
+          const updatedRows = await sysTx
+            .update(users)
+            .set(patch)
+            .where(eq(users.id, parsedInput.id))
+            .returning();
 
-    const updated = updatedRows[0];
-    if (!updated) throw new Error("Falha ao atualizar usuário");
+          const updated = updatedRows[0];
+          if (!updated) throw new Error("Falha ao atualizar usuário");
+          return updated;
+        });
+
+        return { before, updated };
+      },
+    );
 
     await logAudit({
       actorId: ctx.actorId,
@@ -153,30 +185,42 @@ export const suspendUser = adminAction
     }),
   )
   .action(async ({ parsedInput, ctx }) => {
-    const beforeRows = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, parsedInput.id));
+    // withSystemRole: public.users não tem policy de admin-write — mesmo
+    // padrão de exceção de updateUser acima.
+    const { before, updated } = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const beforeRows = await tx
+          .select()
+          .from(users)
+          .where(eq(users.id, parsedInput.id));
 
-    const before = beforeRows[0];
-    if (!before) throw new Error("Usuário não encontrado");
+        const before = beforeRows[0];
+        if (!before) throw new Error("Usuário não encontrado");
 
-    const suspendedModules = parsedInput.modules.includes("global")
-      ? ["global"]
-      : parsedInput.modules;
+        const suspendedModules = parsedInput.modules.includes("global")
+          ? ["global"]
+          : parsedInput.modules;
 
-    const updatedRows = await db
-      .update(users)
-      .set({
-        suspendedModules,
-        suspendedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(users.id, parsedInput.id))
-      .returning();
+        const updated = await withSystemRole(tx, async (sysTx) => {
+          const updatedRows = await sysTx
+            .update(users)
+            .set({
+              suspendedModules,
+              suspendedAt: new Date(),
+              updatedAt: new Date(),
+            })
+            .where(eq(users.id, parsedInput.id))
+            .returning();
 
-    const updated = updatedRows[0];
-    if (!updated) throw new Error("Falha ao suspender usuário");
+          const updated = updatedRows[0];
+          if (!updated) throw new Error("Falha ao suspender usuário");
+          return updated;
+        });
+
+        return { before, updated };
+      },
+    );
 
     await logAudit({
       actorId: ctx.actorId,
@@ -206,33 +250,47 @@ export const unsuspendUser = adminAction
     }),
   )
   .action(async ({ parsedInput, ctx }) => {
-    const beforeRows = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, parsedInput.id));
+    // withSystemRole: public.users não tem policy de admin-write — mesmo
+    // padrão de exceção de updateUser acima.
+    const { before, updated } = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const beforeRows = await tx
+          .select()
+          .from(users)
+          .where(eq(users.id, parsedInput.id));
 
-    const before = beforeRows[0];
-    if (!before) throw new Error("Usuário não encontrado");
+        const before = beforeRows[0];
+        if (!before) throw new Error("Usuário não encontrado");
 
-    const removingAll = parsedInput.modules.includes("global");
-    const suspendedModules = removingAll
-      ? []
-      : before.suspendedModules.filter(
-          (m) => !parsedInput.modules.includes(m as z.infer<typeof moduleEnum>),
-        );
+        const removingAll = parsedInput.modules.includes("global");
+        const suspendedModules = removingAll
+          ? []
+          : before.suspendedModules.filter(
+              (m) =>
+                !parsedInput.modules.includes(m as z.infer<typeof moduleEnum>),
+            );
 
-    const updatedRows = await db
-      .update(users)
-      .set({
-        suspendedModules,
-        suspendedAt: suspendedModules.length === 0 ? null : before.suspendedAt,
-        updatedAt: new Date(),
-      })
-      .where(eq(users.id, parsedInput.id))
-      .returning();
+        const updated = await withSystemRole(tx, async (sysTx) => {
+          const updatedRows = await sysTx
+            .update(users)
+            .set({
+              suspendedModules,
+              suspendedAt:
+                suspendedModules.length === 0 ? null : before.suspendedAt,
+              updatedAt: new Date(),
+            })
+            .where(eq(users.id, parsedInput.id))
+            .returning();
 
-    const updated = updatedRows[0];
-    if (!updated) throw new Error("Falha ao reativar usuário");
+          const updated = updatedRows[0];
+          if (!updated) throw new Error("Falha ao reativar usuário");
+          return updated;
+        });
+
+        return { before, updated };
+      },
+    );
 
     await logAudit({
       actorId: ctx.actorId,
@@ -257,13 +315,19 @@ export const resetPassword = adminAction
   .action(async ({ parsedInput, ctx }) => {
     const supabase = getSupabaseAdmin();
 
-    const userRows = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, parsedInput.id));
+    const user = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const userRows = await tx
+          .select()
+          .from(users)
+          .where(eq(users.id, parsedInput.id));
 
-    const user = userRows[0];
-    if (!user) throw new Error("Usuário não encontrado");
+        const user = userRows[0];
+        if (!user) throw new Error("Usuário não encontrado");
+        return user;
+      },
+    );
 
     const { data, error } = await supabase.auth.admin.generateLink({
       type: "recovery",
@@ -275,6 +339,8 @@ export const resetPassword = adminAction
     const resetUrl = data.properties?.action_link;
     if (!resetUrl) throw new Error("Falha ao gerar link de redefinição");
 
+    // Exceção service-level (G6.3): notificação inserida via `db` (superuser)
+    // em nome do usuário-alvo, não do ator — mesmo padrão de invitations.ts.
     await createNotification({
       insert: async (notifData) => {
         const notifInserted = await db
@@ -325,13 +391,15 @@ export const approveUser = adminAction
   .action(async ({ parsedInput, ctx }) => {
     const supabase = getSupabaseAdmin();
 
-    const userRows = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, parsedInput.id));
+    await withAuthenticatedContext({ actorId: ctx.actorId }, async (tx) => {
+      const userRows = await tx
+        .select()
+        .from(users)
+        .where(eq(users.id, parsedInput.id));
 
-    const user = userRows[0];
-    if (!user) throw new Error("Usuário não encontrado");
+      const user = userRows[0];
+      if (!user) throw new Error("Usuário não encontrado");
+    });
 
     await supabase.auth.admin.updateUserById(parsedInput.id, {
       email_confirm: true,
@@ -356,37 +424,53 @@ export const approveUser = adminAction
 export const approveSignup = adminAction
   .schema(z.object({ id: z.string().uuid() }))
   .action(async ({ parsedInput, ctx }) => {
-    const userRows = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, parsedInput.id));
+    const user = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const userRows = await tx
+          .select()
+          .from(users)
+          .where(eq(users.id, parsedInput.id));
 
-    const user = userRows[0];
-    if (!user) throw new Error("Usuário não encontrado");
-    if (user.status !== "pending_approval") {
-      throw new Error("Este cadastro não está aguardando aprovação.");
-    }
+        const user = userRows[0];
+        if (!user) throw new Error("Usuário não encontrado");
+        if (user.status !== "pending_approval") {
+          throw new Error("Este cadastro não está aguardando aprovação.");
+        }
+        return user;
+      },
+    );
 
     const supabase = getSupabaseAdmin();
     await supabase.auth.admin.updateUserById(parsedInput.id, {
       email_confirm: true,
     });
 
-    await db
-      .update(users)
-      .set({ status: "active", updatedAt: new Date() })
-      .where(eq(users.id, parsedInput.id));
+    // withSystemRole no update de status: public.users não tem policy de
+    // admin-write (mesmo padrão de updateUser). O INSERT em role_assignments
+    // já é coberto por "role_assignments_write_super_admin" (has_role) —
+    // roda normalmente como authenticated, sem bypass.
+    await withAuthenticatedContext({ actorId: ctx.actorId }, async (tx) => {
+      await withSystemRole(tx, (sysTx) =>
+        sysTx
+          .update(users)
+          .set({ status: "active", updatedAt: new Date() })
+          .where(eq(users.id, parsedInput.id)),
+      );
 
-    await db.insert(roleAssignments).values({
-      userId: parsedInput.id,
-      role: "submissor",
-      scope: "global",
-      grantedBy: ctx.actorId,
+      await tx.insert(roleAssignments).values({
+        userId: parsedInput.id,
+        role: "submissor",
+        scope: "global",
+        grantedBy: ctx.actorId,
+      });
     });
 
     const appUrl =
       process.env.NEXT_PUBLIC_APP_URL ?? "https://app.hebronaseec.com.br";
 
+    // Exceção service-level (G6.3): notificação inserida via `db` (superuser)
+    // em nome do usuário-alvo, não do ator — mesmo padrão de invitations.ts.
     await createNotification({
       insert: async (data) => {
         const notifInserted = await db
@@ -438,22 +522,35 @@ export const approveSignup = adminAction
 export const rejectSignup = adminAction
   .schema(z.object({ id: z.string().uuid() }))
   .action(async ({ parsedInput, ctx }) => {
-    const userRows = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, parsedInput.id));
+    // withSystemRole no update de status: public.users não tem policy de
+    // admin-write (mesmo padrão de updateUser).
+    const user = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const userRows = await tx
+          .select()
+          .from(users)
+          .where(eq(users.id, parsedInput.id));
 
-    const user = userRows[0];
-    if (!user) throw new Error("Usuário não encontrado");
-    if (user.status !== "pending_approval") {
-      throw new Error("Este cadastro não está aguardando aprovação.");
-    }
+        const user = userRows[0];
+        if (!user) throw new Error("Usuário não encontrado");
+        if (user.status !== "pending_approval") {
+          throw new Error("Este cadastro não está aguardando aprovação.");
+        }
 
-    await db
-      .update(users)
-      .set({ status: "rejected", updatedAt: new Date() })
-      .where(eq(users.id, parsedInput.id));
+        await withSystemRole(tx, (sysTx) =>
+          sysTx
+            .update(users)
+            .set({ status: "rejected", updatedAt: new Date() })
+            .where(eq(users.id, parsedInput.id)),
+        );
 
+        return user;
+      },
+    );
+
+    // Exceção service-level (G6.3): notificação inserida via `db` (superuser)
+    // em nome do usuário-alvo, não do ator — mesmo padrão de invitations.ts.
     await createNotification({
       insert: async (data) => {
         const notifInserted = await db

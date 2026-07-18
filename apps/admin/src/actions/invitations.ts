@@ -5,6 +5,7 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 import crypto from "node:crypto";
 import { db } from "@hebron/db/client";
+import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { invitations, notifications } from "@hebron/db/schema";
 import { createNotification } from "@hebron/email";
 import { InvitationEmail } from "@hebron/email/templates/invitation";
@@ -38,16 +39,20 @@ export const sendInvitation = adminAction
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + parsedInput.expiresInDays);
 
-    const inserted = await db
-      .insert(invitations)
-      .values({
-        email: parsedInput.email,
-        roles: parsedInput.roles,
-        token,
-        invitedBy: ctx.actorId,
-        expiresAt,
-      })
-      .returning();
+    const inserted = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      (tx) =>
+        tx
+          .insert(invitations)
+          .values({
+            email: parsedInput.email,
+            roles: parsedInput.roles,
+            token,
+            invitedBy: ctx.actorId,
+            expiresAt,
+          })
+          .returning(),
+    );
 
     const invitation = inserted[0];
     if (!invitation) throw new Error("Falha ao criar convite");
@@ -57,6 +62,10 @@ export const sendInvitation = adminAction
     const inviteUrl = `${appUrl}/convite?token=${token}`;
 
     // Dispatch email via Resend
+    // Exceção service-level (G6.3): notificação criada com o `db` singleton
+    // (superuser) em nome do destinatário do convite — não do ator autenticado —
+    // e admin.audit_log é escrito via @hebron/db/audit, que já roda como
+    // service role. Nenhum dos dois participa da migração RLS deste prompt.
     await createNotification({
       insert: async (data) => {
         const notifInserted = await db
@@ -115,11 +124,15 @@ export const sendInvitation = adminAction
 export const revokeInvitation = adminAction
   .schema(z.object({ id: z.string().uuid() }))
   .action(async ({ parsedInput, ctx }) => {
-    const updated = await db
-      .update(invitations)
-      .set({ revokedAt: new Date() })
-      .where(eq(invitations.id, parsedInput.id))
-      .returning();
+    const updated = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      (tx) =>
+        tx
+          .update(invitations)
+          .set({ revokedAt: new Date() })
+          .where(eq(invitations.id, parsedInput.id))
+          .returning(),
+    );
 
     const invitation = updated[0];
     if (!invitation) throw new Error("Convite não encontrado");

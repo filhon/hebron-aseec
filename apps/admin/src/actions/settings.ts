@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { eq } from "drizzle-orm";
-import { db } from "@hebron/db/client";
+import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import {
   featureFlags,
   systemSettings,
@@ -24,33 +24,40 @@ export const toggleFeatureFlag = adminAction
     }),
   )
   .action(async ({ parsedInput, ctx }) => {
-    const beforeRows = await db
-      .select()
-      .from(featureFlags)
-      .where(eq(featureFlags.key, parsedInput.key));
+    const { before, updated } = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const beforeRows = await tx
+          .select()
+          .from(featureFlags)
+          .where(eq(featureFlags.key, parsedInput.key));
 
-    const before = beforeRows[0];
-    if (!before)
-      throw new Error(`Feature flag "${parsedInput.key}" não encontrada`);
+        const before = beforeRows[0];
+        if (!before)
+          throw new Error(`Feature flag "${parsedInput.key}" não encontrada`);
 
-    const patch: Partial<typeof featureFlags.$inferInsert> = {
-      enabled: parsedInput.enabled,
-      updatedBy: ctx.actorId,
-      updatedAt: new Date(),
-    };
+        const patch: Partial<typeof featureFlags.$inferInsert> = {
+          enabled: parsedInput.enabled,
+          updatedBy: ctx.actorId,
+          updatedAt: new Date(),
+        };
 
-    if (parsedInput.rolloutPercent !== undefined) {
-      patch.rolloutPercent = parsedInput.rolloutPercent;
-    }
+        if (parsedInput.rolloutPercent !== undefined) {
+          patch.rolloutPercent = parsedInput.rolloutPercent;
+        }
 
-    const updatedRows = await db
-      .update(featureFlags)
-      .set(patch)
-      .where(eq(featureFlags.key, parsedInput.key))
-      .returning();
+        const updatedRows = await tx
+          .update(featureFlags)
+          .set(patch)
+          .where(eq(featureFlags.key, parsedInput.key))
+          .returning();
 
-    const updated = updatedRows[0];
-    if (!updated) throw new Error("Falha ao atualizar feature flag");
+        const updated = updatedRows[0];
+        if (!updated) throw new Error("Falha ao atualizar feature flag");
+
+        return { before, updated };
+      },
+    );
 
     await logAudit({
       actorId: ctx.actorId,
@@ -82,27 +89,34 @@ export const updateSystemSetting = adminAction
     }),
   )
   .action(async ({ parsedInput, ctx }) => {
-    const beforeRows = await db
-      .select()
-      .from(systemSettings)
-      .where(eq(systemSettings.key, parsedInput.key));
+    const { before, updated } = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const beforeRows = await tx
+          .select()
+          .from(systemSettings)
+          .where(eq(systemSettings.key, parsedInput.key));
 
-    const before = beforeRows[0];
-    if (!before)
-      throw new Error(`Configuração "${parsedInput.key}" não encontrada`);
+        const before = beforeRows[0];
+        if (!before)
+          throw new Error(`Configuração "${parsedInput.key}" não encontrada`);
 
-    const updatedRows = await db
-      .update(systemSettings)
-      .set({
-        value: parsedInput.value,
-        updatedBy: ctx.actorId,
-        updatedAt: new Date(),
-      })
-      .where(eq(systemSettings.key, parsedInput.key))
-      .returning();
+        const updatedRows = await tx
+          .update(systemSettings)
+          .set({
+            value: parsedInput.value,
+            updatedBy: ctx.actorId,
+            updatedAt: new Date(),
+          })
+          .where(eq(systemSettings.key, parsedInput.key))
+          .returning();
 
-    const updated = updatedRows[0];
-    if (!updated) throw new Error("Falha ao atualizar configuração");
+        const updated = updatedRows[0];
+        if (!updated) throw new Error("Falha ao atualizar configuração");
+
+        return { before, updated };
+      },
+    );
 
     await logAudit({
       actorId: ctx.actorId,
@@ -130,53 +144,64 @@ export const updateSystemSetting = adminAction
 export const setProjetosChecklistTemplate = adminAction
   .schema(z.object({ templateId: z.string().uuid() }))
   .action(async ({ parsedInput, ctx }) => {
-    const [template] = await db
-      .select()
-      .from(taskTemplates)
-      .where(eq(taskTemplates.id, parsedInput.templateId))
-      .limit(1);
-    if (!template) throw new Error("Template não encontrado");
-    if (!template.isActive) {
-      throw new Error(
-        `Template "${template.name}" está inativo — ative-o antes de associá-lo a Projetos`,
-      );
-    }
+    const { before, updated, template } = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const [template] = await tx
+          .select()
+          .from(taskTemplates)
+          .where(eq(taskTemplates.id, parsedInput.templateId))
+          .limit(1);
+        if (!template) throw new Error("Template não encontrado");
+        if (!template.isActive) {
+          throw new Error(
+            `Template "${template.name}" está inativo — ative-o antes de associá-lo a Projetos`,
+          );
+        }
 
-    const items = await db
-      .select({ id: templateItems.id })
-      .from(templateItems)
-      .where(eq(templateItems.taskTemplateId, template.id))
-      .limit(1);
-    if (items.length === 0) {
-      throw new Error(
-        `Template "${template.name}" não possui tarefas definidas`,
-      );
-    }
+        const items = await tx
+          .select({ id: templateItems.id })
+          .from(templateItems)
+          .where(eq(templateItems.taskTemplateId, template.id))
+          .limit(1);
+        if (items.length === 0) {
+          throw new Error(
+            `Template "${template.name}" não possui tarefas definidas`,
+          );
+        }
 
-    const beforeRows = await db
-      .select()
-      .from(systemSettings)
-      .where(eq(systemSettings.key, PROJETOS_CHECKLIST_TEMPLATE_SETTING_KEY));
+        const beforeRows = await tx
+          .select()
+          .from(systemSettings)
+          .where(
+            eq(systemSettings.key, PROJETOS_CHECKLIST_TEMPLATE_SETTING_KEY),
+          );
 
-    const before = beforeRows[0];
-    if (!before) {
-      throw new Error(
-        `Configuração "${PROJETOS_CHECKLIST_TEMPLATE_SETTING_KEY}" não encontrada — rode "pnpm db:seed" antes de trocar o template`,
-      );
-    }
+        const before = beforeRows[0];
+        if (!before) {
+          throw new Error(
+            `Configuração "${PROJETOS_CHECKLIST_TEMPLATE_SETTING_KEY}" não encontrada — rode "pnpm db:seed" antes de trocar o template`,
+          );
+        }
 
-    const updatedRows = await db
-      .update(systemSettings)
-      .set({
-        value: template.id,
-        updatedBy: ctx.actorId,
-        updatedAt: new Date(),
-      })
-      .where(eq(systemSettings.key, PROJETOS_CHECKLIST_TEMPLATE_SETTING_KEY))
-      .returning();
+        const updatedRows = await tx
+          .update(systemSettings)
+          .set({
+            value: template.id,
+            updatedBy: ctx.actorId,
+            updatedAt: new Date(),
+          })
+          .where(
+            eq(systemSettings.key, PROJETOS_CHECKLIST_TEMPLATE_SETTING_KEY),
+          )
+          .returning();
 
-    const updated = updatedRows[0];
-    if (!updated) throw new Error("Falha ao atualizar configuração");
+        const updated = updatedRows[0];
+        if (!updated) throw new Error("Falha ao atualizar configuração");
+
+        return { before, updated, template };
+      },
+    );
 
     await logAudit({
       actorId: ctx.actorId,

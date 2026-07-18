@@ -16,7 +16,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import postgres from "postgres";
-import { eq, sql as drizzleSql } from "drizzle-orm";
+import { and, eq, sql as drizzleSql } from "drizzle-orm";
 import { db } from "@hebron/db/client";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { users, roleAssignments } from "@hebron/db/schema";
@@ -54,6 +54,13 @@ const MIGRATIONS_TABLE = { schema: "public", name: "_migrations" };
 // ── Fixture: um "ouvinte" puro para provar isolamento cross-schema ─────────────
 const OUVINTE_ID = "a9000000-0000-0000-0000-000000000091";
 
+// ── Fixture: usuário-alvo com dados reais, para provar isolamento horizontal
+// em public.users/public.role_assignments (P-9.1b-1) — não basta "0 linhas"
+// numa tabela vazia, precisa haver uma linha de terceiro que o ouvinte tente
+// ler/editar e falhe.
+const TARGET_ID = "a9000000-0000-0000-0000-000000000092";
+const TARGET_FULL_NAME = "Sec Audit Alvo";
+
 beforeAll(async () => {
   await db
     .insert(users)
@@ -67,6 +74,19 @@ beforeAll(async () => {
     .insert(roleAssignments)
     .values({ userId: OUVINTE_ID, role: "ouvinte", grantedBy: OUVINTE_ID })
     .onConflictDoNothing();
+
+  await db
+    .insert(users)
+    .values({
+      id: TARGET_ID,
+      email: "sec-audit-alvo@test.hebron",
+      fullName: TARGET_FULL_NAME,
+    })
+    .onConflictDoNothing();
+  await db
+    .insert(roleAssignments)
+    .values({ userId: TARGET_ID, role: "colaborador", grantedBy: TARGET_ID })
+    .onConflictDoNothing();
 });
 
 afterAll(async () => {
@@ -74,6 +94,8 @@ afterAll(async () => {
     .delete(roleAssignments)
     .where(eq(roleAssignments.userId, OUVINTE_ID));
   await db.delete(users).where(eq(users.id, OUVINTE_ID));
+  await db.delete(roleAssignments).where(eq(roleAssignments.userId, TARGET_ID));
+  await db.delete(users).where(eq(users.id, TARGET_ID));
   await sql.end();
 });
 
@@ -215,6 +237,82 @@ describe("Cross-schema leak — ouvinte não acessa financeiro/flats/projetos/ad
         tx.execute(sqlUnsafe("SELECT 1 FROM admin.audit_log LIMIT 1")),
       ),
     ).rejects.toThrow(/permission denied for schema admin/i);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 3b. Isolamento horizontal em public.users/public.role_assignments (S-02,
+// P-9.1b-1) — um usuário sem super_admin não lê nem edita o registro de
+// TERCEIROS via o client autenticado (`withAuthenticatedContext`), agora que
+// admin/src/actions/users.ts e roles.ts passaram a rodar sob esse client em
+// vez do `db` singleton (superuser). Usa dados semeados (TARGET_ID com nome
+// e papel reais) para provar mais do que "0 linhas numa tabela vazia".
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe("Isolamento horizontal — ouvinte não lê/edita o registro de terceiros", () => {
+  it("ouvinte NÃO lê o perfil de outro usuário em public.users", async () => {
+    const rows = await withAuthenticatedContext({ actorId: OUVINTE_ID }, (tx) =>
+      tx
+        .select({ id: users.id, fullName: users.fullName })
+        .from(users)
+        .where(eq(users.id, TARGET_ID)),
+    );
+    expect(rows).toHaveLength(0);
+  });
+
+  it("ouvinte NÃO lê a atribuição de papel de outro usuário em public.role_assignments", async () => {
+    const rows = await withAuthenticatedContext({ actorId: OUVINTE_ID }, (tx) =>
+      tx
+        .select({ id: roleAssignments.id })
+        .from(roleAssignments)
+        .where(eq(roleAssignments.userId, TARGET_ID)),
+    );
+    expect(rows).toHaveLength(0);
+  });
+
+  it("ouvinte NÃO consegue alterar o nome de outro usuário (UPDATE afeta 0 linhas; dado original permanece)", async () => {
+    const updatedRows = await withAuthenticatedContext(
+      { actorId: OUVINTE_ID },
+      (tx) =>
+        tx
+          .update(users)
+          .set({ fullName: "Nome Forjado Pelo Ouvinte" })
+          .where(eq(users.id, TARGET_ID))
+          .returning({ id: users.id }),
+    );
+    expect(updatedRows).toHaveLength(0);
+
+    // Confirma, via conexão superuser, que o nome do alvo não mudou —
+    // não basta a policy ter filtrado a linha do retorno, o UPDATE não pode
+    // ter afetado o dado real.
+    const [target] = await db
+      .select({ fullName: users.fullName })
+      .from(users)
+      .where(eq(users.id, TARGET_ID));
+    expect(target?.fullName).toBe(TARGET_FULL_NAME);
+  });
+
+  it("ouvinte NÃO consegue se auto-conceder o papel super_admin (INSERT rejeitado pela policy)", async () => {
+    await expect(
+      withAuthenticatedContext({ actorId: OUVINTE_ID }, (tx) =>
+        tx.insert(roleAssignments).values({
+          userId: OUVINTE_ID,
+          role: "super_admin",
+          grantedBy: OUVINTE_ID,
+        }),
+      ),
+    ).rejects.toThrow(/row-level security/i);
+
+    const escalated = await db
+      .select({ id: roleAssignments.id })
+      .from(roleAssignments)
+      .where(
+        and(
+          eq(roleAssignments.userId, OUVINTE_ID),
+          eq(roleAssignments.role, "super_admin"),
+        ),
+      );
+    expect(escalated).toHaveLength(0);
   });
 });
 

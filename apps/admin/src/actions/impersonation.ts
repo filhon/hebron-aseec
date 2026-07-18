@@ -3,7 +3,7 @@
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { resolveSession } from "@hebron/auth/server";
-import { db } from "@hebron/db/client";
+import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { eq } from "drizzle-orm";
 import { users } from "@hebron/db/schema";
 import { logAudit } from "../lib/audit";
@@ -42,16 +42,20 @@ export async function startImpersonationAction(
   if (targetUserId === actorId)
     throw new Error("Não é possível impersonar a si mesmo");
 
-  const [actorRows, targetRows] = await Promise.all([
-    db
-      .select({ fullName: users.fullName })
-      .from(users)
-      .where(eq(users.id, actorId)),
-    db
-      .select({ fullName: users.fullName })
-      .from(users)
-      .where(eq(users.id, targetUserId)),
-  ]);
+  const [actorRows, targetRows] = await withAuthenticatedContext(
+    { actorId },
+    (tx) =>
+      Promise.all([
+        tx
+          .select({ fullName: users.fullName })
+          .from(users)
+          .where(eq(users.id, actorId)),
+        tx
+          .select({ fullName: users.fullName })
+          .from(users)
+          .where(eq(users.id, targetUserId)),
+      ]),
+  );
 
   const actor = actorRows[0];
   const target = targetRows[0];

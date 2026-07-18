@@ -2,7 +2,10 @@
 
 import { z } from "zod";
 import { and, eq, isNull } from "drizzle-orm";
-import { db } from "@hebron/db/client";
+import {
+  withAuthenticatedContext,
+  type AuthenticatedTx,
+} from "@hebron/db/authenticated";
 import { roleAssignments, designations } from "@hebron/db/schema";
 import type { Role } from "@hebron/types/roles";
 import { adminAction } from "../lib/safe-action";
@@ -16,10 +19,11 @@ const GOVERNANCE_ROLES: Role[] = ["diretor", "conselheiro"];
 const RESTRICTED_ROLES: Role[] = ["submissor", "hospede"];
 
 async function checkConflictOfInterest(
+  tx: AuthenticatedTx,
   userId: string,
   newRole: Role,
 ): Promise<void> {
-  const currentRows = await db
+  const currentRows = await tx
     .select({ role: roleAssignments.role })
     .from(roleAssignments)
     .where(
@@ -85,38 +89,50 @@ export const assignRole = adminAction
     }),
   )
   .action(async ({ parsedInput, ctx }) => {
-    await checkConflictOfInterest(parsedInput.userId, parsedInput.role as Role);
+    const assignment = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        await checkConflictOfInterest(
+          tx,
+          parsedInput.userId,
+          parsedInput.role as Role,
+        );
 
-    // Prevent duplicate assignment (ignora atribuições já revogadas — uma
-    // revogação anterior não pode bloquear uma nova concessão do mesmo papel)
-    const existingRows = await db
-      .select({ id: roleAssignments.id })
-      .from(roleAssignments)
-      .where(
-        and(
-          eq(roleAssignments.userId, parsedInput.userId),
-          eq(roleAssignments.role, parsedInput.role),
-          eq(roleAssignments.scope, parsedInput.scope),
-          isNull(roleAssignments.revokedAt),
-        ),
-      );
+        // Prevent duplicate assignment (ignora atribuições já revogadas — uma
+        // revogação anterior não pode bloquear uma nova concessão do mesmo papel)
+        const existingRows = await tx
+          .select({ id: roleAssignments.id })
+          .from(roleAssignments)
+          .where(
+            and(
+              eq(roleAssignments.userId, parsedInput.userId),
+              eq(roleAssignments.role, parsedInput.role),
+              eq(roleAssignments.scope, parsedInput.scope),
+              isNull(roleAssignments.revokedAt),
+            ),
+          );
 
-    if (existingRows[0]) {
-      throw new Error("Este papel já foi atribuído ao usuário neste escopo");
-    }
+        if (existingRows[0]) {
+          throw new Error(
+            "Este papel já foi atribuído ao usuário neste escopo",
+          );
+        }
 
-    const inserted = await db
-      .insert(roleAssignments)
-      .values({
-        userId: parsedInput.userId,
-        role: parsedInput.role,
-        scope: parsedInput.scope,
-        grantedBy: ctx.actorId,
-      })
-      .returning();
+        const inserted = await tx
+          .insert(roleAssignments)
+          .values({
+            userId: parsedInput.userId,
+            role: parsedInput.role,
+            scope: parsedInput.scope,
+            grantedBy: ctx.actorId,
+          })
+          .returning();
 
-    const assignment = inserted[0];
-    if (!assignment) throw new Error("Falha ao atribuir papel");
+        const assignment = inserted[0];
+        if (!assignment) throw new Error("Falha ao atribuir papel");
+        return assignment;
+      },
+    );
 
     await logAudit({
       actorId: ctx.actorId,
@@ -147,28 +163,35 @@ export const revokeRole = adminAction
     }),
   )
   .action(async ({ parsedInput, ctx }) => {
-    const rows = await db
-      .select()
-      .from(roleAssignments)
-      .where(
-        and(
-          eq(roleAssignments.id, parsedInput.assignmentId),
-          isNull(roleAssignments.revokedAt),
-        ),
-      );
+    const assignment = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const rows = await tx
+          .select()
+          .from(roleAssignments)
+          .where(
+            and(
+              eq(roleAssignments.id, parsedInput.assignmentId),
+              isNull(roleAssignments.revokedAt),
+            ),
+          );
 
-    const assignment = rows[0];
-    if (!assignment)
-      throw new Error("Atribuição de papel não encontrada ou já revogada");
+        const assignment = rows[0];
+        if (!assignment)
+          throw new Error("Atribuição de papel não encontrada ou já revogada");
 
-    await db
-      .update(roleAssignments)
-      .set({
-        revokedAt: new Date(),
-        revokedBy: ctx.actorId,
-        revocationReason: parsedInput.reason ?? null,
-      })
-      .where(eq(roleAssignments.id, parsedInput.assignmentId));
+        await tx
+          .update(roleAssignments)
+          .set({
+            revokedAt: new Date(),
+            revokedBy: ctx.actorId,
+            revocationReason: parsedInput.reason ?? null,
+          })
+          .where(eq(roleAssignments.id, parsedInput.assignmentId));
+
+        return assignment;
+      },
+    );
 
     await logAudit({
       actorId: ctx.actorId,
@@ -206,29 +229,38 @@ export const updateDesignation = adminAction
   )
   .action(async ({ parsedInput, ctx }) => {
     if (parsedInput.action === "revoke") {
-      const activeRows = await db
-        .select()
-        .from(designations)
-        .where(
-          and(
-            eq(designations.userId, parsedInput.userId),
-            eq(designations.type, parsedInput.type),
-            isNull(designations.revokedAt),
-          ),
-        );
+      const active = await withAuthenticatedContext(
+        { actorId: ctx.actorId },
+        async (tx) => {
+          const activeRows = await tx
+            .select()
+            .from(designations)
+            .where(
+              and(
+                eq(designations.userId, parsedInput.userId),
+                eq(designations.type, parsedInput.type),
+                isNull(designations.revokedAt),
+              ),
+            );
 
-      const active = activeRows[0];
-      if (!active)
-        throw new Error("Designação ativa não encontrada para este usuário");
+          const active = activeRows[0];
+          if (!active)
+            throw new Error(
+              "Designação ativa não encontrada para este usuário",
+            );
 
-      await db
-        .update(designations)
-        .set({
-          revokedAt: new Date(),
-          revokedBy: ctx.actorId,
-          revocationReason: parsedInput.reason ?? null,
-        })
-        .where(eq(designations.id, active.id));
+          await tx
+            .update(designations)
+            .set({
+              revokedAt: new Date(),
+              revokedBy: ctx.actorId,
+              revocationReason: parsedInput.reason ?? null,
+            })
+            .where(eq(designations.id, active.id));
+
+          return active;
+        },
+      );
 
       await logAudit({
         actorId: ctx.actorId,
@@ -244,38 +276,44 @@ export const updateDesignation = adminAction
       return { ok: true };
     }
 
-    // assign — verify the user has a governance role
-    const roleRows = await db
-      .select({ role: roleAssignments.role })
-      .from(roleAssignments)
-      .where(
-        and(
-          eq(roleAssignments.userId, parsedInput.userId),
-          isNull(roleAssignments.revokedAt),
-        ),
-      );
+    const designation = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        // assign — verify the user has a governance role
+        const roleRows = await tx
+          .select({ role: roleAssignments.role })
+          .from(roleAssignments)
+          .where(
+            and(
+              eq(roleAssignments.userId, parsedInput.userId),
+              isNull(roleAssignments.revokedAt),
+            ),
+          );
 
-    const hasGovernanceRole = roleRows.some(
-      (r) => r.role === "diretor" || r.role === "conselheiro",
+        const hasGovernanceRole = roleRows.some(
+          (r) => r.role === "diretor" || r.role === "conselheiro",
+        );
+
+        if (!hasGovernanceRole) {
+          throw new Error(
+            "Apenas diretores ou conselheiros podem receber designações especiais",
+          );
+        }
+
+        const inserted = await tx
+          .insert(designations)
+          .values({
+            userId: parsedInput.userId,
+            type: parsedInput.type,
+            assignedBy: ctx.actorId,
+          })
+          .returning();
+
+        const designation = inserted[0];
+        if (!designation) throw new Error("Falha ao criar designação");
+        return designation;
+      },
     );
-
-    if (!hasGovernanceRole) {
-      throw new Error(
-        "Apenas diretores ou conselheiros podem receber designações especiais",
-      );
-    }
-
-    const inserted = await db
-      .insert(designations)
-      .values({
-        userId: parsedInput.userId,
-        type: parsedInput.type,
-        assignedBy: ctx.actorId,
-      })
-      .returning();
-
-    const designation = inserted[0];
-    if (!designation) throw new Error("Falha ao criar designação");
 
     await logAudit({
       actorId: ctx.actorId,

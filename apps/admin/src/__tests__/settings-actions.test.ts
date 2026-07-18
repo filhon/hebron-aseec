@@ -15,6 +15,7 @@ import { PROJETOS_CHECKLIST_TEMPLATE_SETTING_KEY } from "@hebron/db/seed";
 import {
   users,
   auditLog,
+  roleAssignments,
   systemSettings,
   taskTemplates,
   templateItems,
@@ -85,6 +86,14 @@ beforeAll(async () => {
     })
     .onConflictDoNothing();
 
+  // setProjetosChecklistTemplate agora lê/escreve via withAuthenticatedContext
+  // (P-9.1b-1) — o mock de sessão sozinho não basta, RLS avalia has_role()
+  // contra role_assignments de verdade (mesmo padrão de actions.test.ts).
+  await db
+    .insert(roleAssignments)
+    .values({ userId: ACTOR_ID, role: "super_admin", grantedBy: ACTOR_ID })
+    .onConflictDoNothing();
+
   const [ws] = await db
     .select({ id: workspaces.id })
     .from(workspaces)
@@ -135,6 +144,7 @@ afterAll(async () => {
   }
 
   await db.delete(auditLog).where(eq(auditLog.actorId, ACTOR_ID));
+  await db.delete(roleAssignments).where(eq(roleAssignments.userId, ACTOR_ID));
   await db.delete(users).where(eq(users.id, ACTOR_ID));
 });
 
