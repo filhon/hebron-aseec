@@ -178,6 +178,7 @@
 | S-155  | 2026-07-17 | P-9.1b — Fechamento dos achados abertos da auditoria (S-02 + S-05) (CORRETIVO)          | parcial                              |
 | S-156  | 2026-07-17 | P-9.1b-1 — Fechamento do achado S-02 em `admin` (CORRETIVO)                             | concluido                            |
 | S-157  | 2026-07-17 | P-9.1b-2 — Fechamento do achado S-02 em `financeiro` (CORRETIVO)                        | concluido                            |
+| S-158  | 2026-07-18 | P-9.1b-3 — Fechamento do achado S-02 em `projetos` (CORRETIVO)                          | parcial                              |
 
 ---
 
@@ -11895,3 +11896,175 @@ lê + ouvinte não lê com dados semeados reais.
 - [x] Suíte completa do `financeiro` verde (11/11 arquivos, 49/49 testes)
       e `security-audit.test.ts` do `admin` verde (11/11 describes, 26/26
       testes)
+
+---
+
+### S-158 — 2026-07-18 — P-9.1b-3 — Fechamento do achado S-02 em `projetos` (CORRETIVO)
+
+**Prompt:** P-9.1b-3 (`PROMPTS.md:5463`)
+**Modelo:** claude-sonnet-5
+**Status:** parcial — código migrado e correto, mas **bloqueado para
+verificação estável** por um problema de infraestrutura ativo no banco
+compartilhado (ver achado crítico abaixo). Filipe precisa decidir como
+proceder antes de fechar esta sessão como concluída.
+
+**Resumo:**
+Migrou `evaluations.ts`, `organizations.ts`, `projects.ts` (maior arquivo —
+21 call-sites), `reports.ts` e `voting.ts` de `db` cru
+(`@hebron/db/client`) para `withAuthenticatedContext`
+(`@hebron/db/authenticated`), seguindo o padrão já validado em
+financeiro/admin (P-9.1b-1/2). `lib/queries.ts` já rodava neste padrão
+desde antes (fora de escopo). `db.insert(notifications)` em
+`notifyHomologacao` (`projects.ts`) permanece exceção service-level
+(mesmo motivo documentado em admin/financeiro: `notifications_insert_service`
+só concede INSERT a `service_role`).
+
+**Padrão de auditoria por arquivo:**
+
+- `evaluations.ts`, `organizations.ts`, `reports.ts`, `projects.ts`: cada
+  action abre um único `withAuthenticatedContext` para a mutação e chama
+  `logProjectAudit(...)` **depois** de fechado (sem `dbHandle` — grava via
+  `db` superuser, mesmo padrão já usado pela maioria dos fluxos não-
+  governança em `admin/actions/users.ts`). Não são módulos de governança
+  dual (essa exigência é só para votação, per comentário original de
+  `lib/audit.ts`).
+- `voting.ts` (`castVote`/`closeVoting`/`triggerPanicButton`): votação é
+  governança dual (decisão F3-Q4) — o voto/transição de estágio e o audit
+  precisam ser atômicos. Os `db.transaction(...)` originais viraram
+  `withAuthenticatedContext`, e cada chamada de `logProjectAudit` dentro
+  deles agora passa por `withSystemRole(tx, ...)` (RESET ROLE → INSERT em
+  `admin.audit_log` → SET LOCAL ROLE authenticated), pois a policy de
+  INSERT desta tabela é `TO service_role` — mesma exceção documentada em
+  `financeiro/actions/approval.ts` (`approveBatch`/`authorizeBatch`).
+- Helpers que antes recebiam `db`/nenhum parâmetro (`getProjectOrThrow`,
+  `getNextVersionNumber`, `createVersionSnapshot`, `lookupCategoryId`,
+  `loadScoringCriteria`, `loadCompactTemplate` em `projects.ts`;
+  `getProjectForReport` em `reports.ts`) passaram a receber `tx:
+AuthenticatedTx` como primeiro parâmetro — chamador já está dentro de um
+  `withAuthenticatedContext`, mesmo padrão de `getPayableOrThrow` (P-9.1b-2).
+- `submitProject` (o fluxo mais longo): dividido em múltiplos
+  `withAuthenticatedContext` menores (transição de estágio + snapshot +
+  nome da org; leitura de critério de scoring; update do score IA; leitura
+  de template; insert da versão compacta) em vez de um único bloco — as
+  chamadas de IA (`scoreProject`/`generateCompactVersion`) não devem
+  segurar uma transação Postgres aberta durante uma chamada de rede
+  externa, mesmo padrão de múltiplos blocos já usado em
+  `createWeeklyBatch` (financeiro).
+
+**Achado crítico — drift ATIVO e recorrente de GRANT no schema `projetos`
+(bloqueia verificação, não é bug de código):** durante a suíte de testes,
+`rls.test.ts`/`voting.test.ts`/`audit-abort.test.ts`/`close-voting.test.ts`
+começaram a falhar com `permission denied for schema projetos` — inclusive
+`rls.test.ts`, um arquivo **pré-existente que esta sessão não tocou**, que
+tinha acabado de passar 19/19 minutos antes. Introspecção via
+`has_schema_privilege`/`information_schema.role_table_grants` confirmou:
+`GRANT USAGE ON SCHEMA projetos` e `GRANT SELECT` em
+`projetos.projects`/`projetos.votes`/`projetos.organization_members` para
+o role `authenticated` — exatamente os grants que `0025_fix_projetos_schema_grant.sql`
+e `0026_fix_projetos_missing_select_grants.sql` já haviam restaurado antes
+— estão ausentes de novo no banco de dev/staging (`aws-1-us-west-2.pooler.supabase.com`),
+**apesar de 0025/0026 constarem como aplicadas** em `public._migrations`. Os
+outros 8 schemas de app (admin, documentos, financeiro, plataforma, flats,
+tarefas, intranet, radio) permanecem com o grant intacto — isolado a
+`projetos`. Pior: reaplicar o `GRANT` manualmente restaura o acesso por uma
+janela curta (confirmado passando a suíte inteira, 104-107/107 verdes, e
+depois falhando de novo minutos depois com o mesmo erro) — **algo externo
+a esta sessão está revogando o grant de `projetos` repetidamente, em um
+ciclo de poucos minutos**, enquanto os outros schemas não são afetados.
+Isso não é causado por este código (RLS já estava ativa e testada nos
+outros 8 apps sem esse problema) nem é um bug introduzido aqui (o mesmo
+`rls.test.ts`, que não foi tocado nesta sessão, quebra e volta a passar no
+mesmo ciclo). **Ação registrada:** criada `packages/db/src/migrations/0056_fix_projetos_schema_grant_recur.sql`
+(idempotente, reaplica os grants de 0025+0026) — corrige o ambiente
+efêmero da CI (Supabase local via Docker, sempre migrado do zero) e
+qualquer restauração futura do banco compartilhado, mas **não resolve a
+causa raiz**, ainda desconhecida.
+
+**Hipótese testada e descartada nesta sessão:** Filipe conferiu o Dashboard
+e encontrou que nenhum schema de app estava em "API Settings → Exposed
+schemas" (só `public`/`graphql_public`) — hipótese de que isso disparava
+uma reconciliação da plataforma revogando grants de schemas "não
+oficiais". Filipe expôs **todos** os 9 schemas de app na API. Resultado:
+**não resolveu.** Reaplicado o grant manualmente, confirmado estável por
+90s (inclusive em conexão nova), e ainda assim a suíte completa voltou a
+falhar com o mesmo erro ~100-150s depois (`audit-abort.test.ts`/
+`close-voting.test.ts`, que rodam mais tarde na suíte). Ciclo de reversão:
+aproximadamente 2 minutos, isolado ao schema `projetos`, causa raiz **não
+identificada** — não é grant/policy do código (`0056` está correto), não é
+CI (roda em stack Supabase local efêmero via Docker, isolado do banco
+compartilhado), não é "Exposed schemas". Decisão do Filipe: parar de
+investigar nesta sessão e retomar com acesso ao MCP do Supabase.
+
+**Instrução para a próxima sessão:** antes de reabrir P-9.1b-3, autorizar
+o servidor MCP `plugin:supabase:supabase` (`claude mcp` ou `/mcp` — não
+dá para autorizar em sessão não-interativa) e usar as ferramentas dele
+(ex.: advisors, logs, configuração do projeto) para investigar o que está
+revogando `GRANT USAGE ON SCHEMA projetos` + `SELECT` em
+`projetos.projects`/`votes`/`organization_members` de `authenticated` num
+ciclo de ~2 minutos — acesso via `DATABASE_URL` direto (`postgres.js`) só
+enxerga o estado do catálogo, não a causa (jobs agendados, webhooks,
+branches, config de Data API etc. do lado da plataforma Supabase). Depois
+de identificada e corrigida a causa raiz, reaplicar
+`GRANT USAGE ON SCHEMA projetos TO authenticated` + `GRANT SELECT` em
+`projetos.projects`/`votes`/`organization_members` (ou simplesmente
+rodar `pnpm --filter @hebron/db db:migrate`, já que `0056` está no lugar)
+e rodar `pnpm turbo test --filter=@hebron/projetos` até ficar estável por
+vários minutos seguidos antes de marcar P-9.1b-3 como `concluido`.
+
+**Achado secundário — `close-voting.test.ts` assume ambiente vazio, banco
+compartilhado tem dado real:** 2 dos 4 casos deste arquivo pré-existente
+falham consistentemente (mesmo com os grants intactos) porque
+`countEligibleVoters` (contagem global de `diretor`/`conselheiro` em
+`public.role_assignments`, sem escopo por projeto/organização — lógica
+inalterada por esta sessão) encontra **5 usuários reais** com esses papéis
+no banco de dev/staging compartilhado, não só os 2 fixtures do teste — o
+teste foi validado originalmente contra o stack efêmero da CI (que começa
+vazio) e nunca contra este banco populado. Não é regressão desta migração
+(a mesma consulta, com a mesma lógica, existia no código anterior via `db`
+cru — o resultado da contagem independe de qual role Postgres executa o
+SELECT). Não corrigido aqui (fora de escopo alterar a lógica de negócio de
+quórum ou popular/limpar dados reais de terceiros); registrado para decisão
+de Filipe (escopar a contagem por projeto/organização seria mudança de
+regra de negócio, não bug de RLS).
+
+**Evidência de correção do código (janelas limpas capturadas durante a
+sessão, antes do grant ser revogado de novo):** `rls.test.ts` 19/19,
+`voting.test.ts` 21/21, `flow.test.ts` 21/21, `state-machine.test.ts`
+25/25, `audit-abort.test.ts` 2/2 (incluindo o caso do audit mockado
+falhando de propósito — rollback real confirmado), suíte completa em
+104/107 (as 3 restantes são as 2 de `close-voting.test.ts` acima + 1
+transitória de re-quebra do grant durante o mesmo run). `lint`/`typecheck`
+verdes para `@hebron/projetos` e `@hebron/admin`.
+
+**Arquivos alterados:**
+
+- `apps/projetos/src/actions/evaluations.ts`, `organizations.ts`,
+  `projects.ts`, `reports.ts`, `voting.ts`
+- `apps/admin/src/__tests__/security-audit.test.ts` (novo describe
+  "Isolamento horizontal — submissor não lê/edita projeto de organização à
+  qual não pertence": projeto semeado em uma organização real, membro lê,
+  submissor de outra organização não lê nem edita via
+  `withAuthenticatedContext`)
+- `packages/db/src/migrations/0056_fix_projetos_schema_grant_recur.sql`
+  (novo — fora da lista original de arquivos permitidos; criado por G1,
+  infraestrutura óbvia faltante sem a qual nenhuma action migrada funciona
+  em runtime; ver achado crítico acima)
+- `SESSIONS.md` (esta entrada + índice)
+
+**Critérios de aceite verificados:**
+
+- [x] Grep limpo de `db` cru nos 5 arquivos de `actions/*.ts` (única
+      exceção: `db.insert(notifications)` em `projects.ts`, comentada)
+- [x] Teste prova isolamento horizontal por organização em `projects`
+      (membro lê, não-membro não lê nem edita — dados semeados)
+- [x] Lint passa · Types passam
+- [ ] **SESSÃO NÃO FECHADA COMO 100% VERDE:** suíte de `projetos` variou
+      entre 104/107 e 88/107 dependendo do estado do grant no momento do
+      run (ver achado crítico) — o código está correto (evidenciado pelas
+      janelas limpas), mas a fonte externa de instabilidade não foi
+      resolvida por esta sessão, nem por expor todos os schemas na API
+      (hipótese testada e descartada). Sessão encerrada por decisão do
+      Filipe — retomar na próxima sessão com o MCP do Supabase autorizado
+      (ver instrução acima) antes de reexecutar
+      `pnpm turbo test --filter=@hebron/projetos` e considerar P-9.1b-3
+      definitivamente concluído.

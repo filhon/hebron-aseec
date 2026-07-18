@@ -2,7 +2,10 @@
 
 import { z } from "zod";
 import { eq, and, isNull } from "drizzle-orm";
-import { db } from "@hebron/db/client";
+import {
+  withAuthenticatedContext,
+  type AuthenticatedTx,
+} from "@hebron/db/authenticated";
 import { reports, reportAttachments, projects } from "@hebron/db/schema";
 import { diretorAction, projetosAction } from "../lib/safe-action";
 import { logProjectAudit } from "../lib/audit";
@@ -53,11 +56,12 @@ const reviewReportSchema = z.object({
 // ---------------------------------------------------------------------------
 
 async function getProjectForReport(
+  tx: AuthenticatedTx,
   projectId: string,
   actorId: string,
   roles: string[],
 ) {
-  const projectRows = await db
+  const projectRows = await tx
     .select()
     .from(projects)
     .where(and(eq(projects.id, projectId), isNull(projects.deletedAt)))
@@ -92,40 +96,49 @@ async function getProjectForReport(
 export const createReport = diretorAction
   .schema(createReportSchema)
   .action(async ({ parsedInput, ctx }) => {
-    const projectRows = await db
-      .select({
-        id: projects.id,
-        stage: projects.stage,
-        deletedAt: projects.deletedAt,
-      })
-      .from(projects)
-      .where(
-        and(eq(projects.id, parsedInput.projectId), isNull(projects.deletedAt)),
-      )
-      .limit(1);
+    const report = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const projectRows = await tx
+          .select({
+            id: projects.id,
+            stage: projects.stage,
+            deletedAt: projects.deletedAt,
+          })
+          .from(projects)
+          .where(
+            and(
+              eq(projects.id, parsedInput.projectId),
+              isNull(projects.deletedAt),
+            ),
+          )
+          .limit(1);
 
-    const project = projectRows[0];
-    if (!project) throw new Error("Projeto não encontrado");
-    if (project.stage !== "em_execucao" && project.stage !== "concluido") {
-      throw new Error(
-        "Relatórios só podem ser criados para projetos em execução",
-      );
-    }
+        const project = projectRows[0];
+        if (!project) throw new Error("Projeto não encontrado");
+        if (project.stage !== "em_execucao" && project.stage !== "concluido") {
+          throw new Error(
+            "Relatórios só podem ser criados para projetos em execução",
+          );
+        }
 
-    const inserted = await db
-      .insert(reports)
-      .values({
-        projectId: parsedInput.projectId,
-        periodStart: parsedInput.periodStart,
-        periodEnd: parsedInput.periodEnd,
-        dueDate: parsedInput.dueDate,
-        content: parsedInput.content ?? null,
-        status: "pendente",
-      })
-      .returning();
+        const inserted = await tx
+          .insert(reports)
+          .values({
+            projectId: parsedInput.projectId,
+            periodStart: parsedInput.periodStart,
+            periodEnd: parsedInput.periodEnd,
+            dueDate: parsedInput.dueDate,
+            content: parsedInput.content ?? null,
+            status: "pendente",
+          })
+          .returning();
 
-    const report = inserted[0];
-    if (!report) throw new Error("Falha ao criar relatório");
+        const report = inserted[0];
+        if (!report) throw new Error("Falha ao criar relatório");
+        return report;
+      },
+    );
 
     await logProjectAudit({
       actorId: ctx.actorId,
@@ -150,51 +163,58 @@ export const createReport = diretorAction
 export const submitReport = projetosAction
   .schema(submitReportSchema)
   .action(async ({ parsedInput, ctx }) => {
-    // Fetch report
-    const reportRows = await db
-      .select()
-      .from(reports)
-      .where(eq(reports.id, parsedInput.reportId))
-      .limit(1);
+    const { finalReport, projectId, now } = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        // Fetch report
+        const reportRows = await tx
+          .select()
+          .from(reports)
+          .where(eq(reports.id, parsedInput.reportId))
+          .limit(1);
 
-    const report = reportRows[0];
-    if (!report) throw new Error("Relatório não encontrado");
-    if (report.status !== "pendente") {
-      throw new Error("Apenas relatórios pendentes podem ser submetidos");
-    }
+        const report = reportRows[0];
+        if (!report) throw new Error("Relatório não encontrado");
+        if (report.status !== "pendente") {
+          throw new Error("Apenas relatórios pendentes podem ser submetidos");
+        }
 
-    // Verify actor is the project's submitter OR diretor/super_admin
-    await getProjectForReport(report.projectId, ctx.actorId, ctx.roles);
+        // Verify actor is the project's submitter OR diretor/super_admin
+        await getProjectForReport(tx, report.projectId, ctx.actorId, ctx.roles);
 
-    const now = new Date();
+        const now = new Date();
 
-    const updated = await db
-      .update(reports)
-      .set({
-        content: parsedInput.content,
-        status: "submitted",
-        submittedBy: ctx.actorId,
-        submittedAt: now,
-        updatedAt: now,
-      })
-      .where(eq(reports.id, parsedInput.reportId))
-      .returning();
+        const updated = await tx
+          .update(reports)
+          .set({
+            content: parsedInput.content,
+            status: "submitted",
+            submittedBy: ctx.actorId,
+            submittedAt: now,
+            updatedAt: now,
+          })
+          .where(eq(reports.id, parsedInput.reportId))
+          .returning();
 
-    const finalReport = updated[0];
-    if (!finalReport) throw new Error("Falha ao submeter relatório");
+        const finalReport = updated[0];
+        if (!finalReport) throw new Error("Falha ao submeter relatório");
 
-    // Insert attachments if provided
-    if (parsedInput.attachments && parsedInput.attachments.length > 0) {
-      await db.insert(reportAttachments).values(
-        parsedInput.attachments.map((a) => ({
-          reportId: parsedInput.reportId,
-          fileUrl: a.fileUrl,
-          fileName: a.fileName,
-          fileSize: a.fileSize ?? null,
-          uploadedBy: ctx.actorId,
-        })),
-      );
-    }
+        // Insert attachments if provided
+        if (parsedInput.attachments && parsedInput.attachments.length > 0) {
+          await tx.insert(reportAttachments).values(
+            parsedInput.attachments.map((a) => ({
+              reportId: parsedInput.reportId,
+              fileUrl: a.fileUrl,
+              fileName: a.fileName,
+              fileSize: a.fileSize ?? null,
+              uploadedBy: ctx.actorId,
+            })),
+          );
+        }
+
+        return { finalReport, projectId: report.projectId, now };
+      },
+    );
 
     await logProjectAudit({
       actorId: ctx.actorId,
@@ -202,7 +222,7 @@ export const submitReport = projetosAction
       entity: "report",
       entityId: parsedInput.reportId,
       diff: {
-        projectId: report.projectId,
+        projectId,
         status: { before: "pendente", after: "submitted" },
         attachmentCount: parsedInput.attachments?.length ?? 0,
         submittedAt: now.toISOString(),
@@ -219,35 +239,42 @@ export const submitReport = projetosAction
 export const reviewReport = diretorAction
   .schema(reviewReportSchema)
   .action(async ({ parsedInput, ctx }) => {
-    const reportRows = await db
-      .select()
-      .from(reports)
-      .where(eq(reports.id, parsedInput.reportId))
-      .limit(1);
+    const { finalReport, projectId, now } = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const reportRows = await tx
+          .select()
+          .from(reports)
+          .where(eq(reports.id, parsedInput.reportId))
+          .limit(1);
 
-    const report = reportRows[0];
-    if (!report) throw new Error("Relatório não encontrado");
-    if (report.status !== "submitted") {
-      throw new Error("Apenas relatórios submetidos podem ser revisados");
-    }
+        const report = reportRows[0];
+        if (!report) throw new Error("Relatório não encontrado");
+        if (report.status !== "submitted") {
+          throw new Error("Apenas relatórios submetidos podem ser revisados");
+        }
 
-    const newStatus =
-      parsedInput.decision === "approved" ? "approved" : "rejected";
-    const now = new Date();
+        const newStatus =
+          parsedInput.decision === "approved" ? "approved" : "rejected";
+        const now = new Date();
 
-    const updated = await db
-      .update(reports)
-      .set({
-        status: newStatus,
-        reviewedBy: ctx.actorId,
-        reviewedAt: now,
-        updatedAt: now,
-      })
-      .where(eq(reports.id, parsedInput.reportId))
-      .returning();
+        const updated = await tx
+          .update(reports)
+          .set({
+            status: newStatus,
+            reviewedBy: ctx.actorId,
+            reviewedAt: now,
+            updatedAt: now,
+          })
+          .where(eq(reports.id, parsedInput.reportId))
+          .returning();
 
-    const finalReport = updated[0];
-    if (!finalReport) throw new Error("Falha ao revisar relatório");
+        const finalReport = updated[0];
+        if (!finalReport) throw new Error("Falha ao revisar relatório");
+
+        return { finalReport, projectId: report.projectId, now };
+      },
+    );
 
     await logProjectAudit({
       actorId: ctx.actorId,
@@ -255,8 +282,8 @@ export const reviewReport = diretorAction
       entity: "report",
       entityId: parsedInput.reportId,
       diff: {
-        projectId: report.projectId,
-        status: { before: "submitted", after: newStatus },
+        projectId,
+        status: { before: "submitted", after: finalReport.status },
         decision: parsedInput.decision,
         notes: parsedInput.notes,
         reviewedAt: now.toISOString(),

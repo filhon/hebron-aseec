@@ -2,7 +2,7 @@
 
 import { z } from "zod";
 import { eq, and } from "drizzle-orm";
-import { db } from "@hebron/db/client";
+import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { organizations, organizationMembers } from "@hebron/db/schema";
 import { submissorAction, diretorAction } from "../lib/safe-action";
 import { logProjectAudit, computeDiff } from "../lib/audit";
@@ -52,28 +52,35 @@ const memberSchema = z.object({
 export const createOrganization = submissorAction
   .schema(createOrganizationSchema)
   .action(async ({ parsedInput, ctx }) => {
-    const inserted = await db
-      .insert(organizations)
-      .values({
-        nome: parsedInput.nome,
-        cnpj: parsedInput.cnpj ?? null,
-        endereco: parsedInput.endereco ?? null,
-        telefone: parsedInput.telefone ?? null,
-        responsavelLegal: parsedInput.responsavelLegal ?? null,
-        denominacao: parsedInput.denominacao ?? null,
-        estatutoUrl: parsedInput.estatutoUrl ?? null,
-        createdBy: ctx.actorId,
-      })
-      .returning();
+    const org = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const inserted = await tx
+          .insert(organizations)
+          .values({
+            nome: parsedInput.nome,
+            cnpj: parsedInput.cnpj ?? null,
+            endereco: parsedInput.endereco ?? null,
+            telefone: parsedInput.telefone ?? null,
+            responsavelLegal: parsedInput.responsavelLegal ?? null,
+            denominacao: parsedInput.denominacao ?? null,
+            estatutoUrl: parsedInput.estatutoUrl ?? null,
+            createdBy: ctx.actorId,
+          })
+          .returning();
 
-    const org = inserted[0];
-    if (!org) throw new Error("Falha ao criar organização");
+        const org = inserted[0];
+        if (!org) throw new Error("Falha ao criar organização");
 
-    // Auto-add creator as member
-    await db.insert(organizationMembers).values({
-      organizationId: org.id,
-      userId: ctx.actorId,
-    });
+        // Auto-add creator as member
+        await tx.insert(organizationMembers).values({
+          organizationId: org.id,
+          userId: ctx.actorId,
+        });
+
+        return org;
+      },
+    );
 
     await logProjectAudit({
       actorId: ctx.actorId,
@@ -93,39 +100,47 @@ export const createOrganization = submissorAction
 export const updateOrganization = diretorAction
   .schema(updateOrganizationSchema)
   .action(async ({ parsedInput, ctx }) => {
-    const rows = await db
-      .select()
-      .from(organizations)
-      .where(eq(organizations.id, parsedInput.id))
-      .limit(1);
+    const { before, after } = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const rows = await tx
+          .select()
+          .from(organizations)
+          .where(eq(organizations.id, parsedInput.id))
+          .limit(1);
 
-    const before = rows[0];
-    if (!before) throw new Error("Organização não encontrada");
+        const before = rows[0];
+        if (!before) throw new Error("Organização não encontrada");
 
-    const patch: Partial<typeof organizations.$inferInsert> = {
-      updatedAt: new Date(),
-    };
-    if (parsedInput.nome !== undefined) patch.nome = parsedInput.nome;
-    if (parsedInput.cnpj !== undefined) patch.cnpj = parsedInput.cnpj ?? null;
-    if (parsedInput.endereco !== undefined)
-      patch.endereco = parsedInput.endereco ?? null;
-    if (parsedInput.telefone !== undefined)
-      patch.telefone = parsedInput.telefone ?? null;
-    if (parsedInput.responsavelLegal !== undefined)
-      patch.responsavelLegal = parsedInput.responsavelLegal ?? null;
-    if (parsedInput.denominacao !== undefined)
-      patch.denominacao = parsedInput.denominacao ?? null;
-    if (parsedInput.estatutoUrl !== undefined)
-      patch.estatutoUrl = parsedInput.estatutoUrl ?? null;
+        const patch: Partial<typeof organizations.$inferInsert> = {
+          updatedAt: new Date(),
+        };
+        if (parsedInput.nome !== undefined) patch.nome = parsedInput.nome;
+        if (parsedInput.cnpj !== undefined)
+          patch.cnpj = parsedInput.cnpj ?? null;
+        if (parsedInput.endereco !== undefined)
+          patch.endereco = parsedInput.endereco ?? null;
+        if (parsedInput.telefone !== undefined)
+          patch.telefone = parsedInput.telefone ?? null;
+        if (parsedInput.responsavelLegal !== undefined)
+          patch.responsavelLegal = parsedInput.responsavelLegal ?? null;
+        if (parsedInput.denominacao !== undefined)
+          patch.denominacao = parsedInput.denominacao ?? null;
+        if (parsedInput.estatutoUrl !== undefined)
+          patch.estatutoUrl = parsedInput.estatutoUrl ?? null;
 
-    const updated = await db
-      .update(organizations)
-      .set(patch)
-      .where(eq(organizations.id, parsedInput.id))
-      .returning();
+        const updated = await tx
+          .update(organizations)
+          .set(patch)
+          .where(eq(organizations.id, parsedInput.id))
+          .returning();
 
-    const after = updated[0];
-    if (!after) throw new Error("Falha ao atualizar organização");
+        const after = updated[0];
+        if (!after) throw new Error("Falha ao atualizar organização");
+
+        return { before, after };
+      },
+    );
 
     await logProjectAudit({
       actorId: ctx.actorId,
@@ -148,22 +163,24 @@ export const updateOrganization = diretorAction
 export const addOrganizationMember = diretorAction
   .schema(memberSchema)
   .action(async ({ parsedInput, ctx }) => {
-    // Verify org exists
-    const orgRows = await db
-      .select({ id: organizations.id })
-      .from(organizations)
-      .where(eq(organizations.id, parsedInput.organizationId))
-      .limit(1);
+    await withAuthenticatedContext({ actorId: ctx.actorId }, async (tx) => {
+      // Verify org exists
+      const orgRows = await tx
+        .select({ id: organizations.id })
+        .from(organizations)
+        .where(eq(organizations.id, parsedInput.organizationId))
+        .limit(1);
 
-    if (!orgRows[0]) throw new Error("Organização não encontrada");
+      if (!orgRows[0]) throw new Error("Organização não encontrada");
 
-    await db
-      .insert(organizationMembers)
-      .values({
-        organizationId: parsedInput.organizationId,
-        userId: parsedInput.userId,
-      })
-      .onConflictDoNothing();
+      await tx
+        .insert(organizationMembers)
+        .values({
+          organizationId: parsedInput.organizationId,
+          userId: parsedInput.userId,
+        })
+        .onConflictDoNothing();
+    });
 
     await logProjectAudit({
       actorId: ctx.actorId,
@@ -188,26 +205,30 @@ export const addOrganizationMember = diretorAction
 export const removeOrganizationMember = diretorAction
   .schema(memberSchema)
   .action(async ({ parsedInput, ctx }) => {
-    // Count remaining members
-    const memberRows = await db
-      .select({ userId: organizationMembers.userId })
-      .from(organizationMembers)
-      .where(
-        eq(organizationMembers.organizationId, parsedInput.organizationId),
-      );
-
-    if (memberRows.length <= 1) {
-      throw new Error("Não é possível remover o último membro da organização");
-    }
-
-    await db
-      .delete(organizationMembers)
-      .where(
-        and(
+    await withAuthenticatedContext({ actorId: ctx.actorId }, async (tx) => {
+      // Count remaining members
+      const memberRows = await tx
+        .select({ userId: organizationMembers.userId })
+        .from(organizationMembers)
+        .where(
           eq(organizationMembers.organizationId, parsedInput.organizationId),
-          eq(organizationMembers.userId, parsedInput.userId),
-        ),
-      );
+        );
+
+      if (memberRows.length <= 1) {
+        throw new Error(
+          "Não é possível remover o último membro da organização",
+        );
+      }
+
+      await tx
+        .delete(organizationMembers)
+        .where(
+          and(
+            eq(organizationMembers.organizationId, parsedInput.organizationId),
+            eq(organizationMembers.userId, parsedInput.userId),
+          ),
+        );
+    });
 
     await logProjectAudit({
       actorId: ctx.actorId,

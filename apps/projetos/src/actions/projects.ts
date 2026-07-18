@@ -4,6 +4,10 @@ import { z } from "zod";
 import { eq, and, isNull, count } from "drizzle-orm";
 import { db } from "@hebron/db/client";
 import {
+  withAuthenticatedContext,
+  type AuthenticatedTx,
+} from "@hebron/db/authenticated";
+import {
   projects,
   projectVersions,
   compactVersions,
@@ -53,8 +57,8 @@ import { checkOrganizationBudget } from "@hebron/integrations/projetos";
 // Helpers
 // ---------------------------------------------------------------------------
 
-async function getProjectOrThrow(projectId: string) {
-  const rows = await db
+async function getProjectOrThrow(tx: AuthenticatedTx, projectId: string) {
+  const rows = await tx
     .select()
     .from(projects)
     .where(and(eq(projects.id, projectId), isNull(projects.deletedAt)))
@@ -65,8 +69,11 @@ async function getProjectOrThrow(projectId: string) {
   return project;
 }
 
-async function getNextVersionNumber(projectId: string): Promise<number> {
-  const result = await db
+async function getNextVersionNumber(
+  tx: AuthenticatedTx,
+  projectId: string,
+): Promise<number> {
+  const result = await tx
     .select({ total: count() })
     .from(projectVersions)
     .where(eq(projectVersions.projectId, projectId));
@@ -75,13 +82,14 @@ async function getNextVersionNumber(projectId: string): Promise<number> {
 }
 
 async function createVersionSnapshot(
+  tx: AuthenticatedTx,
   projectId: string,
   stage: ProjectStage,
   data: Record<string, unknown>,
   createdBy: string,
 ): Promise<void> {
-  const versionNumber = await getNextVersionNumber(projectId);
-  await db.insert(projectVersions).values({
+  const versionNumber = await getNextVersionNumber(tx, projectId);
+  await tx.insert(projectVersions).values({
     projectId,
     versionNumber,
     stage,
@@ -90,9 +98,12 @@ async function createVersionSnapshot(
   });
 }
 
-async function lookupCategoryId(slug: string): Promise<string | null> {
+async function lookupCategoryId(
+  tx: AuthenticatedTx,
+  slug: string,
+): Promise<string | null> {
   const { projectCategories } = await import("@hebron/db/schema");
-  const rows = await db
+  const rows = await tx
     .select({ id: projectCategories.id })
     .from(projectCategories)
     .where(eq(projectCategories.slug, slug))
@@ -100,8 +111,10 @@ async function lookupCategoryId(slug: string): Promise<string | null> {
   return rows[0]?.id ?? null;
 }
 
-async function loadScoringCriteria(): Promise<ScoringCriteria> {
-  const rows = await db
+async function loadScoringCriteria(
+  tx: AuthenticatedTx,
+): Promise<ScoringCriteria> {
+  const rows = await tx
     .select({ value: systemSettings.value })
     .from(systemSettings)
     .where(eq(systemSettings.key, "projetos_scoring_criteria"))
@@ -111,8 +124,10 @@ async function loadScoringCriteria(): Promise<ScoringCriteria> {
   return (rows[0].value as ScoringCriteria | null) ?? DEFAULT_SCORING_CRITERIA;
 }
 
-async function loadCompactTemplate(): Promise<CompactVersionTemplate> {
-  const rows = await db
+async function loadCompactTemplate(
+  tx: AuthenticatedTx,
+): Promise<CompactVersionTemplate> {
+  const rows = await tx
     .select({ value: systemSettings.value })
     .from(systemSettings)
     .where(eq(systemSettings.key, "projetos_compact_template"))
@@ -132,54 +147,63 @@ export const createAnnualDraft = submissorAction
   .schema(createAnnualProjectSchema)
   .action(async ({ parsedInput, ctx }) => {
     const year = parsedInput.anoReferencia;
-    const categoryId = await lookupCategoryId(parsedInput.categoria);
 
-    const inserted = await db
-      .insert(projects)
-      .values({
-        title: parsedInput.titulo,
-        tipo: "anual",
-        stage: "rascunho",
-        categoryId,
-        organizationId: parsedInput.organizacaoId,
-        submitterId: ctx.actorId,
-        editalId: parsedInput.editalId ?? null,
-        parentProjectId: parsedInput.parentProjectId ?? null,
-        objectives: parsedInput.objetivos,
-        justification: parsedInput.justificativa,
-        targetAudience: parsedInput.beneficiariosDescricao,
-        expectedResults: parsedInput.resultadosEsperados,
-        ministryRegion: parsedInput.regiao,
-        ministryArea: parsedInput.pais,
-        budgetTotal: parsedInput.valorTotal.toString(),
-        parcelas: parsedInput.numeroParcelas,
-        meses: parsedInput.mesesPagamento.length,
-        evaluationYear: year,
-      })
-      .returning();
+    const project = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const categoryId = await lookupCategoryId(tx, parsedInput.categoria);
 
-    const project = inserted[0];
-    if (!project) throw new Error("Falha ao criar projeto");
+        const inserted = await tx
+          .insert(projects)
+          .values({
+            title: parsedInput.titulo,
+            tipo: "anual",
+            stage: "rascunho",
+            categoryId,
+            organizationId: parsedInput.organizacaoId,
+            submitterId: ctx.actorId,
+            editalId: parsedInput.editalId ?? null,
+            parentProjectId: parsedInput.parentProjectId ?? null,
+            objectives: parsedInput.objetivos,
+            justification: parsedInput.justificativa,
+            targetAudience: parsedInput.beneficiariosDescricao,
+            expectedResults: parsedInput.resultadosEsperados,
+            ministryRegion: parsedInput.regiao,
+            ministryArea: parsedInput.pais,
+            budgetTotal: parsedInput.valorTotal.toString(),
+            parcelas: parsedInput.numeroParcelas,
+            meses: parsedInput.mesesPagamento.length,
+            evaluationYear: year,
+          })
+          .returning();
 
-    // Store full form data (including fields without DB columns) in version 1
-    await createVersionSnapshot(
-      project.id,
-      "rascunho",
-      { ...parsedInput, _source: "createAnnualDraft" },
-      ctx.actorId,
+        const project = inserted[0];
+        if (!project) throw new Error("Falha ao criar projeto");
+
+        // Store full form data (including fields without DB columns) in version 1
+        await createVersionSnapshot(
+          tx,
+          project.id,
+          "rascunho",
+          { ...parsedInput, _source: "createAnnualDraft" },
+          ctx.actorId,
+        );
+
+        if (parsedInput.attachments?.length) {
+          await tx.insert(projectAttachments).values(
+            parsedInput.attachments.map((a) => ({
+              projectId: project.id,
+              fileUrl: a.fileUrl,
+              fileName: a.fileName,
+              fileSize: a.fileSize ?? null,
+              uploadedBy: ctx.actorId,
+            })),
+          );
+        }
+
+        return project;
+      },
     );
-
-    if (parsedInput.attachments?.length) {
-      await db.insert(projectAttachments).values(
-        parsedInput.attachments.map((a) => ({
-          projectId: project.id,
-          fileUrl: a.fileUrl,
-          fileName: a.fileName,
-          fileSize: a.fileSize ?? null,
-          uploadedBy: ctx.actorId,
-        })),
-      );
-    }
 
     await logProjectAudit({
       actorId: ctx.actorId,
@@ -208,52 +232,61 @@ export const createAnnualDraft = submissorAction
 export const createPunctualDraft = submissorAction
   .schema(createPunctualProjectSchema)
   .action(async ({ parsedInput, ctx }) => {
-    const categoryId = await lookupCategoryId(parsedInput.categoria);
     const year = new Date().getFullYear();
 
-    const inserted = await db
-      .insert(projects)
-      .values({
-        title: parsedInput.titulo,
-        tipo: "pontual",
-        stage: "rascunho",
-        categoryId,
-        organizationId: parsedInput.organizacaoId,
-        submitterId: ctx.actorId,
-        editalId: parsedInput.editalId ?? null,
-        parentProjectId: parsedInput.parentProjectId ?? null,
-        objectives: parsedInput.descricao ?? null,
-        justification: parsedInput.motivoEmergencial,
-        ministryRegion: parsedInput.regiao ?? null,
-        ministryArea: parsedInput.pais ?? null,
-        budgetTotal: parsedInput.valorTotal.toString(),
-        parcelas: 1,
-        meses: 1,
-        evaluationYear: year,
-      })
-      .returning();
+    const project = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const categoryId = await lookupCategoryId(tx, parsedInput.categoria);
 
-    const project = inserted[0];
-    if (!project) throw new Error("Falha ao criar projeto pontual");
+        const inserted = await tx
+          .insert(projects)
+          .values({
+            title: parsedInput.titulo,
+            tipo: "pontual",
+            stage: "rascunho",
+            categoryId,
+            organizationId: parsedInput.organizacaoId,
+            submitterId: ctx.actorId,
+            editalId: parsedInput.editalId ?? null,
+            parentProjectId: parsedInput.parentProjectId ?? null,
+            objectives: parsedInput.descricao ?? null,
+            justification: parsedInput.motivoEmergencial,
+            ministryRegion: parsedInput.regiao ?? null,
+            ministryArea: parsedInput.pais ?? null,
+            budgetTotal: parsedInput.valorTotal.toString(),
+            parcelas: 1,
+            meses: 1,
+            evaluationYear: year,
+          })
+          .returning();
 
-    await createVersionSnapshot(
-      project.id,
-      "rascunho",
-      { ...parsedInput, _source: "createPunctualDraft" },
-      ctx.actorId,
+        const project = inserted[0];
+        if (!project) throw new Error("Falha ao criar projeto pontual");
+
+        await createVersionSnapshot(
+          tx,
+          project.id,
+          "rascunho",
+          { ...parsedInput, _source: "createPunctualDraft" },
+          ctx.actorId,
+        );
+
+        if (parsedInput.attachments?.length) {
+          await tx.insert(projectAttachments).values(
+            parsedInput.attachments.map((a) => ({
+              projectId: project.id,
+              fileUrl: a.fileUrl,
+              fileName: a.fileName,
+              fileSize: a.fileSize ?? null,
+              uploadedBy: ctx.actorId,
+            })),
+          );
+        }
+
+        return project;
+      },
     );
-
-    if (parsedInput.attachments?.length) {
-      await db.insert(projectAttachments).values(
-        parsedInput.attachments.map((a) => ({
-          projectId: project.id,
-          fileUrl: a.fileUrl,
-          fileName: a.fileName,
-          fileSize: a.fileSize ?? null,
-          uploadedBy: ctx.actorId,
-        })),
-      );
-    }
 
     await logProjectAudit({
       actorId: ctx.actorId,
@@ -295,60 +328,68 @@ const updateDraftSchema = z.object({
 export const updateDraftProject = submissorAction
   .schema(updateDraftSchema)
   .action(async ({ parsedInput, ctx }) => {
-    const project = await getProjectOrThrow(parsedInput.projectId);
+    const { before, after } = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const project = await getProjectOrThrow(tx, parsedInput.projectId);
 
-    if (project.stage !== "rascunho") {
-      throw new Error(
-        "Apenas projetos em rascunho podem ser editados. Solicite nova revisão se necessário.",
-      );
-    }
+        if (project.stage !== "rascunho") {
+          throw new Error(
+            "Apenas projetos em rascunho podem ser editados. Solicite nova revisão se necessário.",
+          );
+        }
 
-    // Only the submitter or super_admin can edit their own draft
-    const isSuperAdmin = ctx.roles.includes("super_admin");
-    if (!isSuperAdmin && project.submitterId !== ctx.actorId) {
-      throw new Error("Apenas o submissor pode editar o próprio rascunho");
-    }
+        // Only the submitter or super_admin can edit their own draft
+        const isSuperAdmin = ctx.roles.includes("super_admin");
+        if (!isSuperAdmin && project.submitterId !== ctx.actorId) {
+          throw new Error("Apenas o submissor pode editar o próprio rascunho");
+        }
 
-    const patch: Partial<typeof projects.$inferInsert> = {
-      updatedAt: new Date(),
-    };
-    if (parsedInput.title !== undefined) patch.title = parsedInput.title;
-    if (parsedInput.objectives !== undefined)
-      patch.objectives = parsedInput.objectives;
-    if (parsedInput.justification !== undefined)
-      patch.justification = parsedInput.justification;
-    if (parsedInput.targetAudience !== undefined)
-      patch.targetAudience = parsedInput.targetAudience ?? null;
-    if (parsedInput.expectedResults !== undefined)
-      patch.expectedResults = parsedInput.expectedResults;
-    if (parsedInput.ministryRegion !== undefined)
-      patch.ministryRegion = parsedInput.ministryRegion ?? null;
-    if (parsedInput.ministryArea !== undefined)
-      patch.ministryArea = parsedInput.ministryArea ?? null;
-    if (parsedInput.budgetTotal !== undefined)
-      patch.budgetTotal = parsedInput.budgetTotal.toString();
-    if (parsedInput.parcelas !== undefined)
-      patch.parcelas = parsedInput.parcelas;
+        const patch: Partial<typeof projects.$inferInsert> = {
+          updatedAt: new Date(),
+        };
+        if (parsedInput.title !== undefined) patch.title = parsedInput.title;
+        if (parsedInput.objectives !== undefined)
+          patch.objectives = parsedInput.objectives;
+        if (parsedInput.justification !== undefined)
+          patch.justification = parsedInput.justification;
+        if (parsedInput.targetAudience !== undefined)
+          patch.targetAudience = parsedInput.targetAudience ?? null;
+        if (parsedInput.expectedResults !== undefined)
+          patch.expectedResults = parsedInput.expectedResults;
+        if (parsedInput.ministryRegion !== undefined)
+          patch.ministryRegion = parsedInput.ministryRegion ?? null;
+        if (parsedInput.ministryArea !== undefined)
+          patch.ministryArea = parsedInput.ministryArea ?? null;
+        if (parsedInput.budgetTotal !== undefined)
+          patch.budgetTotal = parsedInput.budgetTotal.toString();
+        if (parsedInput.parcelas !== undefined)
+          patch.parcelas = parsedInput.parcelas;
 
-    const updated = await db
-      .update(projects)
-      .set(patch)
-      .where(eq(projects.id, parsedInput.projectId))
-      .returning();
+        const updated = await tx
+          .update(projects)
+          .set(patch)
+          .where(eq(projects.id, parsedInput.projectId))
+          .returning();
 
-    const after = updated[0];
-    if (!after) throw new Error("Falha ao atualizar projeto");
+        const after = updated[0];
+        if (!after) throw new Error("Falha ao atualizar projeto");
 
-    // Update version snapshot with new data
-    await createVersionSnapshot(
-      parsedInput.projectId,
-      "rascunho",
-      {
-        ...patch,
-        extendedData: parsedInput.extendedData,
-        _source: "updateDraftProject",
+        // Update version snapshot with new data
+        await createVersionSnapshot(
+          tx,
+          parsedInput.projectId,
+          "rascunho",
+          {
+            ...patch,
+            extendedData: parsedInput.extendedData,
+            _source: "updateDraftProject",
+          },
+          ctx.actorId,
+        );
+
+        return { before: project, after };
       },
-      ctx.actorId,
     );
 
     await logProjectAudit({
@@ -357,7 +398,7 @@ export const updateDraftProject = submissorAction
       entity: "project",
       entityId: parsedInput.projectId,
       diff: computeDiff(
-        project as Record<string, unknown>,
+        before as Record<string, unknown>,
         after as Record<string, unknown>,
       ),
     });
@@ -373,7 +414,10 @@ export const updateDraftProject = submissorAction
 export const submitProject = submissorAction
   .schema(z.object({ projectId: z.string().uuid("Projeto inválido") }))
   .action(async ({ parsedInput, ctx }) => {
-    const project = await getProjectOrThrow(parsedInput.projectId);
+    const project = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      (tx) => getProjectOrThrow(tx, parsedInput.projectId),
+    );
 
     if (project.stage !== "rascunho") {
       throw new Error("Apenas rascunhos podem ser submetidos");
@@ -407,38 +451,46 @@ export const submitProject = submissorAction
 
     const now = new Date();
 
-    // Transition to validacao
-    const updated = await db
-      .update(projects)
-      .set({ stage: "validacao", submittedAt: now, updatedAt: now })
-      .where(eq(projects.id, parsedInput.projectId))
-      .returning();
+    const { submittedProject, orgName } = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        // Transition to validacao
+        const updated = await tx
+          .update(projects)
+          .set({ stage: "validacao", submittedAt: now, updatedAt: now })
+          .where(eq(projects.id, parsedInput.projectId))
+          .returning();
 
-    const submittedProject = updated[0];
-    if (!submittedProject) throw new Error("Falha ao submeter projeto");
+        const submittedProject = updated[0];
+        if (!submittedProject) throw new Error("Falha ao submeter projeto");
 
-    // Version snapshot
-    await createVersionSnapshot(
-      parsedInput.projectId,
-      "validacao",
-      {
-        ...submittedProject,
-        _source: "submitProject",
-        submittedAt: now.toISOString(),
+        // Version snapshot
+        await createVersionSnapshot(
+          tx,
+          parsedInput.projectId,
+          "validacao",
+          {
+            ...submittedProject,
+            _source: "submitProject",
+            submittedAt: now.toISOString(),
+          },
+          ctx.actorId,
+        );
+
+        // Load org name for AI context
+        let orgName: string | null = null;
+        if (project.organizationId) {
+          const orgRows = await tx
+            .select({ nome: organizations.nome })
+            .from(organizations)
+            .where(eq(organizations.id, project.organizationId))
+            .limit(1);
+          orgName = orgRows[0]?.nome ?? null;
+        }
+
+        return { submittedProject, orgName };
       },
-      ctx.actorId,
     );
-
-    // Load org name for AI context
-    let orgName: string | null = null;
-    if (project.organizationId) {
-      const orgRows = await db
-        .select({ nome: organizations.nome })
-        .from(organizations)
-        .where(eq(organizations.id, project.organizationId))
-        .limit(1);
-      orgName = orgRows[0]?.nome ?? null;
-    }
 
     const scoringInput: ProjectScoringInput = {
       title: project.title,
@@ -472,31 +524,41 @@ export const submitProject = submissorAction
 
     // Run AI scoring (non-blocking: failure logs but doesn't break submission)
     try {
-      const criteria = await loadScoringCriteria();
+      const criteria = await withAuthenticatedContext(
+        { actorId: ctx.actorId },
+        (tx) => loadScoringCriteria(tx),
+      );
       const scoring = await scoreProject(scoringInput, criteria);
 
-      await db
-        .update(projects)
-        .set({
-          scoreAi: scoring.score.toString(),
-          scoreAiBreakdown: scoring.breakdown,
-          updatedAt: new Date(),
-        })
-        .where(eq(projects.id, parsedInput.projectId));
+      await withAuthenticatedContext({ actorId: ctx.actorId }, (tx) =>
+        tx
+          .update(projects)
+          .set({
+            scoreAi: scoring.score.toString(),
+            scoreAiBreakdown: scoring.breakdown,
+            updatedAt: new Date(),
+          })
+          .where(eq(projects.id, parsedInput.projectId)),
+      );
     } catch (err) {
       console.error("[projetos/submit] AI scoring failed:", err);
     }
 
     // Generate compact version (non-blocking)
     try {
-      const template = await loadCompactTemplate();
+      const template = await withAuthenticatedContext(
+        { actorId: ctx.actorId },
+        (tx) => loadCompactTemplate(tx),
+      );
       const compact = await generateCompactVersion(compactInput, template);
 
-      await db.insert(compactVersions).values({
-        projectId: parsedInput.projectId,
-        content: compact.content,
-        generatedBy: "gpt-4.1",
-      });
+      await withAuthenticatedContext({ actorId: ctx.actorId }, (tx) =>
+        tx.insert(compactVersions).values({
+          projectId: parsedInput.projectId,
+          content: compact.content,
+          generatedBy: "gpt-4.1",
+        }),
+      );
     } catch (err) {
       console.error(
         "[projetos/submit] Compact version generation failed:",
@@ -562,49 +624,58 @@ const transitionStageSchema = z.object({
 export const transitionProjectStage = diretorAction
   .schema(transitionStageSchema)
   .action(async ({ parsedInput, ctx }) => {
-    const project = await getProjectOrThrow(parsedInput.projectId);
+    const { fromStage, afterProject } = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const project = await getProjectOrThrow(tx, parsedInput.projectId);
 
-    // Validate transition
-    const validNext = VALID_STAGE_TRANSITIONS[project.stage as ProjectStage];
-    if (!(validNext as string[]).includes(parsedInput.toStage)) {
-      throw new Error(
-        `Transição inválida: ${project.stage} → ${parsedInput.toStage}. ` +
-          `Próximos estágios válidos: ${validNext.join(", ")}`,
-      );
-    }
+        // Validate transition
+        const validNext =
+          VALID_STAGE_TRANSITIONS[project.stage as ProjectStage];
+        if (!(validNext as string[]).includes(parsedInput.toStage)) {
+          throw new Error(
+            `Transição inválida: ${project.stage} → ${parsedInput.toStage}. ` +
+              `Próximos estágios válidos: ${validNext.join(", ")}`,
+          );
+        }
 
-    const now = new Date();
-    const patch: Partial<typeof projects.$inferInsert> = {
-      stage: parsedInput.toStage as ProjectStage,
-      updatedAt: now,
-    };
+        const now = new Date();
+        const patch: Partial<typeof projects.$inferInsert> = {
+          stage: parsedInput.toStage as ProjectStage,
+          updatedAt: now,
+        };
 
-    // Timestamp fields per stage
-    if (parsedInput.toStage === "aprovado") patch.approvedAt = now;
-    if (parsedInput.toStage === "em_execucao") patch.startedAt = now;
-    if (parsedInput.toStage === "concluido") patch.concludedAt = now;
+        // Timestamp fields per stage
+        if (parsedInput.toStage === "aprovado") patch.approvedAt = now;
+        if (parsedInput.toStage === "em_execucao") patch.startedAt = now;
+        if (parsedInput.toStage === "concluido") patch.concludedAt = now;
 
-    const updated = await db
-      .update(projects)
-      .set(patch)
-      .where(eq(projects.id, parsedInput.projectId))
-      .returning();
+        const updated = await tx
+          .update(projects)
+          .set(patch)
+          .where(eq(projects.id, parsedInput.projectId))
+          .returning();
 
-    const afterProject = updated[0];
-    if (!afterProject) throw new Error("Falha ao transicionar estágio");
+        const afterProject = updated[0];
+        if (!afterProject) throw new Error("Falha ao transicionar estágio");
 
-    // Version snapshot
-    await createVersionSnapshot(
-      parsedInput.projectId,
-      parsedInput.toStage as ProjectStage,
-      {
-        ...afterProject,
-        _source: "transitionProjectStage",
-        notes: parsedInput.notes,
-        transitionedAt: now.toISOString(),
-        transitionedBy: ctx.actorId,
+        // Version snapshot
+        await createVersionSnapshot(
+          tx,
+          parsedInput.projectId,
+          parsedInput.toStage as ProjectStage,
+          {
+            ...afterProject,
+            _source: "transitionProjectStage",
+            notes: parsedInput.notes,
+            transitionedAt: now.toISOString(),
+            transitionedBy: ctx.actorId,
+          },
+          ctx.actorId,
+        );
+
+        return { fromStage: project.stage, afterProject };
       },
-      ctx.actorId,
     );
 
     // When approved: generate payment schedule + cross-app financeiro integration
@@ -637,10 +708,10 @@ export const transitionProjectStage = diretorAction
       entity: "project",
       entityId: parsedInput.projectId,
       diff: {
-        from: project.stage,
+        from: fromStage,
         to: parsedInput.toStage,
         notes: parsedInput.notes,
-        transitionedAt: now.toISOString(),
+        transitionedAt: afterProject.updatedAt.toISOString(),
       },
     });
 
@@ -662,54 +733,64 @@ const contestationSchema = z.object({
 export const createContestation = projetosAction
   .schema(contestationSchema)
   .action(async ({ parsedInput, ctx }) => {
-    const project = await getProjectOrThrow(parsedInput.projectId);
+    const contestation = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const project = await getProjectOrThrow(tx, parsedInput.projectId);
 
-    if (project.stage !== "homologacao") {
-      throw new Error("Contestações só podem ser feitas durante a homologação");
-    }
+        if (project.stage !== "homologacao") {
+          throw new Error(
+            "Contestações só podem ser feitas durante a homologação",
+          );
+        }
 
-    // Check max 2 contestations per project
-    const countResult = await db
-      .select({ total: count() })
-      .from(contestations)
-      .where(eq(contestations.projectId, parsedInput.projectId));
+        // Check max 2 contestations per project
+        const countResult = await tx
+          .select({ total: count() })
+          .from(contestations)
+          .where(eq(contestations.projectId, parsedInput.projectId));
 
-    if ((countResult[0]?.total ?? 0) >= 2) {
-      throw new Error("Limite de 2 contestações por projeto atingido");
-    }
+        if ((countResult[0]?.total ?? 0) >= 2) {
+          throw new Error("Limite de 2 contestações por projeto atingido");
+        }
 
-    // Insert — unique constraint (project_id, user_id) blocks double contestation
-    const inserted = await db
-      .insert(contestations)
-      .values({
-        projectId: parsedInput.projectId,
-        userId: ctx.actorId,
-        justification: parsedInput.justification,
-        status: "pending",
-      })
-      .returning();
+        // Insert — unique constraint (project_id, user_id) blocks double contestation
+        const inserted = await tx
+          .insert(contestations)
+          .values({
+            projectId: parsedInput.projectId,
+            userId: ctx.actorId,
+            justification: parsedInput.justification,
+            status: "pending",
+          })
+          .returning();
 
-    const contestation = inserted[0];
-    if (!contestation) throw new Error("Falha ao registrar contestação");
+        const contestation = inserted[0];
+        if (!contestation) throw new Error("Falha ao registrar contestação");
 
-    // Return project to votacao
-    const now = new Date();
-    await db
-      .update(projects)
-      .set({ stage: "votacao", updatedAt: now })
-      .where(eq(projects.id, parsedInput.projectId));
+        // Return project to votacao
+        const now = new Date();
+        await tx
+          .update(projects)
+          .set({ stage: "votacao", updatedAt: now })
+          .where(eq(projects.id, parsedInput.projectId));
 
-    await createVersionSnapshot(
-      parsedInput.projectId,
-      "votacao",
-      {
-        _source: "createContestation",
-        contestationId: contestation.id,
-        returnedBy: ctx.actorId,
-        reason: parsedInput.justification,
-        returnedAt: now.toISOString(),
+        await createVersionSnapshot(
+          tx,
+          parsedInput.projectId,
+          "votacao",
+          {
+            _source: "createContestation",
+            contestationId: contestation.id,
+            returnedBy: ctx.actorId,
+            reason: parsedInput.justification,
+            returnedAt: now.toISOString(),
+          },
+          ctx.actorId,
+        );
+
+        return contestation;
       },
-      ctx.actorId,
     );
 
     await logProjectAudit({
@@ -733,49 +814,57 @@ export const createContestation = projetosAction
 export const deleteProject = projetosAction
   .schema(deleteProjectSchema)
   .action(async ({ parsedInput, ctx }) => {
-    const project = await getProjectOrThrow(parsedInput.projectId);
+    const stageAtDeletion = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const project = await getProjectOrThrow(tx, parsedInput.projectId);
 
-    // Permission: own project (any stage rascunho/validacao), OR diretor/super_admin
-    const isSuperAdmin = ctx.roles.includes("super_admin");
-    const isDiretor = ctx.roles.includes("diretor");
-    const isSubmitter = project.submitterId === ctx.actorId;
+        // Permission: own project (any stage rascunho/validacao), OR diretor/super_admin
+        const isSuperAdmin = ctx.roles.includes("super_admin");
+        const isDiretor = ctx.roles.includes("diretor");
+        const isSubmitter = project.submitterId === ctx.actorId;
 
-    if (!isSuperAdmin && !isDiretor && !isSubmitter) {
-      throw new Error(
-        "Apenas o submissor ou a diretoria podem excluir projetos",
-      );
-    }
+        if (!isSuperAdmin && !isDiretor && !isSubmitter) {
+          throw new Error(
+            "Apenas o submissor ou a diretoria podem excluir projetos",
+          );
+        }
 
-    // Submissors can only delete their own drafts
-    if (
-      !isSuperAdmin &&
-      !isDiretor &&
-      isSubmitter &&
-      project.stage !== "rascunho"
-    ) {
-      throw new Error(
-        "Submissores só podem excluir projetos em rascunho. Contate a diretoria para outros estágios.",
-      );
-    }
+        // Submissors can only delete their own drafts
+        if (
+          !isSuperAdmin &&
+          !isDiretor &&
+          isSubmitter &&
+          project.stage !== "rascunho"
+        ) {
+          throw new Error(
+            "Submissores só podem excluir projetos em rascunho. Contate a diretoria para outros estágios.",
+          );
+        }
 
-    const now = new Date();
+        const now = new Date();
 
-    await db
-      .update(projects)
-      .set({ deletedAt: now, updatedAt: now })
-      .where(eq(projects.id, parsedInput.projectId));
+        await tx
+          .update(projects)
+          .set({ deletedAt: now, updatedAt: now })
+          .where(eq(projects.id, parsedInput.projectId));
 
-    // Record deletion in version snapshot
-    await createVersionSnapshot(
-      parsedInput.projectId,
-      project.stage as ProjectStage,
-      {
-        _source: "deleteProject",
-        deletedBy: ctx.actorId,
-        deletedAt: now.toISOString(),
-        reason: parsedInput.reason,
+        // Record deletion in version snapshot
+        await createVersionSnapshot(
+          tx,
+          parsedInput.projectId,
+          project.stage as ProjectStage,
+          {
+            _source: "deleteProject",
+            deletedBy: ctx.actorId,
+            deletedAt: now.toISOString(),
+            reason: parsedInput.reason,
+          },
+          ctx.actorId,
+        );
+
+        return project.stage;
       },
-      ctx.actorId,
     );
 
     await logProjectAudit({
@@ -784,10 +873,9 @@ export const deleteProject = projetosAction
       entity: "project",
       entityId: parsedInput.projectId,
       diff: {
-        deletedAt: now.toISOString(),
         deletedBy: ctx.actorId,
         reason: parsedInput.reason,
-        stageAtDeletion: project.stage,
+        stageAtDeletion,
       },
     });
 
@@ -810,6 +898,11 @@ async function notifyHomologacao(
   const sevenDaysFromNow = new Date();
   sevenDaysFromNow.setDate(sevenDaysFromNow.getDate() + 7);
 
+  // Exceção service-level (G6.3): "notifications_insert_service"
+  // (0014_grants_authenticated.sql) só concede INSERT a service_role —
+  // authenticated não tem GRANT nenhum na tabela. db (superuser) é o único
+  // caminho possível aqui, mesmo padrão já usado em admin/actions/users.ts
+  // e financeiro/actions/approval.ts pelo mesmo motivo.
   await db.insert(notifications).values({
     userId: submitterId,
     channel: "in_app",

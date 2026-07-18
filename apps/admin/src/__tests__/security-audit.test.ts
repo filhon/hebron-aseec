@@ -27,6 +27,9 @@ import {
   bankAccounts,
   payables,
   receivables,
+  organizations,
+  organizationMembers,
+  projects,
 } from "@hebron/db/schema";
 import {
   serializeImpersonationState,
@@ -397,6 +400,112 @@ describe("RLS financeiro na leitura — colaborador lê, ouvinte não lê (S-02)
       expect(asOuvinte).toHaveLength(0);
     });
   }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 3d. Isolamento horizontal em projetos.projects por organização (S-02,
+// P-9.1b-3) — apps/projetos/src/actions/*.ts liam/escreviam com `db`
+// (conexão superuser) em vez de withAuthenticatedContext; a policy
+// "projects_select_own_or_org" (0007_projetos_rls.sql) nunca era de fato
+// avaliada. Usa dados semeados: um projeto de uma organização real, um
+// membro dela (lê) e um submissor de outra organização (não lê/edita).
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe("Isolamento horizontal — submissor não lê/edita projeto de organização à qual não pertence", () => {
+  const ORG_ID = "a9000000-0000-0000-0000-000000000096";
+  const PROJECT_ID = "a9000000-0000-0000-0000-000000000097";
+  const INTRUSO_ID = "a9000000-0000-0000-0000-000000000098";
+  const PROJECT_TITLE = "Sec Audit Projeto Org A";
+
+  beforeAll(async () => {
+    await db
+      .insert(users)
+      .values({
+        id: INTRUSO_ID,
+        email: "sec-audit-intruso@test.hebron",
+        fullName: "Sec Audit Intruso",
+      })
+      .onConflictDoNothing();
+    await db
+      .insert(roleAssignments)
+      .values({
+        userId: INTRUSO_ID,
+        role: "submissor",
+        grantedBy: INTRUSO_ID,
+      })
+      .onConflictDoNothing();
+
+    await db.insert(organizations).values({
+      id: ORG_ID,
+      nome: "Sec Audit Org A",
+      createdBy: TARGET_ID,
+    });
+    await db.insert(organizationMembers).values({
+      organizationId: ORG_ID,
+      userId: TARGET_ID,
+    });
+    await db.insert(projects).values({
+      id: PROJECT_ID,
+      title: PROJECT_TITLE,
+      tipo: "pontual",
+      stage: "rascunho",
+      organizationId: ORG_ID,
+      submitterId: TARGET_ID,
+      justification: "Sec audit",
+      budgetTotal: "100.00",
+    });
+  });
+
+  afterAll(async () => {
+    await db.delete(projects).where(eq(projects.id, PROJECT_ID));
+    await db
+      .delete(organizationMembers)
+      .where(eq(organizationMembers.organizationId, ORG_ID));
+    await db.delete(organizations).where(eq(organizations.id, ORG_ID));
+    await db
+      .delete(roleAssignments)
+      .where(eq(roleAssignments.userId, INTRUSO_ID));
+    await db.delete(users).where(eq(users.id, INTRUSO_ID));
+  });
+
+  it("membro da organização lê o projeto semeado", async () => {
+    const rows = await withAuthenticatedContext({ actorId: TARGET_ID }, (tx) =>
+      tx
+        .select({ id: projects.id })
+        .from(projects)
+        .where(eq(projects.id, PROJECT_ID)),
+    );
+    expect(rows).toHaveLength(1);
+  });
+
+  it("submissor de outra organização NÃO lê o projeto (0 linhas)", async () => {
+    const rows = await withAuthenticatedContext({ actorId: INTRUSO_ID }, (tx) =>
+      tx
+        .select({ id: projects.id })
+        .from(projects)
+        .where(eq(projects.id, PROJECT_ID)),
+    );
+    expect(rows).toHaveLength(0);
+  });
+
+  it("submissor de outra organização NÃO consegue editar o projeto (UPDATE afeta 0 linhas; dado original permanece)", async () => {
+    const updatedRows = await withAuthenticatedContext(
+      { actorId: INTRUSO_ID },
+      (tx) =>
+        tx
+          .update(projects)
+          .set({ title: "Forjado Pelo Intruso" })
+          .where(eq(projects.id, PROJECT_ID))
+          .returning({ id: projects.id }),
+    );
+    expect(updatedRows).toHaveLength(0);
+
+    const [row] = await db
+      .select({ title: projects.title })
+      .from(projects)
+      .where(eq(projects.id, PROJECT_ID));
+    expect(row?.title).toBe(PROJECT_TITLE);
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════

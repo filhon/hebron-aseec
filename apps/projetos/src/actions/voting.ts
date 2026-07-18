@@ -2,7 +2,11 @@
 
 import { z } from "zod";
 import { eq, and, count, countDistinct, inArray } from "drizzle-orm";
-import { db } from "@hebron/db/client";
+import {
+  withAuthenticatedContext,
+  withSystemRole,
+  type AuthenticatedTx,
+} from "@hebron/db/authenticated";
 import {
   votes,
   projects,
@@ -14,14 +18,10 @@ import { conselheiroDiretorAction, superAdminAction } from "../lib/safe-action";
 import { logProjectAudit } from "../lib/audit";
 
 // ---------------------------------------------------------------------------
-// Helpers — take an explicit db/tx executor so they can run either against
-// the singleton `db` or inside a `db.transaction(...)` callback.
+// Helpers — take an explicit tx executor from withAuthenticatedContext.
 // ---------------------------------------------------------------------------
 
-// `Pick`, not `typeof db` directly: a `tx` from `db.transaction(...)` lacks
-// the `$client` property that the full `PostgresJsDatabase` type carries,
-// but has the same query-builder methods — which is all these helpers need.
-type DbExecutor = Pick<typeof db, "select" | "update" | "insert">;
+type DbExecutor = Pick<AuthenticatedTx, "select" | "update" | "insert">;
 
 async function getVotingProject(executor: DbExecutor, projectId: string) {
   const rows = await executor
@@ -99,7 +99,8 @@ async function getNextVersionNumber(
 //
 // Votação é governança dual (decisão F3-Q4): o voto, a eventual transição de
 // estágio e as entradas de audit correspondentes são atômicos — se o audit
-// falhar, nada do voto é persistido.
+// falhar, nada do voto é persistido. withSystemRole escapa a RLS só para o
+// INSERT em admin.audit_log (policy é TO service_role), dentro da mesma tx.
 // ---------------------------------------------------------------------------
 
 export const castVote = conselheiroDiretorAction
@@ -111,7 +112,7 @@ export const castVote = conselheiroDiretorAction
     }),
   )
   .action(async ({ parsedInput, ctx }) => {
-    return db.transaction(async (tx) => {
+    return withAuthenticatedContext({ actorId: ctx.actorId }, async (tx) => {
       const project = await getVotingProject(tx, parsedInput.projectId);
 
       // Insert — unique constraint (project_id, user_id) blocks double voting
@@ -163,42 +164,46 @@ export const castVote = conselheiroDiretorAction
 
             stageTransitioned = true;
 
-            await logProjectAudit(
-              {
-                actorId: ctx.actorId,
-                action: "project.stage_transition",
-                entity: "project",
-                entityId: parsedInput.projectId,
-                diff: {
-                  from: project.stage,
-                  to: newStage,
-                  trigger: "vote_complete",
-                  result,
+            await withSystemRole(tx, (sysTx) =>
+              logProjectAudit(
+                {
+                  actorId: ctx.actorId,
+                  action: "project.stage_transition",
+                  entity: "project",
+                  entityId: parsedInput.projectId,
+                  diff: {
+                    from: project.stage,
+                    to: newStage,
+                    trigger: "vote_complete",
+                    result,
+                  },
                 },
-              },
-              tx,
+                sysTx,
+              ),
             );
           }
         }
       }
 
       // Audit the vote itself (no user ID in diff — secret ballot)
-      await logProjectAudit(
-        {
-          actorId: ctx.actorId,
-          action: "vote.cast",
-          entity: "vote",
-          entityId: parsedInput.projectId,
-          diff: {
-            projectId: parsedInput.projectId,
-            value: parsedInput.value,
-            resultAfterVote: {
-              totalVoted: result.totalVoted,
-              quorumMet: result.quorumMet,
+      await withSystemRole(tx, (sysTx) =>
+        logProjectAudit(
+          {
+            actorId: ctx.actorId,
+            action: "vote.cast",
+            entity: "vote",
+            entityId: parsedInput.projectId,
+            diff: {
+              projectId: parsedInput.projectId,
+              value: parsedInput.value,
+              resultAfterVote: {
+                totalVoted: result.totalVoted,
+                quorumMet: result.quorumMet,
+              },
             },
           },
-        },
-        tx,
+          sysTx,
+        ),
       );
 
       return { ok: true, result, stageTransitioned };
@@ -223,7 +228,7 @@ export const closeVoting = superAdminAction
     }),
   )
   .action(async ({ parsedInput, ctx }) => {
-    return db.transaction(async (tx) => {
+    return withAuthenticatedContext({ actorId: ctx.actorId }, async (tx) => {
       const project = await getVotingProject(tx, parsedInput.projectId);
       const result = await computeVoteResult(tx, parsedInput.projectId);
 
@@ -260,20 +265,22 @@ export const closeVoting = superAdminAction
         createdBy: ctx.actorId,
       });
 
-      await logProjectAudit(
-        {
-          actorId: ctx.actorId,
-          action: "project.stage_transition",
-          entity: "project",
-          entityId: parsedInput.projectId,
-          diff: {
-            from: project.stage,
-            to: newStage,
-            trigger: "manual_close",
-            result,
+      await withSystemRole(tx, (sysTx) =>
+        logProjectAudit(
+          {
+            actorId: ctx.actorId,
+            action: "project.stage_transition",
+            entity: "project",
+            entityId: parsedInput.projectId,
+            diff: {
+              from: project.stage,
+              to: newStage,
+              trigger: "manual_close",
+              result,
+            },
           },
-        },
-        tx,
+          sysTx,
+        ),
       );
 
       return { ok: true, newStage, result };
@@ -292,7 +299,7 @@ export const triggerPanicButton = superAdminAction
     }),
   )
   .action(async ({ parsedInput, ctx }) => {
-    return db.transaction(async (tx) => {
+    return withAuthenticatedContext({ actorId: ctx.actorId }, async (tx) => {
       const project = await getVotingProject(tx, parsedInput.projectId);
 
       const result = await computeVoteResult(tx, parsedInput.projectId);
@@ -327,20 +334,22 @@ export const triggerPanicButton = superAdminAction
         createdBy: ctx.actorId,
       });
 
-      await logProjectAudit(
-        {
-          actorId: ctx.actorId,
-          action: "vote.panic",
-          entity: "project",
-          entityId: parsedInput.projectId,
-          diff: {
-            from: project.stage,
-            to: newStage,
-            trigger: "panic_button",
-            result,
+      await withSystemRole(tx, (sysTx) =>
+        logProjectAudit(
+          {
+            actorId: ctx.actorId,
+            action: "vote.panic",
+            entity: "project",
+            entityId: parsedInput.projectId,
+            diff: {
+              from: project.stage,
+              to: newStage,
+              trigger: "panic_button",
+              result,
+            },
           },
-        },
-        tx,
+          sysTx,
+        ),
       );
 
       return { ok: true, newStage, result };

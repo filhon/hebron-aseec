@@ -5491,9 +5491,23 @@ arquivo do módulo — 21 call-sites, ciclo de vida completo do projeto),
 
 **Critérios de aceite:**
 
-- [ ] Grep limpo de `db` cru nos 5 arquivos de `actions/*.ts`
-- [ ] Teste prova isolamento horizontal por organização em `projects`
-- [ ] Lint passa · Types passam · SESSIONS.md atualizado
+- [x] Grep limpo de `db` cru nos 5 arquivos de `actions/*.ts`
+- [x] Teste prova isolamento horizontal por organização em `projects`
+- [x] Lint passa · Types passam
+- [ ] SESSIONS.md atualizado — **sessão não fechada 100% verde**: drift
+      ativo e recorrente de GRANT no schema `projetos` no banco
+      compartilhado bloqueia verificação estável da suíte (ver S-158 em
+      SESSIONS.md). Código migrado e correto (evidenciado em janelas
+      limpas). Hipótese "Exposed schemas" testada por Filipe e descartada
+      (não resolveu). Sessão encerrada por decisão do Filipe.
+      **Antes de retomar:** autorizar o MCP `plugin:supabase:supabase`
+      (`claude mcp` / `/mcp`, não dá em sessão não-interativa) e investigar
+      com as ferramentas dele o que revoga `GRANT USAGE ON SCHEMA projetos` + `SELECT` em `projects`/`votes`/`organization_members` de
+      `authenticated` num ciclo de ~2min — acesso via `DATABASE_URL` só
+      enxerga o catálogo, não a causa do lado da plataforma Supabase. Depois
+      de corrigido, rodar `pnpm --filter @hebron/db db:migrate` (migration
+      `0056` já está pronta) e `pnpm turbo test --filter=@hebron/projetos`
+      estável antes de marcar P-9.1b-3 como concluído.
 
 ---
 
