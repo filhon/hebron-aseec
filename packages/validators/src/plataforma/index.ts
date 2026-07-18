@@ -47,7 +47,10 @@ export const createCourseSchema = z.object({
       "Slug deve conter apenas letras minúsculas, números e hífen",
     ),
   description: z.string().min(10, "Descrição é obrigatória").max(5000),
-  coverImageUrl: z.string().url().nullable().optional().default(null),
+  // Storage path do bucket privado `plataforma-capas` (não uma URL) —
+  // resolvido para uma signed URL sob demanda em lib/queries.ts, nunca
+  // persistido como URL (S-05).
+  coverImageUrl: z.string().min(1).nullable().optional().default(null),
   category: z.string().min(2, "Categoria é obrigatória").max(100),
   instructorId: z.string().uuid("Selecione um instrutor"),
   seriesId: z.string().uuid().nullable().optional().default(null),
@@ -95,7 +98,10 @@ export const createLessonSchema = z
       .optional()
       .default(null),
     textContent: z.string().nullable().optional().default(null),
-    downloadUrl: z.string().url().nullable().optional().default(null),
+    // Storage path do bucket privado `plataforma-anexos` (não uma URL) —
+    // resolvido para uma signed URL sob demanda em lib/queries.ts, nunca
+    // persistido como URL (S-05).
+    downloadUrl: z.string().min(1).nullable().optional().default(null),
     downloadFileName: z.string().max(255).nullable().optional().default(null),
     downloadFileSizeBytes: z
       .number()

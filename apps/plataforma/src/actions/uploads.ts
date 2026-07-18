@@ -16,12 +16,12 @@ function extFromFileName(fileName: string): string {
   return fileName.split(".").pop() ?? "bin";
 }
 
-// course-card.tsx/lesson-view.tsx usam coverImageUrl/downloadUrl direto como
-// src/href (schemas de packages/validators exigem z.string().url(), não um
-// path resolvido sob demanda). Os buckets são privados, então a URL
-// resultante precisa ser assinada — 10 anos cobre o ciclo de vida do
-// conteúdo sem exigir reautorização periódica.
-const READ_URL_EXPIRES_IN_SECONDS = 60 * 60 * 24 * 365 * 10;
+// Usada só para a prévia imediata em CourseForm/LessonForm logo após o
+// upload (ephemeral, nunca persistida) — o valor gravado em
+// courses.cover_url/lessons.download_url é o storagePath, resolvido de novo
+// sob demanda em lib/queries.ts (getUserEnrollmentsWithProgress,
+// getLessonPageData) a cada leitura, nunca uma URL de longa duração (S-05).
+const READ_URL_EXPIRES_IN_SECONDS = 60 * 60;
 
 // ---------------------------------------------------------------------------
 // plataforma-capas — capa de curso. Path {actorId}/{uuid}.{ext} (P-6.15,
@@ -100,20 +100,7 @@ export const getLessonAttachmentUploadUrl = staffAction
     return { uploadUrl: data.signedUrl, storagePath: path };
   });
 
-const getLessonAttachmentReadUrlSchema = z.object({
-  storagePath: z.string().min(1),
-});
-
-export const getLessonAttachmentReadUrl = staffAction
-  .schema(getLessonAttachmentReadUrlSchema)
-  .action(async ({ parsedInput }) => {
-    const supabase = getSupabaseAdmin();
-    const { data, error } = await supabase.storage
-      .from("plataforma-anexos")
-      .createSignedUrl(parsedInput.storagePath, READ_URL_EXPIRES_IN_SECONDS);
-
-    if (error)
-      throw new Error(`Falha ao gerar URL de leitura: ${error.message}`);
-
-    return { url: data.signedUrl };
-  });
+// Sem "read URL" de anexo aqui — LessonForm não exibe prévia do anexo (só
+// nome/tamanho), então o storagePath retornado por
+// getLessonAttachmentUploadUrl já é o valor final. A resolução para uma URL
+// baixável acontece em lib/queries.ts#getLessonPageData, sob demanda.

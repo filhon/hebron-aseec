@@ -40,7 +40,14 @@ const COVER_ALLOWED_MIME_TYPES: CourseCoverMimeType[] = [
 
 // Só é chamada depois que handleCoverChange já validou file.type contra
 // COVER_ALLOWED_MIME_TYPES — a asserção abaixo reflete essa garantia.
-async function uploadCourseCover(file: File): Promise<string> {
+//
+// `storagePath` é o valor persistido (courses.cover_url) — `previewUrl` é só
+// para a prévia imediata neste formulário, nunca enviado a onSubmit (S-05:
+// persistir uma URL assinada em vez do path reproduz o bug de URL de longa
+// duração propagada).
+async function uploadCourseCover(
+  file: File,
+): Promise<{ storagePath: string; previewUrl: string }> {
   const urlResult = await getCourseCoverUploadUrl({
     fileName: file.name,
     mimeType: file.type as CourseCoverMimeType,
@@ -61,7 +68,7 @@ async function uploadCourseCover(file: File): Promise<string> {
   const readData = readResult?.data;
   if (!readData) throw new Error("Não foi possível gerar a URL da imagem.");
 
-  return readData.url;
+  return { storagePath: uploadData.storagePath, previewUrl: readData.url };
 }
 
 function cn(...cls: (string | false | null | undefined)[]): string {
@@ -142,9 +149,11 @@ export function CourseForm({
   const [seriesSelectValue, setSeriesSelectValue] = React.useState(
     course?.seriesId ?? NO_SERIES,
   );
-  const [coverPreview, setCoverPreview] = React.useState<string | null>(
-    course?.coverImageUrl ?? null,
-  );
+  // course?.coverImageUrl (modo edição) é o storage path cru, não uma URL
+  // exibível (getCourseForEditor não resolve — ver nota em lib/queries.ts) —
+  // a prévia é resolvida à parte no efeito abaixo; coverImageUrl é o valor
+  // reenviado a onSubmit e começa como o próprio path já persistido.
+  const [coverPreview, setCoverPreview] = React.useState<string | null>(null);
   const [coverImageUrl, setCoverImageUrl] = React.useState<string | null>(
     course?.coverImageUrl ?? null,
   );
@@ -167,6 +176,23 @@ export function CourseForm({
       if (localPreviewRef.current) URL.revokeObjectURL(localPreviewRef.current);
     };
   }, []);
+
+  // Resolve a prévia da capa já existente (modo edição) a partir do storage
+  // path persistido — sob demanda, mesmo padrão do upload (S-05).
+  React.useEffect(() => {
+    if (!course?.coverImageUrl) return;
+    let cancelled = false;
+
+    getCourseCoverReadUrl({ storagePath: course.coverImageUrl }).then(
+      (result) => {
+        if (!cancelled && result?.data) setCoverPreview(result.data.url);
+      },
+    );
+
+    return () => {
+      cancelled = true;
+    };
+  }, [course?.coverImageUrl]);
 
   const category =
     categorySelectValue === OTHER_CATEGORY
@@ -197,9 +223,9 @@ export function CourseForm({
     setCoverUploadError(null);
 
     uploadCourseCover(file)
-      .then((url) => {
-        setCoverImageUrl(url);
-        setCoverPreview(url);
+      .then(({ storagePath, previewUrl }) => {
+        setCoverImageUrl(storagePath);
+        setCoverPreview(previewUrl);
         setCoverUploadStatus("idle");
         if (localPreviewRef.current) {
           URL.revokeObjectURL(localPreviewRef.current);

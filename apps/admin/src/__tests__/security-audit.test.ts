@@ -4,11 +4,10 @@
  * Verificação automatizada, por introspecção do catálogo + testes por papel, dos
  * invariantes de segurança do estado final do ecossistema. Este arquivo é a
  * codificação executável da auditoria: cada `it` corresponde a um critério de
- * aceite de P-9.1. S-02 foi fechado em duas partes (P-9.1b-1: public.users/
- * role_assignments em admin; P-9.1b-2: leitura do schema financeiro) e agora é
- * assertado abaixo. S-05 (TTL de signed URL em plataforma) segue documentado em
- * SESSIONS.md — não é fixável dentro dos arquivos permitidos deste prompt e
- * portanto não é assertado aqui como PASS/FAIL.
+ * aceite de P-9.1. S-02 foi fechado em várias partes (P-9.1b-1: public.users/
+ * role_assignments em admin; P-9.1b-2: leitura do schema financeiro; P-9.1b-7:
+ * residual de flats/plataforma/radio) e S-05 (TTL de signed URL em plataforma,
+ * também P-9.1b-7) — ambos assertados abaixo.
  *
  * Requer: DATABASE_URL (superuser, para introspecção/seed) e esquema migrado com
  * a migration 0055_p91_security_grants_lockdown.sql aplicada.
@@ -851,8 +850,6 @@ describe("Impersonação — cookie HMAC-assinado (F3-13)", () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 // 6. Signed URLs — TTL adequado (guarda de regressão sobre os TTLs corretos)
 // ═══════════════════════════════════════════════════════════════════════════════
-// Nota: plataforma usa TTL de 10 anos (S-05) — achado documentado em SESSIONS.md,
-// não fixável nos arquivos permitidos deste prompt; por isso não é assertado aqui.
 
 describe("Signed URLs — expiração adequada nos módulos já corretos", () => {
   const REPO = resolve(__dirname, "../../../..");
@@ -889,6 +886,14 @@ describe("Signed URLs — expiração adequada nos módulos já corretos", () =>
     );
     expect(download).toBeLessThanOrEqual(oneHour);
     expect(upload).toBeLessThanOrEqual(15 * 60);
+  });
+
+  it("plataforma: URL de leitura (capa/anexo) expira em ≤ 1h", () => {
+    const ttl = readNumber(
+      "apps/plataforma/src/actions/uploads.ts",
+      "READ_URL_EXPIRES_IN_SECONDS",
+    );
+    expect(ttl).toBeLessThanOrEqual(oneHour);
   });
 });
 

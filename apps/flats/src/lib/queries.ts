@@ -1,7 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { asc, desc, eq, inArray } from "drizzle-orm";
-import { db } from "@hebron/db/client";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import type { AuthenticatedTx } from "@hebron/db/authenticated";
 import { CANONICAL_LOGIN_URL } from "@hebron/auth";
@@ -78,11 +77,15 @@ export async function getAuthUser(): Promise<{
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const rows = await db
-    .select({ fullName: users.fullName })
-    .from(users)
-    .where(eq(users.id, user.id))
-    .limit(1);
+  // Leitura própria (users_select_own, 0000_initial.sql) — sem exceção
+  // service-level, o próprio auth.uid() já é user.id.
+  const rows = await withAuthenticatedContext({ actorId: user.id }, (tx) =>
+    tx
+      .select({ fullName: users.fullName })
+      .from(users)
+      .where(eq(users.id, user.id))
+      .limit(1),
+  );
 
   return {
     id: user.id,

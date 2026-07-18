@@ -1,7 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { and, asc, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
-import { db } from "@hebron/db/client";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { CANONICAL_LOGIN_URL } from "@hebron/auth";
 import {
@@ -75,11 +74,15 @@ export async function getAuthUser(): Promise<{
   } = await supabase.auth.getUser();
   if (!user) return null;
 
-  const rows = await db
-    .select({ fullName: users.fullName })
-    .from(users)
-    .where(eq(users.id, user.id))
-    .limit(1);
+  // Leitura própria (users_select_own, 0000_initial.sql) — sem exceção
+  // service-level, o próprio auth.uid() já é user.id.
+  const rows = await withAuthenticatedContext({ actorId: user.id }, (tx) =>
+    tx
+      .select({ fullName: users.fullName })
+      .from(users)
+      .where(eq(users.id, user.id))
+      .limit(1),
+  );
 
   return {
     fullName: rows[0]?.fullName ?? null,
@@ -99,11 +102,13 @@ export async function requireAlunoSession(): Promise<ActionSession> {
 }
 
 async function isInstructor(userId: string): Promise<boolean> {
-  const [row] = await db
-    .select({ id: instructors.id })
-    .from(instructors)
-    .where(eq(instructors.userId, userId))
-    .limit(1);
+  const [row] = await withAuthenticatedContext({ actorId: userId }, (tx) =>
+    tx
+      .select({ id: instructors.id })
+      .from(instructors)
+      .where(eq(instructors.userId, userId))
+      .limit(1),
+  );
   return !!row;
 }
 
@@ -197,6 +202,48 @@ function mapLesson(row: LessonRow, quizId: string | null = null): Lesson {
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Resolução sob demanda de capa/anexo (S-05) — `courses.cover_url`/
+// `lessons.download_url` guardam o storage path (não mais uma signed URL de
+// 10 anos), assinado aqui com TTL curto no exato momento em que a tela que
+// efetivamente exibe a imagem/anexo é montada — nunca persistido. Usado só
+// onde a capa/anexo é de fato renderizado como <img>/<a> (CourseCard via
+// getUserEnrollmentsWithProgress; download da aula via getLessonPageData) —
+// course-detail-view.tsx não tem banner de capa, e as leituras do editor
+// (getCourseForEditor, getLessonForEditor, buildQuizEditorData) mantêm o path
+// cru: CourseForm/LessonForm reenviam esse mesmo valor ao salvar sem alterar
+// a capa/anexo, e persistir uma URL assinada ali reproduziria o bug original.
+// Linhas gravadas antes desta correção ainda guardam a URL legada de 10 anos;
+// `createSignedUrl` falha para um valor que não é um path do bucket e
+// degrada para null (sem capa/anexo) até o instrutor reenviar o arquivo.
+const ASSET_URL_EXPIRES_IN_SECONDS = 60 * 60;
+
+async function resolveAssetUrl(
+  bucket: "plataforma-capas" | "plataforma-anexos",
+  storagePath: string | null,
+): Promise<string | null> {
+  if (!storagePath) return null;
+
+  const cookieStore = await cookies();
+  const supabase = createSupabaseServerActionClient({
+    getAll: () => cookieStore.getAll(),
+    setAll: (cookiesToSet) => {
+      try {
+        cookiesToSet.forEach(({ name, value, options }) =>
+          cookieStore.set(name, value, options),
+        );
+      } catch {
+        // Server Component — não pode setar cookies, ignorar
+      }
+    },
+  });
+
+  const { data } = await supabase.storage
+    .from(bucket)
+    .createSignedUrl(storagePath, ASSET_URL_EXPIRES_IN_SECONDS);
+  return data?.signedUrl ?? null;
 }
 
 // ---------------------------------------------------------------------------
@@ -311,6 +358,10 @@ export async function getCourseBySlug(
   const row = rows[0];
   if (!row) return null;
 
+  // course-detail-view.tsx não renderiza coverImageUrl (sem banner de capa na
+  // página de detalhe) — sem resolver aqui; único ponto real de consumo do
+  // storage path é CourseCard (getUserEnrollmentsWithProgress) e o anexo de
+  // aula (getLessonPageData).
   return {
     course: mapCourse(row.course, row.instructorName, row.seriesName),
     instructorBio: row.instructorBio ?? null,
@@ -549,13 +600,21 @@ export async function getLessonPageData(
       .where(and(eq(notes.userId, actorId), eq(notes.lessonId, lessonRow.id)))
       .orderBy(asc(notes.timestampSeconds));
 
+    const currentLesson = mapLesson(lessonRow, lessonQuizId);
+    if (currentLesson.type === "download") {
+      currentLesson.downloadUrl = await resolveAssetUrl(
+        "plataforma-anexos",
+        currentLesson.downloadUrl,
+      );
+    }
+
     return {
       course,
       modules: moduleRows,
       lessons: allLessonRows.map((row) =>
         mapLesson(row, row.id === lessonRow.id ? lessonQuizId : null),
       ),
-      lesson: mapLesson(lessonRow, lessonQuizId),
+      lesson: currentLesson,
       progress: progressRows,
       quiz,
       lastAttempt,
@@ -628,26 +687,35 @@ export async function getUserEnrollmentsWithProgress(
       completedRows.map((r) => [r.courseId, r.completed]),
     );
 
-    return rows.map((r) => {
-      const total = totalsByCourse.get(r.course.id) ?? 0;
-      const completed = completedByCourse.get(r.course.id) ?? 0;
-      const progressPercent =
-        total > 0 ? Math.round((completed / total) * 100) : 0;
+    return Promise.all(
+      rows.map(async (r) => {
+        const total = totalsByCourse.get(r.course.id) ?? 0;
+        const completed = completedByCourse.get(r.course.id) ?? 0;
+        const progressPercent =
+          total > 0 ? Math.round((completed / total) * 100) : 0;
+        const course = mapCourse(r.course, r.instructorName, r.seriesName);
 
-      return {
-        enrollment: {
-          id: r.enrollment.id,
-          userId: r.enrollment.userId,
-          userName: "",
-          courseId: r.enrollment.courseId,
-          courseName: r.course.title,
-          enrolledAt: r.enrollment.enrolledAt,
-          completedAt: r.enrollment.completedAt,
-        },
-        course: mapCourse(r.course, r.instructorName, r.seriesName),
-        progressPercent,
-      };
-    });
+        return {
+          enrollment: {
+            id: r.enrollment.id,
+            userId: r.enrollment.userId,
+            userName: "",
+            courseId: r.enrollment.courseId,
+            courseName: r.course.title,
+            enrolledAt: r.enrollment.enrolledAt,
+            completedAt: r.enrollment.completedAt,
+          },
+          course: {
+            ...course,
+            coverImageUrl: await resolveAssetUrl(
+              "plataforma-capas",
+              course.coverImageUrl,
+            ),
+          },
+          progressPercent,
+        };
+      }),
+    );
   });
 }
 

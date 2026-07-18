@@ -16,10 +16,7 @@ import {
   Button,
 } from "@hebron/ui";
 import { HelpCircle, Loader2, Paperclip, X } from "lucide-react";
-import {
-  getLessonAttachmentUploadUrl,
-  getLessonAttachmentReadUrl,
-} from "../actions/uploads";
+import { getLessonAttachmentUploadUrl } from "../actions/uploads";
 
 type LessonAttachmentMimeType =
   | "application/pdf"
@@ -37,6 +34,13 @@ const ATTACHMENT_ALLOWED_MIME_TYPES: LessonAttachmentMimeType[] = [
 
 // Só é chamada depois que handleAttachmentChange já validou file.type contra
 // ATTACHMENT_ALLOWED_MIME_TYPES — a asserção abaixo reflete essa garantia.
+//
+// Retorna o storage path, não uma URL assinada — este formulário não exibe
+// prévia do anexo (só nome/tamanho), e é justamente esse path que precisa
+// ser persistido em lessons.download_url (S-05: uma URL assinada persistida
+// aqui reproduziria o bug de URL de longa duração propagada). A resolução
+// para uma URL de fato baixável acontece sob demanda em
+// lib/queries.ts#getLessonPageData, no momento em que a aula é exibida.
 async function uploadLessonAttachment(
   file: File,
   courseId: string,
@@ -56,13 +60,7 @@ async function uploadLessonAttachment(
   });
   if (!putRes.ok) throw new Error("Falha ao enviar anexo para o storage.");
 
-  const readResult = await getLessonAttachmentReadUrl({
-    storagePath: uploadData.storagePath,
-  });
-  const readData = readResult?.data;
-  if (!readData) throw new Error("Não foi possível gerar a URL do anexo.");
-
-  return readData.url;
+  return uploadData.storagePath;
 }
 
 function cn(...cls: (string | false | null | undefined)[]): string {
@@ -172,8 +170,8 @@ export function LessonForm({
     setUploadError(null);
 
     uploadLessonAttachment(file, courseId)
-      .then((url) => {
-        setDownloadUrl(url);
+      .then((storagePath) => {
+        setDownloadUrl(storagePath);
         setUploadStatus("idle");
       })
       .catch(() => {

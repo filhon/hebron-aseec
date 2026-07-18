@@ -175,7 +175,7 @@
 | S-152  | 2026-07-17 | P-8.9b — Persistência da descrição de material exclusivo (CORRETIVO)                    | concluido                            |
 | S-153  | 2026-07-17 | P-8.11b — Fiação do heartbeat de audiência no player (CORRETIVO)                        | concluido                            |
 | S-154  | 2026-07-17 | P-9.1 — Revisão de Segurança (RLS Audit)                                                | concluido                            |
-| S-155  | 2026-07-17 | P-9.1b — Fechamento dos achados abertos da auditoria (S-02 + S-05) (CORRETIVO)          | parcial                              |
+| S-155  | 2026-07-17 | P-9.1b — Fechamento dos achados abertos da auditoria (S-02 + S-05) (CORRETIVO)          | concluido                            |
 | S-156  | 2026-07-17 | P-9.1b-1 — Fechamento do achado S-02 em `admin` (CORRETIVO)                             | concluido                            |
 | S-157  | 2026-07-17 | P-9.1b-2 — Fechamento do achado S-02 em `financeiro` (CORRETIVO)                        | concluido                            |
 | S-158  | 2026-07-18 | P-9.1b-3 — Fechamento do achado S-02 em `projetos` (CORRETIVO)                          | parcial                              |
@@ -183,6 +183,7 @@
 | S-160  | 2026-07-18 | P-9.1b-4 — Fechamento do achado S-02 em `documentos` (CORRETIVO)                        | concluido                            |
 | S-161  | 2026-07-18 | P-9.1b-5 — Fechamento do achado S-02 em `intranet` (CORRETIVO)                          | concluido                            |
 | S-162  | 2026-07-18 | P-9.1b-6 — Fechamento do achado S-02 em `tarefas` (CORRETIVO)                           | concluido                            |
+| S-163  | 2026-07-18 | P-9.1b-7 — Residual S-02 (flats/plataforma/radio) + S-05 (CORRETIVO) — fecha P-9.1b     | concluido                            |
 
 ---
 
@@ -11604,16 +11605,16 @@ introspecção do catálogo Postgres (conexão real ao Supabase) + testes por pa
 
 - [x] Toda tabela com RLS habilitado e DENY-by-default (introspecção
       automatizada — inclui partições de audit_log após a `0055`)
-- [~] Zero conexões superuser em runtime de app — **achado S-02 ALTO em aberto**
-  (documentado; fix é arquitetural, fora dos arquivos permitidos)
+- [x] Zero conexões superuser em runtime de app — **S-02 fechado em
+      P-9.1b-1..7** (S-163, 2026-07-18)
 - [x] GRANTs ↔ policies reconciliados schema a schema (S-01 corrigido)
 - [x] Nenhum cross-schema leak — teste por papel `ouvinte` (0 linhas em
       financeiro/flats/projetos/admin via client autenticado)
 - [x] Conflitos de interesse enforced em RLS (flats reservas: diretor/conselheiro
       bloqueados no WITH CHECK)
 - [x] Cookie de impersonação assinado/infalsificável (F3-13 fechado — HMAC)
-- [~] Signed URLs com expiração adequada — flats/radio OK; **plataforma 10 anos
-  (S-05) documentado como achado em aberto**
+- [x] Signed URLs com expiração adequada — flats/radio OK; **plataforma
+      fechado em P-9.1b-7** (S-163, 2026-07-18)
 - [x] Nenhuma query dinâmica vulnerável a SQL injection (search parametrizado)
 - [x] Testes de segurança passam · Relatório de findings documentado
 
@@ -12457,3 +12458,117 @@ mesma tarefa — prova que a policy filtra por papel, não zera geral.
       7/7, `recurrence.test.ts` 6/6, `runtime-rls.test.ts` 4/4,
       `attachments.test.ts` 3/3) e `security-audit.test.ts` do `admin`
       verde (14/14 describes, 38/38 testes)
+
+---
+
+### S-163 — 2026-07-18 — P-9.1b-7 — Residual S-02 (flats/plataforma/radio) + S-05 (CORRETIVO) — fecha P-9.1b
+
+**Prompt:** P-9.1b-7 (`PROMPTS.md:5638`)
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+**Resumo:**
+Último sub-prompt de P-9.1b: fecha o residual de S-02 nos três apps quase
+totalmente migrados (`getAuthUser` cru em flats/plataforma/radio +
+`isInstructor` cru em plataforma) e corrige S-05 (URL assinada de 10 anos em
+`plataforma`). Com este sub-prompt, P-9.1b-1..7 estão todos `concluido` — S-02
+e S-05 (S-154) são marcados como fechados no índice da auditoria.
+
+**S-02 residual:** os 4 call-sites (`apps/flats/src/lib/queries.ts`,
+`apps/plataforma/src/lib/queries.ts` — `getAuthUser` + `isInstructor` —,
+`apps/radio/src/lib/queries.ts`) seguiram o mesmo padrão já estabelecido em
+`tarefas`/`intranet`/`projetos`: como o `actorId` já é conhecido no ponto da
+leitura (não é bootstrap sem sessão), migraram para
+`withAuthenticatedContext({ actorId }, ...)` sem tratamento de exceção. Grep
+limpo de `db` cru nos 3 arquivos (import de `@hebron/db/client` removido —
+não sobrou nenhum outro uso).
+
+**S-05 — redesenho de como a capa/anexo da plataforma é persistida:**
+o achado original (`READ_URL_EXPIRES_IN_SECONDS = 60*60*24*365*10`) não era
+resolvível só encurtando a constante — qualquer signed URL persistida em
+`courses.cover_url`/`lessons.download_url` expira e quebra a exibição depois
+do TTL, curto ou longo. A correção real muda o que é persistido:
+
+1. `apps/plataforma/src/actions/uploads.ts` — `READ_URL_EXPIRES_IN_SECONDS`
+   reduzida para 1h; passa a servir só a prévia efêmera em
+   CourseForm/LessonForm logo após o upload (nunca persistida).
+   `getLessonAttachmentReadUrl` foi removida (ficou sem nenhum consumidor —
+   LessonForm não renderiza prévia do anexo, só nome/tamanho).
+2. `apps/plataforma/src/components/course-form.tsx` — `uploadCourseCover`
+   agora retorna `{ storagePath, previewUrl }`: `coverImageUrl` (valor
+   reenviado a `onSubmit`, persistido) passa a ser o `storagePath`;
+   `previewUrl` só alimenta a prévia local. Em modo edição, um novo efeito
+   resolve a prévia a partir do `storagePath` já persistido via
+   `getCourseCoverReadUrl` (o valor de `coverImageUrl` em si permanece o path
+   cru, para que reenviar o formulário sem trocar a capa não grave uma URL
+   assinada por engano).
+3. `apps/plataforma/src/components/lesson-form.tsx` — `uploadLessonAttachment`
+   simplificada para devolver direto o `storagePath` (sem chamar nenhuma
+   "read URL", já que não há prévia visual do anexo no editor).
+4. `apps/plataforma/src/lib/queries.ts` — novo helper `resolveAssetUrl`
+   (mesmo padrão de `buildDocumentUrlByGuestId` em `apps/flats`): assina o
+   `storagePath` sob demanda, TTL de 1h, só nos dois pontos que de fato
+   renderizam a capa/anexo como `<img>`/`<a>` — `getUserEnrollmentsWithProgress`
+   (CourseCard em "Minha jornada") e `getLessonPageData` (link de download da
+   aula). As leituras do editor (`getCourseForEditor`, `getLessonForEditor`,
+   `buildQuizEditorData`) continuam devolvendo o path cru — resolver ali
+   reproduziria o bug original ao reenviar o formulário sem alterar a
+   capa/anexo.
+5. `packages/validators/src/plataforma/index.ts` — `coverImageUrl`/
+   `downloadUrl` relaxados de `z.string().url()` para `z.string().min(1)`
+   (agora aceitam um storage path, não uma URL).
+
+**Débito registrado (G1 — escolha mais simples, fora dos arquivos
+permitidos):** o catálogo (`apps/plataforma/src/app/(aluno)/page.tsx`) busca
+cursos via a Server Action `searchCourses` (`actions/courses.ts`), que
+devolve `courses.coverUrl` cru — fora da lista de arquivos permitidos deste
+prompt. Com a mudança de S-05, esse valor agora é um storage path, não uma
+URL, então o card de capa no catálogo (diferente de "Minha jornada", que usa
+`getUserEnrollmentsWithProgress` e já resolve) fica sem imagem até um
+P-9.1b-7b corretivo migrar `searchCourses` para resolver sob demanda também
+— registrado aqui como gap conhecido, não escondido. `course-detail-view.tsx`
+não renderiza `coverImageUrl` (sem banner de capa na página de detalhe),
+então `getCourseBySlug` não precisou de resolução.
+
+Linhas de `courses`/`lessons` já existentes antes desta correção mantêm a
+signed URL legada de 10 anos no lugar do storage path — `createSignedUrl`
+falha para um valor que não é um path do bucket e a leitura degrada para
+`null` (sem capa/anexo) até o instrutor reenviar o arquivo; não há migração
+de backfill neste prompt (fora da lista de arquivos permitidos, e
+"Não alterar buckets nem policies de storage" já excluía qualquer mudança de
+schema).
+
+**Fechamento de P-9.1b (S-154):** com P-9.1b-1 a P-9.1b-7 todos `concluido`,
+os achados S-02 (leituras via `db` superuser contornando RLS) e S-05 (URL
+assinada de 10 anos) de S-154 são marcados como corrigidos no índice da
+auditoria — checklist de S-154 e status de S-155 atualizados acima.
+
+**Arquivos alterados:**
+
+- `apps/flats/src/lib/queries.ts`, `apps/radio/src/lib/queries.ts`
+  (`getAuthUser`)
+- `apps/plataforma/src/lib/queries.ts` (`getAuthUser`, `isInstructor`,
+  `resolveAssetUrl`, `getUserEnrollmentsWithProgress`, `getLessonPageData`)
+- `apps/plataforma/src/actions/uploads.ts`
+- `apps/plataforma/src/components/course-form.tsx`,
+  `lesson-form.tsx`
+- `packages/validators/src/plataforma/index.ts`
+- `apps/admin/src/__tests__/security-audit.test.ts` (guarda de TTL ≤1h para
+  plataforma; nota de S-05 removida)
+- `SESSIONS.md` (esta entrada + índice + fechamento de S-154/S-155)
+
+**Critérios de aceite verificados:**
+
+- [x] Grep limpo de `db` cru nos 3 `lib/queries.ts` (flats, plataforma,
+      radio)
+- [x] URL de leitura da plataforma com TTL ≤1h; resolução sob demanda nos
+      pontos que de fato renderizam capa/anexo (catálogo via `searchCourses`
+      é débito registrado acima, fora dos arquivos permitidos)
+- [x] `security-audit.test.ts` estendido (guarda de TTL da plataforma) e
+      verde
+- [x] Lint passa · Types passam · SESSIONS.md atualizado
+- [x] Fechamento de P-9.1b: S-02 e S-05 marcados como corrigidos no índice
+      da auditoria (S-154/S-155 atualizados)
+- [x] Suítes verdes: `security-audit.test.ts` 12/12 describes, 39/39 testes;
+      `@hebron/flats` 3/3 arquivos, 52/52 testes; `@hebron/plataforma` 3/3
+      arquivos, 21/21 testes; `@hebron/radio` 3/3 arquivos, 19/19 testes

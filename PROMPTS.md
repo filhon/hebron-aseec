@@ -5693,12 +5693,12 @@ Não alterar buckets nem policies de storage (regra original de P-9.1b).
 
 **Critérios de aceite:**
 
-- [ ] Grep limpo de `db` cru nos 3 `lib/queries.ts` (flats, plataforma, radio)
-- [ ] URL de leitura da plataforma com TTL ≤1h; resolução sob demanda, sem URL
+- [x] Grep limpo de `db` cru nos 3 `lib/queries.ts` (flats, plataforma, radio)
+- [x] URL de leitura da plataforma com TTL ≤1h; resolução sob demanda, sem URL
       de longa duração persistida/propagada
-- [ ] `security-audit.test.ts` estendido (guarda de TTL da plataforma) e verde
-- [ ] Lint passa · Types passam · SESSIONS.md atualizado
-- [ ] **Fechamento de P-9.1b:** com P-9.1b-1..7 concluídos, os achados S-02 e
+- [x] `security-audit.test.ts` estendido (guarda de TTL da plataforma) e verde
+- [x] Lint passa · Types passam · SESSIONS.md atualizado
+- [x] **Fechamento de P-9.1b:** com P-9.1b-1..7 concluídos, os achados S-02 e
       S-05 de S-154 podem ser marcados como corrigidos no índice da auditoria
       (atualizar a entrada S-154 ou registrar entrada de fechamento em
       SESSIONS.md referenciando os 7 sub-prompts)
