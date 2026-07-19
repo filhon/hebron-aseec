@@ -5731,12 +5731,12 @@ Tela "Meus Dados" (componente compartilhado em packages/ui, montado em cada app)
 
 **Critérios de aceite:**
 
-- [ ] "Meus Dados" em cada app: visualização, consentimentos revogáveis, export JSON+CSV, pedido de exclusão
-- [ ] Exclusão executada anonimiza PII de verdade (teste fim-a-fim com usuário fixture) e preserva registros contábeis pseudonimizados
-- [ ] Consentimento do cadastro é opt-in (verificação — já implementado em P-1.26/P-7.4)
-- [ ] Acesso a CPF/documentos audita leitura (teste)
-- [ ] Varredura final documentada: inventário de dados pessoais × base legal × retenção
-- [ ] Lint passa · Types passam
+- [x] "Meus Dados" em cada app: visualização, consentimentos revogáveis, export JSON+CSV, pedido de exclusão
+- [x] Exclusão executada anonimiza PII de verdade (teste fim-a-fim com usuário fixture) e preserva registros contábeis pseudonimizados
+- [x] Consentimento do cadastro é opt-in (verificação — já implementado em P-1.26/P-7.4)
+- [x] Acesso a CPF/documentos audita leitura (teste)
+- [x] Varredura final documentada: inventário de dados pessoais × base legal × retenção
+- [~] Lint passa · Types passam
 
 ---
 

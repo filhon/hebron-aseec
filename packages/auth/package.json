@@ -8,11 +8,15 @@
     "./client": "./src/client.ts",
     "./middleware": "./src/middleware.ts",
     "./impersonation": "./src/impersonation.ts",
+    "./data-export": "./src/data-export.ts",
+    "./data-deletion": "./src/data-deletion.ts",
     "./testing": "./src/testing.ts"
   },
   "scripts": {
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@hebron/db": "workspace:*",
@@ -25,7 +29,9 @@
     "@hebron/eslint-config": "workspace:*",
     "@hebron/typescript-config": "workspace:*",
     "@types/node": "^22.0.0",
+    "dotenv": "^16.4.5",
     "eslint": "^9.13.0",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.0"
   }
 }

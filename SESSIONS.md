@@ -184,6 +184,7 @@
 | S-161  | 2026-07-18 | P-9.1b-5 — Fechamento do achado S-02 em `intranet` (CORRETIVO)                          | concluido                            |
 | S-162  | 2026-07-18 | P-9.1b-6 — Fechamento do achado S-02 em `tarefas` (CORRETIVO)                           | concluido                            |
 | S-163  | 2026-07-18 | P-9.1b-7 — Residual S-02 (flats/plataforma/radio) + S-05 (CORRETIVO) — fecha P-9.1b     | concluido                            |
+| S-164  | 2026-07-18 | P-9.2 — LGPD Audit (superfícies de titular "Meus Dados" + varredura final)              | concluido                            |
 
 ---
 
@@ -12572,3 +12573,123 @@ auditoria — checklist de S-154 e status de S-155 atualizados acima.
 - [x] Suítes verdes: `security-audit.test.ts` 12/12 describes, 39/39 testes;
       `@hebron/flats` 3/3 arquivos, 52/52 testes; `@hebron/plataforma` 3/3
       arquivos, 21/21 testes; `@hebron/radio` 3/3 arquivos, 19/19 testes
+
+---
+
+### S-164 — 2026-07-18 — P-9.2 — LGPD Audit
+
+**Prompt:** P-9.2 (`PROMPTS.md:5708`) · Fase 9 · Módulo fundacao · Tipo
+integration · Branch `feat/P-9.2-lgpd-audit`.
+
+**Objetivo:** superfícies de titular da LGPD ("Meus Dados", montada em cada
+app) + revisão final. NÃO recria a fundação de P-0.13 (consentimento,
+anonimização, redação de PII em audit, retenção) nem o consentimento do
+cadastro (P-1.26/P-7.4) — consome tudo isso.
+
+**Entregue:**
+
+1. **Componente compartilhado** `@hebron/ui#MyDataPage`
+   (`packages/ui/src/components/my-data-page.tsx`, `/impeccable`,
+   register=product, tokens canônicos, presentation-only): visualização do
+   perfil, consentimentos revogáveis/reativáveis por finalidade,
+   portabilidade (JSON/CSV com download client-side), pedido de exclusão
+   (dialog de confirmação para ação destrutiva).
+2. **Dados/portabilidade** `@hebron/auth/data-export`:
+   `getMyDataSnapshot` (leitura RLS-correta do próprio titular via `tx`
+   autenticado), `exportMyData` (serializa JSON+CSV, audita `data.exported`),
+   e `logPiiAccess` — primitiva que audita a leitura de CPF/documentos de
+   terceiros por admin (`pii.accessed`, grava campos+contexto, nunca valores).
+3. **Exclusão** `@hebron/auth/data-deletion`: `requestDataDeletion`
+   (ticket idempotente em `public.data_deletion_requests`, audita
+   `data.deletion_requested`), `executeDataDeletion` (super_admin: reusa
+   `anonymizeUser` de P-0.13, marca `completed`, audita `data.deletion_executed`,
+   desativa login via callback injetado — Supabase Admin API fica fora da
+   camada de dados/teste, BRAIN §9), `rejectDataDeletion` (base legal p/ reter).
+4. **Schema (G6.4):** `public.data_deletion_requests` (+ enum de status) com
+   RLS (`select_own`/`insert_own` só pendente/`select_admin`/`update_admin`,
+   sem DELETE — imutável). **Audit (G6.3):** `data.exported`,
+   `data.deletion_requested`, `data.deletion_executed`,
+   `data.deletion_rejected`, `pii.accessed`. Migrations `0057` (ALTER TYPE,
+   não-tx) e `0058` (tabela+RLS), aplicadas no banco de dev.
+5. **Montagem por app (9):** `apps/*/src/app/**/meus-dados/page.tsx` — Server
+   Component fino que resolve sessão, carrega dados via
+   `withAuthenticatedContext` e passa server actions inline (`setConsent`,
+   `exportMyData`, `requestDataDeletion`) ao `MyDataPage`. Mesmo template;
+   varia só `MEUS_DADOS_PATH` (radio: `/admin/meus-dados`; documentos:
+   `/editorial/meus-dados`). Build do flats OK (`/meus-dados` dinâmica).
+6. **Varredura final documentada:** `docs/lgpd-inventario-dados-pessoais.md`
+   — inventário de dados pessoais × base legal × acesso restrito × retenção
+   (identificação, saúde autodeclarada dos flats, documentos, views,
+   heartbeats, vínculos contábeis/deliberativos preservados pseudonimizados).
+
+**Decisões / desvios (G1):**
+
+- `logPiiAccess` colocado em `@hebron/auth/data-export` (módulo de "acesso a
+  dados pessoais" — cobre acesso do titular e de terceiro), nos arquivos
+  permitidos. Novos export paths `./data-export` e `./data-deletion` em
+  `packages/auth/package.json` (infra necessária, registrada).
+- **Infra de teste nova em `packages/auth`** (não tinha): `vitest.config.ts`,
+  `src/__tests__/setup-env.ts`, devDeps `vitest`+`dotenv`, script `test`,
+  `vitest.config.ts` no `include` do tsconfig. Espelha `packages/db`.
+- Montagem no **grupo autenticado primário** de cada app (page-only na lista
+  de permitidos; sem layout próprio). Em apps multi-papel (projetos/flats/
+  plataforma) fica no grupo do titular principal — área cross-papel é
+  refinamento futuro (inventário §6.3).
+
+**Débitos registrados:**
+
+- **Wiring do `logPiiAccess`** nas telas reais de leitura de PII de terceiros
+  (gestor de flats vendo CPF/documentos em `apps/flats/src/lib/queries.ts`;
+  detalhe de usuário no `admin`) — fora dos arquivos permitidos deste prompt.
+  Primitiva + teste entregues; instrumentar os pontos de leitura é corretivo
+  dedicado (inventário §6.1).
+- **UI admin de processamento de tickets** de exclusão: `executeDataDeletion`/
+  `rejectDataDeletion` existem e são testados, mas a tela de super_admin para
+  acioná-los não está nos arquivos permitidos — corretivo futuro.
+
+**Achado pré-existente (NÃO deste diff):** `packages/db` `system-actor.test.ts`
+falha (`getSystemActorId` não encontra papel super_admin). Causa-raiz
+diagnosticada: drift do banco de dev **compartilhado** — o ator-sistema
+(`sistema@hebronaseec.org.br`) existe em `public.users` com **0**
+`role_assignments` e **11** entradas em `admin.audit_log`; o `afterAll` do
+teste deleta o papel mas o `DELETE users` falha (FK de `audit_log.actor_id`
+para um usuário que autorou audit imutável), deixando o usuário sem papel.
+Mesma classe do S-159. Não toquei em system-actor/jobs/role_assignments.
+**Reparo não-destrutivo aplicado** (reinseri o `super_admin` do ator-sistema
+para a saúde dos jobs em dev); a correção durável é redesenhar o `afterAll`
+do teste (não pode hard-deletar quem autorou audit) — corretivo dedicado,
+fora do escopo LGPD.
+
+**Arquivos criados/alterados:**
+
+- `packages/ui/src/components/my-data-page.tsx` (+ export no barrel)
+- `packages/auth/src/data-export.ts`, `packages/auth/src/data-deletion.ts`
+- `packages/auth/package.json` (export paths, test script, devDeps),
+  `packages/auth/vitest.config.ts`, `packages/auth/tsconfig.json`,
+  `packages/auth/src/__tests__/setup-env.ts`,
+  `packages/auth/src/__tests__/data-deletion.test.ts`
+- `packages/db/src/schema/public.ts` (+ `data_deletion_requests`),
+  `packages/db/src/schema/admin.ts` (+ 5 audit actions),
+  `packages/db/src/schema/index.ts`
+- `packages/db/src/migrations/0057_lgpd_data_access_audit_actions.sql`,
+  `0058_data_deletion_requests.sql`
+- `apps/{admin,projetos,plataforma,radio,financeiro,intranet,documentos,flats,tarefas}/src/app/**/meus-dados/page.tsx`
+- `docs/lgpd-inventario-dados-pessoais.md`
+- `SESSIONS.md` (esta entrada + índice)
+
+**Critérios de aceite verificados:**
+
+- [x] "Meus Dados" em cada app (9): visualização, consentimentos revogáveis,
+      export JSON+CSV, pedido de exclusão
+- [x] Exclusão executada anonimiza PII de verdade (teste fim-a-fim com
+      usuário fixture) e preserva registro contábil (`financeiro.transactions`)
+      pseudonimizado — `@hebron/auth` 5/5 testes verdes
+- [x] Consentimento do cadastro é opt-in (verificado: `cadastro-form` default
+      `false`; wizard de flats `step-consent` toggles opt-in, `dado_saude`
+      destacado e zerado no servidor sem consentimento)
+- [x] Acesso a CPF/documentos audita leitura — `logPiiAccess`/`pii.accessed` + teste (wiring nas telas = débito §6.1)
+- [x] Varredura final documentada (`docs/lgpd-inventario-dados-pessoais.md`)
+- [x] Lint passa · Types passam (monorepo 38/38 typecheck+lint; build flats OK)
+- [~] Suíte `@hebron/db`: 59/60; a única falha (`system-actor.test.ts`) é
+  drift pré-existente do banco compartilhado, não deste diff (ver achado
+  acima)

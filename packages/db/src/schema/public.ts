@@ -45,6 +45,16 @@ export const consentPurposeEnum = pgEnum("consent_purpose", [
   "dados_reserva",
   "dado_saude",
 ]);
+// P-9.2 — LGPD: ciclo de vida do pedido de exclusão do titular. O pedido é
+// um "ticket" para super_admin: "pending" ao ser aberto pelo titular em
+// "Meus Dados"; "completed" quando super_admin executa a anonimização
+// (fluxo de P-0.13); "rejected" quando há base legal para reter (ex.:
+// obrigação contábil em curso). Nunca é removido — mantém o rastro do
+// exercício do direito.
+export const dataDeletionRequestStatusEnum = pgEnum(
+  "data_deletion_request_status",
+  ["pending", "completed", "rejected"],
+);
 
 // ---------------------------------------------------------------------------
 // public.users — mirror of auth.users, kept in sync via trigger
@@ -171,6 +181,42 @@ export const consents = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// public.data_deletion_requests — LGPD, pedido de exclusão do titular (P-9.2)
+// Ticket para super_admin: o titular abre (status "pending"); a execução usa
+// a primitiva de anonimização de P-0.13 (anonymizeUser), marcando "completed".
+// Sem DELETE — o registro do exercício do direito é preservado.
+// ---------------------------------------------------------------------------
+export const dataDeletionRequests = pgTable(
+  "data_deletion_requests",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    status: dataDeletionRequestStatusEnum("status")
+      .notNull()
+      .default("pending"),
+    /** Motivo opcional informado pelo titular ao solicitar. Não é PII. */
+    reason: text("reason"),
+    /** super_admin que executou/recusou o pedido. */
+    resolvedBy: uuid("resolved_by").references(() => users.id),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    /** Justificativa da recusa (ex.: retenção contábil obrigatória). */
+    resolutionNotes: text("resolution_notes"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("data_deletion_requests_user_id_idx").on(table.userId),
+    index("data_deletion_requests_status_idx").on(table.status),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // Inferred types
 // ---------------------------------------------------------------------------
 export type User = typeof users.$inferSelect;
@@ -184,3 +230,6 @@ export type NewNotification = typeof notifications.$inferInsert;
 export type Consent = typeof consents.$inferSelect;
 export type NewConsent = typeof consents.$inferInsert;
 export type ConsentPurpose = Consent["purpose"];
+export type DataDeletionRequest = typeof dataDeletionRequests.$inferSelect;
+export type NewDataDeletionRequest = typeof dataDeletionRequests.$inferInsert;
+export type DataDeletionRequestStatus = DataDeletionRequest["status"];

@@ -189,9 +189,7 @@ describe("Subtarefas — completar atualiza o progresso agregado da tarefa-mãe"
     await actingAs(IDS.colaborador, ["colaborador"]);
     const task = await getTaskById(taskId);
     expect(task?.subtaskProgress).toEqual({ done: 3, total: 5 });
-  }, // reais (cada uma com round-trips extra de SET LOCAL ROLE/RESET ROLE) // 9 chamadas nesta única `it` agora abrem 9 transações autenticadas
-  // contra o Supabase de dev compartilhado, em vez das leituras/escritas
-  // via pool cru de antes — acima do testTimeout padrão de 30s do
+  }, // via pool cru de antes — acima do testTimeout padrão de 30s do // contra o Supabase de dev compartilhado, em vez das leituras/escritas // reais (cada uma com round-trips extra de SET LOCAL ROLE/RESET ROLE) // 9 chamadas nesta única `it` agora abrem 9 transações autenticadas
   // vitest.config.ts sob latência de rede real (mesma causa documentada
   // em SESSIONS.md S-33: concorrência/latência do pooler compartilhado,
   // não falha de código).

@@ -117,3 +117,13 @@ export type {
 
 export { NotificationCenter } from "./components/notification-center";
 export type { NotificationCenterProps } from "./components/notification-center";
+
+// LGPD — superfície de titular (P-9.2)
+export { MyDataPage } from "./components/my-data-page";
+export type {
+  MyDataPageProps,
+  MyDataProfileView,
+  MyDataConsentView,
+  MyDataExportFile,
+  MyDataDeletionStatus,
+} from "./components/my-data-page";

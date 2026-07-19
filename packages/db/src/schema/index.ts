@@ -16,10 +16,12 @@ export {
   designationTypeEnum,
   userStatusEnum,
   consentPurposeEnum,
+  dataDeletionRequestStatusEnum,
   users,
   roleAssignments,
   designations,
   consents,
+  dataDeletionRequests,
 } from "./public";
 
 export type {
@@ -32,6 +34,9 @@ export type {
   Consent,
   NewConsent,
   ConsentPurpose,
+  DataDeletionRequest,
+  NewDataDeletionRequest,
+  DataDeletionRequestStatus,
 } from "./public";
 
 // Expanded notifications schema

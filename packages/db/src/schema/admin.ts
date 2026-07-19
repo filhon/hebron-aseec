@@ -144,6 +144,13 @@ export const auditActionEnum = adminSchema.enum("audit_action", [
   "playlist.activated",
   "material.created",
   "term.accepted",
+  // LGPD — superfícies de titular e log de acesso a PII (P-9.2), added via
+  // ALTER TYPE in 0057_lgpd_data_access_audit_actions.sql (G6.3)
+  "data.exported",
+  "data.deletion_requested",
+  "data.deletion_executed",
+  "data.deletion_rejected",
+  "pii.accessed",
 ]);
 
 export const meetingTypeEnum = adminSchema.enum("meeting_type", [
