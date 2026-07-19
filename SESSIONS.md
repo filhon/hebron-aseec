@@ -185,6 +185,7 @@
 | S-162  | 2026-07-18 | P-9.1b-6 — Fechamento do achado S-02 em `tarefas` (CORRETIVO)                           | concluido                            |
 | S-163  | 2026-07-18 | P-9.1b-7 — Residual S-02 (flats/plataforma/radio) + S-05 (CORRETIVO) — fecha P-9.1b     | concluido                            |
 | S-164  | 2026-07-18 | P-9.2 — LGPD Audit (superfícies de titular "Meus Dados" + varredura final)              | concluido                            |
+| S-165  | 2026-07-19 | P-9.3 — Performance e Otimização                                                        | concluido                            |
 
 ---
 
@@ -12693,3 +12694,158 @@ fora do escopo LGPD.
 - [~] Suíte `@hebron/db`: 59/60; a única falha (`system-actor.test.ts`) é
   drift pré-existente do banco compartilhado, não deste diff (ver achado
   acima)
+
+---
+
+## S-165 — P-9.3 — Performance e Otimização
+
+**Data:** 2026-07-19
+**Prompt:** P-9.3 (fase 9, fundacao, tipo integration)
+**Branch:** `feat/P-9.3-performance`
+**Status:** concluido
+
+**Método:** medir antes de otimizar (skill `/impeccable`, referência
+`optimize`). O primeiro `pnpm turbo build` **falhou** — o que virou o primeiro
+achado, e sem ele nenhum número de bundle era mensurável.
+
+### Achados e correções
+
+**A. Build quebrado em `@hebron/radio` (pré-existente, bloqueador).**
+`packages/auth/src/index.ts` re-exportava `./impersonation`, que assina estado
+com `node:crypto`. Qualquer client component que importasse do barrel
+(`apps/radio/src/app/shell.tsx` → `getSupabaseBrowserClient`) puxava
+`node:crypto` para o grafo do cliente → `UnhandledSchemeError`. O próprio
+comentário do barrel já documentava a invariante violada ("must only ever
+re-export browser-safe modules", escrita quando `./server` causou o mesmo
+problema com `net`/`tls`). Removida a linha; **nenhum consumidor afetado** —
+todos os 7 pontos de uso já importam de `@hebron/auth/impersonation`.
+Regressão anterior a P-9.2 (`index.ts` e `impersonation.ts` intocados em HEAD);
+passou despercebida porque P-9.2 só buildou `flats`.
+
+**B. Índices para as consultas frequentes** (`0059_performance_indexes.sql`).
+O achado de maior impacto do prompt: `public.role_assignments` **não tinha
+índice nenhum**, e `public.has_role()` (STABLE SECURITY DEFINER) a consulta
+dentro do `USING` de praticamente toda policy RLS dos 9 schemas — ou seja,
+todo acesso a linha sob RLS, em todo app, era um seq scan. `resolveSession`
+(`@hebron/auth/server`) percorre as mesmas tabelas em toda requisição
+autenticada. 5 índices, todos de caminho de consulta verificado no código:
+
+| Índice                                                             | Consulta que atende                            |
+| ------------------------------------------------------------------ | ---------------------------------------------- |
+| `role_assignments_user_id_role_active_idx` (user_id, role) parcial | `has_role()` + `resolveSession`                |
+| `role_assignments_role_active_idx` (role) parcial                  | fan-out de notificações por papel (~10 pontos) |
+| `designations_user_id_active_idx` parcial                          | 2ª leitura de `resolveSession`                 |
+| `announcements_published_at_created_at_idx`                        | feed do dashboard da intranet                  |
+| `meeting_decisions_meeting_session_id_idx`                         | decisões por ata                               |
+
+Parciais (`WHERE revoked_at IS NULL`) porque revogação é soft (imutabilidade).
+Verificado com `EXPLAIN`: o plano do `EXISTS` de `has_role()` passou de seq
+scan para `Bitmap Index Scan on role_assignments_user_id_role_active_idx`.
+Migration aplicada no banco de dev (aditiva, `IF NOT EXISTS`).
+
+**C. Duas queries N+1 reais** (as demais suspeitas eram falso-positivo — o
+padrão `inArray` + `Map` já é usado corretamente em plataforma/projetos):
+
+- `apps/projetos/src/lib/queries.ts` — um `COUNT` por parcela dentro do laço
+  para numerar parcelas. Agora uma consulta agrupada por (projeto, vencimento)
+  - soma em memória. `date()` do Drizzle devolve `"YYYY-MM-DD"`, então a
+    comparação lexicográfica é cronologicamente correta.
+- `packages/integrations/src/tarefas.ts` (`createAutoTaskChecklist`) — dois
+  INSERTs por item do template. Agora dois INSERTs em lote no total, com ids
+  pré-gerados (`randomUUID`) para vincular subtarefa→tarefa sem depender da
+  ordem do `RETURNING`.
+
+**D. Lazy loading de componentes pesados.** Os libs realmente pesados
+(`@react-pdf/renderer`, `exceljs`, `archiver`, `@aws-sdk/client-s3`) já eram
+server-only; sobraram dois no bundle de cliente:
+
+- `hls.js` (~150 KB) em `lesson-player.tsx` — `import()` dentro do efeito, não
+  do componente: os controles do player pintam de imediato (é conteúdo
+  above-the-fold, lazy-carregar o componente pioraria o LCP) e o parser vem em
+  paralelo. Safari/iOS, que tocam HLS nativamente, não baixam mais o hls.js.
+  Verificado: chunk isolado, rota `/curso/[slug]/aula/[id]` em 193 kB.
+- `music-metadata` em `track-upload-form.tsx` — `import()` no handler de
+  seleção de arquivo; o estado `analyzing` já existente cobre a espera.
+
+**E. Login SSO canônico sem CSS nem fontes.**
+`apps/intranet/src/app/(auth)/layout.tsx` era o scaffold padrão do Next.js:
+sem `globals.css`, sem `next/font`, `lang="en"`, `title: "Next.js"`. Como
+`globals.css` só era importado em `(dashboard)/layout.tsx`, **a página de
+login de entrada dos 9 apps era servida sem nenhum CSS do design system**.
+Corrigido para espelhar o layout do dashboard. Verificado: passou a emitir
+`.next/static/css/app/(auth)/layout.css` (108 KB, com `--hb-blue`,
+`--hb-orange`, `--font-parkinsans`, `--font-titillium`), que antes não existia.
+
+### Decisões / desvios (G1)
+
+- **Allowlist ampliada, com aprovação do Filipe.** A lista de arquivos
+  permitidos do prompt (SQL de índices, pages para imports, `turbo.json`) não
+  cobria A, C nem E, e os critérios "nenhuma query N+1" e "bundle < 500KB"
+  eram inatingíveis dentro dela (o build sequer passava). Consultado antes de
+  editar; resposta: corrigir tudo e registrar. Os lazy imports (D) ficaram nos
+  componentes, não nas pages — lazy-carregar a partir da page pegaria a view
+  inteira e pioraria o LCP.
+- **`turbo.json` não foi tocado** — nada no diagnóstico apontou ajuste de build.
+- **Migration escrita à mão, não por `drizzle-kit generate` (desvio de G6.4).**
+  O journal do drizzle está dessincronizado do repo há muito tempo (15 entradas
+  no `_journal.json` contra 59 arquivos `.sql`; 0057/0058 de P-9.2 também foram
+  escritos à mão). `pnpm db:generate` produziu `0028_giant_jane_foster.sql`, que
+  (a) colidia com a numeração vigente, (b) reemitia toda a tabela e os enums de
+  P-9.2, e (c) trazia `ALTER TYPE ... ADD VALUE` **sem** `IF NOT EXISTS` — e o
+  runner (`src/migrate.ts`) ignora o journal, ordena os `.sql` por nome e
+  registra em `public._migrations`, então esse arquivo rodaria antes de
+  0057/0058 e quebraria. Artefatos gerados foram revertidos (arquivo, snapshot
+  e journal). **Débito:** ressincronizar o baseline do drizzle-kit com os
+  arquivos aplicados, ou assumir formalmente o padrão manual em G6.4.
+
+### Medições
+
+Bundle inicial (`First Load JS shared by all`) — antes não era mensurável
+(build falhava em radio, `0 successful, 9 total`):
+
+- 9/9 apps buildam. Shared: **102–103 kB** em todos.
+- Pior rota por app: flats `/reservar` 268 kB · intranet `/login` 237 kB ·
+  admin `/templates-email` 201 kB · tarefas 198 · plataforma 197 · radio 192 ·
+  projetos 181 · financeiro 173 · documentos 166. **Todas < 500 KB.**
+
+### Critérios de aceite
+
+- [x] Nenhuma query N+1 identificada (2 corrigidas; demais suspeitas eram
+      falso-positivo, já batched)
+- [x] Indexes criados para queries frequentes (5, validados com `EXPLAIN`)
+- [x] Bundle size por app < 500KB initial load (pior caso 268 kB)
+- [x] Imagens otimizadas via Next.js Image — **N/A verificado**: não há
+      nenhuma `<img>` nem imagem rasterizada em nenhum app; toda iconografia é
+      Lucide (SVG) e a marca é a classe `.hb-balao` (CSS). Nada a otimizar.
+- [x] Componentes pesados com lazy loading (`hls.js`, `music-metadata`)
+- [x] Lint passa · Types passam (38/38 turbo)
+- [~] **Web Vitals dentro dos targets — NÃO medido.** LCP/FID/CLS exigem
+  instrumentação em runtime (RUM ou Lighthouse contra deploy), fora do que
+  este prompt permite. Foram atacados os determinantes estruturais: fontes
+  com `display: "swap"` nos 9 apps, `PlayerSkeleton`/`aspect-video`
+  reservando espaço (CLS), CSS do login corrigido (E, era FOUC total),
+  hls.js fora do caminho crítico (TBT/FID). **Débito:** medir de fato após
+  deploy.
+
+### Testes
+
+- `@hebron/integrations` 6 arquivos / 8 testes ✓ — cobre o INSERT em lote
+  (`flats.test.ts` "cria as 2 tarefas de limpeza", `projetos-tarefas.test.ts`
+  "cria o checklist")
+- `@hebron/auth` 5/5 ✓ · `@hebron/intranet` 7 arquivos / 29 testes ✓
+- `apps/projetos` 105/107 — as 2 falhas (`close-voting.test.ts`, quórum) são
+  **pré-existentes**: confirmado rodando o mesmo arquivo com a árvore limpa
+  (`git stash`), falham igual. Não tocam o caminho alterado.
+- `@hebron/db` 60/60 testes passam; `system-actor.test.ts` falha no nível do
+  arquivo — drift conhecido do banco de dev compartilhado (S-164).
+
+### Arquivos criados/alterados
+
+- `packages/db/src/migrations/0059_performance_indexes.sql` (novo)
+- `packages/db/src/schema/public.ts`, `packages/db/src/schema/intranet.ts`
+- `packages/auth/src/index.ts`
+- `apps/projetos/src/lib/queries.ts`, `packages/integrations/src/tarefas.ts`
+- `apps/plataforma/src/components/lesson-player.tsx`
+- `apps/radio/src/components/track-upload-form.tsx`
+- `apps/intranet/src/app/(auth)/layout.tsx`
+- `SESSIONS.md` (esta entrada + índice)

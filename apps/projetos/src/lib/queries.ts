@@ -244,19 +244,41 @@ export async function getSubmissorDashboard(
             .limit(3)
         : [];
 
-    // To compute parcel number, count how many payments come before this one per project
+    // Número da parcela = quantas vencem antes dela no mesmo projeto. Uma
+    // única consulta agrupada por (projeto, vencimento) substitui o COUNT por
+    // linha que rodava aqui (N+1, P-9.3); a soma dos anteriores é feita em
+    // memória, como no restante deste arquivo.
+    const payProjectIds = [...new Set(paymentRows.map((p) => p.projectId))];
+    const scheduleDateRows =
+      payProjectIds.length > 0
+        ? await tx
+            .select({
+              projectId: paymentSchedules.projectId,
+              dueDate: paymentSchedules.dueDate,
+              cnt: count(),
+            })
+            .from(paymentSchedules)
+            .where(inArray(paymentSchedules.projectId, payProjectIds))
+            .groupBy(paymentSchedules.projectId, paymentSchedules.dueDate)
+        : [];
+
+    const datesByProject = new Map<
+      string,
+      { dueDate: string; cnt: number }[]
+    >();
+    for (const row of scheduleDateRows) {
+      const list = datesByProject.get(row.projectId) ?? [];
+      list.push({ dueDate: row.dueDate, cnt: row.cnt });
+      datesByProject.set(row.projectId, list);
+    }
+
     const upcomingPayments: DashboardPayment[] = [];
     for (const pay of paymentRows) {
-      const parcelsBefore = await tx
-        .select({ cnt: count() })
-        .from(paymentSchedules)
-        .where(
-          and(
-            eq(paymentSchedules.projectId, pay.projectId),
-            sql`${paymentSchedules.dueDate} < ${pay.dueDate}`,
-          ),
-        );
-      const parcelNum = (parcelsBefore[0]?.cnt ?? 0) + 1;
+      const parcelsBefore = (datesByProject.get(pay.projectId) ?? []).reduce(
+        (sum, row) => (row.dueDate < pay.dueDate ? sum + row.cnt : sum),
+        0,
+      );
+      const parcelNum = parcelsBefore + 1;
       upcomingPayments.push({
         id: pay.id,
         projectId: pay.projectId,

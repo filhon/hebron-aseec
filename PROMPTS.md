@@ -5762,14 +5762,14 @@ Otimização de performance em todos os apps. Verificar: bundle size (code split
 
 **Critérios de aceite:**
 
-- [ ] Nenhuma query N+1 identificada
-- [ ] Indexes criados para queries frequentes
-- [ ] Bundle size por app < 500KB initial load
-- [ ] Web Vitals dentro dos targets
-- [ ] Imagens otimizadas via Next.js Image
-- [ ] Componentes pesados com lazy loading
-- [ ] Lint passa
-- [ ] Types passam
+- [x] Nenhuma query N+1 identificada
+- [x] Indexes criados para queries frequentes
+- [x] Bundle size por app < 500KB initial load
+- [~] Web Vitals dentro dos targets
+- [x] Imagens otimizadas via Next.js Image
+- [x] Componentes pesados com lazy loading
+- [x] Lint passa
+- [x] Types passam
 
 ---
 

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { asc, eq } from "drizzle-orm";
 import { db } from "@hebron/db/client";
 import {
@@ -143,40 +144,48 @@ export async function createAutoTaskChecklist(
     sourceId: params.sourceId,
   };
 
+  // Ids gerados aqui (a coluna tem defaultRandom()) para que tarefas e
+  // subtarefas entrem em dois INSERTs em lote, em vez de dois por item do
+  // template — o N+1 que rodava neste laço (P-9.3). Pré-gerar o id também
+  // torna o vínculo subtarefa→tarefa explícito, sem depender da ordem do
+  // RETURNING.
+  const prepared = items.map((item) => ({ id: randomUUID(), item }));
+
+  const taskRows = prepared.map(({ id, item }) => ({
+    id,
+    title: item.title,
+    description: item.description,
+    workspaceId: template.workspaceId,
+    priority: item.priority,
+    dueDate:
+      item.dueOffsetDays !== null ? addDays(now, item.dueOffsetDays) : null,
+    source: "auto" as const,
+    sourceRef,
+    needsManualAssignment: true,
+    createdBy: systemActorId,
+  }));
+
+  const subtaskRows = prepared.flatMap(({ id, item }) =>
+    item.subtasks.map((title, index) => ({
+      taskId: id,
+      title,
+      order: index,
+    })),
+  );
+
   const taskIds = await db.transaction(async (tx) => {
-    const ids: string[] = [];
-    for (const item of items) {
-      const dueDate =
-        item.dueOffsetDays !== null ? addDays(now, item.dueOffsetDays) : null;
+    if (taskRows.length === 0) return [];
 
-      const [task] = await tx
-        .insert(tasks)
-        .values({
-          title: item.title,
-          description: item.description,
-          workspaceId: template.workspaceId,
-          priority: item.priority,
-          dueDate,
-          source: "auto",
-          sourceRef,
-          needsManualAssignment: true,
-          createdBy: systemActorId,
-        })
-        .returning({ id: tasks.id });
-      if (!task) continue;
-      ids.push(task.id);
+    const inserted = await tx
+      .insert(tasks)
+      .values(taskRows)
+      .returning({ id: tasks.id });
 
-      if (item.subtasks.length > 0) {
-        await tx.insert(subtasks).values(
-          item.subtasks.map((title, index) => ({
-            taskId: task.id,
-            title,
-            order: index,
-          })),
-        );
-      }
+    if (subtaskRows.length > 0) {
+      await tx.insert(subtasks).values(subtaskRows);
     }
-    return ids;
+
+    return inserted.map((row) => row.id);
   });
 
   if (taskIds.length === 0) {

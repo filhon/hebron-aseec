@@ -1,5 +1,7 @@
+import { desc } from "drizzle-orm";
 import {
   boolean,
+  index,
   jsonb,
   numeric,
   text,
@@ -32,22 +34,33 @@ export const briefingFrequencyEnum = intranetSchema.enum("briefing_frequency", [
 // ---------------------------------------------------------------------------
 // intranet.announcements
 // ---------------------------------------------------------------------------
-export const announcements = intranetSchema.table("announcements", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  title: text("title").notNull(),
-  body: text("body").notNull(),
-  priority: announcementPriorityEnum("priority").notNull(),
-  authorId: uuid("author_id")
-    .notNull()
-    .references(() => users.id),
-  publishedAt: timestamp("published_at", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
+export const announcements = intranetSchema.table(
+  "announcements",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    title: text("title").notNull(),
+    body: text("body").notNull(),
+    priority: announcementPriorityEnum("priority").notNull(),
+    authorId: uuid("author_id")
+      .notNull()
+      .references(() => users.id),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    // Feed do dashboard da intranet: ORDER BY published_at DESC, created_at
+    // DESC a cada carregamento (P-9.3).
+    index("announcements_published_at_created_at_idx").on(
+      desc(table.publishedAt),
+      desc(table.createdAt),
+    ),
+  ],
+);
 
 // ---------------------------------------------------------------------------
 // intranet.dashboard_configs
@@ -84,25 +97,34 @@ export const dashboardConfigs = intranetSchema.table("dashboard_configs", {
 // Decisão de ata vinculada a admin.meeting_sessions; pode gerar uma tarefa em
 // tarefas.tasks (MeetingDecisionForm, P-5.4).
 // ---------------------------------------------------------------------------
-export const meetingDecisions = intranetSchema.table("meeting_decisions", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  meetingSessionId: uuid("meeting_session_id")
-    .notNull()
-    .references(() => meetingSessions.id),
-  description: text("description").notNull(),
-  responsibleId: uuid("responsible_id")
-    .notNull()
-    .references(() => users.id),
-  dueDate: timestamp("due_date", { withTimezone: true }),
-  status: meetingDecisionStatusEnum("status").notNull().default("pendente"),
-  taskId: uuid("task_id").references(() => tasks.id),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
+export const meetingDecisions = intranetSchema.table(
+  "meeting_decisions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    meetingSessionId: uuid("meeting_session_id")
+      .notNull()
+      .references(() => meetingSessions.id),
+    description: text("description").notNull(),
+    responsibleId: uuid("responsible_id")
+      .notNull()
+      .references(() => users.id),
+    dueDate: timestamp("due_date", { withTimezone: true }),
+    status: meetingDecisionStatusEnum("status").notNull().default("pendente"),
+    taskId: uuid("task_id").references(() => tasks.id),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    // Decisões carregadas por ata (tela de detalhe da reunião) — P-9.3.
+    index("meeting_decisions_meeting_session_id_idx").on(
+      table.meetingSessionId,
+    ),
+  ],
+);
 
 // ---------------------------------------------------------------------------
 // intranet.briefing_preferences

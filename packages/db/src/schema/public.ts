@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
   index,
@@ -98,40 +99,72 @@ export const users = pgTable("users", {
 // ---------------------------------------------------------------------------
 // public.role_assignments
 // ---------------------------------------------------------------------------
-export const roleAssignments = pgTable("role_assignments", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  role: roleEnum("role").notNull(),
-  scope: text("scope").notNull().default("global"),
-  scopeId: uuid("scope_id"),
-  grantedBy: uuid("granted_by").references(() => users.id),
-  grantedAt: timestamp("granted_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  revokedAt: timestamp("revoked_at", { withTimezone: true }),
-  revokedBy: uuid("revoked_by").references(() => users.id),
-  revocationReason: text("revocation_reason"),
-});
+export const roleAssignments = pgTable(
+  "role_assignments",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    role: roleEnum("role").notNull(),
+    scope: text("scope").notNull().default("global"),
+    scopeId: uuid("scope_id"),
+    grantedBy: uuid("granted_by").references(() => users.id),
+    grantedAt: timestamp("granted_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    revokedBy: uuid("revoked_by").references(() => users.id),
+    revocationReason: text("revocation_reason"),
+  },
+  (table) => [
+    // Tabela mais quente do ecossistema: public.has_role() a consulta dentro
+    // do USING de praticamente toda policy RLS dos 9 schemas, e resolveSession
+    // (@hebron/auth) a lê em toda requisição autenticada. Sem índice, cada
+    // verificação de papel era um seq scan (P-9.3).
+    //
+    // (user_id, role) parcial cobre exatamente o EXISTS de has_role
+    // (user_id = auth.uid() AND role = ANY(...) AND revoked_at IS NULL),
+    // permitindo index-only scan; o mesmo índice atende resolveSession, que
+    // seleciona só `role` filtrando por user_id.
+    index("role_assignments_user_id_role_active_idx")
+      .on(table.userId, table.role)
+      .where(sql`${table.revokedAt} IS NULL`),
+    // Fan-out de notificações filtra por papel sem user_id ("todos os
+    // diretores", "todos os super_admin") em ~10 pontos dos apps.
+    index("role_assignments_role_active_idx")
+      .on(table.role)
+      .where(sql`${table.revokedAt} IS NULL`),
+  ],
+);
 
 // ---------------------------------------------------------------------------
 // public.designations — gestor / autorizador (configuration, not a role)
 // ---------------------------------------------------------------------------
-export const designations = pgTable("designations", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  type: designationTypeEnum("type").notNull(),
-  userId: uuid("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  assignedBy: uuid("assigned_by").references(() => users.id),
-  assignedAt: timestamp("assigned_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-  revokedAt: timestamp("revoked_at", { withTimezone: true }),
-  revokedBy: uuid("revoked_by").references(() => users.id),
-  revocationReason: text("revocation_reason"),
-});
+export const designations = pgTable(
+  "designations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    type: designationTypeEnum("type").notNull(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    assignedBy: uuid("assigned_by").references(() => users.id),
+    assignedAt: timestamp("assigned_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    revokedBy: uuid("revoked_by").references(() => users.id),
+    revocationReason: text("revocation_reason"),
+  },
+  (table) => [
+    // Lida junto com role_assignments em toda resolveSession (designações
+    // gestor/autorizador do usuário corrente) — P-9.3.
+    index("designations_user_id_active_idx")
+      .on(table.userId)
+      .where(sql`${table.revokedAt} IS NULL`),
+  ],
+);
 
 // ---------------------------------------------------------------------------
 // public.notifications

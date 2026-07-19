@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import Hls from "hls.js";
+import type HlsType from "hls.js";
 import {
   Gauge,
   Maximize,
@@ -78,16 +78,26 @@ export function LessonPlayer({
     const video = videoRef.current;
     if (!video) return;
 
-    let hls: Hls | null = null;
+    // hls.js (~150 KB) sai do bundle inicial: os controles do player pintam
+    // de imediato e o parser é buscado em paralelo (P-9.3). `cancelled`
+    // cobre a desmontagem antes de o import resolver.
+    let hls: HlsType | null = null;
+    let cancelled = false;
 
-    if (Hls.isSupported()) {
-      hls = new Hls();
-      hls.loadSource(videoUrl);
-      hls.attachMedia(video);
-    } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
+    if (video.canPlayType("application/vnd.apple.mpegurl")) {
+      // Safari/iOS reproduzem HLS nativamente — não baixa o hls.js.
       video.src = videoUrl;
     } else {
-      video.src = videoUrl;
+      void import("hls.js").then(({ default: Hls }) => {
+        if (cancelled || !videoRef.current) return;
+        if (Hls.isSupported()) {
+          hls = new Hls();
+          hls.loadSource(videoUrl);
+          hls.attachMedia(videoRef.current);
+        } else {
+          videoRef.current.src = videoUrl;
+        }
+      });
     }
 
     if (startAtSeconds) {
@@ -95,6 +105,7 @@ export function LessonPlayer({
     }
 
     return () => {
+      cancelled = true;
       hls?.destroy();
     };
   }, [videoUrl, startAtSeconds]);

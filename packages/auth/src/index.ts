@@ -11,8 +11,12 @@
 // prevent regressing into. Server code must import `resolveSession` /
 // `createSupabaseServerActionClient` from "@hebron/auth/server" directly
 // (as apps/*/src/lib/safe-action.ts already do).
+// ./impersonation.ts is likewise NOT re-exported: it signs state with
+// `node:crypto`, so re-exporting it here breaks the build of every app whose
+// client components import "@hebron/auth" (webpack: `UnhandledSchemeError:
+// Reading from "node:crypto" is not handled by plugins`). Server code imports
+// it from "@hebron/auth/impersonation" directly, as apps/admin already does.
 export * from "./types";
 export * from "./client";
 export * from "./mfa";
-export * from "./impersonation";
 export { CANONICAL_LOGIN_URL } from "./middleware";

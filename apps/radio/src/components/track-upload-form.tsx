@@ -2,7 +2,6 @@
 
 import * as React from "react";
 import type { z } from "zod";
-import { parseBlob } from "music-metadata";
 import { Loader2, Music, X } from "lucide-react";
 import { createTrackSchema } from "@hebron/validators/radio";
 import type { Author, Series } from "@hebron/types/radio";
@@ -126,6 +125,10 @@ export function TrackUploadForm({
     setAnalyzeError(null);
 
     try {
+      // music-metadata só é necessária ao escolher o arquivo — carregada sob
+      // demanda para ficar fora do bundle inicial do painel (P-9.3). O estado
+      // "analyzing" já cobre a espera.
+      const { parseBlob } = await import("music-metadata");
       const metadata = await parseBlob(selected);
       const duration = metadata.format.duration;
       if (duration === undefined || !Number.isFinite(duration)) {
