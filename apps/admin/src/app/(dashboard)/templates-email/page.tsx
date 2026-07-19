@@ -181,13 +181,13 @@ const DEFAULT_TEMPLATES: Record<
   },
   welcome: {
     subject: "Bem-vindo(a) à Hebron Aseec",
-    bodyHtml: `<p>Bem-vindo(a), <strong>{{nome}}</strong>!</p>
+    bodyHtml: `<p>Bem-vindo(a), <strong>{{nome}}</strong>.</p>
 <p>Sua conta na plataforma <strong>Hebron Aseec</strong> foi ativada com sucesso.</p>
 <p><strong>Acesso concedido:</strong> {{papel}}</p>
 <p style="margin-top:24px;">
   <a href="{{link}}" style="background:#EA5A06;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;display:inline-block;">Acessar plataforma</a>
 </p>`,
-    bodyText: `Bem-vindo(a), {{nome}}!\n\nSua conta foi ativada na plataforma Hebron Aseec.\n\nAcesso concedido: {{papel}}\n\nAcesse em: {{link}}`,
+    bodyText: `Bem-vindo(a), {{nome}}.\n\nSua conta foi ativada na plataforma Hebron Aseec.\n\nAcesso concedido: {{papel}}\n\nAcesse em: {{link}}`,
   },
   "password-reset": {
     subject: "Redefinição de senha — Hebron Aseec",

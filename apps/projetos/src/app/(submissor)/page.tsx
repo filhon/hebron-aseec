@@ -119,7 +119,7 @@ export default async function SubmissorDashboard() {
               color: "var(--fg)",
             }}
           >
-            {firstName ? `Paz do Senhor, ${firstName}.` : "Paz do Senhor!"}
+            {firstName ? `Paz do Senhor, ${firstName}.` : "Paz do Senhor."}
           </h1>
 
           {(relPart ?? votPart) ? (

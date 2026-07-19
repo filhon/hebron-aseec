@@ -180,6 +180,10 @@ export function WorkspaceBoardClient({
           icon={ListTodo}
           title="Nenhuma tarefa neste módulo"
           description="Assim que uma tarefa for criada, ela aparece aqui."
+          quote={{
+            text: "Confia ao Senhor as tuas obras, e os teus planos serão estabelecidos.",
+            reference: "Provérbios 16:3",
+          }}
           action={
             <Button onClick={() => setCreating(true)}>
               <Plus className="h-4 w-4" aria-hidden="true" />

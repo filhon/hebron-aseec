@@ -126,6 +126,10 @@ export default async function MinhasReservasPage() {
         <EmptyState
           title="Nenhuma reserva ainda"
           description="Você ainda não solicitou uma estadia nos flats."
+          quote={{
+            text: "Não vos esqueçais da hospitalidade, porque por ela alguns, sem o saber, hospedaram anjos.",
+            reference: "Hebreus 13:2",
+          }}
         />
       ) : (
         <section className="flex flex-col gap-4 rounded-(--radius) border border-(--border) bg-(--surface) p-5">

@@ -18,7 +18,7 @@ export function DashboardSkeleton() {
   return (
     <div
       className="max-w-4xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-8"
-      aria-label="Carregando dashboard…"
+      aria-label="Carregando painel…"
       aria-busy
     >
       {/* Header */}

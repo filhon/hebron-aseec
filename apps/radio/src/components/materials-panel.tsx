@@ -58,7 +58,11 @@ export function MaterialsPanel({
     return (
       <EmptyState
         title="Nenhum material disponível"
-        description="Lâmpada para os meus pés é tua palavra, e luz para o meu caminho. (Salmos 119:105)"
+        description="Os materiais exclusivos aparecem aqui assim que forem publicados."
+        quote={{
+          text: "Lâmpada para os meus pés é tua palavra, e luz para o meu caminho.",
+          reference: "Salmos 119:105",
+        }}
       />
     );
   }

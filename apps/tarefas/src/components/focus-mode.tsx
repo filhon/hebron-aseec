@@ -131,7 +131,7 @@ export function FocusMode({
   return (
     <div className={cn("grid gap-5 lg:grid-cols-[18rem_1fr]", className)}>
       {/* Pomodoro */}
-      <div className="flex flex-col items-center gap-4 rounded-(--radius-md) border border-(--border) bg-(--surface) px-5 py-6">
+      <div className="flex flex-col items-center gap-4 rounded-md border border-(--border) bg-(--surface) px-5 py-6">
         <span
           className={cn(
             "rounded-full px-3 py-1 text-[10px] font-bold uppercase tracking-wider",
@@ -206,7 +206,7 @@ export function FocusMode({
       </div>
 
       {/* Agenda do dia */}
-      <div className="rounded-(--radius-md) border border-(--border) bg-(--surface) px-5 py-5">
+      <div className="rounded-md border border-(--border) bg-(--surface) px-5 py-5">
         <div className="mb-4 flex items-center gap-2">
           <Sun className="h-4 w-4 text-(--hb-orange)" aria-hidden="true" />
           <h3 className="text-sm font-bold uppercase tracking-wide text-(--fg)">
@@ -221,7 +221,7 @@ export function FocusMode({
           <EmptyState
             icon={Sun}
             title="Nada pendente para hoje"
-            description="Aproveite para adiantar tarefas futuras."
+            description="Nenhuma tarefa vence hoje. As dos próximos dias seguem no seu módulo."
             hideQuote
           />
         ) : (

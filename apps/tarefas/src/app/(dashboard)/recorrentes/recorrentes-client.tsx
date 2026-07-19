@@ -94,6 +94,10 @@ export function RecorrentesClient({
           icon={RefreshCw}
           title="Nenhuma tarefa recorrente"
           description="Regras de recorrência aparecerão aqui assim que forem criadas."
+          quote={{
+            text: "Tudo tem o seu tempo determinado, e há tempo para todo o propósito debaixo do céu.",
+            reference: "Eclesiastes 3:1",
+          }}
           action={
             <Button onClick={() => setCreating(true)}>
               <Plus className="h-4 w-4" aria-hidden="true" />

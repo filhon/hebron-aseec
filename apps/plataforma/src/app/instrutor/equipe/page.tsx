@@ -18,7 +18,7 @@ export default async function EquipeInstrutoresPage() {
     <div className="mx-auto max-w-4xl px-6 py-8">
       <PageHeader
         title="Equipe de instrutores"
-        description="Cadastre e gerencie os instrutores que podem ser vinculados a cursos."
+        description="Instrutores cadastrados aqui podem ser vinculados a cursos."
       />
 
       <InstructorTable instructors={instructors} users={users} />

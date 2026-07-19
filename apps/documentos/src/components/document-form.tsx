@@ -651,11 +651,11 @@ export function DocumentForm({
                   }}
                 >
                   <FileText size={12} aria-hidden="true" />
-                  Preview do PDF
+                  Prévia do PDF
                 </div>
                 <iframe
                   src={pdfUrl}
-                  title="Preview do PDF"
+                  title="Prévia do PDF"
                   style={{
                     width: "100%",
                     height: 480,

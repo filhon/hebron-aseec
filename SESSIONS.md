@@ -186,6 +186,7 @@
 | S-163  | 2026-07-18 | P-9.1b-7 — Residual S-02 (flats/plataforma/radio) + S-05 (CORRETIVO) — fecha P-9.1b     | concluido                            |
 | S-164  | 2026-07-18 | P-9.2 — LGPD Audit (superfícies de titular "Meus Dados" + varredura final)              | concluido                            |
 | S-165  | 2026-07-19 | P-9.3 — Performance e Otimização                                                        | concluido                            |
+| S-166  | 2026-07-19 | P-9.4 — Copy Review (humanizar textos + citações bíblicas por contexto)                 | concluido                            |
 
 ---
 
@@ -12848,4 +12849,129 @@ Bundle inicial (`First Load JS shared by all`) — antes não era mensurável
 - `apps/plataforma/src/components/lesson-player.tsx`
 - `apps/radio/src/components/track-upload-form.tsx`
 - `apps/intranet/src/app/(auth)/layout.tsx`
+- `SESSIONS.md` (esta entrada + índice)
+
+---
+
+## S-166 — P-9.4 — Copy Review (Humanizar Textos)
+
+**Data:** 2026-07-19 · **Branch:** `feat/P-9.4-copy-review` · **Tipo:** ui
+
+### Contexto
+
+Varredura de microcopy dos 9 apps (~350 `.tsx`, 1.192 strings visíveis
+extraídas por script). Skill `/impeccable` carregada antes de qualquer edição
+(G2); registro `product`, referências `clarify.md` + `product.md`.
+
+**Achado de partida:** o grep de frases proibidas do prompt já estava limpo, e
+só havia 4 exclamações em todo o monorepo (2 delas legítimas — texto bíblico).
+As fases anteriores fizeram um trabalho bom de microcopy. O gap real era outro:
+**as citações bíblicas**.
+
+### Decisão principal — citação bíblica é opt-in (validada com o Filipe)
+
+Dos 42 `EmptyState`, apenas 7 passavam `quote`; **16 caíam no `DEFAULT_QUOTE`
+genérico** (Lamentações 3:25) — incluindo 5 painéis CRUD de admin da rádio e 5
+telas de busca/filtro sem resultado. Um mesmo versículo repetido 8× em telas de
+cadastro é exatamente o "cara de IA" que BRAIN §5 manda evitar: vira enfeite,
+não pertinência.
+
+**Política adotada** (opção "seletiva por contexto"):
+
+- **COM versículo:** coleção genuinamente vazia em tela de uso.
+- **SEM versículo:** busca/filtro sem resultado, erro/não encontrado, painel
+  CRUD de admin, widget interno. Nesses casos o usuário está no meio de uma
+  tarefa; escritura ali é ruído.
+
+**Implementação estrutural** (em vez de convenção): removido `DEFAULT_QUOTE` de
+`empty-state.tsx`. A citação passa a ser **opt-in** — sem prop `quote`, nada é
+renderizado. Isso elimina a falha na origem: nenhum `EmptyState` futuro herda
+versículo genérico por esquecimento. Os 11 estados de busca/CRUD ficaram
+corretos **sem nenhuma edição**, e todos já tinham `description` acionável.
+`hideQuote` mantido e marcado `@deprecated` (redundante agora, mas remover
+geraria churn em 19 arquivos sem ganho).
+
+### Versículos adicionados (pertinentes ao contexto)
+
+| Tela                         | Versículo        | Contexto       |
+| ---------------------------- | ---------------- | -------------- |
+| flats — minhas reservas      | Hebreus 13:2     | hospitalidade  |
+| intranet — reuniões          | Mateus 18:20     | reunir-se      |
+| rádio — materiais exclusivos | Salmos 119:105   | palavra/ensino |
+| tarefas — minhas tarefas     | Colossenses 3:23 | trabalho       |
+| tarefas — quadro do módulo   | Provérbios 16:3  | planejamento   |
+| tarefas — recorrentes        | Eclesiastes 3:1  | tempo/ciclo    |
+
+Os 7 versículos pré-existentes foram auditados e todos são pertinentes
+(ex.: Dt 19:15 "duas ou três testemunhas" na verificação de certificado).
+
+### Correções pontuais
+
+- **Bug encontrado:** `radio/materials-panel.tsx` colocava o versículo dentro de
+  `description` como texto corrido — `"...(Salmos 119:105)"` — driblando a prop
+  `quote` e sua estilização (`blockquote`/`cite`). Movido para `quote`.
+- `tarefas/my-tasks` — "Nenhuma tarefa neste **workspace**" → "**módulo**". A
+  sidebar já rotula o grupo como "Módulos" e o board já dizia "neste módulo";
+  era a única string visível vazando o termo técnico interno.
+- `tarefas/task-list` — "Todo status" → "**Todos os** status" (concordância).
+- `documentos/document-form` — "Preview do PDF" → "Prévia do PDF" (2×).
+- `projetos/dashboard-skeleton` — `aria-label` "Carregando dashboard…" → "painel".
+- `tarefas/foco-client` — "Nenhuma tarefa para hoje. Bom descanso**!**" →
+  título + `description` "Sua agenda está livre. Bom descanso."
+- `tarefas/focus-mode` — "Aproveite para adiantar tarefas futuras." (chapado,
+  presunçoso) → "Nenhuma tarefa vence hoje. As dos próximos dias seguem no seu
+  módulo." (informa em vez de animar).
+- `plataforma/instrutor` — "Crie o primeiro curso **para começar** a formar
+  alunos." → descreve o que a tela mostrará.
+- `plataforma/instrutor/equipe` — "**Cadastre e gerencie** os instrutores…"
+  (dupla verbal genérica de IA) → "Instrutores cadastrados aqui podem ser
+  vinculados a cursos."
+- `projetos/(submissor)` — fallback "Paz do Senhor**!**" → "Paz do Senhor."
+  (a variante com nome já usava ponto).
+- `admin/templates-email` — "Bem-vindo(a), {{nome}}**!**" → ponto, em html e
+  texto (o `subject` já não tinha exclamação).
+
+### Anglicismos — o que NÃO foi alterado (decisão do Filipe)
+
+Mantidos por serem vocabulário fixado em BRAIN.md ou naturalizados em pt-BR:
+**template** (§6.9 "templates configuráveis" + rota/nav), **quiz** (§Plataforma
+"Quizzes como tipo de aula"), **check-in** (§6.8), além de `status`, `email`,
+`link`, `login`, `playlist`. Traduzir estes exigiria PATCH de vocabulário +
+mudança de rotas — fora do escopo de um copy review.
+
+> **Débito registrado:** se um dia se quiser "template → modelo" e
+> "quiz → questionário" na UI, é PATCH em `PATCHES/` (afeta BRAIN §6.9, nav,
+> rotas e enum de DB), não copy review.
+
+### Critérios de aceite
+
+- [x] Nenhuma frase genérica "cara de IA" encontrada
+- [x] Citações bíblicas pertinentes ao contexto de cada módulo — política
+      opt-in; versículo só onde acrescenta, nunca como enfeite
+- [x] Tom institucional consistente em todos os apps
+- [x] Português correto, sem anglicismos desnecessários (os mantidos são
+      vocabulário de BRAIN.md — ver acima)
+- [x] Sem exclamações genéricas — restou 1 ocorrência, dentro da citação de
+      Sl 84.1 (`intranet/cadastro/instituicao`), onde a pontuação é do texto
+      bíblico
+- [x] Grep do prompt (case-insensitive, "vamos lá"/"incrível"/"awesome"/"ops!"/
+      "oops"/"não se preocupe"/"estamos quase lá"/"tudo certo!") — **0 ocorrências**
+- [x] Lint passa · Types passam (**38/38 turbo**)
+
+### Arquivos alterados
+
+- `packages/ui/src/components/empty-state.tsx` (remove `DEFAULT_QUOTE`)
+- `apps/flats/src/app/(hospede)/minhas-reservas/page.tsx`
+- `apps/intranet/src/app/(dashboard)/reunioes/page.tsx`
+- `apps/radio/src/components/materials-panel.tsx`
+- `apps/tarefas/src/app/(dashboard)/my-tasks-client.tsx`
+- `apps/tarefas/src/app/(dashboard)/workspace/[slug]/board-client.tsx`
+- `apps/tarefas/src/app/(dashboard)/recorrentes/recorrentes-client.tsx`
+- `apps/tarefas/src/app/(dashboard)/foco/foco-client.tsx`
+- `apps/tarefas/src/components/focus-mode.tsx`, `task-list.tsx`
+- `apps/plataforma/src/app/instrutor/page.tsx`, `instrutor/equipe/page.tsx`
+- `apps/documentos/src/components/document-form.tsx`
+- `apps/projetos/src/components/dashboard-skeleton.tsx`
+- `apps/projetos/src/app/(submissor)/page.tsx`
+- `apps/admin/src/app/(dashboard)/templates-email/page.tsx`
 - `SESSIONS.md` (esta entrada + índice)

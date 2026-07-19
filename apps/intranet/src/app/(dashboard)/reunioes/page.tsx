@@ -101,7 +101,15 @@ export default async function ReunioesPage() {
       />
 
       {sessions.length === 0 ? (
-        <EmptyState icon={Handshake} title="Nenhuma reunião registrada" />
+        <EmptyState
+          icon={Handshake}
+          title="Nenhuma reunião registrada"
+          description="As atas das reuniões aparecem aqui depois de registradas."
+          quote={{
+            text: "Onde estiverem dois ou três reunidos em meu nome, ali estou no meio deles.",
+            reference: "Mateus 18:20",
+          }}
+        />
       ) : (
         <div className="hb-meeting-list">
           {sessions.map((session) => {

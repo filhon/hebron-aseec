@@ -249,7 +249,7 @@ export function TaskList({ tasks, onTaskClick, className }: TaskListProps) {
             setPage(1);
           }}
         >
-          <option value="all">Todo status</option>
+          <option value="all">Todos os status</option>
           {(Object.keys(STATUS_CFG) as TaskStatus[]).map((s) => (
             <option key={s} value={s}>
               {STATUS_CFG[s].label}

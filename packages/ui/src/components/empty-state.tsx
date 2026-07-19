@@ -18,17 +18,19 @@ export interface EmptyStateProps {
   description?: string;
   icon?: LucideIcon;
   action?: React.ReactNode;
+  /**
+   * Citação bíblica pertinente ao contexto do módulo (BRAIN.md §5).
+   * Opt-in: sem `quote` nenhuma citação é exibida. Use apenas quando a coleção
+   * está genuinamente vazia numa tela de uso — nunca em busca/filtro sem
+   * resultado, erro, painel CRUD ou widget interno, onde a citação vira enfeite.
+   */
   quote?: BibleQuote;
+  /** @deprecated A citação já é opt-in; não é mais necessário ocultá-la. */
   hideQuote?: boolean;
   className?: string;
   /** Nível do heading do título, para manter a hierarquia da página. @default "h3" */
   titleAs?: "h2" | "h3" | "h4";
 }
-
-const DEFAULT_QUOTE: BibleQuote = {
-  text: "O Senhor é bom para os que esperam por ele, para a alma que o busca.",
-  reference: "Lamentações 3:25",
-};
 
 export function EmptyState({
   title,
@@ -40,7 +42,7 @@ export function EmptyState({
   className,
   titleAs: Title = "h3",
 }: EmptyStateProps) {
-  const displayQuote = quote ?? DEFAULT_QUOTE;
+  const displayQuote = hideQuote ? undefined : quote;
 
   return (
     <div
@@ -62,7 +64,7 @@ export function EmptyState({
 
       {action && <div>{action}</div>}
 
-      {!hideQuote && (
+      {displayQuote && (
         <blockquote className="mt-1 max-w-xs">
           <p className="text-xs italic leading-relaxed text-(--fg-muted)">
             “{displayQuote.text}”

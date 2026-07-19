@@ -5794,14 +5794,14 @@ Revisão de toda a microcopy do ecossistema para eliminar "cara de IA". Verifica
 
 **Critérios de aceite:**
 
-- [ ] Nenhuma frase genérica "cara de IA" encontrada
-- [ ] Citações bíblicas nos estados vazios pertinentes ao contexto de cada módulo
-- [ ] Tom institucional consistente em todos os apps
-- [ ] Português correto, sem anglicismos desnecessários
-- [ ] Sem exclamações genéricas ("Vamos lá!", "Incrível!", etc.)
-- [ ] Grep sem ocorrências (case-insensitive) em arquivos .tsx de UI: "vamos lá", "incrível", "awesome", "ops!", "oops", "não se preocupe", "estamos quase lá", "tudo certo!" — e revisão manual de exclamações genéricas restantes
-- [ ] Lint passa
-- [ ] Types passam
+- [x] Nenhuma frase genérica "cara de IA" encontrada
+- [x] Citações bíblicas nos estados vazios pertinentes ao contexto de cada módulo
+- [x] Tom institucional consistente em todos os apps
+- [x] Português correto, sem anglicismos desnecessários
+- [x] Sem exclamações genéricas ("Vamos lá!", "Incrível!", etc.)
+- [x] Grep sem ocorrências (case-insensitive) em arquivos .tsx de UI: "vamos lá", "incrível", "awesome", "ops!", "oops", "não se preocupe", "estamos quase lá", "tudo certo!" — e revisão manual de exclamações genéricas restantes
+- [x] Lint passa
+- [x] Types passam
 
 **Notas:**
 Ref: BRAIN.md seção 5 (princípios visuais — fugir do "cara de IA"). Público em transição tecnológica — clareza > criatividade.

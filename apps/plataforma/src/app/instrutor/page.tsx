@@ -81,7 +81,7 @@ export default async function InstrutorDashboardPage() {
         <EmptyState
           icon={TrendingUp}
           title="Nenhum curso ainda"
-          description="Crie o primeiro curso para começar a formar alunos."
+          description="Os cursos que você criar aparecem aqui, com matrículas e progresso."
           action={
             <Button asChild>
               <Link href="/instrutor/curso/novo">Criar curso</Link>

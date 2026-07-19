@@ -53,7 +53,8 @@ export function FocoClient({ tasks }: FocoClientProps) {
       {!hasAgendaToday ? (
         <EmptyState
           icon={Coffee}
-          title="Nenhuma tarefa para hoje. Bom descanso!"
+          title="Nenhuma tarefa para hoje"
+          description="Sua agenda está livre. Bom descanso."
           hideQuote
         />
       ) : (

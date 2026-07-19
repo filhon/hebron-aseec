@@ -183,8 +183,12 @@ export function MyTasksClient({
         />
         <EmptyState
           icon={ListTodo}
-          title="Nenhuma tarefa neste workspace"
+          title="Nenhuma tarefa neste módulo"
           description="Assim que uma tarefa for criada, ela aparece aqui."
+          quote={{
+            text: "Tudo quanto fizerdes, fazei-o de todo o coração, como para o Senhor.",
+            reference: "Colossenses 3:23",
+          }}
           action={
             <Button onClick={() => setCreating(true)}>
               <Plus className="h-4 w-4" aria-hidden="true" />
