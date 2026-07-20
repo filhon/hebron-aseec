@@ -552,15 +552,15 @@ O risco concreto: qualquer app que precisar de tooltip ou de painel deslizante v
 
 **Critérios de aceite:**
 
-- [ ] `Tooltip` e `Drawer` exportados de `@hebron/ui` com seus tipos
-- [ ] `navigation-sidebar.tsx` não importa mais `@radix-ui/react-tooltip` diretamente
-- [ ] `app-shell.tsx` não gerencia mais overlay/painel mobile à mão
-- [ ] Comportamento inalterado: sidebar colapsada mostra tooltip com o mesmo delay; drawer mobile abre, fecha no overlay e no `Escape`
-- [ ] Foco preso no drawer aberto e devolvido ao trigger ao fechar
-- [ ] Tokens canônicos apenas (zero hex, zero alias deprecated)
-- [ ] `pnpm turbo build lint typecheck` verde; build segue 9/9
-- [ ] Débito da S-3 marcado como fechado na SESSIONS.md
-- [ ] Registrar em SESSIONS.md
+- [x] `Tooltip` e `Drawer` exportados de `@hebron/ui` com seus tipos
+- [x] `navigation-sidebar.tsx` não importa mais `@radix-ui/react-tooltip` diretamente
+- [x] `app-shell.tsx` não gerencia mais overlay/painel mobile à mão
+- [x] Comportamento inalterado: sidebar colapsada mostra tooltip com o mesmo delay; drawer mobile abre, fecha no overlay e no `Escape`
+- [x] Foco preso no drawer aberto e devolvido ao trigger ao fechar
+- [x] Tokens canônicos apenas (zero hex, zero alias deprecated)
+- [x] `pnpm turbo build lint typecheck` verde; build segue 9/9
+- [x] Débito da S-3 marcado como fechado na SESSIONS.md
+- [x] Registrar em SESSIONS.md
 
 **Notas:**
 Este prompt fecha o escopo declarado do P-0.2 — depois dele os 8 primitivos listados existem. Não adicionar primitivos fora dessa lista (Popover, Sheet, Accordion): se algum app precisar, vira prompt próprio.

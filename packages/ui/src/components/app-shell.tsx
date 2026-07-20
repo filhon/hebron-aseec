@@ -1,7 +1,6 @@
 "use client";
 
 import * as React from "react";
-import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { Menu, ChevronLeft, ChevronRight } from "lucide-react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
@@ -12,6 +11,7 @@ import {
   type LinkComponent,
 } from "./navigation-sidebar";
 import { UserMenu, type UserMenuUser } from "./user-menu";
+import { Drawer, DrawerContent, DrawerTitle } from "./drawer";
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -123,61 +123,43 @@ function MobileSidebar({
   dark,
 }: MobileSidebarProps) {
   return (
-    <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
-      <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay
-          className={cn(
-            "fixed inset-0 z-(--z-overlay) bg-black/40 backdrop-blur-[2px]",
-            "lg:hidden",
-            "data-[state=open]:animate-in data-[state=closed]:animate-out",
-            "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0",
-            "duration-(--transition-medium)",
-          )}
-        />
-        <DialogPrimitive.Content
-          aria-describedby={undefined}
-          className={cn(
-            "fixed inset-y-0 left-0 z-(--z-modal) w-64",
-            dark
-              ? "border-r border-white/10 bg-(--hb-blue)"
-              : "border-r border-(--border) bg-(--bg)",
-            "shadow-(--shadow-xl)",
-            "lg:hidden",
-            "data-[state=open]:animate-in data-[state=closed]:animate-out",
-            "data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left",
-            "duration-(--transition-medium)",
-          )}
-        >
-          <DialogPrimitive.Title className="sr-only">
-            Menu de navegação
-          </DialogPrimitive.Title>
+    <Drawer open={open} onOpenChange={onOpenChange}>
+      <DrawerContent
+        side="left"
+        aria-describedby={undefined}
+        overlayClassName="lg:hidden"
+        className={cn(
+          dark ? "border-white/10 bg-(--hb-blue)" : "bg-(--bg)",
+          "lg:hidden",
+        )}
+      >
+        <DrawerTitle className="sr-only">Menu de navegação</DrawerTitle>
 
-          {/* Brand row in mobile drawer (no collapse button) */}
-          {(logo ?? appName) && (
-            <SidebarBrand
-              logo={logo}
-              appName={appName}
-              orgName={orgName}
-              collapsed={false}
-              dark={dark}
-              className="pr-4"
-            />
-          )}
-
-          <NavigationSidebar
-            sections={sections}
-            apps={apps}
+        {/* Brand row in mobile drawer (no collapse button) */}
+        {(logo ?? appName) && (
+          <SidebarBrand
+            logo={logo}
+            appName={appName}
+            orgName={orgName}
             collapsed={false}
-            onCollapsedChange={() => undefined}
-            currentPath={currentPath}
-            onNavItemClick={() => onOpenChange(false)}
-            LinkComponent={LinkComponent}
             dark={dark}
-            className={(logo ?? appName) ? "h-[calc(100%-3.5rem)]" : "h-full"}
+            className="pr-4"
           />
-        </DialogPrimitive.Content>
-      </DialogPrimitive.Portal>
-    </DialogPrimitive.Root>
+        )}
+
+        <NavigationSidebar
+          sections={sections}
+          apps={apps}
+          collapsed={false}
+          onCollapsedChange={() => undefined}
+          currentPath={currentPath}
+          onNavItemClick={() => onOpenChange(false)}
+          LinkComponent={LinkComponent}
+          dark={dark}
+          className={(logo ?? appName) ? "h-[calc(100%-3.5rem)]" : "h-full"}
+        />
+      </DrawerContent>
+    </Drawer>
   );
 }
 

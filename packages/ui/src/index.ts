@@ -52,6 +52,25 @@ export {
 } from "./components/dialog";
 
 export {
+  Drawer,
+  DrawerTrigger,
+  DrawerPortal,
+  DrawerClose,
+  DrawerOverlay,
+  DrawerContent,
+  DrawerTitle,
+  DrawerDescription,
+} from "./components/drawer";
+export type { DrawerSide } from "./components/drawer";
+
+export {
+  TooltipProvider,
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "./components/tooltip";
+
+export {
   ToastProvider,
   ToastViewport,
   Toast,

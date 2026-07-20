@@ -1,11 +1,16 @@
 "use client";
 
 import * as React from "react";
-import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 import * as SeparatorPrimitive from "@radix-ui/react-separator";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 import type { LucideIcon } from "lucide-react";
+import {
+  TooltipProvider,
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+} from "./tooltip";
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -82,24 +87,12 @@ function NavTooltip({ label, collapsed, children }: NavTooltipProps) {
   if (!collapsed) return <>{children}</>;
 
   return (
-    <TooltipPrimitive.Root delayDuration={300}>
-      <TooltipPrimitive.Trigger asChild>{children}</TooltipPrimitive.Trigger>
-      <TooltipPrimitive.Portal>
-        <TooltipPrimitive.Content
-          side="right"
-          sideOffset={8}
-          className={cn(
-            "z-(--z-tooltip) rounded-(--radius) px-2.5 py-1.5",
-            "bg-(--fg) text-xs text-(--bg)",
-            "shadow-(--shadow-md)",
-            "animate-in fade-in-0 zoom-in-95",
-          )}
-        >
-          {label}
-          <TooltipPrimitive.Arrow className="fill-(--fg)" />
-        </TooltipPrimitive.Content>
-      </TooltipPrimitive.Portal>
-    </TooltipPrimitive.Root>
+    <Tooltip delayDuration={300}>
+      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipContent side="right" sideOffset={8}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -258,7 +251,7 @@ export function NavigationSidebar({
   dark,
 }: NavigationSidebarProps) {
   return (
-    <TooltipPrimitive.Provider>
+    <TooltipProvider>
       <nav
         aria-label="Navegação principal"
         className={cn("flex h-full flex-col", className)}
@@ -326,6 +319,6 @@ export function NavigationSidebar({
           </div>
         )}
       </nav>
-    </TooltipPrimitive.Provider>
+    </TooltipProvider>
   );
 }

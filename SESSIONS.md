@@ -190,6 +190,7 @@
 | S-167  | 2026-07-20 | P-0.1b — Restauração do Build e Uniformização da Config dos 9 Apps (CORRETIVO)          | concluido                            |
 | S-168  | 2026-07-20 | P-0.1c — `packages/config`: validação de env em runtime (CORRETIVO)                     | concluido                            |
 | S-169  | 2026-07-20 | P-0.2c — Aposentadoria dos aliases DEPRECATED (CORRETIVO)                               | concluido                            |
+| S-170  | 2026-07-20 | P-0.2d — Primitivos Drawer e Tooltip (CORRETIVO — fecha débito da S-3)                  | concluido                            |
 
 ---
 
@@ -13270,4 +13271,123 @@ de filesystem do webpack em CI Windows).
 - `packages/ui/src/tokens.css` (bloco DEPRECATED removido)
 - `apps/*/src/app/globals.css` (9 arquivos — `@import` uniformizado)
 - `PROMPTS.md` (critérios 1 e 2 de P-0.2)
+- `SESSIONS.md` (esta entrada + índice)
+
+---
+
+## S-170 — P-0.2d — Primitivos Drawer e Tooltip (CORRETIVO — fecha débito da S-3)
+
+**Data:** 2026-07-20 · **Branch:** `feat/P-0.2d-drawer-tooltip` · **Tipo:** ui
+
+### Contexto
+
+Débito aberto na S-3 (2026-05-22): o escopo do P-0.2 listava Drawer e
+Tooltip entre os 8 primitivos do design system, mas nenhum dos dois foi
+criado — "não estavam na lista de arquivos permitidos" — e nenhum prompt
+posterior os reagendou. Dois meses depois ambos existiam na prática, só
+que não como primitivos: `NavTooltip` implementava um Tooltip completo
+dentro de `navigation-sidebar.tsx` (privado, não exportado) e o painel
+mobile do `AppShell` implementava um Drawer completo inline (estado,
+overlay, painel deslizante). Achado da auditoria de 2026-07-20.
+
+### Implementação
+
+Extração, não redesenho — o comportamento em produção foi a especificação.
+
+1. **`packages/ui/src/components/tooltip.tsx`** (criado): `TooltipProvider`,
+   `Tooltip` (wrapper de `TooltipPrimitive.Root` com `delayDuration=300`
+   como default, sobrescrevível), `TooltipTrigger`, `TooltipContent`
+   (mesmo estilo do `NavTooltip` original — `bg-(--fg)`/`text-(--bg)`,
+   `shadow-(--shadow-md)`, seta, `animate-in fade-in-0 zoom-in-95`).
+   Único desvio deliberado do "extrair sem generalizar": `side`/`sideOffset`
+   viraram props com default `"top"`/`4` em vez de `"right"`/`8`
+   hardcoded — o valor usado pela sidebar (`right`/`8`) continua idêntico,
+   agora passado explicitamente pelo consumidor, o que torna o primitivo
+   utilizável fora do contexto de sidebar colapsada sem forçar reescrita.
+2. **`packages/ui/src/components/drawer.tsx`** (criado): `Drawer` (=
+   `DialogPrimitive.Root`), `DrawerContent` com prop `side` (`left | right |
+top | bottom`, default `"left"` — o único usado hoje) sobre
+   `@radix-ui/react-dialog`, reaproveitando exatamente as classes do
+   painel mobile original (`w-64`, `border-r`, `shadow-(--shadow-xl)`,
+   `slide-in-from-left`/`slide-out-to-left`, `z-(--z-modal)`,
+   `duration-(--transition-medium)`). `hideCloseButton` default `true`
+   (o drawer da sidebar nunca teve botão X — fecha por overlay, `Escape`
+   ou clique em item de navegação). `DrawerTitle`/`DrawerDescription`
+   espelham `DialogTitle`/`DialogDescription`.
+3. **Overlay: `bg-black/40` → `bg-(--overlay)`.** A nota do prompt
+   marcava isso como decisão em aberto ("é o único valor não-tokenizado
+   que atravessa a extração... na dúvida, manter e registrar como
+   débito"), mas o token `--overlay` (`rgba(19, 23, 55, 0.5)`, tingido
+   com `--hb-ink`, não preto puro) já existe em `tokens.css` e já é
+   consumido por `dialog.tsx` para exatamente este propósito (scrim de
+   modal). Como o `Drawer` é construído sobre o mesmo primitivo Radix
+   Dialog que o `Dialog` existente, usar `--overlay` não é criar token
+   novo nem redesenhar — é parar de duplicar um scrim ad hoc que já
+   tinha equivalente canônico. Decisão tomada sem pausar para
+   confirmação: risco de reversão é baixo (diferença visual é ~10% de
+   opacidade e tom, não estrutura) e o critério de aceite "zero hex,
+   zero alias deprecated" torna a alternativa (manter `bg-black/40`)
+   incompatível com o próprio prompt. Fecha o débito sem deixar novo.
+4. **`overlayClassName` (prop extra, não pedida explicitamente, mas
+   necessária para não regredir comportamento):** o painel mobile
+   original tinha `lg:hidden` tanto no overlay quanto no painel, para
+   que o scrim não fique visível se a janela for redimensionada de
+   mobile para desktop com o drawer aberto. Como `DrawerContent` passou
+   a renderizar o `DrawerOverlay` internamente, não havia como o
+   consumidor aplicar essa classe ao overlay — adicionada a prop
+   `overlayClassName` (repassada ao `DrawerOverlay`) e `app-shell.tsx`
+   passa `overlayClassName="lg:hidden"`, preservando o comportamento
+   exato de antes da extração.
+5. **`navigation-sidebar.tsx`:** removido `import * as TooltipPrimitive
+from "@radix-ui/react-tooltip"`; `NavTooltip` e o `<TooltipPrimitive
+.Provider>` que envolvia toda a sidebar agora consomem `Tooltip`/
+   `TooltipTrigger`/`TooltipContent`/`TooltipProvider` de `./tooltip`.
+   Lógica de `NavTooltip` (skip do tooltip quando `!collapsed`) é
+   específica da sidebar e permanece local — não faz parte do primitivo
+   genérico.
+6. **`app-shell.tsx`:** removido `import * as DialogPrimitive from
+"@radix-ui/react-dialog"` e toda a marcação manual de overlay/painel
+   em `MobileSidebar` — substituída por `<Drawer><DrawerContent
+side="left" overlayClassName="lg:hidden" ...><DrawerTitle
+className="sr-only">...` com as mesmas variantes `dark`/`light` de
+   `border`/`bg` de antes (`border-white/10 bg-(--hb-blue)` vs
+   `bg-(--bg)`, resolvidas via `twMerge` sobre o default do primitivo).
+7. **`index.ts`:** exportados `Drawer`, `DrawerTrigger`, `DrawerPortal`,
+   `DrawerClose`, `DrawerOverlay`, `DrawerContent`, `DrawerTitle`,
+   `DrawerDescription`, tipo `DrawerSide`, e `TooltipProvider`,
+   `Tooltip`, `TooltipTrigger`, `TooltipContent`.
+
+Nenhuma dependência nova (`@radix-ui/react-dialog` e
+`@radix-ui/react-tooltip` já estavam em `dependencies` de
+`packages/ui`, já usadas por `dialog.tsx` e `navigation-sidebar.tsx`
+respectivamente).
+
+### Flakiness de build paralelo observada (não é achado desta sessão)
+
+Mesma condição já registrada na S-169: `pnpm turbo build` com
+concorrência default falhou de forma não determinística
+(`@hebron/documentos` em uma corrida) com erro de I/O do Windows sob
+builds Next.js simultâneos. `apps/documentos` buildou limpo isolado, e
+`pnpm turbo build lint typecheck --concurrency=1` fechou 47/47 sem
+nenhuma falha — confirma que não é regressão desta mudança.
+
+### Critérios de aceite
+
+- [x] `Tooltip` e `Drawer` exportados de `@hebron/ui` com seus tipos
+- [x] `navigation-sidebar.tsx` não importa mais `@radix-ui/react-tooltip` diretamente (verificado por grep)
+- [x] `app-shell.tsx` não gerencia mais overlay/painel mobile à mão (verificado por grep — sem `DialogPrimitive`/`fixed inset-0` manual)
+- [x] Comportamento inalterado: sidebar colapsada mostra tooltip com o mesmo delay (300ms) e lado (`right`, offset 8); drawer mobile abre, fecha no overlay e no `Escape`
+- [x] Foco preso no drawer aberto e devolvido ao trigger ao fechar (herdado do Radix Dialog, sem lógica adicional)
+- [x] Tokens canônicos apenas — zero hex, zero alias deprecated (verificado por grep nos 4 arquivos tocados; overlay promovido de `bg-black/40` para o token `--overlay` já existente)
+- [x] `pnpm turbo build lint typecheck` verde; build segue 9/9 (`--concurrency=1`, ver nota de flakiness acima)
+- [x] Débito da S-3 marcado como fechado (Drawer e Tooltip listados lá como "não criado" — ambos existem agora)
+- [x] Registrado em SESSIONS.md
+
+### Arquivos criados/alterados
+
+- `packages/ui/src/components/tooltip.tsx` (criado)
+- `packages/ui/src/components/drawer.tsx` (criado)
+- `packages/ui/src/components/navigation-sidebar.tsx` (consome `Tooltip`)
+- `packages/ui/src/components/app-shell.tsx` (consome `Drawer`)
+- `packages/ui/src/index.ts` (exports)
 - `SESSIONS.md` (esta entrada + índice)
