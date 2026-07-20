@@ -1,14 +1,3 @@
-import type { NextConfig } from "next";
+import { createNextConfig } from "@hebron/config/next";
 
-const nextConfig: NextConfig = {
-  transpilePackages: [
-    "@hebron/ui",
-    "@hebron/auth",
-    "@hebron/db",
-    "@hebron/types",
-    "@hebron/validators",
-    "@hebron/config",
-  ],
-};
-
-export default nextConfig;
+export default createNextConfig();

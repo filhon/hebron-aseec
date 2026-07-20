@@ -204,7 +204,7 @@ Inicializar o monorepo com pnpm 9 + Turborepo 2. Criar a estrutura de diretório
 **Critérios de aceite:**
 
 - [x] `pnpm install` executa sem erros
-- [x] `pnpm turbo build` resolve dependências entre packages
+- [x] `pnpm turbo build` resolve dependências entre packages — restaurado em **P-0.1b** (S-167, 2026-07-20)
 - [x] TypeScript strict mode habilitado em toda a workspace
 - [x] Estrutura de diretórios completa: 9 apps + 8 packages + 2 tooling
 - [x] Lint passa
@@ -212,6 +212,125 @@ Inicializar o monorepo com pnpm 9 + Turborepo 2. Criar a estrutura de diretório
 
 **Notas:**
 Apps: admin, projetos, plataforma, radio, financeiro, intranet, documentos, flats, tarefas. Packages: ui, db, auth, email, validators, ai, config, types. Ref: BRAIN.md seção 3 (Arquitetura).
+
+> ⚠️ **Auditoria 2026-07-20 (cruzamento S-1/S-2 × codebase):** dois débitos abertos deste prompt geraram corretivos — **P-0.1b** (build quebrado + config de build divergente entre os 9 apps) e **P-0.1c** (`packages/config` nunca implementado: decisão de validação de env registrada na S-1 continua sendo um stub `export {}`).
+
+---
+
+### P-0.1b — Restauração do Build e Uniformização da Config dos 9 Apps (CORRETIVO — bloqueia qualquer build)
+
+**Fase:** 0
+**Módulo:** fundacao
+**Tipo:** config
+**Pré-condições:**
+
+- Branch: `feat/P-0.1b-build-toolchain`
+- Dependências: P-0.1 concluído
+- Env vars: nenhuma
+
+**Problema que este prompt resolve (achados da auditoria de 2026-07-20 sobre S-1/S-2):**
+
+1. **`pnpm turbo build` falha — o critério de aceite de P-0.1 marcado `[x]` é falso hoje.**
+   `apps/tarefas` quebra de forma **determinística** com `TypeError: Cannot read properties of undefined (reading 'length')` em `WasmHash._updateWithBuffer`, dentro do webpack compilado do Next 15.5.18. É incompatibilidade do hash WASM do webpack com **Node 24** — o ambiente local roda `v24.18.0` e o CI roda Node 20, então o CI nunca viu a falha.
+   Sob build paralelo o erro **migra de app** (execução 1: `intranet`; execução 2: `flats` + `tarefas`; execução 3: `tarefas`), o que faz o sintoma parecer flakiness de concorrência. Não é: com `--concurrency=1` a falha é estável em `tarefas` (6/9 tasks, 7m32s), e `npx next build` isolado em `apps/tarefas` falha igual.
+   **Reparo já verificado nesta auditoria:** forçar `output.hashFunction = "sha256"` no webpack de `apps/tarefas` compila o app (21.9s) e leva `pnpm turbo build --force` a **9/9 successful (5m42s)**. `tarefas` era o único bloqueio real.
+
+2. **Toolchain não fixado.** `engines.node` é `">=20.0.0"` — permite exatamente a versão em que o build quebra — e não existe `.nvmrc` nem `.node-version`. O CI fixa Node 20 numa variável própria (`NODE_VERSION`), sem nenhuma relação com o `engines`. Divergência dev × CI sem sinal de erro.
+
+3. **`next.config.ts` existe em 1 dos 9 apps.** O débito registrado na S-1 (“`next.config.ts` com `transpilePackages` ainda não criado”) nunca foi liquidado: só `apps/intranet` tem o arquivo. Os outros 8 compilam por resolução de symlink do pnpm (o path real cai fora de `node_modules`, então o SWC transpila), mas não há ponto único para config de build — foi exatamente por isso que o item 1 não teve onde ser corrigido.
+
+4. **`apps/documentos` não tem `postcss.config.mjs`.** Consequência **verificada no bundle publicado**: o app não gera **nenhuma** classe utilitária do Tailwind. `@tailwindcss/postcss` nunca é invocado, as diretivas `@source` vazam **literalmente para o CSS servido** (`@source "../../../../packages/ui/src";@source "../";` no início do chunk) e `.flex{display:flex}` / `.grid{display:grid}` estão ausentes — presentes em `admin` e `projetos`, ausentes em `documentos`. Só o CSS escrito à mão em `globals.css` funciona; todo `className` utilitário do app é inerte. O app tem `@tailwindcss/postcss` e `tailwindcss` em `devDependencies`, então a única peça faltando é o arquivo de config.
+
+**Decisão de abordagem (confirmar com Filipe — regra G1):**
+Corrigir por **config compartilhada**, não por remendo em 9 arquivos:
+
+1. Criar `packages/config/src/next.ts` exportando uma factory (`createNextConfig(overrides?)`) que já traz o `webpack` com `output.hashFunction = "sha256"` e a lista de `transpilePackages` do monorepo. Adicionar `next` como `peerDependency`/`devDependency` de `packages/config` (o tipo `NextConfig` vem de lá) e o export `"./next"` no `package.json`.
+2. Criar `apps/<app>/next.config.ts` nos 9 apps consumindo a factory. `apps/intranet` migra para ela (hoje tem a lista de `transpilePackages` hardcoded).
+3. Criar `apps/documentos/postcss.config.mjs`, cópia idêntica de `apps/admin/postcss.config.mjs`.
+4. Fixar o toolchain: `.nvmrc` com a versão suportada e `engines.node` com faixa fechada. O CI passa a ler o `.nvmrc` (`actions/setup-node` com `node-version-file`) em vez da variável `NODE_VERSION`, para que dev e CI não possam divergir de novo.
+   **Ponto de decisão para o Filipe:** com o reparo do item 1 o build fica verde tanto em Node 20 quanto em Node 24 — o `hashFunction` remove o acoplamento à versão. O `.nvmrc` entra como reprodutibilidade (defesa em profundidade), não como downgrade obrigatório. Definir se a versão canônica é `20` (paridade com o CI atual) ou `24` (paridade com a máquina do Filipe, evita instalar gerenciador de versão).
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/config/src/next.ts` (criar)
+- `packages/config/package.json` (export `./next` + dep de `next`)
+- `apps/{admin,projetos,plataforma,radio,financeiro,intranet,documentos,flats,tarefas}/next.config.ts` (8 criar, 1 migrar)
+- `apps/documentos/postcss.config.mjs` (criar)
+- `package.json` (`engines.node`)
+- `.nvmrc` (criar)
+- `.github/workflows/ci.yml` (ler `node-version-file`)
+- `PROMPTS.md` (marcar critério de P-0.1 restaurado)
+- `SESSIONS.md`
+
+**Critérios de aceite:**
+
+- [x] `pnpm turbo build --force` → **9/9 successful**, sem `--concurrency=1` (verificado com `--concurrency=4`; concorrência total sem flag estoura memória na máquina local — 8 cores/12GB — achado novo registrado em SESSIONS.md S-167, distinto do bug do hash WASM)
+- [x] `apps/tarefas` compila isoladamente (`npx next build`) na versão de Node do `.nvmrc` (24.18.0) — Node 20 não testado (indisponível localmente); o fix (`hashFunction: "sha256"`) não é condicional à versão do Node
+- [x] Os 9 apps têm `next.config.ts` consumindo a factory de `@hebron/config/next` — nenhuma lista de `transpilePackages` duplicada por app
+- [x] `apps/documentos` emite utilitários do Tailwind: `.flex{display:flex}` e `.grid{display:grid}` presentes em `.next/static/css/*.css`, e **nenhum** `@source` literal no CSS publicado
+- [x] `.nvmrc` existe e o CI o consome; `engines.node` com faixa fechada coerente com ele
+- [x] `pnpm turbo lint typecheck` verde (38/38)
+- [x] Critério 2 de P-0.1 revertido para `[x]` em PROMPTS.md
+- [x] Registrar em SESSIONS.md
+
+**Notas:**
+Não “corrigir” o `@source` de `apps/admin`: a auditoria testou a hipótese de que `@source` com caminho de diretório sem glob não varre recursivamente e **refutou** — `gap-0` não aparece em nenhum arquivo de `apps/admin/src`, só em `packages/ui`, e mesmo assim `.gap-0` é emitido no CSS do admin. A forma de diretório funciona nesta versão do Tailwind; a falha do `documentos` é exclusivamente o `postcss.config.mjs` ausente. Os dois formatos de `@source` em uso na workspace (glob explícito em 7 apps, diretório em `admin`/`documentos`) são equivalentes — uniformizar é opcional e cosmético.
+O erro do item 1 é do webpack, não do Turbopack: se algum app migrar para `--turbopack` no futuro, o `hashFunction` deixa de ser necessário para ele.
+
+---
+
+### P-0.1c — `packages/config`: validação de env em runtime (CORRETIVO — decisão da S-1 nunca implementada)
+
+**Fase:** 0
+**Módulo:** fundacao
+**Tipo:** config
+**Pré-condições:**
+
+- Branch: `feat/P-0.1c-env-validation`
+- Dependências: P-0.1b concluído
+- Env vars: as já usadas pela workspace (inventário abaixo)
+
+**Problema que este prompt resolve (achado da auditoria de 2026-07-20):**
+A S-1 registrou como decisão explícita: “`packages/config` = validação de env em runtime com `@t3-oss/env-nextjs`, distinto do `tooling/` que é dev-only”. Dois meses depois **nada disso existe**:
+
+- `packages/config/src/index.ts` continua sendo o stub `export {}` criado na S-2 (arquivo intocado desde 2026-05-22).
+- `packages/config/package.json` declara `"./env": "./src/env.ts"` — **o arquivo não existe**. É um export apontando para o vazio; qualquer `import from "@hebron/config/env"` quebra.
+- `@t3-oss/env-nextjs` está instalado como dependência do package e **nunca é importado** por ninguém.
+- Os **9 apps** declaram `@hebron/config` em `dependencies`; o único uso real no monorepo inteiro é a string `"@hebron/config"` dentro do array `transpilePackages` de `apps/intranet/next.config.ts`.
+- Enquanto isso há **102 acessos crus a `process.env.*`** em código-fonte (fora de `.next`/`node_modules`), cobrindo 17 variáveis distintas, nenhuma validada: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `OPENAI_API_KEY`, `RESEND_API_KEY`, `NODE_ENV`, `NEXT_PUBLIC_APP_URL`, `NEXT_PUBLIC_SITE_URL` e os 7 `NEXT_PUBLIC_<APP>_URL`.
+
+O risco concreto: variável ausente ou vazia só aparece como falha em runtime, em produção, no ponto de uso — normalmente como erro de conexão sem nome. É também o mesmo terreno do débito já registrado em memória sobre a separação `NEXT_PUBLIC_*` (browser) × `SUPABASE_URL`/`SUPABASE_ANON_KEY` (server), que hoje não tem nada que a imponha.
+
+**Decisão de abordagem (confirmar com Filipe — regra G1):**
+
+1. Implementar `packages/config/src/env.ts` com `createEnv` de `@t3-oss/env-nextjs`, separando `server`, `client` e `runtimeEnv`, com schemas Zod (`z.string().url()`, `z.string().min(1)`, `NODE_ENV` como enum). Respeitar a fronteira: segredos (`SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`, `OPENAI_API_KEY`, `RESEND_API_KEY`) **só** em `server`; nada de segredo em `client`.
+2. Variáveis usadas por um subconjunto de apps (`NEXT_PUBLIC_<APP>_URL`) entram como opcionais ou num sub-export por app — **não** obrigar os 9 apps a declarar as 7 URLs de outros apps.
+3. Reexportar por `packages/config/src/index.ts` e manter o export `"./env"` agora apontando para arquivo real.
+4. **Não** migrar os 102 call sites neste prompt. Migrar apenas os pontos de borda que já quebram hoje se a env faltar (clients Supabase e `DATABASE_URL`), e registrar o restante como débito nominal na SESSIONS.md. Migração em massa vira ruído de diff e mistura escopo.
+5. Sincronizar `.env.example` com o inventário real das 17 variáveis.
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/config/src/env.ts` (criar)
+- `packages/config/src/index.ts` (reexportar)
+- `packages/config/package.json` (corrigir/confirmar exports)
+- `.env.example` (sincronizar com o inventário real)
+- `SESSIONS.md`
+
+**Critérios de aceite:**
+
+- [ ] `import { env } from "@hebron/config/env"` resolve e tipa (o export deixa de apontar para arquivo inexistente)
+- [ ] Segredos declarados apenas em `server`; nenhum segredo alcançável do bundle de cliente
+- [ ] Faltar uma variável obrigatória falha **no boot com nome da variável**, não no ponto de uso
+- [ ] `NEXT_PUBLIC_<APP>_URL` opcionais — nenhum app obrigado a declarar URL de app que não consome
+- [ ] `.env.example` cobre as 17 variáveis inventariadas
+- [ ] `pnpm turbo lint typecheck` verde; `pnpm turbo build` segue 9/9
+- [ ] Débito nominal registrado na SESSIONS.md: N call sites `process.env.*` ainda não migrados
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+`@t3-oss/env-nextjs` valida no import — em RSC/Server Actions isso roda no boot do módulo, que é o comportamento desejado. Cuidado com `packages/db` e scripts de migration/seed, que rodam **fora** do Next (`tsx`): ali `createEnv` de `env-nextjs` pode reclamar de contexto; se acontecer, usar `@t3-oss/env-core` para o subconjunto server-only consumido por scripts, ou manter `process.env.DATABASE_URL` cru nesses runners e documentar a exceção.
+Não alargar o escopo para o inventário de env dos jobs/Inngest (P-0.14) — se aparecer variável nova ali, registrar como débito, não implementar aqui.
 
 ---
 

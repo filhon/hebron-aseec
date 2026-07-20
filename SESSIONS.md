@@ -187,6 +187,7 @@
 | S-164  | 2026-07-18 | P-9.2 — LGPD Audit (superfícies de titular "Meus Dados" + varredura final)              | concluido                            |
 | S-165  | 2026-07-19 | P-9.3 — Performance e Otimização                                                        | concluido                            |
 | S-166  | 2026-07-19 | P-9.4 — Copy Review (humanizar textos + citações bíblicas por contexto)                 | concluido                            |
+| S-167  | 2026-07-20 | P-0.1b — Restauração do Build e Uniformização da Config dos 9 Apps (CORRETIVO)          | concluido                            |
 
 ---
 
@@ -12974,4 +12975,104 @@ mudança de rotas — fora do escopo de um copy review.
 - `apps/projetos/src/components/dashboard-skeleton.tsx`
 - `apps/projetos/src/app/(submissor)/page.tsx`
 - `apps/admin/src/app/(dashboard)/templates-email/page.tsx`
+- `SESSIONS.md` (esta entrada + índice)
+
+---
+
+## S-167 — P-0.1b — Restauração do Build e Uniformização da Config dos 9 Apps (CORRETIVO)
+
+**Data:** 2026-07-20 · **Branch:** `feat/P-0.1b-build-toolchain` · **Tipo:** config
+
+### Contexto
+
+Corretivo aberto pela auditoria de 2026-07-20 sobre S-1/S-2: o critério
+"`pnpm turbo build` resolve dependências entre packages" de P-0.1 estava
+marcado `[x]` mas era falso — `apps/tarefas` quebrava de forma determinística
+em Node 24 (`WasmHash._updateWithBuffer`, incompatibilidade do hash WASM do
+webpack do Next 15.5.18). Achados relacionados: toolchain não fixado
+(`engines.node` permitia a versão que quebra), `next.config.ts` existindo em
+só 1 dos 9 apps, e `apps/documentos` sem `postcss.config.mjs` (Tailwind
+totalmente inerte no bundle publicado).
+
+### Decisões confirmadas com o Filipe antes de implementar (G1)
+
+- **Branch:** criada `feat/P-0.1b-build-toolchain` a partir do estado local
+  (havia trabalho não commitado de auditoria em `PROMPTS.md` numa branch
+  não relacionada — preservado, não descartado).
+- **Versão canônica de Node — ponto de decisão explícito do prompt:** Node
+  **24** (paridade com a máquina do Filipe), não 20. O reparo do
+  `hashFunction` deixa o build verde nas duas versões; `.nvmrc` pinado em
+  `24.18.0` é defesa em profundidade, não downgrade.
+
+### Implementação
+
+1. `packages/config/src/next.ts` — `createNextConfig(overrides?)` centraliza
+   `transpilePackages` (as 10 packages de `packages/*`, não só as 6 que
+   `intranet` tinha hardcoded) e o `webpack()` que força
+   `output.hashFunction = "sha256"`. O wrapper de `webpack` é aplicado
+   **depois** do spread de `overrides` para não ser descartado caso um app
+   passe seu próprio `webpack()` no futuro.
+2. `packages/config/package.json` — export `./next`, `next` como
+   `devDependency` (tipo `NextConfig`) e `peerDependency` (`^15.3.0`).
+3. `next.config.ts` criado nos 8 apps que não tinham; `apps/intranet`
+   migrado para consumir a factory (a lista hardcoded saiu do app).
+4. `apps/documentos/postcss.config.mjs` criado (cópia de `apps/admin`).
+5. `.nvmrc` (`24.18.0`) + `package.json#engines.node` (`>=24.0.0 <25.0.0`,
+   faixa fechada) + CI (`actions/setup-node` com `node-version-file:
+".nvmrc"` nos dois jobs, removida a env var `NODE_VERSION` solta que
+   divergia do `engines`).
+
+### Achado novo, fora do escopo original do prompt: build paralelo total estoura memória nesta máquina
+
+`pnpm turbo build --force` sem flag de concorrência **falha** nesta máquina
+(8 cores / 12 GB RAM) — mas não no app que o prompt corrigiu. Reproduzido
+2x: primeira tentativa `@hebron/admin` abortou (exit `3221225477`, access
+violation do Windows); segunda tentativa, com a árvore idêntica,
+`plataforma`/`projetos`/`documentos`/`flats` abortaram (exit `134`). É o
+mesmo padrão que a auditoria já tinha registrado como "migra de app" sob
+build paralelo — só que a causa não é o hash WASM (esse já está corrigido e
+verificado isoladamente em `tarefas`), é pressão de memória de 9 builds
+Next.js simultâneos (webpack + typecheck + static gen cada) num total de
+12 GB. `--concurrency=4` reproduz 9/9 sucesso de forma limpa e repetível
+(rebuild completo, 0 cache, 4m45s) — não usa `--concurrency=1`, então
+satisfaz o critério de aceite na letra, mas é um achado técnico novo, não
+autorizado explicitamente como escopo deste prompt. Nenhum arquivo de
+config de concorrência (`turbo.json`) foi tocado — fora da allowlist deste
+prompt. **Débito registrado:** decidir se isso é só uma limitação da
+máquina local (documentar e seguir) ou se merece um `--concurrency` padrão
+em `turbo.json`/scripts — CI (GitHub Actions) roda em runner diferente e
+não necessariamente reproduz.
+
+### Critérios de aceite
+
+- [x] `pnpm turbo build --force` → 9/9 successful, sem `--concurrency=1`
+      (verificado com `--concurrency=4`; concorrência total sem flag estoura
+      memória nesta máquina — ver achado acima)
+- [x] `apps/tarefas` compila isoladamente (`npx next build`) em Node 24
+      (`.nvmrc`) — não testado em Node 20 (máquina só tem Node 24 disponível
+      localmente; o mecanismo do fix — `hashFunction: "sha256"` — não é
+      condicional à versão do Node, então não há caminho de código
+      Node-20-específico a validar)
+- [x] Os 9 apps têm `next.config.ts` consumindo `@hebron/config/next` —
+      nenhuma lista de `transpilePackages` duplicada por app
+- [x] `apps/documentos` emite utilitários do Tailwind: `.flex{display:flex}`
+      e `.grid{display:grid}` presentes em `.next/static/css/*.css`,
+      nenhum `@source` literal no CSS publicado
+- [x] `.nvmrc` existe e o CI o consome; `engines.node` com faixa fechada
+      coerente
+- [x] `pnpm turbo lint typecheck` verde (38/38)
+- [x] Critério 2 de P-0.1 revertido para `[x]` em PROMPTS.md
+- [x] Registrado em SESSIONS.md
+
+### Arquivos criados/alterados
+
+- `packages/config/src/next.ts` (novo)
+- `packages/config/package.json`
+- `apps/{admin,projetos,plataforma,radio,financeiro,documentos,flats,tarefas}/next.config.ts` (novos)
+- `apps/intranet/next.config.ts` (migrado para a factory)
+- `apps/documentos/postcss.config.mjs` (novo)
+- `package.json` (`engines.node`)
+- `.nvmrc` (novo)
+- `.github/workflows/ci.yml`
+- `PROMPTS.md` (critério de P-0.1 restaurado)
 - `SESSIONS.md` (esta entrada + índice)

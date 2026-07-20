@@ -4,7 +4,8 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts",
-    "./env": "./src/env.ts"
+    "./env": "./src/env.ts",
+    "./next": "./src/next.ts"
   },
   "scripts": {
     "lint": "eslint .",
@@ -19,6 +20,10 @@
     "@hebron/typescript-config": "workspace:*",
     "@types/node": "^22.0.0",
     "eslint": "^9.13.0",
+    "next": "^15.3.0",
     "typescript": "^5.6.3"
+  },
+  "peerDependencies": {
+    "next": "^15.3.0"
   }
 }
