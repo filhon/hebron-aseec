@@ -437,7 +437,7 @@ export default async function TemplatesEmailPage({ searchParams }: PageProps) {
     fontWeight: 700,
     textTransform: "uppercase",
     letterSpacing: "0.07em",
-    color: "var(--color-muted-foreground, #6B7280)",
+    color: "var(--fg-muted, #6B7280)",
     padding: "12px 12px 4px",
   };
 
@@ -461,7 +461,7 @@ export default async function TemplatesEmailPage({ searchParams }: PageProps) {
             width: 40,
             height: 40,
             borderRadius: 10,
-            background: "var(--color-primary, #202C85)",
+            background: "var(--hb-blue, #202C85)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -475,7 +475,7 @@ export default async function TemplatesEmailPage({ searchParams }: PageProps) {
             style={{
               fontSize: 20,
               fontWeight: 700,
-              color: "var(--color-foreground, #111827)",
+              color: "var(--fg, #111827)",
               margin: 0,
               lineHeight: 1.3,
             }}
@@ -485,7 +485,7 @@ export default async function TemplatesEmailPage({ searchParams }: PageProps) {
           <p
             style={{
               fontSize: 13,
-              color: "var(--color-muted-foreground, #6B7280)",
+              color: "var(--fg-muted, #6B7280)",
               margin: "2px 0 0",
             }}
           >
@@ -502,8 +502,8 @@ export default async function TemplatesEmailPage({ searchParams }: PageProps) {
           style={{
             width: 210,
             flexShrink: 0,
-            background: "var(--color-surface, #F9FAFB)",
-            border: "1px solid var(--color-border, #E5E7EB)",
+            background: "var(--bg-alt, #F7F8FC)",
+            border: "1px solid var(--border, #E5E7EB)",
             borderRadius: 10,
             overflow: "hidden",
             position: "sticky",
@@ -524,10 +524,10 @@ export default async function TemplatesEmailPage({ searchParams }: PageProps) {
                       style={{
                         ...sidebarItemBase,
                         color: active
-                          ? "var(--color-primary, #202C85)"
-                          : "var(--color-foreground, #111827)",
+                          ? "var(--hb-blue, #202C85)"
+                          : "var(--fg, #111827)",
                         background: active
-                          ? "var(--color-primary-50, #EFF2FF)"
+                          ? "var(--brand-muted, #EEF0F6)"
                           : "transparent",
                         fontWeight: active ? 600 : 400,
                       }}
@@ -586,7 +586,7 @@ export default async function TemplatesEmailPage({ searchParams }: PageProps) {
                 <p
                   style={{
                     fontSize: 12,
-                    color: "var(--color-muted-foreground, #6B7280)",
+                    color: "var(--fg-muted, #6B7280)",
                     margin: "2px 0 0",
                   }}
                 >
@@ -612,7 +612,7 @@ export default async function TemplatesEmailPage({ searchParams }: PageProps) {
                 <p
                   style={{
                     fontSize: 12,
-                    color: "var(--color-muted-foreground, #6B7280)",
+                    color: "var(--fg-muted, #6B7280)",
                     margin: "2px 0 0",
                   }}
                 >

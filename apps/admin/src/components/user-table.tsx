@@ -131,8 +131,8 @@ function buildColumns(): ColumnDef<UserRow>[] {
               width: "2rem",
               height: "2rem",
               borderRadius: "var(--radius-full)",
-              backgroundColor: "var(--color-primary-muted)",
-              color: "var(--color-primary)",
+              backgroundColor: "var(--brand-muted)",
+              color: "var(--hb-blue)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -156,7 +156,7 @@ function buildColumns(): ColumnDef<UserRow>[] {
               style={{
                 fontSize: "var(--text-sm)",
                 fontWeight: "var(--font-weight-medium)",
-                color: "var(--color-foreground)",
+                color: "var(--fg)",
               }}
             >
               {row.original.fullName ?? row.original.email}
@@ -164,7 +164,7 @@ function buildColumns(): ColumnDef<UserRow>[] {
             <div
               style={{
                 fontSize: "var(--text-xs)",
-                color: "var(--color-muted-foreground)",
+                color: "var(--fg-muted)",
               }}
             >
               {row.original.email}
@@ -183,7 +183,7 @@ function buildColumns(): ColumnDef<UserRow>[] {
             <span
               style={{
                 fontSize: "var(--text-xs)",
-                color: "var(--color-muted-foreground)",
+                color: "var(--fg-muted)",
               }}
             >
               —
@@ -216,7 +216,7 @@ function buildColumns(): ColumnDef<UserRow>[] {
         <span
           style={{
             fontSize: "var(--text-sm)",
-            color: "var(--color-muted-foreground)",
+            color: "var(--fg-muted)",
           }}
         >
           {formatDate(row.original.createdAt)}
@@ -296,7 +296,7 @@ export function UserTable({ users, roleAssignments }: UserTableProps) {
               left: "0.75rem",
               top: "50%",
               transform: "translateY(-50%)",
-              color: "var(--color-muted-foreground)",
+              color: "var(--fg-muted)",
               pointerEvents: "none",
             }}
           />
@@ -351,7 +351,7 @@ export function UserTable({ users, roleAssignments }: UserTableProps) {
       <p
         style={{
           fontSize: "var(--text-xs)",
-          color: "var(--color-muted-foreground)",
+          color: "var(--fg-muted)",
         }}
       >
         {rows.length} {rows.length === 1 ? "usuário" : "usuários"} encontrado
@@ -363,7 +363,7 @@ export function UserTable({ users, roleAssignments }: UserTableProps) {
         style={{
           overflowX: "auto",
           borderRadius: "var(--radius-lg)",
-          border: "1px solid var(--color-border)",
+          border: "1px solid var(--border)",
         }}
       >
         <table
@@ -379,8 +379,8 @@ export function UserTable({ users, roleAssignments }: UserTableProps) {
               <tr
                 key={headerGroup.id}
                 style={{
-                  backgroundColor: "var(--color-muted)",
-                  borderBottom: "1px solid var(--color-border)",
+                  backgroundColor: "var(--surface-alt)",
+                  borderBottom: "1px solid var(--border)",
                 }}
               >
                 {headerGroup.headers.map((header) => {
@@ -396,7 +396,7 @@ export function UserTable({ users, roleAssignments }: UserTableProps) {
                         textAlign: "left",
                         fontWeight: "var(--font-weight-semibold)",
                         fontSize: "var(--text-xs)",
-                        color: "var(--color-muted-foreground)",
+                        color: "var(--fg-muted)",
                         whiteSpace: "nowrap",
                         cursor: isSortable ? "pointer" : "default",
                         userSelect: "none",
@@ -430,7 +430,7 @@ export function UserTable({ users, roleAssignments }: UserTableProps) {
                         {isSortable && (
                           <span
                             aria-hidden="true"
-                            style={{ color: "var(--color-muted-foreground)" }}
+                            style={{ color: "var(--fg-muted)" }}
                           >
                             {sortDir === "asc" ? (
                               <ChevronUp size={13} />
@@ -457,7 +457,7 @@ export function UserTable({ users, roleAssignments }: UserTableProps) {
                   style={{
                     padding: "3rem 1rem",
                     textAlign: "center",
-                    color: "var(--color-muted-foreground)",
+                    color: "var(--fg-muted)",
                     fontSize: "var(--text-sm)",
                   }}
                 >
@@ -470,10 +470,8 @@ export function UserTable({ users, roleAssignments }: UserTableProps) {
                   key={row.id}
                   style={{
                     borderBottom:
-                      i < rows.length - 1
-                        ? "1px solid var(--color-border)"
-                        : "none",
-                    backgroundColor: "var(--color-background)",
+                      i < rows.length - 1 ? "1px solid var(--border)" : "none",
+                    backgroundColor: "var(--bg)",
                     transition: "background-color var(--transition-fast)",
                   }}
                 >

@@ -98,7 +98,7 @@ export function DesignationForm({
         </div>
 
         {directors.length === 0 ? (
-          <div className="rounded-(--radius) border border-(--color-border) px-4 py-6 text-center">
+          <div className="rounded-(--radius) border border-(--border) px-4 py-6 text-center">
             <p className="text-sm">
               Nenhum diretor encontrado. Atribua o papel de diretor a um usuário
               primeiro.
@@ -172,17 +172,17 @@ export function DesignationForm({
       {activeDesignations.length > 0 && (
         <div className="flex flex-col gap-3">
           <h3 className="text-sm font-semibold">Designações ativas</h3>
-          <div className="overflow-hidden rounded-(--radius) border border-(--color-border)">
+          <div className="overflow-hidden rounded-(--radius) border border-(--border)">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-(--color-border) bg-(--color-muted)/40">
-                  <th className="px-4 py-2.5 text-left font-medium text-(--color-muted-foreground)">
+                <tr className="border-b border-(--border) bg-(--surface-alt)/40">
+                  <th className="px-4 py-2.5 text-left font-medium text-(--fg-muted)">
                     Diretor
                   </th>
-                  <th className="px-4 py-2.5 text-left font-medium text-(--color-muted-foreground)">
+                  <th className="px-4 py-2.5 text-left font-medium text-(--fg-muted)">
                     Tipo
                   </th>
-                  <th className="px-4 py-2.5 text-left font-medium text-(--color-muted-foreground)">
+                  <th className="px-4 py-2.5 text-left font-medium text-(--fg-muted)">
                     Desde
                   </th>
                   <th className="w-12 px-4 py-2.5" />
@@ -194,17 +194,15 @@ export function DesignationForm({
                     key={d.id}
                     className={[
                       "transition-colors duration-(--transition-fast)",
-                      idx % 2 === 0 ? "" : "bg-(--color-muted)/20",
-                      "hover:bg-(--color-primary)/4",
+                      idx % 2 === 0 ? "" : "bg-(--surface-alt)/20",
+                      "hover:bg-(--hb-blue)/4",
                     ].join(" ")}
                   >
-                    <td className="px-4 py-3 text-(--color-foreground)">
-                      {d.directorName}
-                    </td>
-                    <td className="px-4 py-3 text-(--color-foreground)">
+                    <td className="px-4 py-3 text-(--fg)">{d.directorName}</td>
+                    <td className="px-4 py-3 text-(--fg)">
                       {DESIGNATION_TYPE_LABELS[d.type]}
                     </td>
-                    <td className="px-4 py-3 text-(--color-muted-foreground)">
+                    <td className="px-4 py-3 text-(--fg-muted)">
                       {d.assignedAt.toLocaleDateString("pt-BR")}
                     </td>
                     <td className="px-4 py-3">
@@ -213,7 +211,7 @@ export function DesignationForm({
                         onClick={() => onRevoke(d.id)}
                         className={[
                           "flex h-7 w-7 items-center justify-center rounded-sm",
-                          "text-(--color-muted-foreground) transition-colors duration-(--transition-fast)",
+                          "text-(--fg-muted) transition-colors duration-(--transition-fast)",
                           "hover:bg-(--color-destructive)/10 hover:text-(--color-destructive)",
                         ].join(" ")}
                         title="Revogar designação"

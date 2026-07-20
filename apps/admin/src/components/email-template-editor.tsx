@@ -47,7 +47,7 @@ export function EmailTemplateEditor({
     return html.replace(
       /\{\{(\w+)\}\}/g,
       (_, name: string) =>
-        `<span style="background:var(--color-primary);color:var(--color-primary-foreground);padding:0 4px;border-radius:3px;font-family:monospace;font-size:12px;">{{${name}}}</span>`,
+        `<span style="background:var(--hb-blue);color:var(--brand-fg);padding:0 4px;border-radius:3px;font-family:monospace;font-size:12px;">{{${name}}}</span>`,
     );
   }
 
@@ -62,7 +62,7 @@ export function EmailTemplateEditor({
               key={v}
               className={[
                 "rounded px-1.5 py-0.5",
-                "bg-(--color-primary)/10 text-(--color-primary)",
+                "bg-(--hb-blue)/10 text-(--hb-blue)",
                 "text-xs font-mono",
               ].join(" ")}
             >
@@ -126,14 +126,14 @@ export function EmailTemplateEditor({
                 placeholder="<p>Olá {{name}},</p>"
                 className={[
                   "flex w-full resize-y font-mono",
-                  "rounded-(--radius) border border-(--color-border)",
-                  "bg-(--color-input-bg) text-(--color-foreground)",
+                  "rounded-(--radius) border border-(--border)",
+                  "bg-(--bg-alt) text-(--fg)",
                   "px-3 py-2 text-xs",
-                  "placeholder:text-(--color-muted-foreground)",
+                  "placeholder:text-(--fg-muted)",
                   "transition-colors duration-(--transition-fast)",
-                  "hover:border-(--color-primary)/50",
-                  "focus-visible:outline-none focus-visible:border-(--color-primary)",
-                  "focus-visible:ring-2 focus-visible:ring-(--color-ring)/20",
+                  "hover:border-(--hb-blue)/50",
+                  "focus-visible:outline-none focus-visible:border-(--hb-blue)",
+                  "focus-visible:ring-2 focus-visible:ring-(--hb-blue)/20",
                   errors.bodyHtml
                     ? "border-(--color-destructive) focus-visible:ring-(--color-destructive)/20"
                     : "",
@@ -149,19 +149,19 @@ export function EmailTemplateEditor({
 
             {/* Preview */}
             <div className="flex flex-col gap-1.5">
-              <span className="font-medium text-(--color-muted-foreground) uppercase tracking-wide">
+              <span className="font-medium text-(--fg-muted) uppercase tracking-wide">
                 Pré-visualização
               </span>
               <div
                 className={[
-                  "min-h-60 rounded-(--radius) border border-(--color-border)",
+                  "min-h-60 rounded-(--radius) border border-(--border)",
                   "bg-white px-4 py-3 text-sm",
                   "overflow-auto",
                 ].join(" ")}
               >
                 {/* Subject preview */}
                 {watchedSubject && (
-                  <div className="mb-3 border-b border-(--color-border) pb-2">
+                  <div className="mb-3 border-b border-(--border) pb-2">
                     <span className="text-xs">Assunto: </span>
                     <strong className="text-sm">{watchedSubject}</strong>
                   </div>
@@ -191,14 +191,14 @@ export function EmailTemplateEditor({
             placeholder="Olá {{name}}, você foi convidado para..."
             className={[
               "flex w-full resize-y",
-              "rounded-(--radius) border border-(--color-border)",
-              "bg-(--color-input-bg) text-(--color-foreground)",
+              "rounded-(--radius) border border-(--border)",
+              "bg-(--bg-alt) text-(--fg)",
               "px-3 py-2 text-sm",
-              "placeholder:text-(--color-muted-foreground)",
+              "placeholder:text-(--fg-muted)",
               "transition-colors duration-(--transition-fast)",
-              "hover:border-(--color-primary)/50",
-              "focus-visible:outline-none focus-visible:border-(--color-primary)",
-              "focus-visible:ring-2 focus-visible:ring-(--color-ring)/20",
+              "hover:border-(--hb-blue)/50",
+              "focus-visible:outline-none focus-visible:border-(--hb-blue)",
+              "focus-visible:ring-2 focus-visible:ring-(--hb-blue)/20",
               errors.bodyText
                 ? "border-(--color-destructive) focus-visible:ring-(--color-destructive)/20"
                 : "",
@@ -208,7 +208,7 @@ export function EmailTemplateEditor({
         </FormField>
 
         {/* Ações */}
-        <div className="flex items-center justify-between border-t border-(--color-border) pt-4">
+        <div className="flex items-center justify-between border-t border-(--border) pt-4">
           <p className="text-xs">
             Última edição:{" "}
             {template.updatedAt.toLocaleDateString("pt-BR", {

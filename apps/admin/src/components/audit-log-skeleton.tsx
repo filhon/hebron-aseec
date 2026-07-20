@@ -18,7 +18,7 @@ function Bone({
       className="animate-pulse"
       aria-hidden="true"
       style={{
-        backgroundColor: "var(--color-muted)",
+        backgroundColor: "var(--surface-alt)",
         borderRadius: radius ?? "var(--radius)",
         width,
         height,
@@ -34,10 +34,7 @@ function TableRowSkeleton({ index }: { index: number }) {
   const actorWidth = `${5 + (index % 3)}rem`;
 
   return (
-    <tr
-      aria-hidden="true"
-      style={{ borderBottom: "1px solid var(--color-border)" }}
-    >
+    <tr aria-hidden="true" style={{ borderBottom: "1px solid var(--border)" }}>
       {/* Data/hora — monospaced */}
       <td style={{ padding: "0.875rem 1rem", whiteSpace: "nowrap" }}>
         <Bone width="8rem" height="0.75rem" />
@@ -86,7 +83,7 @@ export function AuditLogSkeleton() {
           style={{
             flex: "1 1 16rem",
             height: "2.25rem",
-            backgroundColor: "var(--color-muted)",
+            backgroundColor: "var(--surface-alt)",
             borderRadius: "var(--radius)",
           }}
         />
@@ -96,7 +93,7 @@ export function AuditLogSkeleton() {
           style={{
             width: "11rem",
             height: "2.25rem",
-            backgroundColor: "var(--color-muted)",
+            backgroundColor: "var(--surface-alt)",
             borderRadius: "var(--radius)",
           }}
         />
@@ -106,7 +103,7 @@ export function AuditLogSkeleton() {
           style={{
             width: "2.25rem",
             height: "2.25rem",
-            backgroundColor: "var(--color-muted)",
+            backgroundColor: "var(--surface-alt)",
             borderRadius: "var(--radius)",
           }}
         />
@@ -115,7 +112,7 @@ export function AuditLogSkeleton() {
       {/* Table */}
       <div
         style={{
-          border: "1px solid var(--color-border)",
+          border: "1px solid var(--border)",
           borderRadius: "var(--radius-lg)",
           overflow: "hidden",
         }}
@@ -125,9 +122,9 @@ export function AuditLogSkeleton() {
           <thead>
             <tr
               style={{
-                borderBottom: "1px solid var(--color-border)",
+                borderBottom: "1px solid var(--border)",
                 backgroundColor:
-                  "color-mix(in sRGB, var(--color-muted) 40%, transparent)",
+                  "color-mix(in sRGB, var(--surface-alt) 40%, transparent)",
               }}
             >
               {[

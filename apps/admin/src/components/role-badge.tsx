@@ -9,43 +9,43 @@ const ROLE_CONFIG: Record<Role, { label: string; bg: string; color: string }> =
   {
     super_admin: {
       label: "Super Admin",
-      bg: "var(--color-primary)",
-      color: "var(--color-primary-foreground)",
+      bg: "var(--hb-blue)",
+      color: "var(--brand-fg)",
     },
     diretor: {
       label: "Diretor",
-      bg: "var(--color-accent)",
-      color: "var(--color-accent-foreground)",
+      bg: "var(--hb-orange)",
+      color: "var(--fg-invert)",
     },
     conselheiro: {
       label: "Conselheiro",
-      bg: "var(--color-support-sky)",
-      color: "var(--color-support-sky-foreground)",
+      bg: "var(--hb-cyan)",
+      color: "var(--hb-cyan-fg)",
     },
     colaborador: {
       label: "Colaborador",
-      bg: "var(--color-support-green)",
-      color: "var(--color-support-green-foreground)",
+      bg: "var(--hb-green)",
+      color: "var(--hb-green-fg)",
     },
     submissor: {
       label: "Submissor",
-      bg: "var(--color-accent-muted)",
-      color: "var(--color-accent)",
+      bg: "var(--hb-orange-muted)",
+      color: "var(--hb-orange)",
     },
     aluno: {
       label: "Aluno",
-      bg: "var(--color-support-sky-muted)",
-      color: "var(--color-support-sky-foreground)",
+      bg: "var(--hb-cyan-muted)",
+      color: "var(--hb-cyan-fg)",
     },
     hospede: {
       label: "Hóspede",
-      bg: "var(--color-primary-muted)",
-      color: "var(--color-primary)",
+      bg: "var(--brand-muted)",
+      color: "var(--hb-blue)",
     },
     ouvinte: {
       label: "Ouvinte",
-      bg: "var(--color-support-green-muted)",
-      color: "var(--color-support-green-foreground)",
+      bg: "var(--hb-green-muted)",
+      color: "var(--hb-green-fg)",
     },
   };
 

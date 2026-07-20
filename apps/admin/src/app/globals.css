@@ -1,5 +1,5 @@
 @import "tailwindcss";
-@import "../../../../packages/ui/src/tokens.css";
+@import "@hebron/ui/tokens.css";
 @import "../../../../packages/ui/src/styles/patterns.css";
 @import "./admin.css";
 @source "../../../../packages/ui/src";

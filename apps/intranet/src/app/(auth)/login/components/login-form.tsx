@@ -233,8 +233,8 @@ export function LoginForm({ returnTo }: LoginFormProps) {
     <div className="flex flex-col gap-6">
       {/* Mode tabs */}
       <div
-        className="flex rounded-(--radius) border border-(--color-border) p-1"
-        style={{ background: "var(--color-muted)" }}
+        className="flex rounded-(--radius) border border-(--border) p-1"
+        style={{ background: "var(--surface-alt)" }}
       >
         <ModeTab
           active={mode === "password"}
@@ -363,8 +363,8 @@ function ModeTab({
         "flex-1 rounded-[calc(var(--radius)-2px)] py-1.5 text-sm font-medium",
         "transition-all duration-(--transition-fast)",
         active
-          ? "bg-(--color-background) text-(--color-primary) shadow-(--shadow-xs)"
-          : "text-(--color-muted-foreground) hover:text-(--color-foreground)",
+          ? "bg-(--bg) text-(--hb-blue) shadow-(--shadow-xs)"
+          : "text-(--fg-muted) hover:text-(--fg)",
       ].join(" ")}
     >
       {children}
@@ -401,10 +401,10 @@ function MfaStep({
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h3 className="text-base font-semibold text-(--color-foreground)">
+        <h3 className="text-base font-semibold text-(--fg)">
           Verificação em dois fatores
         </h3>
-        <p className="mt-1 text-sm text-(--color-muted-foreground)">
+        <p className="mt-1 text-sm text-(--fg-muted)">
           Abra seu aplicativo autenticador e insira o código de 6 dígitos.
         </p>
       </div>
@@ -435,7 +435,7 @@ function MfaStep({
       <button
         type="button"
         onClick={onBack}
-        className="text-center text-sm text-(--color-muted-foreground) hover:text-(--color-foreground) transition-colors"
+        className="text-center text-sm text-(--fg-muted) hover:text-(--fg) transition-colors"
       >
         Voltar ao login
       </button>
@@ -449,7 +449,7 @@ function MagicLinkSentState({ email }: { email: string }) {
       {/* Checkmark */}
       <div
         className="flex h-12 w-12 items-center justify-center rounded-full"
-        style={{ background: "var(--color-support-green-muted)" }}
+        style={{ background: "var(--hb-green-muted)" }}
         aria-hidden="true"
       >
         <svg
@@ -457,7 +457,7 @@ function MagicLinkSentState({ email }: { email: string }) {
           height="24"
           viewBox="0 0 24 24"
           fill="none"
-          stroke="var(--color-support-green)"
+          stroke="var(--hb-green)"
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -467,15 +467,15 @@ function MagicLinkSentState({ email }: { email: string }) {
       </div>
 
       <div>
-        <p className="font-medium text-(--color-foreground)">Link enviado</p>
-        <p className="mt-1 text-sm text-(--color-muted-foreground)">
+        <p className="font-medium text-(--fg)">Link enviado</p>
+        <p className="mt-1 text-sm text-(--fg-muted)">
           Verifique sua caixa de entrada em{" "}
-          <span className="font-medium text-(--color-foreground)">{email}</span>
-          . O link expira em 60 minutos.
+          <span className="font-medium text-(--fg)">{email}</span>. O link
+          expira em 60 minutos.
         </p>
       </div>
 
-      <p className="text-xs text-(--color-muted-foreground)">
+      <p className="text-xs text-(--fg-muted)">
         Não recebeu? Verifique a pasta de spam.
       </p>
     </div>

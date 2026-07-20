@@ -135,13 +135,13 @@ export function CadastroForm() {
         />
       </FormField>
 
-      <label className="flex items-start gap-2 text-xs text-(--color-muted-foreground)">
+      <label className="flex items-start gap-2 text-xs text-(--fg-muted)">
         <input
           type="checkbox"
           checked={state.consent}
           onChange={(e) => setField("consent", e.target.checked)}
           disabled={state.loading}
-          className="mt-0.5 h-4 w-4 shrink-0 rounded-sm border-(--color-border) text-(--color-primary)"
+          className="mt-0.5 h-4 w-4 shrink-0 rounded-sm border-(--border) text-(--hb-blue)"
         />
         <span>
           Autorizo o uso dos meus dados para fins de análise e aprovação de
@@ -173,11 +173,11 @@ export function CadastroForm() {
         Solicitar acesso
       </Button>
 
-      <p className="text-center text-xs text-(--color-muted-foreground)">
+      <p className="text-center text-xs text-(--fg-muted)">
         Já tem uma conta?{" "}
         <a
           href="/login"
-          className="text-(--color-primary) underline-offset-2 hover:underline"
+          className="text-(--hb-blue) underline-offset-2 hover:underline"
         >
           Fazer login
         </a>
@@ -204,7 +204,7 @@ function ConfirmationSentState({ email }: { email: string }) {
     <div className="flex flex-col items-center gap-4 py-4 text-center">
       <div
         className="flex h-12 w-12 items-center justify-center rounded-full"
-        style={{ background: "var(--color-support-green-muted)" }}
+        style={{ background: "var(--hb-green-muted)" }}
         aria-hidden="true"
       >
         <svg
@@ -212,7 +212,7 @@ function ConfirmationSentState({ email }: { email: string }) {
           height="24"
           viewBox="0 0 24 24"
           fill="none"
-          stroke="var(--color-support-green)"
+          stroke="var(--hb-green)"
           strokeWidth="2"
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -222,14 +222,11 @@ function ConfirmationSentState({ email }: { email: string }) {
       </div>
 
       <div>
-        <p className="font-medium text-(--color-foreground)">
-          Confirme seu e-mail
-        </p>
-        <p className="mt-1 text-sm text-(--color-muted-foreground)">
+        <p className="font-medium text-(--fg)">Confirme seu e-mail</p>
+        <p className="mt-1 text-sm text-(--fg-muted)">
           Enviamos um link de confirmação para{" "}
-          <span className="font-medium text-(--color-foreground)">{email}</span>
-          . Depois de confirmar, você vai vincular sua instituição para concluir
-          o cadastro.
+          <span className="font-medium text-(--fg)">{email}</span>. Depois de
+          confirmar, você vai vincular sua instituição para concluir o cadastro.
         </p>
       </div>
     </div>

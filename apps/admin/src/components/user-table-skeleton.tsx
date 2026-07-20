@@ -17,7 +17,7 @@ function Bone({
       className="animate-pulse"
       aria-hidden="true"
       style={{
-        backgroundColor: "var(--color-muted)",
+        backgroundColor: "var(--surface-alt)",
         borderRadius: radius ?? "var(--radius)",
         width,
         height,
@@ -37,7 +37,7 @@ function TableRowSkeleton({ index }: { index: number }) {
     <tr
       aria-hidden="true"
       style={{
-        borderBottom: "1px solid var(--color-border)",
+        borderBottom: "1px solid var(--border)",
         transition: "background-color 0.15s",
       }}
     >
@@ -51,7 +51,7 @@ function TableRowSkeleton({ index }: { index: number }) {
               width: "2rem",
               height: "2rem",
               borderRadius: "var(--radius-full)",
-              backgroundColor: "var(--color-muted)",
+              backgroundColor: "var(--surface-alt)",
             }}
           />
           <div
@@ -107,7 +107,7 @@ export function UserTableSkeleton() {
           style={{
             flex: "1 1 16rem",
             height: "2.25rem",
-            backgroundColor: "var(--color-muted)",
+            backgroundColor: "var(--surface-alt)",
             borderRadius: "var(--radius)",
           }}
         />
@@ -117,7 +117,7 @@ export function UserTableSkeleton() {
           style={{
             width: "9rem",
             height: "2.25rem",
-            backgroundColor: "var(--color-muted)",
+            backgroundColor: "var(--surface-alt)",
             borderRadius: "var(--radius)",
           }}
         />
@@ -127,7 +127,7 @@ export function UserTableSkeleton() {
           style={{
             width: "9rem",
             height: "2.25rem",
-            backgroundColor: "var(--color-muted)",
+            backgroundColor: "var(--surface-alt)",
             borderRadius: "var(--radius)",
           }}
         />
@@ -136,7 +136,7 @@ export function UserTableSkeleton() {
       {/* Table */}
       <div
         style={{
-          border: "1px solid var(--color-border)",
+          border: "1px solid var(--border)",
           borderRadius: "var(--radius-lg)",
           overflow: "hidden",
         }}
@@ -146,9 +146,9 @@ export function UserTableSkeleton() {
           <thead>
             <tr
               style={{
-                borderBottom: "1px solid var(--color-border)",
+                borderBottom: "1px solid var(--border)",
                 backgroundColor:
-                  "color-mix(in sRGB, var(--color-muted) 40%, transparent)",
+                  "color-mix(in sRGB, var(--surface-alt) 40%, transparent)",
               }}
             >
               {[

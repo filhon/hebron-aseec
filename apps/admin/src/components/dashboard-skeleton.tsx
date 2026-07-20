@@ -17,7 +17,7 @@ function Bone({
       className="animate-pulse"
       aria-hidden="true"
       style={{
-        backgroundColor: "var(--color-muted)",
+        backgroundColor: "var(--surface-alt)",
         borderRadius: "var(--radius)",
         width,
         height,
@@ -33,8 +33,8 @@ function StatCardSkeleton() {
   return (
     <div
       style={{
-        backgroundColor: "var(--color-background)",
-        border: "1px solid var(--color-border)",
+        backgroundColor: "var(--bg)",
+        border: "1px solid var(--border)",
         borderRadius: "var(--radius-lg)",
         boxShadow: "var(--shadow-sm)",
         padding: "1.25rem",
@@ -51,7 +51,7 @@ function StatCardSkeleton() {
           width: "2.5rem",
           height: "2.5rem",
           borderRadius: "var(--radius-md)",
-          backgroundColor: "var(--color-muted)",
+          backgroundColor: "var(--surface-alt)",
         }}
       />
       <div
@@ -76,8 +76,8 @@ function CardSkeleton({
   return (
     <div
       style={{
-        backgroundColor: "var(--color-background)",
-        border: "1px solid var(--color-border)",
+        backgroundColor: "var(--bg)",
+        border: "1px solid var(--border)",
         borderRadius: "var(--radius-lg)",
         boxShadow: "var(--shadow-sm)",
         padding: "1.25rem",
@@ -127,8 +127,8 @@ function RoleBreakdownSkeleton() {
   return (
     <div
       style={{
-        backgroundColor: "var(--color-background)",
-        border: "1px solid var(--color-border)",
+        backgroundColor: "var(--bg)",
+        border: "1px solid var(--border)",
         borderRadius: "var(--radius-lg)",
         boxShadow: "var(--shadow-sm)",
         padding: "1.25rem",

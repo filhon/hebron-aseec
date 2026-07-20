@@ -189,6 +189,7 @@
 | S-166  | 2026-07-19 | P-9.4 — Copy Review (humanizar textos + citações bíblicas por contexto)                 | concluido                            |
 | S-167  | 2026-07-20 | P-0.1b — Restauração do Build e Uniformização da Config dos 9 Apps (CORRETIVO)          | concluido                            |
 | S-168  | 2026-07-20 | P-0.1c — `packages/config`: validação de env em runtime (CORRETIVO)                     | concluido                            |
+| S-169  | 2026-07-20 | P-0.2c — Aposentadoria dos aliases DEPRECATED (CORRETIVO)                               | concluido                            |
 
 ---
 
@@ -13175,4 +13176,98 @@ consolidado aqui, fora do escopo do prompt.
 - `packages/config/src/env.ts` (novo)
 - `packages/config/src/index.ts`
 - `.env.example`
+- `SESSIONS.md` (esta entrada + índice)
+
+---
+
+## S-169 — P-0.2c — Aposentadoria dos aliases DEPRECATED (CORRETIVO)
+
+**Data:** 2026-07-20 · **Branch:** `feat/P-0.2c-deprecated-aliases` · **Tipo:** ui
+
+### Contexto
+
+Corretivo aberto pela auditoria de 2026-07-20: o bloco de 26 aliases
+`--color-*`/`--font-ui` criado em P-0.2b (S-20) como ponte temporária
+("DEPRECATED — remover após migração dos apps") nunca foi de fato
+consumido pelos apps — P-1.12b (S-22b) só eliminou hex hardcoded do
+Admin, não migrou vocabulário. Dois meses depois o bloco seguia vivo,
+228 ocorrências em 19 arquivos-fonte (`apps/admin/src`,
+`apps/intranet/src`), e o critério de aceite de P-0.2b que declarava
+isso resolvido estava marcado `[x]` sem estar.
+
+### Implementação
+
+1. Migrados os **19 arquivos** (11 `apps/admin/src`, 8
+   `apps/intranet/src`) da tabela de equivalência de P-0.2b para o
+   vocabulário canônico — troca mecânica de nome de variável CSS, valor
+   computado idêntico. Ordem longest-first para evitar colisão de
+   prefixo (`--color-muted-foreground` antes de `--color-muted`, etc.).
+   Os 3 primeiros arquivos (`user-table.tsx`, `user-table-skeleton.tsx`,
+   `role-badge.tsx`) migrados diretamente; os 16 restantes delegados a
+   um subagente com a tabela de equivalência completa e as mesmas regras
+   de sintaxe (sem colchetes `[--var]`, sem colisão `text-(--font-*)`).
+2. Removido o bloco DEPRECATED inteiro de `packages/ui/src/tokens.css`
+   (26 aliases, incluindo os que a auditoria listou como "sem
+   consumidor" — na prática `--color-primary-muted`,
+   `--color-accent-foreground`, `--color-accent-muted`,
+   `--color-support-*-muted` e `--color-input-bg` tinham consumidores
+   reais em `role-badge.tsx`, `user-table.tsx`, `instituicao-form.tsx`,
+   `meeting-form.tsx`, `invitation-form.tsx` e `email-template-editor.tsx`
+   — a contagem da auditoria estava desatualizada, não o achado em si).
+3. **Achado novo, fora da tabela de 26 aliases:**
+   `apps/admin/src/app/(dashboard)/templates-email/page.tsx` usava
+   `var(--color-surface, #F9FAFB)` e `var(--color-primary-50, #EFF2FF)`
+   — duas variáveis que nunca existiram em nenhum dos dois vocabulários
+   (nem canônico, nem deprecated); fallback hex sempre resolvia porque a
+   var em si nunca foi definida. `--color-primary-50` batia no grep de
+   aceite por ser substring de `color-primary`. Decisão confirmada com
+   Filipe: mapear para o token canônico mais próximo em vez de só
+   remover a indireção morta (`--bg-alt` para o primeiro,
+   `--brand-muted` para o segundo), aceitando que o valor computado
+   nessa tela específica muda de um hex órfão para o token real mais
+   próximo — mais correto do que preservar um bug pré-existente.
+4. Critérios 1 e 2 de **P-0.2** corrigidos em `PROMPTS.md`: critério 1
+   trocado de `--color-primary`/`--color-accent` para o vocabulário
+   canônico; critério 2 passou de `[~]` para `[x]` (P-0.2b concluído na
+   S-20, tipografia Parkinsans + Titillium verificada nos 9 apps).
+5. Uniformizado o `@import` de tokens nos 9 `globals.css`: trocado de
+   `@import "../../../../packages/ui/src/tokens.css"` (caminho relativo)
+   para `@import "@hebron/ui/tokens.css"` (export subpath já declarado em
+   `packages/ui/package.json` e já documentado em
+   `packages/ui/src/index.ts` — só os apps estavam desalinhados). `pnpm
+turbo build --concurrency=1` confirmou 9/9 verde com a nova forma;
+   nenhuma mudança necessária em `index.ts`.
+
+### Observação — flakiness de build paralelo no Windows (não é achado desta sessão)
+
+`pnpm turbo build` com concorrência default falhou de forma não
+determinística (app diferente falha a cada corrida — `flats`,
+`plataforma`, `projetos` em corridas separadas) com
+`UNKNOWN: unknown error, read` no cache do webpack
+(`PackFileCacheStrategy`/`ResolverCachePlugin`). Confirmado como race de
+I/O do Windows sob 9 builds Next.js simultâneos, não relacionado à
+mudança do `@import`: cada app "falho" compilou limpo quando rodado
+sozinho, e `pnpm turbo build --concurrency=1` fechou 9/9 sem nenhuma
+falha. Não corrigido aqui — registrar como débito de ambiente se voltar
+a incomodar (mitigação conhecida: `--concurrency=1` ou desabilitar cache
+de filesystem do webpack em CI Windows).
+
+### Critérios de aceite
+
+- [x] `grep -rE '\-\-(color-primary|color-accent|color-support|color-background|color-foreground|color-muted|color-subtle|color-border|color-ring|font-ui)' apps/*/src packages/*/src` não retorna nada (verificado após a correção do item 3 acima)
+- [x] Bloco DEPRECATED removido de `tokens.css`; nenhum alias de compatibilidade restante
+- [x] Zero uso da forma `[--var]` introduzida na migração (só `(--var)`)
+- [x] Nenhum `text-(--font-*)` ou `text-(--text-*)` introduzido
+- [x] Critérios 1 e 2 do P-0.2 corrigidos (vocabulário canônico; `[~]` → `[x]`)
+- [x] `pnpm turbo build lint typecheck` verde (build 9/9 serial; lint+typecheck 38/38)
+- [x] Inspeção visual: `apps/admin` e fluxo de auth do `apps/intranet` — troca de nome preserva valor em todos os 19 arquivos da tabela; a única exceção deliberada (item 3) foi confirmada com Filipe
+- [x] Registrado em SESSIONS.md
+
+### Arquivos criados/alterados
+
+- `apps/admin/src/**` (11 arquivos da tabela + achado extra em `templates-email/page.tsx`)
+- `apps/intranet/src/**` (8 arquivos da tabela)
+- `packages/ui/src/tokens.css` (bloco DEPRECATED removido)
+- `apps/*/src/app/globals.css` (9 arquivos — `@import` uniformizado)
+- `PROMPTS.md` (critérios 1 e 2 de P-0.2)
 - `SESSIONS.md` (esta entrada + índice)

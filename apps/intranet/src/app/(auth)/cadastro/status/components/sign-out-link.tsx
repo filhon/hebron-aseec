@@ -10,7 +10,7 @@ export function SignOutLink() {
         await signOut();
         window.location.replace("/login");
       }}
-      className="text-sm font-medium text-(--color-primary) underline-offset-2 hover:underline"
+      className="text-sm font-medium text-(--hb-blue) underline-offset-2 hover:underline"
     >
       Sair
     </button>

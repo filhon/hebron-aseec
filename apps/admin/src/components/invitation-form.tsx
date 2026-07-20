@@ -103,9 +103,9 @@ export function InvitationForm({ onSubmit, isLoading }: InvitationFormProps) {
                   "flex cursor-pointer items-center gap-2 rounded-(--radius) border px-3 py-2.5",
                   "text-sm transition-colors duration-(--transition-fast)",
                   checked
-                    ? "border-(--color-primary) bg-(--color-primary)/8 text-(--color-primary)"
-                    : "border-(--color-border) bg-(--color-background) text-(--color-foreground)",
-                  "hover:border-(--color-primary)/50",
+                    ? "border-(--hb-blue) bg-(--hb-blue)/8 text-(--hb-blue)"
+                    : "border-(--border) bg-(--bg) text-(--fg)",
+                  "hover:border-(--hb-blue)/50",
                 ].join(" ")}
               >
                 <input
@@ -118,8 +118,8 @@ export function InvitationForm({ onSubmit, isLoading }: InvitationFormProps) {
                   className={[
                     "flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border",
                     checked
-                      ? "border-(--color-primary) bg-(--color-primary)"
-                      : "border-(--color-border)",
+                      ? "border-(--hb-blue) bg-(--hb-blue)"
+                      : "border-(--border)",
                   ].join(" ")}
                   aria-hidden="true"
                 >
@@ -179,14 +179,14 @@ export function InvitationForm({ onSubmit, isLoading }: InvitationFormProps) {
           placeholder="Olá! Você foi convidado para fazer parte da plataforma Hebron Aseec."
           className={[
             "flex w-full resize-none",
-            "rounded-(--radius) border border-(--color-border)",
-            "bg-(--color-input-bg) text-(--color-foreground)",
+            "rounded-(--radius) border border-(--border)",
+            "bg-(--bg-alt) text-(--fg)",
             "px-3 py-2 text-sm",
-            "placeholder:text-(--color-muted-foreground)",
+            "placeholder:text-(--fg-muted)",
             "transition-colors duration-(--transition-fast)",
-            "hover:border-(--color-primary)/50",
-            "focus-visible:outline-none focus-visible:border-(--color-primary)",
-            "focus-visible:ring-2 focus-visible:ring-(--color-ring)/20",
+            "hover:border-(--hb-blue)/50",
+            "focus-visible:outline-none focus-visible:border-(--hb-blue)",
+            "focus-visible:ring-2 focus-visible:ring-(--hb-blue)/20",
             errors.message
               ? "border-(--color-destructive) focus-visible:ring-(--color-destructive)/20"
               : "",
@@ -196,7 +196,7 @@ export function InvitationForm({ onSubmit, isLoading }: InvitationFormProps) {
       </FormField>
 
       {/* Ações */}
-      <div className="flex items-center justify-end gap-3 border-t border-(--color-border) pt-4">
+      <div className="flex items-center justify-end gap-3 border-t border-(--border) pt-4">
         <Button type="submit" loading={loading}>
           Enviar convite
         </Button>

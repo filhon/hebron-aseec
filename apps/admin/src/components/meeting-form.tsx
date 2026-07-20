@@ -147,7 +147,7 @@ export function MeetingForm({
         error={errors.chairUserId?.message}
       >
         {directors.length === 0 ? (
-          <div className="flex h-10 items-center rounded-(--radius) border border-(--color-border) px-3">
+          <div className="flex h-10 items-center rounded-(--radius) border border-(--border) px-3">
             <span className="text-sm">Nenhum diretor disponível</span>
           </div>
         ) : (
@@ -184,14 +184,14 @@ export function MeetingForm({
           placeholder="Pauta da reunião, observações..."
           className={[
             "flex w-full resize-y",
-            "rounded-(--radius) border border-(--color-border)",
-            "bg-(--color-input-bg) text-(--color-foreground)",
+            "rounded-(--radius) border border-(--border)",
+            "bg-(--bg-alt) text-(--fg)",
             "px-3 py-2 text-sm",
-            "placeholder:text-(--color-muted-foreground)",
+            "placeholder:text-(--fg-muted)",
             "transition-colors duration-(--transition-fast)",
-            "hover:border-(--color-primary)/50",
-            "focus-visible:outline-none focus-visible:border-(--color-primary)",
-            "focus-visible:ring-2 focus-visible:ring-(--color-ring)/20",
+            "hover:border-(--hb-blue)/50",
+            "focus-visible:outline-none focus-visible:border-(--hb-blue)",
+            "focus-visible:ring-2 focus-visible:ring-(--hb-blue)/20",
             errors.notes
               ? "border-(--color-destructive) focus-visible:ring-(--color-destructive)/20"
               : "",
@@ -201,7 +201,7 @@ export function MeetingForm({
       </FormField>
 
       {/* Ações */}
-      <div className="flex items-center justify-end gap-3 border-t border-(--color-border) pt-4">
+      <div className="flex items-center justify-end gap-3 border-t border-(--border) pt-4">
         <Button type="submit" loading={loading}>
           {isEdit ? "Salvar alterações" : "Agendar reunião"}
         </Button>

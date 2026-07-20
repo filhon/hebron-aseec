@@ -67,8 +67,8 @@ export function InstituicaoForm() {
   return (
     <div className="flex flex-col gap-4">
       <div
-        className="flex rounded-(--radius) border border-(--color-border) p-1"
-        style={{ background: "var(--color-muted)" }}
+        className="flex rounded-(--radius) border border-(--border) p-1"
+        style={{ background: "var(--surface-alt)" }}
       >
         <ModeTab
           active={mode === "buscar"}
@@ -97,7 +97,7 @@ export function InstituicaoForm() {
               <Search
                 size={16}
                 aria-hidden="true"
-                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-(--color-muted-foreground)"
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-(--fg-muted)"
               />
               <Input
                 type="text"
@@ -126,21 +126,21 @@ export function InstituicaoForm() {
                     className={[
                       "flex w-full items-center gap-3 rounded-(--radius) border px-3 py-2.5 text-left transition-colors",
                       selected?.id === org.id
-                        ? "border-(--color-primary) bg-(--color-primary-muted)"
-                        : "border-(--color-border) hover:bg-(--color-muted)",
+                        ? "border-(--hb-blue) bg-(--brand-muted)"
+                        : "border-(--border) hover:bg-(--surface-alt)",
                     ].join(" ")}
                   >
                     <Building2
                       size={16}
                       aria-hidden="true"
-                      className="shrink-0 text-(--color-muted-foreground)"
+                      className="shrink-0 text-(--fg-muted)"
                     />
                     <span className="flex flex-col">
-                      <span className="text-sm font-medium text-(--color-foreground)">
+                      <span className="text-sm font-medium text-(--fg)">
                         {org.nome}
                       </span>
                       {org.cnpj && (
-                        <span className="text-xs text-(--color-muted-foreground)">
+                        <span className="text-xs text-(--fg-muted)">
                           {org.cnpj}
                         </span>
                       )}
@@ -152,7 +152,7 @@ export function InstituicaoForm() {
           )}
 
           {results.length === 0 && query.trim().length >= 2 && !searching && (
-            <p className="text-sm text-(--color-muted-foreground)">
+            <p className="text-sm text-(--fg-muted)">
               Nenhuma instituição encontrada. Você pode cadastrar uma nova.
             </p>
           )}
@@ -220,8 +220,8 @@ function ModeTab({
         "flex-1 rounded-[calc(var(--radius)-2px)] py-1.5 text-sm font-medium",
         "transition-all duration-(--transition-fast)",
         active
-          ? "bg-(--color-background) text-(--color-primary) shadow-(--shadow-xs)"
-          : "text-(--color-muted-foreground) hover:text-(--color-foreground)",
+          ? "bg-(--bg) text-(--hb-blue) shadow-(--shadow-xs)"
+          : "text-(--fg-muted) hover:text-(--fg)",
       ].join(" ")}
     >
       {children}

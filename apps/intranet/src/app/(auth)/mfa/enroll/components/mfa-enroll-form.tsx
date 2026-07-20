@@ -82,7 +82,7 @@ export function MfaEnrollForm({ returnTo }: MfaEnrollFormProps) {
 
   if (step === "loading") {
     return (
-      <p className="py-8 text-center text-sm text-(--color-muted-foreground)">
+      <p className="py-8 text-center text-sm text-(--fg-muted)">
         Preparando o código de ativação…
       </p>
     );
@@ -103,7 +103,7 @@ export function MfaEnrollForm({ returnTo }: MfaEnrollFormProps) {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col items-center gap-3">
-        <p className="text-sm text-(--color-muted-foreground)">
+        <p className="text-sm text-(--fg-muted)">
           Escaneie o código com um aplicativo autenticador (Google
           Authenticator, Authy, 1Password).
         </p>
@@ -113,14 +113,14 @@ export function MfaEnrollForm({ returnTo }: MfaEnrollFormProps) {
             alt="QR code para ativação da verificação em duas etapas"
             width={180}
             height={180}
-            className="rounded-(--radius) border border-(--color-border) p-2"
+            className="rounded-(--radius) border border-(--border) p-2"
           />
         )}
         <details className="w-full text-center">
-          <summary className="cursor-pointer text-xs text-(--color-muted-foreground)">
+          <summary className="cursor-pointer text-xs text-(--fg-muted)">
             Não consegue escanear? Insira manualmente
           </summary>
-          <code className="mt-2 block break-all rounded-(--radius) bg-(--color-muted) px-3 py-2 text-xs">
+          <code className="mt-2 block break-all rounded-(--radius) bg-(--surface-alt) px-3 py-2 text-xs">
             {secret}
           </code>
         </details>

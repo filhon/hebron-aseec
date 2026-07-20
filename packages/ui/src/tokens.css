@@ -229,37 +229,6 @@
   --impersonation-fg-muted: #ffb4b4; /* ajustado de #fca5a5 — 4.92:1 AA contra --impersonation-bg-mid */
   --impersonation-dot: #fca5a5;
   --impersonation-action-border: rgba(252, 165, 165, 0.5);
-
-  /* ══ DEPRECATED — remover após migração dos apps (P-1.12b) ═
-     Aliases de compatibilidade. Não usar em código novo.
-     Usar os tokens canônicos --hb-* e semânticos acima.    */
-  --color-primary: var(--hb-blue);
-  --color-primary-hover: var(--hb-blue-soft);
-  --color-primary-active: var(--hb-blue-deep);
-  --color-primary-muted: var(--brand-muted);
-  --color-primary-foreground: var(--brand-fg);
-  --color-accent: var(--hb-orange);
-  --color-accent-hover: var(--hb-orange-deep);
-  --color-accent-active: var(--hb-orange-deep);
-  --color-accent-muted: var(--hb-orange-muted);
-  --color-accent-foreground: var(--fg-invert);
-  --color-support-green: var(--hb-green);
-  --color-support-green-hover: var(--hb-green-deep);
-  --color-support-green-muted: var(--hb-green-muted);
-  --color-support-green-foreground: var(--hb-green-fg);
-  --color-support-sky: var(--hb-cyan);
-  --color-support-sky-hover: var(--hb-cyan-deep);
-  --color-support-sky-muted: var(--hb-cyan-muted);
-  --color-support-sky-foreground: var(--hb-cyan-fg);
-  --color-background: var(--bg);
-  --color-foreground: var(--fg);
-  --color-muted: var(--surface-alt);
-  --color-muted-foreground: var(--fg-muted);
-  --color-subtle: var(--hb-gray-100);
-  --color-border: var(--border);
-  --color-input-bg: var(--bg-alt);
-  --color-ring: var(--hb-blue);
-  --font-ui: var(--font-body);
 }
 
 /* ── RESET DE TIPOGRAFIA BASE ──────────────────────────────── */

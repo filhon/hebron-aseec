@@ -363,8 +363,8 @@ Criar o design system em `packages/ui` como fork customizado do shadcn/ui. Defin
 
 **Critérios de aceite:**
 
-- [x] Tokens de cor disponíveis como CSS variables (`--color-primary`, `--color-accent`, etc.)
-- [~] Tipografia **Parkinsans + Titillium Web** configuradas via `next/font` (correção e unificação final em P-0.2b)
+- [x] Tokens de cor disponíveis como CSS variables (vocabulário canônico `--hb-*` + semânticos: `--brand`, `--accent`, `--fg`, `--bg`, `--border`, etc.)
+- [x] Tipografia **Parkinsans + Titillium Web** configuradas via `next/font` (unificação final em P-0.2b, S-20; verificado nos 9 apps em P-0.2c)
 - [x] Componentes primitivos exportados e importáveis por qualquer app
 - [x] Visual consistente com identidade Hebron (não parece template shadcn vanilla)
 - [x] Responsivo (mobile-first)
@@ -446,6 +446,125 @@ Hoje existem **3 vocabulários de token desconectados** para as mesmas cores: `-
 
 **Notas:**
 Ref: BRAIN.md §5 (fonte única da verdade). Este prompt **não** mexe nos apps; a remoção do `admin.css` e dos hex inline do Admin é feita em **P-1.12b**. Não invente componentes novos — apenas migre tokens e mova estilos recorrentes para `packages/ui`.
+
+---
+
+### P-0.2c — Aposentadoria dos aliases DEPRECATED (CORRETIVO — critério de P-0.2b nunca fechado)
+
+**Fase:** 0
+**Módulo:** fundacao
+**Tipo:** ui
+**Pré-condições:**
+
+- Branch: `feat/P-0.2c-deprecated-aliases`
+- Dependências: P-0.2b e P-1.12b concluídos
+- Env vars: nenhuma
+- Skill: **invocar `/impeccable` antes de começar**
+
+**Problema que este prompt resolve (achado da auditoria de 2026-07-20):**
+O bloco de aliases criado em P-0.2b está marcado no código como `/* DEPRECATED — remover após migração dos apps (P-1.12b) */` (`packages/ui/src/tokens.css:233`). P-1.12b executou (S-22b), mas seu escopo real foi **apenas eliminar hex hardcoded** do Admin — a migração do vocabulário de tokens nunca aconteceu, em nenhum app. O bloco continua vivo e continua sendo consumido:
+
+- **228 ocorrências de aliases deprecated em 19 arquivos-fonte** (excluindo `.next/` e a própria definição em `tokens.css`): 11 em `apps/admin/src`, 8 em `apps/intranet/src`.
+- Distribuição: `--color-muted-foreground` (51), `--color-primary` (40), `--color-border` (36), `--color-foreground` (25), `--color-muted` (24), `--color-support-green` (12), `--color-background` (9), `--color-support-sky` (8), `--color-accent` (8), `--color-ring` (5), `--color-primary-foreground` (4), e 1 cada de `--font-ui`, `--color-subtle`, `--color-primary-hover`, `--color-primary-active`, `--color-accent-hover`.
+- O bloco declara **26 aliases**; parte deles (`--color-primary-muted`, `--color-accent-active`, `--color-accent-foreground`, `--color-support-*-hover/-muted/-foreground`, `--color-input-bg`) não tem **nenhum** consumidor — são alias mortos criados por simetria.
+
+O risco concreto: o design system tem dois vocabulários vivos para as mesmas cores há dois meses. Toda UI nova pode legitimamente escolher o vocabulário errado, porque o errado continua funcionando. É exatamente a condição que P-0.2b existiu para eliminar, e o critério de aceite que declara isso resolvido está marcado `[x]` sem estar.
+
+**Decisão de abordagem (confirmar com Filipe — regra G1):**
+
+1. Migrar os **19 arquivos** pela tabela de equivalência do P-0.2b (item 2), que já é a fonte da verdade do mapeamento. Substituição mecânica — nenhum valor computado muda, os aliases são `var()` diretos para os canônicos.
+2. Atenção à sintaxe Tailwind v4: usar `text-(--fg-muted)`, **não** `text-[--fg-muted]`. Ver o débito já registrado em memória sobre a forma de colchetes compilar para CSS inválido.
+3. Cuidado específico com a colisão `text-(--var)`: `text-(--algo)` compila para `color`. Nenhum alias desta migração é de tipografia exceto `--font-ui` → `--font-body`, que deve virar `font-(family-name:--font-body)` ou a classe utilitária apropriada — **não** `font-(--font-body)`.
+4. **Remover o bloco DEPRECATED inteiro** de `tokens.css` ao fim, incluindo os aliases mortos. Não manter "por segurança": o ponto do prompt é que só reste um vocabulário.
+5. Corrigir os dois critérios de aceite desatualizados do P-0.2 (ver escopo, item 4) — sem isso, P-0.2 volta a ficar falso assim que o bloco sai.
+
+**Escopo (siga na ordem):**
+
+1. **Migrar `apps/admin/src`** (11 arquivos): `app/(dashboard)/templates-email/page.tsx`, `components/audit-log-skeleton.tsx`, `components/dashboard-skeleton.tsx`, `components/designation-form.tsx`, `components/email-template-editor.tsx`, `components/invitation-form.tsx`, `components/meeting-form.tsx`, `components/role-assignment-form.tsx`, `components/role-badge.tsx`, `components/user-table-skeleton.tsx`, `components/user-table.tsx`.
+2. **Migrar `apps/intranet/src`** (8 arquivos): `app/(auth)/cadastro/components/cadastro-form.tsx`, `app/(auth)/cadastro/instituicao/components/instituicao-form.tsx`, `app/(auth)/cadastro/status/components/sign-out-link.tsx`, `app/(auth)/cadastro/status/page.tsx`, `app/(auth)/convite/page.tsx`, `app/(auth)/login/components/login-form.tsx`, `app/(auth)/mfa/enroll/components/mfa-enroll-form.tsx`, `components/auth-card.tsx`.
+3. **Remover o bloco DEPRECATED** de `packages/ui/src/tokens.css` (linhas 233–262 na versão auditada).
+4. **Corrigir os critérios do P-0.2 neste arquivo:** critério 1 nomeia `--color-primary`/`--color-accent`, tokens que este prompt revoga — reescrever para o vocabulário `--hb-*` + semânticos. Critério 2 está `[~]` remetendo a P-0.2b, que concluiu na S-20 e cujos 9 apps têm `next/font` com Parkinsans + Titillium verificados — passar para `[x]`.
+5. **Uniformizar o import de tokens** nos 9 `globals.css`: hoje todos usam `@import "../../../../packages/ui/src/tokens.css"`, ignorando o export `"./tokens.css"` declarado em `packages/ui/package.json` e documentado em `packages/ui/src/index.ts`. Trocar por `@import "@hebron/ui/tokens.css"` **somente se o build dos 9 apps continuar verde** — Tailwind v4 + PostCSS nem sempre resolve export subpath em `@import`. Se falhar, reverter para o caminho relativo e corrigir a documentação do `index.ts` para refletir a forma que de fato funciona, registrando a razão na SESSIONS.md.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/admin/src/**/*.tsx` (apenas troca de tokens)
+- `apps/intranet/src/**/*.tsx` (apenas troca de tokens)
+- `packages/ui/src/tokens.css` (remoção do bloco DEPRECATED)
+- `packages/ui/src/index.ts` (apenas o comentário de documentação do import, se o item 5 exigir)
+- `apps/*/src/app/globals.css` (apenas a linha do `@import` de tokens)
+- `PROMPTS.md` (apenas os critérios do P-0.2)
+- `SESSIONS.md`
+
+**Critérios de aceite:**
+
+- [x] `grep -rE '\-\-(color-primary|color-accent|color-support|color-background|color-foreground|color-muted|color-subtle|color-border|color-ring|font-ui)' apps/*/src packages/*/src` não retorna nada
+- [x] Bloco DEPRECATED removido de `tokens.css`; nenhum alias de compatibilidade restante
+- [x] Zero uso da forma `[--var]` introduzida na migração (só `(--var)`)
+- [x] Nenhum `text-(--font-*)` ou `text-(--text-*)` introduzido (colisão que compila para `color`)
+- [x] Critérios 1 e 2 do P-0.2 corrigidos neste arquivo (vocabulário canônico; `[~]` → `[x]`)
+- [x] `pnpm turbo build lint typecheck` verde; build segue 9/9
+- [x] Inspeção visual: telas de `apps/admin` e do fluxo de auth do `apps/intranet` inalteradas (a troca é de nome, não de valor)
+- [x] Registrar em SESSIONS.md
+
+**Notas:**
+A migração é mecânica mas **não** é find/replace cego: `--color-muted` mapeia para `--surface-alt` e `--color-muted-foreground` para `--fg-muted` — prefixos que se sobrepõem. Substituir do nome mais longo para o mais curto, ou usar limite de palavra.
+Não alargar o escopo para reescrever componentes, extrair classes novas para `patterns.css` ou ajustar layout. Se aparecer duplicação óbvia durante a migração, registrar como débito na SESSIONS.md — não resolver aqui.
+O `apps/admin/src/app/admin.css` já está limpo (só tokens canônicos, ~50 linhas) — não mexer.
+
+---
+
+### P-0.2d — Primitivos Drawer e Tooltip (CORRETIVO — débito aberto desde a S-3)
+
+**Fase:** 0
+**Módulo:** fundacao
+**Tipo:** ui
+**Pré-condições:**
+
+- Branch: `feat/P-0.2d-drawer-tooltip`
+- Dependências: P-0.2c concluído (para nascerem já com o vocabulário canônico)
+- Env vars: nenhuma
+- Skill: **invocar `/impeccable` antes de começar**
+
+**Problema que este prompt resolve (achado da auditoria de 2026-07-20):**
+O escopo do P-0.2 lista "Button, Input, Select, Dialog, **Drawer**, **Tooltip**, Toast, FormField". A S-3 registrou os dois como débito explícito — "não criados, não estavam na lista de arquivos permitidos" — e nenhum prompt posterior os reagendou. Dois meses depois:
+
+- **Tooltip existe, mas privado.** `packages/ui/src/components/navigation-sidebar.tsx:81` implementa `NavTooltip` sobre `@radix-ui/react-tooltip`, com estilo e comportamento próprios (`delayDuration={300}`, portal, arrow). Não é exportado. `@radix-ui/react-tooltip` está em `dependencies` do package servindo a **um** consumidor interno.
+- **Drawer não existe, e a necessidade sim.** `packages/ui/src/components/app-shell.tsx:202` implementa o drawer mobile inline: estado `mobileOpen`, overlay `fixed inset-0 z-(--z-overlay) bg-black/40 backdrop-blur-[2px]`, painel deslizante, trigger `Menu`. É um Drawer completo sem ser um componente.
+
+O risco concreto: qualquer app que precisar de tooltip ou de painel deslizante vai reimplementar — com outro delay, outro z-index, outro comportamento de foco e outro tratamento de `Escape`. É o mesmo padrão de divergência que P-0.2b teve que corrigir nos tokens, agora em comportamento em vez de cor.
+
+**Decisão de abordagem (confirmar com Filipe — regra G1):**
+
+1. **Extrair, não inventar.** `Tooltip` sai de `NavTooltip` e `Drawer` sai do bloco mobile do `AppShell`. O comportamento hoje em produção é a especificação — este prompt não é oportunidade de redesenhar.
+2. Refatorar `navigation-sidebar.tsx` e `app-shell.tsx` para **consumirem** os novos primitivos. Se a extração forçar mudança de aparência ou de comportamento, parar e perguntar: significa que a abstração está errada.
+3. `Drawer` sobre `@radix-ui/react-dialog` (já em `dependencies`, já consumido por `dialog.tsx`) com variante de posição — não adicionar `vaul` nem outra dependência nova.
+4. Acessibilidade não é opcional na extração: foco preso no painel aberto, `Escape` fecha, `aria-modal`, retorno do foco ao trigger. O Radix entrega isso; o ponto é não perder na extração.
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/ui/src/components/tooltip.tsx` (criar)
+- `packages/ui/src/components/drawer.tsx` (criar)
+- `packages/ui/src/components/navigation-sidebar.tsx` (consumir Tooltip)
+- `packages/ui/src/components/app-shell.tsx` (consumir Drawer)
+- `packages/ui/src/index.ts` (exportar)
+- `SESSIONS.md`
+
+**Critérios de aceite:**
+
+- [ ] `Tooltip` e `Drawer` exportados de `@hebron/ui` com seus tipos
+- [ ] `navigation-sidebar.tsx` não importa mais `@radix-ui/react-tooltip` diretamente
+- [ ] `app-shell.tsx` não gerencia mais overlay/painel mobile à mão
+- [ ] Comportamento inalterado: sidebar colapsada mostra tooltip com o mesmo delay; drawer mobile abre, fecha no overlay e no `Escape`
+- [ ] Foco preso no drawer aberto e devolvido ao trigger ao fechar
+- [ ] Tokens canônicos apenas (zero hex, zero alias deprecated)
+- [ ] `pnpm turbo build lint typecheck` verde; build segue 9/9
+- [ ] Débito da S-3 marcado como fechado na SESSIONS.md
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+Este prompt fecha o escopo declarado do P-0.2 — depois dele os 8 primitivos listados existem. Não adicionar primitivos fora dessa lista (Popover, Sheet, Accordion): se algum app precisar, vira prompt próprio.
+`bg-black/40` no overlay é o único valor não-tokenizado que atravessa a extração. Mantê-lo como está ou promovê-lo a token (`--overlay-scrim`) é decisão de Filipe — na dúvida, manter e registrar como débito.
 
 ---
 
