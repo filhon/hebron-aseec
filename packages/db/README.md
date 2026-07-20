@@ -4,28 +4,25 @@ Drizzle ORM schemas and custom SQL migration runner for the Hebron Aseec monorep
 
 ## Migration flow
 
-Migrations are **numbered SQL files** in `src/migrations/`. They are the single source of truth and are applied by a custom idempotent runner, not by `drizzle-kit migrate`.
+Migrations are **hand-numbered SQL files** in `src/migrations/` (`NNNN_<name>.sql`). They are the single source of truth and are applied by a custom idempotent runner, not by `drizzle-kit migrate`.
 
-### Why not `drizzle-kit migrate`?
+### `drizzle-kit generate`/`check`/`push` are retired
 
-Several migrations contain RLS policies, table partitions, `SECURITY DEFINER` functions, and other constructs that Drizzle Kit cannot generate or diff correctly. Keeping the _apply_ step as hand-authored SQL run by our own runner gives us full control over those constructs.
+This project **does not use** `drizzle-kit generate`, `drizzle-kit check`, or `drizzle-kit push`. They were tried early on (P-0.3b) and abandoned (P-0.3c): the `meta/` journal and snapshots they depend on drifted completely out of sync with the real numbered `.sql` files (wrong names, missing tags, snapshots frozen dozens of migrations behind), and several migrations contain RLS policies, table partitions, `SECURITY DEFINER` functions, and other constructs Drizzle Kit cannot generate or diff correctly. Running `generate` or `check` against this repo will diff against a stale/absent baseline and either report false drift or emit a colliding, duplicate migration file. **Do not run them.**
 
-That said, `drizzle-kit generate` **is** the starting point for authoring a migration (P-0.11) — it diffs `schema/index.ts` against `src/migrations/meta/` and scaffolds the plain-DDL part (tables, columns, enums, indexes it understands) as a new numbered SQL file. You then review and extend that file by hand for anything generate can't produce (RLS, partitions, functions), exactly as before.
+`drizzle-kit` remains a devDependency only for `db:studio` (schema browsing/type inference), which does not read `meta/` or `out`.
 
 ### Adding a new migration
 
-1. Change `schema/*.ts`, then run:
-   ```bash
-   pnpm --filter @hebron/db db:generate
-   ```
-   This creates `src/migrations/NNNN_<name>.sql` with the next number — **migrations are no longer numbered by hand**; whatever `drizzle-kit generate` assigns is the number. Pass `--name` to control the description (e.g. `db:generate --name add_flats_bookings`).
-2. Review the generated SQL. Add by hand whatever `generate` cannot produce: RLS policies, partitions, `SECURITY DEFINER` functions, `CREATE INDEX CONCURRENTLY`, `ALTER TYPE … ADD VALUE`, seed data, etc.
-3. Write idempotent SQL where possible (`IF NOT EXISTS`, `CREATE OR REPLACE`, `DO $$ BEGIN … EXCEPTION WHEN duplicate_object …`).
-4. If the file contains `ALTER TYPE … ADD VALUE`, add a comment noting it runs outside a transaction — the runner detects this automatically.
-5. **Never edit a migration that has already been applied.** Create a new one instead (`db:generate` again).
-6. Run `pnpm --filter @hebron/db db:migrate` to apply it.
+1. Change `schema/*.ts` to match the DDL you're about to write (keeps ORM types correct).
+2. Create `src/migrations/NNNN_<name>.sql` by hand, where `NNNN` is the highest existing number + 1 (check `src/migrations/` for the current max — next is `0060`).
+3. Author the SQL yourself: tables, columns, enums, indexes, RLS policies, partitions, `SECURITY DEFINER` functions, `ALTER TYPE … ADD VALUE`, seed data, etc.
+4. Write idempotent SQL where possible (`IF NOT EXISTS`, `CREATE OR REPLACE`, `DO $$ BEGIN … EXCEPTION WHEN duplicate_object …`).
+5. If the file contains `ALTER TYPE … ADD VALUE`, add a comment noting it runs outside a transaction — the runner detects this automatically.
+6. **Never edit a migration that has already been applied.** Create a new one instead, with the next number.
+7. Run `pnpm --filter @hebron/db db:migrate` to apply it.
 
-Run `pnpm --filter @hebron/db db:check` (`drizzle-kit check`) any time to confirm `schema/index.ts` and `src/migrations/meta/` haven't drifted apart — it should always report "Everything's fine" on a clean working tree, since `generate` is how meta gets updated in the first place.
+The drift guard is `src/__tests__/schema-parity.test.ts` (runs in CI via `pnpm turbo test`), **not** `db:check` — see below.
 
 ### Apply pending migrations
 
@@ -46,12 +43,10 @@ The command is **idempotent** — running it twice is safe.
 
 ### Other scripts
 
-| Script      | Purpose                                                                   |
-| ----------- | ------------------------------------------------------------------------- |
-| `db:check`  | Verify `schema/index.ts` and `src/migrations/meta/` haven't drifted apart |
-| `db:push`   | Push schema directly to the database (dev only, never in production)      |
-| `db:studio` | Open Drizzle Studio connected to `DATABASE_URL`                           |
-| `test`      | Run the schema parity test (see below) against `DATABASE_URL`             |
+| Script      | Purpose                                                       |
+| ----------- | ------------------------------------------------------------- |
+| `db:studio` | Open Drizzle Studio connected to `DATABASE_URL`               |
+| `test`      | Run the schema parity test (see below) against `DATABASE_URL` |
 
 ### Schema parity test
 

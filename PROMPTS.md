@@ -651,6 +651,63 @@ Cuidado: 0000–0003 **já foram aplicadas** no banco — o runner deve marcá-l
 
 ---
 
+### P-0.3c — Aposentar o caminho `drizzle-kit generate/check` (CORRETIVO — remover footgun de migrations)
+
+**Fase:** 0
+**Módulo:** fundacao
+**Tipo:** schema
+**Pré-condições:**
+
+- Branch: `feat/P-0.3c-drizzle-kit-retire`
+- Dependências: P-0.3b concluído; migrations 0000–0059 já aplicadas
+- Env vars: `DATABASE_URL`
+
+**Problema que este prompt resolve (contexto — débito registrado na S-165, 2026-07-18):**
+O P-0.3b (S-22) decidiu **preservar** os scripts `db:generate`, `db:check` e `db:push` e manter `out: "./src/migrations"` em `drizzle.config.ts` "para utilidade de dev". Na prática isso deixou o caminho `drizzle-kit` vivo em paralelo à fonte da verdade (os `.sql` numerados manuais), e os dois **divergiram por completo**:
+
+- `src/migrations/meta/_journal.json` tem **14 tags** (numeração 0014–0027) cujos nomes **não correspondem** aos arquivos reais com esses números (ex.: a tag `0015_tarefas` no journal vs. o arquivo real `0015_user_status.sql`; `0016_charming_korath` e `0023_cute_spiral` não existem como `.sql`; `0024_radio_rls` no journal vs. `0024_lgpd_audit_actions.sql` real).
+- Os snapshots (`meta/*_snapshot.json`) congelaram em `0027`; existem **68 arquivos `.sql`** numerados até `0059`.
+- O `README.md` (reescrito no P-0.11) **documenta um fluxo quebrado**: afirma que `db:generate` é o ponto de partida para autorar migrations e que `db:check` "should always report Everything's fine". Ambos são **falsos** no estado atual — `db:check` acusaria drift catastrófico e `db:generate` diffaria contra o snapshot obsoleto `0027`, reemitindo DDL já aplicado e atribuindo um número colidente. Seguir o README **corrompe** o conjunto de migrations. Confirmado ao vivo na S-165.
+
+O runner idempotente (`migrate.ts`) e o `schema-parity.test.ts` já são, na prática, o fluxo e o guarda-drift reais — mas a documentação e os scripts apontam para o caminho errado. Este prompt alinha ferramentas e documentação à realidade: **SQL numerado à mão = única fonte da verdade**, aposentando o caminho `drizzle-kit generate/check`.
+
+**Decisão de abordagem (confirmar com Filipe se houver dúvida — regra G1):**
+Abandonar o caminho `drizzle-kit generate/check` em vez de tentar reconciliar journal + 68 snapshots (fluxo frágil que nunca lidou bem com RLS/partições/funções `SECURITY DEFINER`):
+
+1. **`packages/db/package.json`** — remover os scripts `db:generate`, `db:check` e `db:push` (nenhum é referenciado em CI/turbo — verificado). Manter `db:migrate`, `db:seed*` e `db:studio` (Studio segue útil para inspeção e não depende de `out`/journal).
+2. **`packages/db/drizzle.config.ts`** — remover a chave `out: "./src/migrations"` (nada mais deve gravar ali automaticamente). Manter `schema: "./src/schema/index.ts"` e `dbCredentials` para type-inference do Drizzle ORM e para o `db:studio`.
+3. **`packages/db/src/migrations/meta/`** — remover o diretório inteiro (`_journal.json` + `*_snapshot.json`): é vestígio obsoleto, não é lido por `migrate.ts` nem pelo teste de paridade, e sua presença induz ao erro.
+4. **`packages/db/README.md`** — reescrever a seção "Migration flow" para refletir a realidade:
+   - Migrations são `NNNN_<nome>.sql` **numeradas à mão**, sendo `NNNN` = maior número existente + 1 (próximo: `0060`).
+   - Autorar o SQL manualmente (tabelas, colunas, enums, RLS, partições, funções, `ALTER TYPE … ADD VALUE`), preferindo idempotência (`IF NOT EXISTS`, `CREATE OR REPLACE`, blocos `DO $$ … EXCEPTION WHEN duplicate_object …`).
+   - **Nunca** usar `drizzle-kit generate`/`check`/`push` — o caminho foi aposentado; qualquer arquivo que ele gere colide com a numeração e reemite DDL aplicado.
+   - Nunca editar uma migration já aplicada; criar uma nova.
+   - O guarda-drift é o `schema-parity.test.ts` (roda em CI via `pnpm turbo test`), **não** `db:check`.
+   - Aplicar com `pnpm --filter @hebron/db db:migrate`.
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/db/package.json` (remover scripts `db:generate`, `db:check`, `db:push`)
+- `packages/db/drizzle.config.ts` (remover chave `out`)
+- `packages/db/src/migrations/meta/**` (remover diretório)
+- `packages/db/README.md` (reescrever seção de fluxo de migrations)
+
+**Critérios de aceite:**
+
+- [ ] `db:generate`, `db:check` e `db:push` removidos de `package.json`; `db:migrate`/`db:seed*`/`db:studio` preservados
+- [ ] `drizzle.config.ts` sem a chave `out`; `schema` e `dbCredentials` mantidos
+- [ ] `src/migrations/meta/` removido do repositório
+- [ ] `README.md` descreve numeração manual (`NNNN` = max+1), aposenta explicitamente `drizzle-kit generate/check/push`, e aponta `schema-parity.test.ts` como o guarda-drift
+- [ ] `pnpm --filter @hebron/db db:migrate` continua idempotente (rodar 2x não aplica nada)
+- [ ] `pnpm turbo typecheck` verde
+- [ ] `pnpm --filter @hebron/db test` (schema-parity) verde
+- [ ] Registrar em SESSIONS.md; atualizar a memória `project_drizzle_journal_drift.md` como RESOLVIDO
+
+**Notas:**
+Nenhum consumidor importa de `@hebron/db` raiz (todos usam subpaths: `/schema`, `/client`, `/audit`, etc.), então o stub `src/index.ts` (`export {}`) permanece intencional — não é débito. O `migrate.ts` já evoluiu além do P-0.3b (baseline + `STALE_IDS` + `ID_RENAMES` do P-0.7) e o débito de `no-non-null-assertion` naquele arquivo (nota da S-1.12b) já foi corrigido — nada a fazer nele. Este prompt é puramente de ferramentas/documentação: **não** cria nem altera migrations `.sql` nem toca no banco.
+
+---
+
 ### P-0.4 — Autenticação e SSO
 
 **Fase:** 0

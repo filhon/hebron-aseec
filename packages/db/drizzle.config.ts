@@ -18,7 +18,6 @@ export default defineConfig({
   // Barrel used for Drizzle ORM type inference and Studio only.
   // Migrations are SQL files applied by `pnpm --filter @hebron/db db:migrate`.
   schema: "./src/schema/index.ts",
-  out: "./src/migrations",
   dialect: "postgresql",
   dbCredentials: {
     url: process.env.DATABASE_URL,
