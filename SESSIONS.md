@@ -188,6 +188,7 @@
 | S-165  | 2026-07-19 | P-9.3 — Performance e Otimização                                                        | concluido                            |
 | S-166  | 2026-07-19 | P-9.4 — Copy Review (humanizar textos + citações bíblicas por contexto)                 | concluido                            |
 | S-167  | 2026-07-20 | P-0.1b — Restauração do Build e Uniformização da Config dos 9 Apps (CORRETIVO)          | concluido                            |
+| S-168  | 2026-07-20 | P-0.1c — `packages/config`: validação de env em runtime (CORRETIVO)                     | concluido                            |
 
 ---
 
@@ -13075,4 +13076,103 @@ não necessariamente reproduz.
 - `.nvmrc` (novo)
 - `.github/workflows/ci.yml`
 - `PROMPTS.md` (critério de P-0.1 restaurado)
+- `SESSIONS.md` (esta entrada + índice)
+
+## S-168 — P-0.1c — `packages/config`: validação de env em runtime (CORRETIVO)
+
+**Data:** 2026-07-20 · **Branch:** `feat/P-0.1c-env-validation` · **Tipo:** config
+
+### Contexto
+
+Corretivo aberto pela auditoria de 2026-07-20 sobre a decisão da S-1 nunca
+implementada: `packages/config/src/index.ts` era o stub `export {}` desde a
+S-2 (2026-05-22); `package.json` declarava o export `"./env":
+"./src/env.ts"` apontando para um arquivo inexistente; `@t3-oss/env-nextjs`
+instalado e nunca importado. 102 acessos crus a `process.env.*` em 54
+arquivos, nenhum validado. Ver detalhe completo do achado no prompt
+P-0.1c (`PROMPTS.md`).
+
+### Suposição registrada (G1) — conflito dentro do próprio prompt
+
+O corpo do prompt (item 4 de "Decisão de abordagem") pede para migrar os
+"pontos de borda que já quebram hoje" (clients Supabase, `DATABASE_URL`) —
+o que exigiria editar `packages/auth/src/client.ts`,
+`packages/db/src/client.ts`, `packages/db/src/system-actor.ts` e
+`packages/db/drizzle.config.ts`. Nenhum desses arquivos está na lista
+"Arquivos permitidos para criação/edição" do próprio prompt (só
+`packages/config/src/env.ts`, `src/index.ts`, `package.json`,
+`.env.example`, `SESSIONS.md`). Resolvido a favor da lista formal — mais
+restritiva e mecanicamente verificável — por G1 ("não crie/edite arquivos
+fora da lista permitida"): nenhum consumidor foi tocado. Confirma essa
+leitura o próprio critério de aceite do prompt, que pede o débito nominal
+de **102** call sites (contagem via grep batida exatamente: 102 ocorrências
+em 54 arquivos) — ou seja, o prompt já esperava que nenhum call site,
+incluindo os "pontos de borda", fosse migrado nesta sessão.
+
+### Implementação
+
+1. `packages/config/src/env.ts` (novo) — `createEnv` de `@t3-oss/env-nextjs`
+   com `server` (segredos: `DATABASE_URL`, `SUPABASE_URL`,
+   `SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`, `RESEND_API_KEY`, +
+   `NODE_ENV` como enum com default `"development"`) e `client` (`NEXT_PUBLIC_SUPABASE_URL`,
+   `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_APP_URL`,
+   `NEXT_PUBLIC_SITE_URL` obrigatórios; as 7 `NEXT_PUBLIC_<APP>_URL`
+   `.optional()` — nenhum dos 9 apps é forçado a declarar URL de app que não
+   consome). `runtimeEnv` lista cada var por dot-notation (`process.env.X`)
+   — obrigatório para o webpack inlinar as `NEXT_PUBLIC_*` no bundle de
+   cliente, mesmo padrão já usado em `packages/auth/src/client.ts`.
+   `emptyStringAsUndefined: true`.
+2. `packages/config/src/index.ts` — trocado o stub `export {}` por
+   `export { env } from "./env"`.
+3. `packages/config/package.json` — nenhuma mudança necessária; o export
+   `"./env": "./src/env.ts"` já existia (só apontava para arquivo
+   inexistente; passa a resolver).
+4. `.env.example` sincronizado com o inventário real das 17 variáveis:
+   adicionadas `NEXT_PUBLIC_APP_URL`, as 7 `NEXT_PUBLIC_<APP>_URL` (uma por
+   app, porta de dev de cada `package.json#scripts.dev`), `OPENAI_API_KEY`
+   e `NODE_ENV` (comentado como auto-definida pelo runtime, não precisa ser
+   setada manualmente). Vars pré-existentes fora do inventário de 17
+   (`IMPERSONATION_COOKIE_SECRET`, `INNGEST_*`, `R2_*`,
+   `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`) mantidas — são reais e usadas em
+   outros módulos (impersonation P-1.x, jobs P-0.14, radio P-8.8); fora do
+   escopo deste prompt remover ou revisar.
+
+### Débito nominal registrado
+
+**102 call sites `process.env.*` em 54 arquivos** seguem sem migrar para
+`@hebron/config/env` (nenhum app/package importa `env` ainda — só o módulo
+`packages/config` foi criado/corrigido). Lista de arquivos por ocorrência
+disponível via `rg 'process\.env\.[A-Z_]+' --glob '*.{ts,tsx}'` na raiz do
+monorepo. Migração fica para prompt(s) futuro(s) dedicado(s) — inclusive os
+"pontos de borda" citados no corpo deste prompt
+(`packages/auth/src/client.ts`, `packages/db/src/client.ts`,
+`packages/db/src/system-actor.ts`, `packages/db/drizzle.config.ts`), que
+não entraram na lista de arquivos permitidos desta sessão (ver suposição
+acima).
+
+Observação lateral (não é achado novo, só nota): existem hoje duas vars
+`NEXT_PUBLIC_APP_URL` e `NEXT_PUBLIC_SITE_URL` co-existindo com uso
+sobreposto (ambas referem a URL da intranet, em módulos diferentes) — não
+consolidado aqui, fora do escopo do prompt.
+
+### Critérios de aceite
+
+- [x] `import { env } from "@hebron/config/env"` resolve e tipa (verificado
+      via `tsc --noEmit` em `packages/config`; nenhum outro package importa
+      ainda, ver débito acima)
+- [x] Segredos declarados apenas em `server`; nenhum alcançável do bundle
+      de cliente
+- [x] Faltar uma variável obrigatória falha no boot com nome da variável
+      (comportamento nativo do `createEnv`/Zod — mensagem cita a chave)
+- [x] `NEXT_PUBLIC_<APP>_URL` opcionais
+- [x] `.env.example` cobre as 17 variáveis inventariadas
+- [x] `pnpm turbo lint typecheck` verde (38/38); `pnpm turbo build` 9/9
+- [x] Débito nominal registrado (102 call sites, 54 arquivos)
+- [x] Registrado em SESSIONS.md
+
+### Arquivos criados/alterados
+
+- `packages/config/src/env.ts` (novo)
+- `packages/config/src/index.ts`
+- `.env.example`
 - `SESSIONS.md` (esta entrada + índice)

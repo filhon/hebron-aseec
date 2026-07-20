@@ -319,14 +319,14 @@ O risco concreto: variável ausente ou vazia só aparece como falha em runtime, 
 
 **Critérios de aceite:**
 
-- [ ] `import { env } from "@hebron/config/env"` resolve e tipa (o export deixa de apontar para arquivo inexistente)
-- [ ] Segredos declarados apenas em `server`; nenhum segredo alcançável do bundle de cliente
-- [ ] Faltar uma variável obrigatória falha **no boot com nome da variável**, não no ponto de uso
-- [ ] `NEXT_PUBLIC_<APP>_URL` opcionais — nenhum app obrigado a declarar URL de app que não consome
-- [ ] `.env.example` cobre as 17 variáveis inventariadas
-- [ ] `pnpm turbo lint typecheck` verde; `pnpm turbo build` segue 9/9
-- [ ] Débito nominal registrado na SESSIONS.md: N call sites `process.env.*` ainda não migrados
-- [ ] Registrar em SESSIONS.md
+- [x] `import { env } from "@hebron/config/env"` resolve e tipa (o export deixa de apontar para arquivo inexistente)
+- [x] Segredos declarados apenas em `server`; nenhum segredo alcançável do bundle de cliente
+- [x] Faltar uma variável obrigatória falha **no boot com nome da variável**, não no ponto de uso
+- [x] `NEXT_PUBLIC_<APP>_URL` opcionais — nenhum app obrigado a declarar URL de app que não consome
+- [x] `.env.example` cobre as 17 variáveis inventariadas
+- [x] `pnpm turbo lint typecheck` verde; `pnpm turbo build` segue 9/9
+- [x] Débito nominal registrado na SESSIONS.md: **102** call sites `process.env.*` em 54 arquivos ainda não migrados (S-168) — inclui os "pontos de borda" citados na nota de abordagem acima, não migrados por não constarem na lista de arquivos permitidos (suposição registrada em SESSIONS.md, G1)
+- [x] Registrar em SESSIONS.md
 
 **Notas:**
 `@t3-oss/env-nextjs` valida no import — em RSC/Server Actions isso roda no boot do módulo, que é o comportamento desejado. Cuidado com `packages/db` e scripts de migration/seed, que rodam **fora** do Next (`tsx`): ali `createEnv` de `env-nextjs` pode reclamar de contexto; se acontecer, usar `@t3-oss/env-core` para o subconjunto server-only consumido por scripts, ou manter `process.env.DATABASE_URL` cru nesses runners e documentar a exceção.
