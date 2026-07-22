@@ -42,7 +42,18 @@ function getDoc(): MinimalDocument | undefined {
   return undefined;
 }
 
-function parseCookies(): Array<{ name: string; value: string }> {
+// Mirrors the `cookie` package's tryDecode: a single malformed `%` sequence
+// (e.g. from an unrelated third-party cookie on the same domain) must not
+// throw and take down the whole getAll() — it falls back to the raw value.
+function tryDecode(value: string): string {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+export function parseCookies(): Array<{ name: string; value: string }> {
   const doc = getDoc();
   if (!doc) return [];
   return doc.cookie
@@ -50,11 +61,13 @@ function parseCookies(): Array<{ name: string; value: string }> {
     .filter(Boolean)
     .map((c) => {
       const eqIdx = c.indexOf("=");
-      return { name: c.slice(0, eqIdx), value: c.slice(eqIdx + 1) };
+      const name = c.slice(0, eqIdx);
+      const value = c.slice(eqIdx + 1);
+      return { name: tryDecode(name), value: tryDecode(value) };
     });
 }
 
-function setCookie(
+export function setCookie(
   name: string,
   value: string,
   options: {

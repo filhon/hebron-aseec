@@ -23,7 +23,7 @@
 | 8    | Rádio      | P-8.1 a P-8.12  | P-8.1–8.5   | P-8.6–8.12  |
 | 9    | Polimento  | P-9.1 a P-9.5   | —           | —           |
 
-### Correções (S1-26 — cabeçalho antigo dizia "3 correções"; eram 4; hoje são 19 + 2 corretivos de Flats pendentes: P-7.1b, P-7.5b)
+### Correções (S1-26 — cabeçalho antigo dizia "3 correções"; eram 4; hoje são 19 + 3 corretivos pendentes: P-0.4b, P-7.1b, P-7.5b)
 
 Corpo integral no próprio arquivo (as 4 originais) ou em `AUDIT/04-prompts-pendentes.md` §4 (as 15 da auditoria de 2026-07 — convenção registrada em cada sessão de SESSIONS.md a partir de S-54; transcrever o texto para dentro deste arquivo é trabalho mecânico à parte, não feito em P-0.16 para não misturar prompts na mesma sessão).
 
@@ -48,6 +48,7 @@ Corpo integral no próprio arquivo (as 4 originais) ou em `AUDIT/04-prompts-pend
 | P-0.14    | Jobs: Inngest de verdade                                    | AUDIT/04-prompts-pendentes.md §4 | S-66     |
 | P-0.15    | packages/integrations + contrato de settings                | AUDIT/04-prompts-pendentes.md §4 | S-67     |
 | P-0.16    | Registro retroativo (este próprio corretivo)                | AUDIT/04-prompts-pendentes.md §4 | S-68     |
+| P-0.4b    | Auth: simetria de decode de cookie no browser client        | neste arquivo                    | pendente |
 | P-7.1b    | Flats: máximo de scoring em BRAIN §6.8 (80 → 75)            | neste arquivo                    | pendente |
 | P-7.5b    | Flats: fiação das telas do Bloco A para validação diretoria | neste arquivo                    | pendente |
 
@@ -694,14 +695,14 @@ Abandonar o caminho `drizzle-kit generate/check` em vez de tentar reconciliar jo
 
 **Critérios de aceite:**
 
-- [ ] `db:generate`, `db:check` e `db:push` removidos de `package.json`; `db:migrate`/`db:seed*`/`db:studio` preservados
-- [ ] `drizzle.config.ts` sem a chave `out`; `schema` e `dbCredentials` mantidos
-- [ ] `src/migrations/meta/` removido do repositório
-- [ ] `README.md` descreve numeração manual (`NNNN` = max+1), aposenta explicitamente `drizzle-kit generate/check/push`, e aponta `schema-parity.test.ts` como o guarda-drift
-- [ ] `pnpm --filter @hebron/db db:migrate` continua idempotente (rodar 2x não aplica nada)
-- [ ] `pnpm turbo typecheck` verde
-- [ ] `pnpm --filter @hebron/db test` (schema-parity) verde
-- [ ] Registrar em SESSIONS.md; atualizar a memória `project_drizzle_journal_drift.md` como RESOLVIDO
+- [x] `db:generate`, `db:check` e `db:push` removidos de `package.json`; `db:migrate`/`db:seed*`/`db:studio` preservados
+- [x] `drizzle.config.ts` sem a chave `out`; `schema` e `dbCredentials` mantidos
+- [x] `src/migrations/meta/` removido do repositório
+- [x] `README.md` descreve numeração manual (`NNNN` = max+1), aposenta explicitamente `drizzle-kit generate/check/push`, e aponta `schema-parity.test.ts` como o guarda-drift
+- [x] `pnpm --filter @hebron/db db:migrate` continua idempotente (rodar 2x não aplica nada)
+- [x] `pnpm turbo typecheck` verde
+- [x] `pnpm --filter @hebron/db test` (schema-parity) verde
+- [x] Registrar em SESSIONS.md; atualizar a memória `project_drizzle_journal_drift.md` como RESOLVIDO
 
 **Notas:**
 Nenhum consumidor importa de `@hebron/db` raiz (todos usam subpaths: `/schema`, `/client`, `/audit`, etc.), então o stub `src/index.ts` (`export {}`) permanece intencional — não é débito. O `migrate.ts` já evoluiu além do P-0.3b (baseline + `STALE_IDS` + `ID_RENAMES` do P-0.7) e o débito de `no-non-null-assertion` naquele arquivo (nota da S-1.12b) já foi corrigido — nada a fazer nele. Este prompt é puramente de ferramentas/documentação: **não** cria nem altera migrations `.sql` nem toca no banco.
@@ -746,6 +747,58 @@ Implementar autenticação via Supabase Auth no package `packages/auth`. Método
 
 **Notas:**
 Ref: BRAIN.md seção 3 (SSO cross-platform). Login canônico em `app.hebronaseec.com.br/login`. Em dev, cookies no localhost. Fluxo: detecta ausência de cookie → redirect login → Supabase grava cookies → redirect back.
+
+> ⚠️ **Auditoria 2026-07-22 (cruzamento S-5 × codebase):** dos 3 débitos da S-5, **D1** (exports `./mfa`) e **D3** (UI de enrollment MFA, entregue em P-1.26 — `/mfa/enroll`, `/mfa/challenge`) estão fechados, e o gap de fontes/tokens do `(auth)/layout.tsx` (nota da S-86) já foi sanado (Parkinsans + Titillium via `next/font` + `globals.css`). O **D2** gerou o corretivo **P-0.4b**: o lado servidor (Set-Cookie com domain no middleware) já existe, mas o browser client tem uma assimetria de codificação de cookie (codifica na escrita, não decodifica na leitura) dormente sob `base64url`. A verificação do domain SSO em produção permanece um débito operacional (só fecha em staging/produção).
+
+---
+
+### P-0.4b — Simetria de codificação de cookies no browser client (CORRETIVO — round-trip de cookie quebrado latente)
+
+**Fase:** 0
+**Módulo:** fundacao
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-0.4b-cookie-decode`
+- Dependências: P-0.4 concluído
+- Env vars: nenhuma (correção puramente de código)
+
+**Problema que este prompt resolve (contexto — cruzamento S-5 × codebase, auditoria 2026-07-22):**
+
+A S-5 registrou como débito **D2** que o domínio de cookie do browser client depende de um `document.cookie` customizado e que a alternativa mais robusta seria o servidor emitir `Set-Cookie` com domain. Esse lado já foi coberto: `apps/intranet/src/middleware.ts` hoje reescreve os cookies de sessão com `domain=.hebronaseec.com.br; secure; sameSite=lax` em produção. Mas ao cruzar `packages/auth/src/client.ts` com o comportamento real do `@supabase/ssr@0.5.2`, sobra um defeito latente na implementação inline de cookies:
+
+- `setCookie` grava o valor com `encodeURIComponent(value)` (`client.ts:69`).
+- `parseCookies` lê o valor com `c.slice(eqIdx + 1)` — **sem `decodeURIComponent`** (`client.ts:53`).
+
+O caminho padrão do `@supabase/ssr` (quando `cookies` não é sobrescrito) usa o pacote `cookie` via `parse`/`serialize`, que é **simétrico**: `serialize` codifica o valor com `encodeURIComponent`, `parse` decodifica com `decodeURIComponent`. Ao sobrescrever `getAll`/`setAll` com uma versão que codifica na escrita mas não decodifica na leitura, o valor não faz round-trip.
+
+Por que ainda não quebrou: `createBrowserClient` usa `cookieEncoding: "base64url"` por padrão, então os valores de token ficam no alfabeto URL-safe (`A–Za–z0–9-_`, prefixo `base64-`) — que `encodeURIComponent` não altera. O bug está **dormente, não ausente**: qualquer valor com caractere transformado por `encodeURIComponent` (mudança de encoding, cookie de sessão em formato "raw", conteúdo não-ASCII) é lido corrompido, e a sessão é descartada silenciosamente.
+
+**Decisão de abordagem (confirmar com Filipe se houver dúvida — regra G1):**
+
+Alinhar a leitura à escrita e ao comportamento de referência do `@supabase/ssr` (pacote `cookie`): valor codificado na escrita ⇒ decodificado na leitura; nome mantido cru (o `cookie` padrão não codifica nem decodifica o nome — os nomes do Supabase, `sb-<ref>-auth-token[.n]`, já são URL-safe).
+
+1. Em `parseCookies`, aplicar `decodeURIComponent` ao valor lido (e ao nome, mantendo simetria com o `encodeURIComponent(name)` da escrita).
+2. Decodificar de forma **segura**: `decodeURIComponent` lança `URIError` em sequência `%` malformada. Um cookie de terceiros no mesmo domínio (`.hebronaseec.com.br`) pode conter `%` não-codificado; sem proteção, um único cookie estranho derruba todo o `getAll` e desloga o usuário. Espelhar o `tryDecode` do pacote `cookie`: tentar decodificar e, em erro, cair no valor cru.
+3. Não alterar o lado de escrita nem a lógica de domain/SSO — apenas fechar a assimetria de leitura. **Não** introduzir dependência nova (não importar o pacote `cookie` diretamente; a implementação inline existe por decisão da S-5 de manter o package agnóstico de DOM).
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/auth/src/client.ts` (corrigir `parseCookies`)
+- `packages/auth/src/__tests__/client.test.ts` (criar — teste de round-trip)
+
+**Critérios de aceite:**
+
+- [x] `parseCookies` decodifica valor (e nome) com decode seguro (fallback ao valor cru em `URIError`)
+- [x] Round-trip `setCookie` → `parseCookies` preserva valores com caracteres que `encodeURIComponent` transforma (ex.: `{`, `"`, `=`, espaço, acento) — coberto por teste
+- [x] Cookie de terceiros com `%` malformado não lança nem esvazia o `getAll` — coberto por teste
+- [x] Nenhuma mudança no comportamento de domain/`secure`/`sameSite` da escrita
+- [x] `pnpm --filter @hebron/auth test` verde
+- [x] `pnpm turbo lint typecheck` verde
+- [x] Registrar em SESSIONS.md (o contrato de env vars não muda — memória `project_auth_env_vars` permanece válida)
+
+**Notas:**
+Ref: BRAIN.md §3 (SSO cross-platform). Os demais débitos da S-5 já estão fechados (ver a nota de auditoria em P-0.4). A verificação em produção do domain de cookie SSO permanece um débito **operacional** — só fecha com teste em staging/produção, fora do escopo de código deste prompt. Não alargar o escopo para reescrever a estratégia de cookie (ex.: mover 100% para `Set-Cookie` httpOnly no servidor): o browser client ainda precisa persistir a sessão logo após `signInWithPassword`, antes de qualquer round-trip pelo middleware.
 
 ---
 
