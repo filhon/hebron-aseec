@@ -22,7 +22,7 @@ export interface AppShellProps {
   sections: NavSection[];
   apps?: AppShortcut[];
   user: UserMenuUser;
-  profileHref: string;
+  profileHref?: string;
   onLogout: () => void;
   currentPath?: string;
   logo?: React.ReactNode;

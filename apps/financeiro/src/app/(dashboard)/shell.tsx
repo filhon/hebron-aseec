@@ -159,7 +159,6 @@ export default function FinanceiroShell({ user, children }: ShellProps) {
         name: user.fullName ?? user.email ?? "",
         email: user.email ?? "",
       }}
-      profileHref="/configuracoes"
       onLogout={() => void logoutAction()}
       currentPath={path}
       appName="Financeiro"

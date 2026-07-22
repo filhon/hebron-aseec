@@ -108,7 +108,6 @@ export default function HospedeShell({ user, children }: ShellProps) {
         name: user.fullName ?? user.email ?? "",
         email: user.email ?? "",
       }}
-      profileHref="/"
       onLogout={() => void logoutAction()}
       currentPath={path}
       appName="Flats"

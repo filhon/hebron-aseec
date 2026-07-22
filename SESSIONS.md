@@ -193,6 +193,7 @@
 | S-170  | 2026-07-20 | P-0.2d — Primitivos Drawer e Tooltip (CORRETIVO — fecha débito da S-3)                                            | concluido                            |
 | S-171  | 2026-07-20 | P-0.3c — Aposentar `drizzle-kit generate/check` (CORRETIVO — remove footgun de migrations)                        | concluido                            |
 | S-172  | 2026-07-22 | P-0.4b — Simetria de codificação de cookies no browser client (CORRETIVO — round-trip de cookie quebrado latente) | concluido                            |
+| S-173  | 2026-07-22 | P-0.5b — `profileHref` opcional e correção dos alvos de "Meu perfil" (CORRETIVO — links 404 no user menu)         | concluido                            |
 
 ---
 
@@ -13565,4 +13566,92 @@ S-5) permanece aberta, fora do escopo de código deste prompt.
 - `packages/auth/src/client.ts` (`parseCookies` corrigido + `tryDecode`;
   `parseCookies`/`setCookie` exportados para teste)
 - `packages/auth/src/__tests__/client.test.ts` (novo)
+- `SESSIONS.md` (esta entrada + índice)
+
+---
+
+## S-173 — P-0.5b — `profileHref` opcional e correção dos alvos de "Meu perfil" (CORRETIVO — links 404 no user menu)
+
+**Branch:** `feat/P-0.5b-profile-href`
+
+### Contexto
+
+Débito identificado em auditoria (2026-07-22, cruzamento S-6 × codebase):
+`AppShell`/`UserMenu` exigiam `profileHref` como prop obrigatória. Como
+nenhum app tinha página de perfil dedicada, cada shell inventou um alvo —
+6 dos 11 shells apontavam "Meu perfil" para rota inexistente (404) e 3
+apontavam para uma rota real mas que não é perfil (placeholder). O débito
+foi registrado na sessão de P-5.9 ("`/perfil` ainda não existe como
+página") e nunca fechado.
+
+### O que foi feito
+
+1. **`packages/ui/src/components/user-menu.tsx`** — `profileHref` passou
+   a opcional (`profileHref?: string`). Sem a prop, o item "Meu perfil" e
+   o `Separator` logo abaixo dele deixam de renderizar — o dropdown fica
+   só com o header de identidade (nome + email) e o item "Sair", sem
+   separador órfão.
+2. **`packages/ui/src/components/app-shell.tsx`** — `profileHref` repassado
+   como opcional (mesma assinatura), sem mudança de comportamento no
+   repasse para `UserMenu`.
+3. **Shells corrigidos:**
+   - `plataforma` `(aluno)`: `/perfil` → `/meus-dados` (página existe —
+     P-9.2, hub LGPD "Meus Dados" — e é o alvo mais próximo de "perfil"
+     disponível neste app).
+   - `admin` (`/configuracoes`) e `projetos` `(submissor)` (`/instituicao`):
+     mantidos sem alteração — já apontavam para destinos reais.
+   - **Prop `profileHref` removida** (item some do menu) em: `intranet`
+     `(dashboard)`, `plataforma` `instrutor`, `tarefas` `(dashboard)`,
+     `financeiro` `(dashboard)`, `projetos` `(diretoria)`, `radio` `admin`,
+     `flats` `(hospede)` e `flats` `admin` — nenhuma dessas rotas tem
+     página de perfil; item ausente é melhor que 404 ou alvo enganoso.
+
+### Verificação
+
+- Grep de `profileHref` no monorepo: os únicos 3 usos restantes
+  (`plataforma` aluno → `/meus-dados`, `projetos` submissor →
+  `/instituicao`, `admin` → `/configuracoes`) correspondem a `page.tsx`
+  reais nos respectivos apps (confirmado por listagem de arquivos).
+- `pnpm turbo lint typecheck` — 38/38 verde (monorepo completo).
+
+### Critérios de aceite
+
+- [x] `profileHref` opcional em `UserMenu` e `AppShell`; sem a prop, o
+      item "Meu perfil" não renderiza e o dropdown não exibe separador
+      órfão
+- [x] Nenhum shell passa `profileHref` para rota inexistente
+- [x] `plataforma` `(aluno)` aponta para `/meus-dados`; `admin` e
+      `projetos` `(submissor)` mantêm seus alvos atuais
+- [x] Dropdown continua navegável por teclado (Radix `DropdownMenu`
+      inalterado) e `aria-label="Menu do usuário"` no trigger permanece
+      quando só resta "Sair"
+- [x] `pnpm turbo lint typecheck` verde
+- [x] Registrado em SESSIONS.md
+
+### Nota
+
+Escopo mantido estritamente ao contrato `profileHref` e aos 9 shells
+listados no prompt — nenhuma página de perfil foi criada. O app
+`plataforma` (aluno) já tinha uma página `/meus-dados` (LGPD, P-9.2) que
+não constava na tabela de auditoria do prompt; o mesmo padrão `/meus-dados`
+existe também em `financeiro`, `tarefas`, `admin` e `projetos` (submissor)
+(mesmo commit P-9.2), mas o prompt instruiu omitir a prop nesses shells em
+vez de apontar para o hub LGPD — decisão do prompt seguida literalmente
+(regra G1), não uma suposição desta sessão. Quando o hub canônico de
+perfil existir na Intranet (BRAIN.md §3), os shells reintroduzem
+`profileHref` apontando para a URL do app canônico.
+
+### Arquivos criados/alterados
+
+- `packages/ui/src/components/user-menu.tsx`
+- `packages/ui/src/components/app-shell.tsx`
+- `apps/intranet/src/app/(dashboard)/shell.tsx`
+- `apps/plataforma/src/app/(aluno)/shell.tsx`
+- `apps/plataforma/src/app/instrutor/shell.tsx`
+- `apps/tarefas/src/app/(dashboard)/shell.tsx`
+- `apps/financeiro/src/app/(dashboard)/shell.tsx`
+- `apps/projetos/src/app/(diretoria)/shell.tsx`
+- `apps/radio/src/app/admin/shell.tsx`
+- `apps/flats/src/app/(hospede)/shell.tsx`
+- `apps/flats/src/app/admin/shell.tsx`
 - `SESSIONS.md` (esta entrada + índice)

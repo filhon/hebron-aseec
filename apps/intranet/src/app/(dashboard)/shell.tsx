@@ -141,7 +141,6 @@ export default function IntranetShell({ user, children }: IntranetShellProps) {
         name: user.fullName ?? user.email ?? "",
         email: user.email ?? "",
       }}
-      profileHref="/perfil"
       onLogout={() => void logoutAction()}
       currentPath={pathname}
       appName="Intranet"

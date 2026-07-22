@@ -42,7 +42,6 @@ export default function InstrutorShell({
         name: user.fullName ?? user.email ?? "",
         email: user.email ?? "",
       }}
-      profileHref="/perfil"
       onLogout={() => void logoutAction()}
       currentPath={pathname}
       appName="Plataforma — Instrutor"

@@ -59,7 +59,6 @@ export default function DiretoriaShell({ user, children }: Props) {
         name: user.fullName ?? user.email ?? "",
         email: user.email ?? "",
       }}
-      profileHref="/configuracoes"
       onLogout={() => void logoutAction()}
       currentPath={path}
       appName="Projetos"

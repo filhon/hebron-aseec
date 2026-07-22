@@ -44,7 +44,7 @@ export default function AlunoShell({ user, children }: AlunoShellProps) {
         name: user.fullName ?? user.email ?? "",
         email: user.email ?? "",
       }}
-      profileHref="/perfil"
+      profileHref="/meus-dados"
       onLogout={() => void logoutAction()}
       currentPath={pathname}
       appName="Plataforma"

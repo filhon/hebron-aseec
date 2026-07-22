@@ -87,7 +87,7 @@ export interface UserMenuUser {
 
 export interface UserMenuProps {
   user: UserMenuUser;
-  profileHref: string;
+  profileHref?: string;
   onLogout: () => void;
   className?: string;
 }
@@ -163,31 +163,35 @@ export function UserMenu({
             </p>
           </div>
 
-          <div className="py-1">
-            <DropdownMenuPrimitive.Item asChild>
-              <a
-                href={profileHref}
-                className={cn(
-                  "group mx-1 flex cursor-pointer items-center gap-2.5 rounded-(--radius-sm)",
-                  "px-2.5 py-2 text-sm text-(--fg) outline-hidden",
-                  "transition-colors duration-(--transition-fast)",
-                  "data-[highlighted]:bg-(--surface-alt) data-[highlighted]:text-(--brand)",
-                )}
-              >
-                <User
+          {profileHref && (
+            <div className="py-1">
+              <DropdownMenuPrimitive.Item asChild>
+                <a
+                  href={profileHref}
                   className={cn(
-                    "h-3.5 w-3.5 shrink-0 text-(--fg-muted)",
+                    "group mx-1 flex cursor-pointer items-center gap-2.5 rounded-(--radius-sm)",
+                    "px-2.5 py-2 text-sm text-(--fg) outline-hidden",
                     "transition-colors duration-(--transition-fast)",
-                    "group-data-[highlighted]:text-(--brand)",
+                    "data-[highlighted]:bg-(--surface-alt) data-[highlighted]:text-(--brand)",
                   )}
-                  aria-hidden="true"
-                />
-                Meu perfil
-              </a>
-            </DropdownMenuPrimitive.Item>
-          </div>
+                >
+                  <User
+                    className={cn(
+                      "h-3.5 w-3.5 shrink-0 text-(--fg-muted)",
+                      "transition-colors duration-(--transition-fast)",
+                      "group-data-[highlighted]:text-(--brand)",
+                    )}
+                    aria-hidden="true"
+                  />
+                  Meu perfil
+                </a>
+              </DropdownMenuPrimitive.Item>
+            </div>
+          )}
 
-          <DropdownMenuPrimitive.Separator className="mx-1 h-px bg-(--border)" />
+          {profileHref && (
+            <DropdownMenuPrimitive.Separator className="mx-1 h-px bg-(--border)" />
+          )}
 
           <div className="py-1">
             <DropdownMenuPrimitive.Item

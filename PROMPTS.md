@@ -840,6 +840,140 @@ Criar componentes de layout compartilhados em `packages/ui`: AppShell (sidebar +
 **Notas:**
 Ref: BRAIN.md seção 4 (Convenções — componentes compostos) e seção 5 (princípios visuais). Sidebar deve mostrar atalhos para outros apps do ecossistema (app launcher).
 
+> ⚠️ **Auditoria 2026-07-22 (cruzamento S-6 × codebase):** a S-6 fechou sem débitos e os 8 critérios de aceite seguem atendidos no código atual; os refinos posteriores (tokens canônicos em P-0.2b/S-20, citação bíblica opt-in no `EmptyState`, extração dos primitivos `Drawer`/`Tooltip`) já absorveram os pontos de manutenção do package. Dois gaps, porém, acumularam **nos consumidores** do AppShell: **(1)** `profileHref` é prop obrigatória e 6 dos 11 shells apontam "Meu perfil" para rota inexistente (404) — débito já registrado na sessão de P-5.9 ("`/perfil` ainda não existe como página — mesmo padrão dos outros apps") e nunca fechado → corretivo **P-0.5b**; **(2)** o app launcher (nota deste prompt) está copiado em 6 shells com drift real de ícones/ordem, e o shell do hóspede (papel externo) expõe atalhos para Admin/Financeiro enquanto aluno/submissor/instrutor não têm launcher algum → corretivo **P-0.5c** (inclui limpeza de API residual do `navigation-sidebar`). Observação fora do escopo destes corretivos: `NotificationBell`/`NotificationCenter` (P-0.6) seguem sem uso em nenhum app e o AppShell não tem slot de ações no header — débito de integração do P-0.6, a fechar quando o sistema de notificações for ligado de fato.
+
+---
+
+### P-0.5b — `profileHref` opcional e correção dos alvos de "Meu perfil" (CORRETIVO — links 404 no user menu)
+
+**Fase:** 0
+**Módulo:** fundacao
+**Tipo:** ui
+**Pré-condições:**
+
+- Branch: `feat/P-0.5b-profile-href`
+- Dependências: P-0.5 concluído
+- Env vars: nenhuma
+
+**Problema que este prompt resolve (contexto — cruzamento S-6 × codebase, auditoria 2026-07-22):**
+
+`AppShell`/`UserMenu` exigem `profileHref` como prop obrigatória. Como nenhum app tem página de perfil, cada shell inventou um alvo — e a maioria aponta para rota que não existe:
+
+| Shell                              | `profileHref`    | Rota existe?                            |
+| ---------------------------------- | ---------------- | --------------------------------------- |
+| `apps/intranet` `(dashboard)`      | `/perfil`        | ❌ 404                                  |
+| `apps/plataforma` `(aluno)`        | `/perfil`        | ❌ 404 (existe `/meus-dados`)           |
+| `apps/plataforma` `instrutor`      | `/perfil`        | ❌ 404                                  |
+| `apps/tarefas` `(dashboard)`       | `/configuracoes` | ❌ 404                                  |
+| `apps/financeiro` `(dashboard)`    | `/configuracoes` | ❌ 404                                  |
+| `apps/projetos` `(diretoria)`      | `/configuracoes` | ❌ 404                                  |
+| `apps/admin`                       | `/configuracoes` | ✅                                      |
+| `apps/projetos` `(submissor)`      | `/instituicao`   | ✅                                      |
+| `apps/radio` `admin`               | `/admin`         | ✅ (placeholder — home, não perfil)     |
+| `apps/flats` `(hospede)` e `admin` | `/`              | ✅ (placeholder — catálogo, não perfil) |
+
+Ou seja: 6 shells servem um item de menu que leva a 404, e 3 servem um item "Meu perfil" que leva a uma página que não é perfil. A raiz é a API: prop obrigatória força cada app a preencher algo mesmo sem ter destino real. O débito foi registrado na sessão de P-5.9 e nunca fechado.
+
+**Decisão de abordagem (confirmar com Filipe se houver dúvida — regra G1):**
+
+1. Em `user-menu.tsx`, tornar `profileHref` opcional (`profileHref?: string`). Sem a prop, o item "Meu perfil" **não é renderizado** — o dropdown fica com o header de identidade (nome + email) e o item "Sair". O separador entre seções só aparece quando há item acima dele.
+2. Em `app-shell.tsx`, repassar a prop como opcional (mesma assinatura).
+3. Nos shells, corrigir os alvos:
+   - `plataforma` `(aluno)`: `profileHref="/meus-dados"` (a página existe e é exatamente o perfil do aluno);
+   - `admin` (`/configuracoes`) e `projetos` `(submissor)` (`/instituicao`): manter — destinos reais;
+   - **todos os demais** (intranet, plataforma instrutor, tarefas, financeiro, projetos diretoria, radio, flats hóspede e flats admin): **omitir** a prop até existir página de perfil. Um item ausente é melhor que um item 404 ou enganoso (princípio "interfaces simples e claras").
+4. Não criar páginas de perfil neste patch — quando o hub canônico de perfil existir (intranet, BRAIN.md §3), os shells reintroduzem `profileHref` apontando para a URL do app canônico.
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/ui/src/components/user-menu.tsx`
+- `packages/ui/src/components/app-shell.tsx`
+- `apps/intranet/src/app/(dashboard)/shell.tsx`
+- `apps/plataforma/src/app/(aluno)/shell.tsx`
+- `apps/plataforma/src/app/instrutor/shell.tsx`
+- `apps/tarefas/src/app/(dashboard)/shell.tsx`
+- `apps/financeiro/src/app/(dashboard)/shell.tsx`
+- `apps/projetos/src/app/(diretoria)/shell.tsx`
+- `apps/radio/src/app/admin/shell.tsx`
+- `apps/flats/src/app/(hospede)/shell.tsx`
+- `apps/flats/src/app/admin/shell.tsx`
+- `SESSIONS.md`
+
+**Critérios de aceite:**
+
+- [x] `profileHref` opcional em `UserMenu` e `AppShell`; sem a prop, o item "Meu perfil" não renderiza e o dropdown não exibe separador órfão
+- [x] Nenhum shell passa `profileHref` para rota inexistente (verificado por grep: todo valor passado corresponde a `page.tsx` real no app)
+- [x] `plataforma` `(aluno)` aponta para `/meus-dados`; `admin` e `projetos` `(submissor)` mantêm seus alvos atuais
+- [x] Dropdown continua navegável por teclado e com `aria-label` quando só resta "Sair"
+- [x] `pnpm turbo lint typecheck` verde
+- [x] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: BRAIN.md §3 (login canônico/SSO) e §5 (simplicidade). Não alargar o escopo para criar a página de perfil — ela pertence ao módulo Intranet (hub canônico) e terá prompt próprio. `hideQuote` do `EmptyState` permanece deprecated-mas-funcional (15+ usos nos apps); removê-lo exigiria tocar arquivos fora do escopo — não fazer aqui.
+
+---
+
+### P-0.5c — App launcher canônico e higiene de API do sidebar (CORRETIVO — duplicação com drift + launcher exposto a papel externo)
+
+**Fase:** 0
+**Módulo:** fundacao
+**Tipo:** ui
+**Pré-condições:**
+
+- Branch: `feat/P-0.5c-app-launcher`
+- Dependências: P-0.5 concluído (P-0.5b recomendado antes, para evitar conflito nos mesmos shells)
+- Env vars: nenhuma
+
+**Problema que este prompt resolve (contexto — cruzamento S-6 × codebase, auditoria 2026-07-22):**
+
+A nota do P-0.5 pede que a sidebar mostre "atalhos para outros apps do ecossistema". Foi implementado via prop `apps`, mas cada shell mantém sua **cópia local** da lista — 6 cópias hardcoded (intranet, admin, financeiro, tarefas, radio admin, flats admin, flats hóspede) — e o drift já é observável:
+
+- **Ícones divergentes para o mesmo app:** Projetos é `FolderOpen` na intranet e `Briefcase` no flats; Financeiro é `DollarSign` na intranet e `BadgeDollarSign` no flats.
+- **Ordens diferentes** entre shells (intranet começa em Admin; admin começa em Financeiro).
+- **Inconsistência de papel:** o shell do **hóspede** (papel externo) exibe launcher completo com Admin e Financeiro — apps aos quais um hóspede jamais terá acesso — enquanto aluno (`plataforma`), submissor (`projetos`) e instrutor não têm launcher algum. O middleware de cada app bloqueia o acesso (defense in depth intacta), mas atalho para porta trancada viola o princípio "interfaces simples e claras".
+
+Aproveitando que `navigation-sidebar.tsx` será tocado, fechar também as sobras de API deixadas pela migração do collapse toggle para o `AppShell`:
+
+- `onCollapsedChange` é **obrigatório porém ignorado** (`_onCollapsedChange`) — força o drawer mobile a passar `() => undefined`;
+- `showCollapseToggle` está deprecated e **sem nenhum uso** nos apps (verificado por grep);
+- `AppShortcutTile` envolve o link em `NavTooltip collapsed={false}` — wrapper morto que nunca renderiza tooltip.
+
+**Decisão de abordagem (confirmar com Filipe se houver dúvida — regra G1):**
+
+1. Criar `packages/ui/src/components/ecosystem-apps.ts` com o catálogo canônico: `ECOSYSTEM_APPS` (os 9 apps, com `id`, `label`, `href` de produção e ícone Lucide canônicos, em ordem fixa) e helper `getAppShortcuts(currentAppId)` que devolve a lista sem o app atual. Exportar em `packages/ui/src/index.ts`.
+2. Substituir as listas locais dos shells **internos** (intranet, admin, financeiro, tarefas, radio admin, flats admin) pelo helper, apagando as cópias.
+3. **Remover** o launcher do shell do hóspede (`apps/flats/src/app/(hospede)/shell.tsx`) — alinhar ao padrão dos demais papéis externos (aluno/submissor/instrutor, que não recebem `apps`).
+4. Higiene de API em `navigation-sidebar.tsx`: remover `showCollapseToggle` e `onCollapsedChange` da interface (o colapso é controlado exclusivamente pelo `AppShell` via prop `collapsed`), ajustar `app-shell.tsx` nos dois pontos de uso e remover o wrapper `NavTooltip` morto do `AppShortcutTile`.
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/ui/src/components/ecosystem-apps.ts` (criar)
+- `packages/ui/src/components/navigation-sidebar.tsx`
+- `packages/ui/src/components/app-shell.tsx`
+- `packages/ui/src/index.ts`
+- `apps/intranet/src/app/(dashboard)/shell.tsx`
+- `apps/admin/src/components/admin-shell.tsx`
+- `apps/financeiro/src/app/(dashboard)/shell.tsx`
+- `apps/tarefas/src/app/(dashboard)/shell.tsx`
+- `apps/radio/src/app/admin/shell.tsx`
+- `apps/flats/src/app/admin/shell.tsx`
+- `apps/flats/src/app/(hospede)/shell.tsx`
+- `SESSIONS.md`
+
+**Critérios de aceite:**
+
+- [ ] `ECOSYSTEM_APPS` é a única definição de atalhos do ecossistema (verificado por grep: nenhum `const APPS: AppShortcut[]` restante nos apps)
+- [ ] Ícone e ordem idênticos para o mesmo app em todos os shells
+- [ ] Shell do hóspede sem launcher; shells de aluno/submissor/instrutor permanecem sem launcher
+- [ ] `NavigationSidebarProps` sem `showCollapseToggle`/`onCollapsedChange`; drawer mobile sem `() => undefined`
+- [ ] `AppShortcutTile` sem wrapper de tooltip morto
+- [ ] `pnpm turbo build` verde (garante que a remoção de props não quebrou nenhum consumidor)
+- [ ] `pnpm turbo lint typecheck` verde
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: BRAIN.md §5 (simplicidade; não parecer IA) e nota do P-0.5 (app launcher). As URLs de produção permanecem hardcoded — agora em **um único lugar**; parametrizar por env para dev local fica fora de escopo (registrar como débito na sessão se incomodar no dia a dia). Filtragem de launcher por papel mais fina que "interno × externo" (ex.: colaborador sem acesso ao Financeiro) não entra aqui: launcher é atalho, não gate — RBAC real continua no middleware + RLS de cada app. Não mexer na estratégia de colapso nem no drawer mobile além da assinatura de props.
+
 ---
 
 ### P-0.6 — Sistema de Notificações
