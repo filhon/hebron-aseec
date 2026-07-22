@@ -962,14 +962,14 @@ Aproveitando que `navigation-sidebar.tsx` será tocado, fechar também as sobras
 
 **Critérios de aceite:**
 
-- [ ] `ECOSYSTEM_APPS` é a única definição de atalhos do ecossistema (verificado por grep: nenhum `const APPS: AppShortcut[]` restante nos apps)
-- [ ] Ícone e ordem idênticos para o mesmo app em todos os shells
-- [ ] Shell do hóspede sem launcher; shells de aluno/submissor/instrutor permanecem sem launcher
-- [ ] `NavigationSidebarProps` sem `showCollapseToggle`/`onCollapsedChange`; drawer mobile sem `() => undefined`
-- [ ] `AppShortcutTile` sem wrapper de tooltip morto
-- [ ] `pnpm turbo build` verde (garante que a remoção de props não quebrou nenhum consumidor)
-- [ ] `pnpm turbo lint typecheck` verde
-- [ ] Registrar em SESSIONS.md
+- [x] `ECOSYSTEM_APPS` é a única definição de atalhos do ecossistema (verificado por grep: nenhum `const APPS: AppShortcut[]` restante nos apps)
+- [x] Ícone e ordem idênticos para o mesmo app em todos os shells
+- [x] Shell do hóspede sem launcher; shells de aluno/submissor/instrutor permanecem sem launcher
+- [x] `NavigationSidebarProps` sem `showCollapseToggle`/`onCollapsedChange`; drawer mobile sem `() => undefined`
+- [x] `AppShortcutTile` sem wrapper de tooltip morto
+- [x] `pnpm turbo build` verde (garante que a remoção de props não quebrou nenhum consumidor)
+- [x] `pnpm turbo lint typecheck` verde
+- [x] Registrar em SESSIONS.md
 
 **Notas:**
 Ref: BRAIN.md §5 (simplicidade; não parecer IA) e nota do P-0.5 (app launcher). As URLs de produção permanecem hardcoded — agora em **um único lugar**; parametrizar por env para dev local fica fora de escopo (registrar como débito na sessão se incomodar no dia a dia). Filtragem de launcher por papel mais fina que "interno × externo" (ex.: colaborador sem acesso ao Financeiro) não entra aqui: launcher é atalho, não gate — RBAC real continua no middleware + RLS de cada app. Não mexer na estratégia de colapso nem no drawer mobile além da assinatura de props.

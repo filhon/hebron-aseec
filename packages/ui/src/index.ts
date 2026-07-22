@@ -103,6 +103,8 @@ export type {
 export { PageHeader } from "./components/page-header";
 export type { PageHeaderProps, BreadcrumbItem } from "./components/page-header";
 
+export { ECOSYSTEM_APPS, getAppShortcuts } from "./components/ecosystem-apps";
+
 export { BrandMark } from "./components/brand-mark";
 export type { BrandMarkProps } from "./components/brand-mark";
 

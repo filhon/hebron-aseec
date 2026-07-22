@@ -151,7 +151,6 @@ function MobileSidebar({
           sections={sections}
           apps={apps}
           collapsed={false}
-          onCollapsedChange={() => undefined}
           currentPath={currentPath}
           onNavItemClick={() => onOpenChange(false)}
           LinkComponent={LinkComponent}
@@ -233,7 +232,6 @@ export function AppShell({
           sections={sections}
           apps={apps}
           collapsed={desktopCollapsed}
-          onCollapsedChange={setDesktopCollapsed}
           currentPath={currentPath}
           LinkComponent={LinkComponent}
           dark={sidebarDark}

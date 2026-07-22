@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { AppShell, type NavSection, type AppShortcut } from "@hebron/ui";
+import { AppShell, getAppShortcuts, type NavSection } from "@hebron/ui";
 import {
   LayoutDashboard,
   Users,
@@ -9,13 +9,6 @@ import {
   CalendarDays,
   ClipboardList,
   Settings,
-  DollarSign,
-  FolderOpen,
-  Home,
-  BookOpen,
-  Radio,
-  Folder,
-  CheckCircle,
 } from "lucide-react";
 
 /** White rounded mark — the "HA" sigla used as the Admin icon mark. */
@@ -43,51 +36,6 @@ function AdminMark() {
     </span>
   );
 }
-
-const APPS: AppShortcut[] = [
-  {
-    id: "financeiro",
-    label: "Financeiro",
-    href: "https://financeiro.hebronaseec.com.br",
-    icon: DollarSign,
-  },
-  {
-    id: "projetos",
-    label: "Projetos",
-    href: "https://projetos.hebronaseec.com.br",
-    icon: FolderOpen,
-  },
-  {
-    id: "intranet",
-    label: "Intranet",
-    href: "https://app.hebronaseec.com.br",
-    icon: Home,
-  },
-  {
-    id: "plataforma",
-    label: "Plataforma",
-    href: "https://plataforma.hebronaseec.com.br",
-    icon: BookOpen,
-  },
-  {
-    id: "radio",
-    label: "Rádio",
-    href: "https://radio.hebronaseec.com.br",
-    icon: Radio,
-  },
-  {
-    id: "documentos",
-    label: "Documentos",
-    href: "https://docs.hebronaseec.com.br",
-    icon: Folder,
-  },
-  {
-    id: "tarefas",
-    label: "Tarefas",
-    href: "https://tarefas.hebronaseec.com.br",
-    icon: CheckCircle,
-  },
-];
 
 type Props = {
   children: React.ReactNode;
@@ -151,7 +99,7 @@ export function AdminShell({
   return (
     <AppShell
       sections={sections}
-      apps={APPS}
+      apps={getAppShortcuts("admin")}
       user={{
         name: "Filipe Honório",
         email: "fcbfilipesantos@gmail.com",

@@ -48,10 +48,7 @@ export interface NavigationSidebarProps {
   sections: NavSection[];
   apps?: AppShortcut[];
   collapsed: boolean;
-  onCollapsedChange: (collapsed: boolean) => void;
   currentPath?: string;
-  /** @deprecated collapse toggle moved to AppShell brand row */
-  showCollapseToggle?: boolean;
   onNavItemClick?: () => void;
   LinkComponent?: LinkComponent;
   className?: string;
@@ -210,32 +207,30 @@ function AppShortcutTile({
   const Icon = app.icon;
 
   return (
-    <NavTooltip label={app.label} collapsed={false}>
-      <Link
-        href={app.href}
-        aria-label={app.label}
-        className={cn(
-          "group flex flex-col items-center gap-1 rounded-(--radius-xs) p-2",
-          "transition-colors duration-(--transition-fast)",
-          "focus-visible:outline-none focus-visible:ring-2",
-          dark
-            ? "focus-visible:ring-(--fg-invert)"
-            : "focus-visible:ring-(--brand)",
-          app.active
-            ? dark
-              ? "bg-white/15 text-(--fg-invert)"
-              : "bg-(--brand-muted) text-(--brand)"
-            : dark
-              ? "text-(--fg-invert-muted) hover:bg-white/10 hover:text-(--fg-invert)"
-              : "text-(--fg-muted) hover:bg-(--surface-alt) hover:text-(--fg)",
-        )}
-      >
-        <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
-        <span className="w-full truncate text-center text-xs leading-none">
-          {app.label}
-        </span>
-      </Link>
-    </NavTooltip>
+    <Link
+      href={app.href}
+      aria-label={app.label}
+      className={cn(
+        "group flex flex-col items-center gap-1 rounded-(--radius-xs) p-2",
+        "transition-colors duration-(--transition-fast)",
+        "focus-visible:outline-none focus-visible:ring-2",
+        dark
+          ? "focus-visible:ring-(--fg-invert)"
+          : "focus-visible:ring-(--brand)",
+        app.active
+          ? dark
+            ? "bg-white/15 text-(--fg-invert)"
+            : "bg-(--brand-muted) text-(--brand)"
+          : dark
+            ? "text-(--fg-invert-muted) hover:bg-white/10 hover:text-(--fg-invert)"
+            : "text-(--fg-muted) hover:bg-(--surface-alt) hover:text-(--fg)",
+      )}
+    >
+      <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+      <span className="w-full truncate text-center text-xs leading-none">
+        {app.label}
+      </span>
+    </Link>
   );
 }
 
@@ -243,7 +238,6 @@ export function NavigationSidebar({
   sections,
   apps,
   collapsed,
-  onCollapsedChange: _onCollapsedChange,
   currentPath = "",
   onNavItemClick,
   LinkComponent = DefaultLink,
