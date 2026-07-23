@@ -103,7 +103,11 @@ export type {
 export { PageHeader } from "./components/page-header";
 export type { PageHeaderProps, BreadcrumbItem } from "./components/page-header";
 
-export { ECOSYSTEM_APPS, getAppShortcuts } from "./components/ecosystem-apps";
+export {
+  ECOSYSTEM_APPS,
+  getAppShortcuts,
+  resolveNotificationHref,
+} from "./components/ecosystem-apps";
 
 export { BrandMark } from "./components/brand-mark";
 export type { BrandMarkProps } from "./components/brand-mark";
@@ -138,6 +142,18 @@ export type {
 
 export { NotificationCenter } from "./components/notification-center";
 export type { NotificationCenterProps } from "./components/notification-center";
+
+export { NotificationBellContainer } from "./components/notification-bell-container";
+export type {
+  NotificationBellContainerProps,
+  NotificationBellListResult,
+} from "./components/notification-bell-container";
+
+export { NotificationCenterContainer } from "./components/notification-center-container";
+export type {
+  NotificationCenterContainerProps,
+  NotificationCenterListResult,
+} from "./components/notification-center-container";
 
 // LGPD — superfície de titular (P-9.2)
 export { MyDataPage } from "./components/my-data-page";

@@ -42,7 +42,7 @@ export async function notifyInvitationAccepted(
       type: "invitation.accepted",
       title: "Convite aceito",
       body: `${inviteeEmail} aceitou o convite e já tem acesso à plataforma.`,
-      payload: { inviteeEmail },
+      payload: { module: "intranet", inviteeEmail },
     },
   });
 }
@@ -74,7 +74,7 @@ export async function notifySignupPendingReview(
           type: "user.signup_requested",
           title: "Novo cadastro aguardando aprovação",
           body: `${userName} (${userEmail}) solicitou acesso vinculado a ${organizationName}.`,
-          payload: { userEmail, organizationName },
+          payload: { module: "intranet", userEmail, organizationName },
         },
       }),
     ),
@@ -125,7 +125,11 @@ export async function notifyUrgentAnnouncement(announcement: {
           type: "announcement.urgent",
           title: announcement.title,
           body: announcement.body,
-          payload: { announcementId: announcement.id, href: "/anuncios" },
+          payload: {
+            module: "intranet",
+            announcementId: announcement.id,
+            href: "/anuncios",
+          },
         },
         email: {
           to: recipient.email,
@@ -170,7 +174,11 @@ export async function notifyMeetingDecisionCreated(decision: {
           type: "meeting_decision.created",
           title: "Nova decisão de reunião registrada",
           body: decision.description,
-          payload: { meetingDecisionId: decision.id, href: "/reunioes" },
+          payload: {
+            module: "intranet",
+            meetingDecisionId: decision.id,
+            href: "/reunioes",
+          },
         },
       }),
     ),

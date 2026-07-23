@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Home,
   LayoutDashboard,
@@ -10,8 +10,18 @@ import {
   Handshake,
   Search,
 } from "lucide-react";
-import { AppShell, getAppShortcuts, type NavSection } from "@hebron/ui";
+import {
+  AppShell,
+  getAppShortcuts,
+  NotificationBellContainer,
+  type NavSection,
+} from "@hebron/ui";
 import { logoutAction } from "../../actions/auth";
+import {
+  listBellNotifications,
+  markNotificationReadAction,
+  markAllNotificationsReadAction,
+} from "../../actions/notifications";
 import type { AuthUser } from "../../lib/queries";
 
 const SECTIONS: NavSection[] = [
@@ -73,6 +83,7 @@ export interface IntranetShellProps {
 
 export default function IntranetShell({ user, children }: IntranetShellProps) {
   const pathname = usePathname();
+  const router = useRouter();
 
   return (
     <AppShell
@@ -92,6 +103,26 @@ export default function IntranetShell({ user, children }: IntranetShellProps) {
         />
       }
       sidebarDark
+      headerActions={
+        <NotificationBellContainer
+          currentAppId="intranet"
+          centerHref="/notificacoes"
+          listNotifications={async () => {
+            const result = await listBellNotifications({});
+            if (!result?.data) {
+              throw new Error("Falha ao carregar notificações");
+            }
+            return result.data;
+          }}
+          markRead={async (id) => {
+            await markNotificationReadAction({ id });
+          }}
+          markAllRead={async () => {
+            await markAllNotificationsReadAction({});
+          }}
+          navigate={(href) => router.push(href)}
+        />
+      }
     >
       {children}
     </AppShell>

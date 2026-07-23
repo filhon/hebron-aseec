@@ -23,34 +23,38 @@
 | 8    | Rádio      | P-8.1 a P-8.12  | P-8.1–8.5   | P-8.6–8.12  |
 | 9    | Polimento  | P-9.1 a P-9.5   | —           | —           |
 
-### Correções (S1-26 — cabeçalho antigo dizia "3 correções"; eram 4; hoje são 19 + 3 corretivos pendentes: P-0.4b, P-7.1b, P-7.5b)
+### Correções (S1-26 — cabeçalho antigo dizia "3 correções"; eram 4; hoje são 20 + 6 corretivos pendentes: P-0.4b, P-0.6c, P-0.6d, P-0.6e, P-7.1b, P-7.5b)
 
 Corpo integral no próprio arquivo (as 4 originais) ou em `AUDIT/04-prompts-pendentes.md` §4 (as 15 da auditoria de 2026-07 — convenção registrada em cada sessão de SESSIONS.md a partir de S-54; transcrever o texto para dentro deste arquivo é trabalho mecânico à parte, não feito em P-0.16 para não misturar prompts na mesma sessão).
 
-| Corretivo | Motivo                                                      | Corpo do prompt                  | Sessão   |
-| --------- | ----------------------------------------------------------- | -------------------------------- | -------- |
-| P-0.2b    | Unificação do design system (tokens `--hb-*`)               | neste arquivo                    | S-20     |
-| P-0.3b    | Pipeline de migrations                                      | neste arquivo                    | S-22     |
-| P-1.12b   | Reconciliação do Admin ao design system unificado           | neste arquivo                    | S-22b¹   |
-| P-2.9b    | Usuário real no header de Projetos                          | neste arquivo                    | S-44     |
-| P-0.7     | Resgate do banco (partições, enum de audit, 0000 duplicada) | AUDIT/04-prompts-pendentes.md §4 | S-54     |
-| P-0.8     | Kit de backend compartilhado (sessão/audit/notificações)    | AUDIT/04-prompts-pendentes.md §4 | S-55     |
-| P-0.9     | CI mínimo                                                   | AUDIT/04-prompts-pendentes.md §4 | S-56     |
-| P-0.10    | Decisão B: RLS ativa (grants + policies + adoção)           | AUDIT/04-prompts-pendentes.md §4 | S-57     |
-| P-0.11    | drizzle-kit reconciliado                                    | AUDIT/04-prompts-pendentes.md §4 | S-58     |
-| P-1.25    | Admin: leitura protegida e fiação completa                  | AUDIT/04-prompts-pendentes.md §4 | S-59     |
-| P-1.26    | Onboarding: convite, auto-signup e MFA bloqueante           | AUDIT/04-prompts-pendentes.md §4 | S-60     |
-| P-1.27    | Documentos: visibilidade e área editorial verdadeiras       | AUDIT/04-prompts-pendentes.md §4 | S-61     |
-| P-2.9c    | Projetos: operável de ponta a ponta                         | AUDIT/04-prompts-pendentes.md §4 | S-62     |
-| P-3.8b    | Financeiro: governança e conciliação verdadeiras            | AUDIT/04-prompts-pendentes.md §4 | S-63     |
-| P-0.12    | Storage: buckets e policies                                 | AUDIT/04-prompts-pendentes.md §4 | S-64     |
-| P-0.13    | LGPD: fundação                                              | AUDIT/04-prompts-pendentes.md §4 | S-65     |
-| P-0.14    | Jobs: Inngest de verdade                                    | AUDIT/04-prompts-pendentes.md §4 | S-66     |
-| P-0.15    | packages/integrations + contrato de settings                | AUDIT/04-prompts-pendentes.md §4 | S-67     |
-| P-0.16    | Registro retroativo (este próprio corretivo)                | AUDIT/04-prompts-pendentes.md §4 | S-68     |
-| P-0.4b    | Auth: simetria de decode de cookie no browser client        | neste arquivo                    | pendente |
-| P-7.1b    | Flats: máximo de scoring em BRAIN §6.8 (80 → 75)            | neste arquivo                    | pendente |
-| P-7.5b    | Flats: fiação das telas do Bloco A para validação diretoria | neste arquivo                    | pendente |
+| Corretivo | Motivo                                                       | Corpo do prompt                  | Sessão   |
+| --------- | ------------------------------------------------------------ | -------------------------------- | -------- |
+| P-0.2b    | Unificação do design system (tokens `--hb-*`)                | neste arquivo                    | S-20     |
+| P-0.3b    | Pipeline de migrations                                       | neste arquivo                    | S-22     |
+| P-1.12b   | Reconciliação do Admin ao design system unificado            | neste arquivo                    | S-22b¹   |
+| P-2.9b    | Usuário real no header de Projetos                           | neste arquivo                    | S-44     |
+| P-0.7     | Resgate do banco (partições, enum de audit, 0000 duplicada)  | AUDIT/04-prompts-pendentes.md §4 | S-54     |
+| P-0.8     | Kit de backend compartilhado (sessão/audit/notificações)     | AUDIT/04-prompts-pendentes.md §4 | S-55     |
+| P-0.9     | CI mínimo                                                    | AUDIT/04-prompts-pendentes.md §4 | S-56     |
+| P-0.10    | Decisão B: RLS ativa (grants + policies + adoção)            | AUDIT/04-prompts-pendentes.md §4 | S-57     |
+| P-0.11    | drizzle-kit reconciliado                                     | AUDIT/04-prompts-pendentes.md §4 | S-58     |
+| P-1.25    | Admin: leitura protegida e fiação completa                   | AUDIT/04-prompts-pendentes.md §4 | S-59     |
+| P-1.26    | Onboarding: convite, auto-signup e MFA bloqueante            | AUDIT/04-prompts-pendentes.md §4 | S-60     |
+| P-1.27    | Documentos: visibilidade e área editorial verdadeiras        | AUDIT/04-prompts-pendentes.md §4 | S-61     |
+| P-2.9c    | Projetos: operável de ponta a ponta                          | AUDIT/04-prompts-pendentes.md §4 | S-62     |
+| P-3.8b    | Financeiro: governança e conciliação verdadeiras             | AUDIT/04-prompts-pendentes.md §4 | S-63     |
+| P-0.12    | Storage: buckets e policies                                  | AUDIT/04-prompts-pendentes.md §4 | S-64     |
+| P-0.13    | LGPD: fundação                                               | AUDIT/04-prompts-pendentes.md §4 | S-65     |
+| P-0.14    | Jobs: Inngest de verdade                                     | AUDIT/04-prompts-pendentes.md §4 | S-66     |
+| P-0.15    | packages/integrations + contrato de settings                 | AUDIT/04-prompts-pendentes.md §4 | S-67     |
+| P-0.16    | Registro retroativo (este próprio corretivo)                 | AUDIT/04-prompts-pendentes.md §4 | S-68     |
+| P-0.4b    | Auth: simetria de decode de cookie no browser client         | neste arquivo                    | pendente |
+| P-0.6b    | Notificações in_app operáveis: slot no AppShell + piloto     | neste arquivo                    | S-175    |
+| P-0.6c    | Notificações in_app: rollout do sino/central aos demais apps | neste arquivo                    | pendente |
+| P-0.6d    | Client Drizzle tipado (remoção do stub de notifications)     | neste arquivo                    | pendente |
+| P-0.6e    | Emails: tipografia institucional (remover Inter)             | neste arquivo                    | pendente |
+| P-7.1b    | Flats: máximo de scoring em BRAIN §6.8 (80 → 75)             | neste arquivo                    | pendente |
+| P-7.5b    | Flats: fiação das telas do Bloco A para validação diretoria  | neste arquivo                    | pendente |
 
 ¹ Sessão referenciada retroativamente como S-22b em SESSIONS.md S-68 (ponto 2 da entrada retificadora) — o bloco original nunca recebeu número.
 
@@ -1013,6 +1017,195 @@ Implementar sistema de notificações base. Tabela `public.notifications` com ca
 
 **Notas:**
 Ref: BRAIN.md seção 9 (checklists). v1 usa apenas in_app + email. Push e SMS removidos. Preferências de notificação por usuário serão implementadas no Admin (fase 1).
+
+> ⚠️ **Auditoria 2026-07-22 (cruzamento S-7 × codebase):** dos 3 débitos registrados na S-7, dois foram fechados por corretivos posteriores (`drizzle.config.ts` → barrel em P-0.11; templates concretos de email → blocos B, P-X.10) e um **nunca foi liquidado**: `packages/db/src/client.ts:3` segue importando `./schema/public` (confirmado em F2-F2) — o `db` singleton é tipado com o **stub** de notifications (sem `channel`/`type`/`payload`/`sent_at`) e cego aos demais schemas → corretivo **P-0.6d**. A ressalva de RLS do audit (F2-F1, `notifications_insert_service` sem `TO service_role`) foi fechada nas migrations 0014/0055; a triplicação de helpers foi consolidada em P-0.8 (`makeNotificationInserter`). O gap maior está no lado **in_app**: os critérios "sino com badge", "central com filtros" e "clique marca como lida e navega" valem apenas como componentes — `NotificationBell`/`NotificationCenter` **não são renderizados por nenhum dos 9 apps** (grep: zero usos), o AppShell não tem slot de ações no header e não existe página `/notificacoes` em app algum (P-5.3 listou "Notificações centralizadas" no escopo mas a rota nunca esteve nos arquivos permitidos). Todos os módulos gravam notificações in_app que o usuário não tem como ver; os payloads usam `href` relativo ao app de origem (ex.: `/tarefa/${id}` em tarefas), o que quebraria navegação cross-app → corretivos **P-0.6b** (infra + piloto intranet) e **P-0.6c** (rollout). Fora isso, `EmailLayout` usa Inter — proibida pela identidade visual → corretivo **P-0.6e**.
+
+---
+
+### P-0.6b — Notificações in_app operáveis: slot no AppShell + piloto na intranet (CORRETIVO — bell/central nunca fiados)
+
+**Fase:** 0
+**Módulo:** fundacao
+**Tipo:** fullstack
+**Pré-condições:**
+
+- Branch: `feat/P-0.6b-notifications-wiring`
+- Dependências: P-0.6, P-0.8 (kit `@hebron/auth`), P-0.10 (RLS ativa) concluídos
+- Env vars: `DATABASE_URL`
+- Skill `/impeccable` obrigatória antes de escrever qualquer JSX (G2 + CLAUDE.md)
+
+**Problema que este prompt resolve (contexto — cruzamento S-7 × codebase, auditoria 2026-07-22):**
+
+P-0.6 entregou `NotificationBell` e `NotificationCenter` como componentes "dumb" (decisão registrada na S-7), mas a fiação nunca aconteceu em nenhum prompt posterior: nenhum app os importa, o `AppShell` não tem slot de ações no header (o `UserMenu` é renderizado direto em `app-shell.tsx:289`) e não existe rota de central de notificações em nenhum app. Enquanto isso, os blocos B de **todos** os módulos (P-1.10, P-2.10, P-3.10, P-4.10, P-5.10, P-6.10, P-7.10, P-8.10) gravam notificações `in_app` via `createNotification` — que o usuário não tem como ver. Agravante estrutural: os payloads usam `href` **relativo ao app de origem** (ex.: `payload: { href: "/tarefa/${id}" }` em `apps/tarefas/src/lib/notifications.ts:119`); como as notificações de um usuário misturam módulos na mesma tabela, qualquer sino renderizado fora do app de origem navegaria para rota errada.
+
+**Decisão de abordagem (confirmar com Filipe se houver dúvida — regra G1):**
+
+1. **Slot no AppShell:** novo prop opcional `headerActions?: React.ReactNode`, renderizado no header entre o espaçador e o `UserMenu`. Prop opcional ⇒ zero breaking change nos 11 shells existentes.
+2. **Contrato de payload cross-app:** padronizar `payload.module` (id canônico do app de origem — mesmo id de `ECOSYSTEM_APPS`) + `payload.href` relativo ao módulo de origem. Criar `resolveNotificationHref(payload, currentAppId)` em `ecosystem-apps.ts`: mesmo módulo (ou payload antigo sem `module`) → devolve o href relativo como está; módulo diferente → prefixa a URL canônica do módulo (`ECOSYSTEM_APPS` é a fonte única de URLs). Fallback obrigatório: payloads já gravados sem `module` continuam funcionando como hoje.
+3. **Leitura/mutação em `packages/db`:** estender `src/notifications.ts` (que já tem `makeNotificationInserter`, P-0.8) com `listNotifications({ userId, unreadOnly?, limit, offset })`, `countUnread(userId)`, `markNotificationRead(id, userId)` e `markAllNotificationsRead(userId)`. **Todas** filtram por `user_id` no WHERE (gate na action + RLS `notifications_select_own`/`notifications_update_own` como segunda camada — defense in depth, nunca apenas uma).
+4. **Containers compartilhados em `packages/ui`:** `notification-bell-container.tsx` e `notification-center-container.tsx` — client components que recebem por props as **actions injetadas** (list/markRead/markAllRead) e um callback `navigate` (o app injeta `router.push`). Assim o rollout (P-0.6c) vira fiação fina por app, sem copiar lógica (mesma razão do `getAppShortcuts` centralizado em P-0.5c). Sem dependência de `next/*` dentro de `packages/ui`.
+5. **Piloto na intranet** (app canônico — `app.hebronaseec.com.br`): server actions via `next-safe-action` com o kit de P-0.8 (usuário da sessão = único `userId` aceito); shell passa o bell via `headerActions` com `centerHref="/notificacoes"`; página `(dashboard)/notificacoes/page.tsx` com a central (tabs todas/não lidas, paginação incremental). `apps/intranet/src/lib/notifications.ts` passa a incluir `module: "intranet"` nos payloads.
+6. **Não alterar** o visual de `notification-bell.tsx`/`notification-center.tsx` (apenas consumi-los). Sem realtime/polling na v1: badge atualiza em navegação/`router.refresh` (registrar como decisão; polling é melhoria futura, não inventar agora).
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/ui/src/components/app-shell.tsx` (prop `headerActions`)
+- `packages/ui/src/components/ecosystem-apps.ts` (`resolveNotificationHref`)
+- `packages/ui/src/components/notification-bell-container.tsx` (criar)
+- `packages/ui/src/components/notification-center-container.tsx` (criar)
+- `packages/ui/src/index.ts` (exports novos)
+- `packages/db/src/notifications.ts` (helpers de leitura/mutação)
+- `packages/db/src/__tests__/notifications.test.ts` (criar)
+- `apps/intranet/src/actions/notifications.ts` (criar)
+- `apps/intranet/src/app/(dashboard)/notificacoes/page.tsx` (criar)
+- `apps/intranet/src/app/(dashboard)/shell.tsx` (fiação do bell)
+- `apps/intranet/src/lib/notifications.ts` (incluir `module` no payload)
+
+**Critérios de aceite:**
+
+- [ ] `AppShell` aceita `headerActions` opcional; os 11 shells existentes seguem compilando sem mudança
+- [ ] Bell na intranet com badge real de não lidas e dropdown das últimas 10
+- [ ] `/notificacoes` na intranet: tabs todas/não lidas + paginação incremental + marcar todas como lidas
+- [ ] Clique marca como lida e navega para o href resolvido; notificação de outro módulo (`payload.module` ≠ intranet) navega para a URL absoluta do módulo de origem; payload antigo sem `module` não quebra
+- [ ] Actions gated pelo kit: usuário só lê/marca as próprias notificações (gate + RLS — teste cobrindo não-vazamento entre usuários)
+- [ ] `resolveNotificationHref` coberto por teste (mesmo módulo, módulo diferente, payload sem `module`, payload sem `href`)
+- [ ] Zero import de `next/*` em `packages/ui`
+- [ ] Lint · Types · `next build` da intranet verdes
+- [ ] Registrar em SESSIONS.md, referenciando o fechamento parcial do débito de fiação de P-0.6 (rollout fica para P-0.6c)
+
+**Notas:**
+Ref: BRAIN.md seção 9. Preferências de notificação por usuário continuam sendo escopo do Admin (fase 1 — nota original de P-0.6); não criar aqui. Não tocar no lado email (`packages/email`) — este prompt é só o lado in_app.
+
+---
+
+### P-0.6c — Notificações in_app: rollout do sino/central aos demais apps (CORRETIVO — continuação de P-0.6b)
+
+**Fase:** 0
+**Módulo:** fundacao
+**Tipo:** fullstack
+**Pré-condições:**
+
+- Branch: `feat/P-0.6c-notifications-rollout`
+- Dependências: P-0.6b concluído
+- Env vars: `DATABASE_URL`
+- Skill `/impeccable` obrigatória antes de escrever qualquer JSX (G2 + CLAUDE.md)
+
+**Escopo:**
+
+Replicar o padrão de P-0.6b (actions gated + containers compartilhados + rota `/notificacoes`) nos apps com AppShell autenticado, e incluir `payload.module` em **todos** os `lib/notifications.ts`. Por app:
+
+1. `src/actions/notifications.ts` — actions via kit (mesmo shape da intranet).
+2. Rota `notificacoes/page.tsx` no(s) grupo(s) autenticado(s) com a central.
+3. Shell(s) passam o bell via `headerActions` com `centerHref` apontando para a rota local.
+4. `src/lib/notifications.ts` ganha `module: "<id canônico>"` nos payloads.
+
+Cobertura: **admin** (`components/admin-shell.tsx`), **projetos** (`(diretoria)/shell.tsx` e `(submissor)/shell.tsx` — uma rota de central por grupo ou compartilhada, o que for mais simples), **plataforma** (`(aluno)/shell.tsx` e `instrutor/shell.tsx`), **financeiro** (`(dashboard)/shell.tsx`), **tarefas** (`(dashboard)/shell.tsx`), **flats** (`admin/shell.tsx` e `(hospede)/shell.tsx`), **radio** (apenas `admin/shell.tsx` — o shell público do player não recebe bell; ouvinte não tem notificações in_app na v1).
+
+**Exceção a registrar:** `apps/documentos` não usa AppShell (superfície pública + área editorial própria) — **não** forçar o bell; registrar em SESSIONS.md como exceção consciente e perguntar ao Filipe se a área editorial deve ganhar o sino numa sessão futura.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/{admin,projetos,plataforma,financeiro,tarefas,flats,radio}/src/actions/notifications.ts` (criar)
+- `apps/{admin,projetos,plataforma,financeiro,tarefas,flats,radio}/src/app/**/notificacoes/page.tsx` (criar, nos grupos autenticados listados acima)
+- Os 10 shells listados no escopo (fiação via `headerActions`)
+- `apps/{admin,projetos,plataforma,financeiro,tarefas,flats,radio,documentos,intranet}/src/lib/notifications.ts` (adicionar `module` aos payloads — documentos e intranet inclusos: todo produtor identifica seu módulo mesmo sem consumir o bell)
+- `packages/jobs/src/**` — **apenas** se os crons que criam notificações in_app precisarem do `module` no payload (não refatorar nada além disso)
+
+**Critérios de aceite:**
+
+- [ ] Bell + central funcionais nos 7 apps do rollout (10 shells); intranet (P-0.6b) inalterada
+- [ ] Todos os `lib/notifications.ts` (9 apps) e crons de `packages/jobs` que gravam in_app incluem `payload.module`
+- [ ] Notificação criada no módulo X e clicada no módulo Y navega para a URL absoluta correta (verificado com pelo menos 1 teste do resolver já existente — não duplicar lógica por app)
+- [ ] Nenhuma cópia local de container/resolver: apps só importam de `@hebron/ui` (grep)
+- [ ] Exceção do documentos registrada em SESSIONS.md
+- [ ] Lint · Types · `next build` dos 7 apps verdes
+- [ ] Registrar em SESSIONS.md, fechando o débito de fiação de P-0.6
+
+**Notas:**
+Rollout mecânico — a inteligência está toda em P-0.6b. Se algum shell tiver particularidade que exija decisão de produto (ex.: hóspede ver ou não notificações de módulos internos), **não decidir sozinho**: RLS já limita a `user_id` próprio, então o que o hóspede vê são apenas as notificações dele; em dúvida sobre exibir o bell num papel externo, perguntar ao Filipe.
+
+---
+
+### P-0.6d — Client Drizzle tipado com o schema completo (CORRETIVO — débito S-7/F2-F2 nunca liquidado)
+
+**Fase:** 0
+**Módulo:** fundacao
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-0.6d-db-client-schema`
+- Dependências: P-0.6, P-0.11 concluídos
+- Env vars: `DATABASE_URL` (para rodar os testes de `packages/db`)
+
+**Problema que este prompt resolve (contexto — cruzamento S-7 × codebase, auditoria 2026-07-22):**
+
+A S-7 registrou como débito que `packages/db/src/client.ts` "ainda importa de `./schema/public`" — e ele importa até hoje (`client.ts:3`), fato reconfirmado pela auditoria de fase 2 (F2-F2: "o débito S-7 nunca foi liquidado; os apps contornam importando `@hebron/db/schema` diretamente"). Consequências: (1) o `db` singleton, na API relacional `db.query.*`, é tipado com o **stub** de `notifications` de `public.ts:172` — sem `channel`, `type`, `payload`, `sent_at` — e não enxerga nenhum dos schemas de módulo; (2) existem **duas** definições `pgTable("notifications")` vivas no código (`public.ts` e `notifications.ts`), um drift latente que o barrel `schema/index.ts` esconde mas não elimina — qualquer import direto do stub compila e lê colunas erradas.
+
+**Decisão de abordagem (confirmar com Filipe se houver dúvida — regra G1):**
+
+1. `client.ts` passa a importar `* as schema from "./schema/index"` — o `db` fica tipado com o schema completo (todos os módulos + notifications expandido). Sem ciclo de import: nada em `src/schema/**` importa `client.ts`.
+2. Remover de `public.ts` o stub `notifications` e os tipos `Notification`/`NewNotification` derivados dele (a definição canônica é `schema/notifications.ts`, que o barrel já exporta). Verificado em 2026-07-22: **nenhum** arquivo importa `notifications` a partir de `schema/public` — os imports diretos de `schema/public` existentes (`consents.ts`, `system-actor.ts`, `anonymization.ts`, testes) usam outras tabelas e não são afetados.
+3. Atualizar o comentário do barrel `schema/index.ts` (a ressalva "excluindo o stub" deixa de existir) — os re-exports em si não mudam.
+4. **Não** tocar em `drizzle.config.ts` (já aponta para o barrel desde P-0.11) nem em migrations (a tabela real já foi expandida por `0001_notifications.sql`). Correção puramente de tipos/imports — nenhum SQL novo.
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/db/src/client.ts` (import do barrel)
+- `packages/db/src/schema/public.ts` (remover stub + tipos derivados)
+- `packages/db/src/schema/index.ts` (comentário)
+
+**Critérios de aceite:**
+
+- [ ] `db.query.notifications` tipado com `channel`/`type`/`payload`/`sent_at`; schemas de módulo visíveis em `db.query.*`
+- [ ] Grep: uma única definição `pgTable("notifications")` no repo
+- [ ] Grep: zero imports de `notifications` a partir de `schema/public`
+- [ ] `pnpm --filter @hebron/db test` verde (suites existentes não regridem)
+- [ ] `pnpm turbo lint typecheck` verde (workspace inteiro — apps que importam `@hebron/db` compilam sem mudança)
+- [ ] Registrar em SESSIONS.md, fechando o débito da S-7
+
+**Notas:**
+Se o typecheck do workspace revelar algum consumidor silencioso do stub, **não** adaptá-lo às escondidas: listar em SESSIONS.md e corrigir apontando para o schema canônico.
+
+---
+
+### P-0.6e — Tipografia institucional nos emails (CORRETIVO — EmailLayout usa Inter, proibida pela identidade)
+
+**Fase:** 0
+**Módulo:** fundacao
+**Tipo:** ui
+**Pré-condições:**
+
+- Branch: `feat/P-0.6e-email-typography`
+- Dependências: P-0.6 concluído
+- Env vars: nenhuma (`RESEND_API_KEY` não é necessária — mudança só de template)
+
+**Problema que este prompt resolve (contexto — cruzamento S-7 × codebase, auditoria 2026-07-22):**
+
+`packages/email/src/components/layout.tsx:27-28` define `fontFamily = 'Inter, -apple-system, …'` — e re-exporta essa stack como `emailFontFamily` para todos os templates concretos. A identidade visual (CLAUDE.md, BRAIN §5, PATCH 001) determina Parkinsans (display) + Titillium Web (UI/corpo) e proíbe Inter explicitamente. O desvio passou por todos os blocos B (P-1.10 → P-8.10) porque os templates herdam a stack do layout.
+
+**Decisão de abordagem (confirmar com Filipe se houver dúvida — regra G1):**
+
+1. Adicionar `<Font>` do `@react-email/components` dentro do `<Head>` do `EmailLayout`: webFont Google Fonts para **Titillium Web** (400/600/700), `fallbackFontFamily` de sistema (`Helvetica`/`sans-serif`).
+2. Trocar a const `fontFamily` para `'Titillium Web', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif` (**sem Inter em nenhuma posição da stack**). O re-export `emailFontFamily` mantém o nome — templates concretos herdam a correção sem edição.
+3. Título do header ("Hebron Aseec") pode usar **Parkinsans** com fallback para a mesma stack — segundo `<Font>` apenas se o resultado justificar; caso contrário manter Titillium bold e registrar a escolha em SESSIONS.md.
+4. Clientes de email sem suporte a web font (Outlook desktop, etc.) caem no fallback de sistema — limitação conhecida do meio, aceitável e a registrar; o que a regra proíbe é **Inter**, não o fallback.
+5. Não tocar em `send.ts`, nos templates concretos, nem em cores/espacamentos do layout.
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/email/src/components/layout.tsx`
+
+**Critérios de aceite:**
+
+- [ ] Grep `Inter` em `packages/email/src` → zero ocorrências
+- [ ] `<Font>` com Titillium Web no `<Head>`; stack de fallback sem Inter
+- [ ] Preview via `pnpm --filter @hebron/email email:dev` renderiza com Titillium Web (screenshot ou registro em SESSIONS.md)
+- [ ] Templates concretos existentes não precisam de edição (herdam via `emailFontFamily`)
+- [ ] Lint · Types verdes
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+Observação lateral (não é escopo deste prompt): `send.ts` usa `renderAsync`, deprecado nas versões novas do React Email em favor de `render` assíncrono — trocar apenas quando o package for atualizado de versão, em sessão própria.
 
 ---
 

@@ -33,6 +33,8 @@ export interface AppShellProps {
   LinkComponent?: LinkComponent;
   className?: string;
   sidebarDark?: boolean;
+  /** Ações renderadas no header, entre o espaçador e o UserMenu (ex.: sino de notificações). */
+  headerActions?: React.ReactNode;
 }
 
 // ── Brand row shown inside the sidebar ────────────────────────────────────────
@@ -178,6 +180,7 @@ export function AppShell({
   LinkComponent,
   className,
   sidebarDark,
+  headerActions,
 }: AppShellProps) {
   const [desktopCollapsed, setDesktopCollapsed] = React.useState(false);
   const [mobileOpen, setMobileOpen] = React.useState(false);
@@ -285,6 +288,8 @@ export function AppShell({
         )}
 
         <div className="flex-1" />
+
+        {headerActions}
 
         <UserMenu user={user} profileHref={profileHref} onLogout={onLogout} />
       </header>

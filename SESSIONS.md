@@ -195,6 +195,7 @@
 | S-172  | 2026-07-22 | P-0.4b — Simetria de codificação de cookies no browser client (CORRETIVO — round-trip de cookie quebrado latente)                | concluido                            |
 | S-173  | 2026-07-22 | P-0.5b — `profileHref` opcional e correção dos alvos de "Meu perfil" (CORRETIVO — links 404 no user menu)                        | concluido                            |
 | S-174  | 2026-07-22 | P-0.5c — App launcher canônico e higiene de API do sidebar (CORRETIVO — duplicação com drift + launcher exposto a papel externo) | concluido                            |
+| S-175  | 2026-07-22 | P-0.6b — Notificações in_app operáveis: slot no AppShell + piloto na intranet (CORRETIVO — bell/central nunca fiados)            | concluido                            |
 
 ---
 
@@ -13771,4 +13772,149 @@ dia ganharem launcher, devem consumir o mesmo `getAppShortcuts`.
 - `apps/radio/src/app/admin/shell.tsx`
 - `apps/flats/src/app/admin/shell.tsx`
 - `apps/flats/src/app/(hospede)/shell.tsx`
+- `SESSIONS.md` (esta entrada + índice)
+
+---
+
+## S-175 — P-0.6b — Notificações in_app operáveis: slot no AppShell + piloto na intranet (CORRETIVO — bell/central nunca fiados)
+
+**Branch:** `feat/P-0.6b-notifications-wiring`
+
+### Contexto
+
+Auditoria 2026-07-22 (cruzamento S-7 × codebase): `NotificationBell` e
+`NotificationCenter` (P-0.6) sempre foram componentes "dumb" — nenhum dos
+9 apps os importava, o `AppShell` não tinha slot de ações no header
+(`UserMenu` renderizado direto) e não existia rota de central de
+notificações em app algum. Enquanto isso, todos os blocos B gravam
+notificações `in_app` que o usuário nunca tinha como ver. Agravante:
+payloads usam `href` relativo ao app de origem (ex.: `/tarefa/${id}` em
+`apps/tarefas/src/lib/notifications.ts:119`) — como as notificações de um
+usuário misturam módulos na mesma tabela, um sino renderizado fora do app
+de origem navegaria para rota errada.
+
+### O que foi feito
+
+1. **`packages/ui/src/components/app-shell.tsx`** — prop opcional
+   `headerActions?: React.ReactNode`, renderizada no header entre o
+   espaçador e o `UserMenu`. Zero breaking change nos 11 shells existentes
+   (confirmado por `pnpm turbo build typecheck` completo, 38/38 verdes).
+2. **`packages/ui/src/components/ecosystem-apps.ts`** —
+   `resolveNotificationHref(payload, currentAppId)`: contrato de payload
+   cross-app (`payload.module` = id canônico de `ECOSYSTEM_APPS`,
+   `payload.href` relativo ao módulo de origem). Mesmo módulo (ou payload
+   antigo sem `module`) devolve o href como está; módulo diferente prefixa
+   a URL canônica do módulo (única fonte: `ECOSYSTEM_APPS`); módulo
+   desconhecido ou payload sem `href` caem em fallback seguro (`"/"` ou
+   raiz do módulo) — nunca lança.
+3. **`packages/db/src/notifications.ts`** — `listNotifications`
+   (paginação + total via `count()` na mesma transação, `unreadOnly`
+   opcional), `countUnread`, `markNotificationRead`, `markAllNotificationsRead`.
+   Todas rodam via `withAuthenticatedContext` (papel `authenticated`,
+   `user_id` no WHERE) — RLS (`notifications_select_own`/
+   `notifications_update_own`, já existentes desde P-0.6) é a segunda
+   camada, nunca a única.
+4. **`packages/ui/src/components/notification-bell-container.tsx` e
+   `notification-center-container.tsx` (novos)** — client components
+   "dumb-wired": recebem `listNotifications`/`markRead`/`markAllRead`
+   injetados pelo app + um `navigate`, sem nenhum import de `next/*`
+   (confirmado por grep). Consomem `NotificationBell`/`NotificationCenter`
+   sem alterar o visual deles. Exportados em `packages/ui/src/index.ts`.
+5. **Piloto na intranet** — `apps/intranet/src/actions/notifications.ts`
+   (novo: `listBellNotifications`, `listCenterNotifications`,
+   `markNotificationReadAction`, `markAllNotificationsReadAction`, todas
+   via `authenticatedAction` do kit P-0.8, `ctx.actorId` como único userId
+   aceito — nunca um id vindo do input); `(dashboard)/notificacoes/page.tsx`
+   (novo, Client Component — a página não precisa buscar dados no server
+   porque o container já se autoalimenta via as actions injetadas);
+   `(dashboard)/shell.tsx` passa o bell via `headerActions` com
+   `centerHref="/notificacoes"`; `apps/intranet/src/lib/notifications.ts`
+   passou a incluir `module: "intranet"` nos 4 payloads que gera.
+6. **Sem realtime/polling na v1** (decisão do prompt): badge/lista
+   atualizam ao reabrir o dropdown, após marcar como lida/todas, ou em nova
+   navegação — não há `setInterval` nem assinatura realtime.
+
+### Débito de infraestrutura registrado (G1 — arquivo óbvio faltante)
+
+`packages/ui` não tinha nenhum test runner configurado (sem `vitest`,
+sem script `test`, sem `vitest.config.ts`) — mas o critério de aceite
+exige `resolveNotificationHref` coberto por teste. Adicionado o mínimo
+necessário: `vitest` (mesma versão de `packages/db`, `^2.1.0`) como
+devDependency, `vitest.config.ts` (equivalente ao de `packages/db`, sem
+a parte de setup de banco — não é necessária aqui), script `"test": "vitest run"`,
+e `vitest.config.ts` adicionado ao `include` de `tsconfig.json` (mesmo
+ajuste que `packages/db` já tinha, necessário para o parser do ESLint
+não reclamar de "file not found in project"). Teste em
+`packages/ui/src/components/__tests__/ecosystem-apps.test.ts` (6 casos).
+
+### Verificação
+
+- `packages/ui` — `pnpm test`: 6/6 (`resolveNotificationHref`: mesmo
+  módulo, módulo diferente, payload sem `module`, payload sem `href`,
+  payload nulo, módulo desconhecido).
+- `packages/db` — `pnpm test -- notifications.test`: 10/10 (helpers +
+  RLS: titular lê as próprias, outro usuário não lê nem marca como lida
+  via UPDATE direto, `anon` não lê nenhuma).
+- `pnpm turbo test --filter=@hebron/ui --filter=@hebron/db`: única falha é
+  `system-actor.test.ts` (pré-existente, documentado em memória de sessão
+  como flake de banco de dev compartilhado — `afterAll` não consegue
+  apagar um usuário que autorou audit — não relacionado a este diff).
+- `pnpm turbo lint typecheck` (workspace completo): 38/38 verdes.
+- `pnpm turbo build --filter=@hebron/intranet`: verde; rota
+  `/notificacoes` gerada (ƒ, 657 B).
+- Grep `NotificationBellContainer|NotificationCenterContainer` em
+  `apps/intranet/src`: usados em `shell.tsx` e `notificacoes/page.tsx`.
+- Grep `from "next` nos 4 arquivos novos/editados de `packages/ui`: zero
+  ocorrências.
+
+### Critérios de aceite
+
+- [x] `AppShell` aceita `headerActions` opcional; os 11 shells existentes
+      seguem compilando sem mudança
+- [x] Bell na intranet com badge real de não lidas e dropdown das
+      últimas 10
+- [x] `/notificacoes` na intranet: tabs todas/não lidas + paginação
+      incremental + marcar todas como lidas
+- [x] Clique marca como lida e navega para o href resolvido; notificação
+      de outro módulo navega para a URL absoluta do módulo de origem;
+      payload antigo sem `module` não quebra
+- [x] Actions gated pelo kit: usuário só lê/marca as próprias
+      notificações (gate + RLS — testado)
+- [x] `resolveNotificationHref` coberto por teste (mesmo módulo, módulo
+      diferente, payload sem `module`, payload sem `href`)
+- [x] Zero import de `next/*` em `packages/ui`
+- [x] Lint · Types · `next build` da intranet verdes
+- [x] Registrado em SESSIONS.md
+
+### Nota
+
+Rollout do bell/central para os outros 8 apps fica para **P-0.6c**
+(já registrado em PROMPTS.md como corretivo pendente), assim como o
+`db` singleton continuar tipado só com `schema/public` (**P-0.6d**) e o
+`EmailLayout` usando Inter (**P-0.6e**) — nenhum dos dois tocado aqui,
+fora de escopo deste prompt. `apps/tarefas/src/lib/notifications.ts`
+(e demais módulos que já gravam `in_app`) continuam sem `module` no
+payload — `resolveNotificationHref` trata isso como "mesmo módulo"
+por design (fallback obrigatório do prompt), então nada quebra; ganhar
+`module: "<app>"` em cada um é trabalho do rollout de cada módulo, não
+deste corretivo.
+
+### Arquivos criados/alterados
+
+- `packages/ui/src/components/app-shell.tsx`
+- `packages/ui/src/components/ecosystem-apps.ts`
+- `packages/ui/src/components/notification-bell-container.tsx` (novo)
+- `packages/ui/src/components/notification-center-container.tsx` (novo)
+- `packages/ui/src/components/__tests__/ecosystem-apps.test.ts` (novo —
+  débito de infra, ver acima)
+- `packages/ui/src/index.ts`
+- `packages/ui/package.json` (script `test` + devDependency `vitest`)
+- `packages/ui/vitest.config.ts` (novo — débito de infra, ver acima)
+- `packages/ui/tsconfig.json` (`include` de `vitest.config.ts`)
+- `packages/db/src/notifications.ts`
+- `packages/db/src/__tests__/notifications.test.ts` (novo)
+- `apps/intranet/src/actions/notifications.ts` (novo)
+- `apps/intranet/src/app/(dashboard)/notificacoes/page.tsx` (novo)
+- `apps/intranet/src/app/(dashboard)/shell.tsx`
+- `apps/intranet/src/lib/notifications.ts`
 - `SESSIONS.md` (esta entrada + índice)
