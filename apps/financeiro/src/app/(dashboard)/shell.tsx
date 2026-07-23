@@ -1,7 +1,12 @@
 "use client";
 
-import { usePathname } from "next/navigation";
-import { AppShell, getAppShortcuts, type NavSection } from "@hebron/ui";
+import { usePathname, useRouter } from "next/navigation";
+import {
+  AppShell,
+  getAppShortcuts,
+  NotificationBellContainer,
+  type NavSection,
+} from "@hebron/ui";
 import {
   LayoutDashboard,
   List,
@@ -18,6 +23,11 @@ import {
 } from "lucide-react";
 import { FinanceiroLogo } from "../../components/financeiro-logo";
 import { logoutAction } from "../../actions/auth";
+import {
+  listBellNotifications,
+  markNotificationReadAction,
+  markAllNotificationsReadAction,
+} from "../../actions/notifications";
 
 const SECTIONS: NavSection[] = [
   {
@@ -98,6 +108,7 @@ type ShellProps = {
 
 export default function FinanceiroShell({ user, children }: ShellProps) {
   const path = usePathname();
+  const router = useRouter();
 
   return (
     <AppShell
@@ -112,6 +123,26 @@ export default function FinanceiroShell({ user, children }: ShellProps) {
       appName="Financeiro"
       logo={<FinanceiroLogo />}
       sidebarDark
+      headerActions={
+        <NotificationBellContainer
+          currentAppId="financeiro"
+          centerHref="/notificacoes"
+          listNotifications={async () => {
+            const result = await listBellNotifications({});
+            if (!result?.data) {
+              throw new Error("Falha ao carregar notificações");
+            }
+            return result.data;
+          }}
+          markRead={async (id) => {
+            await markNotificationReadAction({ id });
+          }}
+          markAllRead={async () => {
+            await markAllNotificationsReadAction({});
+          }}
+          navigate={(href) => router.push(href)}
+        />
+      }
     >
       {children}
     </AppShell>

@@ -57,7 +57,7 @@ export async function notifyInvitationAccepted(
       type: "invitation.accepted",
       title: "Convite aceito",
       body: `${inviteeEmail} aceitou o convite e já tem acesso à plataforma.`,
-      payload: { inviteeEmail },
+      payload: { module: "admin", inviteeEmail },
     },
   });
 }
@@ -84,7 +84,7 @@ export async function notifyUserSuspended(
       type: "user.suspended",
       title: "Acesso suspenso",
       body: `Seu acesso foi suspenso em: ${modulesText}. Entre em contato com a administração para mais informações.`,
-      payload: { modules },
+      payload: { module: "admin", modules },
     },
   });
 }
@@ -113,7 +113,7 @@ export async function notifyRoleChanged(
       body: isGranted
         ? `O papel ${roleLabel} foi atribuído à sua conta.`
         : `O papel ${roleLabel} foi removido da sua conta.`,
-      payload: { role, action },
+      payload: { module: "admin", role, action },
     },
   });
 }

@@ -1,9 +1,18 @@
 "use client";
 
-import { usePathname } from "next/navigation";
-import { AppShell, type NavSection } from "@hebron/ui";
+import { usePathname, useRouter } from "next/navigation";
+import {
+  AppShell,
+  NotificationBellContainer,
+  type NavSection,
+} from "@hebron/ui";
 import { BookOpen, LayoutDashboard, Plus } from "lucide-react";
 import { logoutAction } from "../../actions/auth";
+import {
+  listBellNotifications,
+  markNotificationReadAction,
+  markAllNotificationsReadAction,
+} from "../../actions/notifications";
 
 const SECTIONS: NavSection[] = [
   {
@@ -34,6 +43,7 @@ export default function InstrutorShell({
   children,
 }: InstrutorShellProps) {
   const pathname = usePathname();
+  const router = useRouter();
 
   return (
     <AppShell
@@ -53,6 +63,26 @@ export default function InstrutorShell({
         />
       }
       sidebarDark
+      headerActions={
+        <NotificationBellContainer
+          currentAppId="plataforma"
+          centerHref="/instrutor/notificacoes"
+          listNotifications={async () => {
+            const result = await listBellNotifications({});
+            if (!result?.data) {
+              throw new Error("Falha ao carregar notificações");
+            }
+            return result.data;
+          }}
+          markRead={async (id) => {
+            await markNotificationReadAction({ id });
+          }}
+          markAllRead={async () => {
+            await markAllNotificationsReadAction({});
+          }}
+          navigate={(href) => router.push(href)}
+        />
+      }
     >
       {children}
     </AppShell>

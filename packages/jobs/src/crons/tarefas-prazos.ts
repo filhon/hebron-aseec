@@ -116,7 +116,11 @@ export async function runTarefasPrazos(): Promise<{
           channel: "in_app",
           type: "task.due_soon",
           title: `Prazo próximo: "${task.title}" vence amanhã`,
-          payload: { taskId: task.id, href: `/tarefa/${task.id}` },
+          payload: {
+            module: "tarefas",
+            taskId: task.id,
+            href: `/tarefa/${task.id}`,
+          },
         },
       });
     }
@@ -144,7 +148,11 @@ export async function runTarefasPrazos(): Promise<{
             channel: "in_app",
             type: "task.overdue",
             title,
-            payload: { taskId: task.id, href: `/tarefa/${task.id}` },
+            payload: {
+              module: "tarefas",
+              taskId: task.id,
+              href: `/tarefa/${task.id}`,
+            },
           },
         }),
         createNotification({
@@ -155,7 +163,11 @@ export async function runTarefasPrazos(): Promise<{
             channel: "email",
             type: "task.overdue",
             title,
-            payload: { taskId: task.id, href: `/tarefa/${task.id}` },
+            payload: {
+              module: "tarefas",
+              taskId: task.id,
+              href: `/tarefa/${task.id}`,
+            },
           },
           email: {
             to: recipient.email,

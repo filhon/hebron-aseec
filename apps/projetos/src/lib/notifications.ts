@@ -135,7 +135,11 @@ export async function notifyProjectSubmitted(projectId: string): Promise<void> {
             type: "project.submitted",
             title: `Nova submissão: ${project.title}`,
             body: `${project.submitterName ?? "Um submissor"} submeteu um novo projeto.`,
-            payload: { projectId, href: `/projetos/${projectId}` },
+            payload: {
+              module: "projetos",
+              projectId,
+              href: `/projetos/${projectId}`,
+            },
           },
         }),
         createNotification({
@@ -147,7 +151,11 @@ export async function notifyProjectSubmitted(projectId: string): Promise<void> {
             type: "project.submitted",
             title: `Nova submissão: ${project.title}`,
             body: `${project.submitterName ?? "Um submissor"} submeteu um novo projeto.`,
-            payload: { projectId, href: `/projetos/${projectId}` },
+            payload: {
+              module: "projetos",
+              projectId,
+              href: `/projetos/${projectId}`,
+            },
           },
           email: emailOpts
             ? { to: admin.email, ...emailOpts }
@@ -208,7 +216,11 @@ export async function notifyProjectInValidation(
         type: "project.in_validation",
         title: `Projeto em análise: ${project.title}`,
         body: "Seu projeto foi recebido e está sendo analisado.",
-        payload: { projectId, href: `/projetos/${projectId}` },
+        payload: {
+          module: "projetos",
+          projectId,
+          href: `/projetos/${projectId}`,
+        },
       },
     }),
     createNotification({
@@ -220,7 +232,11 @@ export async function notifyProjectInValidation(
         type: "project.in_validation",
         title: `Projeto em análise: ${project.title}`,
         body: "Seu projeto foi recebido e está sendo analisado.",
-        payload: { projectId, href: `/projetos/${projectId}` },
+        payload: {
+          module: "projetos",
+          projectId,
+          href: `/projetos/${projectId}`,
+        },
       },
       email: emailOpts
         ? { to: project.submitterEmail, ...emailOpts }
@@ -276,7 +292,11 @@ export async function notifyVotingOpen(projectId: string): Promise<void> {
             type: "project.voting_open",
             title: `Votação aberta: ${project.title}`,
             body: "Um projeto aguarda sua avaliação.",
-            payload: { projectId, href: `/projetos/${projectId}` },
+            payload: {
+              module: "projetos",
+              projectId,
+              href: `/projetos/${projectId}`,
+            },
           },
         }),
         createNotification({
@@ -288,7 +308,11 @@ export async function notifyVotingOpen(projectId: string): Promise<void> {
             type: "project.voting_open",
             title: `Votação aberta: ${project.title}`,
             body: "Um projeto aguarda sua avaliação.",
-            payload: { projectId, href: `/projetos/${projectId}` },
+            payload: {
+              module: "projetos",
+              projectId,
+              href: `/projetos/${projectId}`,
+            },
           },
           email: emailOpts
             ? { to: voter.email, ...emailOpts }
@@ -374,6 +398,7 @@ export async function notifyPaymentMade(
       title: subject,
       body: "Um pagamento do seu projeto foi processado.",
       payload: {
+        module: "projetos",
         projectId: payment.projectId,
         paymentScheduleId,
         href: `/projetos/${payment.projectId}`,
@@ -451,7 +476,11 @@ export async function notifyProjectBlocked(projectId: string): Promise<void> {
             type: "project.blocked",
             title,
             body,
-            payload: { projectId, href: `/projetos/${projectId}` },
+            payload: {
+              module: "projetos",
+              projectId,
+              href: `/projetos/${projectId}`,
+            },
           },
         }),
         createNotification({
@@ -463,7 +492,11 @@ export async function notifyProjectBlocked(projectId: string): Promise<void> {
             type: "project.blocked",
             title,
             body,
-            payload: { projectId, href: `/projetos/${projectId}` },
+            payload: {
+              module: "projetos",
+              projectId,
+              href: `/projetos/${projectId}`,
+            },
           },
           email: emailOpts
             ? { to: recipient.email, ...emailOpts }
@@ -527,7 +560,11 @@ export async function notifyContestation(
             type: "project.contested",
             title,
             body,
-            payload: { projectId, href: `/projetos/${projectId}` },
+            payload: {
+              module: "projetos",
+              projectId,
+              href: `/projetos/${projectId}`,
+            },
           },
         }),
         createNotification({
@@ -539,7 +576,11 @@ export async function notifyContestation(
             type: "project.contested",
             title,
             body,
-            payload: { projectId, href: `/projetos/${projectId}` },
+            payload: {
+              module: "projetos",
+              projectId,
+              href: `/projetos/${projectId}`,
+            },
           },
           email: emailOpts
             ? { to: voter.email, ...emailOpts }
@@ -624,7 +665,7 @@ export async function notifyEvaluatorDesignated(
         type: "project.evaluator_designated",
         title: titleLabel,
         body: `Reunião de votação em ${meetingDateStr}.`,
-        payload: { projectIds, href: "/projetos" },
+        payload: { module: "projetos", projectIds, href: "/projetos" },
       },
     }),
     createNotification({
@@ -636,7 +677,7 @@ export async function notifyEvaluatorDesignated(
         type: "project.evaluator_designated",
         title: titleLabel,
         body: `Reunião de votação em ${meetingDateStr}.`,
-        payload: { projectIds, href: "/projetos" },
+        payload: { module: "projetos", projectIds, href: "/projetos" },
       },
       email: emailOpts
         ? { to: evaluator.email, ...emailOpts }

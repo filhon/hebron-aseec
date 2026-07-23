@@ -50,7 +50,7 @@ export async function notifyPayablePaid(payableId: string): Promise<void> {
       type: "financeiro.payable.paid",
       title: `Pagamento realizado: ${row.description}`,
       body: `O pagamento de ${amount} foi processado.`,
-      payload: { payableId, href: "/contas-pagar" },
+      payload: { module: "financeiro", payableId, href: "/contas-pagar" },
     },
   });
 }
@@ -151,6 +151,7 @@ export async function checkBudgetAlert(params: {
         title,
         body: `Execução em ${pctDisplay.toFixed(0)}% do orçado para ${year}.`,
         payload: {
+          module: "financeiro",
           costCenterId: params.costCenterId,
           year,
           pct: pctDisplay,

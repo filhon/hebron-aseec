@@ -116,7 +116,11 @@ export async function notifyTaskAssigned(
           type: "task.assigned",
           title,
           body,
-          payload: { taskId: task.id, href: `/tarefa/${task.id}` },
+          payload: {
+            module: "tarefas",
+            taskId: task.id,
+            href: `/tarefa/${task.id}`,
+          },
         },
       }),
       createNotification({
@@ -128,7 +132,11 @@ export async function notifyTaskAssigned(
           type: "task.assigned",
           title,
           body,
-          payload: { taskId: task.id, href: `/tarefa/${task.id}` },
+          payload: {
+            module: "tarefas",
+            taskId: task.id,
+            href: `/tarefa/${task.id}`,
+          },
         },
         email: {
           to: recipient.email,
@@ -208,7 +216,11 @@ export async function notifyApprovalRequested(
         type: "task.approval_requested",
         title,
         body,
-        payload: { taskId: request.taskId, approvalRequestId: request.id },
+        payload: {
+          module: "tarefas",
+          taskId: request.taskId,
+          approvalRequestId: request.id,
+        },
       },
     }),
     createNotification({
@@ -220,7 +232,11 @@ export async function notifyApprovalRequested(
         type: "task.approval_requested",
         title,
         body,
-        payload: { taskId: request.taskId, approvalRequestId: request.id },
+        payload: {
+          module: "tarefas",
+          taskId: request.taskId,
+          approvalRequestId: request.id,
+        },
       },
       email: {
         to: approver.email,

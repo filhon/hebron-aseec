@@ -78,7 +78,11 @@ export async function notifyNewMaterialAvailable(
           type: "material.published",
           title,
           body: material.description ?? undefined,
-          payload: { materialId: material.id, href: "/materiais" },
+          payload: {
+            module: "radio",
+            materialId: material.id,
+            href: "/materiais",
+          },
         },
         email: {
           to: recipient.email,

@@ -50,7 +50,7 @@ Corpo integral no próprio arquivo (as 4 originais) ou em `AUDIT/04-prompts-pend
 | P-0.16    | Registro retroativo (este próprio corretivo)                 | AUDIT/04-prompts-pendentes.md §4 | S-68     |
 | P-0.4b    | Auth: simetria de decode de cookie no browser client         | neste arquivo                    | pendente |
 | P-0.6b    | Notificações in_app operáveis: slot no AppShell + piloto     | neste arquivo                    | S-175    |
-| P-0.6c    | Notificações in_app: rollout do sino/central aos demais apps | neste arquivo                    | pendente |
+| P-0.6c    | Notificações in_app: rollout do sino/central aos demais apps | neste arquivo                    | S-176    |
 | P-0.6d    | Client Drizzle tipado (remoção do stub de notifications)     | neste arquivo                    | pendente |
 | P-0.6e    | Emails: tipografia institucional (remover Inter)             | neste arquivo                    | pendente |
 | P-7.1b    | Flats: máximo de scoring em BRAIN §6.8 (80 → 75)             | neste arquivo                    | pendente |
@@ -1063,15 +1063,15 @@ P-0.6 entregou `NotificationBell` e `NotificationCenter` como componentes "dumb"
 
 **Critérios de aceite:**
 
-- [ ] `AppShell` aceita `headerActions` opcional; os 11 shells existentes seguem compilando sem mudança
-- [ ] Bell na intranet com badge real de não lidas e dropdown das últimas 10
-- [ ] `/notificacoes` na intranet: tabs todas/não lidas + paginação incremental + marcar todas como lidas
-- [ ] Clique marca como lida e navega para o href resolvido; notificação de outro módulo (`payload.module` ≠ intranet) navega para a URL absoluta do módulo de origem; payload antigo sem `module` não quebra
-- [ ] Actions gated pelo kit: usuário só lê/marca as próprias notificações (gate + RLS — teste cobrindo não-vazamento entre usuários)
-- [ ] `resolveNotificationHref` coberto por teste (mesmo módulo, módulo diferente, payload sem `module`, payload sem `href`)
-- [ ] Zero import de `next/*` em `packages/ui`
-- [ ] Lint · Types · `next build` da intranet verdes
-- [ ] Registrar em SESSIONS.md, referenciando o fechamento parcial do débito de fiação de P-0.6 (rollout fica para P-0.6c)
+- [x] `AppShell` aceita `headerActions` opcional; os 11 shells existentes seguem compilando sem mudança
+- [x] Bell na intranet com badge real de não lidas e dropdown das últimas 10
+- [x] `/notificacoes` na intranet: tabs todas/não lidas + paginação incremental + marcar todas como lidas
+- [x] Clique marca como lida e navega para o href resolvido; notificação de outro módulo (`payload.module` ≠ intranet) navega para a URL absoluta do módulo de origem; payload antigo sem `module` não quebra
+- [x] Actions gated pelo kit: usuário só lê/marca as próprias notificações (gate + RLS — teste cobrindo não-vazamento entre usuários)
+- [x] `resolveNotificationHref` coberto por teste (mesmo módulo, módulo diferente, payload sem `module`, payload sem `href`)
+- [x] Zero import de `next/*` em `packages/ui`
+- [x] Lint · Types · `next build` da intranet verdes
+- [x] Registrar em SESSIONS.md, referenciando o fechamento parcial do débito de fiação de P-0.6 (rollout fica para P-0.6c)
 
 **Notas:**
 Ref: BRAIN.md seção 9. Preferências de notificação por usuário continuam sendo escopo do Admin (fase 1 — nota original de P-0.6); não criar aqui. Não tocar no lado email (`packages/email`) — este prompt é só o lado in_app.
@@ -1113,13 +1113,13 @@ Cobertura: **admin** (`components/admin-shell.tsx`), **projetos** (`(diretoria)/
 
 **Critérios de aceite:**
 
-- [ ] Bell + central funcionais nos 7 apps do rollout (10 shells); intranet (P-0.6b) inalterada
-- [ ] Todos os `lib/notifications.ts` (9 apps) e crons de `packages/jobs` que gravam in_app incluem `payload.module`
-- [ ] Notificação criada no módulo X e clicada no módulo Y navega para a URL absoluta correta (verificado com pelo menos 1 teste do resolver já existente — não duplicar lógica por app)
-- [ ] Nenhuma cópia local de container/resolver: apps só importam de `@hebron/ui` (grep)
-- [ ] Exceção do documentos registrada em SESSIONS.md
-- [ ] Lint · Types · `next build` dos 7 apps verdes
-- [ ] Registrar em SESSIONS.md, fechando o débito de fiação de P-0.6
+- [x] Bell + central funcionais nos 7 apps do rollout (10 shells); intranet (P-0.6b) inalterada
+- [x] Todos os `lib/notifications.ts` (9 apps) e crons de `packages/jobs` que gravam in_app incluem `payload.module`
+- [x] Notificação criada no módulo X e clicada no módulo Y navega para a URL absoluta correta (verificado com pelo menos 1 teste do resolver já existente — não duplicar lógica por app)
+- [x] Nenhuma cópia local de container/resolver: apps só importam de `@hebron/ui` (grep)
+- [x] Exceção do documentos registrada em SESSIONS.md
+- [x] Lint · Types · `next build` dos 7 apps verdes
+- [x] Registrar em SESSIONS.md, fechando o débito de fiação de P-0.6
 
 **Notas:**
 Rollout mecânico — a inteligência está toda em P-0.6b. Se algum shell tiver particularidade que exija decisão de produto (ex.: hóspede ver ou não notificações de módulos internos), **não decidir sozinho**: RLS já limita a `user_id` próprio, então o que o hóspede vê são apenas as notificações dele; em dúvida sobre exibir o bell num papel externo, perguntar ao Filipe.

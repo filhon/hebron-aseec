@@ -153,6 +153,7 @@ export async function notifyReportReminder(
         title,
         body: `Verifique o prazo do relatório do projeto ${row.projectTitle}.`,
         payload: {
+          module: "projetos",
           projectId: row.projectId,
           reportId,
           href: `/projetos/${row.projectId}`,
@@ -169,6 +170,7 @@ export async function notifyReportReminder(
         title,
         body: `Verifique o prazo do relatório do projeto ${row.projectTitle}.`,
         payload: {
+          module: "projetos",
           projectId: row.projectId,
           reportId,
           href: `/projetos/${row.projectId}`,

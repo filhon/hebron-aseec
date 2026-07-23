@@ -196,6 +196,7 @@
 | S-173  | 2026-07-22 | P-0.5b — `profileHref` opcional e correção dos alvos de "Meu perfil" (CORRETIVO — links 404 no user menu)                        | concluido                            |
 | S-174  | 2026-07-22 | P-0.5c — App launcher canônico e higiene de API do sidebar (CORRETIVO — duplicação com drift + launcher exposto a papel externo) | concluido                            |
 | S-175  | 2026-07-22 | P-0.6b — Notificações in_app operáveis: slot no AppShell + piloto na intranet (CORRETIVO — bell/central nunca fiados)            | concluido                            |
+| S-176  | 2026-07-23 | P-0.6c — Notificações in_app: rollout do sino/central aos demais apps (CORRETIVO — continuação de P-0.6b)                        | concluido                            |
 
 ---
 
@@ -13917,4 +13918,171 @@ deste corretivo.
 - `apps/intranet/src/app/(dashboard)/notificacoes/page.tsx` (novo)
 - `apps/intranet/src/app/(dashboard)/shell.tsx`
 - `apps/intranet/src/lib/notifications.ts`
+- `SESSIONS.md` (esta entrada + índice)
+
+---
+
+## S-176 — P-0.6c — Notificações in_app: rollout do sino/central aos demais apps (CORRETIVO — continuação de P-0.6b)
+
+**Branch:** `feat/P-0.6c-notifications-rollout`
+
+### Contexto
+
+Débito deixado explicitamente por S-175 (P-0.6b): o sino e a central de
+notificações só existiam na intranet (piloto). Os outros 8 apps com
+`AppShell` autenticado continuavam gravando notificações `in_app` que
+ninguém tinha como ver, e a maioria dos `lib/notifications.ts` não incluía
+`payload.module` — o que faz `resolveNotificationHref` (P-0.6b) tratar
+essas notificações como "mesmo módulo" por fallback, funcionando mas sem o
+contrato explícito que permite navegação cross-app correta quando o
+usuário vê a notificação de um módulo diferente do que está navegando.
+
+### O que foi feito
+
+Rollout mecânico do padrão da intranet (actions gated pelo kit de cada
+app + `NotificationBellContainer`/`NotificationCenterContainer` de
+`@hebron/ui` + rota `/notificacoes`) para os 7 apps restantes com
+`AppShell` autenticado, cobrindo os 10 shells listados no prompt:
+
+1. **admin** — `components/admin-shell.tsx`; `actions/notifications.ts`
+   usa `adminAction` (super_admin exclusivo — mesmo gate de
+   `requireAdminSession`, então equivale a "qualquer autenticado do app").
+   Rota em `(dashboard)/notificacoes/page.tsx`.
+2. **financeiro** e **tarefas** — um único shell `(dashboard)/shell.tsx`
+   cada; `financeiroAction`/`tarefasAction` (base "qualquer papel", mesmo
+   padrão de `authenticatedAction` da intranet). Rotas em
+   `(dashboard)/notificacoes/page.tsx`.
+3. **plataforma** — dois shells: `(aluno)/shell.tsx` (rota `/notificacoes`)
+   e `instrutor/shell.tsx` (rota `/instrutor/notificacoes`, já que
+   `instrutor` é segmento real, não route group). Ambos com
+   `currentAppId="plataforma"` (id único do módulo no ecossistema — não
+   existe id separado para instrutor em `ECOSYSTEM_APPS`).
+4. **flats** — `admin/shell.tsx` (`/admin/notificacoes`) e
+   `(hospede)/shell.tsx` (`/notificacoes`). Hóspede recebe o sino conforme
+   escopo explícito do prompt ("Cobertura" já lista `(hospede)/shell.tsx`);
+   RLS (`notifications_select_own`) já restringe a notificações do próprio
+   usuário, então não há decisão de produto nova aqui.
+5. **radio** — apenas `admin/shell.tsx` (`/admin/notificacoes`); shell
+   público do player não recebe bell, conforme escopo do prompt.
+6. **projetos** — **decisão técnica não trivial**: `(diretoria)/shell.tsx`
+   e `(submissor)/shell.tsx` são dois route groups que mapeiam para a
+   **mesma raiz de URL** do app. Criar `notificacoes/page.tsx` em cada
+   grupo (a leitura mais direta do prompt) quebra o build do Next.js —
+   confirmado empiricamente: `next build` falha com "You cannot have two
+   parallel pages that resolve to the same path" apontando exatamente
+   `/(diretoria)/notificacoes/page` × `/(submissor)/notificacoes/page`.
+   Resolvido com a alternativa que o próprio prompt permite ("uma rota por
+   grupo **ou compartilhada**, o que for mais simples"): rota única em
+   `apps/projetos/src/app/notificacoes/page.tsx` (fora dos dois grupos),
+   Server Component que resolve a sessão uma vez (mesma checagem de
+   `requireDiretorSession`/`requireSubmissorSession`, combinada — diretor/
+   conselheiro/super_admin tem prioridade sobre submissor se o usuário
+   acumular os dois papéis) e renderiza `DiretoriaShell` ou
+   `SubmissorShell` ao redor do conteúdo. O conteúdo (client, com
+   `useRouter` + os containers) foi extraído para
+   `notificacoes/notificacoes-content.tsx` — arquivo não listado
+   literalmente na lista de permitidos (que citava só `.../notificacoes/
+page.tsx`), criado por necessidade óbvia de infraestrutura (G1): o
+   `page.tsx` precisa ser Server Component para checar papel antes de
+   escolher o shell, mas o conteúdo em si precisa ser Client Component
+   (hooks). `actions/notifications.ts` usa `projetosAction` (base "qualquer
+   papel").
+7. **`payload.module`** adicionado a **todos** os `lib/notifications.ts`
+   dos 9 apps (incluindo `documentos` e `intranet`, que não ganham
+   sino — contrato pede que todo produtor identifique seu módulo mesmo
+   sem consumir o bell; `intranet` já tinha desde P-0.6b). Também
+   adicionado aos 3 arquivos de `packages/jobs` que gravam notificação
+   `in_app`: `crons/financeiro.ts` (payable/receivable due_soon),
+   `notify/projetos.ts` (report.reminder) e `crons/tarefas-prazos.ts`
+   (task.due_soon/overdue). Nenhum outro arquivo de `packages/jobs` grava
+   `in_app` (`channel: "in_app"` grepado — só esses 3).
+8. **Nenhuma cópia local de container/resolver** — grep de
+   `NotificationBellContainer|NotificationCenterContainer` nos 9 apps
+   confirma que todo import vem de `@hebron/ui`; grep de
+   `function NotificationBellContainer|function NotificationCenterContainer`
+   nos apps não retorna nenhum resultado.
+
+### Exceção registrada — `apps/documentos`
+
+Conforme o prompt, `apps/documentos` não usa `AppShell` (superfície
+pública + área editorial própria) — o sino **não** foi forçado ali.
+Pendência para o Filipe: decidir numa sessão futura se a área editorial
+de documentos deve ganhar sino/central própria (hoje os produtores desse
+app só geram notificação `channel: "email"`, nenhuma `in_app`).
+
+### Verificação
+
+- `pnpm turbo lint typecheck` (workspace completo, 21 packages/apps,
+  38 tasks lint+typecheck): 38/38 verdes.
+- `pnpm turbo build` isolado por app (evitando flake de build paralelo no
+  Windows — um `next build` de `admin` falhou com
+  `PageNotFoundError: Cannot find module for page: /_document` ao rodar
+  em paralelo com outros 4 builds; reexecutado sozinho, passou limpo —
+  não relacionado a este diff): `admin`, `financeiro`, `tarefas`,
+  `plataforma`, `flats`, `radio`, `projetos` — 7/7 verdes, rota
+  `/notificacoes` (ou equivalente por grupo) presente no output de cada
+  um.
+- Grep `NotificationBellContainer|NotificationCenterContainer` — 29
+  ocorrências nos 9 apps, todas via import de `@hebron/ui` (nenhuma
+  definição local).
+- Empiricamente confirmado o erro de build do Next.js para route groups
+  colidentes em `projetos` antes de consolidar na rota compartilhada
+  (ver item 6 acima).
+
+### Critérios de aceite
+
+- [x] Bell + central funcionais nos 7 apps do rollout (10 shells);
+      intranet (P-0.6b) inalterada
+- [x] Todos os `lib/notifications.ts` (9 apps) e os 3 arquivos de
+      `packages/jobs` que gravam in_app incluem `payload.module`
+- [x] Nenhuma cópia local de container/resolver — apps só importam de
+      `@hebron/ui` (grep)
+- [x] Exceção do `documentos` registrada em SESSIONS.md (pergunta ao
+      Filipe pendente sobre sino na área editorial)
+- [x] Lint · Types · `next build` dos 7 apps verdes
+- [x] Registrado em SESSIONS.md, fechando o débito de fiação de P-0.6
+
+### Arquivos criados/alterados
+
+- `apps/admin/src/actions/notifications.ts` (novo)
+- `apps/admin/src/app/(dashboard)/notificacoes/page.tsx` (novo)
+- `apps/admin/src/components/admin-shell.tsx`
+- `apps/admin/src/lib/notifications.ts`
+- `apps/financeiro/src/actions/notifications.ts` (novo)
+- `apps/financeiro/src/app/(dashboard)/notificacoes/page.tsx` (novo)
+- `apps/financeiro/src/app/(dashboard)/shell.tsx`
+- `apps/financeiro/src/lib/notifications.ts`
+- `apps/tarefas/src/actions/notifications.ts` (novo)
+- `apps/tarefas/src/app/(dashboard)/notificacoes/page.tsx` (novo)
+- `apps/tarefas/src/app/(dashboard)/shell.tsx`
+- `apps/tarefas/src/lib/notifications.ts`
+- `apps/plataforma/src/actions/notifications.ts` (novo)
+- `apps/plataforma/src/app/(aluno)/notificacoes/page.tsx` (novo)
+- `apps/plataforma/src/app/instrutor/notificacoes/page.tsx` (novo)
+- `apps/plataforma/src/app/(aluno)/shell.tsx`
+- `apps/plataforma/src/app/instrutor/shell.tsx`
+- `apps/plataforma/src/lib/notifications.ts`
+- `apps/flats/src/actions/notifications.ts` (novo)
+- `apps/flats/src/app/admin/notificacoes/page.tsx` (novo)
+- `apps/flats/src/app/(hospede)/notificacoes/page.tsx` (novo)
+- `apps/flats/src/app/admin/shell.tsx`
+- `apps/flats/src/app/(hospede)/shell.tsx`
+- `apps/flats/src/lib/notifications.ts`
+- `apps/radio/src/actions/notifications.ts` (novo)
+- `apps/radio/src/app/admin/notificacoes/page.tsx` (novo)
+- `apps/radio/src/app/admin/shell.tsx`
+- `apps/radio/src/lib/notifications.ts`
+- `apps/projetos/src/actions/notifications.ts` (novo)
+- `apps/projetos/src/app/notificacoes/page.tsx` (novo — rota
+  compartilhada, ver decisão acima)
+- `apps/projetos/src/app/notificacoes/notificacoes-content.tsx` (novo —
+  débito de infra, ver acima)
+- `apps/projetos/src/app/(diretoria)/shell.tsx`
+- `apps/projetos/src/app/(submissor)/shell.tsx`
+- `apps/projetos/src/lib/notifications.ts`
+- `apps/documentos/src/lib/notifications.ts` (só `payload.module` —
+  exceção do sino, ver acima)
+- `packages/jobs/src/crons/financeiro.ts`
+- `packages/jobs/src/notify/projetos.ts`
+- `packages/jobs/src/crons/tarefas-prazos.ts`
 - `SESSIONS.md` (esta entrada + índice)

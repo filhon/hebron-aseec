@@ -79,7 +79,11 @@ export async function notifyNewDocument(documentId: string): Promise<void> {
           type: "document.published",
           title: `Novo documento: ${doc.title}`,
           body: `Publicado em ${category.name}`,
-          payload: { documentId: doc.id, categoryId: doc.categoryId },
+          payload: {
+            module: "documentos",
+            documentId: doc.id,
+            categoryId: doc.categoryId,
+          },
         },
         email: {
           to: sub.email,
@@ -135,7 +139,7 @@ export async function notifyEditalOpen(editalId: string): Promise<void> {
           type: "edital.opened",
           title: `Edital aberto: ${row.title}`,
           body: "Novo edital disponível para submissão",
-          payload: { editalId },
+          payload: { module: "documentos", editalId },
         },
         email: {
           to: sub.email,

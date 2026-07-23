@@ -1,7 +1,12 @@
 "use client";
 
-import { usePathname } from "next/navigation";
-import { AppShell, getAppShortcuts, type NavSection } from "@hebron/ui";
+import { usePathname, useRouter } from "next/navigation";
+import {
+  AppShell,
+  getAppShortcuts,
+  NotificationBellContainer,
+  type NavSection,
+} from "@hebron/ui";
 import {
   LayoutDashboard,
   Users,
@@ -10,6 +15,11 @@ import {
   ClipboardList,
   Settings,
 } from "lucide-react";
+import {
+  listBellNotifications,
+  markNotificationReadAction,
+  markAllNotificationsReadAction,
+} from "../actions/notifications";
 
 /** White rounded mark — the "HA" sigla used as the Admin icon mark. */
 function AdminMark() {
@@ -49,6 +59,7 @@ export function AdminShell({
   pendingInvitesCount,
 }: Props) {
   const path = usePathname();
+  const router = useRouter();
 
   const sections: NavSection[] = [
     {
@@ -110,6 +121,26 @@ export function AdminShell({
       appName="Admin"
       logo={<AdminMark />}
       sidebarDark
+      headerActions={
+        <NotificationBellContainer
+          currentAppId="admin"
+          centerHref="/notificacoes"
+          listNotifications={async () => {
+            const result = await listBellNotifications({});
+            if (!result?.data) {
+              throw new Error("Falha ao carregar notificações");
+            }
+            return result.data;
+          }}
+          markRead={async (id) => {
+            await markNotificationReadAction({ id });
+          }}
+          markAllRead={async () => {
+            await markAllNotificationsReadAction({});
+          }}
+          navigate={(href) => router.push(href)}
+        />
+      }
     >
       {children}
     </AppShell>

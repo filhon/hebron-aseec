@@ -72,7 +72,11 @@ export async function notifyEnrollmentConfirmed(
       type: "enrollment.confirmed",
       title,
       body: `Você está matriculado em "${row.courseTitle}"`,
-      payload: { courseId: row.courseId, href: `/curso/${row.courseSlug}` },
+      payload: {
+        module: "plataforma",
+        courseId: row.courseId,
+        href: `/curso/${row.courseSlug}`,
+      },
     },
     email: {
       to: row.email,
@@ -144,7 +148,11 @@ export async function notifyNewCoursePublished(
           type: "course.published",
           title,
           body: course.description,
-          payload: { courseId: course.id, href: `/curso/${course.slug}` },
+          payload: {
+            module: "plataforma",
+            courseId: course.id,
+            href: `/curso/${course.slug}`,
+          },
         },
         email: {
           to: recipient.email,
@@ -198,7 +206,11 @@ export async function notifyCertificateIssued(
         type: "certificate.issued",
         title,
         body,
-        payload: { certificateId, href: "/certificados" },
+        payload: {
+          module: "plataforma",
+          certificateId,
+          href: "/certificados",
+        },
       },
     }),
     createNotification({
@@ -210,7 +222,11 @@ export async function notifyCertificateIssued(
         type: "certificate.issued",
         title,
         body,
-        payload: { certificateId, href: "/certificados" },
+        payload: {
+          module: "plataforma",
+          certificateId,
+          href: "/certificados",
+        },
       },
       email: {
         to: row.email,
@@ -270,6 +286,7 @@ export async function notifyDiscussionReply(postId: string): Promise<void> {
       title: "Nova resposta no fórum",
       body: `${authorName} respondeu ao seu comentário`,
       payload: {
+        module: "plataforma",
         postId: post.id,
         href: `/curso/${post.courseSlug}/aula/${post.lessonId}`,
       },

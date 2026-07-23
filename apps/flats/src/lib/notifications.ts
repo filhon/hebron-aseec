@@ -153,7 +153,11 @@ export async function notifyReservationSubmitted(
           type: "flats.reservation.submitted",
           title,
           body: `${guestName} solicitou hospedagem — pontuação ${scoreTotal}/75.`,
-          payload: { reservationId, href: `/admin/reserva/${reservationId}` },
+          payload: {
+            module: "flats",
+            reservationId,
+            href: `/admin/reserva/${reservationId}`,
+          },
         },
       }),
       createNotification({
@@ -165,7 +169,11 @@ export async function notifyReservationSubmitted(
           type: "flats.reservation.submitted",
           title,
           body: `${guestName} solicitou hospedagem — pontuação ${scoreTotal}/75.`,
-          payload: { reservationId, href: `/admin/reserva/${reservationId}` },
+          payload: {
+            module: "flats",
+            reservationId,
+            href: `/admin/reserva/${reservationId}`,
+          },
         },
         email: {
           to: recipient.email,
@@ -250,7 +258,11 @@ export async function notifyReservationDecision(
         decision === "aprovada"
           ? `Reserva confirmada em ${unitName ?? "unidade a definir"}.`
           : (row.managerNotes ?? "Solicitação não aprovada."),
-      payload: { reservationId, href: "/minhas-reservas" },
+      payload: {
+        module: "flats",
+        reservationId,
+        href: "/minhas-reservas",
+      },
     },
     email: {
       to: row.requesterEmail,

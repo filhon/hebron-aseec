@@ -1,9 +1,18 @@
 "use client";
 
-import { usePathname } from "next/navigation";
-import { AppShell, type NavSection } from "@hebron/ui";
+import { usePathname, useRouter } from "next/navigation";
+import {
+  AppShell,
+  NotificationBellContainer,
+  type NavSection,
+} from "@hebron/ui";
 import { LayoutDashboard, FolderPlus, Building2, FileText } from "lucide-react";
 import { logoutAction } from "../../actions/auth";
+import {
+  listBellNotifications,
+  markNotificationReadAction,
+  markAllNotificationsReadAction,
+} from "../../actions/notifications";
 import { ProjetosLogo } from "../../components/projetos-logo";
 
 const SECTIONS: NavSection[] = [
@@ -29,6 +38,7 @@ type Props = {
 
 export default function SubmissorShell({ user, children }: Props) {
   const path = usePathname();
+  const router = useRouter();
 
   return (
     <AppShell
@@ -43,6 +53,26 @@ export default function SubmissorShell({ user, children }: Props) {
       appName="Projetos"
       logo={<ProjetosLogo />}
       sidebarDark
+      headerActions={
+        <NotificationBellContainer
+          currentAppId="projetos"
+          centerHref="/notificacoes"
+          listNotifications={async () => {
+            const result = await listBellNotifications({});
+            if (!result?.data) {
+              throw new Error("Falha ao carregar notificações");
+            }
+            return result.data;
+          }}
+          markRead={async (id) => {
+            await markNotificationReadAction({ id });
+          }}
+          markAllRead={async () => {
+            await markAllNotificationsReadAction({});
+          }}
+          navigate={(href) => router.push(href)}
+        />
+      }
     >
       {children}
     </AppShell>

@@ -3,7 +3,12 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useAction } from "next-safe-action/hooks";
 import type { Task } from "@hebron/types/tarefas";
-import { AppShell, getAppShortcuts, type NavSection } from "@hebron/ui";
+import {
+  AppShell,
+  getAppShortcuts,
+  NotificationBellContainer,
+  type NavSection,
+} from "@hebron/ui";
 import {
   CheckCircle,
   ListTodo,
@@ -20,6 +25,11 @@ import {
 } from "lucide-react";
 import { createTask } from "../../actions/tasks";
 import { logoutAction } from "../../actions/auth";
+import {
+  listBellNotifications,
+  markNotificationReadAction,
+  markAllNotificationsReadAction,
+} from "../../actions/notifications";
 import { CommandMenu } from "../../components/command-menu";
 
 const SECTIONS: NavSection[] = [
@@ -131,6 +141,26 @@ export default function TarefasShell({ user, tasks, children }: ShellProps) {
         />
       }
       sidebarDark
+      headerActions={
+        <NotificationBellContainer
+          currentAppId="tarefas"
+          centerHref="/notificacoes"
+          listNotifications={async () => {
+            const result = await listBellNotifications({});
+            if (!result?.data) {
+              throw new Error("Falha ao carregar notificações");
+            }
+            return result.data;
+          }}
+          markRead={async (id) => {
+            await markNotificationReadAction({ id });
+          }}
+          markAllRead={async () => {
+            await markAllNotificationsReadAction({});
+          }}
+          navigate={(href) => router.push(href)}
+        />
+      }
     >
       {children}
       <CommandMenu

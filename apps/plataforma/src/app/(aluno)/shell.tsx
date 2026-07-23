@@ -1,9 +1,18 @@
 "use client";
 
-import { usePathname } from "next/navigation";
-import { AppShell, type NavSection } from "@hebron/ui";
+import { usePathname, useRouter } from "next/navigation";
+import {
+  AppShell,
+  NotificationBellContainer,
+  type NavSection,
+} from "@hebron/ui";
 import { GraduationCap, LayoutGrid, Route, Award } from "lucide-react";
 import { logoutAction } from "../../actions/auth";
+import {
+  listBellNotifications,
+  markNotificationReadAction,
+  markAllNotificationsReadAction,
+} from "../../actions/notifications";
 
 const SECTIONS: NavSection[] = [
   {
@@ -36,6 +45,7 @@ interface AlunoShellProps {
 
 export default function AlunoShell({ user, children }: AlunoShellProps) {
   const pathname = usePathname();
+  const router = useRouter();
 
   return (
     <AppShell
@@ -53,6 +63,26 @@ export default function AlunoShell({ user, children }: AlunoShellProps) {
           className="h-5 w-5 shrink-0"
           style={{ color: "var(--hb-teal)" }}
           aria-hidden="true"
+        />
+      }
+      headerActions={
+        <NotificationBellContainer
+          currentAppId="plataforma"
+          centerHref="/notificacoes"
+          listNotifications={async () => {
+            const result = await listBellNotifications({});
+            if (!result?.data) {
+              throw new Error("Falha ao carregar notificações");
+            }
+            return result.data;
+          }}
+          markRead={async (id) => {
+            await markNotificationReadAction({ id });
+          }}
+          markAllRead={async () => {
+            await markAllNotificationsReadAction({});
+          }}
+          navigate={(href) => router.push(href)}
         />
       }
     >

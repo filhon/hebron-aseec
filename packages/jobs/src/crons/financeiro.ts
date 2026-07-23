@@ -252,7 +252,11 @@ export async function runDueDateReminders(): Promise<void> {
         type: "financeiro.payable.due_soon",
         title: `Conta a pagar vence em 3 dias: ${p.description}`,
         body: `Vencimento em ${targetDate} — R$ ${parseFloat(p.amount).toFixed(2)}.`,
-        payload: { payableId: p.id, href: "/contas-pagar" },
+        payload: {
+          module: "financeiro",
+          payableId: p.id,
+          href: "/contas-pagar",
+        },
       },
     });
   }
@@ -282,7 +286,11 @@ export async function runDueDateReminders(): Promise<void> {
         type: "financeiro.receivable.due_soon",
         title: `Conta a receber vence em 3 dias: ${r.description}`,
         body: `Previsão em ${targetDate} — R$ ${parseFloat(r.amount).toFixed(2)}.`,
-        payload: { receivableId: r.id, href: "/contas-receber" },
+        payload: {
+          module: "financeiro",
+          receivableId: r.id,
+          href: "/contas-receber",
+        },
       },
     });
   }
