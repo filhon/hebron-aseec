@@ -26,28 +26,6 @@ const scopeEnum = z.enum([
   "tarefas",
 ]);
 
-// ─── createUserSchema ─────────────────────────────────────────────────────────
-
-export const createUserSchema = z.object({
-  name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres").max(120),
-  email: z.string().email("Email inválido"),
-  role: roleEnum,
-  sendInvite: z.boolean().default(true),
-});
-
-export type CreateUserInput = z.infer<typeof createUserSchema>;
-
-// ─── updateUserSchema ─────────────────────────────────────────────────────────
-
-export const updateUserSchema = z.object({
-  id: z.string().uuid(),
-  name: z.string().min(2).max(120).optional(),
-  status: z.enum(["active", "suspended", "pending_approval"]).optional(),
-  moduleAccess: z.array(scopeEnum).optional(),
-});
-
-export type UpdateUserInput = z.infer<typeof updateUserSchema>;
-
 // ─── createInvitationSchema ───────────────────────────────────────────────────
 
 export const createInvitationSchema = z.object({
@@ -66,35 +44,6 @@ export const updateSettingSchema = z.object({
 });
 
 export type UpdateSettingInput = z.infer<typeof updateSettingSchema>;
-
-// ─── createUserExtendedSchema ─────────────────────────────────────────────────
-// Versão estendida para o formulário admin: múltiplos papéis + controle de módulos
-
-export const createUserExtendedSchema = z.object({
-  name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres").max(120),
-  email: z.string().email("Email inválido"),
-  roles: z.array(roleEnum).min(1, "Selecione pelo menos um papel"),
-  moduleAccess: z.array(scopeEnum).optional(),
-  sendInvite: z.boolean().optional(),
-});
-
-export type CreateUserExtendedInput = z.infer<typeof createUserExtendedSchema>;
-
-// ─── updateUserExtendedSchema ─────────────────────────────────────────────────
-
-export const updateUserExtendedSchema = z.object({
-  id: z.string().uuid(),
-  name: z
-    .string()
-    .min(2, "Nome deve ter pelo menos 2 caracteres")
-    .max(120)
-    .optional(),
-  status: z.enum(["active", "suspended", "pending_approval"]).optional(),
-  roles: z.array(roleEnum).min(1, "Selecione pelo menos um papel").optional(),
-  moduleAccess: z.array(scopeEnum).optional(),
-});
-
-export type UpdateUserExtendedInput = z.infer<typeof updateUserExtendedSchema>;
 
 // ─── createInvitationExtendedSchema ──────────────────────────────────────────
 

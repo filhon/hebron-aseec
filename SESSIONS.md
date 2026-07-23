@@ -198,6 +198,9 @@
 | S-175  | 2026-07-22 | P-0.6b — Notificações in_app operáveis: slot no AppShell + piloto na intranet (CORRETIVO — bell/central nunca fiados)            | concluido                            |
 | S-176  | 2026-07-23 | P-0.6c — Notificações in_app: rollout do sino/central aos demais apps (CORRETIVO — continuação de P-0.6b)                        | concluido                            |
 | S-177  | 2026-07-23 | P-0.6d — Client Drizzle tipado com o schema completo (CORRETIVO — débito S-7/F2-F2 nunca liquidado)                              | concluido                            |
+| S-178  | 2026-07-22 | P-0.6e — Tipografia institucional nos emails (CORRETIVO — EmailLayout usava Inter)                                               | concluido                            |
+| S-179  | 2026-07-22 | Débito ad-hoc — `PreviewProps` nos 27 templates de email (fix do `email:dev`, fora do escopo original do P-0.6e)                 | concluido                            |
+| S-180  | 2026-07-23 | P-1.26b — Admin: remover `moduleAccess` fantasma, schemas de usuário mortos e tipos de domínio órfãos (PATCH-025)                | concluido                            |
 
 ---
 
@@ -14412,3 +14415,89 @@ approval-request.tsx` (antes: stack trace/falha). Testado via `curl` em 6
 - `pnpm-lock.yaml`
 - `pnpm-patches/react-email@3.0.7.patch` (novo)
 - `SESSIONS.md` (esta entrada, e correção da S-179)
+
+## S-180 — P-1.26b — Admin: remover `moduleAccess` fantasma, schemas de usuário mortos e tipos de domínio órfãos (PATCH-025)
+
+**Branch:** `fix/P-1.26b-admin-moduleaccess-fantasma`
+
+### Contexto
+
+Auditoria cruzada do Bloco A do Admin (P-1.1–1.5) contra a codebase atual,
+débitos declarados em S-8/S-11. `PATCHES/025-admin-moduleaccess-fantasma-e-
+schemas-mortos.md` documentou um campo fantasma do mesmo tipo que o
+PATCH-021 existe para eliminar: `User.moduleAccess` (allow-list) e os
+schemas Zod que o carregavam nunca tiveram consumidor, e o controle de
+acesso por módulo que efetivamente foi ao ar usa a polaridade oposta —
+`public.users.suspended_modules`, deny-list, operada só por
+`suspendUser`/`removeSuspension`. Junto, sobravam quatro schemas de usuário
+do antigo `user-form.tsx` (removido na fase de backend) e sete dos nove
+tipos de domínio de `packages/types/src/admin/index.ts`, sem consumidor e
+divergentes do schema Drizzle vivo.
+
+### O que foi feito
+
+Confirmado por `grep` antes de remover (repetindo o levantamento do PATCH-025):
+`moduleAccess` só aparecia nas próprias definições; os quatro schemas de
+usuário (`createUserSchema`, `updateUserSchema`, `createUserExtendedSchema`,
+`updateUserExtendedSchema`) e seus tipos inferidos não eram importados por
+nenhum app (`createUser` vivo usa schema inline em
+`apps/admin/src/actions/users.ts`); de `@hebron/types/admin`, só
+`EmailTemplate` tinha consumidor (`email-template-editor.tsx`,
+`templates-email/page.tsx`).
+
+1. `packages/validators/src/admin/index.ts` — removidos `moduleAccess` dos
+   três schemas afetados junto com os próprios schemas (o campo não
+   sobrevivia isolado, os quatro schemas inteiros eram mortos);
+   `roleEnum`/`scopeEnum` e os schemas com consumidor vivo
+   (`createInvitationExtendedSchema`, `roleAssignmentSchema`,
+   `roleRevocationSchema`, `designationSchema`, `emailTemplateSchema`,
+   `meetingSchema`) preservados intactos — `scopeEnum` continua em uso por
+   `roleAssignmentSchema.scope`.
+2. `packages/types/src/admin/index.ts` — removidos os oito tipos órfãos
+   (`User`/`UserStatus`, `RoleAssignment`, `Invitation`/`InvitationStatus`,
+   `AuditLogEntry`/`AuditAction`, `SystemSetting`/`SettingValueType`,
+   `FeatureFlag`, `MeetingSession`/`MeetingType`/`MeetingStatus`,
+   `Designation`); `EmailTemplate` preservado. O `import type {
+DesignationType, Role, Scope } from "../roles"` saiu junto — nenhum tipo
+   remanescente no arquivo o usava.
+3. `packages/validators/src/index.ts` e `packages/types/package.json` — não
+   precisaram de edição: a barrel (`export * from "./admin"`) e o export
+   `"./admin"` do `package.json` de types continuam válidos, só sumiu o que
+   era morto.
+
+Nenhuma migration criada — `public.users` já usa `suspended_modules`/`status`
+desde o Bloco B; esta foi uma mudança puramente de contrato TS/Zod.
+
+### Verificação
+
+- `grep -r moduleAccess` no repositório → zero ocorrências fora de
+  `SESSIONS.md`/`PATCHES/` (histórico).
+- `pnpm turbo typecheck` e `pnpm turbo lint` verdes em `@hebron/types`,
+  `@hebron/validators` e `@hebron/admin` (build completo do turbo, sem
+  erros em nenhum pacote do grafo).
+- `pnpm --filter @hebron/admin test` — 103/105 verdes. As 2 falhas são
+  drift de ambiente pré-existente, não relacionado a este diff (que só
+  remove tipos/schemas sem consumidor, sem tocar runtime/DB):
+  `security-audit.test.ts` (GRANTs TRUNCATE/TRIGGER/REFERENCES indevidos de
+  anon/authenticated em `public.data_deletion_requests` — drift de
+  permissões no Postgres dev) e `settings-actions.test.ts` (`
+setProjetosChecklistTemplate` falha por config `
+projetos_analysis_checklist_template` não seedada — `pnpm db:seed`
+  pendente no ambiente). `git diff --stat` confirma que o diff desta
+  sessão toca só os dois arquivos de contrato listados acima.
+
+### Critérios de aceite
+
+- [x] `grep -r moduleAccess` não retorna ocorrência em código-fonte
+- [x] Os quatro schemas de usuário mortos removidos, nenhum import quebrou
+- [x] Tipos de domínio órfãos removidos; `EmailTemplate` preservado e ainda
+      importável via `@hebron/types/admin`
+- [x] Nenhuma migration de banco criada
+- [x] Typecheck e lint de Admin passam; testes 103/105 verdes (2 falhas
+      pré-existentes de ambiente, não relacionadas a este diff — ver acima)
+
+### Arquivos criados/alterados
+
+- `packages/validators/src/admin/index.ts`
+- `packages/types/src/admin/index.ts`
+- `SESSIONS.md` (esta entrada)
