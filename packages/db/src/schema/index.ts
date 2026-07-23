@@ -1,7 +1,7 @@
-// Re-exports public schema primitives (excluding the minimal notifications
-// stub — the expanded version lives in notifications.ts, adjacent to this
-// file — not to be confused with ../notifications.ts, which is the shared
-// insert helper for @hebron/email's createNotification).
+// Re-exports public schema primitives. notifications lives in
+// notifications.ts, adjacent to this file — not to be confused with
+// ../notifications.ts, which is the shared insert helper for
+// @hebron/email's createNotification.
 export {
   adminSchema,
   projetosSchema,

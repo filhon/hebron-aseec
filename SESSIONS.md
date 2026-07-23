@@ -197,6 +197,7 @@
 | S-174  | 2026-07-22 | P-0.5c — App launcher canônico e higiene de API do sidebar (CORRETIVO — duplicação com drift + launcher exposto a papel externo) | concluido                            |
 | S-175  | 2026-07-22 | P-0.6b — Notificações in_app operáveis: slot no AppShell + piloto na intranet (CORRETIVO — bell/central nunca fiados)            | concluido                            |
 | S-176  | 2026-07-23 | P-0.6c — Notificações in_app: rollout do sino/central aos demais apps (CORRETIVO — continuação de P-0.6b)                        | concluido                            |
+| S-177  | 2026-07-23 | P-0.6d — Client Drizzle tipado com o schema completo (CORRETIVO — débito S-7/F2-F2 nunca liquidado)                              | concluido                            |
 
 ---
 
@@ -14086,3 +14087,76 @@ app só geram notificação `channel: "email"`, nenhuma `in_app`).
 - `packages/jobs/src/notify/projetos.ts`
 - `packages/jobs/src/crons/tarefas-prazos.ts`
 - `SESSIONS.md` (esta entrada + índice)
+
+---
+
+## S-177 — P-0.6d — Client Drizzle tipado com o schema completo (CORRETIVO — débito S-7/F2-F2 nunca liquidado)
+
+**Branch:** `feat/P-0.6d-db-client-schema`
+
+### Contexto
+
+Débito registrado na S-7 ("`client.ts` ainda importa de `./schema/public`")
+e reconfirmado pela auditoria de fase 2 (F2-F2: "o débito S-7 nunca foi
+liquidado; os apps contornam importando `@hebron/db/schema` diretamente").
+`client.ts:3` importava `* as schema from "./schema/public"`, tipando o
+singleton `db` (API relacional `db.query.*`) só com o **stub** minimalista
+de `notifications` (`public.ts:172`, sem `channel`/`type`/`payload`/
+`sent_at`) e sem enxergar nenhum schema de módulo — mesmo com todos os 9
+schemas de app já implementados e exportados pelo barrel `schema/index.ts`.
+Havia também duas definições `pgTable("notifications")` vivas no repo
+(`public.ts` e `notifications.ts`), drift latente escondido pelo barrel.
+
+### O que foi feito
+
+1. `packages/db/src/client.ts` — import trocado para
+   `* as schema from "./schema/index"`. Sem ciclo: confirmado por grep que
+   nada em `src/schema/**` importa `client.ts`.
+2. `packages/db/src/schema/public.ts` — removidos o stub
+   `pgTable("notifications", ...)` e os tipos `Notification`/
+   `NewNotification` derivados dele. Confirmado por grep antes da remoção
+   que nenhum arquivo do repo importava `notifications` a partir de
+   `schema/public` (os imports diretos existentes de `schema/public` —
+   `anonymization.ts`, `consents.ts`, `system-actor.ts` e 4 testes — usam
+   `users`/`roleAssignments`/`consents`, não afetados). A definição
+   canônica (`schema/notifications.ts`, com `channel`/`type`/`payload`/
+   `sentAt`) já era a que o barrel exportava.
+3. `packages/db/src/schema/index.ts` — comentário do topo atualizado
+   (a ressalva "excluindo o stub" não existe mais); re-exports inalterados.
+4. `drizzle.config.ts` e migrations não tocados — correção puramente de
+   tipos/imports, nenhum SQL novo (a tabela real já estava expandida desde
+   `0001_notifications.sql`).
+
+### Verificação
+
+- Grep `pgTable("notifications"` em `packages/db/src/schema/` (multiline)
+  — 1 única ocorrência (`notifications.ts`).
+- Grep por imports de `notifications` a partir de `schema/public` — zero.
+- Probe de typecheck ad-hoc (`tsc --noEmit` isolado, removido após o
+  teste): `Awaited<ReturnType<typeof db.query.notifications.findFirst>>`
+  aceita `channel`/`type`/`payload`/`sentAt`; `keyof typeof db.query`
+  inclui `auditLog`, `projects`, `tasks` (schemas de módulo antes
+  invisíveis ao `db` singleton).
+- `pnpm --filter @hebron/db test` — 69/70 verde; a falha
+  (`system-actor.test.ts`) é o drift pré-existente já registrado na S-164/
+  S-171 (conflito de FK ao tentar hard-delete um usuário que assinou audit
+  em banco de dev compartilhado), não relacionado a este diff.
+- `pnpm turbo lint typecheck` — 38/38 tasks verdes (workspace completo).
+
+### Critérios de aceite
+
+- [x] `db.query.notifications` tipado com `channel`/`type`/`payload`/
+      `sent_at`; schemas de módulo visíveis em `db.query.*`
+- [x] Grep: uma única definição `pgTable("notifications")` no repo
+- [x] Grep: zero imports de `notifications` a partir de `schema/public`
+- [x] `pnpm --filter @hebron/db test` verde (suítes existentes não
+      regridem; única falha é o drift pré-existente da S-164)
+- [x] `pnpm turbo lint typecheck` verde (workspace inteiro)
+- [x] Registrado em SESSIONS.md, fechando o débito da S-7
+
+### Arquivos criados/alterados
+
+- `packages/db/src/client.ts`
+- `packages/db/src/schema/public.ts`
+- `packages/db/src/schema/index.ts`
+- `SESSIONS.md` (esta entrada)

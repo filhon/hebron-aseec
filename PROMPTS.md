@@ -51,7 +51,7 @@ Corpo integral no próprio arquivo (as 4 originais) ou em `AUDIT/04-prompts-pend
 | P-0.4b    | Auth: simetria de decode de cookie no browser client         | neste arquivo                    | pendente |
 | P-0.6b    | Notificações in_app operáveis: slot no AppShell + piloto     | neste arquivo                    | S-175    |
 | P-0.6c    | Notificações in_app: rollout do sino/central aos demais apps | neste arquivo                    | S-176    |
-| P-0.6d    | Client Drizzle tipado (remoção do stub de notifications)     | neste arquivo                    | pendente |
+| P-0.6d    | Client Drizzle tipado (remoção do stub de notifications)     | neste arquivo                    | S-177    |
 | P-0.6e    | Emails: tipografia institucional (remover Inter)             | neste arquivo                    | pendente |
 | P-7.1b    | Flats: máximo de scoring em BRAIN §6.8 (80 → 75)             | neste arquivo                    | pendente |
 | P-7.5b    | Flats: fiação das telas do Bloco A para validação diretoria  | neste arquivo                    | pendente |
@@ -1156,12 +1156,12 @@ A S-7 registrou como débito que `packages/db/src/client.ts` "ainda importa de `
 
 **Critérios de aceite:**
 
-- [ ] `db.query.notifications` tipado com `channel`/`type`/`payload`/`sent_at`; schemas de módulo visíveis em `db.query.*`
-- [ ] Grep: uma única definição `pgTable("notifications")` no repo
-- [ ] Grep: zero imports de `notifications` a partir de `schema/public`
-- [ ] `pnpm --filter @hebron/db test` verde (suites existentes não regridem)
-- [ ] `pnpm turbo lint typecheck` verde (workspace inteiro — apps que importam `@hebron/db` compilam sem mudança)
-- [ ] Registrar em SESSIONS.md, fechando o débito da S-7
+- [x] `db.query.notifications` tipado com `channel`/`type`/`payload`/`sent_at`; schemas de módulo visíveis em `db.query.*`
+- [x] Grep: uma única definição `pgTable("notifications")` no repo
+- [x] Grep: zero imports de `notifications` a partir de `schema/public`
+- [x] `pnpm --filter @hebron/db test` verde (suites existentes não regridem)
+- [x] `pnpm turbo lint typecheck` verde (workspace inteiro — apps que importam `@hebron/db` compilam sem mudança)
+- [x] Registrar em SESSIONS.md, fechando o débito da S-7
 
 **Notas:**
 Se o typecheck do workspace revelar algum consumidor silencioso do stub, **não** adaptá-lo às escondidas: listar em SESSIONS.md e corrigir apontando para o schema canônico.

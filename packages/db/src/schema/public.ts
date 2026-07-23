@@ -167,22 +167,6 @@ export const designations = pgTable(
 );
 
 // ---------------------------------------------------------------------------
-// public.notifications
-// ---------------------------------------------------------------------------
-export const notifications = pgTable("notifications", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  userId: uuid("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  title: text("title").notNull(),
-  body: text("body"),
-  readAt: timestamp("read_at", { withTimezone: true }),
-  createdAt: timestamp("created_at", { withTimezone: true })
-    .notNull()
-    .defaultNow(),
-});
-
-// ---------------------------------------------------------------------------
 // public.consents — LGPD, consentimento granular por finalidade (P-0.13)
 // Uma linha por (usuário, finalidade); revogação é granted=false +
 // revoked_at, nunca remoção de linha (mantém histórico de quando existiu).
@@ -258,8 +242,6 @@ export type RoleAssignment = typeof roleAssignments.$inferSelect;
 export type NewRoleAssignment = typeof roleAssignments.$inferInsert;
 export type Designation = typeof designations.$inferSelect;
 export type NewDesignation = typeof designations.$inferInsert;
-export type Notification = typeof notifications.$inferSelect;
-export type NewNotification = typeof notifications.$inferInsert;
 export type Consent = typeof consents.$inferSelect;
 export type NewConsent = typeof consents.$inferInsert;
 export type ConsentPurpose = Consent["purpose"];
