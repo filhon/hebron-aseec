@@ -146,4 +146,11 @@ export function CertificateIssuedEmail({
   );
 }
 
+CertificateIssuedEmail.PreviewProps = {
+  recipientName: "Camila Ribeiro",
+  courseTitle: "Fundamentos da Liderança Cristã",
+  issuedAt: new Date("2026-07-15"),
+  certificatesUrl: "https://plataforma.hebronaseec.com.br/certificados",
+} satisfies CertificateIssuedEmailProps;
+
 export default CertificateIssuedEmail;

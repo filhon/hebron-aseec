@@ -52,7 +52,7 @@ Corpo integral no próprio arquivo (as 4 originais) ou em `AUDIT/04-prompts-pend
 | P-0.6b    | Notificações in_app operáveis: slot no AppShell + piloto     | neste arquivo                    | S-175    |
 | P-0.6c    | Notificações in_app: rollout do sino/central aos demais apps | neste arquivo                    | S-176    |
 | P-0.6d    | Client Drizzle tipado (remoção do stub de notifications)     | neste arquivo                    | S-177    |
-| P-0.6e    | Emails: tipografia institucional (remover Inter)             | neste arquivo                    | pendente |
+| P-0.6e    | Emails: tipografia institucional (remover Inter)             | neste arquivo                    | S-178    |
 | P-7.1b    | Flats: máximo de scoring em BRAIN §6.8 (80 → 75)             | neste arquivo                    | pendente |
 | P-7.5b    | Flats: fiação das telas do Bloco A para validação diretoria  | neste arquivo                    | pendente |
 
@@ -1197,12 +1197,12 @@ Se o typecheck do workspace revelar algum consumidor silencioso do stub, **não*
 
 **Critérios de aceite:**
 
-- [ ] Grep `Inter` em `packages/email/src` → zero ocorrências
-- [ ] `<Font>` com Titillium Web no `<Head>`; stack de fallback sem Inter
-- [ ] Preview via `pnpm --filter @hebron/email email:dev` renderiza com Titillium Web (screenshot ou registro em SESSIONS.md)
-- [ ] Templates concretos existentes não precisam de edição (herdam via `emailFontFamily`)
-- [ ] Lint · Types verdes
-- [ ] Registrar em SESSIONS.md
+- [x] Grep `Inter` em `packages/email/src` → zero ocorrências
+- [x] `<Font>` com Titillium Web no `<Head>`; stack de fallback sem Inter
+- [x] Preview via `pnpm --filter @hebron/email email:dev` renderiza com Titillium Web (screenshot ou registro em SESSIONS.md)
+- [x] Templates concretos existentes não precisam de edição (herdam via `emailFontFamily`)
+- [x] Lint · Types verdes
+- [x] Registrar em SESSIONS.md
 
 **Notas:**
 Observação lateral (não é escopo deste prompt): `send.ts` usa `renderAsync`, deprecado nas versões novas do React Email em favor de `render` assíncrono — trocar apenas quando o package for atualizado de versão, em sessão própria.

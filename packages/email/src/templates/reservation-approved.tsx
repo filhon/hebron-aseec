@@ -239,4 +239,13 @@ export function ReservationApprovedEmail({
   );
 }
 
+ReservationApprovedEmail.PreviewProps = {
+  recipientName: "Fernanda Costa",
+  decision: "aprovada",
+  unitName: "Flat 302",
+  period: { start: new Date("2026-07-27"), end: new Date("2026-07-30") },
+  managerNotes: "Chegada após 22h, avisar a recepção com antecedência.",
+  reservationUrl: "https://flats.hebronaseec.com.br/reservas/88",
+} satisfies ReservationApprovedEmailProps;
+
 export default ReservationApprovedEmail;

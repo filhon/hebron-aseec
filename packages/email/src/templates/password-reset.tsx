@@ -123,4 +123,10 @@ export function PasswordResetEmail({
   );
 }
 
+PasswordResetEmail.PreviewProps = {
+  resetUrl: "https://app.hebronaseec.com.br/redefinir-senha?token=xyz789",
+  name: "Marcos Andrade",
+  expiresInHours: 24,
+} satisfies PasswordResetEmailProps;
+
 export default PasswordResetEmail;

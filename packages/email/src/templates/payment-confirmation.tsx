@@ -209,4 +209,14 @@ export function PaymentConfirmationEmail({
   );
 }
 
+PaymentConfirmationEmail.PreviewProps = {
+  recipientName: "Paulo Henrique Souza",
+  projectTitle: "Restauração do telhado da capela sede",
+  amount: "1500.00",
+  paymentDate: new Date("2026-07-10"),
+  paymentMonth: 7,
+  projectUrl: "https://projetos.hebronaseec.com.br/projetos/55",
+  receiptUrl: "https://storage.hebronaseec.com.br/comprovantes/55-07.pdf",
+} satisfies PaymentConfirmationEmailProps;
+
 export default PaymentConfirmationEmail;

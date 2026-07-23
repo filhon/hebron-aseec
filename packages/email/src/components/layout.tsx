@@ -2,6 +2,7 @@ import * as React from "react";
 import {
   Body,
   Container,
+  Font,
   Head,
   Hr,
   Html,
@@ -25,7 +26,46 @@ const colors = {
 } as const;
 
 const fontFamily =
-  'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+  '"Titillium Web", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+
+// Web fonts (weights 400/600/700, latin subset) — clientes sem suporte a
+// @font-face (Outlook desktop, etc.) caem no fallback de sistema acima.
+function EmailFont() {
+  return (
+    <>
+      <Font
+        fontFamily="Titillium Web"
+        fallbackFontFamily="sans-serif"
+        fontWeight={400}
+        fontStyle="normal"
+        webFont={{
+          url: "https://fonts.gstatic.com/s/titilliumweb/v19/NaPecZTIAOhVxoMyOr9n_E7fdMPmDQ.woff2",
+          format: "woff2",
+        }}
+      />
+      <Font
+        fontFamily="Titillium Web"
+        fallbackFontFamily="sans-serif"
+        fontWeight={600}
+        fontStyle="normal"
+        webFont={{
+          url: "https://fonts.gstatic.com/s/titilliumweb/v19/NaPDcZTIAOhVxoMyOr9n_E7ffBzCGItzYw.woff2",
+          format: "woff2",
+        }}
+      />
+      <Font
+        fontFamily="Titillium Web"
+        fallbackFontFamily="sans-serif"
+        fontWeight={700}
+        fontStyle="normal"
+        webFont={{
+          url: "https://fonts.gstatic.com/s/titilliumweb/v19/NaPDcZTIAOhVxoMyOr9n_E7ffHjDGItzYw.woff2",
+          format: "woff2",
+        }}
+      />
+    </>
+  );
+}
 
 // ——————————————————————————————————————
 // EmailHeader
@@ -154,7 +194,9 @@ export interface EmailLayoutProps {
 export function EmailLayout({ preview, children }: EmailLayoutProps) {
   return (
     <Html lang="pt-BR" dir="ltr">
-      <Head />
+      <Head>
+        <EmailFont />
+      </Head>
       <Preview>{preview}</Preview>
 
       <Body

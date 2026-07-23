@@ -211,4 +211,12 @@ export function EditalClosingEmail({
   );
 }
 
+EditalClosingEmail.PreviewProps = {
+  recipientName: "Paulo Henrique Souza",
+  editalTitle: "Edital de Projetos Missionários 2026/2",
+  editalUrl: "https://projetos.hebronaseec.com.br/editais/12",
+  closesAt: new Date("2026-08-01T18:00:00-03:00"),
+  daysUntilClose: 3,
+} satisfies EditalClosingEmailProps;
+
 export default EditalClosingEmail;

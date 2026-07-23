@@ -155,4 +155,14 @@ export function NewCourseEmail({
   );
 }
 
+NewCourseEmail.PreviewProps = {
+  recipientName: "Camila Ribeiro",
+  courseTitle: "Fundamentos da Liderança Cristã",
+  courseDescription:
+    "Um curso introdutório sobre princípios bíblicos de liderança para líderes de ministério.",
+  category: "Liderança",
+  instructorName: "Pr. José Almeida",
+  courseUrl: "https://plataforma.hebronaseec.com.br/cursos/9",
+} satisfies NewCourseEmailProps;
+
 export default NewCourseEmail;

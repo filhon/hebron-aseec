@@ -145,4 +145,10 @@ export function WelcomeEmail({ name, roles, loginUrl }: WelcomeEmailProps) {
   );
 }
 
+WelcomeEmail.PreviewProps = {
+  name: "Camila Ribeiro",
+  roles: ["colaborador", "aluno"],
+  loginUrl: "https://app.hebronaseec.com.br/login",
+} satisfies WelcomeEmailProps;
+
 export default WelcomeEmail;

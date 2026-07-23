@@ -131,4 +131,11 @@ export function EnrollmentConfirmedEmail({
   );
 }
 
+EnrollmentConfirmedEmail.PreviewProps = {
+  recipientName: "Camila Ribeiro",
+  courseTitle: "Fundamentos da Liderança Cristã",
+  instructorName: "Pr. José Almeida",
+  courseUrl: "https://plataforma.hebronaseec.com.br/cursos/9",
+} satisfies EnrollmentConfirmedEmailProps;
+
 export default EnrollmentConfirmedEmail;

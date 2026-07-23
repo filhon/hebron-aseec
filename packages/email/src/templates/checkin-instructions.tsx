@@ -211,4 +211,13 @@ export function CheckinInstructionsEmail({
   );
 }
 
+CheckinInstructionsEmail.PreviewProps = {
+  recipientName: "Fernanda Costa",
+  type: "checkin",
+  unitName: "Flat 302",
+  instructions: "Portão eletrônico com senha 2026, informada pela recepção.",
+  period: { start: new Date("2026-07-27"), end: new Date("2026-07-30") },
+  reservationUrl: "https://flats.hebronaseec.com.br/reservas/88",
+} satisfies CheckinInstructionsEmailProps;
+
 export default CheckinInstructionsEmail;

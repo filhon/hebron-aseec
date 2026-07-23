@@ -14160,3 +14160,255 @@ Havia também duas definições `pgTable("notifications")` vivas no repo
 - `packages/db/src/schema/public.ts`
 - `packages/db/src/schema/index.ts`
 - `SESSIONS.md` (esta entrada)
+
+## S-178 — P-0.6e — Tipografia institucional nos emails (CORRETIVO — EmailLayout usava Inter)
+
+**Branch:** `feat/P-0.6e-email-typography`
+
+### Contexto
+
+Achado da auditoria (cruzamento S-7 × codebase, 2026-07-22):
+`packages/email/src/components/layout.tsx:27-28` definia
+`fontFamily = 'Inter, -apple-system, …'`, re-exportada como
+`emailFontFamily` e herdada por todos os 27 templates concretos
+(`packages/email/src/templates/*.tsx`) via `import { emailFontFamily }`.
+A identidade visual (CLAUDE.md, BRAIN §5, PATCH 001) exige Parkinsans
+(display) + Titillium Web (UI/corpo) e proíbe Inter explicitamente.
+
+### O que foi feito
+
+1. `packages/email/src/components/layout.tsx` — const `fontFamily` trocada
+   para `'"Titillium Web", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif'`
+   (Inter removido de toda a stack; Roboto também removido, não fazia parte
+   da identidade).
+2. Adicionado componente interno `EmailFont` com 3 `<Font>` do
+   `@react-email/components` (pesos 400/600/700, subset "latin" —
+   suficiente para PT-BR: ã/õ/ç estão em U+0000-00FF) apontando para URLs
+   estáveis do Google Fonts CDN (`fonts.gstatic.com/s/titilliumweb/v19/...`,
+   obtidas via `curl` do endpoint oficial `fonts.googleapis.com/css2`, não
+   inventadas). Montado dentro de `<Head>` do `EmailLayout`.
+3. Título do header ("Hebron Aseec") — **decisão registrada aqui por G1**:
+   mantido em Titillium Web bold (não foi adicionado um segundo `<Font>`
+   para Parkinsans no header). Motivo: o prompt tornava isso opcional
+   ("apenas se o resultado justificar"), e a opção mais simples (não somar
+   um segundo web font só para 2 palavras de header, sujeitas ao mesmo
+   fallback de sistema no Outlook) foi a escolhida. Reabrir se a diretoria
+   pedir Parkinsans no header em revisão visual.
+4. `send.ts` e os 27 templates concretos não tocados — herdam a correção
+   via `emailFontFamily` (re-export mantido, sem mudança de nome).
+
+### Verificação
+
+- Grep `Inter` em `packages/email/src` — zero ocorrências.
+- `pnpm --filter @hebron/email lint` — verde.
+- `pnpm --filter @hebron/email typecheck` — verde.
+- **Preview visual confirmado pelo Filipe**, por fora do `email:dev` (ver
+  S-179: o CLI do React Email 3.0.7 tem um bug próprio, não relacionado a
+  este prompt, que impedia a renderização de qualquer template). Um script
+  ad-hoc (esbuild + `@react-email/render`, removido após o teste) renderizou
+  `EmailLayout` com conteúdo de exemplo para HTML estático; o Filipe abriu o
+  arquivo diretamente no navegador e confirmou visualmente Titillium Web
+  (geometria mais estreita que Inter) nos 3 pesos usados (400/600/700).
+- Inspeção de código confirma: `<Font>` com `fontFamily="Titillium Web"`
+  nos 3 pesos, `fallbackFontFamily="sans-serif"` (união restrita do tipo
+  `FontProps` de `@react-email/font` não aceita uma stack completa — só
+  um nome de fallback, daí o "sans-serif" isolado ali; a stack completa
+  com Titillium Web + fallback de sistema continua sendo a que os
+  elementos `<Text>`/`<Body>` usam via `fontFamily` inline).
+
+### Critérios de aceite
+
+- [x] Grep `Inter` em `packages/email/src` → zero ocorrências
+- [x] `<Font>` com Titillium Web no `<Head>`; stack de fallback sem Inter
+- [x] Preview renderizado com Titillium Web — confirmado visualmente pelo
+      Filipe via HTML estático (`email:dev` está quebrado por um bug do
+      próprio CLI, não deste prompt — ver S-179)
+- [x] Templates concretos existentes não precisaram de edição (herdam via
+      `emailFontFamily`) — confirmado por grep, só `layout.tsx` continha
+      "Inter"
+- [x] Lint · Types verdes
+- [x] Registrado em SESSIONS.md
+
+### Arquivos criados/alterados
+
+- `packages/email/src/components/layout.tsx`
+- `SESSIONS.md` (esta entrada)
+
+## S-179 — Débito ad-hoc — `PreviewProps` nos 27 templates de email (fix do `email:dev`, fora do escopo original do P-0.6e)
+
+**Branch:** `feat/P-0.6e-email-typography`
+
+### Contexto
+
+Ao tentar validar visualmente a S-178 (`pnpm --filter @hebron/email
+email:dev`), o Filipe reportou que **nenhum template renderizava** — nem no
+terminal (stack traces) nem no navegador (tela de erro do React Email). Nenhum
+dos 27 templates em `packages/email/src/templates/` exportava `PreviewProps`
+(mecanismo do React Email para fornecer dados de exemplo quando o CLI renderiza
+sem props reais), então toda prop obrigatória chegava `undefined` e quebrava em
+`.split()`/`.toFixed()`/`.map()` já no primeiro uso. Confirmado com o Filipe
+(pergunta direta) que ele queria a correção feita nesta mesma sessão, mesmo
+fora do escopo do P-0.6e original (arquivos permitidos daquele prompt eram só
+`layout.tsx`).
+
+### O que foi feito
+
+1. Adicionado `<ComponentName>.PreviewProps = {...} satisfies <Props>` a todos
+   os 27 templates, com dados de exemplo em PT-BR coerentes com o domínio
+   (nomes fictícios, URLs `*.hebronaseec.com.br`, valores plausíveis para
+   projetos/financeiro/flats/tarefas/documentos/plataforma). Convenção
+   confirmada lendo o código-fonte do CLI (`react-email/src/actions/
+render-email-by-path.tsx:63`: `const previewProps = Email.PreviewProps ||
+{};`) — não é suposição, é o mecanismo real usado pelo `module.exports.default`.
+2. Nenhuma mudança de lógica/props/estilo nos templates — só a atribução
+   estática de `PreviewProps` ao final de cada arquivo, antes do `export
+default`.
+
+### Achado colateral: bug no próprio `email:dev` (causa raiz corrigida na S-180)
+
+Mesmo depois de adicionar `PreviewProps` a todos os templates, o `email:dev`
+continuou falhando — inclusive para um template trivial sem nenhuma prop,
+criado só para teste e removido depois, com `ReferenceError: WritableStream is
+not defined`. **Nota de correção (S-180):** a causa raiz identificada aqui
+nesta entrada (divergência de versão `@react-email/render` 1.0.2 vs 1.1.2)
+estava **errada** — o lockfile mostrou que `@react-email/components@0.0.26`
+sempre resolveu `1.0.2`, a mesma versão usada no meu teste manual "de
+sucesso". A causa raiz real (achada e corrigida na S-180) é o `fakeContext`
+do `vm.runInNewContext` do próprio CLI esquecer o global `WritableStream`.
+Workaround usado só para validar a S-178 nesta sessão: script ad-hoc de
+render estático para HTML, removido ao final.
+
+### Verificação
+
+- `pnpm --filter @hebron/email lint` — verde.
+- `pnpm --filter @hebron/email typecheck` — verde.
+- Render manual (fora do CLI) de `welcome.tsx` com suas `PreviewProps`:
+  sucesso, HTML válido, contém "Titillium Web", zero "Inter".
+- `email:dev` corrigido na S-180 (mesma sessão, entrada separada) — não
+  bloqueava o P-0.6e (cujo critério de aceite já tinha sido cumprido via
+  render estático, confirmado visualmente pelo Filipe).
+
+### Critérios de aceite
+
+- [x] Todos os 27 templates com `PreviewProps` compatível com sua própria
+      interface de props
+- [x] Lint · Types verdes
+- [x] `email:dev` funcional — corrigido na S-180 (patch no CLI `react-email`)
+- [x] Registrado em SESSIONS.md
+
+### Arquivos criados/alterados
+
+- `packages/email/src/templates/approval-request.tsx`
+- `packages/email/src/templates/batch-approval.tsx`
+- `packages/email/src/templates/briefing.tsx`
+- `packages/email/src/templates/budget-alert.tsx`
+- `packages/email/src/templates/certificate-issued.tsx`
+- `packages/email/src/templates/checkin-instructions.tsx`
+- `packages/email/src/templates/edital-closing.tsx`
+- `packages/email/src/templates/edital-open.tsx`
+- `packages/email/src/templates/enrollment-confirmed.tsx`
+- `packages/email/src/templates/evaluation-reminder.tsx`
+- `packages/email/src/templates/invitation.tsx`
+- `packages/email/src/templates/monthly-financial-report.tsx`
+- `packages/email/src/templates/new-course.tsx`
+- `packages/email/src/templates/new-document.tsx`
+- `packages/email/src/templates/new-material.tsx`
+- `packages/email/src/templates/password-reset.tsx`
+- `packages/email/src/templates/payment-confirmation.tsx`
+- `packages/email/src/templates/project-status-change.tsx`
+- `packages/email/src/templates/project-submitted.tsx`
+- `packages/email/src/templates/report-reminder.tsx`
+- `packages/email/src/templates/reservation-approved.tsx`
+- `packages/email/src/templates/reservation-submitted.tsx`
+- `packages/email/src/templates/signup-rejected.tsx`
+- `packages/email/src/templates/task-assigned.tsx`
+- `packages/email/src/templates/task-overdue.tsx`
+- `packages/email/src/templates/urgent-announcement.tsx`
+- `packages/email/src/templates/welcome.tsx`
+- `SESSIONS.md` (esta entrada)
+
+## S-180 — Débito ad-hoc — patch no CLI `react-email@3.0.7`: `WritableStream` ausente no sandbox de preview
+
+**Branch:** `feat/P-0.6e-email-typography`
+
+### Contexto
+
+Após a S-179 (todos os 27 templates com `PreviewProps`), o Filipe testou
+`email:dev` de verdade e o erro persistiu — no terminal e na tela do
+navegador (`ReferenceError: WritableStream is not defined`), inclusive para
+um template trivial sem props. A hipótese registrada na S-179 (divergência
+de versão do `@react-email/render`, 1.0.2 vs 1.1.2) foi investigada e
+**descartada**: o `pnpm-lock.yaml` mostra que `@react-email/components@0.0.26`
+sempre resolveu `1.0.2` — a mesma versão do meu teste manual bem-sucedido.
+
+Achada a causa raiz real lendo o código-fonte do pacote em
+`node_modules/.pnpm/react-email@3.0.7.../react-email/src/utils/
+get-email-component.ts`: o preview roda cada template via
+`vm.runInNewContext(builtEmailCode, fakeContext, ...)`, e `fakeContext` lista
+globals explicitamente (`ReadableStream`, `TextEncoder`, `TextEncoderStream`
+etc. — o `...global` do início não basta porque esses globals do Node não são
+propriedades próprias enumeráveis). A lista **esquece `WritableStream`**, e o
+renderer de `@react-email/render` precisa dele internamente — daí o
+`ReferenceError` dentro do sandbox, para qualquer template, com ou sem props.
+Confirmado bug do pacote (não do nosso código) comparando com um teste manual
+fora do sandbox (fora do `vm`), que sempre funcionou.
+
+### O que foi feito
+
+1. `pnpm patch react-email@3.0.7` → editada a cópia gerada em
+   `node_modules/.pnpm_patches/react-email@3.0.7/dist/preview/.next/server/
+app/preview/[...slug]/page.js` (único arquivo do pacote, fora do cache
+   binário do webpack, que continha a lista de globals compilada):
+   `TextEncoderStream,ReadableStream,URL` → `TextEncoderStream,ReadableStream,WritableStream,URL`.
+2. `pnpm patch-commit ... --patches-dir pnpm-patches` — **atenção**: o
+   diretório padrão do `patch-commit` é `patches/`, que no Windows (FS
+   case-insensitive) é **o mesmo diretório** que `PATCHES/` (registro de
+   decisões de negócio deste projeto, ver CLAUDE.md). Usar sempre
+   `--patches-dir pnpm-patches` para não misturar patches de dependência com
+   os PATCHES de decisão do SDD.
+3. Config `patchedDependencies` adicionada em `package.json` (campo `pnpm.
+patchedDependencies`) — **não** em `pnpm-workspace.yaml`: testado e
+   confirmado que nesta versão do pnpm (9.14.4) é `package.json` que
+   efetivamente aplica o patch (o aviso do CLI dizendo que o campo `pnpm` do
+   `package.json` "não é mais lido" é enganoso ou refere-se só a outras
+   chaves — `pnpm install` só gerou o hash `patch_hash=...` no lockfile e
+   relinkou os símlinks quando a config estava em `package.json`).
+4. `pnpm install` (depois `--force` para forçar o relink de
+   `packages/email/node_modules/react-email`, que na primeira tentativa
+   ficou apontando para a versão sem patch mesmo após o lockfile já ter o
+   patch — reinstall normal não bastou).
+
+### Verificação
+
+- `readlink` de `packages/email/node_modules/react-email` aponta para o
+  diretório `react-email@3.0.7_patch_hash=.../` no store do pnpm.
+- `pnpm-lock.yaml` mostra `patchedDependencies` no topo e
+  `react-email@3.0.7(patch_hash=iovjgumnev5g5rhlkaqwpzke64)...` na entrada
+  resolvida.
+- `email:dev` reiniciado do zero: terminal mostra `✔ Successfully rendered
+approval-request.tsx` (antes: stack trace/falha). Testado via `curl` em 6
+  templates (`welcome`, `password-reset`, `budget-alert`, `briefing`,
+  `reservation-submitted`, `urgent-announcement`) — todos HTTP 200, conteúdo
+  real renderizado (texto em português, `Titillium Web` presente), zero
+  ocorrências de "WritableStream is not defined".
+- **Confirmado visualmente pelo Filipe no navegador**: "Consegui visualizar
+  todos os templates."
+- `pnpm turbo lint typecheck` — não rodado workspace-inteiro nesta entrada
+  (mudança é só de patch de dependência + config, sem alteração de código
+  do monorepo); `pnpm --filter @hebron/email lint typecheck` seguem verdes
+  (já verificado na S-178/S-179, arquivos do pacote não mudaram aqui).
+
+### Critérios de aceite
+
+- [x] `email:dev` renderiza todos os templates sem erro
+- [x] Patch isolado em `pnpm-patches/`, não em `PATCHES/` (evitada colisão
+      de diretório case-insensitive no Windows)
+- [x] Confirmado visualmente pelo Filipe
+- [x] Registrado em SESSIONS.md
+
+### Arquivos criados/alterados
+
+- `package.json` (raiz — `pnpm.patchedDependencies`)
+- `pnpm-lock.yaml`
+- `pnpm-patches/react-email@3.0.7.patch` (novo)
+- `SESSIONS.md` (esta entrada, e correção da S-179)

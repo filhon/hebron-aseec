@@ -16,6 +16,11 @@ catalogs:
       specifier: ^3.24.0
       version: 3.25.76
 
+patchedDependencies:
+  react-email@3.0.7:
+    hash: iovjgumnev5g5rhlkaqwpzke64
+    path: pnpm-patches/react-email@3.0.7.patch
+
 importers:
   .:
     devDependencies:
@@ -1009,7 +1014,7 @@ importers:
         version: 0.0.26(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       react-email:
         specifier: ^3.0.1
-        version: 3.0.7(@opentelemetry/api@1.9.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+        version: 3.0.7(patch_hash=iovjgumnev5g5rhlkaqwpzke64)(@opentelemetry/api@1.9.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
       resend:
         specifier: ^4.0.0
         version: 4.8.0(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -14281,7 +14286,7 @@ snapshots:
       react: 19.2.6
       scheduler: 0.27.0
 
-  react-email@3.0.7(@opentelemetry/api@1.9.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6):
+  react-email@3.0.7(patch_hash=iovjgumnev5g5rhlkaqwpzke64)(@opentelemetry/api@1.9.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6):
     dependencies:
       "@babel/core": 7.24.5
       "@babel/parser": 7.24.5

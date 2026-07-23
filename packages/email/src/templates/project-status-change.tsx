@@ -193,4 +193,12 @@ export function ProjectStatusChangeEmail({
   );
 }
 
+ProjectStatusChangeEmail.PreviewProps = {
+  recipientName: "Paulo Henrique Souza",
+  projectTitle: "Restauração do telhado da capela sede",
+  statusEvent: "aprovado",
+  projectUrl: "https://projetos.hebronaseec.com.br/projetos/55",
+  extra: null,
+} satisfies ProjectStatusChangeEmailProps;
+
 export default ProjectStatusChangeEmail;

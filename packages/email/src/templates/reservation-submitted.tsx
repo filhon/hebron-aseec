@@ -240,4 +240,16 @@ export function ReservationSubmittedEmail({
   );
 }
 
+ReservationSubmittedEmail.PreviewProps = {
+  recipientName: "Roberto Almeida",
+  guestName: "Fernanda Costa",
+  purpose: "Retiro de descanso pastoral",
+  scoreTotal: 62,
+  periods: [
+    { rank: 1, start: new Date("2026-07-27"), end: new Date("2026-07-30") },
+    { rank: 2, start: new Date("2026-08-03"), end: new Date("2026-08-06") },
+  ],
+  reservationUrl: "https://flats.hebronaseec.com.br/reservas/88",
+} satisfies ReservationSubmittedEmailProps;
+
 export default ReservationSubmittedEmail;

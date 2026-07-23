@@ -161,4 +161,14 @@ export function BudgetAlertEmail({
   );
 }
 
+BudgetAlertEmail.PreviewProps = {
+  costCenterName: "Manutenção Predial",
+  year: 2026,
+  plannedAmount: 50000,
+  executedAmount: 42500,
+  pct: 85,
+  financeiroUrl:
+    "https://financeiro.hebronaseec.com.br/centros-de-custo/manutencao",
+} satisfies BudgetAlertEmailProps;
+
 export default BudgetAlertEmail;

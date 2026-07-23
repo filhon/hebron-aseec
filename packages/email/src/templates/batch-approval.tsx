@@ -171,4 +171,13 @@ export function BatchApprovalEmail({
   );
 }
 
+BatchApprovalEmail.PreviewProps = {
+  recipientName: "Ricardo Souza",
+  weekStart: "2026-07-13",
+  weekEnd: "2026-07-19",
+  payableCount: 8,
+  totalAmount: 12450.75,
+  financeiroUrl: "https://financeiro.hebronaseec.com.br/lotes/45",
+} satisfies BatchApprovalEmailProps;
+
 export default BatchApprovalEmail;

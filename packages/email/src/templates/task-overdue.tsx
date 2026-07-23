@@ -143,4 +143,12 @@ export function TaskOverdueEmail({
   );
 }
 
+TaskOverdueEmail.PreviewProps = {
+  recipientName: "Juliana Ferreira",
+  taskTitle: "Revisar prestação de contas do 2º trimestre",
+  workspaceLabel: "Financeiro",
+  dueDate: new Date("2026-07-20"),
+  taskUrl: "https://tarefas.hebronaseec.com.br/tarefas/123",
+} satisfies TaskOverdueEmailProps;
+
 export default TaskOverdueEmail;

@@ -67,4 +67,8 @@ export function SignupRejectedEmail({ name }: SignupRejectedEmailProps) {
   );
 }
 
+SignupRejectedEmail.PreviewProps = {
+  name: "Lucas Martins",
+} satisfies SignupRejectedEmailProps;
+
 export default SignupRejectedEmail;

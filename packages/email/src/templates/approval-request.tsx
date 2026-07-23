@@ -157,4 +157,13 @@ export function ApprovalRequestEmail({
   );
 }
 
+ApprovalRequestEmail.PreviewProps = {
+  recipientName: "Marcos Andrade",
+  taskTitle: "Revisar prestação de contas do 2º trimestre",
+  requestedByName: "Juliana Ferreira",
+  requestedStatusLabel: "Concluída",
+  notes: "Segue anexo o comprovante de despesas.",
+  taskUrl: "https://tarefas.hebronaseec.com.br/tarefas/123",
+} satisfies ApprovalRequestEmailProps;
+
 export default ApprovalRequestEmail;

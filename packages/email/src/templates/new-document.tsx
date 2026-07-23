@@ -150,4 +150,12 @@ export function NewDocumentEmail({
   );
 }
 
+NewDocumentEmail.PreviewProps = {
+  recipientName: "Marcos Andrade",
+  documentTitle: "Regimento Interno atualizado (2026)",
+  categoryName: "Documentos Institucionais",
+  documentUrl: "https://docs.hebronaseec.com.br/documentos/210",
+  publishedAt: new Date("2026-07-20"),
+} satisfies NewDocumentEmailProps;
+
 export default NewDocumentEmail;

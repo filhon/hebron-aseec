@@ -188,4 +188,25 @@ export function BriefingEmail({
   );
 }
 
+BriefingEmail.PreviewProps = {
+  recipientName: "Ana Beatriz Lima",
+  frequency: "semanal",
+  periodLabel: "6 a 12 de julho de 2026",
+  kpis: [
+    { label: "Projetos ativos", value: "14" },
+    { label: "Tarefas em aberto", value: "37" },
+    { label: "Saldo do mês", value: "R$ 18.320,00" },
+  ],
+  recentAnnouncements: [
+    { label: "Novo edital de projetos aberto", detail: "Prazo até 30/07" },
+  ],
+  recentMeetingDecisions: [
+    {
+      label: "Aprovado orçamento do 3º trimestre",
+      detail: "Reunião de diretoria de 10/07",
+    },
+  ],
+  intranetUrl: "https://app.hebronaseec.com.br",
+} satisfies BriefingEmailProps;
+
 export default BriefingEmail;

@@ -154,4 +154,14 @@ export function TaskAssignedEmail({
   );
 }
 
+TaskAssignedEmail.PreviewProps = {
+  recipientName: "Juliana Ferreira",
+  taskTitle: "Revisar prestação de contas do 2º trimestre",
+  workspaceLabel: "Financeiro",
+  priorityLabel: "Alta",
+  dueDate: new Date("2026-07-31"),
+  assignedByName: "Marcos Andrade",
+  taskUrl: "https://tarefas.hebronaseec.com.br/tarefas/123",
+} satisfies TaskAssignedEmailProps;
+
 export default TaskAssignedEmail;

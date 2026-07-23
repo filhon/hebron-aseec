@@ -263,4 +263,19 @@ export function MonthlyFinancialReportEmail({
   );
 }
 
+MonthlyFinancialReportEmail.PreviewProps = {
+  recipientName: "Diretor Antônio Vieira",
+  month: 6,
+  year: 2026,
+  totalRevenue: 84500,
+  totalExpense: 61230.4,
+  categoryTotals: [
+    { categoryName: "Dízimos e ofertas", type: "receita", total: 62000 },
+    { categoryName: "Doações designadas", type: "receita", total: 22500 },
+    { categoryName: "Folha de pagamento", type: "despesa", total: 38900.4 },
+    { categoryName: "Manutenção predial", type: "despesa", total: 22330 },
+  ],
+  financeiroUrl: "https://financeiro.hebronaseec.com.br/relatorios/2026-06",
+} satisfies MonthlyFinancialReportEmailProps;
+
 export default MonthlyFinancialReportEmail;

@@ -132,4 +132,12 @@ export function NewMaterialEmail({
   );
 }
 
+NewMaterialEmail.PreviewProps = {
+  recipientName: "Fernanda Costa",
+  materialTitle: "Série especial: 40 anos de missão",
+  materialDescription:
+    "Documentário em 4 episódios sobre a história da Hebron Aseec.",
+  materialUrl: "https://radio.hebronaseec.com.br/materiais/exclusivos/12",
+} satisfies NewMaterialEmailProps;
+
 export default NewMaterialEmail;

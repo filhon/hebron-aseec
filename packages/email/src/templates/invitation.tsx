@@ -185,4 +185,12 @@ export function InvitationEmail({
   );
 }
 
+InvitationEmail.PreviewProps = {
+  inviteUrl: "https://app.hebronaseec.com.br/convite/abc123",
+  roles: ["colaborador", "submissor"],
+  message: "Seja bem-vindo(a) à equipe. Qualquer dúvida, me chame.",
+  expiresAt: new Date("2026-08-06"),
+  inviterName: "Roberto Almeida",
+} satisfies InvitationEmailProps;
+
 export default InvitationEmail;

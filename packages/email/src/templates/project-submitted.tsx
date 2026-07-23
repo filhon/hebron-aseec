@@ -192,4 +192,13 @@ export function ProjectSubmittedEmail({
   );
 }
 
+ProjectSubmittedEmail.PreviewProps = {
+  recipientName: "Marcos Andrade",
+  projectTitle: "Missão urbana no bairro Santa Clara",
+  submitterName: "Pr. José Almeida",
+  projectType: "anual",
+  organizationName: "Igreja Batista Central",
+  projectUrl: "https://projetos.hebronaseec.com.br/projetos/56",
+} satisfies ProjectSubmittedEmailProps;
+
 export default ProjectSubmittedEmail;

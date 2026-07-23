@@ -197,4 +197,12 @@ export function ReportReminderEmail({
   );
 }
 
+ReportReminderEmail.PreviewProps = {
+  recipientName: "Paulo Henrique Souza",
+  projectTitle: "Restauração do telhado da capela sede",
+  reminderType: "seven_days_before",
+  dueDate: new Date("2026-07-30"),
+  projectUrl: "https://projetos.hebronaseec.com.br/projetos/55",
+} satisfies ReportReminderEmailProps;
+
 export default ReportReminderEmail;

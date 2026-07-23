@@ -139,4 +139,13 @@ export function UrgentAnnouncementEmail({
   );
 }
 
+UrgentAnnouncementEmail.PreviewProps = {
+  recipientName: "Marcos Andrade",
+  title: "Manutenção programada do sistema neste sábado",
+  body: "No próximo sábado, das 6h às 8h, os sistemas da Hebron Aseec ficarão indisponíveis para manutenção programada. Planeje eventuais acessos fora desse período.",
+  authorName: "Equipe de TI",
+  publishedAt: new Date("2026-07-22T14:30:00-03:00"),
+  intranetUrl: "https://app.hebronaseec.com.br/anuncios",
+} satisfies UrgentAnnouncementEmailProps;
+
 export default UrgentAnnouncementEmail;

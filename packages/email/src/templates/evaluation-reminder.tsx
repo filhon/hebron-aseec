@@ -115,4 +115,14 @@ export function EvaluationReminderEmail({
   );
 }
 
+EvaluationReminderEmail.PreviewProps = {
+  recipientName: "Conselheira Beatriz Nunes",
+  meetingDateStr: "22 de julho de 2026",
+  projectTitles: [
+    "Restauração do telhado da capela sede",
+    "Missão urbana no bairro Santa Clara",
+  ],
+  projetosUrl: "https://projetos.hebronaseec.com.br/avaliacoes",
+} satisfies EvaluationReminderEmailProps;
+
 export default EvaluationReminderEmail;
