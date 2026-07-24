@@ -85,7 +85,7 @@ export function DocumentCard({
           </div>
 
           {/* Title */}
-          <h3 className="font-(--font-display) text-[16px] font-bold leading-snug tracking-[-0.015em] text-(--fg) line-clamp-2 group-hover:text-(--brand) transition-colors duration-(--dur-fast)">
+          <h3 className="font-(--font-display) text-[16px] leading-snug tracking-[-0.015em] text-(--fg) line-clamp-2 group-hover:text-(--brand) transition-colors duration-(--dur-fast)">
             {document.title}
           </h3>
 

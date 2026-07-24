@@ -1,10 +1,9 @@
 import type { MetadataRoute } from "next";
 
 // ---------------------------------------------------------------------------
-// PWA (BRAIN §6.4: "PWA com background play"). Ícone é um placeholder SVG
-// (public/icon.svg, mesmo desenho do balão azul + Radio usado em
-// app/layout.tsx) — sem asset de design definitivo neste prompt (P-8.8 é
-// backend/integração, não Bloco A); registrado como débito em SESSIONS.md.
+// PWA (BRAIN §6.4: "PWA com background play"). O ícone é a sub-marca do módulo
+// (public/icon.svg), com a mesma geometria do favicon em src/app/icon.tsx —
+// tile de acento com o glifo de ondas, definido em @hebron/ui.
 // ---------------------------------------------------------------------------
 
 export default function manifest(): MetadataRoute.Manifest {

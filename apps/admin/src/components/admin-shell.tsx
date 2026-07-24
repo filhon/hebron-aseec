@@ -3,8 +3,9 @@
 import { usePathname, useRouter } from "next/navigation";
 import {
   AppShell,
-  getAppShortcuts,
+  ModuleLogo,
   NotificationBellContainer,
+  getAppShortcuts,
   type NavSection,
 } from "@hebron/ui";
 import {
@@ -22,31 +23,6 @@ import {
 } from "../actions/notifications";
 
 /** White rounded mark — the "HA" sigla used as the Admin icon mark. */
-function AdminMark() {
-  return (
-    <span
-      style={{
-        width: 32,
-        height: 32,
-        borderRadius: 8,
-        background: "var(--hb-white)",
-        display: "grid",
-        placeItems: "center",
-        flexShrink: 0,
-        fontFamily: "var(--font-display)",
-        fontWeight: 800,
-        fontSize: 12,
-        color: "var(--hb-blue)",
-        letterSpacing: "-0.02em",
-        userSelect: "none",
-      }}
-      aria-hidden="true"
-    >
-      HA
-    </span>
-  );
-}
-
 type Props = {
   children: React.ReactNode;
   userCount: number;
@@ -119,7 +95,7 @@ export function AdminShell({
       onLogout={() => {}}
       currentPath={path}
       appName="Admin"
-      logo={<AdminMark />}
+      logo={<ModuleLogo module="admin" />}
       sidebarDark
       headerActions={
         <NotificationBellContainer

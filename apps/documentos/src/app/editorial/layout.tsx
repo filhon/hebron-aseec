@@ -9,7 +9,7 @@ import {
   Bell,
   ClipboardList,
 } from "lucide-react";
-import { DocumentosLogo } from "../../components/documentos-logo";
+import { ModuleLogo } from "@hebron/ui";
 import { requireEditorSession } from "../../lib/session";
 
 export default async function EditorialLayout({
@@ -28,7 +28,12 @@ export default async function EditorialLayout({
       >
         <div className="docs-editorial-sidebar-header">
           <Link href="/editorial" className="docs-editorial-sidebar-brand">
-            <DocumentosLogo variant="horizontal" dark={true} />
+            <ModuleLogo
+              module="documentos"
+              variant="horizontal"
+              size={40}
+              dark
+            />
           </Link>
           <div className="docs-editorial-sidebar-sub">Área editorial</div>
         </div>

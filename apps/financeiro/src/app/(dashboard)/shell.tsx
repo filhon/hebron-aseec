@@ -3,8 +3,9 @@
 import { usePathname, useRouter } from "next/navigation";
 import {
   AppShell,
-  getAppShortcuts,
+  ModuleLogo,
   NotificationBellContainer,
+  getAppShortcuts,
   type NavSection,
 } from "@hebron/ui";
 import {
@@ -21,7 +22,6 @@ import {
   Building2,
   LineChart,
 } from "lucide-react";
-import { FinanceiroLogo } from "../../components/financeiro-logo";
 import { logoutAction } from "../../actions/auth";
 import {
   listBellNotifications,
@@ -121,7 +121,7 @@ export default function FinanceiroShell({ user, children }: ShellProps) {
       onLogout={() => void logoutAction()}
       currentPath={path}
       appName="Financeiro"
-      logo={<FinanceiroLogo />}
+      logo={<ModuleLogo module="financeiro" />}
       sidebarDark
       headerActions={
         <NotificationBellContainer

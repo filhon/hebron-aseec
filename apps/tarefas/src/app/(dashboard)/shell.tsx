@@ -5,12 +5,12 @@ import { useAction } from "next-safe-action/hooks";
 import type { Task } from "@hebron/types/tarefas";
 import {
   AppShell,
-  getAppShortcuts,
+  ModuleLogo,
   NotificationBellContainer,
+  getAppShortcuts,
   type NavSection,
 } from "@hebron/ui";
 import {
-  CheckCircle,
   ListTodo,
   CalendarDays,
   RefreshCcw,
@@ -134,12 +134,7 @@ export default function TarefasShell({ user, tasks, children }: ShellProps) {
       onLogout={() => void logoutAction()}
       currentPath={path}
       appName="Tarefas"
-      logo={
-        <CheckCircle
-          className="h-5 w-5 shrink-0"
-          style={{ color: "var(--hb-blue)" }}
-        />
-      }
+      logo={<ModuleLogo module="tarefas" />}
       sidebarDark
       headerActions={
         <NotificationBellContainer

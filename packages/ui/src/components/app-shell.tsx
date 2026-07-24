@@ -65,8 +65,10 @@ function SidebarBrand({
         className,
       )}
     >
-      {/* Logo mark */}
-      {logo && <span className="shrink-0">{logo}</span>}
+      {/* Logo mark — recolhido, o trilho de 64px pertence ao botão de expandir:
+          o logotipo em miniatura ali competiria com a seta sem informar nada
+          que o favicon e o cabeçalho já não digam. */}
+      {logo && !collapsed && <span className="shrink-0">{logo}</span>}
 
       {/* 2-line brand text — hidden when collapsed */}
       {!collapsed && (appName ?? orgName) && (
@@ -208,12 +210,14 @@ export function AppShell({
           dark={sidebarDark}
         />
 
-        {/* Collapse toggle — tab on the right edge, vertically centered in brand bar */}
+        {/* Collapse toggle — aba na borda direita quando expandida; recolhida,
+            ocupa o trilho inteiro para a seta ficar centrada e com alvo maior */}
         <button
           onClick={() => setDesktopCollapsed((v) => !v)}
           aria-label={desktopCollapsed ? "Expandir menu" : "Recolher menu"}
           className={cn(
-            "absolute right-0 top-0 flex h-14 w-8 items-center justify-center",
+            "absolute top-0 flex h-14 items-center justify-center",
+            desktopCollapsed ? "inset-x-0 w-full" : "right-0 w-8",
             sidebarDark
               ? "text-(--fg-invert-muted) hover:text-(--fg-invert)"
               : "text-(--fg-muted) hover:text-(--fg)",

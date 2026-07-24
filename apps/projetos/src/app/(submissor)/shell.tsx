@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import {
   AppShell,
+  ModuleLogo,
   NotificationBellContainer,
   type NavSection,
 } from "@hebron/ui";
@@ -13,7 +14,6 @@ import {
   markNotificationReadAction,
   markAllNotificationsReadAction,
 } from "../../actions/notifications";
-import { ProjetosLogo } from "../../components/projetos-logo";
 
 const SECTIONS: NavSection[] = [
   {
@@ -51,7 +51,7 @@ export default function SubmissorShell({ user, children }: Props) {
       onLogout={() => void logoutAction()}
       currentPath={path}
       appName="Projetos"
-      logo={<ProjetosLogo />}
+      logo={<ModuleLogo module="projetos" />}
       sidebarDark
       headerActions={
         <NotificationBellContainer

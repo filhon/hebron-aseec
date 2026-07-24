@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { FileText, Search, Scroll, LayoutGrid } from "lucide-react";
-import { DocumentosLogo } from "./documentos-logo";
+import { ModuleLogo } from "@hebron/ui";
 
 export function PublicNav() {
   return (
     <nav className="docs-nav" aria-label="Navegação principal">
       <div className="docs-nav-inner">
         <Link href="/" className="docs-nav-brand">
-          <DocumentosLogo variant="horizontal" />
+          <ModuleLogo module="documentos" variant="horizontal" size={40} />
         </Link>
 
         <div className="docs-nav-links">

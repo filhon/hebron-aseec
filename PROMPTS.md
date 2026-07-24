@@ -2030,6 +2030,273 @@ Implementar estados de loading, empty e error em todas as telas de Documentos. S
 
 ---
 
+### P-1.14b — Badge de visibilidade e pílula de status únicos (CORRETIVO)
+
+**Fase:** 1
+**Módulo:** documentos
+**Tipo:** ui
+**Pré-condições:**
+
+- Branch: `feat/P-1.14b-docs-badges`
+- Dependências: P-1.27 concluído (S-61)
+- Env vars: nenhuma
+- Skill: **invocar `/impeccable` antes de começar**
+
+**Problema que este prompt resolve (contexto):**
+O critério de P-1.14 "DocumentCard com badge de visibilidade (público=verde, interno=azul, restrito=vermelho)" está marcado `[x]`, mas hoje **o mesmo dado é pintado de seis maneiras diferentes**, cada uma com sua própria tabela local:
+
+- `apps/documentos/src/components/document-card.tsx:13-32` (`VISIBILITY`, com ícone + dot)
+- `apps/documentos/src/components/document-viewer.tsx:356` (`VISIBILITY_LABEL`)
+- `apps/documentos/src/app/[slug]/page.tsx:256` (`VISIBILITY_MAP`)
+- `apps/documentos/src/app/editais/[slug]/page.tsx:292` (`VISIBILITY_MAP` — cópia literal da anterior)
+- `apps/documentos/src/app/editorial/page.tsx:43,49` e `apps/documentos/src/app/editorial/documentos/page.tsx:10,16` (`VISIBILITY_LABEL` + `VISIBILITY_CLS`)
+- `apps/documentos/src/app/busca/page.tsx:513-527` e `apps/documentos/src/app/page.tsx:673-681` — **ternários inline sem as cores semânticas**: na busca todo badge sai cinza (`--bg-alt`/`--fg-muted`), e na home só "Público" aparece, sem cor. O leitor de `/busca` não distingue interno de restrito.
+
+O mesmo vale para o status do edital (aberto / encerra em breve / encerrado / permanente), duplicado em `components/edital-card.tsx:20-45`, `app/editais/[slug]/page.tsx:305-325`, `app/editorial/page.tsx:55-66` e `app/editorial/editais/page.tsx:20-32`. O design-ref resolve os dois com um componente só: `design-refs/documentos/components.jsx:634` (`VisibilityBadge`) e `:643` (`StatusPill`).
+
+**Escopo (siga na ordem):**
+
+1. **Criar `visibility-badge.tsx`** exportando `VisibilityBadge` (props: `visibility`, `size?: "sm" | "md"`, `withIcon?: boolean`) e a constante `VISIBILITY` como fonte única de rótulo/ícone/classe — herdando o mapeamento já correto de `document-card.tsx` (público → `--hb-green`, interno → `--hb-cyan`, restrito → `--color-destructive-muted`/`--hb-red`). Sem hex, sem CSS de app novo.
+2. **Criar `edital-status-pill.tsx`** exportando `EditalStatusPill` e o helper puro `resolveEditalStatus({ opensAt, closesAt })` → `"open" | "closing_soon" | "closed" | "permanent"`, extraído de `edital-card.tsx` (que hoje é o único cálculo completo).
+3. **Substituir as seis cópias de visibilidade e as quatro de status** pelos dois componentes. Nenhum arquivo pode manter tabela local de `visibility` ou de status de edital depois deste prompt.
+4. **Corrigir a regressão visual de `/busca` e da home**: o badge passa a usar as cores semânticas nas três visibilidades (não só "Público"), igual ao resto do portal.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/documentos/src/components/visibility-badge.tsx` (criar)
+- `apps/documentos/src/components/edital-status-pill.tsx` (criar)
+- `apps/documentos/src/components/document-card.tsx`
+- `apps/documentos/src/components/document-viewer.tsx`
+- `apps/documentos/src/components/edital-card.tsx`
+- `apps/documentos/src/app/page.tsx`
+- `apps/documentos/src/app/busca/page.tsx`
+- `apps/documentos/src/app/[slug]/page.tsx`
+- `apps/documentos/src/app/editais/page.tsx`
+- `apps/documentos/src/app/editais/[slug]/page.tsx`
+- `apps/documentos/src/app/editorial/page.tsx`
+- `apps/documentos/src/app/editorial/documentos/page.tsx`
+- `apps/documentos/src/app/editorial/editais/page.tsx`
+
+**Critérios de aceite:**
+
+- [ ] `grep -rn "VISIBILITY_MAP\|VISIBILITY_CLS\|VISIBILITY_LABEL" apps/documentos/src` retorna apenas `visibility-badge.tsx`
+- [ ] `grep -rn "STATUS_COLOR\|STATUS_LABEL" apps/documentos/src` retorna apenas `edital-status-pill.tsx`
+- [ ] `/busca` e a home mostram as três visibilidades com as cores semânticas (verde / azul-claro / vermelho), idênticas às da página de documento
+- [ ] Cálculo de status do edital vive num único helper; `EditalCard` e as três telas que o repetiam passam a consumi-lo
+- [ ] Zero hex e zero CSS de app novo (BRAIN §5)
+- [ ] `pnpm --filter documentos typecheck lint test` verdes
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: BRAIN.md §5 e §6.7; design-ref `design-refs/documentos/components.jsx` (`VisibilityBadge`, `StatusPill`). Prompt de consolidação: não muda regra de visibilidade nem RLS, só a camada de apresentação.
+
+---
+
+### P-1.15b — Listagem por categoria: a rota que nunca foi criada (CORRETIVO)
+
+**Fase:** 1
+**Módulo:** documentos
+**Tipo:** ui
+**Pré-condições:**
+
+- Branch: `feat/P-1.15b-docs-categoria`
+- Dependências: **P-1.14b concluído** (badge único), P-1.27 concluído (S-61)
+- Env vars: nenhuma
+- Skill: **invocar `/impeccable` antes de começar**
+
+**Problema que este prompt resolve (contexto):**
+O escopo de P-1.15 pede "**listagem por categoria com filtros (visibilidade, tags, data)**" e o critério "Listagem com filtros por categoria, visibilidade e tags" está `[x]` — mas **essa tela não existe**. O que existe é `/busca`, que aceita `?categoria=`, `?tags=` e `?tipo=` e **não tem filtro de visibilidade nenhum** (`app/busca/page.tsx:113-121` lê apenas `q`, `categoria`, `tags`, `tipo`). A seção "Explore por área" da home (`app/page.tsx:867-885`) linka para `/busca?categoria=<id>` como substituto — o usuário cai numa tela de resultados de busca, sem cabeçalho da categoria, sem subcategorias, sem contagem, sem alternância cartões/lista.
+
+O design-ref tem a tela inteira especificada: `design-refs/documentos/screens-public.jsx:355` (`CategoryScreen`), rota `/c/<cat>` em `app.jsx:107`, com cabeçalho da categoria (ícone, nome, contagem "N documentos disponíveis para o seu perfil"), chips de subcategoria com contagem, chips de visibilidade **renderizados conforme o papel** (`Públicos` sempre; `Internos`/`Restritos` só para quem pode vê-los), alternância **Cartões / Lista** e grid onde edital ocupa duas colunas.
+
+Consequência colateral: `apps/documentos/src/components/document-card.tsx` (`DocumentCard`, P-1.14) está **órfão — zero imports em todo o app** (`grep -rn "DocumentCard" apps/documentos/src` só devolve a própria definição). É o consumidor natural do grid desta tela. Note que S-61 registrou "zero componentes do Bloco A órfãos" como verificado; isso deixou de valer quando `/busca` foi reescrita como lista de resultados.
+
+**Escopo (siga na ordem):**
+
+1. **Criar a rota `/categoria/[slug]`** (RSC), lendo por `withAuthenticatedContext` + `getOptionalActorId` — mesmo padrão de `/busca` e `/editais`, para que a RLS filtre a visibilidade de verdade (F2-D1). Nunca usar o client superuser `db`.
+2. **Cabeçalho + navegação:** breadcrumb (Início › Categorias › Nome), contagem de documentos visíveis ao papel atual, descrição da categoria; chips de subcategoria com contagem (`categories.parentId`).
+3. **Filtro de visibilidade por URL** (`?vis=public|internal|restricted`), com os chips renderizados apenas para as visibilidades que o papel atual enxerga — o resultado da RLS é a fonte da verdade, o chip não pode oferecer o que a consulta não devolve. Adicionar também o recorte por período (`?periodo=`) previsto no escopo de P-1.15 (ex.: 12 meses / 24 meses / tudo), aplicado sobre `updatedAt`.
+4. **Alternância Cartões / Lista** (`?view=grid|list`), grid usando **`DocumentCard`** (reconectado) e `EditalCard` ocupando duas colunas; a lista reusa o padrão `docs-row` já existente na home.
+5. **Repontar a home:** os cards de "Explore por área" passam a linkar `/categoria/<slug>` (o slug já vem da consulta — `makeCat` em `app/page.tsx:118`), não mais `/busca?categoria=<id>`.
+6. **Estados:** `loading.tsx` com `DocumentCardSkeleton`/`DocumentListSkeleton` e vazio contextual com versículo, no padrão das demais telas.
+7. **Bookkeeping em PROMPTS.md** (parte deste prompt): marcar o critério `[~] Área editorial protegida (super_admin/editor)` de P-1.15 como `[x]` — atendido por `requireEditorSession()` (`apps/documentos/src/lib/session.ts`) desde S-61 — e corrigir a lista de arquivos de P-1.15, que ainda nomeia o route-group `(editorial)/...` quando a estrutura real é o segmento `editorial/...` (desvio nunca registrado como decisão, ver `AUDIT/02-codigo-documentos.md:11`).
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/documentos/src/app/categoria/[slug]/page.tsx` (criar)
+- `apps/documentos/src/app/categoria/[slug]/loading.tsx` (criar)
+- `apps/documentos/src/app/page.tsx` (apenas os links da seção de categorias)
+- `apps/documentos/src/components/document-card.tsx` (ajustes mínimos para o grid, se necessário)
+- `apps/documentos/src/__tests__/` (teste de visibilidade por papel na nova rota)
+- `PROMPTS.md` (bookkeeping do item 7)
+
+**Critérios de aceite:**
+
+- [ ] `/categoria/<slug>` existe, com cabeçalho, contagem, chips de subcategoria, filtro de visibilidade e de período, e alternância cartões/lista
+- [ ] Anônimo não vê documento `internal`/`restricted` na listagem nem na contagem — teste de regressão no padrão do bloco "F2-D1/F2-D2" de `rls.test.ts`
+- [ ] Chips de visibilidade só aparecem para as visibilidades que o papel atual enxerga
+- [ ] `DocumentCard` tem consumidor real; `grep -rn "DocumentCard" apps/documentos/src` devolve ≥1 import
+- [ ] Cards de categoria da home levam a `/categoria/<slug>`; nenhum link do app aponta para `/busca?categoria=`
+- [ ] Vazio com versículo e `loading.tsx` com skeleton
+- [ ] Critério `[~]` de P-1.15 fechado e lista de arquivos de P-1.15 corrigida para `editorial/...`
+- [ ] `pnpm --filter documentos typecheck lint test` verdes
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: BRAIN.md §6.7; design-ref `design-refs/documentos/screens-public.jsx:355` (`CategoryScreen`). `/busca` **não** deve ser alterada aqui: as duas telas têm propósitos distintos (busca = resultados em lista; categoria = navegação editorial). Não criar rota `/c/` — a URL canônica em português é `/categoria/<slug>`.
+
+---
+
+### P-1.16b — Assinaturas: preferência por tipo de alerta de verdade (CORRETIVO)
+
+**Fase:** 1
+**Módulo:** documentos
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-1.16b-docs-assinaturas`
+- Dependências: P-1.27 concluído (S-61)
+- Env vars: `DATABASE_URL`
+
+**Problema que este prompt resolve (contexto):**
+`SubscriptionForm` (P-1.16) expõe **dois toggles independentes por categoria** — "avisar em nova versão" e "avisar quando abrir edital" (`components/subscription-form.tsx:37-42`, decisão registrada em S-26) — mas o banco não tem onde guardar isso: `documentos.subscriptions` armazena só `(user_id, category_id)` (`packages/db/src/schema/documentos.ts:174-195`). O wrapper colapsa os dois num só: `app/assinaturas/_client.tsx:41` inscreve a categoria se **qualquer** um dos toggles estiver ligado, e `:28-32` recarrega a tela com **ambos hardcoded em `true`**.
+
+Resultado: o usuário desliga "nova versão", salva, vê "Preferências salvas." — e ao recarregar o toggle está ligado de novo. Pior, ele continua recebendo o e-mail que pediu para não receber: `lib/notifications.ts:57-62` (`notifyNewDocument`) e `notifyEditalOpen` consultam a mesma tabela sem nenhum filtro por tipo de evento. É uma UI que mente sobre o estado persistido.
+
+**Escopo (siga na ordem):**
+
+1. **Migration** (hand-write `NNNN_*.sql`, sem drizzle-kit): adicionar `on_new_version boolean NOT NULL DEFAULT true` e `on_edital_open boolean NOT NULL DEFAULT true` em `documentos.subscriptions`; refletir em `packages/db/src/schema/documentos.ts`. Linhas existentes ficam com ambos `true` — o comportamento atual preservado.
+2. **Action de salvamento:** substituir o par `subscribe`/`unsubscribe` por chamada única `saveSubscriptions({ items: [{ categoryId, onNewVersion, onEditalOpen }] })` (upsert por `(user_id, category_id)`; remove a linha quando os dois toggles ficam `false`), mantendo `subscribe`/`unsubscribe` apenas se houver outro chamador. Gate `authenticatedAction` e audit no padrão do módulo.
+3. **Honrar os flags no envio:** `notifyNewDocument` filtra por `on_new_version = true`; `notifyEditalOpen` filtra por `on_edital_open = true`.
+4. **Carregar o estado real:** `app/assinaturas/page.tsx` passa os flags persistidos ao `_client.tsx`, que para de fabricar `true` e para de colapsar os toggles no submit.
+5. **Teste:** assinante com `on_new_version = false` **não** recebe notificação ao publicar documento na categoria, e **recebe** ao abrir edital na mesma categoria (estender `actions.test.ts`, que já cobre o caminho feliz desde S-61).
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/db/src/migrations/NNNN_documentos_subscription_prefs.sql` (criar — próximo número livre; hoje `0060`)
+- `packages/db/src/schema/documentos.ts`
+- `apps/documentos/src/actions/subscriptions.ts`
+- `apps/documentos/src/lib/notifications.ts`
+- `apps/documentos/src/app/assinaturas/page.tsx`
+- `apps/documentos/src/app/assinaturas/_client.tsx`
+- `apps/documentos/src/__tests__/actions.test.ts`
+
+**Critérios de aceite:**
+
+- [ ] `documentos.subscriptions` tem `on_new_version` e `on_edital_open`, com RLS preservada (policies existentes continuam válidas)
+- [ ] Desligar um toggle, salvar e recarregar devolve exatamente o estado salvo
+- [ ] `notifyNewDocument` e `notifyEditalOpen` respeitam os flags — coberto por teste
+- [ ] Desligar os dois toggles remove a inscrição (nenhuma linha órfã)
+- [ ] Nenhum toggle da UI sem correspondente persistido (auditar `SubscriptionFormValues` campo a campo)
+- [ ] `pnpm --filter documentos typecheck lint test` verdes; migration aplicada no Supabase de dev
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: BRAIN.md §6.7 (assinaturas por categoria). Alternativa descartada: simplificar a UI para um único toggle — a granularidade por tipo de evento é útil (quem acompanha editais raramente quer o ruído de cada nova versão de política) e já está desenhada; o que falta é o backend. Não introduzir frequência/digest aqui.
+
+---
+
+### P-1.16c — Reordenação de categorias: ligar a UI ao backend (ou remover a promessa) (CORRETIVO)
+
+**Fase:** 1
+**Módulo:** documentos
+**Tipo:** ui
+**Pré-condições:**
+
+- Branch: `feat/P-1.16c-docs-categorias-ordem`
+- Dependências: P-1.27 concluído (S-61)
+- Env vars: `DATABASE_URL`
+
+**Problema que este prompt resolve (contexto):**
+O critério de P-1.16 "Gestão de categorias (criar, editar, **reordenar** na árvore)" está `[x]`, mas a reordenação é **cenário**: `components/category-form.tsx:183` declara no próprio comentário "Reorder tree row (simplified drag indicator — visual only in Phase 1)" e renderiza linhas com `cursor: "grab"`, alça `GripVertical` e `title="Arraste para reordenar"` (`:206-222`) — **sem um único handler de drag**. O usuário arrasta e nada acontece, sem erro e sem feedback. S-26 registrou o débito com "wiring real na fase B"; a fase B passou (P-1.20/P-1.27) e o débito ficou sem dono (padrão PD-4 do `AUDIT/02-codigo-SINTESE.md:80`).
+
+Do outro lado há a metade oposta do mesmo débito: a action `moveCategoryInTree` (`actions/categories.ts:235`) existe, tem proteção anti-ciclo e **teste** (`__tests__/actions.test.ts:416`), e **nenhum chamador em toda a UI**. Além disso ela só troca `parentId` — `documentos.categories` **não tem coluna de ordem** (`packages/db/src/schema/documentos.ts`), então a ordenação entre irmãos que a alça promete não é sequer representável hoje.
+
+**Escopo (siga na ordem):**
+
+1. **Decidir e registrar** (o prompt aceita as duas saídas, mas exige uma delas — não deixar a alça decorativa):
+   - **(a) Ordem explícita:** migration adicionando `sort_order integer NOT NULL DEFAULT 0` em `documentos.categories`, `ORDER BY sort_order, name` em toda leitura de árvore (`actions/categories.ts`, `CategoryTree`, seletores dos formulários), e uma action `reorderCategory({ id, newParentId, newIndex })` (renomeando/estendendo `moveCategoryInTree`, preservando a checagem de descendência e o audit `category.updated`).
+   - **(b) Escopo reduzido:** remover a alça e o `cursor: grab` de `category-form.tsx` e expor em `categories-manager.tsx` apenas o **reparentamento** — que é o que `moveCategoryInTree` já faz — via seletor "Mover para" com confirmação; a ordem visual permanece alfabética e isso passa a estar escrito.
+2. **Ligar `categories-manager.tsx`** (a tela viva em `/editorial/categorias`) à action escolhida, com estado de carregamento, tratamento de erro (a mensagem de ciclo já existe no servidor) e `router.refresh()` no padrão das demais mutações do arquivo.
+3. **Acessibilidade:** se a saída for (a) com drag, prover alternativa por teclado (mover acima / abaixo / mudar pai) — arrastar não pode ser o único caminho.
+4. **Atualizar o critério de P-1.16** em PROMPTS.md conforme a saída escolhida, com uma linha de nota dizendo qual foi.
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/db/src/migrations/NNNN_documentos_category_order.sql` (criar — apenas na saída (a); próximo número livre)
+- `packages/db/src/schema/documentos.ts` (apenas na saída (a))
+- `apps/documentos/src/actions/categories.ts`
+- `apps/documentos/src/components/categories-manager.tsx`
+- `apps/documentos/src/components/category-form.tsx`
+- `apps/documentos/src/components/category-tree.tsx`
+- `apps/documentos/src/__tests__/actions.test.ts`
+- `PROMPTS.md` (critério de P-1.16 + nota da decisão)
+
+**Critérios de aceite:**
+
+- [ ] Nenhuma afordância de arrastar sem comportamento: `grep -n "Arraste para reordenar\|cursor: \"grab\"" apps/documentos/src` retorna vazio **ou** o drag funciona de ponta a ponta
+- [ ] `moveCategoryInTree` (ou sua sucessora) tem chamador real na UI editorial
+- [ ] Reordenar/mover persiste, sobrevive a reload e grava `category.updated` no audit
+- [ ] Tentativa de mover categoria para um descendente é bloqueada com mensagem legível na UI
+- [ ] Operação alcançável por teclado
+- [ ] `pnpm --filter documentos typecheck lint test` verdes
+- [ ] Registrar em SESSIONS.md — incluindo qual saída foi escolhida e por quê
+
+**Notas:**
+Ref: BRAIN.md §6.7. Recomendação: saída **(b)** se a árvore de categorias for rasa e estável (é o caso hoje — a ordem alfabética não incomoda ninguém), (a) só se a diretoria pedir controle editorial da ordem. O importante é que a tela pare de prometer o que não faz.
+
+---
+
+### P-1.17b — Fronteiras de erro e cópia de estados vazios (CORRETIVO)
+
+**Fase:** 1
+**Módulo:** documentos
+**Tipo:** ui
+**Pré-condições:**
+
+- Branch: `feat/P-1.17b-docs-error-states`
+- Dependências: P-1.27 concluído (S-61)
+- Env vars: nenhuma
+- Skill: **invocar `/impeccable` antes de começar**
+
+**Problema que este prompt resolve (contexto):**
+O critério de P-1.17 "Estado de erro com retry" está `[x]`, mas depois da integração com banco (P-1.21/P-1.27) **sobrou um só**: o `try/catch` da home (`app/page.tsx:462-499`). A `/busca`, que S-27 tinha entregue com `searchError` + botão "Tentar novamente", virou RSC e **perdeu qualquer tratamento** — hoje faz cinco consultas (`app/busca/page.tsx:139+`) sem `try/catch`. E `find apps/documentos/src -name "error.tsx"` devolve **vazio**: nenhuma rota do app tem fronteira de erro. Uma indisponibilidade do Supabase em `/[slug]`, `/editais`, `/categoria`, `/assinaturas` ou em qualquer tela editorial cai na tela de erro genérica do Next — em produção, uma página branca com "Application error", num portal público institucional.
+
+Além disso, dois textos estão errados: o vazio de `/editais` diz "**Nenhum edital nesta categoria**" e "Tente selecionar outro filtro acima" (`app/editais/page.tsx:272-275`) quando o filtro é por **status**, não por categoria — o critério de P-1.17 pede "Nenhum edital aberto no momento". E `app/globals.css:897` carrega um hex de fallback (`var(--hb-gray-200, #d1d5db)`), único hex do arquivo, contra BRAIN §5.
+
+**Escopo (siga na ordem):**
+
+1. **`error.tsx` na raiz** (`app/error.tsx`, client component) com a identidade do portal: mensagem humana, botão "Tentar novamente" chamando `reset()`, link para a home. Sem exclamações genéricas nem tom de mascote (BRAIN — "não parecer IA").
+2. **`error.tsx` na área editorial** (`app/editorial/error.tsx`), respeitando o shell da sidebar, para que uma falha de leitura não derrube a navegação editorial inteira.
+3. **`global-error.tsx`** mínimo, cobrindo falha no próprio layout raiz.
+4. **`/busca`:** envolver a leitura em `try/catch` e renderizar o estado de erro com retry (link que refaz a mesma query), no padrão da home — recuperando o que S-27 tinha e a reescrita perdeu.
+5. **Cópia dos vazios:** `/editais` passa a refletir o filtro ativo ("Nenhum edital aberto no momento" quando o filtro é `aberto`, e a variante correspondente nos demais); revisar de passagem se cada vazio do módulo nomeia a ação certa.
+6. **Fechar o hex** de `globals.css:897` usando o token canônico sem fallback literal.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/documentos/src/app/error.tsx` (criar)
+- `apps/documentos/src/app/global-error.tsx` (criar)
+- `apps/documentos/src/app/editorial/error.tsx` (criar)
+- `apps/documentos/src/app/busca/page.tsx`
+- `apps/documentos/src/app/editais/page.tsx`
+- `apps/documentos/src/app/globals.css`
+
+**Critérios de aceite:**
+
+- [ ] Toda rota do app é coberta por uma fronteira de erro (raiz + editorial + `global-error`)
+- [ ] Erro de leitura em `/busca` renderiza estado com retry, não a tela do Next
+- [ ] Vazio de `/editais` corresponde ao filtro ativo; com filtro "Abertos" o texto é "Nenhum edital aberto no momento"
+- [ ] `grep -n "#[0-9a-fA-F]\{3,6\}" apps/documentos/src/app/globals.css` retorna vazio
+- [ ] Microcopy sem exclamação genérica; versículo mantido apenas nos vazios (não nos erros)
+- [ ] `pnpm --filter documentos typecheck lint test` verdes
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: BRAIN.md §5 e princípio "não parecer IA". `error.tsx` precisa ser client component com `reset`; não usar `router.refresh()` em RSC. Não converter páginas RSC em client só para tratar erro — a fronteira resolve.
+
+---
+
 > **PAUSA — Bloco A Documentos concluído. Validar telas com diretoria antes de prosseguir para Bloco B.**
 
 ---

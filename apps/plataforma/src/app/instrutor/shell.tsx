@@ -3,10 +3,11 @@
 import { usePathname, useRouter } from "next/navigation";
 import {
   AppShell,
+  ModuleLogo,
   NotificationBellContainer,
   type NavSection,
 } from "@hebron/ui";
-import { BookOpen, LayoutDashboard, Plus } from "lucide-react";
+import { LayoutDashboard, Plus } from "lucide-react";
 import { logoutAction } from "../../actions/auth";
 import {
   listBellNotifications,
@@ -55,13 +56,7 @@ export default function InstrutorShell({
       onLogout={() => void logoutAction()}
       currentPath={pathname}
       appName="Plataforma — Instrutor"
-      logo={
-        <BookOpen
-          className="h-5 w-5 shrink-0"
-          style={{ color: "var(--hb-cyan)" }}
-          aria-hidden="true"
-        />
-      }
+      logo={<ModuleLogo module="plataforma" />}
       sidebarDark
       headerActions={
         <NotificationBellContainer

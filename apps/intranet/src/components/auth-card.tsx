@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { HebronLockup } from "@hebron/ui";
 
 // ——————————————————————————————————————————
 // Shared shell for every (auth) page — login, cadastro, convite, mfa/*.
@@ -23,7 +24,7 @@ export function AuthCard({
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-(--surface-alt) px-4 py-12">
       <div className="w-full max-w-md rounded-lg bg-(--bg) p-8 shadow-(--shadow-md)">
-        <div className="mb-8 flex flex-col items-center gap-3">
+        <div className="mb-8 flex flex-col items-center gap-5">
           <HebronLogo />
           <div className="text-center">
             <h1 className="text-xl font-semibold tracking-tight text-(--fg)">
@@ -49,28 +50,14 @@ export function AuthCard({
   );
 }
 
+/**
+ * Marca institucional das telas de acesso.
+ *
+ * Aqui o usuário ainda não está dentro de módulo nenhum — quem se apresenta é
+ * a instituição, com o logotipo oficial, e não uma sub-marca.
+ */
 export function HebronLogo() {
-  return (
-    <div className="flex flex-col items-center">
-      <div
-        className="flex h-12 w-12 items-center justify-center rounded-md bg-(--hb-blue)"
-        aria-hidden="true"
-      >
-        <span className="text-xl font-bold text-(--brand-fg) tracking-tight select-none">
-          H
-        </span>
-      </div>
-
-      <div className="mt-2 text-center leading-none">
-        <span className="block text-xs font-semibold tracking-[0.2em] uppercase text-(--hb-blue)">
-          Hebron
-        </span>
-        <span className="block text-xs tracking-[0.15em] uppercase text-(--fg-muted)">
-          Aseec
-        </span>
-      </div>
-    </div>
-  );
+  return <HebronLockup height={44} />;
 }
 
 export function SupportFooter() {

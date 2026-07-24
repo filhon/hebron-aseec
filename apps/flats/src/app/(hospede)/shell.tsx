@@ -3,10 +3,11 @@
 import { usePathname, useRouter } from "next/navigation";
 import {
   AppShell,
+  ModuleLogo,
   NotificationBellContainer,
   type NavSection,
 } from "@hebron/ui";
-import { Home, CalendarPlus, History, BedDouble } from "lucide-react";
+import { Home, CalendarPlus, History } from "lucide-react";
 import { logoutAction } from "../../actions/auth";
 import {
   listBellNotifications,
@@ -57,12 +58,7 @@ export default function HospedeShell({ user, children }: ShellProps) {
       onLogout={() => void logoutAction()}
       currentPath={path}
       appName="Flats"
-      logo={
-        <BedDouble
-          className="h-5 w-5 shrink-0"
-          style={{ color: "var(--hb-cyan)" }}
-        />
-      }
+      logo={<ModuleLogo module="flats" />}
       sidebarDark
       headerActions={
         <NotificationBellContainer

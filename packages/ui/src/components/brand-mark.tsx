@@ -1,6 +1,7 @@
 import * as React from "react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { HebronSymbol, type BrandTone } from "./hebron-brand";
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -9,35 +10,38 @@ function cn(...inputs: ClassValue[]) {
 export interface BrandMarkProps extends React.HTMLAttributes<HTMLDivElement> {
   showName?: boolean;
   compact?: boolean;
-  /** Diâmetro do símbolo em pixels. */
+  /** Altura do símbolo em pixels. */
   size?: number;
   /** Usa cores invertidas (--fg-invert) para uso sobre superfícies de marca/escuras. */
   inverted?: boolean;
+  /** Linha de apoio sob o nome. Só aparece quando `compact` é falso. */
+  tagline?: string;
 }
 
+/**
+ * Assinatura institucional da Hebron Aseec: símbolo oficial + nome.
+ *
+ * Para o logotipo completo com a assinatura desenhada, use `HebronLockup`.
+ * Para identidade de módulo, use `ModuleLogo`.
+ */
 export function BrandMark({
   showName = true,
   compact = false,
   size = 32,
   inverted = false,
+  tagline,
   className,
   ...props
 }: BrandMarkProps) {
+  const tone: BrandTone = inverted ? "light" : "color";
+
   return (
     <div
       className={cn("inline-flex items-center gap-2.5", className)}
-      aria-label={showName ? undefined : "Hebron ASEEC"}
+      aria-label={showName ? undefined : "Hebron Aseec"}
       {...props}
     >
-      <span
-        aria-hidden="true"
-        style={{ width: size, height: size }}
-        className="relative block shrink-0 rounded-full bg-(--brand)"
-      >
-        <span className="absolute left-[12.5%] top-[12.5%] h-[43.75%] w-[43.75%] rounded-full bg-(--accent)" />
-        <span className="absolute bottom-[18.75%] left-[31.25%] h-[25%] w-[25%] rounded-full bg-(--hb-green)" />
-        <span className="absolute right-[18.75%] top-[37.5%] h-[31.25%] w-[31.25%] rounded-full bg-(--hb-cyan)" />
-      </span>
+      <HebronSymbol size={size} tone={tone} />
 
       {showName && (
         <span className="min-w-0 leading-none">
@@ -47,16 +51,16 @@ export function BrandMark({
               inverted ? "text-(--fg-invert)" : "text-(--fg)",
             )}
           >
-            Hebron ASEEC
+            Hebron Aseec
           </span>
-          {!compact && (
+          {!compact && tagline && (
             <span
               className={cn(
                 "mt-0.5 block truncate text-xs font-(--font-weight-medium)",
                 inverted ? "text-(--fg-invert-muted)" : "text-(--fg-muted)",
               )}
             >
-              Administração
+              {tagline}
             </span>
           )}
         </span>

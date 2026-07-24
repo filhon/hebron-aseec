@@ -3,11 +3,12 @@
 import { usePathname, useRouter } from "next/navigation";
 import {
   AppShell,
-  getAppShortcuts,
+  ModuleLogo,
   NotificationBellContainer,
+  getAppShortcuts,
   type NavSection,
 } from "@hebron/ui";
-import { CalendarDays, ClipboardCheck, BedDouble } from "lucide-react";
+import { CalendarDays, ClipboardCheck } from "lucide-react";
 import { logoutAction } from "../../actions/auth";
 import {
   listBellNotifications,
@@ -54,12 +55,7 @@ export default function AdminShell({ user, children }: ShellProps) {
       onLogout={() => void logoutAction()}
       currentPath={path}
       appName="Flats — Gestão"
-      logo={
-        <BedDouble
-          className="h-5 w-5 shrink-0"
-          style={{ color: "var(--hb-cyan)" }}
-        />
-      }
+      logo={<ModuleLogo module="flats" />}
       sidebarDark
       headerActions={
         <NotificationBellContainer

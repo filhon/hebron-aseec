@@ -2,7 +2,6 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import {
-  Home,
   LayoutDashboard,
   Megaphone,
   Users,
@@ -12,8 +11,9 @@ import {
 } from "lucide-react";
 import {
   AppShell,
-  getAppShortcuts,
+  ModuleLogo,
   NotificationBellContainer,
+  getAppShortcuts,
   type NavSection,
 } from "@hebron/ui";
 import { logoutAction } from "../../actions/auth";
@@ -96,12 +96,7 @@ export default function IntranetShell({ user, children }: IntranetShellProps) {
       onLogout={() => void logoutAction()}
       currentPath={pathname}
       appName="Intranet"
-      logo={
-        <Home
-          className="h-5 w-5 shrink-0"
-          style={{ color: "var(--hb-cyan)" }}
-        />
-      }
+      logo={<ModuleLogo module="intranet" />}
       sidebarDark
       headerActions={
         <NotificationBellContainer

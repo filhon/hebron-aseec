@@ -109,8 +109,32 @@ export {
   resolveNotificationHref,
 } from "./components/ecosystem-apps";
 
+// Marca institucional
 export { BrandMark } from "./components/brand-mark";
 export type { BrandMarkProps } from "./components/brand-mark";
+
+export { HebronSymbol, HebronLockup } from "./components/hebron-brand";
+export type {
+  BrandTone,
+  HebronSymbolProps,
+  HebronLockupProps,
+} from "./components/hebron-brand";
+
+// Sub-marcas dos módulos
+export { MODULE_BRANDS, MODULE_IDS } from "./components/module-brands";
+export type { ModuleId, ModuleBrand } from "./components/module-brands";
+
+export { ModuleLogo, ModuleGlyph } from "./components/module-logo";
+export type {
+  ModuleLogoProps,
+  ModuleLogoVariant,
+} from "./components/module-logo";
+
+export {
+  moduleIconElement,
+  MODULE_ICON_SIZE,
+  MODULE_ICON_CONTENT_TYPE,
+} from "./components/module-icon";
 
 export { UserMenu, Avatar } from "./components/user-menu";
 export type {

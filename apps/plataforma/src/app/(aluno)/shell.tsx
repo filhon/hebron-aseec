@@ -3,10 +3,11 @@
 import { usePathname, useRouter } from "next/navigation";
 import {
   AppShell,
+  ModuleLogo,
   NotificationBellContainer,
   type NavSection,
 } from "@hebron/ui";
-import { GraduationCap, LayoutGrid, Route, Award } from "lucide-react";
+import { LayoutGrid, Route, Award } from "lucide-react";
 import { logoutAction } from "../../actions/auth";
 import {
   listBellNotifications,
@@ -58,13 +59,7 @@ export default function AlunoShell({ user, children }: AlunoShellProps) {
       onLogout={() => void logoutAction()}
       currentPath={pathname}
       appName="Plataforma"
-      logo={
-        <GraduationCap
-          className="h-5 w-5 shrink-0"
-          style={{ color: "var(--hb-teal)" }}
-          aria-hidden="true"
-        />
-      }
+      logo={<ModuleLogo module="plataforma" />}
       headerActions={
         <NotificationBellContainer
           currentAppId="plataforma"
