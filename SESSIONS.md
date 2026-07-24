@@ -14501,3 +14501,103 @@ projetos_analysis_checklist_template` não seedada — `pnpm db:seed`
 - `packages/validators/src/admin/index.ts`
 - `packages/types/src/admin/index.ts`
 - `SESSIONS.md` (esta entrada)
+
+## S-181 — P-1.10b — Admin: consolidação e acesso ao editor de templates de email (CORRETIVO)
+
+**Branch:** `feat/P-1.10b-admin-email-templates-access`
+
+### Contexto
+
+Critério de aceite de P-1.10 ("Templates editáveis no Admin com preview ao
+vivo") estava marcado `[x]` mas inatingível no app rodando: o editor real
+(`templates-email/page.tsx`, `EmailTemplateEditor` + `EmailTemplatePreview`
+
+- save action com audit log) era órfão — nenhum link no `admin-shell.tsx`
+  apontava para ele — enquanto `configuracoes/page.tsx` (aba "Templates de
+  email", a que de fato está no sidebar) mostrava só um preview somente-
+  leitura com "Edição disponível em breve via interface dedicada". Além
+  disso, `templates-email/page.tsx` e `email-template-editor.tsx`/
+  `email-template-preview.tsx` não entraram na lista de arquivos do P-1.12b
+  (S-22b) e ainda carregavam hex hardcoded. `admin.email_templates` também
+  nunca foi semeada — banco novo renderiza a aba vazia.
+
+### O que foi feito
+
+1. **Consolidação em Configurações:** `TEMPLATE_META`, `DEFAULT_EMAIL_TEMPLATES`
+   (15 slugs Geral/Projetos), `validateEmailTemplateSlug` e a action
+   `saveEmailTemplate` (fechada sobre o slug ativo, mesmo padrão que já
+   existia em `templates-email/page.tsx`) foram movidos para
+   `configuracoes/page.tsx`. O painel `EmailTemplatesPanel` da aba
+   "Templates de email" deixou de ser somente-leitura: agora renderiza
+   `EmailTemplateEditor` + `EmailTemplatePreview` reais dentro da mesma
+   estrutura de sidebar/dual-column (`hb-settings-dual-col`,
+   `hb-tpl-sidebar-*`) que já existia, com grupos Geral/Projetos, seleção
+   por slug via `?template=`, badge de "personalizado vs. padrão", save
+   com `logAudit("email_template.updated")` e `revalidatePath`, gate
+   `super_admin` (checado dentro da action via `resolveSession`).
+2. **Rota órfã eliminada:** `templates-email/page.tsx` virou um redirect
+   permanente (`redirect("/configuracoes?tab=email-templates")`) — não
+   quebra URLs salvas, mas não é mais uma segunda tela editável.
+3. **Hex → token em `email-template-preview.tsx`:** os constantes `C.*`
+   (chrome do preview: primary/foreground/muted/border/surface/white) e os
+   badges de variável resolvida/não-resolvida, dots de "traffic light",
+   fundo do viewport e banner de variável sem exemplo passaram a usar
+   `var(--hb-*)`/semânticos (`--brand`, `--color-destructive`,
+   `--color-success`, `--color-warning`, `color-mix(...)`, seguindo o
+   padrão já usado por `.hb-tpl-var`/`.hb-warn-banner` em
+   `patterns.css`). `email-template-editor.tsx` já estava limpo (só usava
+   `bg-(--token)` do Tailwind v4). Hex hardcoded dentro do **corpo HTML**
+   dos templates (ex. `background:#202C85` em `<a style="...">` no
+   `DEFAULT_EMAIL_TEMPLATES`/seed) foi mantido de propósito — é conteúdo
+   de e-mail real, que precisa de hex porque clientes de e-mail não
+   suportam CSS custom properties; o grep de aceite só cobre os
+   componentes de app (`email-template-editor.tsx`, `email-template-
+preview.tsx`, `templates-email/`), não o conteúdo dos templates.
+4. **Seed de `admin.email_templates`:** `seedEmailTemplates()` em
+   `packages/db/src/seed.ts`, com o mesmo texto padrão que a UI já usava
+   como fallback (`EMAIL_TEMPLATE_DEFAULTS`, 15 slugs com `variables` por
+   slug), `onConflictDoNothing()` (nunca sobrescreve customização salva
+   por super_admin) — mantém a tela idêntica visualmente antes/depois do
+   seed. Chamada adicionada em `main()`, ao lado de
+   `seedProjetosChecklistTemplate`. Verificado rodando a função
+   diretamente contra o banco de dev (script descartável, removido depois)
+   — insere as 15 linhas na primeira execução.
+
+### Verificação
+
+- `grep -rin "#f0fdf4|#f7f8fc|#bbf7d0|#202c85|#ea5a06|#07b4e7|#6b7280"` nos
+  três arquivos/pasta do critério → zero ocorrências.
+- `pnpm turbo typecheck lint` verdes em `@hebron/db` e `@hebron/admin`;
+  `pnpm turbo build --filter=@hebron/admin` verde (`/templates-email` cai
+  para 123 B, confirmando que é só redirect).
+- `pnpm --filter @hebron/db test src/__tests__/seed.test.ts` — 2/2 verdes.
+- `pnpm --filter @hebron/admin test` — 103/105 verdes; as mesmas 2 falhas
+  de S-180 (`security-audit.test.ts` GRANTs em
+  `public.data_deletion_requests`, `settings-actions.test.ts` config
+  `projetos_analysis_checklist_template` não seedada no ambiente
+  compartilhado). Confirmado pré-existente: `git stash` dos 4 arquivos
+  desta sessão + rerun dos dois arquivos de teste reproduz as mesmas 2
+  falhas contra o código antes do diff.
+
+### Critérios de aceite
+
+- [x] Aba Configurações → Templates de email é editável (assunto + corpo,
+      preview ao vivo, save) e acessível pela navegação existente
+- [x] `/templates-email` não é mais tela editável (redirect permanente)
+- [x] Grep de hex de marca nos arquivos do critério retorna vazio
+- [x] `seed.ts` popula `admin.email_templates` para os 15 slugs de
+      `TEMPLATE_META`, idempotente
+- [x] Save continua registrando `email_template.updated` e revalidando
+- [x] Gate `super_admin` preservado
+- [x] Testes do Admin continuam no mesmo estado (103/105, 2 falhas de
+      ambiente pré-existentes e não relacionadas)
+- [x] `pnpm turbo build lint typecheck` verde
+- [x] Registrado em SESSIONS.md
+
+### Arquivos criados/alterados
+
+- `apps/admin/src/app/(dashboard)/configuracoes/page.tsx`
+- `apps/admin/src/app/(dashboard)/templates-email/page.tsx`
+- `apps/admin/src/components/email-template-preview.tsx`
+- `packages/db/src/seed.ts`
+- `SESSIONS.md` (esta entrada)

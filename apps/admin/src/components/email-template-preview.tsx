@@ -27,24 +27,25 @@ function renderBodyHtml(html: string): string {
   return html.replace(/\{\{(\w+)\}\}/g, (_, name: string) => {
     const val = EXAMPLE_VARS[name];
     if (val) {
-      return `<span style="background:#DBEAFE;color:#1D4ED8;padding:1px 6px;border-radius:4px;font-size:0.875em;font-weight:500;">${val}</span>`;
+      return `<span style="background:color-mix(in srgb, var(--brand) 15%, transparent);color:var(--brand);padding:1px 6px;border-radius:4px;font-size:0.875em;font-weight:500;">${val}</span>`;
     }
-    return `<span style="background:#FEE2E2;color:#B91C1C;padding:1px 6px;border-radius:4px;font-size:0.875em;font-family:monospace;">{{${name}}}</span>`;
+    return `<span style="background:color-mix(in srgb, var(--color-destructive) 15%, transparent);color:var(--color-destructive);padding:1px 6px;border-radius:4px;font-size:0.875em;font-family:monospace;">{{${name}}}</span>`;
   });
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Design tokens (mirroring packages/email/src/components/layout.tsx)
+// Chrome do preview — tokens canônicos (o e-mail real, em packages/email/src,
+// usa hex fixo pois clientes de e-mail não suportam CSS custom properties;
+// este componente é UI do app e por isso usa o vocabulário --hb-*).
 // ──────────────────────────────────────────────────────────────────────────────
 
 const C = {
-  primary: "#202C85",
-  accent: "#EA5A06",
-  foreground: "#111827",
-  muted: "#6B7280",
-  border: "#E5E7EB",
-  surface: "#F9FAFB",
-  white: "#FFFFFF",
+  primary: "var(--hb-blue)",
+  foreground: "var(--fg)",
+  muted: "var(--fg-muted)",
+  border: "var(--border)",
+  surface: "var(--surface-alt)",
+  white: "var(--surface)",
 } as const;
 
 const FONT = 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
@@ -103,8 +104,10 @@ export function EmailTemplatePreview({
                   fontSize: 11,
                   padding: "2px 8px",
                   borderRadius: 4,
-                  background: val ? "#DBEAFE" : "#FEE2E2",
-                  color: val ? "#1D4ED8" : "#B91C1C",
+                  background: val
+                    ? "color-mix(in srgb, var(--brand) 12%, transparent)"
+                    : "color-mix(in srgb, var(--color-destructive) 12%, transparent)",
+                  color: val ? "var(--brand)" : "var(--color-destructive)",
                   fontWeight: 500,
                 }}
               >
@@ -153,7 +156,9 @@ export function EmailTemplatePreview({
             style={{ display: "flex", gap: 5, marginBottom: 10 }}
             aria-hidden="true"
           >
-            {(["#FF5F57", "#FFBD2E", "#28C840"] as const).map((color, i) => (
+            {(
+              ["var(--hb-red)", "var(--hb-gold)", "var(--hb-green)"] as const
+            ).map((color, i) => (
               <div
                 key={i}
                 style={{
@@ -222,7 +227,7 @@ export function EmailTemplatePreview({
         {/* Email viewport */}
         <div
           style={{
-            background: "#F3F4F6",
+            background: "var(--bg-alt)",
             padding: "24px 16px",
             minHeight: 200,
           }}
@@ -248,7 +253,7 @@ export function EmailTemplatePreview({
                   fontFamily: FONT,
                   fontSize: 18,
                   fontWeight: 700,
-                  color: "#fff",
+                  color: "var(--fg-invert)",
                   letterSpacing: "-0.3px",
                   marginBottom: 2,
                 }}
@@ -329,11 +334,12 @@ export function EmailTemplatePreview({
           style={{
             marginTop: 12,
             padding: "8px 12px",
-            background: "#FEF3C7",
-            border: "1px solid #FDE68A",
+            background: "color-mix(in srgb, var(--hb-orange) 7%, transparent)",
+            border:
+              "1px solid color-mix(in srgb, var(--hb-orange) 20%, transparent)",
             borderRadius: 6,
             fontSize: 12,
-            color: "#92400E",
+            color: "var(--hb-orange-deep)",
           }}
         >
           Variável(eis) sem valor de exemplo:{" "}
@@ -342,7 +348,8 @@ export function EmailTemplatePreview({
               key={v}
               style={{
                 fontFamily: "ui-monospace, monospace",
-                background: "#FDE68A",
+                background:
+                  "color-mix(in srgb, var(--hb-orange) 25%, transparent)",
                 padding: "0 4px",
                 borderRadius: 3,
                 marginRight: 4,

@@ -55,6 +55,8 @@ Corpo integral no próprio arquivo (as 4 originais) ou em `AUDIT/04-prompts-pend
 | P-0.6e    | Emails: tipografia institucional (remover Inter)             | neste arquivo                    | S-178    |
 | P-7.1b    | Flats: máximo de scoring em BRAIN §6.8 (80 → 75)             | neste arquivo                    | pendente |
 | P-7.5b    | Flats: fiação das telas do Bloco A para validação diretoria  | neste arquivo                    | pendente |
+| P-1.10b   | Admin: editor de templates de email acessível (órfão→Config) | neste arquivo                    | S-181    |
+| P-1.10c   | Emails enviados a partir dos templates do banco (DB-driven)  | neste arquivo                    | pendente |
 
 ¹ Sessão referenciada retroativamente como S-22b em SESSIONS.md S-68 (ponto 2 da entrada retificadora) — o bloco original nunca recebeu número.
 
@@ -1728,6 +1730,104 @@ O Admin foi construído antes das referências de design e usa `apps/admin/src/a
 
 **Notas:**
 Ref: BRAIN.md §5. **Não** altere regra de negócio, queries ou Server Actions — somente a camada de estilo. Se uma classe do protótipo ainda não existir em `patterns.css`, adicione-a lá (em `packages/ui`), nunca em um CSS do app.
+
+---
+
+### P-1.10b — Consolidação e acesso ao editor de templates de email (CORRETIVO)
+
+**Fase:** 1
+**Módulo:** admin
+**Tipo:** ui
+**Pré-condições:**
+
+- Branch: `feat/P-1.10b-admin-email-templates-access`
+- Dependências: P-1.10 concluído, **P-1.12b concluído** (design system unificado), P-1.25 concluído (fiação/leitura protegida do Admin)
+- Env vars: nenhuma
+- Skill: **invocar `/impeccable` antes de começar**
+
+**Problema que este prompt resolve (contexto):**
+O critério de aceite de P-1.10 "Templates editáveis no Admin com preview ao vivo" está marcado `[x]` mas **não é atingível no app rodando**. Existem duas telas paralelas e desconectadas:
+
+1. `apps/admin/src/app/(dashboard)/templates-email/page.tsx` — editor **completo e funcional** (17 slugs em grupos Geral/Projetos, `EmailTemplateEditor` + preview ao vivo + save action com audit log), porém **órfão**: nenhum link no `admin-shell.tsx` nem em qualquer tela aponta para ele. Só abre digitando a URL. Além disso, esse arquivo e `email-template-editor.tsx`/`email-template-preview.tsx` **não entraram na lista de arquivos do P-1.12b** (S-22b) — ainda carregam hex hardcoded (ex.: `#F0FDF4`, `#F7F8FC`, `#BBF7D0`), violando o design system.
+2. `apps/admin/src/app/(dashboard)/configuracoes/page.tsx` (aba `email-templates`) — mostra apenas um preview **somente-leitura** com o texto "Edição de templates disponível em breve via interface dedicada" (a "interface dedicada" é justamente a de cima, que já existe).
+
+Ainda: a tabela `admin.email_templates` **não é semeada** em `packages/db/src/seed.ts` — num banco novo as duas telas renderizam vazias. O design-ref `design-refs/admin/screen-settings.jsx` (`{ key: "templates", label: "Templates de email" }`, editor com botão Salvar) confirma que a IA correta é: o **editor vive dentro de Configurações → aba "Templates de email"**.
+
+**Escopo (siga na ordem):**
+
+1. **Consolidar na aba de Configurações:** substituir o `EmailTemplatesPanel` somente-leitura em `configuracoes/page.tsx` (aba `email-templates`) pelo **editor real** — reutilizar `EmailTemplateEditor` + `EmailTemplatePreview` e a `saveEmailTemplate` server action (hoje inline em `templates-email/page.tsx`), preservando: agrupamento Geral/Projetos, seleção por slug via `searchParams`, save com `logAudit` e `revalidatePath`, e o gate `super_admin`.
+2. **Eliminar a rota órfã:** converter `templates-email/page.tsx` em um **redirect permanente** para `/configuracoes?tab=email-templates` (`redirect()` no RSC), para não quebrar links salvos — ou remover a rota se não houver links externos. Não deixar duas telas editáveis.
+3. **Migrar hex→token** em `email-template-editor.tsx` e `email-template-preview.tsx` (e no que for movido) para os tokens canônicos `--hb-*`/semânticos, fechando a lacuna herdada de P-1.12b. Rode e zere o grep de hex de marca conforme P-1.12b.
+4. **Semear `admin.email_templates`** em `packages/db/src/seed.ts` (idempotente, `onConflictDoNothing` por `slug`) com os textos padrão de **todos os slugs** já listados em `TEMPLATE_META` (Geral + Projetos), derivando `subject`/`bodyText`/`bodyHtml` do conteúdo atual dos componentes React Email correspondentes em `packages/email/src/templates/*`. Usar as variáveis canônicas em português no corpo: `{{nome}}`, `{{link}}`, `{{papel}}`, `{{modulo}}` (as mesmas exibidas na UI).
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/admin/src/app/(dashboard)/configuracoes/page.tsx`
+- `apps/admin/src/app/(dashboard)/templates-email/page.tsx` (converter em redirect ou remover)
+- `apps/admin/src/components/email-template-editor.tsx`
+- `apps/admin/src/components/email-template-preview.tsx`
+- `packages/db/src/seed.ts`
+
+**Critérios de aceite:**
+
+- [x] A aba `Configurações → Templates de email` é **editável** (edição de assunto + corpo, preview ao vivo, save) e é acessível pela navegação (Configurações está no sidebar)
+- [x] `/templates-email` não é mais uma segunda tela editável (redirect para `/configuracoes?tab=email-templates` ou removida)
+- [x] `grep -rn "#f0fdf4\|#f7f8fc\|#bbf7d0\|#202c85\|#ea5a06\|#07b4e7\|#6b7280" apps/admin/src/components/email-template-*.tsx apps/admin/src/app/(dashboard)/templates-email` retorna vazio (zero hex de marca)
+- [x] `seed.ts` popula `admin.email_templates` para todos os slugs de `TEMPLATE_META` (idempotente); num banco recém-semeado a aba mostra os textos padrão
+- [x] Save continua registrando `email_template.updated` no audit log e revalidando a rota
+- [x] Gate `super_admin` preservado
+- [x] Testes do Admin continuam passando (103/105 — as 2 falhas restantes são drift de ambiente pré-existente, ver S-181 em SESSIONS.md)
+- [x] `pnpm turbo build lint typecheck` verde
+- [x] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: BRAIN.md §6.1 (templates editáveis) e §5 (design system). Este prompt **não** conecta os emails enviados aos textos do banco — isso é P-1.10c. Aqui só se resolve o acesso, a duplicação, o design system e o seed. Não invente novos slugs além dos já presentes em `TEMPLATE_META`.
+
+---
+
+### P-1.10c — Emails enviados a partir dos templates do banco (CORRETIVO)
+
+**Fase:** 1
+**Módulo:** admin / email
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-1.10c-db-driven-emails`
+- Dependências: **P-1.10b concluído** (templates semeados e editáveis)
+- Env vars: `DATABASE_URL`, `RESEND_API_KEY`
+
+**Problema que este prompt resolve (contexto):**
+Os emails **realmente enviados** (convite, boas-vindas, reset de senha, e demais) renderizam **componentes React hardcoded** (`InvitationEmail`, `WelcomeEmail`, …). A tabela `admin.email_templates`, editável pelo super_admin (P-1.10b), é **cosmética**: editar uma linha **não altera nenhum email enviado**. Isso contradiz BRAIN §6.1 ("templates editáveis, nunca hardcoded"). O seam já existe e nunca foi ligado: `packages/email/src/lib/send.ts` (`SendEmailOptions`) aceita `html?: string` e `subject?: string` como override, documentado como "usado quando o admin sobrescreveu o template via Admin", com precedência sobre o componente React — mas **nenhum caller carrega a linha do banco e passa `html`**.
+
+**Escopo (siga na ordem):**
+
+1. **Helper puro de interpolação** em `packages/email` (mantém o pacote agnóstico a banco): `interpolateStoredTemplate({ subject, bodyHtml, bodyText }, variables: Record<string,string>) => { subject: string; html: string; text: string }`, substituindo `{{chave}}` de forma segura (escapar HTML dos valores em `bodyHtml`; deixar placeholders desconhecidos intactos ou vazios — decidir e documentar). Exportar em `packages/email/src/index.ts`.
+2. **Loader do banco** para a linha do template por `slug` (função em `packages/db` ou lib compartilhada `@hebron/db/email-templates`), retornando `null` quando não houver linha.
+3. **Ligar nos envios:** nas actions que disparam email (convite em `apps/admin/src/actions/invitations.ts`; boas-vindas em `apps/intranet/src/actions/invitations.ts` e no `approveSignup` de `apps/admin/src/actions/users.ts`; reset de senha), **carregar a linha do template** pelo slug e, quando existir, passar `email.html` + `email.subject` (via `interpolateStoredTemplate`); quando **não existir**, manter o componente React atual como **fallback** (comportamento inalterado). O override do DB tem precedência (já suportado por `send.ts`).
+4. **Contrato de variáveis:** o dicionário passado deve casar com as variáveis semeadas em P-1.10b (`{{nome}}`, `{{link}}`, `{{papel}}`, `{{modulo}}`, …). Documentar por slug quais variáveis são fornecidas.
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/email/src/lib/interpolate.ts` (criar) + `packages/email/src/index.ts` (export)
+- `packages/db/src/email-templates.ts` (criar — loader por slug) + export no barrel/`package.json`
+- `apps/admin/src/actions/invitations.ts`
+- `apps/admin/src/actions/users.ts`
+- `apps/intranet/src/actions/invitations.ts`
+- `apps/admin/src/__tests__/` e/ou `apps/intranet/src/__tests__/` (teste de interpolação + fallback)
+
+**Critérios de aceite:**
+
+- [ ] `interpolateStoredTemplate` substitui `{{var}}` corretamente e escapa HTML dos valores; testado
+- [ ] Com uma linha custom em `admin.email_templates`, o email enviado usa o texto do banco (assunto + corpo), não o componente React
+- [ ] Sem linha no banco, o envio cai no componente React atual (fallback), sem regressão
+- [ ] Convite, boas-vindas e reset de senha passam a respeitar o template editado
+- [ ] Nenhuma mudança de regra de negócio além da fonte do texto do email
+- [ ] Testes (novos + existentes de Admin/Intranet) passam
+- [ ] `pnpm turbo build lint typecheck` verde
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: BRAIN.md §6.1. `packages/email` **permanece agnóstico a banco** — quem lê o banco é o caller (action) ou `@hebron/db`; o pacote de email só interpola e envia. Não remover os componentes React Email: eles seguem como fallback e como base do seed (P-1.10b).
 
 ---
 
