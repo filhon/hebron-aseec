@@ -21,13 +21,20 @@ import {
   auditLog,
 } from "@hebron/db/schema";
 import { deleteTestAuthUser } from "@hebron/auth/testing";
+import type * as EmailModule from "@hebron/email";
 
 // Sem chave Resend real em ambiente de teste — mocka o envio de email
 // (mesmo padrão de apps/admin/src/__tests__/actions.test.ts). A criação de
 // conta/papéis, que é o que este teste verifica, continua real.
-vi.mock("@hebron/email", () => ({
-  createNotification: vi.fn().mockResolvedValue({ id: "mock-notif-id" }),
-}));
+// interpolateStoredTemplate fica real (importOriginal, P-1.10c) — só
+// createNotification é mockado.
+vi.mock("@hebron/email", async (importOriginal) => {
+  const actual = await importOriginal<typeof EmailModule>();
+  return {
+    ...actual,
+    createNotification: vi.fn().mockResolvedValue({ id: "mock-notif-id" }),
+  };
+});
 vi.mock("@hebron/email/templates/welcome", () => ({
   WelcomeEmail: vi.fn().mockReturnValue(null),
 }));

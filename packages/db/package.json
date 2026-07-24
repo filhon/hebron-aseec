@@ -12,6 +12,7 @@
     "./anonymization": "./src/anonymization.ts",
     "./notifications": "./src/notifications.ts",
     "./settings": "./src/settings.ts",
+    "./email-templates": "./src/email-templates.ts",
     "./system-actor": "./src/system-actor.ts",
     "./meetings": "./src/meetings.ts",
     "./projetos-approval": "./src/projetos-approval.ts",

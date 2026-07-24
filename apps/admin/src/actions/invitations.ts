@@ -6,8 +6,9 @@ import { eq } from "drizzle-orm";
 import crypto from "node:crypto";
 import { db } from "@hebron/db/client";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
-import { invitations, notifications } from "@hebron/db/schema";
-import { createNotification } from "@hebron/email";
+import { invitations, notifications, users } from "@hebron/db/schema";
+import { getEmailTemplateBySlug } from "@hebron/db/email-templates";
+import { createNotification, interpolateStoredTemplate } from "@hebron/email";
 import { InvitationEmail } from "@hebron/email/templates/invitation";
 import { adminAction } from "../lib/safe-action";
 import { logAudit } from "../lib/audit";
@@ -61,6 +62,30 @@ export const sendInvitation = adminAction
       process.env.NEXT_PUBLIC_APP_URL ?? "https://app.hebronaseec.com.br";
     const inviteUrl = `${appUrl}/convite?token=${token}`;
 
+    // P-1.10c: admin.email_templates (editável pelo super_admin) tem
+    // precedência sobre o componente React Email hardcoded — quando existe
+    // linha para o slug, `email.html`/`email.subject` sobrescrevem
+    // `email.template` em `send.ts`; sem linha, o componente segue como
+    // fallback inalterado.
+    const invitationTemplate = await getEmailTemplateBySlug("invitation");
+    let storedSubject: string | undefined;
+    let storedHtml: string | undefined;
+    if (invitationTemplate) {
+      const [inviter] = await db
+        .select({ fullName: users.fullName, email: users.email })
+        .from(users)
+        .where(eq(users.id, ctx.actorId))
+        .limit(1);
+
+      const interpolated = interpolateStoredTemplate(invitationTemplate, {
+        nome: inviter?.fullName ?? inviter?.email ?? "A administração",
+        link: inviteUrl,
+        papel: parsedInput.roles.join(", "),
+      });
+      storedSubject = interpolated.subject;
+      storedHtml = interpolated.html;
+    }
+
     // Dispatch email via Resend
     // Exceção service-level (G6.3): notificação criada com o `db` singleton
     // (superuser) em nome do destinatário do convite — não do ator autenticado —
@@ -91,7 +116,8 @@ export const sendInvitation = adminAction
       },
       email: {
         to: parsedInput.email,
-        subject: "Convite para Hebron Aseec",
+        subject: storedSubject ?? "Convite para Hebron Aseec",
+        html: storedHtml,
         template: React.createElement(InvitationEmail, {
           inviteUrl,
           roles: parsedInput.roles,

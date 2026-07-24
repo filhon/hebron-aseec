@@ -201,6 +201,8 @@
 | S-178  | 2026-07-22 | P-0.6e — Tipografia institucional nos emails (CORRETIVO — EmailLayout usava Inter)                                               | concluido                            |
 | S-179  | 2026-07-22 | Débito ad-hoc — `PreviewProps` nos 27 templates de email (fix do `email:dev`, fora do escopo original do P-0.6e)                 | concluido                            |
 | S-180  | 2026-07-23 | P-1.26b — Admin: remover `moduleAccess` fantasma, schemas de usuário mortos e tipos de domínio órfãos (PATCH-025)                | concluido                            |
+| S-181  | 2026-07-23 | P-1.10b — Admin: consolidação e acesso ao editor de templates de email (CORRETIVO)                                               | concluido                            |
+| S-182  | 2026-07-24 | P-1.10c — Emails enviados a partir dos templates do banco (CORRETIVO)                                                            | concluido                            |
 
 ---
 
@@ -14600,4 +14602,139 @@ preview.tsx`, `templates-email/`), não o conteúdo dos templates.
 - `apps/admin/src/app/(dashboard)/templates-email/page.tsx`
 - `apps/admin/src/components/email-template-preview.tsx`
 - `packages/db/src/seed.ts`
+
+---
+
+## S-182 — P-1.10c — Emails enviados a partir dos templates do banco (CORRETIVO)
+
+**Branch:** `feat/P-1.10c-db-driven-emails`
+
+### Contexto
+
+`admin.email_templates` (editável pelo super_admin desde P-1.10b) era
+cosmética: editar uma linha não alterava nenhum email de fato enviado —
+`sendInvitation`, `acceptInvitation`, `approveSignup` e `resetPassword`
+sempre renderizavam o componente React Email hardcoded
+(`InvitationEmail`/`WelcomeEmail`/`PasswordResetEmail`). O seam já existia
+em `packages/email/src/lib/send.ts` (`SendEmailOptions.html`/`.subject`,
+com precedência documentada sobre `.template`), mas nenhum caller carregava
+a linha do banco e passava `html`. Este prompt liga o seam.
+
+### O que foi feito
+
+1. **`interpolateStoredTemplate`** (`packages/email/src/lib/interpolate.ts`,
+   exportado no barrel): substitui `{{chave}}` em `subject`/`bodyHtml`/
+   `bodyText`. Valores usados em `bodyHtml` são escapados (evita HTML
+   injection via campos livres, ex. nome de usuário); `subject`/`bodyText`
+   permanecem texto puro. Placeholder sem entrada em `variables` fica
+   intacto no output (decisão registrada no próprio código) — um dado
+   faltante fica visível em vez de virar um buraco silencioso na frase.
+   `packages/email` continua agnóstico a banco.
+2. **Loader por slug** (`packages/db/src/email-templates.ts`,
+   `getEmailTemplateBySlug`, exportado como `@hebron/db/email-templates`):
+   `select` por `slug`, retorna `null` quando não há linha — o caller decide
+   o fallback.
+3. **Wiring nas 4 actions que disparam email:**
+   - `apps/admin/src/actions/invitations.ts::sendInvitation` — slug
+     `invitation`; `nome` = `fullName`/`email` de quem convidou (consulta
+     extra a `users` por `ctx.actorId`, já que o convite ainda não tem
+     "nome do convidado"), `link` = URL do convite, `papel` = papéis
+     unidos por vírgula.
+   - `apps/intranet/src/actions/invitations.ts::acceptInvitation` — slug
+     `welcome`; `nome` = nome informado no formulário de aceite, `link` =
+     URL de login, `papel` = papéis do convite.
+   - `apps/admin/src/actions/users.ts::approveSignup` — também slug
+     `welcome` (mesmo email conceitual de boas-vindas de
+     `acceptInvitation`; não há slug `signup-approved` separado semeado em
+     P-1.10b — suposição registrada aqui, a confirmar com Filipe se depois
+     for necessário diferenciar o texto por origem do cadastro), `papel`
+     fixo `"submissor"`.
+   - `apps/admin/src/actions/users.ts::resetPassword` — slug
+     `password-reset`; `nome` = `fullName`/`email` do usuário-alvo, `link`
+     = link de recovery do Supabase Auth.
+   - Em todas: quando `getEmailTemplateBySlug` retorna linha, `email.html`/
+     `email.subject` são setados a partir do template interpolado (o
+     `send.ts` já dá precedência a `html` sobre `template`); quando
+     retorna `null`, `html`/`subject` ficam `undefined` e o componente
+     React Email hardcoded segue como fallback, comportamento idêntico ao
+     anterior.
+4. **`rejectSignup` não foi tocado** — fora do escopo do prompt (não está
+   na lista de "convite/boas-vindas/reset de senha"), continua usando
+   `SignupRejectedEmail` puro; não há slug semeado para ele em P-1.10b.
+
+### Testes
+
+- `packages/email`: sem suíte de testes própria (pacote não tem
+  `__tests__`/`vitest` configurado) — `interpolateStoredTemplate` é
+  coberto pelos testes de unidade no Admin (ver abaixo).
+- **Novo** `apps/admin/src/__tests__/email-templates-wiring.test.ts` (8
+  testes): unidade de `interpolateStoredTemplate` (substituição,
+  escape de HTML, placeholder desconhecido intacto) + integração de
+  `sendInvitation`/`resetPassword`/`approveSignup` com
+  `getEmailTemplateBySlug` mockado — linha customizada → email usa texto
+  do banco; linha ausente → fallback ao componente React, sem regressão.
+- **Novo** `apps/intranet/src/__tests__/email-templates-wiring.test.ts` (2
+  testes): mesma cobertura de linha customizada/ausente para
+  `acceptInvitation` (slug `welcome`), reaproveitando
+  `createTestAuthUser`/`deleteTestAuthUser` (fluxo real de criação de
+  conta, sem mock de Supabase Auth).
+- `actions.test.ts` (Admin) e `invitations.test.ts` (Intranet): o mock de
+  `@hebron/email` passou a usar `importOriginal` (mantém
+  `interpolateStoredTemplate` real, só `createNotification` é substituído)
+  — sem isso, `sendInvitation`/`resetPassword`/`approveSignup`/
+  `acceptInvitation` quebrariam ao chamar uma função inexistente no módulo
+  mockado. Os testes existentes desses arquivos passam a exercitar o
+  loader real contra `admin.email_templates` (já semeada por P-1.10b no
+  banco compartilhado de dev) — as asserções, que já eram `objectContaining`
+  sobre `to`, continuam válidas sem alteração.
+- `pnpm --filter @hebron/admin test`: 111/113 verdes — as 2 falhas restantes
+  são as mesmas pré-existentes de S-180/S-181 (`security-audit.test.ts`
+  GRANTs em `public.data_deletion_requests`,
+  `settings-actions.test.ts` config `projetos_analysis_checklist_template`
+  não semeada no ambiente compartilhado); confirmado idêntico ao estado
+  anterior ao diff.
+- `pnpm --filter @hebron/intranet test`: 31/31 verdes.
+- `pnpm --filter @hebron/db test`: 69/70 verdes — a falha restante é
+  `system-actor.test.ts` (drift pré-existente e não relacionado, já
+  registrado em memória de sessões anteriores — S-164).
+- `pnpm turbo build lint typecheck` (monorepo completo): lint+typecheck
+  100% verdes; `build` completo em paralelo (9 apps simultâneos) falhou
+  uma vez com erro flaky do Next.js (`<Html> should not be imported
+outside of pages/_document`) por contenção de recursos — reproduzido como
+  não relacionado ao diff: `git stash` das mudanças desta sessão + build
+  isolado de `@hebron/admin` falhou; com as mudanças restauradas, build
+  isolado de `@hebron/admin` e de `@hebron/intranet` (`--force`, sem
+  cache) passou limpo em ambos. Não investigado a fundo por ser sintoma
+  conhecido de builds Next.js concorrentes sob contenção, não uma
+  regressão de código.
+
+### Critérios de aceite
+
+- [x] `interpolateStoredTemplate` substitui `{{var}}` corretamente e
+      escapa HTML dos valores; testado
+- [x] Com uma linha custom em `admin.email_templates`, o email enviado usa
+      o texto do banco (assunto + corpo), não o componente React
+- [x] Sem linha no banco, o envio cai no componente React atual
+      (fallback), sem regressão
+- [x] Convite, boas-vindas (aceite de convite e aprovação de auto-signup)
+      e reset de senha passam a respeitar o template editado
+- [x] Nenhuma mudança de regra de negócio além da fonte do texto do email
+- [x] Testes (novos + existentes de Admin/Intranet) passam
+- [x] `pnpm turbo build lint typecheck` verde (ver nota acima sobre build
+      paralelo flaky, isolado confirmado verde)
+- [x] Registrado em SESSIONS.md
+
+### Arquivos criados/alterados
+
+- `packages/email/src/lib/interpolate.ts` (novo)
+- `packages/email/src/index.ts`
+- `packages/db/src/email-templates.ts` (novo)
+- `packages/db/package.json`
+- `apps/admin/src/actions/invitations.ts`
+- `apps/admin/src/actions/users.ts`
+- `apps/intranet/src/actions/invitations.ts`
+- `apps/admin/src/__tests__/actions.test.ts`
+- `apps/admin/src/__tests__/email-templates-wiring.test.ts` (novo)
+- `apps/intranet/src/__tests__/invitations.test.ts`
+- `apps/intranet/src/__tests__/email-templates-wiring.test.ts` (novo)
 - `SESSIONS.md` (esta entrada)

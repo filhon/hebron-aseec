@@ -14,6 +14,7 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { eq, and, desc } from "drizzle-orm";
 import { db } from "@hebron/db/client";
+import type * as EmailModule from "@hebron/email";
 import {
   users,
   roleAssignments,
@@ -38,9 +39,16 @@ vi.mock("next/navigation", () => ({
   redirect: vi.fn(),
 }));
 
-vi.mock("@hebron/email", () => ({
-  createNotification: vi.fn().mockResolvedValue({ id: "mock-notif-id" }),
-}));
+// P-1.10c: interpolateStoredTemplate fica real (importOriginal) — só
+// createNotification é mockado, para exercitar o seam DB → email de fato
+// contra admin.email_templates (seed real de P-1.10b) sem enviar via Resend.
+vi.mock("@hebron/email", async (importOriginal) => {
+  const actual = await importOriginal<typeof EmailModule>();
+  return {
+    ...actual,
+    createNotification: vi.fn().mockResolvedValue({ id: "mock-notif-id" }),
+  };
+});
 
 vi.mock("@hebron/email/templates/invitation", () => ({
   InvitationEmail: vi.fn().mockReturnValue(null),

@@ -10,3 +10,6 @@ export type {
   NotificationInsertData,
   SendEmailOptions,
 } from "./lib/send";
+
+export { interpolateStoredTemplate } from "./lib/interpolate";
+export type { InterpolatedEmail, StoredEmailTemplate } from "./lib/interpolate";

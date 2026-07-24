@@ -10,7 +10,8 @@ import {
   withSystemRole,
 } from "@hebron/db/authenticated";
 import { invitations, roleAssignments } from "@hebron/db/schema";
-import { createNotification } from "@hebron/email";
+import { getEmailTemplateBySlug } from "@hebron/db/email-templates";
+import { createNotification, interpolateStoredTemplate } from "@hebron/email";
 import { WelcomeEmail } from "@hebron/email/templates/welcome";
 import { publicAction } from "../lib/safe-action";
 import { logIntranetAudit } from "../lib/audit";
@@ -136,6 +137,24 @@ export const acceptInvitation = publicAction
 
     const appUrl =
       process.env.NEXT_PUBLIC_APP_URL ?? "https://app.hebronaseec.com.br";
+    const loginUrl = `${appUrl}/login`;
+
+    // P-1.10c: admin.email_templates tem precedência sobre o componente
+    // React Email hardcoded quando existe uma linha para o slug — ver
+    // apps/admin/src/actions/invitations.ts::sendInvitation para o mesmo
+    // padrão.
+    const welcomeTemplate = await getEmailTemplateBySlug("welcome");
+    let storedSubject: string | undefined;
+    let storedHtml: string | undefined;
+    if (welcomeTemplate) {
+      const interpolated = interpolateStoredTemplate(welcomeTemplate, {
+        nome: parsedInput.name,
+        link: loginUrl,
+        papel: roles.join(", "),
+      });
+      storedSubject = interpolated.subject;
+      storedHtml = interpolated.html;
+    }
 
     await createNotification({
       insert: (data) => insertNotification(data),
@@ -148,11 +167,12 @@ export const acceptInvitation = publicAction
       },
       email: {
         to: invitation.email,
-        subject: "Bem-vindo(a) à Hebron Aseec",
+        subject: storedSubject ?? "Bem-vindo(a) à Hebron Aseec",
+        html: storedHtml,
         template: React.createElement(WelcomeEmail, {
           name: parsedInput.name,
           roles,
-          loginUrl: `${appUrl}/login`,
+          loginUrl,
         }),
       },
       resendApiKey: process.env.RESEND_API_KEY,

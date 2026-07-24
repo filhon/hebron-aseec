@@ -56,7 +56,7 @@ Corpo integral no próprio arquivo (as 4 originais) ou em `AUDIT/04-prompts-pend
 | P-7.1b    | Flats: máximo de scoring em BRAIN §6.8 (80 → 75)             | neste arquivo                    | pendente |
 | P-7.5b    | Flats: fiação das telas do Bloco A para validação diretoria  | neste arquivo                    | pendente |
 | P-1.10b   | Admin: editor de templates de email acessível (órfão→Config) | neste arquivo                    | S-181    |
-| P-1.10c   | Emails enviados a partir dos templates do banco (DB-driven)  | neste arquivo                    | pendente |
+| P-1.10c   | Emails enviados a partir dos templates do banco (DB-driven)  | neste arquivo                    | S-182    |
 
 ¹ Sessão referenciada retroativamente como S-22b em SESSIONS.md S-68 (ponto 2 da entrada retificadora) — o bloco original nunca recebeu número.
 
@@ -1817,14 +1817,14 @@ Os emails **realmente enviados** (convite, boas-vindas, reset de senha, e demais
 
 **Critérios de aceite:**
 
-- [ ] `interpolateStoredTemplate` substitui `{{var}}` corretamente e escapa HTML dos valores; testado
-- [ ] Com uma linha custom em `admin.email_templates`, o email enviado usa o texto do banco (assunto + corpo), não o componente React
-- [ ] Sem linha no banco, o envio cai no componente React atual (fallback), sem regressão
-- [ ] Convite, boas-vindas e reset de senha passam a respeitar o template editado
-- [ ] Nenhuma mudança de regra de negócio além da fonte do texto do email
-- [ ] Testes (novos + existentes de Admin/Intranet) passam
-- [ ] `pnpm turbo build lint typecheck` verde
-- [ ] Registrar em SESSIONS.md
+- [x] `interpolateStoredTemplate` substitui `{{var}}` corretamente e escapa HTML dos valores; testado
+- [x] Com uma linha custom em `admin.email_templates`, o email enviado usa o texto do banco (assunto + corpo), não o componente React
+- [x] Sem linha no banco, o envio cai no componente React atual (fallback), sem regressão
+- [x] Convite, boas-vindas e reset de senha passam a respeitar o template editado
+- [x] Nenhuma mudança de regra de negócio além da fonte do texto do email
+- [x] Testes (novos + existentes de Admin/Intranet) passam
+- [x] `pnpm turbo build lint typecheck` verde
+- [x] Registrar em SESSIONS.md
 
 **Notas:**
 Ref: BRAIN.md §6.1. `packages/email` **permanece agnóstico a banco** — quem lê o banco é o caller (action) ou `@hebron/db`; o pacote de email só interpola e envia. Não remover os componentes React Email: eles seguem como fallback e como base do seed (P-1.10b).

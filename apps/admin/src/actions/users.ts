@@ -10,7 +10,8 @@ import {
   withSystemRole,
 } from "@hebron/db/authenticated";
 import { users, notifications, roleAssignments } from "@hebron/db/schema";
-import { createNotification } from "@hebron/email";
+import { getEmailTemplateBySlug } from "@hebron/db/email-templates";
+import { createNotification, interpolateStoredTemplate } from "@hebron/email";
 import { PasswordResetEmail } from "@hebron/email/templates/password-reset";
 import { WelcomeEmail } from "@hebron/email/templates/welcome";
 import { SignupRejectedEmail } from "@hebron/email/templates/signup-rejected";
@@ -339,6 +340,21 @@ export const resetPassword = adminAction
     const resetUrl = data.properties?.action_link;
     if (!resetUrl) throw new Error("Falha ao gerar link de redefinição");
 
+    // P-1.10c: admin.email_templates tem precedência sobre o componente
+    // React Email hardcoded quando existe uma linha para o slug — mesmo
+    // padrão de invitations.ts::sendInvitation.
+    const resetTemplate = await getEmailTemplateBySlug("password-reset");
+    let storedSubject: string | undefined;
+    let storedHtml: string | undefined;
+    if (resetTemplate) {
+      const interpolated = interpolateStoredTemplate(resetTemplate, {
+        nome: user.fullName ?? user.email,
+        link: resetUrl,
+      });
+      storedSubject = interpolated.subject;
+      storedHtml = interpolated.html;
+    }
+
     // Exceção service-level (G6.3): notificação inserida via `db` (superuser)
     // em nome do usuário-alvo, não do ator — mesmo padrão de invitations.ts.
     await createNotification({
@@ -364,7 +380,8 @@ export const resetPassword = adminAction
       },
       email: {
         to: user.email,
-        subject: "Redefinição de senha — Hebron Aseec",
+        subject: storedSubject ?? "Redefinição de senha — Hebron Aseec",
+        html: storedHtml,
         template: React.createElement(PasswordResetEmail, {
           resetUrl,
           name: user.fullName ?? undefined,
@@ -468,6 +485,25 @@ export const approveSignup = adminAction
 
     const appUrl =
       process.env.NEXT_PUBLIC_APP_URL ?? "https://app.hebronaseec.com.br";
+    const loginUrl = `${appUrl}/login`;
+
+    // P-1.10c: admin.email_templates tem precedência sobre o componente
+    // React Email hardcoded quando existe uma linha para o slug — mesmo
+    // slug "welcome" usado por apps/intranet/src/actions/invitations.ts::
+    // acceptInvitation, já que ambos são o mesmo email conceitual de boas-
+    // vindas (não há slug "signup-approved" separado semeado em P-1.10b).
+    const welcomeTemplate = await getEmailTemplateBySlug("welcome");
+    let storedSubject: string | undefined;
+    let storedHtml: string | undefined;
+    if (welcomeTemplate) {
+      const interpolated = interpolateStoredTemplate(welcomeTemplate, {
+        nome: user.fullName ?? user.email,
+        link: loginUrl,
+        papel: "submissor",
+      });
+      storedSubject = interpolated.subject;
+      storedHtml = interpolated.html;
+    }
 
     // Exceção service-level (G6.3): notificação inserida via `db` (superuser)
     // em nome do usuário-alvo, não do ator — mesmo padrão de invitations.ts.
@@ -494,11 +530,12 @@ export const approveSignup = adminAction
       },
       email: {
         to: user.email,
-        subject: "Cadastro aprovado — Hebron Aseec",
+        subject: storedSubject ?? "Cadastro aprovado — Hebron Aseec",
+        html: storedHtml,
         template: React.createElement(WelcomeEmail, {
           name: user.fullName ?? user.email,
           roles: ["submissor"],
-          loginUrl: `${appUrl}/login`,
+          loginUrl,
         }),
       },
       resendApiKey: process.env.RESEND_API_KEY,
