@@ -1,35 +1,7 @@
-import type { Document, DocumentVisibility } from "@hebron/types/documentos";
-import type { LucideIcon } from "lucide-react";
-import { Globe, Lock, Users, FileText, Calendar, Folder } from "lucide-react";
+import type { Document } from "@hebron/types/documentos";
+import { FileText, Calendar, Folder } from "lucide-react";
 import Link from "next/link";
-
-interface VisibilityConfig {
-  label: string;
-  dotColor: string;
-  badgeClass: string;
-  Icon: LucideIcon;
-}
-
-const VISIBILITY: Record<DocumentVisibility, VisibilityConfig> = {
-  public: {
-    label: "Público",
-    dotColor: "var(--hb-green)",
-    badgeClass: "bg-(--hb-green-muted) text-(--hb-green-fg)",
-    Icon: Globe,
-  },
-  internal: {
-    label: "Interno",
-    dotColor: "var(--hb-cyan)",
-    badgeClass: "bg-(--hb-cyan-muted) text-(--hb-cyan-fg)",
-    Icon: Users,
-  },
-  restricted: {
-    label: "Restrito",
-    dotColor: "var(--hb-red)",
-    badgeClass: "bg-(--color-destructive-muted) text-(--hb-red)",
-    Icon: Lock,
-  },
-};
+import { VisibilityBadge } from "./visibility-badge";
 
 function formatDate(date: Date): string {
   return new Intl.DateTimeFormat("pt-BR", {
@@ -56,8 +28,6 @@ export function DocumentCard({
   href,
   className = "",
 }: DocumentCardProps) {
-  const vis = VISIBILITY[document.visibility];
-  const VisIcon = vis.Icon;
   const fileSize = document.currentVersion?.fileSizeBytes;
 
   return (
@@ -74,14 +44,10 @@ export function DocumentCard({
               <span className="truncate">{document.category.name}</span>
             </span>
 
-            <span className={`hb-badge shrink-0 ${vis.badgeClass}`}>
-              <span
-                className="hb-badge-dot"
-                style={{ backgroundColor: vis.dotColor }}
-              />
-              <VisIcon size={11} aria-hidden="true" />
-              {vis.label}
-            </span>
+            <VisibilityBadge
+              visibility={document.visibility}
+              className="shrink-0"
+            />
           </div>
 
           {/* Title */}

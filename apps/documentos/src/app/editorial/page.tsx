@@ -18,6 +18,11 @@ import {
   documentVersions,
 } from "@hebron/db/schema";
 import { and, eq, isNull, isNotNull, desc, sql, gt } from "drizzle-orm";
+import { VisibilityBadge } from "../../components/visibility-badge";
+import {
+  EditalStatusPill,
+  resolveEditalStatus,
+} from "../../components/edital-status-pill";
 
 export const dynamic = "force-dynamic";
 
@@ -28,43 +33,6 @@ function formatDate(date: Date): string {
     year: "numeric",
   }).format(new Date(date));
 }
-
-function getEditalStatus(e: {
-  editalOpensAt: Date | null;
-  editalClosesAt: Date | null;
-}): "open" | "closed" | "permanent" | "upcoming" {
-  if (!e.editalOpensAt && !e.editalClosesAt) return "permanent";
-  const now = new Date();
-  if (e.editalOpensAt && now < new Date(e.editalOpensAt)) return "upcoming";
-  if (e.editalClosesAt && now > new Date(e.editalClosesAt)) return "closed";
-  return "open";
-}
-
-const VISIBILITY_LABEL: Record<string, string> = {
-  public: "Público",
-  internal: "Interno",
-  restricted: "Restrito",
-};
-
-const VISIBILITY_CLS: Record<string, string> = {
-  public: "bg-(--hb-green-muted) text-(--hb-green-fg)",
-  internal: "bg-(--hb-cyan-muted) text-(--hb-cyan-fg)",
-  restricted: "bg-(--color-destructive-muted) text-(--hb-red)",
-};
-
-const STATUS_COLOR: Record<string, string> = {
-  open: "var(--hb-green)",
-  closed: "var(--hb-red)",
-  permanent: "var(--hb-cyan)",
-  upcoming: "var(--hb-orange)",
-};
-
-const STATUS_LABEL: Record<string, string> = {
-  open: "Aberto",
-  closed: "Encerrado",
-  permanent: "Permanente",
-  upcoming: "Em breve",
-};
 
 export default async function EditorialDashboardPage() {
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -347,11 +315,10 @@ export default async function EditorialDashboardPage() {
                         {doc.categoryName ?? "—"}
                       </td>
                       <td>
-                        <span
-                          className={`hb-badge ${VISIBILITY_CLS[doc.visibility] ?? ""}`}
-                        >
-                          {VISIBILITY_LABEL[doc.visibility] ?? doc.visibility}
-                        </span>
+                        <VisibilityBadge
+                          visibility={doc.visibility}
+                          withIcon={false}
+                        />
                       </td>
                       <td>
                         <span
@@ -412,7 +379,10 @@ export default async function EditorialDashboardPage() {
                 style={{ display: "flex", flexDirection: "column", gap: 10 }}
               >
                 {activeEditais.map((e) => {
-                  const s = getEditalStatus(e);
+                  const s = resolveEditalStatus({
+                    opensAt: e.editalOpensAt,
+                    closesAt: e.editalClosesAt,
+                  });
                   return (
                     <div
                       key={e.id}
@@ -433,20 +403,7 @@ export default async function EditorialDashboardPage() {
                           gap: 8,
                         }}
                       >
-                        <span
-                          className="hb-badge"
-                          style={{
-                            background: `color-mix(in srgb, ${STATUS_COLOR[s]} 14%, transparent)`,
-                            color: STATUS_COLOR[s],
-                            fontSize: 11,
-                          }}
-                        >
-                          <span
-                            className="hb-badge-dot"
-                            style={{ backgroundColor: STATUS_COLOR[s] }}
-                          />
-                          {STATUS_LABEL[s]}
-                        </span>
+                        <EditalStatusPill status={s} withIcon={false} />
                       </div>
                       <div
                         style={{

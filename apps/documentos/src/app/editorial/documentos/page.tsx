@@ -4,20 +4,9 @@ import { db } from "@hebron/db/client";
 import { documents, categories, editals } from "@hebron/db/schema";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { DocumentRowActions } from "../../../components/document-row-actions";
+import { VisibilityBadge } from "../../../components/visibility-badge";
 
 export const dynamic = "force-dynamic";
-
-const VISIBILITY_LABEL: Record<string, string> = {
-  public: "Público",
-  internal: "Interno",
-  restricted: "Restrito",
-};
-
-const VISIBILITY_CLS: Record<string, string> = {
-  public: "bg-(--hb-green-muted) text-(--hb-green-fg)",
-  internal: "bg-(--hb-cyan-muted) text-(--hb-cyan-fg)",
-  restricted: "bg-(--color-destructive-muted) text-(--hb-red)",
-};
 
 function formatDate(date: Date): string {
   return new Intl.DateTimeFormat("pt-BR", {
@@ -135,11 +124,10 @@ export default async function EditorialDocumentosPage() {
                     {doc.categoryName ?? "—"}
                   </td>
                   <td>
-                    <span
-                      className={`hb-badge ${VISIBILITY_CLS[doc.visibility] ?? ""}`}
-                    >
-                      {VISIBILITY_LABEL[doc.visibility] ?? doc.visibility}
-                    </span>
+                    <VisibilityBadge
+                      visibility={doc.visibility}
+                      withIcon={false}
+                    />
                   </td>
                   <td style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>
                     {doc.publishedAt ? "Publicado" : "Rascunho"}

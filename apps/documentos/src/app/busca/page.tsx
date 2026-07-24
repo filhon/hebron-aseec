@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Search, X, ChevronRight, FileText, Scroll } from "lucide-react";
 import { PublicNav } from "../../components/public-nav";
 import { BuscaSearchBar } from "./_search-bar-client";
+import { VisibilityBadge } from "../../components/visibility-badge";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import {
   documents,
@@ -510,21 +511,10 @@ export default async function BuscaPage({ searchParams }: PageProps) {
                         color: "var(--fg-muted)",
                       }}
                     >
-                      <span
-                        className="hb-badge"
-                        style={{
-                          background: "var(--bg-alt)",
-                          color: "var(--fg-muted)",
-                          fontSize: 11,
-                          padding: "2px 8px",
-                        }}
-                      >
-                        {result.visibility === "public"
-                          ? "Público"
-                          : result.visibility === "internal"
-                            ? "Interno"
-                            : "Restrito"}
-                      </span>
+                      <VisibilityBadge
+                        visibility={result.visibility}
+                        size="sm"
+                      />
                       <span>{formatDate(result.updatedAt)}</span>
                       {docTags.slice(0, 2).map((t) => (
                         <span key={t.id}>#{t.name}</span>

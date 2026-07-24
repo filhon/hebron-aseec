@@ -4,6 +4,10 @@ import { db } from "@hebron/db/client";
 import { documents, categories, editals } from "@hebron/db/schema";
 import { desc, eq, isNull } from "drizzle-orm";
 import { DocumentRowActions } from "../../../components/document-row-actions";
+import {
+  EditalStatusPill,
+  resolveEditalStatus,
+} from "../../../components/edital-status-pill";
 
 export const dynamic = "force-dynamic";
 
@@ -14,22 +18,6 @@ function formatDate(date: Date | null): string {
     month: "short",
     year: "numeric",
   }).format(new Date(date));
-}
-
-function getStatus(e: {
-  opensAt: Date | null;
-  closesAt: Date | null;
-  publishedAt: Date | null;
-}): { label: string; color: string } {
-  if (!e.publishedAt) return { label: "Rascunho", color: "var(--fg-muted)" };
-  if (!e.opensAt && !e.closesAt)
-    return { label: "Permanente", color: "var(--hb-cyan)" };
-  const now = new Date();
-  if (e.opensAt && now < new Date(e.opensAt))
-    return { label: "Em breve", color: "var(--hb-orange)" };
-  if (e.closesAt && now > new Date(e.closesAt))
-    return { label: "Encerrado", color: "var(--hb-red)" };
-  return { label: "Aberto", color: "var(--hb-green)" };
 }
 
 export default async function EditorialEditaisPage() {
@@ -122,7 +110,7 @@ export default async function EditorialEditaisPage() {
             </thead>
             <tbody>
               {rows.map((row) => {
-                const status = getStatus(row);
+                const status = resolveEditalStatus(row);
                 return (
                   <tr key={row.id}>
                     <td>
@@ -141,19 +129,23 @@ export default async function EditorialEditaisPage() {
                       {row.categoryName ?? "—"}
                     </td>
                     <td>
-                      <span
-                        className="hb-badge"
-                        style={{
-                          background: `color-mix(in srgb, ${status.color} 14%, transparent)`,
-                          color: status.color,
-                        }}
-                      >
+                      {row.publishedAt ? (
+                        <EditalStatusPill status={status} withIcon={false} />
+                      ) : (
                         <span
-                          className="hb-badge-dot"
-                          style={{ backgroundColor: status.color }}
-                        />
-                        {status.label}
-                      </span>
+                          className="hb-badge"
+                          style={{
+                            background: "var(--bg-alt)",
+                            color: "var(--fg-muted)",
+                          }}
+                        >
+                          <span
+                            className="hb-badge-dot"
+                            style={{ backgroundColor: "var(--fg-muted)" }}
+                          />
+                          Rascunho
+                        </span>
+                      )}
                     </td>
                     <td style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>
                       {formatDate(row.closesAt)}

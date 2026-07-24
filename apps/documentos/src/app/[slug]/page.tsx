@@ -6,9 +6,6 @@ import {
   Download,
   Folder,
   Calendar,
-  Globe,
-  Users,
-  Lock,
   Tag,
   Clock,
 } from "lucide-react";
@@ -16,6 +13,7 @@ import { createClient } from "@supabase/supabase-js";
 import { PublicNav } from "../../components/public-nav";
 import { DocumentViewer } from "../../components/document-viewer";
 import { VersionHistory } from "../../components/version-history";
+import { VISIBILITY, VisibilityBadge } from "../../components/visibility-badge";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import {
   documents,
@@ -253,25 +251,7 @@ export default async function DocumentPage({ params }: PageProps) {
     deletedAt: docRow.deletedAt,
   };
 
-  const VISIBILITY_MAP = {
-    public: {
-      label: "Público",
-      Icon: Globe,
-      cls: "bg-(--hb-green-muted) text-(--hb-green-fg)",
-    },
-    internal: {
-      label: "Interno",
-      Icon: Users,
-      cls: "bg-(--hb-cyan-muted) text-(--hb-cyan-fg)",
-    },
-    restricted: {
-      label: "Restrito",
-      Icon: Lock,
-      cls: "bg-(--color-destructive-muted) text-(--hb-red)",
-    },
-  } as const;
-
-  const vis = VISIBILITY_MAP[doc.visibility];
+  const vis = VISIBILITY[doc.visibility];
   const VisIcon = vis.Icon;
 
   return (
@@ -314,11 +294,7 @@ export default async function DocumentPage({ params }: PageProps) {
                   marginBottom: 16,
                 }}
               >
-                <span className={`hb-badge ${vis.cls}`}>
-                  <span className="hb-badge-dot" />
-                  <VisIcon size={11} aria-hidden="true" />
-                  {vis.label}
-                </span>
+                <VisibilityBadge visibility={doc.visibility} />
 
                 <span
                   className="hb-badge"

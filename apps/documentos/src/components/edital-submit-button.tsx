@@ -1,4 +1,5 @@
 import { ExternalLink } from "lucide-react";
+import type { EditalStatus } from "./edital-status-pill";
 
 const PROJETOS_NOVO = "https://projetos.hebronaseec.com.br/novo";
 
@@ -6,7 +7,7 @@ interface EditalSubmitButtonProps {
   editalId: string;
   projectType: string | null;
   projectCategory: string | null;
-  status: "open" | "closed" | "permanent" | "upcoming";
+  status: EditalStatus;
 }
 
 export function EditalSubmitButton({
@@ -15,7 +16,8 @@ export function EditalSubmitButton({
   projectCategory,
   status,
 }: EditalSubmitButtonProps) {
-  if (status !== "open" && status !== "permanent") return null;
+  if (status !== "open" && status !== "closing_soon" && status !== "permanent")
+    return null;
 
   const params = new URLSearchParams({ edital_id: editalId });
   if (projectType) params.set("tipo", projectType);

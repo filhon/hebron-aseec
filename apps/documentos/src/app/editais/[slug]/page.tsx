@@ -5,9 +5,6 @@ import {
   ChevronRight,
   Download,
   Folder,
-  Globe,
-  Users,
-  Lock,
   Tag,
   Check,
   Calendar,
@@ -19,6 +16,14 @@ import { PublicNav } from "../../../components/public-nav";
 import { EditalSubmitButton } from "../../../components/edital-submit-button";
 import { DocumentViewer } from "../../../components/document-viewer";
 import { VersionHistory } from "../../../components/version-history";
+import {
+  VISIBILITY,
+  VisibilityBadge,
+} from "../../../components/visibility-badge";
+import {
+  EditalStatusPill,
+  resolveEditalStatus,
+} from "../../../components/edital-status-pill";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import {
   documents,
@@ -110,16 +115,6 @@ async function getSignedUrl(
     .from("hebron-docs")
     .createSignedUrl(storagePath, 3600);
   return data?.signedUrl ?? null;
-}
-
-function getEditalStatus(
-  e: Pick<Edital, "cycleType" | "opensAt" | "closesAt">,
-): "open" | "closed" | "permanent" | "upcoming" {
-  if (e.cycleType === "pontual") return "permanent";
-  const now = new Date();
-  if (e.opensAt && now < new Date(e.opensAt)) return "upcoming";
-  if (e.closesAt && now > new Date(e.closesAt)) return "closed";
-  return "open";
 }
 
 function daysUntil(date: Date | null): number | null {
@@ -285,54 +280,12 @@ export default async function EditalDetailPage({ params }: PageProps) {
     faq: row.editalFaq,
   };
 
-  const status = getEditalStatus(edital);
-  const isSubmittable = status === "open" || status === "permanent";
+  const status = resolveEditalStatus(edital);
+  const isOpenNow = status === "open" || status === "closing_soon";
+  const isSubmittable = isOpenNow || status === "permanent";
   const daysToClose = daysUntil(edital.closesAt);
-
-  const VISIBILITY_MAP = {
-    public: {
-      label: "Público",
-      Icon: Globe,
-      cls: "bg-(--hb-green-muted) text-(--hb-green-fg)",
-    },
-    internal: {
-      label: "Interno",
-      Icon: Users,
-      cls: "bg-(--hb-cyan-muted) text-(--hb-cyan-fg)",
-    },
-    restricted: {
-      label: "Restrito",
-      Icon: Lock,
-      cls: "bg-(--color-destructive-muted) text-(--hb-red)",
-    },
-  } as const;
-
-  const STATUS_MAP = {
-    open: {
-      label: "Aberto",
-      dotColor: "var(--hb-green)",
-      cls: "bg-(--hb-green-muted) text-(--hb-green-fg)",
-    },
-    closed: {
-      label: "Encerrado",
-      dotColor: "var(--hb-red)",
-      cls: "bg-(--color-destructive-muted) text-(--hb-red)",
-    },
-    permanent: {
-      label: "Permanente",
-      dotColor: "var(--hb-cyan)",
-      cls: "bg-(--hb-cyan-muted) text-(--hb-cyan-fg)",
-    },
-    upcoming: {
-      label: "Em breve",
-      dotColor: "var(--hb-orange)",
-      cls: "bg-(--hb-orange-muted) text-(--hb-orange-deep)",
-    },
-  } as const;
-
-  const vis = VISIBILITY_MAP[edital.visibility];
+  const vis = VISIBILITY[edital.visibility];
   const VisIcon = vis.Icon;
-  const statusCfg = STATUS_MAP[status];
 
   return (
     <>
@@ -381,17 +334,8 @@ export default async function EditalDetailPage({ params }: PageProps) {
                   marginBottom: 16,
                 }}
               >
-                <span className={`hb-badge ${statusCfg.cls}`}>
-                  <span
-                    className="hb-badge-dot"
-                    style={{ backgroundColor: statusCfg.dotColor }}
-                  />
-                  {statusCfg.label}
-                </span>
-                <span className={`hb-badge ${vis.cls}`}>
-                  <VisIcon size={11} aria-hidden="true" />
-                  {vis.label}
-                </span>
+                <EditalStatusPill status={status} />
+                <VisibilityBadge visibility={edital.visibility} />
                 {edital.tags.slice(0, 2).map((tag) => (
                   <span
                     key={tag.id}
@@ -500,12 +444,11 @@ export default async function EditalDetailPage({ params }: PageProps) {
                       <div
                         className="docs-timeline-dot"
                         style={{
-                          borderColor:
-                            status === "open"
-                              ? "var(--hb-orange)"
-                              : status === "closed"
-                                ? "var(--hb-green)"
-                                : "var(--border-strong)",
+                          borderColor: isOpenNow
+                            ? "var(--hb-orange)"
+                            : status === "closed"
+                              ? "var(--hb-green)"
+                              : "var(--border-strong)",
                           backgroundColor:
                             status === "closed"
                               ? "var(--hb-green)"
@@ -521,18 +464,15 @@ export default async function EditalDetailPage({ params }: PageProps) {
                         )}
                       </div>
                       <div className="docs-timeline-label">
-                        {status === "open" ? "Em andamento" : "Vigência"}
+                        {isOpenNow ? "Em andamento" : "Vigência"}
                       </div>
                       <div
                         className="docs-timeline-date"
                         style={{
-                          color:
-                            status === "open"
-                              ? "var(--hb-orange)"
-                              : "var(--fg)",
+                          color: isOpenNow ? "var(--hb-orange)" : "var(--fg)",
                         }}
                       >
-                        {status === "open" ? "Hoje" : "—"}
+                        {isOpenNow ? "Hoje" : "—"}
                       </div>
                     </div>
 
@@ -567,26 +507,24 @@ export default async function EditalDetailPage({ params }: PageProps) {
                   </div>
 
                   {/* Days remaining banner */}
-                  {status === "open" &&
-                    daysToClose !== null &&
-                    daysToClose > 0 && (
-                      <div
-                        style={{
-                          marginTop: 20,
-                          padding: "12px 16px",
-                          background: "var(--bg)",
-                          borderRadius: "var(--radius-sm)",
-                          borderLeft: "4px solid var(--hb-blue)",
-                          fontSize: 14,
-                          color: "var(--fg)",
-                        }}
-                      >
-                        <strong>{daysToClose}</strong> dia
-                        {daysToClose === 1 ? "" : "s"} restante
-                        {daysToClose === 1 ? "" : "s"} até o encerramento da
-                        janela de submissão.
-                      </div>
-                    )}
+                  {isOpenNow && daysToClose !== null && daysToClose > 0 && (
+                    <div
+                      style={{
+                        marginTop: 20,
+                        padding: "12px 16px",
+                        background: "var(--bg)",
+                        borderRadius: "var(--radius-sm)",
+                        borderLeft: "4px solid var(--hb-blue)",
+                        fontSize: 14,
+                        color: "var(--fg)",
+                      }}
+                    >
+                      <strong>{daysToClose}</strong> dia
+                      {daysToClose === 1 ? "" : "s"} restante
+                      {daysToClose === 1 ? "" : "s"} até o encerramento da
+                      janela de submissão.
+                    </div>
+                  )}
                 </div>
               )}
 

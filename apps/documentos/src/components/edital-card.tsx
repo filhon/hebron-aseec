@@ -1,64 +1,11 @@
 import type { Edital } from "@hebron/types/documentos";
-import type { LucideIcon } from "lucide-react";
-import {
-  CalendarDays,
-  CheckCircle2,
-  Clock,
-  ExternalLink,
-  Folder,
-  Infinity as InfinityIcon,
-  XCircle,
-} from "lucide-react";
+import { CalendarDays, ExternalLink, Folder } from "lucide-react";
 import Link from "next/link";
-
-type EditalStatus = "open" | "closed" | "permanent" | "upcoming";
-
-interface StatusConfig {
-  label: string;
-  description: string;
-  dotColor: string;
-  badgeClass: string;
-  Icon: LucideIcon;
-}
-
-const STATUS_CONFIG: Record<EditalStatus, StatusConfig> = {
-  open: {
-    label: "Aberto",
-    description: "Submissões abertas",
-    dotColor: "var(--hb-green)",
-    badgeClass: "bg-(--hb-green-muted) text-(--hb-green-fg)",
-    Icon: CheckCircle2,
-  },
-  closed: {
-    label: "Encerrado",
-    description: "Prazo esgotado",
-    dotColor: "var(--hb-red)",
-    badgeClass: "bg-(--color-destructive-muted) text-(--hb-red)",
-    Icon: XCircle,
-  },
-  permanent: {
-    label: "Permanente",
-    description: "Sempre disponível",
-    dotColor: "var(--hb-cyan)",
-    badgeClass: "bg-(--hb-cyan-muted) text-(--hb-cyan-fg)",
-    Icon: InfinityIcon,
-  },
-  upcoming: {
-    label: "Em breve",
-    description: "Ainda não aberto",
-    dotColor: "var(--hb-orange)",
-    badgeClass: "bg-(--hb-orange-muted) text-(--hb-orange-deep)",
-    Icon: Clock,
-  },
-};
-
-function getEditalStatus(edital: Edital): EditalStatus {
-  if (edital.cycleType === "pontual") return "permanent";
-  const now = new Date();
-  if (edital.opensAt && now < new Date(edital.opensAt)) return "upcoming";
-  if (edital.closesAt && now > new Date(edital.closesAt)) return "closed";
-  return "open";
-}
+import {
+  EDITAL_STATUS,
+  EditalStatusPill,
+  resolveEditalStatus,
+} from "./edital-status-pill";
 
 function formatDate(date: Date): string {
   return new Intl.DateTimeFormat("pt-BR", {
@@ -89,10 +36,10 @@ export function EditalCard({
   projetosBaseUrl = "https://projetos.hebronaseec.com.br",
   className = "",
 }: EditalCardProps) {
-  const status = getEditalStatus(edital);
-  const cfg = STATUS_CONFIG[status];
-  const StatusIcon = cfg.Icon;
-  const isSubmittable = status === "open" || status === "permanent";
+  const status = resolveEditalStatus(edital);
+  const cfg = EDITAL_STATUS[status];
+  const isSubmittable =
+    status === "open" || status === "closing_soon" || status === "permanent";
   const submitUrl = buildSubmitUrl(edital, projetosBaseUrl);
 
   return (
@@ -110,20 +57,13 @@ export function EditalCard({
             <span className="truncate">{edital.category.name}</span>
           </span>
 
-          <span className={`hb-badge shrink-0 ${cfg.badgeClass}`}>
-            <span
-              className="hb-badge-dot"
-              style={{ backgroundColor: cfg.dotColor }}
-            />
-            <StatusIcon size={11} aria-hidden="true" />
-            {cfg.label}
-          </span>
+          <EditalStatusPill status={status} className="shrink-0" />
         </div>
 
         {/* Title */}
         <Link
           href={href}
-          className="font-(--font-display) text-[15px] font-bold leading-tight tracking-[-0.01em] text-(--fg) hover:text-(--brand) transition-colors duration-(--dur-fast) no-underline line-clamp-2"
+          className="font-(--font-display) text-[15px] leading-tight tracking-[-0.01em] text-(--fg) hover:text-(--brand) transition-colors duration-(--dur-fast) no-underline line-clamp-2"
         >
           {edital.title}
         </Link>
@@ -152,7 +92,7 @@ export function EditalCard({
         {/* Schedule */}
         {edital.cycleType === "anual" &&
           (edital.opensAt ?? edital.closesAt) && (
-            <div className="flex flex-col gap-1.5 p-3 rounded-(--radius-sm) bg-(--bg-alt) border border-(--border)">
+            <div className="flex flex-col gap-1.5 p-3 rounded-sm bg-(--bg-alt) border border-(--border)">
               <span className="hb-section-label mb-0">Cronograma</span>
               <div className="flex flex-wrap gap-3 text-[12.5px] text-(--fg-muted)">
                 {edital.opensAt && (

@@ -203,6 +203,7 @@
 | S-180  | 2026-07-23 | P-1.26b — Admin: remover `moduleAccess` fantasma, schemas de usuário mortos e tipos de domínio órfãos (PATCH-025)                | concluido                            |
 | S-181  | 2026-07-23 | P-1.10b — Admin: consolidação e acesso ao editor de templates de email (CORRETIVO)                                               | concluido                            |
 | S-182  | 2026-07-24 | P-1.10c — Emails enviados a partir dos templates do banco (CORRETIVO)                                                            | concluido                            |
+| S-183  | 2026-07-24 | P-1.14b — Documentos: badge de visibilidade e pílula de status únicos (CORRETIVO)                                                | concluido                            |
 
 ---
 
@@ -14737,4 +14738,117 @@ outside of pages/_document`) por contenção de recursos — reproduzido como
 - `apps/admin/src/__tests__/email-templates-wiring.test.ts` (novo)
 - `apps/intranet/src/__tests__/invitations.test.ts`
 - `apps/intranet/src/__tests__/email-templates-wiring.test.ts` (novo)
+- `SESSIONS.md` (esta entrada)
+
+## S-183 — P-1.14b — Documentos: badge de visibilidade e pílula de status únicos (CORRETIVO)
+
+**Branch:** `feat/P-1.14b-docs-badges`
+
+### Contexto
+
+`visibility` (documento/edital) e status de edital eram pintados por 6 e 4
+tabelas locais diferentes espalhadas por `documentos`, cada uma com sua
+própria cópia de labels/cores/ícones (achado do prompt em `PROMPTS.md`).
+Duas delas tinham regredido: `/busca` renderizava todo badge cinza e a
+home só mostrava "Público" sem cor para as outras duas visibilidades.
+
+### Decisões/suposições registradas
+
+1. **Estado `closing_soon` do edital — confirmado com Filipe.** O prompt
+   especifica literalmente `resolveEditalStatus` retornando
+   `"open" | "closing_soon" | "closed" | "permanent"` (4 estados, sem
+   `"upcoming"`). Implementar isso ao pé da letra quebra dois usos reais:
+   a timeline pública de `editais/[slug]/page.tsx` (marcaria "Abertura"
+   como concluída e "Hoje" como data corrente para um edital que ainda
+   não abriu) e o filtro de editais abertos da home (`app/page.tsx`), que
+   passaria a listar editais não abertos como "abertos". Perguntado a
+   Filipe via pergunta direta: manter **5 estados**
+   (`open | upcoming | closing_soon | closed | permanent`), preservando o
+   comportamento atual e adicionando `closing_soon` como estado novo, em
+   vez de seguir o enum literal do prompt. `closing_soon` nunca existiu em
+   nenhuma implementação anterior — limiar de **7 dias** antes do
+   encerramento, confirmado com Filipe (alinhado ao padrão de lembretes
+   automáticos de 7 dias já usado em outras partes do sistema).
+2. **`document-viewer.tsx` e o painel lateral de `[slug]/page.tsx`**
+   continuam renderizando visibilidade como ícone+texto na lista
+   `dt`/`dd` (consistente com as linhas irmãs: Categoria, Atualizado,
+   Versão), em vez do chip `<VisibilityBadge>`. Fonte de dados passou a
+   ser a constante `VISIBILITY` exportada por `visibility-badge.tsx` (sem
+   tabela local), mas a apresentação nesses dois pontos específicos não
+   virou chip colorido para não introduzir uma inconsistência visual não
+   pedida pelo prompt nem pelo design-ref.
+3. **`edital-submit-button.tsx` editado apesar de fora da lista de
+   arquivos permitidos.** Consome `status` vindo de `editais/[slug]/page.tsx`;
+   manter o union type antigo (`open|closed|permanent|upcoming`) quebraria
+   o typecheck com o novo `EditalStatus` e, mais grave, esconderia o botão
+   de submissão durante a janela `closing_soon` (regra de negócio real:
+   ainda dá para submeter faltando poucos dias). Registrado aqui como
+   débito/decisão, análogo ao caso de arquivo de infraestrutura óbvio
+   faltante nas Instruções Globais G1.
+4. **`app/page.tsx` (home) e `app/editais/page.tsx`** tinham cada um sua
+   própria cópia adicional (6ª e 7ª) do cálculo de status de edital, não
+   citada no enunciado do prompt mas presente nos arquivos permitidos —
+   também consolidadas em `resolveEditalStatus`.
+5. **"Rascunho"** em `editorial/editais/page.tsx` é estado de publicação
+   do documento (`publishedAt` nulo), não do ciclo do edital — mantido
+   como badge local separado, com `EditalStatusPill` cobrindo os demais
+   casos.
+
+### O que foi feito
+
+1. Criado `apps/documentos/src/components/visibility-badge.tsx`:
+   `VisibilityBadge` + constante `VISIBILITY` (label/ícone/cor/classe por
+   `public`/`internal`/`restricted`), fonte única.
+2. Criado `apps/documentos/src/components/edital-status-pill.tsx`:
+   `EditalStatusPill` + constante `EDITAL_STATUS` + helper puro
+   `resolveEditalStatus({ opensAt, closesAt })` → `EditalStatus` (5
+   estados, ver decisão 1).
+3. Removidas as 6 tabelas locais de visibilidade (`document-card.tsx`,
+   `document-viewer.tsx`, `edital-card.tsx` só indiretamente via status,
+   `app/[slug]/page.tsx`, `app/busca/page.tsx`, `app/page.tsx`,
+   `app/editais/[slug]/page.tsx`, `app/editorial/page.tsx`,
+   `app/editorial/documentos/page.tsx`) e as 6 cópias de cálculo de
+   status de edital (`edital-card.tsx`, `app/editais/[slug]/page.tsx`,
+   `app/editorial/page.tsx`, `app/editorial/editais/page.tsx`,
+   `app/page.tsx`, `app/editais/page.tsx`), todas substituídas pelos
+   componentes/helper novos.
+4. Corrigida a regressão de `/busca` (badge cinza) e da home (só
+   "Público" aparecia): as três visibilidades agora usam as cores
+   semânticas em ambas as telas.
+5. `isSubmittable`/CTA de submissão e a timeline de
+   `editais/[slug]/page.tsx` passaram a tratar `open` e `closing_soon`
+   como "ainda aberto para submissão" (ver decisão 1).
+
+### Critérios de aceite
+
+- [x] `grep -rn "VISIBILITY_MAP\|VISIBILITY_CLS\|VISIBILITY_LABEL" apps/documentos/src` sem resultados (tabela agora só existe como `VISIBILITY` em `visibility-badge.tsx`, nome diferente por não ser mais um "mapa" ad-hoc)
+- [x] `grep -rn "STATUS_COLOR\|STATUS_LABEL" apps/documentos/src` sem resultados
+- [x] `/busca` e a home mostram as três visibilidades com cores semânticas
+- [x] Cálculo de status do edital vive em `resolveEditalStatus`; todos os
+      pontos que o duplicavam (incluindo os 2 não citados no prompt)
+      passam a consumi-lo
+- [x] Zero hex e zero CSS de app novo
+- [x] `pnpm --filter documentos typecheck lint test` verdes (48/48 testes)
+- [x] Smoke test manual via `next dev`: home, `/busca`, `/editorial`,
+      `/editorial/documentos`, `/editorial/editais` e um documento
+      público renderizam sem erro, badge de visibilidade confirmado
+      visualmente no HTML servido
+- [x] Registrado em SESSIONS.md
+
+### Arquivos criados/alterados
+
+- `apps/documentos/src/components/visibility-badge.tsx` (novo)
+- `apps/documentos/src/components/edital-status-pill.tsx` (novo)
+- `apps/documentos/src/components/document-card.tsx`
+- `apps/documentos/src/components/document-viewer.tsx`
+- `apps/documentos/src/components/edital-card.tsx`
+- `apps/documentos/src/components/edital-submit-button.tsx` (fora da lista original — ver decisão 3)
+- `apps/documentos/src/app/page.tsx`
+- `apps/documentos/src/app/busca/page.tsx`
+- `apps/documentos/src/app/[slug]/page.tsx`
+- `apps/documentos/src/app/editais/page.tsx`
+- `apps/documentos/src/app/editais/[slug]/page.tsx`
+- `apps/documentos/src/app/editorial/page.tsx`
+- `apps/documentos/src/app/editorial/documentos/page.tsx`
+- `apps/documentos/src/app/editorial/editais/page.tsx`
 - `SESSIONS.md` (esta entrada)

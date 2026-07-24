@@ -57,6 +57,7 @@ Corpo integral no próprio arquivo (as 4 originais) ou em `AUDIT/04-prompts-pend
 | P-7.5b    | Flats: fiação das telas do Bloco A para validação diretoria  | neste arquivo                    | pendente |
 | P-1.10b   | Admin: editor de templates de email acessível (órfão→Config) | neste arquivo                    | S-181    |
 | P-1.10c   | Emails enviados a partir dos templates do banco (DB-driven)  | neste arquivo                    | S-182    |
+| P-1.14b   | Documentos: badge de visibilidade e pílula de status únicos  | neste arquivo                    | S-183    |
 
 ¹ Sessão referenciada retroativamente como S-22b em SESSIONS.md S-68 (ponto 2 da entrada retificadora) — o bloco original nunca recebeu número.
 
@@ -2079,13 +2080,13 @@ O mesmo vale para o status do edital (aberto / encerra em breve / encerrado / pe
 
 **Critérios de aceite:**
 
-- [ ] `grep -rn "VISIBILITY_MAP\|VISIBILITY_CLS\|VISIBILITY_LABEL" apps/documentos/src` retorna apenas `visibility-badge.tsx`
-- [ ] `grep -rn "STATUS_COLOR\|STATUS_LABEL" apps/documentos/src` retorna apenas `edital-status-pill.tsx`
-- [ ] `/busca` e a home mostram as três visibilidades com as cores semânticas (verde / azul-claro / vermelho), idênticas às da página de documento
-- [ ] Cálculo de status do edital vive num único helper; `EditalCard` e as três telas que o repetiam passam a consumi-lo
-- [ ] Zero hex e zero CSS de app novo (BRAIN §5)
-- [ ] `pnpm --filter documentos typecheck lint test` verdes
-- [ ] Registrar em SESSIONS.md
+- [x] `grep -rn "VISIBILITY_MAP\|VISIBILITY_CLS\|VISIBILITY_LABEL" apps/documentos/src` retorna apenas `visibility-badge.tsx`
+- [x] `grep -rn "STATUS_COLOR\|STATUS_LABEL" apps/documentos/src` retorna apenas `edital-status-pill.tsx`
+- [x] `/busca` e a home mostram as três visibilidades com as cores semânticas (verde / azul-claro / vermelho), idênticas às da página de documento
+- [x] Cálculo de status do edital vive num único helper; `EditalCard` e as três telas que o repetiam passam a consumi-lo (mais duas cópias adicionais encontradas fora do enunciado — ver S-183)
+- [x] Zero hex e zero CSS de app novo (BRAIN §5)
+- [x] `pnpm --filter documentos typecheck lint test` verdes
+- [x] Registrar em SESSIONS.md
 
 **Notas:**
 Ref: BRAIN.md §5 e §6.7; design-ref `design-refs/documentos/components.jsx` (`VisibilityBadge`, `StatusPill`). Prompt de consolidação: não muda regra de visibilidade nem RLS, só a camada de apresentação.

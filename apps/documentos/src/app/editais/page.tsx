@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { PublicNav } from "../../components/public-nav";
 import { EditalCard } from "../../components/edital-card";
+import { resolveEditalStatus } from "../../components/edital-status-pill";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import {
   documents,
@@ -28,16 +29,6 @@ function extractDescription(contentMd: string | null): string | null {
     .split("\n")
     .find((l) => l.trim() !== "" && !l.startsWith("#") && !l.startsWith("-"));
   return line?.trim().slice(0, 240) ?? null;
-}
-
-function getEditalStatus(
-  e: Edital,
-): "open" | "closed" | "permanent" | "upcoming" {
-  if (e.cycleType === "pontual") return "permanent";
-  const now = new Date();
-  if (e.opensAt && now < new Date(e.opensAt)) return "upcoming";
-  if (e.closesAt && now > new Date(e.closesAt)) return "closed";
-  return "open";
 }
 
 type StatusFilter = "all" | "open" | "permanent" | "closed";
@@ -164,16 +155,19 @@ export default async function EditaisPage({ searchParams }: PageProps) {
     };
   });
 
+  const isOpenish = (e: Edital) => {
+    const s = resolveEditalStatus(e);
+    return s === "open" || s === "upcoming" || s === "closing_soon";
+  };
+
   // Count by status
   const counts: Record<StatusFilter, number> = {
     all: allEditais.length,
-    open: allEditais.filter((e) => {
-      const s = getEditalStatus(e);
-      return s === "open" || s === "upcoming";
-    }).length,
-    permanent: allEditais.filter((e) => getEditalStatus(e) === "permanent")
+    open: allEditais.filter(isOpenish).length,
+    permanent: allEditais.filter((e) => resolveEditalStatus(e) === "permanent")
       .length,
-    closed: allEditais.filter((e) => getEditalStatus(e) === "closed").length,
+    closed: allEditais.filter((e) => resolveEditalStatus(e) === "closed")
+      .length,
   };
 
   // Apply filter
@@ -181,13 +175,10 @@ export default async function EditaisPage({ searchParams }: PageProps) {
     activeFilter === "all"
       ? allEditais
       : activeFilter === "open"
-        ? allEditais.filter((e) => {
-            const s = getEditalStatus(e);
-            return s === "open" || s === "upcoming";
-          })
+        ? allEditais.filter(isOpenish)
         : activeFilter === "permanent"
-          ? allEditais.filter((e) => getEditalStatus(e) === "permanent")
-          : allEditais.filter((e) => getEditalStatus(e) === "closed");
+          ? allEditais.filter((e) => resolveEditalStatus(e) === "permanent")
+          : allEditais.filter((e) => resolveEditalStatus(e) === "closed");
 
   const FILTERS = [
     { key: "all" as const, label: "Todos" },

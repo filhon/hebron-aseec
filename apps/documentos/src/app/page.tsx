@@ -18,6 +18,8 @@ import {
 } from "lucide-react";
 import { PublicNav } from "../components/public-nav";
 import { EditalCard } from "../components/edital-card";
+import { VisibilityBadge } from "../components/visibility-badge";
+import { resolveEditalStatus } from "../components/edital-status-pill";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import {
   documents,
@@ -417,19 +419,9 @@ async function buildPageData() {
     adaptEdital(row, editalTagMap.get(row.id) ?? [], null),
   );
 
-  function getEditalStatus(
-    e: Edital,
-  ): "open" | "closed" | "permanent" | "upcoming" {
-    if (e.cycleType === "pontual") return "permanent";
-    const now = new Date();
-    if (e.opensAt && now < new Date(e.opensAt)) return "upcoming";
-    if (e.closesAt && now > new Date(e.closesAt)) return "closed";
-    return "open";
-  }
-
   const openEditais = allEditais.filter((e) => {
-    const s = getEditalStatus(e);
-    return s === "open" || s === "permanent";
+    const s = resolveEditalStatus(e);
+    return s === "open" || s === "closing_soon" || s === "permanent";
   });
 
   return {
@@ -671,14 +663,7 @@ export default async function HomePage() {
                         </span>
                       </div>
                     </div>
-                    {doc.visibility === "public" && (
-                      <span
-                        className="docs-open-stripe"
-                        style={{ fontSize: 11 }}
-                      >
-                        Público
-                      </span>
-                    )}
+                    <VisibilityBadge visibility={doc.visibility} size="sm" />
                   </Link>
                 ))}
               </div>

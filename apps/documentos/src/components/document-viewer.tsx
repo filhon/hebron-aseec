@@ -3,7 +3,6 @@
 import { useState } from "react";
 import type { ReactNode } from "react";
 import type { Document } from "@hebron/types/documentos";
-import type { LucideIcon } from "lucide-react";
 import {
   Download,
   ExternalLink,
@@ -12,11 +11,9 @@ import {
   Folder,
   Calendar,
   Tag,
-  Globe,
-  Users,
-  Lock,
   Hash,
 } from "lucide-react";
+import { VISIBILITY } from "./visibility-badge";
 
 // ─── Markdown parser ─────────────────────────────────────────────────────────
 
@@ -353,15 +350,6 @@ function formatBytes(bytes: number): string {
   return `${(bytes / 1_000_000).toFixed(1)} MB`;
 }
 
-const VISIBILITY_LABEL: Record<
-  Document["visibility"],
-  { label: string; Icon: LucideIcon }
-> = {
-  public: { label: "Público", Icon: Globe },
-  internal: { label: "Interno", Icon: Users },
-  restricted: { label: "Restrito", Icon: Lock },
-};
-
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export interface DocumentViewerProps {
@@ -388,7 +376,7 @@ export function DocumentViewer({
     document.currentVersion?.mimeType === "text/markdown" ||
     document.currentVersion?.mimeType === "text/plain";
 
-  const vis = VISIBILITY_LABEL[document.visibility];
+  const vis = VISIBILITY[document.visibility];
   const VisIcon = vis.Icon;
   const fileSize = document.currentVersion?.fileSizeBytes;
 
