@@ -59,6 +59,7 @@ Corpo integral no próprio arquivo (as 4 originais) ou em `AUDIT/04-prompts-pend
 | P-1.10c   | Emails enviados a partir dos templates do banco (DB-driven)   | neste arquivo                    | S-182    |
 | P-1.14b   | Documentos: badge de visibilidade e pílula de status únicos   | neste arquivo                    | S-183    |
 | P-1.15b   | Documentos: listagem por categoria — a rota que nunca existiu | neste arquivo                    | S-184    |
+| P-1.16b   | Documentos: assinaturas, preferência por tipo de alerta       | neste arquivo                    | S-185    |
 
 ¹ Sessão referenciada retroativamente como S-22b em SESSIONS.md S-68 (ponto 2 da entrada retificadora) — o bloco original nunca recebeu número.
 
@@ -2185,13 +2186,13 @@ Resultado: o usuário desliga "nova versão", salva, vê "Preferências salvas."
 
 **Critérios de aceite:**
 
-- [ ] `documentos.subscriptions` tem `on_new_version` e `on_edital_open`, com RLS preservada (policies existentes continuam válidas)
-- [ ] Desligar um toggle, salvar e recarregar devolve exatamente o estado salvo
-- [ ] `notifyNewDocument` e `notifyEditalOpen` respeitam os flags — coberto por teste
-- [ ] Desligar os dois toggles remove a inscrição (nenhuma linha órfã)
-- [ ] Nenhum toggle da UI sem correspondente persistido (auditar `SubscriptionFormValues` campo a campo)
-- [ ] `pnpm --filter documentos typecheck lint test` verdes; migration aplicada no Supabase de dev
-- [ ] Registrar em SESSIONS.md
+- [x] `documentos.subscriptions` tem `on_new_version` e `on_edital_open`, com RLS preservada (policies existentes continuam válidas)
+- [x] Desligar um toggle, salvar e recarregar devolve exatamente o estado salvo
+- [x] `notifyNewDocument` e `notifyEditalOpen` respeitam os flags — coberto por teste
+- [x] Desligar os dois toggles remove a inscrição (nenhuma linha órfã)
+- [x] Nenhum toggle da UI sem correspondente persistido (auditar `SubscriptionFormValues` campo a campo)
+- [x] `pnpm --filter documentos typecheck lint test` verdes; migration aplicada no Supabase de dev
+- [x] Registrar em SESSIONS.md
 
 **Notas:**
 Ref: BRAIN.md §6.7 (assinaturas por categoria). Alternativa descartada: simplificar a UI para um único toggle — a granularidade por tipo de evento é útil (quem acompanha editais raramente quer o ruído de cada nova versão de política) e já está desenhada; o que falta é o backend. Não introduzir frequência/digest aqui.

@@ -160,15 +160,19 @@ async function AssinaturasClientLoader({ actorId }: { actorId: string }) {
   ]);
 
   const tree = buildTree(catRows);
-  const initialSubscribedIds = (subsResult?.data?.subscriptions ?? []).map(
-    (s) => s.subscription.categoryId,
+  const initialSubscriptions = (subsResult?.data?.subscriptions ?? []).map(
+    (s) => ({
+      categoryId: s.subscription.categoryId,
+      onNewVersion: s.subscription.onNewVersion,
+      onEditalOpen: s.subscription.onEditalOpen,
+    }),
   );
 
   return (
     <AssinaturasClient
       categories={tree}
       userEmail={userRow?.email ?? ""}
-      initialSubscribedIds={initialSubscribedIds}
+      initialSubscriptions={initialSubscriptions}
     />
   );
 }

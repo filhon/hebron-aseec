@@ -59,6 +59,7 @@ export async function notifyNewDocument(documentId: string): Promise<void> {
     .where(
       and(
         eq(subscriptions.categoryId, doc.categoryId),
+        eq(subscriptions.onNewVersion, true),
         isNull(users.suspendedAt),
       ),
     );
@@ -102,7 +103,9 @@ export async function notifyNewDocument(documentId: string): Promise<void> {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// notifyEditalOpen — dispara emails para todos os submissores ativos
+// notifyEditalOpen — dispara emails para todos os submissores ativos e para
+// os inscritos na categoria do edital com onEditalOpen = true (deduplicado
+// por userId, já que um submissor pode também estar inscrito na categoria)
 // ──────────────────────────────────────────────────────────────────────────────
 
 export async function notifyEditalOpen(editalId: string): Promise<void> {
@@ -110,6 +113,7 @@ export async function notifyEditalOpen(editalId: string): Promise<void> {
     .select({
       title: documents.title,
       slug: documents.slug,
+      categoryId: documents.categoryId,
       opensAt: editals.opensAt,
       closesAt: editals.closesAt,
       projectType: editals.projectType,
@@ -122,14 +126,18 @@ export async function notifyEditalOpen(editalId: string): Promise<void> {
   if (!row) return;
 
   const submissors = await resolveSubmissors();
-  if (!submissors.length) return;
+  const categorySubscribers = row.categoryId
+    ? await resolveEditalCategorySubscribers(row.categoryId)
+    : [];
+  const recipients = dedupeByUserId([...submissors, ...categorySubscribers]);
+  if (!recipients.length) return;
 
   const editalUrl = `${BASE_URL}/editais/${row.slug}`;
   const resendApiKey = process.env.RESEND_API_KEY;
   const opensAt = row.opensAt ?? new Date();
 
   await Promise.all(
-    submissors.map((sub) =>
+    recipients.map((sub) =>
       createNotification({
         insert: makeInsert(),
         resendApiKey,
@@ -193,4 +201,41 @@ async function resolveSubmissors(): Promise<
         isNull(users.suspendedAt),
       ),
     );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// resolveEditalCategorySubscribers — inscritos na categoria do edital que
+// pediram alerta de abertura (mesma tabela/critério de notifyNewDocument,
+// filtrando por onEditalOpen em vez de onNewVersion)
+// ──────────────────────────────────────────────────────────────────────────────
+
+async function resolveEditalCategorySubscribers(
+  categoryId: string,
+): Promise<{ userId: string; email: string; fullName: string | null }[]> {
+  return db
+    .select({
+      userId: users.id,
+      email: users.email,
+      fullName: users.fullName,
+    })
+    .from(subscriptions)
+    .innerJoin(users, eq(subscriptions.userId, users.id))
+    .where(
+      and(
+        eq(subscriptions.categoryId, categoryId),
+        eq(subscriptions.onEditalOpen, true),
+        isNull(users.suspendedAt),
+      ),
+    );
+}
+
+function dedupeByUserId<T extends { userId: string }>(rows: T[]): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const row of rows) {
+    if (seen.has(row.userId)) continue;
+    seen.add(row.userId);
+    out.push(row);
+  }
+  return out;
 }

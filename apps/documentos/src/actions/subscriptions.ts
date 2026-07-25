@@ -1,78 +1,81 @@
 "use server";
 
 import { z } from "zod";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { categories, subscriptions } from "@hebron/db/schema";
 import { authenticatedAction } from "../lib/safe-action";
 
-// ─── subscribe ────────────────────────────────────────────────────────────────
+// ─── saveSubscriptions ──────────────────────────────────────────────────────
+// Upsert por (user_id, category_id): categorias com os dois toggles desligados
+// perdem a linha (nenhuma inscrição órfã); as demais gravam onNewVersion /
+// onEditalOpen como enviados. Substitui o par subscribe/unsubscribe — a UI
+// não faz mais diff entre estado anterior/novo, só envia o estado desejado.
 
-export const subscribe = authenticatedAction
-  .schema(z.object({ categoryId: z.string().uuid() }))
+const subscriptionItemSchema = z.object({
+  categoryId: z.string().uuid(),
+  onNewVersion: z.boolean(),
+  onEditalOpen: z.boolean(),
+});
+
+export const saveSubscriptions = authenticatedAction
+  .schema(z.object({ items: z.array(subscriptionItemSchema) }))
   .action(async ({ parsedInput, ctx }) => {
-    const subscription = await withAuthenticatedContext(
+    const saved = await withAuthenticatedContext(
       { actorId: ctx.actorId },
       async (tx) => {
-        const [category] = await tx
-          .select({ id: categories.id })
-          .from(categories)
-          .where(eq(categories.id, parsedInput.categoryId))
-          .limit(1);
+        const categoryIds = parsedInput.items.map((item) => item.categoryId);
+        if (categoryIds.length > 0) {
+          const existing = await tx
+            .select({ id: categories.id })
+            .from(categories)
+            .where(inArray(categories.id, categoryIds));
+          const existingIds = new Set(existing.map((c) => c.id));
+          if (categoryIds.some((id) => !existingIds.has(id))) {
+            throw new Error("Categoria não encontrada");
+          }
+        }
 
-        if (!category) throw new Error("Categoria não encontrada");
+        const results = [];
+        for (const item of parsedInput.items) {
+          if (!item.onNewVersion && !item.onEditalOpen) {
+            await tx
+              .delete(subscriptions)
+              .where(
+                and(
+                  eq(subscriptions.userId, ctx.actorId),
+                  eq(subscriptions.categoryId, item.categoryId),
+                ),
+              );
+            continue;
+          }
 
-        const [existing] = await tx
-          .select({ id: subscriptions.id })
-          .from(subscriptions)
-          .where(
-            and(
-              eq(subscriptions.userId, ctx.actorId),
-              eq(subscriptions.categoryId, parsedInput.categoryId),
-            ),
-          )
-          .limit(1);
+          const [row] = await tx
+            .insert(subscriptions)
+            .values({
+              userId: ctx.actorId,
+              categoryId: item.categoryId,
+              onNewVersion: item.onNewVersion,
+              onEditalOpen: item.onEditalOpen,
+            })
+            .onConflictDoUpdate({
+              target: [subscriptions.userId, subscriptions.categoryId],
+              set: {
+                onNewVersion: item.onNewVersion,
+                onEditalOpen: item.onEditalOpen,
+              },
+            })
+            .returning();
 
-        if (existing) throw new Error("Já inscrito nesta categoria");
+          if (!row) throw new Error("Falha ao salvar inscrição");
+          results.push(row);
+        }
 
-        const [subscription] = await tx
-          .insert(subscriptions)
-          .values({
-            userId: ctx.actorId,
-            categoryId: parsedInput.categoryId,
-          })
-          .returning();
-
-        if (!subscription) throw new Error("Falha ao criar inscrição");
-        return subscription;
+        return results;
       },
     );
 
-    return { subscription };
-  });
-
-// ─── unsubscribe ──────────────────────────────────────────────────────────────
-
-export const unsubscribe = authenticatedAction
-  .schema(z.object({ categoryId: z.string().uuid() }))
-  .action(async ({ parsedInput, ctx }) => {
-    const deleted = await withAuthenticatedContext(
-      { actorId: ctx.actorId },
-      (tx) =>
-        tx
-          .delete(subscriptions)
-          .where(
-            and(
-              eq(subscriptions.userId, ctx.actorId),
-              eq(subscriptions.categoryId, parsedInput.categoryId),
-            ),
-          )
-          .returning(),
-    );
-
-    if (!deleted.length) throw new Error("Inscrição não encontrada");
-
-    return { unsubscribed: true };
+    return { subscriptions: saved };
   });
 
 // ─── listSubscriptions ────────────────────────────────────────────────────────

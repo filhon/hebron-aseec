@@ -4,53 +4,40 @@ import { useState } from "react";
 import { Check, AlertCircle } from "lucide-react";
 import {
   SubscriptionForm,
+  type CategorySubscription,
   type SubscriptionFormValues,
 } from "../../components/subscription-form";
-import { subscribe, unsubscribe } from "../../actions/subscriptions";
+import { saveSubscriptions } from "../../actions/subscriptions";
 import type { Category } from "@hebron/types/documentos";
 
 export function AssinaturasClient({
   categories,
   userEmail,
-  initialSubscribedIds,
+  initialSubscriptions,
 }: {
   categories: Category[];
   userEmail: string;
-  initialSubscribedIds: string[];
+  initialSubscriptions: CategorySubscription[];
 }) {
   const [isLoading, setIsLoading] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [subscribedIds, setSubscribedIds] = useState(
-    new Set(initialSubscribedIds),
-  );
-
-  const initialSubscriptions = initialSubscribedIds.map((categoryId) => ({
-    categoryId,
-    onNewVersion: true,
-    onEditalOpen: true,
-  }));
 
   async function handleSubmit(values: SubscriptionFormValues) {
     setIsLoading(true);
     setError(null);
     setSaved(false);
     try {
-      const nextIds = new Set(
-        values.subscriptions
-          .filter((s) => s.onNewVersion || s.onEditalOpen)
-          .map((s) => s.categoryId),
-      );
+      const result = await saveSubscriptions({
+        items: values.subscriptions.map((s) => ({
+          categoryId: s.categoryId,
+          onNewVersion: s.onNewVersion,
+          onEditalOpen: s.onEditalOpen,
+        })),
+      });
 
-      const toSubscribe = [...nextIds].filter((id) => !subscribedIds.has(id));
-      const toUnsubscribe = [...subscribedIds].filter((id) => !nextIds.has(id));
+      if (result?.serverError) throw new Error(result.serverError);
 
-      await Promise.all([
-        ...toSubscribe.map((categoryId) => subscribe({ categoryId })),
-        ...toUnsubscribe.map((categoryId) => unsubscribe({ categoryId })),
-      ]);
-
-      setSubscribedIds(nextIds);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {

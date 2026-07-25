@@ -1,4 +1,5 @@
 import {
+  boolean,
   date,
   index,
   integer,
@@ -181,6 +182,8 @@ export const subscriptions = documentosSchema.table(
     categoryId: uuid("category_id")
       .notNull()
       .references(() => categories.id, { onDelete: "cascade" }),
+    onNewVersion: boolean("on_new_version").notNull().default(true),
+    onEditalOpen: boolean("on_edital_open").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

@@ -23,6 +23,7 @@ import {
   documents,
   documentTags,
   documentVersions,
+  editals,
   subscriptions,
 } from "@hebron/db/schema";
 
@@ -39,6 +40,7 @@ const createdCatIds: string[] = [];
 let notifCatId: string | null = null;
 let _notifDocId: string | null = null;
 let notifSubId: string | null = null;
+let flagSubId: string | null = null;
 
 // ── Mocks globais ─────────────────────────────────────────────────────────────
 
@@ -129,6 +131,9 @@ afterAll(async () => {
   // Subscriptions criadas no teste de notificação
   if (notifSubId) {
     await db.delete(subscriptions).where(eq(subscriptions.id, notifSubId));
+  }
+  if (flagSubId) {
+    await db.delete(subscriptions).where(eq(subscriptions.id, flagSubId));
   }
 
   // Documentos criados pelo ACTOR_ID
@@ -435,7 +440,7 @@ describe("notifyNewDocument — fluxo de notificação", () => {
     const { createDocument, publishDocument } =
       await import("../actions/documents");
     const { createCategory } = await import("../actions/categories");
-    const { subscribe } = await import("../actions/subscriptions");
+    const { saveSubscriptions } = await import("../actions/subscriptions");
     const { notifyNewDocument } = await import("../lib/notifications");
 
     // Cria categoria
@@ -449,8 +454,10 @@ describe("notifyNewDocument — fluxo de notificação", () => {
       roles: ["hospede"],
       designations: [],
     });
-    const subResult = await subscribe({ categoryId: cat.id });
-    const sub = requireDefined(subResult?.data?.subscription, "sub");
+    const subResult = await saveSubscriptions({
+      items: [{ categoryId: cat.id, onNewVersion: true, onEditalOpen: true }],
+    });
+    const sub = requireDefined(subResult?.data?.subscriptions?.[0], "sub");
     notifSubId = sub.id;
 
     // Cria e publica documento na categoria
@@ -489,5 +496,101 @@ describe("notifyNewDocument — fluxo de notificação", () => {
         }),
       }),
     );
+  });
+});
+
+// ── Preferências por tipo de alerta (P-1.16b) ─────────────────────────────────
+
+describe("saveSubscriptions — preferências por tipo de alerta", () => {
+  it("assinante com on_new_version=false não é notificado ao publicar documento, mas é notificado ao abrir edital na mesma categoria", async () => {
+    const { createNotification } = await import("@hebron/email");
+    const { resolveSession } = await import("@hebron/auth/server");
+    const { createDocument, publishDocument } =
+      await import("../actions/documents");
+    const { createCategory } = await import("../actions/categories");
+    const { saveSubscriptions } = await import("../actions/subscriptions");
+    const { notifyEditalOpen } = await import("../lib/notifications");
+
+    const catResult = await createCategory({ name: "Notif Flags Category" });
+    const cat = requireDefined(catResult?.data?.category, "cat");
+    createdCatIds.push(cat.id);
+
+    vi.mocked(resolveSession).mockResolvedValueOnce({
+      actorId: SUBSCRIBER_ID,
+      roles: ["hospede"],
+      designations: [],
+    });
+    const subResult = await saveSubscriptions({
+      items: [{ categoryId: cat.id, onNewVersion: false, onEditalOpen: true }],
+    });
+    const sub = requireDefined(subResult?.data?.subscriptions?.[0], "sub");
+    flagSubId = sub.id;
+    expect(sub.onNewVersion).toBe(false);
+    expect(sub.onEditalOpen).toBe(true);
+
+    // Publica documento comum na categoria: on_new_version=false não deve notificar
+    const docResult = await createDocument({
+      title: "Documento Flag Test",
+      visibility: "public",
+      categoryId: cat.id,
+    });
+    const doc = requireDefined(docResult?.data?.document, "doc");
+
+    vi.mocked(createNotification).mockClear();
+    await publishDocument({ id: doc.id });
+
+    expect(vi.mocked(createNotification)).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          userId: SUBSCRIBER_ID,
+          type: "document.published",
+        }),
+      }),
+    );
+
+    // Edital na mesma categoria: on_edital_open=true deve notificar. Insere
+    // direto (createEdital exige super_admin/diretor) — aqui o alvo é
+    // notifyEditalOpen, não o gate de criação.
+    const [editalDoc] = await db
+      .insert(documents)
+      .values({
+        title: "Edital Flag Test",
+        slug: `edital-flag-test-${Date.now()}`,
+        visibility: "public",
+        categoryId: cat.id,
+        authorId: ACTOR_ID,
+        publishedAt: new Date(),
+      })
+      .returning();
+    const editalDocRow = requireDefined(editalDoc, "editalDoc");
+    await db.insert(editals).values({ id: editalDocRow.id });
+
+    vi.mocked(createNotification).mockClear();
+    await notifyEditalOpen(editalDocRow.id);
+
+    expect(vi.mocked(createNotification)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          userId: SUBSCRIBER_ID,
+          type: "edital.opened",
+        }),
+      }),
+    );
+
+    // Desligar os dois toggles remove a inscrição (nenhuma linha órfã)
+    vi.mocked(resolveSession).mockResolvedValueOnce({
+      actorId: SUBSCRIBER_ID,
+      roles: ["hospede"],
+      designations: [],
+    });
+    await saveSubscriptions({
+      items: [{ categoryId: cat.id, onNewVersion: false, onEditalOpen: false }],
+    });
+    const remaining = await db
+      .select({ id: subscriptions.id })
+      .from(subscriptions)
+      .where(eq(subscriptions.id, flagSubId));
+    expect(remaining).toHaveLength(0);
+    flagSubId = null;
   });
 });

@@ -205,6 +205,7 @@
 | S-182  | 2026-07-24 | P-1.10c — Emails enviados a partir dos templates do banco (CORRETIVO)                                                            | concluido                            |
 | S-183  | 2026-07-24 | P-1.14b — Documentos: badge de visibilidade e pílula de status únicos (CORRETIVO)                                                | concluido                            |
 | S-184  | 2026-07-25 | P-1.15b — Documentos: listagem por categoria, a rota que nunca foi criada (CORRETIVO)                                            | concluido                            |
+| S-185  | 2026-07-25 | P-1.16b — Documentos: assinaturas, preferência por tipo de alerta de verdade (CORRETIVO)                                         | concluido                            |
 
 ---
 
@@ -14940,7 +14941,7 @@ tela de resultados de busca.
       atual enxerga (`availableVisibilities` derivado do resultado já
       filtrado por RLS)
 - [x] `DocumentCard` tem consumidor real — `grep -rn "DocumentCard"
-    apps/documentos/src` devolve o import em `categoria/[slug]/page.tsx`
+  apps/documentos/src` devolve o import em `categoria/[slug]/page.tsx`
 - [x] Cards de categoria da home levam a `/categoria/<slug>`; nenhum link do
       app aponta para `/busca?categoria=`
 - [x] Vazio com versículo e `loading.tsx` com skeleton
@@ -14949,7 +14950,7 @@ tela de resultados de busca.
 - [x] `pnpm --filter documentos typecheck lint` verdes. `test`: **não
       verificável nesta sessão** — o sandbox de execução de comandos não tem
       rota de rede até o Postgres compartilhado (`getaddrinfo ENOTFOUND
-    aws-1-us-west-2.pooler.supabase.com`), falha que atinge igualmente
+  aws-1-us-west-2.pooler.supabase.com`), falha que atinge igualmente
       suites pré-existentes (`actions.test.ts`, `session-real.test.ts`) não
       tocadas por este prompt — limitação de ambiente, não regressão. Teste
       novo segue o padrão já validado do bloco F2-D1/F2-D2 do mesmo arquivo;
@@ -14963,4 +14964,118 @@ tela de resultados de busca.
 - `apps/documentos/src/app/page.tsx`
 - `apps/documentos/src/__tests__/rls.test.ts`
 - `PROMPTS.md` (bookkeeping de P-1.15 + tabela de corretivos)
+- `SESSIONS.md` (esta entrada)
+
+---
+
+## S-185 — P-1.16b — Documentos: assinaturas, preferência por tipo de alerta de verdade (CORRETIVO)
+
+**Branch:** `feat/P-1.16b-docs-assinaturas`
+
+### Contexto
+
+`SubscriptionForm` (P-1.16) já expunha dois toggles independentes por
+categoria ("avisar em nova versão" / "avisar quando abrir edital"), mas
+`documentos.subscriptions` só guardava `(user_id, category_id)`: o wrapper
+colapsava os dois num único "inscrito" e recarregava a tela sempre com ambos
+hardcoded em `true`. Resultado: desligar um toggle e salvar não mudava nada
+— ao recarregar, os dois voltavam ligados — e o usuário continuava recebendo
+o e-mail que pediu para não receber, porque `notifyNewDocument`/
+`notifyEditalOpen` nunca filtravam por tipo de evento.
+
+### Decisões/suposições registradas
+
+1. **`notifyEditalOpen` não consultava `subscriptions` de forma alguma** —
+   ao contrário do que o texto do prompt presumia ("a mesma tabela sem
+   filtro"). A função só notificava por papel (`role_assignments.role =
+'submissor'`, broadcast para todos). Ou seja, um assinante de categoria
+   com "abertura de edital" ligado **nunca** recebia esse e-mail, papel
+   nenhum resolvia isso. Assumido o conserto mais simples e aditivo: manter
+   o broadcast por papel (não removido — não foi pedido) e **adicionar**
+   uma segunda fonte de destinatários (inscritos na categoria do edital com
+   `on_edital_open = true`), deduplicada por `userId`. Sem isso o critério
+   de aceite "assinante... recebe ao abrir edital na mesma categoria" seria
+   estruturalmente impossível de cumprir. Precisa validação de Filipe: é
+   esperado que assinante de categoria vire destinatário de alerta de
+   edital, em paralelo ao papel `submissor`?
+2. **RLS de `subscriptions` não tinha policy de `UPDATE`** (só
+   `SELECT`/`INSERT`/`DELETE`, coerente com o antigo par
+   `subscribe`/`unsubscribe`, que nunca atualizava uma linha existente). O
+   novo `saveSubscriptions` faz upsert (`onConflictDoUpdate`), que exige o
+   caminho de `UPDATE` sob RLS — adicionada `subscriptions_update_own`
+   (`user_id = auth.uid()`) + `GRANT UPDATE` na mesma migration.
+3. **`subscribe`/`unsubscribe` removidos** (não apenas descontinuados): após
+   migrar os dois chamadores (`_client.tsx` e `actions.test.ts`) para
+   `saveSubscriptions`, não sobrou nenhum outro chamador (`grep` confirmado)
+   — consistente com a instrução do prompt de só manter o par se houvesse
+   outro consumidor. `getSubscriptionStatus` (já sem nenhum chamador antes
+   desta sessão) foi mantido intacto — fora do escopo deste corretivo.
+4. **Sem auditoria em `saveSubscriptions`** — mantém o padrão pré-existente:
+   `subscribe`/`unsubscribe` nunca chamavam `logDocumentAudit` (preferência
+   pessoal de notificação, não mutação de governança); a troca de nome não
+   introduziu esse novo requisito.
+
+### O que foi feito
+
+1. Migration `0060_documentos_subscription_prefs.sql`: colunas
+   `on_new_version`/`on_edital_open` (`boolean NOT NULL DEFAULT true` —
+   linhas existentes preservam o comportamento atual) + policy
+   `subscriptions_update_own` + `GRANT UPDATE`. Aplicada no Supabase de dev
+   via `pnpm --filter @hebron/db db:migrate`.
+2. `packages/db/src/schema/documentos.ts`: colunas refletidas em
+   `subscriptions`.
+3. `actions/subscriptions.ts`: `subscribe`/`unsubscribe` substituídos por
+   `saveSubscriptions({ items })` — upsert por `(user_id, category_id)` via
+   `onConflictDoUpdate`; item com os dois toggles `false` remove a linha
+   (nenhuma inscrição órfã). Valida categorias existentes antes de
+   mutar. `getSubscriptionStatus` inalterado.
+4. `lib/notifications.ts`: `notifyNewDocument` filtra por
+   `subscriptions.onNewVersion = true`; `notifyEditalOpen` passa a também
+   resolver inscritos da categoria do edital com `onEditalOpen = true`
+   (`resolveEditalCategorySubscribers`), mesclados com os submissores por
+   papel e deduplicados por `userId` (`dedupeByUserId`).
+5. `app/assinaturas/page.tsx`: carrega e repassa `onNewVersion`/
+   `onEditalOpen` reais de cada inscrição (antes só a lista de ids,
+   fabricando `true` nos dois campos).
+6. `app/assinaturas/_client.tsx`: recebe `initialSubscriptions` (estado
+   real) em vez de fabricar `true`/`true`; `handleSubmit` envia o estado do
+   formulário direto para `saveSubscriptions` (sem diff local
+   subscribe/unsubscribe) e passa a checar `result?.serverError` (erro de
+   servidor deixava de aparecer para o usuário antes — mesma classe de bug
+   do "UI que mente sobre o estado persistido" que este prompt corrige).
+7. `__tests__/actions.test.ts`: teste de notificação existente migrado para
+   `saveSubscriptions`; novo bloco "saveSubscriptions — preferências por
+   tipo de alerta" cobre: assinante com `on_new_version=false` não é
+   notificado ao publicar documento comum; é notificado ao abrir edital na
+   mesma categoria (`on_edital_open=true`); desligar os dois toggles remove
+   a linha.
+
+### Critérios de aceite
+
+- [x] `documentos.subscriptions` tem `on_new_version`/`on_edital_open`, RLS
+      preservada — `rls.test.ts` (22 testes, incluindo os 3 de
+      `documentos.subscriptions`) continua verde
+- [x] Desligar um toggle, salvar e recarregar devolve exatamente o estado
+      salvo — `page.tsx` carrega os flags reais, `_client.tsx` não fabrica
+      mais `true`
+- [x] `notifyNewDocument`/`notifyEditalOpen` respeitam os flags — coberto
+      por teste novo
+- [x] Desligar os dois toggles remove a inscrição — coberto por teste novo
+      (`remaining.length === 0`)
+- [x] Nenhum toggle da UI sem correspondente persistido —
+      `SubscriptionFormValues.subscriptions[].{onNewVersion,onEditalOpen}`
+      mapeiam 1:1 para as colunas novas
+- [x] `pnpm --filter documentos typecheck lint test` verdes (52 testes, 5
+      arquivos); migration aplicada no Supabase de dev
+- [x] Registrado em SESSIONS.md
+
+### Arquivos criados/alterados
+
+- `packages/db/src/migrations/0060_documentos_subscription_prefs.sql` (novo)
+- `packages/db/src/schema/documentos.ts`
+- `apps/documentos/src/actions/subscriptions.ts`
+- `apps/documentos/src/lib/notifications.ts`
+- `apps/documentos/src/app/assinaturas/page.tsx`
+- `apps/documentos/src/app/assinaturas/_client.tsx`
+- `apps/documentos/src/__tests__/actions.test.ts`
 - `SESSIONS.md` (esta entrada)
