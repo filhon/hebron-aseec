@@ -2,14 +2,7 @@
 
 import { useState, useCallback, useId } from "react";
 import { z } from "zod";
-import {
-  AlertCircle,
-  Check,
-  FolderTree,
-  GripVertical,
-  Minus,
-  Plus,
-} from "lucide-react";
+import { AlertCircle, Check, FolderTree, Minus } from "lucide-react";
 import type { Category } from "@hebron/types/documentos";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -78,8 +71,9 @@ function FieldError({ message }: { message: string }) {
   );
 }
 
-// Flat tree node for parent selection
-function ParentNode({
+// Flat tree node for parent selection (also reused by CategoriesManager's
+// "Mover para" picker — mesma UI para escolher um destino na árvore).
+export function ParentNode({
   category,
   depth,
   selectedId,
@@ -180,79 +174,10 @@ function ParentNode({
   );
 }
 
-// Reorder tree row (simplified drag indicator — visual only in Phase 1)
-function ReorderRow({
-  category,
-  depth,
-}: {
-  category: Category;
-  depth: number;
-}) {
-  return (
-    <>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          padding: "7px 12px",
-          paddingLeft: `${12 + depth * 18}px`,
-          borderRadius: "var(--radius-xs, 4px)",
-          border: "1px solid transparent",
-          transition:
-            "border-color var(--dur-fast), background var(--dur-fast)",
-          cursor: "grab",
-        }}
-        onMouseEnter={(e) => {
-          const el = e.currentTarget as HTMLDivElement;
-          el.style.background = "var(--bg-alt)";
-          el.style.borderColor = "var(--border)";
-        }}
-        onMouseLeave={(e) => {
-          const el = e.currentTarget as HTMLDivElement;
-          el.style.background = "transparent";
-          el.style.borderColor = "transparent";
-        }}
-        title="Arraste para reordenar"
-      >
-        <GripVertical
-          size={14}
-          style={{ color: "var(--fg-subtle)", flexShrink: 0 }}
-          aria-hidden="true"
-        />
-        <FolderTree
-          size={13}
-          style={{ color: "var(--fg-muted)", flexShrink: 0 }}
-          aria-hidden="true"
-        />
-        <span style={{ fontSize: 13, color: "var(--fg)", flex: 1 }}>
-          {category.name}
-        </span>
-        <span
-          style={{
-            fontSize: 11,
-            color: "var(--fg-muted)",
-            background: "var(--bg-alt)",
-            padding: "1px 7px",
-            borderRadius: "var(--radius-pill)",
-            border: "1px solid var(--border)",
-          }}
-        >
-          {category.documentCount} docs
-        </span>
-      </div>
-
-      {category.children.map((child) => (
-        <ReorderRow key={child.id} category={child} depth={depth + 1} />
-      ))}
-    </>
-  );
-}
-
 // ─── Main component ────────────────────────────────────────────────────────────
 
 export interface CategoryFormProps {
-  /** All existing categories (for parent picker & reorder tree). */
+  /** All existing categories (for parent picker). */
   categories?: Category[];
   /** If editing, pass the category being edited (to disable it as parent option). */
   editingCategory?: Category | null;
@@ -283,7 +208,6 @@ export function CategoryForm({
   });
   const [errors, setErrors] = useState<FormErrors>({});
   const [showParentPicker, setShowParentPicker] = useState(false);
-  const [showReorder, setShowReorder] = useState(false);
 
   const set = useCallback(
     <K extends keyof CategoryFormValues>(
@@ -591,83 +515,6 @@ export function CategoryForm({
           </button>
         </div>
       </form>
-
-      {/* ── Reorder tree ── */}
-      <section className="hb-card" style={{ padding: "22px 24px" }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: showReorder ? 16 : 0,
-          }}
-        >
-          <div>
-            <span className="hb-eyebrow" style={{ marginBottom: 2 }}>
-              Reordenar árvore
-            </span>
-            <p
-              style={{
-                margin: "4px 0 0",
-                fontSize: 12.5,
-                color: "var(--fg-muted)",
-              }}
-            >
-              Arraste as categorias para reorganizar a hierarquia.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowReorder((v) => !v)}
-            className="hb-btn hb-btn-ghost hb-btn-sm"
-          >
-            {showReorder ? (
-              <Minus size={13} aria-hidden="true" />
-            ) : (
-              <Plus size={13} aria-hidden="true" />
-            )}
-            {showReorder ? "Recolher" : "Reordenar"}
-          </button>
-        </div>
-
-        {showReorder && (
-          <div
-            style={{ display: "flex", flexDirection: "column", gap: 2 }}
-            role="tree"
-            aria-label="Árvore de categorias para reordenação"
-          >
-            {categories.length === 0 ? (
-              <p
-                style={{
-                  fontSize: 13,
-                  color: "var(--fg-muted)",
-                  fontStyle: "italic",
-                  textAlign: "center",
-                  padding: "20px 0",
-                }}
-              >
-                Nenhuma categoria cadastrada.
-              </p>
-            ) : (
-              categories.map((cat) => (
-                <ReorderRow key={cat.id} category={cat} depth={0} />
-              ))
-            )}
-            <p
-              style={{
-                fontSize: 11.5,
-                color: "var(--fg-subtle)",
-                marginTop: 10,
-                textAlign: "center",
-                fontStyle: "italic",
-              }}
-            >
-              Arrastar e soltar disponível na fase de integração com banco de
-              dados.
-            </p>
-          </div>
-        )}
-      </section>
     </div>
   );
 }

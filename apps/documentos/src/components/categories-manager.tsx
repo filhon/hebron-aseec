@@ -8,22 +8,25 @@ import {
   Trash2,
   FolderTree,
   ChevronRight,
+  Move,
   X,
+  Check,
   Loader2,
   AlertTriangle,
 } from "lucide-react";
-import { CategoryForm } from "./category-form";
+import { CategoryForm, ParentNode } from "./category-form";
 import type { CategoryFormValues } from "./category-form";
 import {
   createCategory,
   updateCategory,
   deleteCategory,
+  moveCategoryInTree,
 } from "../actions/categories";
 import type { Category } from "@hebron/types/documentos";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type PanelMode = "none" | "create" | "edit";
+type PanelMode = "none" | "create" | "edit" | "move";
 
 // ─── CategoryRow ──────────────────────────────────────────────────────────────
 
@@ -33,6 +36,7 @@ function CategoryRow({
   confirmDeleteId,
   deleting,
   onEdit,
+  onMove,
   onDeleteRequest,
   onDeleteConfirm,
   onDeleteCancel,
@@ -42,6 +46,7 @@ function CategoryRow({
   confirmDeleteId: string | null;
   deleting: boolean;
   onEdit: (cat: Category) => void;
+  onMove: (cat: Category) => void;
   onDeleteRequest: (id: string) => void;
   onDeleteConfirm: (id: string) => void;
   onDeleteCancel: () => void;
@@ -162,6 +167,14 @@ function CategoryRow({
             </button>
             <button
               type="button"
+              onClick={() => onMove(category)}
+              className="hb-btn hb-btn-ghost hb-btn-xs"
+              aria-label={`Mover ${category.name} para outra categoria pai`}
+            >
+              <Move size={12} aria-hidden="true" />
+            </button>
+            <button
+              type="button"
               onClick={() => onDeleteRequest(category.id)}
               className="hb-btn hb-btn-ghost hb-btn-xs"
               aria-label={`Remover ${category.name}`}
@@ -181,6 +194,7 @@ function CategoryRow({
           confirmDeleteId={confirmDeleteId}
           deleting={deleting}
           onEdit={onEdit}
+          onMove={onMove}
           onDeleteRequest={onDeleteRequest}
           onDeleteConfirm={onDeleteConfirm}
           onDeleteCancel={onDeleteCancel}
@@ -207,10 +221,13 @@ export function CategoriesManager({
 
   const [panelMode, setPanelMode] = useState<PanelMode>("none");
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [movingCategory, setMovingCategory] = useState<Category | null>(null);
+  const [moveTargetId, setMoveTargetId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [moving, setMoving] = useState(false);
 
   function openCreate() {
     setEditingCategory(null);
@@ -226,9 +243,19 @@ export function CategoriesManager({
     setConfirmDeleteId(null);
   }
 
+  function openMove(cat: Category) {
+    setMovingCategory(cat);
+    setMoveTargetId(cat.parentId);
+    setPanelMode("move");
+    setError(null);
+    setConfirmDeleteId(null);
+  }
+
   function closePanel() {
     setPanelMode("none");
     setEditingCategory(null);
+    setMovingCategory(null);
+    setMoveTargetId(null);
     setError(null);
   }
 
@@ -282,6 +309,25 @@ export function CategoriesManager({
     }
   }
 
+  async function handleMoveConfirm() {
+    if (!movingCategory) return;
+    setMoving(true);
+    setError(null);
+    try {
+      const result = await moveCategoryInTree({
+        id: movingCategory.id,
+        newParentId: moveTargetId,
+      });
+      if (result?.serverError) throw new Error(result.serverError);
+      closePanel();
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao mover categoria.");
+    } finally {
+      setMoving(false);
+    }
+  }
+
   const total = countAll(initialTree);
 
   return (
@@ -323,7 +369,7 @@ export function CategoriesManager({
       )}
 
       {/* Form panel */}
-      {panelMode !== "none" && (
+      {(panelMode === "create" || panelMode === "edit") && (
         <div>
           <div
             style={{
@@ -374,6 +420,159 @@ export function CategoriesManager({
             onCancel={closePanel}
             isLoading={submitting}
           />
+        </div>
+      )}
+
+      {/* Move panel — reparenta via moveCategoryInTree; a ordem entre irmãos
+          permanece alfabética (decisão P-1.16c, saída b). */}
+      {panelMode === "move" && movingCategory && (
+        <div>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: 16,
+            }}
+          >
+            <span
+              style={{
+                fontFamily: "var(--font-display)",
+                fontSize: 15,
+                fontWeight: 600,
+                color: "var(--fg)",
+              }}
+            >
+              Mover: {movingCategory.name}
+            </span>
+            <button
+              type="button"
+              onClick={closePanel}
+              className="hb-btn hb-btn-ghost hb-btn-sm"
+              aria-label="Fechar"
+            >
+              <X size={14} aria-hidden="true" />
+              Cancelar
+            </button>
+          </div>
+
+          <section className="hb-card" style={{ padding: "22px 24px" }}>
+            <span className="hb-eyebrow">Nova categoria pai</span>
+            <p
+              style={{
+                margin: "4px 0 12px",
+                fontSize: 12.5,
+                color: "var(--fg-muted)",
+              }}
+            >
+              Escolha para onde <strong>{movingCategory.name}</strong> deve se
+              mover. A ordem entre categorias no mesmo nível é sempre
+              alfabética.
+            </p>
+
+            <div
+              style={{
+                border: "1px solid var(--border)",
+                borderRadius: "var(--radius-sm)",
+                background: "var(--surface)",
+                padding: "8px",
+                maxHeight: 260,
+                overflowY: "auto",
+              }}
+              role="tree"
+              aria-label="Escolha a nova categoria pai"
+            >
+              <button
+                type="button"
+                onClick={() => setMoveTargetId(null)}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  width: "100%",
+                  padding: "7px 12px",
+                  borderRadius: "var(--radius-xs, 4px)",
+                  border: "none",
+                  background:
+                    moveTargetId === null ? "var(--brand)" : "transparent",
+                  color:
+                    moveTargetId === null
+                      ? "var(--brand-fg)"
+                      : "var(--fg-muted)",
+                  cursor: "pointer",
+                  fontSize: 13,
+                  fontFamily: "var(--font-body)",
+                  fontStyle: "italic",
+                  textAlign: "left",
+                  marginBottom: 4,
+                }}
+              >
+                Nenhuma (categoria raiz)
+                {moveTargetId === null && (
+                  <Check
+                    size={12}
+                    aria-hidden="true"
+                    style={{ marginLeft: "auto" }}
+                  />
+                )}
+              </button>
+
+              <div
+                style={{
+                  height: 1,
+                  background: "var(--divider)",
+                  margin: "4px 8px 8px",
+                }}
+                role="separator"
+              />
+
+              {initialTree.map((cat) => (
+                <ParentNode
+                  key={cat.id}
+                  category={cat}
+                  depth={0}
+                  selectedId={moveTargetId}
+                  disabledId={movingCategory.id}
+                  onSelect={(id) => setMoveTargetId(id)}
+                />
+              ))}
+            </div>
+
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                justifyContent: "flex-end",
+                marginTop: 16,
+              }}
+            >
+              <button
+                type="button"
+                onClick={closePanel}
+                className="hb-btn hb-btn-ghost hb-btn-sm"
+                disabled={moving}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleMoveConfirm()}
+                className="hb-btn hb-btn-primary hb-btn-sm"
+                disabled={moving || moveTargetId === movingCategory.parentId}
+              >
+                {moving ? (
+                  <Loader2
+                    size={13}
+                    className="animate-spin"
+                    aria-hidden="true"
+                  />
+                ) : (
+                  <Check size={13} aria-hidden="true" />
+                )}
+                Confirmar movimentação
+              </button>
+            </div>
+          </section>
         </div>
       )}
 
@@ -481,6 +680,7 @@ export function CategoriesManager({
                 confirmDeleteId={confirmDeleteId}
                 deleting={deleting}
                 onEdit={openEdit}
+                onMove={openMove}
                 onDeleteRequest={(id) => setConfirmDeleteId(id)}
                 onDeleteConfirm={(id) => void handleDeleteConfirm(id)}
                 onDeleteCancel={() => setConfirmDeleteId(null)}

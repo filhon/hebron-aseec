@@ -206,6 +206,7 @@
 | S-183  | 2026-07-24 | P-1.14b — Documentos: badge de visibilidade e pílula de status únicos (CORRETIVO)                                                | concluido                            |
 | S-184  | 2026-07-25 | P-1.15b — Documentos: listagem por categoria, a rota que nunca foi criada (CORRETIVO)                                            | concluido                            |
 | S-185  | 2026-07-25 | P-1.16b — Documentos: assinaturas, preferência por tipo de alerta de verdade (CORRETIVO)                                         | concluido                            |
+| S-186  | 2026-07-25 | P-1.16c — Documentos: reordenação de categorias, ligar a UI ao backend ou remover a promessa (CORRETIVO)                         | concluido                            |
 
 ---
 
@@ -14941,7 +14942,7 @@ tela de resultados de busca.
       atual enxerga (`availableVisibilities` derivado do resultado já
       filtrado por RLS)
 - [x] `DocumentCard` tem consumidor real — `grep -rn "DocumentCard"
-  apps/documentos/src` devolve o import em `categoria/[slug]/page.tsx`
+apps/documentos/src` devolve o import em `categoria/[slug]/page.tsx`
 - [x] Cards de categoria da home levam a `/categoria/<slug>`; nenhum link do
       app aponta para `/busca?categoria=`
 - [x] Vazio com versículo e `loading.tsx` com skeleton
@@ -14950,7 +14951,7 @@ tela de resultados de busca.
 - [x] `pnpm --filter documentos typecheck lint` verdes. `test`: **não
       verificável nesta sessão** — o sandbox de execução de comandos não tem
       rota de rede até o Postgres compartilhado (`getaddrinfo ENOTFOUND
-  aws-1-us-west-2.pooler.supabase.com`), falha que atinge igualmente
+aws-1-us-west-2.pooler.supabase.com`), falha que atinge igualmente
       suites pré-existentes (`actions.test.ts`, `session-real.test.ts`) não
       tocadas por este prompt — limitação de ambiente, não regressão. Teste
       novo segue o padrão já validado do bloco F2-D1/F2-D2 do mesmo arquivo;
@@ -15078,4 +15079,85 @@ o e-mail que pediu para não receber, porque `notifyNewDocument`/
 - `apps/documentos/src/app/assinaturas/page.tsx`
 - `apps/documentos/src/app/assinaturas/_client.tsx`
 - `apps/documentos/src/__tests__/actions.test.ts`
+
+## S-186 — P-1.16c — Reordenação de categorias: ligar a UI ao backend, ou remover a promessa (CORRETIVO)
+
+**Branch:** `feat/P-1.16c-docs-categorias-ordem`
+
+### Contexto
+
+O critério de P-1.16 prometia "reordenar na árvore", mas `category-form.tsx`
+renderizava uma segunda seção ("Reordenar árvore") com alça `GripVertical`,
+`cursor: "grab"` e o título "Arraste para reordenar" — sem nenhum handler de
+drag. A ação era puramente decorativa desde a Fase A e o débito (S-26) nunca
+foi resolvido na Fase B. Do lado do backend, `moveCategoryInTree` existia,
+com proteção anti-ciclo e teste, mas sem nenhum chamador na UI. Além disso
+`documentos.categories` nunca teve coluna de ordem — a promessa de
+"reordenar entre irmãos" não era sequer representável no schema.
+
+### Decisão registrada
+
+Saída **(b)** — escopo reduzido, conforme recomendação do próprio prompt: a
+árvore de categorias é rasa e estável, ninguém pediu controle editorial de
+ordem, e todo ponto de leitura da árvore (`editorial/categorias`,
+`editorial/novo`, `editorial/[id]/editar`, `assinaturas`) já ordena por
+`categories.name` (`ORDER BY` no SQL + `localeCompare("pt-BR")` no
+`buildTree`) — a ordem alfabética já era o comportamento real, não uma
+lacuna. Não foi criada migration nem coluna `sort_order`; a saída (a) fica
+descartada a menos que a diretoria peça explicitamente controle de ordem.
+
+### O que foi feito
+
+1. `category-form.tsx`: removida a seção "Reordenar árvore" inteira
+   (`ReorderRow`, estado `showReorder`, ícones `GripVertical`/`Plus` não
+   mais usados) — nenhuma afordância de arrastar sem comportamento
+   permanece (`grep -n "Arraste para reordenar\|cursor: \"grab\""` retorna
+   vazio). O componente interno `ParentNode` (árvore com item desabilitável)
+   passou a ser exportado para reuso.
+2. `categories-manager.tsx`: novo `PanelMode "move"` — botão "Mover" (ícone
+   `Move`) em cada linha da lista abre um painel com a árvore de categorias
+   (via `ParentNode` reexportado, mais a opção "Nenhuma (categoria raiz)"),
+   seleciona o novo pai e confirma com `moveCategoryInTree({ id,
+newParentId })`. Estado de carregamento (`moving`), erro de servidor
+   exibido no banner existente (a mensagem de ciclo do servidor já é
+   legível: "Destino inválido: categoria não pode ser movida para um de
+   seus descendentes") e `router.refresh()` no mesmo padrão de
+   `handleSubmit`/`handleDeleteConfirm`.
+3. Acessibilidade: como a saída (b) não usa drag, a operação inteira é
+   botões (`Mover` → selecionar linha da árvore → `Confirmar movimentação`)
+   — alcançável por teclado nativamente, sem necessidade de atalho
+   adicional.
+4. `PROMPTS.md`: critério de P-1.16 (linha do Escopo) atualizado de
+   "reordenar na árvore" para "mover entre pais na árvore — ordem entre
+   irmãos é sempre alfabética"; nota adicionada documentando a decisão (b)
+   e a razão.
+5. Nenhuma alteração em `actions/categories.ts`, `category-tree.tsx` ou
+   `__tests__/actions.test.ts` — `moveCategoryInTree` e o teste de ciclo
+   (`actions.test.ts:421`) já existiam e cobrem exatamente o caminho agora
+   ligado à UI; `category-tree.tsx` é a navegação read-only de documentos,
+   não a tela editorial, e não referenciava a alça removida.
+
+### Critérios de aceite
+
+- [x] Nenhuma afordância de arrastar sem comportamento —
+      `grep -n "Arraste para reordenar\|cursor: \"grab\"" apps/documentos/src`
+      retorna vazio
+- [x] `moveCategoryInTree` tem chamador real na UI editorial
+      (`categories-manager.tsx`, painel "Mover")
+- [x] Mover persiste, sobrevive a reload (`router.refresh()` busca a árvore
+      do servidor de novo) e grava `category.updated` no audit (já feito
+      dentro de `moveCategoryInTree`)
+- [x] Mover para um descendente é bloqueado com mensagem legível na UI
+      (erro do servidor exibido no banner de erro existente)
+- [x] Operação alcançável por teclado (botões nativos, sem drag)
+- [x] `pnpm --filter documentos typecheck lint test` verdes (52 testes, 5
+      arquivos)
+- [x] Registrado em SESSIONS.md
+
+### Arquivos criados/alterados
+
+- `apps/documentos/src/components/category-form.tsx`
+- `apps/documentos/src/components/categories-manager.tsx`
+- `PROMPTS.md`
+- `SESSIONS.md` (esta entrada)
 - `SESSIONS.md` (esta entrada)

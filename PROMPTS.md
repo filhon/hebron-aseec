@@ -60,6 +60,7 @@ Corpo integral no próprio arquivo (as 4 originais) ou em `AUDIT/04-prompts-pend
 | P-1.14b   | Documentos: badge de visibilidade e pílula de status únicos   | neste arquivo                    | S-183    |
 | P-1.15b   | Documentos: listagem por categoria — a rota que nunca existiu | neste arquivo                    | S-184    |
 | P-1.16b   | Documentos: assinaturas, preferência por tipo de alerta       | neste arquivo                    | S-185    |
+| P-1.16c   | Documentos: reordenação de categorias — UI ao backend (b)     | neste arquivo                    | S-186    |
 
 ¹ Sessão referenciada retroativamente como S-22b em SESSIONS.md S-68 (ponto 2 da entrada retificadora) — o bloco original nunca recebeu número.
 
@@ -1973,7 +1974,7 @@ Ref: BRAIN.md seção 6.7. Parte pública acessível sem login. Parte editorial 
 - Env vars: nenhuma
 
 **Escopo:**
-Formulários editoriais: criar/editar documento (título, slug, conteúdo Markdown ou upload PDF, categoria, tags, visibilidade). Criar/editar edital (herda documento + datas abertura/fechamento, tipo de projeto, categoria de projeto, FAQ). Gestão de categorias (criar, editar, reordenar na árvore). Subscriptions (email para alertas por categoria).
+Formulários editoriais: criar/editar documento (título, slug, conteúdo Markdown ou upload PDF, categoria, tags, visibilidade). Criar/editar edital (herda documento + datas abertura/fechamento, tipo de projeto, categoria de projeto, FAQ). Gestão de categorias (criar, editar, mover entre pais na árvore — ordem entre irmãos é sempre alfabética, ver nota P-1.16c). Subscriptions (email para alertas por categoria).
 
 **Arquivos permitidos para criação/edição:**
 
@@ -1997,6 +1998,8 @@ Formulários editoriais: criar/editar documento (título, slug, conteúdo Markdo
 
 **Notas:**
 Ref: BRAIN.md seção 6.7. Apenas super_admin e colaboradores com papel "editor" podem publicar.
+
+> **P-1.16c (CORRETIVO):** o critério original prometia "reordenar na árvore" com alça de arrastar, mas nunca teve wiring — cenário puramente visual. Decisão registrada em P-1.16c: saída **(b)**, escopo reduzido. A alça de arrastar foi removida de `category-form.tsx`; `categories-manager.tsx` agora expõe reparentamento (mover categoria para outro pai) via `moveCategoryInTree`, com seletor de árvore e confirmação. A ordem entre categorias irmãs permanece alfabética (já era o comportamento real em toda leitura de árvore) — não há coluna de ordem no banco. Ver SESSIONS.md.
 
 ---
 
@@ -2237,13 +2240,13 @@ Do outro lado há a metade oposta do mesmo débito: a action `moveCategoryInTree
 
 **Critérios de aceite:**
 
-- [ ] Nenhuma afordância de arrastar sem comportamento: `grep -n "Arraste para reordenar\|cursor: \"grab\"" apps/documentos/src` retorna vazio **ou** o drag funciona de ponta a ponta
-- [ ] `moveCategoryInTree` (ou sua sucessora) tem chamador real na UI editorial
-- [ ] Reordenar/mover persiste, sobrevive a reload e grava `category.updated` no audit
-- [ ] Tentativa de mover categoria para um descendente é bloqueada com mensagem legível na UI
-- [ ] Operação alcançável por teclado
-- [ ] `pnpm --filter documentos typecheck lint test` verdes
-- [ ] Registrar em SESSIONS.md — incluindo qual saída foi escolhida e por quê
+- [x] Nenhuma afordância de arrastar sem comportamento: `grep -n "Arraste para reordenar\|cursor: \"grab\"" apps/documentos/src` retorna vazio **ou** o drag funciona de ponta a ponta
+- [x] `moveCategoryInTree` (ou sua sucessora) tem chamador real na UI editorial
+- [x] Reordenar/mover persiste, sobrevive a reload e grava `category.updated` no audit
+- [x] Tentativa de mover categoria para um descendente é bloqueada com mensagem legível na UI
+- [x] Operação alcançável por teclado
+- [x] `pnpm --filter documentos typecheck lint test` verdes
+- [x] Registrar em SESSIONS.md — incluindo qual saída foi escolhida e por quê
 
 **Notas:**
 Ref: BRAIN.md §6.7. Recomendação: saída **(b)** se a árvore de categorias for rasa e estável (é o caso hoje — a ordem alfabética não incomoda ninguém), (a) só se a diretoria pedir controle editorial da ordem. O importante é que a tela pare de prometer o que não faz.
