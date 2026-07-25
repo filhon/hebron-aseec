@@ -207,6 +207,7 @@
 | S-184  | 2026-07-25 | P-1.15b — Documentos: listagem por categoria, a rota que nunca foi criada (CORRETIVO)                                            | concluido                            |
 | S-185  | 2026-07-25 | P-1.16b — Documentos: assinaturas, preferência por tipo de alerta de verdade (CORRETIVO)                                         | concluido                            |
 | S-186  | 2026-07-25 | P-1.16c — Documentos: reordenação de categorias, ligar a UI ao backend ou remover a promessa (CORRETIVO)                         | concluido                            |
+| S-187  | 2026-07-25 | P-1.17b — Documentos: fronteiras de erro e cópia de estados vazios (CORRETIVO)                                                   | concluido                            |
 
 ---
 
@@ -15160,4 +15161,78 @@ newParentId })`. Estado de carregamento (`moving`), erro de servidor
 - `apps/documentos/src/components/categories-manager.tsx`
 - `PROMPTS.md`
 - `SESSIONS.md` (esta entrada)
-- `SESSIONS.md` (esta entrada)
+
+---
+
+## S-187 — P-1.17b — Fronteiras de erro e cópia de estados vazios (CORRETIVO)
+
+**Branch:** `feat/P-1.17b-docs-error-states`
+
+### Contexto
+
+O critério de P-1.17 "Estado de erro com retry" estava `[x]`, mas depois da
+integração com banco (P-1.21/P-1.27) sobrou um só: o `try/catch` da home
+(`app/page.tsx:462-499`). A `/busca`, que S-27 tinha entregue com
+`searchError` + botão "Tentar novamente", virou RSC e perdeu qualquer
+tratamento — fazia cinco consultas (`app/busca/page.tsx:139+`) sem
+`try/catch`. `find apps/documentos/src -name "error.tsx"` devolvia vazio:
+nenhuma rota do app tinha fronteira de erro — uma indisponibilidade do
+Supabase em qualquer tela caía na tela de erro genérica do Next. Além disso,
+`/editais` reciclava o mesmo texto de vazio ("Nenhum edital nesta
+categoria" / "Tente selecionar outro filtro acima") para todo filtro de
+**status**, e `app/globals.css:897` carregava um hex de fallback
+(`var(--hb-gray-200, #d1d5db)`) — único hex do arquivo, e desatualizado em
+relação ao valor real do token (`#b7bdd0`).
+
+### O que foi feito
+
+1. `app/error.tsx` (novo, client component): fronteira de erro da raiz —
+   `PublicNav` + `hb-empty` com ícone, mensagem sem exclamação, botão
+   "Tentar novamente" (`reset()`) e link para o início. Sem versículo
+   (critério: versículo só em vazio, não em erro).
+2. `app/global-error.tsx` (novo): fallback mínimo para falha no próprio
+   root layout — define `<html>/<body>` próprios (exigência do Next) e
+   importa `./globals.css` diretamente para ter acesso aos tokens/`hb-*`
+   sem depender do layout que falhou.
+3. `app/editorial/error.tsx` (novo): fronteira da área editorial. Não
+   redesenha a sidebar — como o boundary é filho de `editorial/layout.tsx`
+   no mesmo segmento, o shell (sidebar + topbar) já continua renderizado
+   pelo layout quando uma página filha lança erro; só o conteúdo precisa de
+   fallback.
+4. `app/busca/page.tsx`: consulta extraída para `runSearchQuery()` (mesmo
+   padrão de `buildPageData()` da home) e chamada dentro de `try/catch`;
+   erro renderiza `hb-empty` com retry via `Link` para a mesma URL
+   (`retryHref`, reconstruído a partir de `searchParams` antes da query
+   arriscada — recarregar a rota RSC refaz a busca).
+5. `app/editais/page.tsx`: vazio agora reflete o filtro de status ativo via
+   mapa `EMPTY_STATE_COPY` (`all`/`open`/`permanent`/`closed`) — com filtro
+   "Abertos" o texto é "Nenhum edital aberto no momento", conforme critério.
+6. `app/globals.css:897`: removido o fallback hex — `var(--hb-gray-200,
+#d1d5db)` → `var(--hb-gray-200)` (o token já existe em
+   `packages/ui/src/tokens.css`, o fallback era supérfluo e desatualizado).
+
+### Critérios de aceite
+
+- [x] Toda rota do app é coberta por uma fronteira de erro (raiz +
+      editorial + `global-error`)
+- [x] Erro de leitura em `/busca` renderiza estado com retry, não a tela do
+      Next
+- [x] Vazio de `/editais` corresponde ao filtro ativo; com filtro "Abertos"
+      o texto é "Nenhum edital aberto no momento"
+- [x] `grep -n "#[0-9a-fA-F]\{3,6\}" apps/documentos/src/app/globals.css`
+      retorna vazio
+- [x] Microcopy sem exclamação genérica; versículo mantido apenas nos
+      vazios (não nos erros)
+- [x] `pnpm --filter documentos typecheck lint test` verdes (52 testes, 5
+      arquivos)
+- [x] Registrado em SESSIONS.md
+
+### Arquivos criados/alterados
+
+- `apps/documentos/src/app/error.tsx` (criado)
+- `apps/documentos/src/app/global-error.tsx` (criado)
+- `apps/documentos/src/app/editorial/error.tsx` (criado)
+- `apps/documentos/src/app/busca/page.tsx`
+- `apps/documentos/src/app/editais/page.tsx`
+- `apps/documentos/src/app/globals.css`
+- `SESSIONS.md` (esta entrada + linha no índice)

@@ -33,6 +33,26 @@ function extractDescription(contentMd: string | null): string | null {
 
 type StatusFilter = "all" | "open" | "permanent" | "closed";
 
+const EMPTY_STATE_COPY: Record<StatusFilter, { title: string; body: string }> =
+  {
+    all: {
+      title: "Nenhum edital publicado no momento",
+      body: "Novos editais aparecem aqui assim que forem publicados.",
+    },
+    open: {
+      title: "Nenhum edital aberto no momento",
+      body: "Veja os editais permanentes ou encerrados acima.",
+    },
+    permanent: {
+      title: "Nenhum edital permanente no momento",
+      body: "Veja os editais abertos ou encerrados acima.",
+    },
+    closed: {
+      title: "Nenhum edital encerrado até o momento",
+      body: "Veja os editais abertos ou permanentes acima.",
+    },
+  };
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function EditaisPage({ searchParams }: PageProps) {
@@ -260,9 +280,9 @@ export default async function EditaisPage({ searchParams }: PageProps) {
             <div className="hb-empty-icon">
               <ChevronRight size={24} aria-hidden="true" />
             </div>
-            <b>Nenhum edital nesta categoria</b>
+            <b>{EMPTY_STATE_COPY[activeFilter].title}</b>
             <p className="hb-empty-body">
-              Tente selecionar outro filtro acima.
+              {EMPTY_STATE_COPY[activeFilter].body}
             </p>
             <p className="hb-empty-quote">
               "Pois sou eu que conheço os planos que tenho para vocês, diz o

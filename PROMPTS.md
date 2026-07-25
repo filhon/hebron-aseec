@@ -2290,13 +2290,13 @@ Além disso, dois textos estão errados: o vazio de `/editais` diz "**Nenhum edi
 
 **Critérios de aceite:**
 
-- [ ] Toda rota do app é coberta por uma fronteira de erro (raiz + editorial + `global-error`)
-- [ ] Erro de leitura em `/busca` renderiza estado com retry, não a tela do Next
-- [ ] Vazio de `/editais` corresponde ao filtro ativo; com filtro "Abertos" o texto é "Nenhum edital aberto no momento"
-- [ ] `grep -n "#[0-9a-fA-F]\{3,6\}" apps/documentos/src/app/globals.css` retorna vazio
-- [ ] Microcopy sem exclamação genérica; versículo mantido apenas nos vazios (não nos erros)
-- [ ] `pnpm --filter documentos typecheck lint test` verdes
-- [ ] Registrar em SESSIONS.md
+- [x] Toda rota do app é coberta por uma fronteira de erro (raiz + editorial + `global-error`)
+- [x] Erro de leitura em `/busca` renderiza estado com retry, não a tela do Next
+- [x] Vazio de `/editais` corresponde ao filtro ativo; com filtro "Abertos" o texto é "Nenhum edital aberto no momento"
+- [x] `grep -n "#[0-9a-fA-F]\{3,6\}" apps/documentos/src/app/globals.css` retorna vazio
+- [x] Microcopy sem exclamação genérica; versículo mantido apenas nos vazios (não nos erros)
+- [x] `pnpm --filter documentos typecheck lint test` verdes
+- [x] Registrar em SESSIONS.md
 
 **Notas:**
 Ref: BRAIN.md §5 e princípio "não parecer IA". `error.tsx` precisa ser client component com `reset`; não usar `router.refresh()` em RSC. Não converter páginas RSC em client só para tratar erro — a fronteira resolve.

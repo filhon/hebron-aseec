@@ -894,7 +894,7 @@
   border-radius: 50%;
   border: 2px solid var(--surface);
   z-index: 10;
-  background: var(--hb-gray-200, #d1d5db);
+  background: var(--hb-gray-200);
 }
 
 .docs-ver-dot.current {

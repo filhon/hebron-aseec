@@ -1,6 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Search, X, ChevronRight, FileText, Scroll } from "lucide-react";
+import {
+  Search,
+  X,
+  ChevronRight,
+  FileText,
+  Scroll,
+  AlertTriangle,
+  RefreshCw,
+} from "lucide-react";
 import { PublicNav } from "../../components/public-nav";
 import { BuscaSearchBar } from "./_search-bar-client";
 import { VisibilityBadge } from "../../components/visibility-badge";
@@ -133,156 +141,219 @@ export default async function BuscaPage({ searchParams }: PageProps) {
         )`
       : undefined;
 
+  // Build "try again" link from the raw search params, before the query
+  // that can fail — same URL, RSC reload re-runs the search.
+  const retryHref = (() => {
+    const p = new URLSearchParams();
+    if (sp.q) p.set("q", sp.q);
+    if (sp.categoria) p.set("categoria", sp.categoria);
+    if (sp.tags) p.set("tags", sp.tags);
+    if (sp.tipo) p.set("tipo", sp.tipo);
+    const str = p.toString();
+    return `/busca${str ? `?${str}` : ""}`;
+  })();
+
   // Load categories, tags, results, result-tags and versions in one
   // authenticated context — RLS filters results by visibility for real
   // (public/internal for anon/authenticated, restricted for the roles
   // allowed to see it).
-  const { catRows, allTagRows, allResults, tagMap, versionMap } =
-    await withAuthenticatedContext(actorId ? { actorId } : null, async (tx) => {
-      const [catRows, allTagRows, editalRows, docRows] = await Promise.all([
-        tx
-          .select({
-            id: categories.id,
-            name: categories.name,
-            slug: categories.slug,
-          })
-          .from(categories)
-          .orderBy(categories.name),
+  async function runSearchQuery() {
+    return withAuthenticatedContext(
+      actorId ? { actorId } : null,
+      async (tx) => {
+        const [catRows, allTagRows, editalRows, docRows] = await Promise.all([
+          tx
+            .select({
+              id: categories.id,
+              name: categories.name,
+              slug: categories.slug,
+            })
+            .from(categories)
+            .orderBy(categories.name),
 
-        tx
-          .select({ id: tags.id, name: tags.name, slug: tags.slug })
-          .from(tags)
-          .orderBy(tags.name),
+          tx
+            .select({ id: tags.id, name: tags.name, slug: tags.slug })
+            .from(tags)
+            .orderBy(tags.name),
 
-        // Edital results
-        tipo === "doc"
-          ? Promise.resolve([] as ResultRow[])
-          : tx
-              .select({
-                id: documents.id,
-                title: documents.title,
-                slug: documents.slug,
-                contentMd: documents.contentMd,
-                visibility: documents.visibility,
-                categoryId: documents.categoryId,
-                categoryName: categories.name,
-                publishedAt: documents.publishedAt,
-                updatedAt: documents.updatedAt,
-              })
-              .from(editals)
-              .innerJoin(documents, eq(editals.id, documents.id))
-              .leftJoin(categories, eq(categories.id, documents.categoryId))
-              .where(
-                and(
-                  isNull(documents.deletedAt),
-                  isNotNull(documents.publishedAt),
-                  q
-                    ? or(
-                        sql`${documents.title} ILIKE ${pattern}`,
-                        sql`${documents.contentMd} ILIKE ${pattern}`,
-                      )
-                    : undefined,
-                  catId ? eq(documents.categoryId, catId) : undefined,
-                  tagFilter,
+          // Edital results
+          tipo === "doc"
+            ? Promise.resolve([] as ResultRow[])
+            : tx
+                .select({
+                  id: documents.id,
+                  title: documents.title,
+                  slug: documents.slug,
+                  contentMd: documents.contentMd,
+                  visibility: documents.visibility,
+                  categoryId: documents.categoryId,
+                  categoryName: categories.name,
+                  publishedAt: documents.publishedAt,
+                  updatedAt: documents.updatedAt,
+                })
+                .from(editals)
+                .innerJoin(documents, eq(editals.id, documents.id))
+                .leftJoin(categories, eq(categories.id, documents.categoryId))
+                .where(
+                  and(
+                    isNull(documents.deletedAt),
+                    isNotNull(documents.publishedAt),
+                    q
+                      ? or(
+                          sql`${documents.title} ILIKE ${pattern}`,
+                          sql`${documents.contentMd} ILIKE ${pattern}`,
+                        )
+                      : undefined,
+                    catId ? eq(documents.categoryId, catId) : undefined,
+                    tagFilter,
+                  ),
+                )
+                .orderBy(desc(documents.publishedAt))
+                .limit(tipo === "edital" ? 20 : 10)
+                .then((rows) =>
+                  rows.map((r) => ({ ...r, isEdital: true as const })),
                 ),
-              )
-              .orderBy(desc(documents.publishedAt))
-              .limit(tipo === "edital" ? 20 : 10)
-              .then((rows) =>
-                rows.map((r) => ({ ...r, isEdital: true as const })),
-              ),
 
-        // Document results (non-editals)
-        tipo === "edital"
-          ? Promise.resolve([] as ResultRow[])
-          : tx
-              .select({
-                id: documents.id,
-                title: documents.title,
-                slug: documents.slug,
-                contentMd: documents.contentMd,
-                visibility: documents.visibility,
-                categoryId: documents.categoryId,
-                categoryName: categories.name,
-                publishedAt: documents.publishedAt,
-                updatedAt: documents.updatedAt,
-                editalId: editals.id,
-              })
-              .from(documents)
-              .leftJoin(categories, eq(categories.id, documents.categoryId))
-              .leftJoin(editals, eq(editals.id, documents.id))
-              .where(
-                and(
-                  isNull(documents.deletedAt),
-                  isNotNull(documents.publishedAt),
-                  isNull(editals.id),
-                  q
-                    ? or(
-                        sql`${documents.title} ILIKE ${pattern}`,
-                        sql`${documents.contentMd} ILIKE ${pattern}`,
-                      )
-                    : undefined,
-                  catId ? eq(documents.categoryId, catId) : undefined,
-                  tagFilter,
+          // Document results (non-editals)
+          tipo === "edital"
+            ? Promise.resolve([] as ResultRow[])
+            : tx
+                .select({
+                  id: documents.id,
+                  title: documents.title,
+                  slug: documents.slug,
+                  contentMd: documents.contentMd,
+                  visibility: documents.visibility,
+                  categoryId: documents.categoryId,
+                  categoryName: categories.name,
+                  publishedAt: documents.publishedAt,
+                  updatedAt: documents.updatedAt,
+                  editalId: editals.id,
+                })
+                .from(documents)
+                .leftJoin(categories, eq(categories.id, documents.categoryId))
+                .leftJoin(editals, eq(editals.id, documents.id))
+                .where(
+                  and(
+                    isNull(documents.deletedAt),
+                    isNotNull(documents.publishedAt),
+                    isNull(editals.id),
+                    q
+                      ? or(
+                          sql`${documents.title} ILIKE ${pattern}`,
+                          sql`${documents.contentMd} ILIKE ${pattern}`,
+                        )
+                      : undefined,
+                    catId ? eq(documents.categoryId, catId) : undefined,
+                    tagFilter,
+                  ),
+                )
+                .orderBy(desc(documents.updatedAt))
+                .limit(tipo === "doc" ? 20 : 10)
+                .then((rows) =>
+                  rows.map((r) => ({ ...r, isEdital: false as const })),
                 ),
-              )
-              .orderBy(desc(documents.updatedAt))
-              .limit(tipo === "doc" ? 20 : 10)
-              .then((rows) =>
-                rows.map((r) => ({ ...r, isEdital: false as const })),
-              ),
-      ]);
+        ]);
 
-      // Merge and sort all results
-      const allResults: ResultRow[] = [...editalRows, ...docRows].sort(
-        (a, b) =>
-          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
-      );
+        // Merge and sort all results
+        const allResults: ResultRow[] = [...editalRows, ...docRows].sort(
+          (a, b) =>
+            new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+        );
 
-      // Fetch tags for results (N+2 pattern)
-      const resultIds = allResults.map((r) => r.id);
-      const tagRows =
-        resultIds.length > 0
-          ? await tx
-              .select({
-                documentId: documentTags.documentId,
-                tagId: tags.id,
-                tagName: tags.name,
-              })
-              .from(documentTags)
-              .innerJoin(tags, eq(tags.id, documentTags.tagId))
-              .where(inArray(documentTags.documentId, resultIds))
-          : [];
+        // Fetch tags for results (N+2 pattern)
+        const resultIds = allResults.map((r) => r.id);
+        const tagRows =
+          resultIds.length > 0
+            ? await tx
+                .select({
+                  documentId: documentTags.documentId,
+                  tagId: tags.id,
+                  tagName: tags.name,
+                })
+                .from(documentTags)
+                .innerJoin(tags, eq(tags.id, documentTags.tagId))
+                .where(inArray(documentTags.documentId, resultIds))
+            : [];
 
-      const tagMap = new Map<string, Array<{ id: string; name: string }>>();
-      for (const t of tagRows) {
-        const arr = tagMap.get(t.documentId) ?? [];
-        arr.push({ id: t.tagId, name: t.tagName });
-        tagMap.set(t.documentId, arr);
-      }
-
-      // Fetch latest version numbers
-      const versionRows =
-        resultIds.length > 0
-          ? await tx
-              .select({
-                documentId: documentVersions.documentId,
-                versionNumber: documentVersions.versionNumber,
-              })
-              .from(documentVersions)
-              .where(inArray(documentVersions.documentId, resultIds))
-              .orderBy(desc(documentVersions.versionNumber))
-          : [];
-
-      const versionMap = new Map<string, number>();
-      for (const v of versionRows) {
-        if (!versionMap.has(v.documentId)) {
-          versionMap.set(v.documentId, v.versionNumber);
+        const tagMap = new Map<string, Array<{ id: string; name: string }>>();
+        for (const t of tagRows) {
+          const arr = tagMap.get(t.documentId) ?? [];
+          arr.push({ id: t.tagId, name: t.tagName });
+          tagMap.set(t.documentId, arr);
         }
-      }
 
-      return { catRows, allTagRows, allResults, tagMap, versionMap };
-    });
+        // Fetch latest version numbers
+        const versionRows =
+          resultIds.length > 0
+            ? await tx
+                .select({
+                  documentId: documentVersions.documentId,
+                  versionNumber: documentVersions.versionNumber,
+                })
+                .from(documentVersions)
+                .where(inArray(documentVersions.documentId, resultIds))
+                .orderBy(desc(documentVersions.versionNumber))
+            : [];
+
+        const versionMap = new Map<string, number>();
+        for (const v of versionRows) {
+          if (!versionMap.has(v.documentId)) {
+            versionMap.set(v.documentId, v.versionNumber);
+          }
+        }
+
+        return { catRows, allTagRows, allResults, tagMap, versionMap };
+      },
+    );
+  }
+
+  let searchData: Awaited<ReturnType<typeof runSearchQuery>> | null = null;
+  let hasError = false;
+
+  try {
+    searchData = await runSearchQuery();
+  } catch {
+    hasError = true;
+  }
+
+  if (hasError || searchData === null) {
+    return (
+      <>
+        <PublicNav />
+        <main
+          className="docs-page-narrow"
+          style={{
+            minHeight: "60vh",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <div className="hb-empty">
+            <div className="hb-empty-icon">
+              <AlertTriangle size={24} aria-hidden="true" />
+            </div>
+            <b>Não foi possível carregar a busca</b>
+            <p className="hb-empty-body">
+              Verifique sua conexão e tente novamente.
+            </p>
+            <Link
+              href={retryHref}
+              className="hb-btn hb-btn-primary"
+              style={{ marginTop: 16 }}
+            >
+              <RefreshCw size={14} aria-hidden="true" />
+              Tentar novamente
+            </Link>
+          </div>
+        </main>
+      </>
+    );
+  }
+
+  const { catRows, allTagRows, allResults, tagMap, versionMap } = searchData;
 
   const editalCount = allResults.filter((r) => r.isEdital).length;
   const docCount = allResults.length - editalCount;
