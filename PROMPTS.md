@@ -27,37 +27,38 @@
 
 Corpo integral no próprio arquivo (as 4 originais) ou em `AUDIT/04-prompts-pendentes.md` §4 (as 15 da auditoria de 2026-07 — convenção registrada em cada sessão de SESSIONS.md a partir de S-54; transcrever o texto para dentro deste arquivo é trabalho mecânico à parte, não feito em P-0.16 para não misturar prompts na mesma sessão).
 
-| Corretivo | Motivo                                                       | Corpo do prompt                  | Sessão   |
-| --------- | ------------------------------------------------------------ | -------------------------------- | -------- |
-| P-0.2b    | Unificação do design system (tokens `--hb-*`)                | neste arquivo                    | S-20     |
-| P-0.3b    | Pipeline de migrations                                       | neste arquivo                    | S-22     |
-| P-1.12b   | Reconciliação do Admin ao design system unificado            | neste arquivo                    | S-22b¹   |
-| P-2.9b    | Usuário real no header de Projetos                           | neste arquivo                    | S-44     |
-| P-0.7     | Resgate do banco (partições, enum de audit, 0000 duplicada)  | AUDIT/04-prompts-pendentes.md §4 | S-54     |
-| P-0.8     | Kit de backend compartilhado (sessão/audit/notificações)     | AUDIT/04-prompts-pendentes.md §4 | S-55     |
-| P-0.9     | CI mínimo                                                    | AUDIT/04-prompts-pendentes.md §4 | S-56     |
-| P-0.10    | Decisão B: RLS ativa (grants + policies + adoção)            | AUDIT/04-prompts-pendentes.md §4 | S-57     |
-| P-0.11    | drizzle-kit reconciliado                                     | AUDIT/04-prompts-pendentes.md §4 | S-58     |
-| P-1.25    | Admin: leitura protegida e fiação completa                   | AUDIT/04-prompts-pendentes.md §4 | S-59     |
-| P-1.26    | Onboarding: convite, auto-signup e MFA bloqueante            | AUDIT/04-prompts-pendentes.md §4 | S-60     |
-| P-1.27    | Documentos: visibilidade e área editorial verdadeiras        | AUDIT/04-prompts-pendentes.md §4 | S-61     |
-| P-2.9c    | Projetos: operável de ponta a ponta                          | AUDIT/04-prompts-pendentes.md §4 | S-62     |
-| P-3.8b    | Financeiro: governança e conciliação verdadeiras             | AUDIT/04-prompts-pendentes.md §4 | S-63     |
-| P-0.12    | Storage: buckets e policies                                  | AUDIT/04-prompts-pendentes.md §4 | S-64     |
-| P-0.13    | LGPD: fundação                                               | AUDIT/04-prompts-pendentes.md §4 | S-65     |
-| P-0.14    | Jobs: Inngest de verdade                                     | AUDIT/04-prompts-pendentes.md §4 | S-66     |
-| P-0.15    | packages/integrations + contrato de settings                 | AUDIT/04-prompts-pendentes.md §4 | S-67     |
-| P-0.16    | Registro retroativo (este próprio corretivo)                 | AUDIT/04-prompts-pendentes.md §4 | S-68     |
-| P-0.4b    | Auth: simetria de decode de cookie no browser client         | neste arquivo                    | pendente |
-| P-0.6b    | Notificações in_app operáveis: slot no AppShell + piloto     | neste arquivo                    | S-175    |
-| P-0.6c    | Notificações in_app: rollout do sino/central aos demais apps | neste arquivo                    | S-176    |
-| P-0.6d    | Client Drizzle tipado (remoção do stub de notifications)     | neste arquivo                    | S-177    |
-| P-0.6e    | Emails: tipografia institucional (remover Inter)             | neste arquivo                    | S-178    |
-| P-7.1b    | Flats: máximo de scoring em BRAIN §6.8 (80 → 75)             | neste arquivo                    | pendente |
-| P-7.5b    | Flats: fiação das telas do Bloco A para validação diretoria  | neste arquivo                    | pendente |
-| P-1.10b   | Admin: editor de templates de email acessível (órfão→Config) | neste arquivo                    | S-181    |
-| P-1.10c   | Emails enviados a partir dos templates do banco (DB-driven)  | neste arquivo                    | S-182    |
-| P-1.14b   | Documentos: badge de visibilidade e pílula de status únicos  | neste arquivo                    | S-183    |
+| Corretivo | Motivo                                                        | Corpo do prompt                  | Sessão   |
+| --------- | ------------------------------------------------------------- | -------------------------------- | -------- |
+| P-0.2b    | Unificação do design system (tokens `--hb-*`)                 | neste arquivo                    | S-20     |
+| P-0.3b    | Pipeline de migrations                                        | neste arquivo                    | S-22     |
+| P-1.12b   | Reconciliação do Admin ao design system unificado             | neste arquivo                    | S-22b¹   |
+| P-2.9b    | Usuário real no header de Projetos                            | neste arquivo                    | S-44     |
+| P-0.7     | Resgate do banco (partições, enum de audit, 0000 duplicada)   | AUDIT/04-prompts-pendentes.md §4 | S-54     |
+| P-0.8     | Kit de backend compartilhado (sessão/audit/notificações)      | AUDIT/04-prompts-pendentes.md §4 | S-55     |
+| P-0.9     | CI mínimo                                                     | AUDIT/04-prompts-pendentes.md §4 | S-56     |
+| P-0.10    | Decisão B: RLS ativa (grants + policies + adoção)             | AUDIT/04-prompts-pendentes.md §4 | S-57     |
+| P-0.11    | drizzle-kit reconciliado                                      | AUDIT/04-prompts-pendentes.md §4 | S-58     |
+| P-1.25    | Admin: leitura protegida e fiação completa                    | AUDIT/04-prompts-pendentes.md §4 | S-59     |
+| P-1.26    | Onboarding: convite, auto-signup e MFA bloqueante             | AUDIT/04-prompts-pendentes.md §4 | S-60     |
+| P-1.27    | Documentos: visibilidade e área editorial verdadeiras         | AUDIT/04-prompts-pendentes.md §4 | S-61     |
+| P-2.9c    | Projetos: operável de ponta a ponta                           | AUDIT/04-prompts-pendentes.md §4 | S-62     |
+| P-3.8b    | Financeiro: governança e conciliação verdadeiras              | AUDIT/04-prompts-pendentes.md §4 | S-63     |
+| P-0.12    | Storage: buckets e policies                                   | AUDIT/04-prompts-pendentes.md §4 | S-64     |
+| P-0.13    | LGPD: fundação                                                | AUDIT/04-prompts-pendentes.md §4 | S-65     |
+| P-0.14    | Jobs: Inngest de verdade                                      | AUDIT/04-prompts-pendentes.md §4 | S-66     |
+| P-0.15    | packages/integrations + contrato de settings                  | AUDIT/04-prompts-pendentes.md §4 | S-67     |
+| P-0.16    | Registro retroativo (este próprio corretivo)                  | AUDIT/04-prompts-pendentes.md §4 | S-68     |
+| P-0.4b    | Auth: simetria de decode de cookie no browser client          | neste arquivo                    | pendente |
+| P-0.6b    | Notificações in_app operáveis: slot no AppShell + piloto      | neste arquivo                    | S-175    |
+| P-0.6c    | Notificações in_app: rollout do sino/central aos demais apps  | neste arquivo                    | S-176    |
+| P-0.6d    | Client Drizzle tipado (remoção do stub de notifications)      | neste arquivo                    | S-177    |
+| P-0.6e    | Emails: tipografia institucional (remover Inter)              | neste arquivo                    | S-178    |
+| P-7.1b    | Flats: máximo de scoring em BRAIN §6.8 (80 → 75)              | neste arquivo                    | pendente |
+| P-7.5b    | Flats: fiação das telas do Bloco A para validação diretoria   | neste arquivo                    | pendente |
+| P-1.10b   | Admin: editor de templates de email acessível (órfão→Config)  | neste arquivo                    | S-181    |
+| P-1.10c   | Emails enviados a partir dos templates do banco (DB-driven)   | neste arquivo                    | S-182    |
+| P-1.14b   | Documentos: badge de visibilidade e pílula de status únicos   | neste arquivo                    | S-183    |
+| P-1.15b   | Documentos: listagem por categoria — a rota que nunca existiu | neste arquivo                    | S-184    |
 
 ¹ Sessão referenciada retroativamente como S-22b em SESSIONS.md S-68 (ponto 2 da entrada retificadora) — o bloco original nunca recebeu número.
 
@@ -1937,9 +1938,9 @@ Criar páginas do portal público de Documentos. Home com destaques e editais ab
 - `apps/documentos/src/app/editais/page.tsx`
 - `apps/documentos/src/app/editais/[slug]/page.tsx`
 - `apps/documentos/src/app/busca/page.tsx`
-- `apps/documentos/src/app/(editorial)/layout.tsx`
-- `apps/documentos/src/app/(editorial)/page.tsx`
-- `apps/documentos/src/app/(editorial)/novo/page.tsx`
+- `apps/documentos/src/app/editorial/layout.tsx`
+- `apps/documentos/src/app/editorial/page.tsx`
+- `apps/documentos/src/app/editorial/novo/page.tsx`
 
 **Critérios de aceite:**
 
@@ -1948,7 +1949,7 @@ Criar páginas do portal público de Documentos. Home com destaques e editais ab
 - [x] Página de documento com viewer inline, download e versões
 - [x] Página de edital com cronograma visual, FAQ e botão "submeter projeto"
 - [x] Busca full-text com resultados categorizados
-- [~] Área editorial protegida (super_admin/editor)
+- [x] Área editorial protegida (super_admin/editor) — `requireEditorSession()` em `apps/documentos/src/lib/session.ts`, desde S-61
 - [x] Metadata e OG tags dinâmicos por documento
 - [x] Responsivo
 - [x] Lint passa
@@ -2133,15 +2134,15 @@ Consequência colateral: `apps/documentos/src/components/document-card.tsx` (`Do
 
 **Critérios de aceite:**
 
-- [ ] `/categoria/<slug>` existe, com cabeçalho, contagem, chips de subcategoria, filtro de visibilidade e de período, e alternância cartões/lista
-- [ ] Anônimo não vê documento `internal`/`restricted` na listagem nem na contagem — teste de regressão no padrão do bloco "F2-D1/F2-D2" de `rls.test.ts`
-- [ ] Chips de visibilidade só aparecem para as visibilidades que o papel atual enxerga
-- [ ] `DocumentCard` tem consumidor real; `grep -rn "DocumentCard" apps/documentos/src` devolve ≥1 import
-- [ ] Cards de categoria da home levam a `/categoria/<slug>`; nenhum link do app aponta para `/busca?categoria=`
-- [ ] Vazio com versículo e `loading.tsx` com skeleton
-- [ ] Critério `[~]` de P-1.15 fechado e lista de arquivos de P-1.15 corrigida para `editorial/...`
-- [ ] `pnpm --filter documentos typecheck lint test` verdes
-- [ ] Registrar em SESSIONS.md
+- [x] `/categoria/<slug>` existe, com cabeçalho, contagem, chips de subcategoria, filtro de visibilidade e de período, e alternância cartões/lista
+- [x] Anônimo não vê documento `internal`/`restricted` na listagem nem na contagem — teste de regressão no padrão do bloco "F2-D1/F2-D2" de `rls.test.ts`
+- [x] Chips de visibilidade só aparecem para as visibilidades que o papel atual enxerga
+- [x] `DocumentCard` tem consumidor real; `grep -rn "DocumentCard" apps/documentos/src` devolve ≥1 import
+- [x] Cards de categoria da home levam a `/categoria/<slug>`; nenhum link do app aponta para `/busca?categoria=`
+- [x] Vazio com versículo e `loading.tsx` com skeleton
+- [x] Critério `[~]` de P-1.15 fechado e lista de arquivos de P-1.15 corrigida para `editorial/...`
+- [x] `pnpm --filter documentos typecheck lint test` verdes
+- [x] Registrar em SESSIONS.md
 
 **Notas:**
 Ref: BRAIN.md §6.7; design-ref `design-refs/documentos/screens-public.jsx:355` (`CategoryScreen`). `/busca` **não** deve ser alterada aqui: as duas telas têm propósitos distintos (busca = resultados em lista; categoria = navegação editorial). Não criar rota `/c/` — a URL canônica em português é `/categoria/<slug>`.

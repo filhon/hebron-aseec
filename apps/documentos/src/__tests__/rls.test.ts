@@ -412,3 +412,51 @@ describe("Regressão F2-D1/F2-D2 — leitura via client autenticado respeita vis
     expect(Array.from(rows)).toHaveLength(0);
   });
 });
+
+// ── Regressão P-1.15b ─────────────────────────────────────────────────────────
+// A rota `/categoria/[slug]` (P-1.15b) lista documentos por `category_id IN
+// (cat.id, ...subcategorias)` via `withAuthenticatedContext` — mesma consulta
+// abaixo, agora usando `CAT_ID` (que tem um documento de cada visibilidade).
+// Garante que nem a listagem nem a contagem exponham `internal`/`restricted`
+// para quem não tem papel para vê-los.
+
+describe("Regressão P-1.15b — /categoria/[slug] respeita visibilidade na listagem", () => {
+  const byCategory = drizzleSql`
+    SELECT id FROM documentos.documents
+    WHERE category_id = ${CAT_ID}
+      AND deleted_at IS NULL
+      AND published_at IS NOT NULL
+  `;
+
+  it("anônimo só recebe o documento public da categoria", async () => {
+    const rows = await withAuthenticatedContext(null, (tx) =>
+      tx.execute(byCategory),
+    );
+    const ids = Array.from(rows).map((r) => r["id"] as string);
+    expect(ids).toContain(DOC_IDS.public);
+    expect(ids).not.toContain(DOC_IDS.internal);
+    expect(ids).not.toContain(DOC_IDS.restricted);
+  });
+
+  it("hóspede (autenticado, sem papel especial) recebe public + internal, mas não restricted", async () => {
+    const rows = await withAuthenticatedContext(
+      { actorId: IDS.hospede },
+      (tx) => tx.execute(byCategory),
+    );
+    const ids = Array.from(rows).map((r) => r["id"] as string);
+    expect(ids).toContain(DOC_IDS.public);
+    expect(ids).toContain(DOC_IDS.internal);
+    expect(ids).not.toContain(DOC_IDS.restricted);
+  });
+
+  it("conselheiro recebe os três documentos da categoria", async () => {
+    const rows = await withAuthenticatedContext(
+      { actorId: IDS.conselheiro },
+      (tx) => tx.execute(byCategory),
+    );
+    const ids = Array.from(rows).map((r) => r["id"] as string);
+    expect(ids).toContain(DOC_IDS.public);
+    expect(ids).toContain(DOC_IDS.internal);
+    expect(ids).toContain(DOC_IDS.restricted);
+  });
+});

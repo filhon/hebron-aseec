@@ -861,7 +861,7 @@ export default async function HomePage() {
             {allCategories.map((cat) => (
               <Link
                 key={cat.id}
-                href={`/busca?categoria=${cat.id}`}
+                href={`/categoria/${cat.slug}`}
                 className="docs-cat-card"
               >
                 <div className="docs-cat-icon">

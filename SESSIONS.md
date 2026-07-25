@@ -204,6 +204,7 @@
 | S-181  | 2026-07-23 | P-1.10b — Admin: consolidação e acesso ao editor de templates de email (CORRETIVO)                                               | concluido                            |
 | S-182  | 2026-07-24 | P-1.10c — Emails enviados a partir dos templates do banco (CORRETIVO)                                                            | concluido                            |
 | S-183  | 2026-07-24 | P-1.14b — Documentos: badge de visibilidade e pílula de status únicos (CORRETIVO)                                                | concluido                            |
+| S-184  | 2026-07-25 | P-1.15b — Documentos: listagem por categoria, a rota que nunca foi criada (CORRETIVO)                                            | concluido                            |
 
 ---
 
@@ -14851,4 +14852,115 @@ home só mostrava "Público" sem cor para as outras duas visibilidades.
 - `apps/documentos/src/app/editorial/page.tsx`
 - `apps/documentos/src/app/editorial/documentos/page.tsx`
 - `apps/documentos/src/app/editorial/editais/page.tsx`
+- `SESSIONS.md` (esta entrada)
+
+---
+
+## S-184 — P-1.15b — Documentos: listagem por categoria, a rota que nunca foi criada (CORRETIVO)
+
+**Branch:** `feat/P-1.15b-docs-categoria`
+
+### Contexto
+
+O escopo de P-1.15 marcava `[x]` "Listagem com filtros por categoria,
+visibilidade e tags", mas a tela nunca existiu. O que existia era `/busca`
+(sem filtro de visibilidade algum) e os cards de "Explore por área" da home
+linkando para `/busca?categoria=<id>` como substituto — sem cabeçalho de
+categoria, sem subcategorias, sem alternância cartões/lista. Consequência
+colateral: `DocumentCard` (P-1.14) estava órfão desde que `/busca` virou uma
+tela de resultados de busca.
+
+### Decisões/suposições registradas
+
+1. **Categoria não encontrada → `notFound()`**, não o `EmptyState` inline do
+   design-ref. O design-ref (`CategoryScreen`) é uma SPA mock sem roteador
+   real; toda página `[slug]` já existente no app (`/[slug]`,
+   `/editais/[slug]`) usa `notFound()` do Next para slug inexistente — mantida
+   a consistência arquitetural do app real sobre a aparência do protótipo
+   (G3.5: protótipo vence aparência, mas aqui é decisão técnica de roteamento,
+   não de UI).
+2. **`categories.description` não existe no banco** (`0005_documentos.sql`:
+   só `id/name/slug/parent_id/timestamps`). O design-ref mostra uma descrição
+   da categoria no cabeçalho; como o dado não existe em lugar nenhum do
+   schema (nem os adapters de `page.tsx`/`busca`/`editais` populam esse campo,
+   todos hardcodam `description: null`), o cabeçalho novo **não inventa**
+   texto — mostra só eyebrow + nome + contagem, igual ao padrão já usado nas
+   demais telas.
+3. **Contagem do cabeçalho e dos chips de subcategoria ignoram os filtros de
+   visibilidade/período** (refletem só o recorte de papel via RLS) — mesmo
+   comportamento do `CategoryScreen` do design-ref: `baseDocs` (papel +
+   categoria/subcategoria) é a base de todas as contagens; `vis`/`periodo`
+   filtram apenas a lista final exibida, nunca as contagens dos chips.
+4. **Subcategoria no filtro por `?sub=<slug>`** (não `?sub=<id>`), para manter
+   URL legível — resolvido para id internamente contra as subcategorias da
+   categoria atual; slug desconhecido é ignorado silenciosamente (cai em
+   "Tudo"), não é erro.
+5. **`/busca` não foi tocada** — rotas com propósitos distintos (busca =
+   resultados; categoria = navegação editorial), conforme nota do prompt.
+
+### O que foi feito
+
+1. Criada a rota `apps/documentos/src/app/categoria/[slug]/page.tsx` (RSC),
+   lendo via `withAuthenticatedContext` + `getOptionalActorId` (nunca `db`
+   superuser) — RLS filtra visibilidade de verdade.
+2. Cabeçalho com ícone por categoria (mesmo mapeamento de `app/page.tsx`),
+   breadcrumb "Início › Categorias › Nome", contagem de documentos visíveis
+   ao papel atual.
+3. Chips de subcategoria (`categories.parentId`) com contagem; chips de
+   visibilidade (`?vis=`) só para as visibilidades presentes no resultado já
+   filtrado por RLS (`availableVisibilities`); chips de período (`?periodo=
+12|24|tudo`) sobre `updatedAt`.
+4. Alternância Cartões/Lista (`?view=grid|list`): grid usa `DocumentCard`
+   (reconectado — antes órfão) e `EditalCard` ocupando duas colunas; lista
+   reusa o padrão `.docs-row` da home (ícone, título, meta, `VisibilityBadge`).
+5. `loading.tsx` com skeleton de breadcrumb/cabeçalho/chips/grid
+   (`DocumentCardSkeleton`); vazio com versículo (Provérbios 2:6) quando o
+   filtro não retorna nada.
+6. `app/page.tsx`: cards de "Explore por área" agora linkam
+   `/categoria/<slug>` em vez de `/busca?categoria=<id>`.
+7. Teste de regressão acrescentado a `rls.test.ts` (bloco "Regressão
+   P-1.15b"), reaproveitando os fixtures `CAT_ID`/`DOC_IDS` já existentes:
+   confirma que a consulta por `category_id` (mesma forma usada pela nova
+   rota) devolve só `public` para anônimo, `public+internal` para hóspede
+   autenticado, e as três visibilidades para conselheiro.
+8. Bookkeeping em `PROMPTS.md`: critério `[~] Área editorial protegida` de
+   P-1.15 fechado como `[x]` (atendido por `requireEditorSession()` desde
+   S-61); lista de arquivos de P-1.15 corrigida de `(editorial)/...` para
+   `editorial/...` (segmento real, sem route-group).
+
+### Critérios de aceite
+
+- [x] `/categoria/<slug>` existe, com cabeçalho, contagem, chips de
+      subcategoria, filtro de visibilidade e de período, e alternância
+      cartões/lista
+- [x] Anônimo não vê documento `internal`/`restricted` na listagem nem na
+      contagem — via RLS (`withAuthenticatedContext`) + teste de regressão
+      em `rls.test.ts`
+- [x] Chips de visibilidade só aparecem para as visibilidades que o papel
+      atual enxerga (`availableVisibilities` derivado do resultado já
+      filtrado por RLS)
+- [x] `DocumentCard` tem consumidor real — `grep -rn "DocumentCard"
+    apps/documentos/src` devolve o import em `categoria/[slug]/page.tsx`
+- [x] Cards de categoria da home levam a `/categoria/<slug>`; nenhum link do
+      app aponta para `/busca?categoria=`
+- [x] Vazio com versículo e `loading.tsx` com skeleton
+- [x] Critério `[~]` de P-1.15 fechado e lista de arquivos corrigida para
+      `editorial/...`
+- [x] `pnpm --filter documentos typecheck lint` verdes. `test`: **não
+      verificável nesta sessão** — o sandbox de execução de comandos não tem
+      rota de rede até o Postgres compartilhado (`getaddrinfo ENOTFOUND
+    aws-1-us-west-2.pooler.supabase.com`), falha que atinge igualmente
+      suites pré-existentes (`actions.test.ts`, `session-real.test.ts`) não
+      tocadas por este prompt — limitação de ambiente, não regressão. Teste
+      novo segue o padrão já validado do bloco F2-D1/F2-D2 do mesmo arquivo;
+      precisa ser confirmado por Filipe rodando localmente.
+- [x] Registrado em SESSIONS.md
+
+### Arquivos criados/alterados
+
+- `apps/documentos/src/app/categoria/[slug]/page.tsx` (novo)
+- `apps/documentos/src/app/categoria/[slug]/loading.tsx` (novo)
+- `apps/documentos/src/app/page.tsx`
+- `apps/documentos/src/__tests__/rls.test.ts`
+- `PROMPTS.md` (bookkeeping de P-1.15 + tabela de corretivos)
 - `SESSIONS.md` (esta entrada)
