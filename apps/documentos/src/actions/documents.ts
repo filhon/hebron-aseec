@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { and, desc, eq, isNull, max, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "node:crypto";
 import {
@@ -20,6 +20,16 @@ import { logDocumentAudit } from "../lib/audit";
 import { notifyNewDocument, notifyEditalOpen } from "../lib/notifications";
 
 const visibilityEnum = z.enum(["public", "internal", "restricted"]);
+const documentTypeEnum = z.enum([
+  "edital",
+  "legal",
+  "fiscal",
+  "sop",
+  "cargo_description",
+  "policy",
+  "report",
+  "other",
+]);
 
 function slugify(text: string): string {
   return text
@@ -72,7 +82,10 @@ export const createDocument = editorAction
       title: z.string().min(3).max(200),
       contentMd: z.string().optional(),
       storagePath: z.string().optional(),
+      fileSizeBytes: z.number().int().nonnegative().optional(),
+      mimeType: z.string().optional(),
       visibility: visibilityEnum.default("internal"),
+      type: documentTypeEnum.default("other"),
       categoryId: z.string().uuid().optional(),
       tagIds: z.array(z.string().uuid()).optional(),
     }),
@@ -92,6 +105,7 @@ export const createDocument = editorAction
             contentMd: parsedInput.contentMd ?? null,
             fileUrl: parsedInput.storagePath ?? null,
             visibility: parsedInput.visibility,
+            type: parsedInput.type,
             categoryId: parsedInput.categoryId ?? null,
             authorId: ctx.actorId,
           })
@@ -103,6 +117,8 @@ export const createDocument = editorAction
           documentId: document.id,
           contentMd: parsedInput.contentMd ?? null,
           fileUrl: parsedInput.storagePath ?? null,
+          fileSizeBytes: parsedInput.fileSizeBytes ?? null,
+          mimeType: parsedInput.mimeType ?? null,
           versionNumber: 1,
           createdBy: ctx.actorId,
         });
@@ -151,7 +167,10 @@ export const updateDocument = editorAction
       title: z.string().min(3).max(200).optional(),
       contentMd: z.string().optional(),
       storagePath: z.string().optional(),
+      fileSizeBytes: z.number().int().nonnegative().optional(),
+      mimeType: z.string().optional(),
       visibility: visibilityEnum.optional(),
+      type: documentTypeEnum.optional(),
       categoryId: z.string().uuid().nullable().optional(),
       tagIds: z.array(z.string().uuid()).optional(),
     }),
@@ -178,6 +197,7 @@ export const updateDocument = editorAction
           updateValues.fileUrl = fields.storagePath;
         if (fields.visibility !== undefined)
           updateValues.visibility = fields.visibility;
+        if (fields.type !== undefined) updateValues.type = fields.type;
         if ("categoryId" in fields)
           updateValues.categoryId = fields.categoryId ?? null;
 
@@ -189,18 +209,24 @@ export const updateDocument = editorAction
 
         if (!updated) throw new Error("Falha ao atualizar documento");
 
-        // Determina próximo número de versão
-        const [maxRow] = await tx
-          .select({ v: max(documentVersions.versionNumber) })
+        // Última versão — usada para next version number e para herdar
+        // fileSizeBytes/mimeType quando a edição não troca o arquivo.
+        const [latestVersion] = await tx
+          .select()
           .from(documentVersions)
-          .where(eq(documentVersions.documentId, id));
+          .where(eq(documentVersions.documentId, id))
+          .orderBy(desc(documentVersions.versionNumber))
+          .limit(1);
 
-        const nextVersion = (maxRow?.v ?? 0) + 1;
+        const nextVersion = (latestVersion?.versionNumber ?? 0) + 1;
 
         await tx.insert(documentVersions).values({
           documentId: id,
           contentMd: fields.contentMd ?? before.contentMd,
           fileUrl: fields.storagePath ?? before.fileUrl,
+          fileSizeBytes:
+            fields.fileSizeBytes ?? latestVersion?.fileSizeBytes ?? null,
+          mimeType: fields.mimeType ?? latestVersion?.mimeType ?? null,
           versionNumber: nextVersion,
           createdBy: ctx.actorId,
         });
@@ -223,8 +249,16 @@ export const updateDocument = editorAction
               entity: "document",
               entityId: id,
               diff: {
-                before: { title: before.title, visibility: before.visibility },
-                after: { title: updated.title, visibility: updated.visibility },
+                before: {
+                  title: before.title,
+                  visibility: before.visibility,
+                  type: before.type,
+                },
+                after: {
+                  title: updated.title,
+                  visibility: updated.visibility,
+                  type: updated.type,
+                },
                 version: nextVersion,
               },
             },

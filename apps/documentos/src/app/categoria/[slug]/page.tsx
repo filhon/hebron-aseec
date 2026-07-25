@@ -29,6 +29,7 @@ import {
 import { and, eq, isNull, isNotNull, desc, inArray } from "drizzle-orm";
 import type {
   Document,
+  DocumentType,
   Edital,
   DocumentVersion,
   DocumentVisibility,
@@ -86,6 +87,8 @@ function extractDescription(contentMd: string | null): string | null {
   return line?.trim().slice(0, 240) ?? null;
 }
 
+// Fallback só para versões anteriores à migration 0061, que não guardavam
+// mime_type — a partir dela, o valor real da coluna sempre vence.
 function getMimeType(fileUrl: string | null, contentMd: string | null): string {
   if (fileUrl?.endsWith(".pdf")) return "application/pdf";
   if (contentMd) return "text/markdown";
@@ -106,6 +109,7 @@ type DbRow = {
   contentMd: string | null;
   fileUrl: string | null;
   visibility: DocumentVisibility;
+  type: DocumentType;
   categoryId: string | null;
   categoryName: string | null;
   categorySlug: string | null;
@@ -127,6 +131,9 @@ type DbVersionRow = {
   versionNumber: number;
   fileUrl: string | null;
   contentMd: string | null;
+  fileSizeBytes: number | null;
+  mimeType: string | null;
+  notes: string | null;
   createdBy: string;
   createdAt: Date;
 };
@@ -139,9 +146,9 @@ function adaptVersion(v: DbVersionRow): DocumentVersion {
     documentId: v.documentId,
     version: v.versionNumber,
     storageKey: v.fileUrl ?? "",
-    fileSizeBytes: 0,
-    mimeType: getMimeType(v.fileUrl, v.contentMd),
-    notes: null,
+    fileSizeBytes: v.fileSizeBytes ?? 0,
+    mimeType: v.mimeType ?? getMimeType(v.fileUrl, v.contentMd),
+    notes: v.notes,
     publishedBy: v.createdBy,
     publishedAt: v.createdAt,
   };
@@ -172,7 +179,7 @@ function adaptDoc(
     title: row.title,
     slug: row.slug,
     description: extractDescription(row.contentMd),
-    type: "other",
+    type: row.type,
     visibility: row.visibility,
     status: row.publishedAt ? "published" : "draft",
     categoryId: row.categoryId ?? "",
@@ -266,6 +273,7 @@ async function buildCategoryPageData(slug: string, actorId: string | null) {
           contentMd: documents.contentMd,
           fileUrl: documents.fileUrl,
           visibility: documents.visibility,
+          type: documents.type,
           categoryId: documents.categoryId,
           categoryName: categories.name,
           categorySlug: categories.slug,
@@ -299,6 +307,7 @@ async function buildCategoryPageData(slug: string, actorId: string | null) {
           contentMd: documents.contentMd,
           fileUrl: documents.fileUrl,
           visibility: documents.visibility,
+          type: documents.type,
           categoryId: documents.categoryId,
           categoryName: categories.name,
           categorySlug: categories.slug,

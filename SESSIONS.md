@@ -208,6 +208,7 @@
 | S-185  | 2026-07-25 | P-1.16b — Documentos: assinaturas, preferência por tipo de alerta de verdade (CORRETIVO)                                         | concluido                            |
 | S-186  | 2026-07-25 | P-1.16c — Documentos: reordenação de categorias, ligar a UI ao backend ou remover a promessa (CORRETIVO)                         | concluido                            |
 | S-187  | 2026-07-25 | P-1.17b — Documentos: fronteiras de erro e cópia de estados vazios (CORRETIVO)                                                   | concluido                            |
+| S-188  | 2026-07-25 | P-1.18b — Documentos: campos que a UI coleta e o banco não guarda (CORRETIVO)                                                    | concluido                            |
 
 ---
 
@@ -15235,4 +15236,125 @@ relação ao valor real do token (`#b7bdd0`).
 - `apps/documentos/src/app/busca/page.tsx`
 - `apps/documentos/src/app/editais/page.tsx`
 - `apps/documentos/src/app/globals.css`
+
+---
+
+## S-188 — P-1.18b — Documentos: campos que a UI coleta e o banco não guarda (CORRETIVO)
+
+**Branch:** `feat/P-1.18b-docs-campos-perdidos`
+
+### Contexto
+
+O critério de P-1.18 (colunas de `documentos.documents`) estava `[x]`, mas o
+modelo de domínio (`packages/types/src/documentos/index.ts:7`) declara
+`DocumentType` com oito valores e a tabela não tinha coluna `type`:
+`document-form.tsx` renderizava o `<select>` "Tipo de documento" e guardava a
+escolha só em memória — nem a action de criação a aceitava, nem as quatro
+telas de leitura a liam (todas escreviam `type: "other"` fixo). O mesmo valia
+para `DocumentVersion.fileSizeBytes`/`mimeType`/`notes`: `document_versions`
+não tinha nenhuma das três colunas, `fileSizeBytes` chegava sempre `0`
+(escondendo o chip de tamanho, que é falsy) e `mimeType` era sempre inferido
+por extensão de arquivo — inclusive descartando o `File.type` real que o
+upload já tinha disponível no cliente.
+
+### O que foi feito
+
+1. **Migration** `0061_documentos_document_type.sql`: enum
+   `documentos.document_type` (8 valores); `documents.type ... NOT NULL
+DEFAULT 'other'` + índice; `document_versions.file_size_bytes` (bigint),
+   `mime_type` (text), `notes` (text) — as três nullable (versões existentes
+   não têm como recuperar o dado). Backfill declarado na própria migration:
+   todo documento com linha em `editals` vira `type = 'edital'`. Aplicada no
+   Supabase de dev (`pnpm --filter @hebron/db db:migrate`).
+2. `packages/db/src/schema/documentos.ts`: `documentTypeEnum`, coluna `type`
+   em `documents`, colunas `fileSizeBytes`/`mimeType`/`notes` em
+   `documentVersions`, índice `documents_type_idx`.
+3. `actions/documents.ts`: `createDocument`/`updateDocument` aceitam `type`
+   (default `"other"`) e `fileSizeBytes`/`mimeType` junto de `storagePath`.
+   `updateDocument` herda `fileSizeBytes`/`mimeType` da versão anterior
+   quando a edição não troca o arquivo (troquei a query `max(versionNumber)`
+   por um select da linha completa da última versão) e inclui `type` no
+   diff do audit (antes/depois). `actions/editals.ts`: `createEdital` grava
+   `type: "edital"` sem expor a escolha na UI.
+4. `novo/_client.tsx` e `editar/[id]/editar/_client.tsx`: `uploadFile` passa
+   a enviar `file.type`/`file.size` reais (antes: `"application/pdf"` fixo
+   para todo upload, inclusive de editais) e devolve os três campos; os dois
+   fluxos de documento (não-edital) enviam `values.type` na chamada da
+   action.
+5. As quatro telas de leitura (`app/page.tsx`, `app/[slug]/page.tsx`,
+   `app/categoria/[slug]/page.tsx`, `app/editais/[slug]/page.tsx`) leem
+   `type`/`fileSizeBytes`/`mimeType`/`notes` das colunas reais; a inferência
+   de mimeType por extensão passou a ser fallback explícito (comentado) só
+   para versões anteriores à 0061.
+6. `DocumentCard` ganhou um chip com o tipo (rótulos pt-BR replicados do
+   `<select>` de `document-form.tsx`, que não exporta o mapa); `DocumentViewer`
+   ganhou a linha "Tipo" na aba Informações.
+7. `actions.test.ts`: 5 testes novos cobrindo persistência de `type`
+   (escolhido e default), `fileSizeBytes`/`mimeType` na versão criada,
+   diff de audit no `updateDocument`, e herança de metadados de arquivo em
+   edições que não trocam o arquivo.
+
+### Débitos registrados (fora do escopo deste prompt)
+
+- `editorial/[id]/editar/page.tsx` (Server Component, não está entre os
+  arquivos permitidos deste prompt) não seleciona `documents.type` — o
+  formulário de edição sempre reabre com `type` default `"other"`, mesmo
+  que o documento tenha outro tipo salvo. `InitialDocData.type` foi
+  declarado opcional em `editar/_client.tsx` justamente para não quebrar o
+  typecheck contra esse gap. A escolha do editor passa a ser **salva**
+  corretamente a partir deste prompt — só a pré-seleção ao reabrir para
+  editar continua incorreta. Requer prompt próprio que inclua esse
+  `page.tsx` nos arquivos permitidos.
+- `createEdital`/`updateEdital` (`actions/editals.ts`) nunca inserem em
+  `documentVersions` — descoberto ao investigar o pedido de
+  `fileSizeBytes`/`mimeType` para editais. `edital.currentVersion` é sempre
+  `null`, então o chip de tamanho e o mimeType real do viewer nunca
+  aparecem para editais, independentemente desta correção. Não é causado
+  por P-1.18b nem está no escopo declarado do prompt (que só pede
+  `type: 'edital'` em `createEdital`); registrado aqui para virar prompt
+  corretivo próprio.
+- `apps/documentos/src/__tests__/actions.test.ts`: `expect(mockFn)
+.toHaveBeenCalledWith(expect.objectContaining({ diff: expect.objectContaining(...)
+}))` (matcher `objectContaining` aninhado em dois níveis) travou o worker
+  do Vitest 2.1.9 em OOM (heap cresce sem limite até `--max-old-space-size`,
+  reproduzido em 2 GB e 4 GB) — isolado por bisecção a essa combinação
+  específica de matchers, não ao código de produção (a suíte original,
+  sem o teste novo, passa integralmente com o `updateDocument` já
+  modificado). Contornado lendo `mock.calls[0][0]` manualmente em vez de
+  `toHaveBeenCalledWith`. Vale investigar/reportar upstream se reaparecer
+  em outro módulo.
+
+### Critérios de aceite
+
+- [x] `documentos.documents` tem `type`; `documentos.document_versions` tem
+      `file_size_bytes`, `mime_type` e `notes`
+- [x] Escolher um tipo no formulário, salvar e reabrir devolve o tipo
+      escolhido (5 testes novos em `actions.test.ts`)
+- [x] `grep -rn "type: \"other\"\|fileSizeBytes: 0" apps/documentos/src/app`
+      retorna vazio
+- [x] `mimeType` do viewer vem da coluna quando existe; a inferência por
+      extensão só atua como fallback comentado
+- [x] Editais nascem e são backfillados com `type = 'edital'`
+- [x] `pnpm --filter documentos typecheck lint test` verdes (57 testes, 5
+      arquivos); migration aplicada no Supabase de dev
+- [x] Registrado em SESSIONS.md
+
+### Arquivos criados/alterados
+
+- `packages/db/src/migrations/0061_documentos_document_type.sql` (criado)
+- `packages/db/src/schema/documentos.ts`
+- `packages/db/src/schema/index.ts` (export de `documentTypeEnum`, fora da
+  lista original mas necessário — é só um re-export, sem lógica nova)
+- `apps/documentos/src/actions/documents.ts`
+- `apps/documentos/src/actions/editals.ts`
+- `apps/documentos/src/app/editorial/novo/_client.tsx`
+- `apps/documentos/src/app/editorial/[id]/editar/_client.tsx`
+- `apps/documentos/src/app/page.tsx`
+- `apps/documentos/src/app/[slug]/page.tsx`
+- `apps/documentos/src/app/categoria/[slug]/page.tsx`
+- `apps/documentos/src/app/editais/[slug]/page.tsx`
+- `apps/documentos/src/components/document-card.tsx`
+- `apps/documentos/src/components/document-viewer.tsx`
+- `apps/documentos/src/__tests__/actions.test.ts`
+- `SESSIONS.md` (esta entrada + linha no índice)
 - `SESSIONS.md` (esta entrada + linha no índice)

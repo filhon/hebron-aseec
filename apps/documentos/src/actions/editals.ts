@@ -98,6 +98,9 @@ export const createEdital = adminDocAction
             contentMd: parsedInput.contentMd ?? null,
             fileUrl: parsedInput.storagePath ?? null,
             visibility: parsedInput.visibility,
+            // Edital não expõe a escolha de tipo — todo edital é do tipo
+            // "edital" por definição (mesmo backfill aplicado em 0061).
+            type: "edital",
             categoryId: parsedInput.categoryId ?? null,
             authorId: ctx.actorId,
           })

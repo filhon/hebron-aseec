@@ -201,6 +201,113 @@ describe("createDocument", () => {
   });
 });
 
+// ── type / fileSizeBytes / mimeType (P-1.18b) ─────────────────────────────────
+
+describe("createDocument / updateDocument — type e metadados de arquivo", () => {
+  it("persiste o type escolhido e devolve o mesmo valor ao reabrir", async () => {
+    const { createDocument } = await import("../actions/documents");
+
+    const result = await createDocument({
+      title: "Documento com Tipo Escolhido",
+      contentMd: "# Conteúdo",
+      visibility: "internal",
+      type: "policy",
+    });
+
+    const doc = requireDefined(result?.data?.document, "document");
+    expect(doc.type).toBe("policy");
+
+    const [row] = await db
+      .select({ type: documents.type })
+      .from(documents)
+      .where(eq(documents.id, doc.id));
+    expect(row?.type).toBe("policy");
+  });
+
+  it("default de type é 'other' quando não informado", async () => {
+    const { createDocument } = await import("../actions/documents");
+
+    const result = await createDocument({
+      title: "Documento sem Tipo Informado",
+      visibility: "internal",
+    });
+
+    const doc = requireDefined(result?.data?.document, "document");
+    expect(doc.type).toBe("other");
+  });
+
+  it("persiste fileSizeBytes e mimeType na versão criada", async () => {
+    const { createDocument } = await import("../actions/documents");
+
+    const result = await createDocument({
+      title: "Documento com Metadados de Arquivo",
+      storagePath: "documents/actor/arquivo.pdf",
+      fileSizeBytes: 123456,
+      mimeType: "application/pdf",
+      visibility: "internal",
+    });
+    const doc = requireDefined(result?.data?.document, "document");
+
+    const [version] = await db
+      .select()
+      .from(documentVersions)
+      .where(eq(documentVersions.documentId, doc.id));
+    expect(version?.fileSizeBytes).toBe(123456);
+    expect(version?.mimeType).toBe("application/pdf");
+  });
+
+  it("updateDocument altera o type e registra antes/depois no diff do audit", async () => {
+    const { logDocumentAudit } = await import("../lib/audit");
+    const { createDocument, updateDocument } =
+      await import("../actions/documents");
+
+    const created = await createDocument({
+      title: "Documento para Trocar Tipo",
+      visibility: "internal",
+      type: "other",
+    });
+    const docId = requireDefined(created?.data?.document.id, "docId");
+
+    vi.mocked(logDocumentAudit).mockClear();
+    const updated = await updateDocument({ id: docId, type: "legal" });
+
+    expect(updated?.data?.document.type).toBe("legal");
+
+    const call = vi.mocked(logDocumentAudit).mock.calls[0]?.[0];
+    expect(call?.action).toBe("document.updated");
+    const diff = call?.diff as {
+      before?: { type?: string };
+      after?: { type?: string };
+    };
+    expect(diff?.before?.type).toBe("other");
+    expect(diff?.after?.type).toBe("legal");
+  });
+
+  it("nova versão herda fileSizeBytes/mimeType da anterior quando a edição não troca o arquivo", async () => {
+    const { createDocument, updateDocument } =
+      await import("../actions/documents");
+
+    const created = await createDocument({
+      title: "Documento Herdar Metadados",
+      storagePath: "documents/actor/original.pdf",
+      fileSizeBytes: 500,
+      mimeType: "application/pdf",
+      visibility: "internal",
+    });
+    const docId = requireDefined(created?.data?.document.id, "docId");
+
+    await updateDocument({ id: docId, title: "Título atualizado" });
+
+    const versions = await db
+      .select()
+      .from(documentVersions)
+      .where(eq(documentVersions.documentId, docId))
+      .orderBy(desc(documentVersions.versionNumber));
+    expect(versions[0]?.fileSizeBytes).toBe(500);
+    expect(versions[0]?.mimeType).toBe("application/pdf");
+  });
+});
+
 // ── updateDocument — versionamento ────────────────────────────────────────────
 
 describe("updateDocument — versionamento", () => {

@@ -67,6 +67,8 @@ function formatBytes(bytes: number): string {
   return `${(bytes / 1_000_000).toFixed(1)} MB`;
 }
 
+// Fallback só para versões anteriores à migration 0061, que não guardavam
+// mime_type — a partir dela, o valor real da coluna sempre vence.
 function getMimeType(fileUrl: string | null, contentMd: string | null): string {
   if (fileUrl?.endsWith(".pdf")) return "application/pdf";
   if (contentMd) return "text/markdown";
@@ -87,6 +89,9 @@ function adaptVersion(v: {
   versionNumber: number;
   fileUrl: string | null;
   contentMd: string | null;
+  fileSizeBytes: number | null;
+  mimeType: string | null;
+  notes: string | null;
   createdBy: string;
   createdAt: Date;
 }): DocumentVersion {
@@ -95,9 +100,9 @@ function adaptVersion(v: {
     documentId: v.documentId,
     version: v.versionNumber,
     storageKey: v.fileUrl ?? "",
-    fileSizeBytes: 0,
-    mimeType: getMimeType(v.fileUrl, v.contentMd),
-    notes: null,
+    fileSizeBytes: v.fileSizeBytes ?? 0,
+    mimeType: v.mimeType ?? getMimeType(v.fileUrl, v.contentMd),
+    notes: v.notes,
     publishedBy: v.createdBy,
     publishedAt: v.createdAt,
   };

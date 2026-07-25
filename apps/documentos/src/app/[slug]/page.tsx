@@ -43,6 +43,8 @@ function formatDate(date: Date): string {
   }).format(new Date(date));
 }
 
+// Fallback só para versões anteriores à migration 0061, que não guardavam
+// mime_type — a partir dela, o valor real da coluna sempre vence.
 function getMimeType(fileUrl: string | null, contentMd: string | null): string {
   if (fileUrl?.endsWith(".pdf")) return "application/pdf";
   if (contentMd) return "text/markdown";
@@ -63,6 +65,9 @@ function adaptDocVersion(v: {
   versionNumber: number;
   fileUrl: string | null;
   contentMd: string | null;
+  fileSizeBytes: number | null;
+  mimeType: string | null;
+  notes: string | null;
   createdBy: string;
   createdAt: Date;
 }): DocumentVersion {
@@ -71,9 +76,9 @@ function adaptDocVersion(v: {
     documentId: v.documentId,
     version: v.versionNumber,
     storageKey: v.fileUrl ?? "",
-    fileSizeBytes: 0,
-    mimeType: getMimeType(v.fileUrl, v.contentMd),
-    notes: null,
+    fileSizeBytes: v.fileSizeBytes ?? 0,
+    mimeType: v.mimeType ?? getMimeType(v.fileUrl, v.contentMd),
+    notes: v.notes,
     publishedBy: v.createdBy,
     publishedAt: v.createdAt,
   };
@@ -157,6 +162,7 @@ export default async function DocumentPage({ params }: PageProps) {
           contentMd: documents.contentMd,
           fileUrl: documents.fileUrl,
           visibility: documents.visibility,
+          type: documents.type,
           categoryId: documents.categoryId,
           categoryName: categories.name,
           categorySlug: categories.slug,
@@ -225,7 +231,7 @@ export default async function DocumentPage({ params }: PageProps) {
     title: docRow.title,
     slug: docRow.slug,
     description: extractDescription(docRow.contentMd),
-    type: "other",
+    type: docRow.type,
     visibility: docRow.visibility,
     status: docRow.publishedAt ? "published" : "draft",
     categoryId: docRow.categoryId ?? "",

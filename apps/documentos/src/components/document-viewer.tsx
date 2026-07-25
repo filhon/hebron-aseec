@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import type { ReactNode } from "react";
-import type { Document } from "@hebron/types/documentos";
+import type { Document, DocumentType } from "@hebron/types/documentos";
 import {
   Download,
   ExternalLink,
   FileText,
+  FileType,
   Info,
   Folder,
   Calendar,
@@ -14,6 +15,19 @@ import {
   Hash,
 } from "lucide-react";
 import { VISIBILITY } from "./visibility-badge";
+
+// Rótulos em pt-BR — mesmo vocabulário do <select> de tipo em
+// components/document-form.tsx (não exportado de lá; ver DOCUMENT_TYPE_OPTIONS).
+const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
+  edital: "Edital",
+  legal: "Jurídico / Legal",
+  fiscal: "Fiscal / Contábil",
+  sop: "SOP / Procedimento",
+  cargo_description: "Descrição de cargo",
+  policy: "Política",
+  report: "Relatório",
+  other: "Outro",
+};
 
 // ─── Markdown parser ─────────────────────────────────────────────────────────
 
@@ -502,6 +516,11 @@ export function DocumentViewer({
               <Folder size={12} aria-hidden="true" /> Categoria
             </dt>
             <dd>{document.category.name}</dd>
+
+            <dt style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <FileType size={12} aria-hidden="true" /> Tipo
+            </dt>
+            <dd>{DOCUMENT_TYPE_LABELS[document.type]}</dd>
 
             <dt style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <VisIcon size={12} aria-hidden="true" /> Visibilidade

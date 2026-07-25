@@ -1,4 +1,5 @@
 import {
+  bigint,
   boolean,
   date,
   index,
@@ -20,6 +21,17 @@ export const visibilityEnum = documentosSchema.enum("visibility", [
   "public",
   "internal",
   "restricted",
+]);
+
+export const documentTypeEnum = documentosSchema.enum("document_type", [
+  "edital",
+  "legal",
+  "fiscal",
+  "sop",
+  "cargo_description",
+  "policy",
+  "report",
+  "other",
 ]);
 
 // ---------------------------------------------------------------------------
@@ -75,6 +87,7 @@ export const documents = documentosSchema.table(
     contentMd: text("content_md"),
     fileUrl: text("file_url"),
     visibility: visibilityEnum("visibility").notNull().default("internal"),
+    type: documentTypeEnum("type").notNull().default("other"),
     categoryId: uuid("category_id").references(() => categories.id, {
       onDelete: "set null",
     }),
@@ -93,6 +106,7 @@ export const documents = documentosSchema.table(
   (table) => [
     index("documents_slug_idx").on(table.slug),
     index("documents_visibility_idx").on(table.visibility),
+    index("documents_type_idx").on(table.type),
     index("documents_published_at_idx").on(table.publishedAt),
     index("documents_author_id_idx").on(table.authorId),
     index("documents_category_id_idx").on(table.categoryId),
@@ -127,6 +141,9 @@ export const documentVersions = documentosSchema.table(
       .references(() => documents.id, { onDelete: "cascade" }),
     contentMd: text("content_md"),
     fileUrl: text("file_url"),
+    fileSizeBytes: bigint("file_size_bytes", { mode: "number" }),
+    mimeType: text("mime_type"),
+    notes: text("notes"),
     versionNumber: integer("version_number").notNull(),
     createdBy: uuid("created_by")
       .notNull()

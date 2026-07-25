@@ -75,6 +75,7 @@ export type {
 // Documentos schema
 export {
   visibilityEnum,
+  documentTypeEnum,
   categories,
   tags,
   documents,

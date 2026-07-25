@@ -1,7 +1,20 @@
-import type { Document } from "@hebron/types/documentos";
+import type { Document, DocumentType } from "@hebron/types/documentos";
 import { FileText, Calendar, Folder } from "lucide-react";
 import Link from "next/link";
 import { VisibilityBadge } from "./visibility-badge";
+
+// Rótulos em pt-BR — mesmo vocabulário do <select> de tipo em
+// components/document-form.tsx (não exportado de lá; ver DOCUMENT_TYPE_OPTIONS).
+const DOCUMENT_TYPE_LABELS: Record<DocumentType, string> = {
+  edital: "Edital",
+  legal: "Jurídico / Legal",
+  fiscal: "Fiscal / Contábil",
+  sop: "SOP / Procedimento",
+  cargo_description: "Descrição de cargo",
+  policy: "Política",
+  report: "Relatório",
+  other: "Outro",
+};
 
 function formatDate(date: Date): string {
   return new Intl.DateTimeFormat("pt-BR", {
@@ -44,10 +57,12 @@ export function DocumentCard({
               <span className="truncate">{document.category.name}</span>
             </span>
 
-            <VisibilityBadge
-              visibility={document.visibility}
-              className="shrink-0"
-            />
+            <div className="flex items-center gap-1.5 shrink-0">
+              <span className="px-2 py-0.5 rounded-full text-[11px] font-medium bg-(--bg-alt) text-(--fg-muted)">
+                {DOCUMENT_TYPE_LABELS[document.type]}
+              </span>
+              <VisibilityBadge visibility={document.visibility} />
+            </div>
           </div>
 
           {/* Title */}

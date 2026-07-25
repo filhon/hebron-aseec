@@ -38,20 +38,31 @@ async function resolveTagIds(
     .filter((id) => !id.startsWith("local-"));
 }
 
-async function uploadFile(file: File): Promise<string> {
+interface UploadResult {
+  storagePath: string;
+  fileSizeBytes: number;
+  mimeType: string;
+}
+
+async function uploadFile(file: File): Promise<UploadResult> {
+  const mimeType = file.type || "application/pdf";
   const urlResult = await getUploadUrl({
     fileName: file.name,
-    mimeType: "application/pdf",
+    mimeType,
   });
   const uploadData = urlResult?.data;
   if (!uploadData) throw new Error("Não foi possível obter URL de upload.");
   const res = await fetch(uploadData.uploadUrl, {
     method: "PUT",
     body: file,
-    headers: { "Content-Type": "application/pdf" },
+    headers: { "Content-Type": mimeType },
   });
   if (!res.ok) throw new Error("Falha ao enviar arquivo para o storage.");
-  return uploadData.storagePath;
+  return {
+    storagePath: uploadData.storagePath,
+    fileSizeBytes: file.size,
+    mimeType,
+  };
 }
 
 export function NovoDocumentoClient({
@@ -70,7 +81,7 @@ export function NovoDocumentoClient({
     setIsLoading(true);
     setError(null);
     try {
-      const [storagePath, tagIds] = await Promise.all([
+      const [uploaded, tagIds] = await Promise.all([
         values.contentMode === "pdf" && values.file
           ? uploadFile(values.file)
           : Promise.resolve(undefined),
@@ -81,8 +92,11 @@ export function NovoDocumentoClient({
         title: values.title,
         contentMd:
           values.contentMode === "markdown" ? values.content : undefined,
-        storagePath,
+        storagePath: uploaded?.storagePath,
+        fileSizeBytes: uploaded?.fileSizeBytes,
+        mimeType: uploaded?.mimeType,
         visibility: values.visibility,
+        type: values.type,
         categoryId: values.categoryId || undefined,
         tagIds,
       });
@@ -102,7 +116,7 @@ export function NovoDocumentoClient({
     setIsLoading(true);
     setError(null);
     try {
-      const [storagePath, tagIds] = await Promise.all([
+      const [uploaded, tagIds] = await Promise.all([
         values.contentMode === "pdf" && values.file
           ? uploadFile(values.file)
           : Promise.resolve(undefined),
@@ -113,7 +127,7 @@ export function NovoDocumentoClient({
         title: values.title,
         contentMd:
           values.contentMode === "markdown" ? values.content : undefined,
-        storagePath,
+        storagePath: uploaded?.storagePath,
         visibility: values.visibility,
         categoryId: values.categoryId || undefined,
         tagIds,

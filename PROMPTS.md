@@ -1,7 +1,7 @@
 # PROMPTS.md — Sequência de Desenvolvimento SDD
 
 > **Referência:** BRAIN.md (fonte da verdade) | SDD-STRUCTURE.md (formato)
-> **Total:** 119 prompts + 19 correções (ver tabela "Correções" abaixo) | Fases 0-9
+> **Total:** 119 prompts + 41 correções (ver tabela "Correções" abaixo) | Fases 0-9
 > **Metodologia:** Bloco A (UI com mocks) → Pausa (validar com diretoria) → Bloco B (Backend + integração)
 > **⚠️ Antes de tudo:** ler a seção **Instruções Globais** (logo abaixo do Sumário). Prompts corretivos `P-0.2b` (design system), `P-0.3b` (migrations), `P-1.12b` (Admin) e `P-2.9b` (usuário real no header de Projetos) devem ser executados na ordem indicada; as demais correções (Ondas 0–2, ver tabela) são as executadas na retomada pós-auditoria de 2026-07.
 
@@ -23,7 +23,7 @@
 | 8    | Rádio      | P-8.1 a P-8.12  | P-8.1–8.5   | P-8.6–8.12  |
 | 9    | Polimento  | P-9.1 a P-9.5   | —           | —           |
 
-### Correções (S1-26 — cabeçalho antigo dizia "3 correções"; eram 4; hoje são 20 + 6 corretivos pendentes: P-0.4b, P-0.6c, P-0.6d, P-0.6e, P-7.1b, P-7.5b)
+### Correções (S1-26 — cabeçalho antigo dizia "3 correções"; eram 4; hoje são 41 no total, 11 pendentes: P-0.4b, P-7.1b, P-7.5b e as 8 do bloco B de Documentos abertas na auditoria de 2026-07-25 — P-1.18b a P-1.24b)
 
 Corpo integral no próprio arquivo (as 4 originais) ou em `AUDIT/04-prompts-pendentes.md` §4 (as 15 da auditoria de 2026-07 — convenção registrada em cada sessão de SESSIONS.md a partir de S-54; transcrever o texto para dentro deste arquivo é trabalho mecânico à parte, não feito em P-0.16 para não misturar prompts na mesma sessão).
 
@@ -61,6 +61,15 @@ Corpo integral no próprio arquivo (as 4 originais) ou em `AUDIT/04-prompts-pend
 | P-1.15b   | Documentos: listagem por categoria — a rota que nunca existiu | neste arquivo                    | S-184    |
 | P-1.16b   | Documentos: assinaturas, preferência por tipo de alerta       | neste arquivo                    | S-185    |
 | P-1.16c   | Documentos: reordenação de categorias — UI ao backend (b)     | neste arquivo                    | S-186    |
+| P-1.17b   | Documentos: fronteiras de erro e cópia de estados vazios      | neste arquivo                    | S-187    |
+| P-1.18b   | Documentos: campos que a UI coleta e o banco não guarda       | neste arquivo                    | pendente |
+| P-1.19b   | Documentos: RLS de rascunho, lixeira e papel conselheiro      | neste arquivo                    | pendente |
+| P-1.20b   | Documentos: busca com acento, índice e fim da action órfã     | neste arquivo                    | pendente |
+| P-1.20c   | Documentos: registro de leitura (`views`) que ninguém escreve | neste arquivo                    | pendente |
+| P-1.21b   | Documentos: área editorial ainda lê como superusuário         | neste arquivo                    | pendente |
+| P-1.22b   | Documentos: alerta de "novas versões" que nunca chega         | neste arquivo                    | pendente |
+| P-1.23b   | Documentos: botão "submeter projeto" que o wizard ignora      | neste arquivo                    | pendente |
+| P-1.24b   | Documentos: audit mockado e escrita sem cobertura de teste    | neste arquivo                    | pendente |
 
 ¹ Sessão referenciada retroativamente como S-22b em SESSIONS.md S-68 (ponto 2 da entrada retificadora) — o bloco original nunca recebeu número.
 
@@ -2544,6 +2553,436 @@ Testes de integração para Documentos. RLS: anon vê public, autenticado vê pu
 - [x] Testes passam
 - [x] Lint passa
 - [x] Types passam
+
+---
+
+## Documentos — Bloco B (Correções pós-auditoria)
+
+> Levantados no cruzamento de P-1.18–P-1.24 × SESSIONS.md (S-28, S-29, S-29b, S-30, S-31, S-32) × codebase, em 2026-07-25. Todos os critérios citados estão `[x]` em PROMPTS.md; o que segue é o que o código não cumpre. Ordem sugerida de execução: P-1.19b → P-1.21b (a segunda depende da policy de rascunho criada pela primeira); as demais são independentes entre si.
+
+---
+
+### P-1.18b — Campos que a UI coleta e o banco não guarda (CORRETIVO)
+
+**Fase:** 1
+**Módulo:** documentos
+**Tipo:** schema
+**Pré-condições:**
+
+- Branch: `feat/P-1.18b-docs-campos-perdidos`
+- Dependências: P-1.17b concluído (S-187)
+- Env vars: `DATABASE_URL`
+
+**Problema que este prompt resolve (contexto):**
+O critério de P-1.18 lista as colunas de `documentos.documents` e está `[x]`, mas o modelo de domínio (`packages/types/src/documentos/index.ts:7`) declara `DocumentType` com oito valores (`edital`, `legal`, `fiscal`, `sop`, `cargo_description`, `policy`, `report`, `other`) e a tabela **não tem coluna `type`**. A consequência é uma UI que mente, o mesmo padrão que P-1.16b corrigiu nas assinaturas:
+
+- `components/document-form.tsx:700` renderiza um `<select>` "Tipo de documento" com os oito valores e o guarda em `values.type` (`:192`);
+- `app/editorial/novo/_client.tsx` chama `createDocument({ title, contentMd, storagePath, visibility, categoryId, tagIds })` — **`type` não é enviado**; o schema Zod da action (`actions/documents.ts:71-78`) sequer o aceita;
+- as quatro telas que montam o objeto `Document` escrevem `type: "other"` fixo (`app/page.tsx:146`, `app/[slug]/page.tsx:228`, `app/categoria/[slug]/page.tsx:175`).
+
+O editor escolhe "Política institucional", salva, e nada em lugar nenhum reflete a escolha — nem badge, nem filtro, nem listagem editorial.
+
+O mesmo vale para os metadados da versão. `DocumentVersion` (`packages/types/src/documentos/index.ts:49-60`) tem `fileSizeBytes`, `mimeType` e `notes`; `documentos.document_versions` não tem nenhum dos três. `adaptDocVersion` (`app/[slug]/page.tsx:60-80`) devolve `fileSizeBytes: 0`, `notes: null` e um `mimeType` **adivinhado** a partir da extensão de `fileUrl`. Isso não é cosmético: `components/document-viewer.tsx:374-381` decide entre renderizar o PDF e renderizar o Markdown com base nesse `mimeType` inferido, e o chip de tamanho de `document-card.tsx:31` some sempre (0 é falsy). O tamanho real está disponível no cliente no momento do upload (`File.size`, `File.type`) e é simplesmente descartado — `novo/_client.tsx:42` chega a mandar `mimeType: "application/pdf"` fixo para `getUploadUrl` e não o persiste.
+
+**Escopo (siga na ordem):**
+
+1. **Migration** (hand-write `0061_documentos_document_type.sql`, sem drizzle-kit): criar o enum `documentos.document_type` com os oito valores de `DocumentType`; adicionar `documents.type documentos.document_type NOT NULL DEFAULT 'other'`; adicionar `document_versions.file_size_bytes bigint`, `mime_type text` e `notes text` (todos nullable — as versões já existentes não têm como recuperar o dado). Índice em `documents.type` (é filtro de listagem). Refletir tudo em `packages/db/src/schema/documentos.ts`.
+2. **Backfill declarado na própria migration:** `UPDATE documentos.documents d SET type = 'edital' WHERE EXISTS (SELECT 1 FROM documentos.editals e WHERE e.id = d.id)` — todo edital é do tipo edital por definição, e é o único backfill honesto possível.
+3. **Actions:** `createDocument`/`updateDocument` passam a aceitar `type` (default `other`) e `fileSizeBytes`/`mimeType` no par de campos que já acompanha `storagePath`; `createEdital` grava `type: 'edital'` sem expor a escolha. `updateDocument` inclui `type` no diff do audit (o padrão do arquivo é logar antes/depois dos campos governáveis).
+4. **Fluxo de upload:** `uploadFile` (`novo/_client.tsx` e `editorial/[id]/editar/_client.tsx`) passa a repassar `file.size` e `file.type` reais em vez do `"application/pdf"` fixo, e os dois `_client` enviam `values.type` na chamada da action.
+5. **Adaptadores:** as quatro telas leem `type`, `fileSizeBytes`, `mimeType` e `notes` do banco. Nenhum `type: "other"` fixo e nenhum `fileSizeBytes: 0` pode sobrar. Onde o dado for nulo (versões antigas), manter a inferência atual como _fallback_ explícito, com comentário — não como caminho principal.
+6. **Superfície de leitura mínima:** exibir o tipo onde a tela já reserva espaço para ele (chip do `DocumentCard` e cabeçalho do `DocumentViewer`), usando os rótulos em português do `document-form`. Não criar filtro por tipo aqui — é escopo de outra tela.
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/db/src/migrations/0061_documentos_document_type.sql` (criar)
+- `packages/db/src/schema/documentos.ts`
+- `apps/documentos/src/actions/documents.ts`
+- `apps/documentos/src/actions/editals.ts`
+- `apps/documentos/src/app/editorial/novo/_client.tsx`
+- `apps/documentos/src/app/editorial/[id]/editar/_client.tsx`
+- `apps/documentos/src/app/page.tsx`
+- `apps/documentos/src/app/[slug]/page.tsx`
+- `apps/documentos/src/app/categoria/[slug]/page.tsx`
+- `apps/documentos/src/app/editais/[slug]/page.tsx`
+- `apps/documentos/src/components/document-card.tsx`
+- `apps/documentos/src/components/document-viewer.tsx`
+- `apps/documentos/src/__tests__/actions.test.ts`
+
+**Critérios de aceite:**
+
+- [x] `documentos.documents` tem `type`; `documentos.document_versions` tem `file_size_bytes`, `mime_type` e `notes`
+- [x] Escolher um tipo no formulário, salvar e reabrir devolve o tipo escolhido (teste em `actions.test.ts`)
+- [x] `grep -rn "type: \"other\"\|fileSizeBytes: 0" apps/documentos/src/app` retorna vazio
+- [x] `mimeType` do viewer vem da coluna quando existe; a inferência por extensão só atua como fallback comentado
+- [x] Editais nascem e são backfillados com `type = 'edital'`
+- [x] `pnpm --filter documentos typecheck lint test` verdes; migration aplicada no Supabase de dev
+- [x] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: BRAIN.md §6.7. Não introduzir aqui filtro por tipo na busca nem badge novo de design — só fechar a lacuna entre o que a UI coleta/exibe e o que o banco guarda. Alternativa descartada: remover o `<select>` do formulário — o tipo é dado editorial legítimo (a diretoria distingue política de SOP de descrição de cargo) e já está desenhado.
+
+---
+
+### P-1.19b — RLS: rascunho, lixeira e o papel conselheiro (CORRETIVO)
+
+**Fase:** 1
+**Módulo:** documentos
+**Tipo:** schema
+**Pré-condições:**
+
+- Branch: `feat/P-1.19b-docs-rls-escrita`
+- Dependências: P-1.17b concluído (S-187)
+- Env vars: `DATABASE_URL`
+- ⚠️ **Decisão de negócio pendente com o Filipe** (item 3 do escopo) — não implementar por conta própria
+
+**Problema que este prompt resolve (contexto):**
+P-1.19 nunca teve sessão própria em SESSIONS.md (débito de documentação registrado em S-68, ponto 5) e seus seis critérios estão `[x]`. As policies de `0005_documentos_rls.sql` cobrem bem a **leitura por visibilidade** — e a suíte `__tests__/rls.test.ts` cobre exatamente isso, e só isso: todos os `it()` do arquivo são SELECT. Três buracos ficaram do lado da escrita:
+
+1. **Rascunho não é gateado por RLS.** As três policies de SELECT (`:55`, `:63`, `:72`) filtram `deleted_at IS NULL` e visibilidade, mas **não** `published_at`. Um rascunho com `visibility = 'public'` é legível por `anon` no banco. Hoje nenhuma tela vaza (todas filtram `isNotNull(publishedAt)` na consulta), mas isso é exatamente a camada que o BRAIN chama de "última linha de defesa": a proteção do rascunho depende inteiramente de nenhuma consulta futura esquecer o filtro.
+2. **Documento soft-deletado é invisível para todos, inclusive para quem o apagou.** Não existe policy de SELECT que alcance `deleted_at IS NOT NULL`. `deleteDocument` (`actions/documents.ts:375-386`) já documenta o efeito no próprio código: ninguém — nem `super_admin` — consegue soft-deletar via client autenticado, porque o `UPDATE` precisa que a linha resultante satisfaça alguma policy de SELECT; a action contorna com `withSystemRole`. Consequência de produto: não há lixeira nem restauração — o documento apagado por engano só volta por SQL manual, o que contraria o princípio de imutabilidade/reversibilidade do BRAIN.
+3. **`conselheiro` passa no portão e apanha do banco.** `lib/safe-action.ts:20` (`editorAction`) e `lib/session.ts` (`EDITOR_ROLES`) admitem `super_admin`, `diretor`, `conselheiro`, `colaborador`; **todas** as policies de escrita (`:84`, `:91`, `:97`, `:128`, `:157`, e as de `categories`/`tags`) admitem apenas `super_admin`, `diretor`, `colaborador`. Um conselheiro entra na área editorial, preenche o formulário, clica em publicar e recebe um erro cru de banco. BRAIN §6.7 diz "super_admins ou colaboradores com papel editor" — o conjunto do portão foi herdado de S-61 por conveniência, não por regra.
+
+**Escopo (siga na ordem):**
+
+1. **Policy de rascunho:** adicionar `published_at IS NOT NULL` às três policies de SELECT existentes **e** criar `documents_select_own_draft`, que devolve rascunhos e deletados para o autor (`author_id = auth.uid()`) e para `has_role('super_admin','diretor')`. Sem ela, `updateDocument`/`publishDocument` (que leem o `before` sob contexto autenticado) param de funcionar para rascunhos — verificar isso explicitamente, é o risco central deste prompt. Espelhar a mesma regra em `document_versions`, `document_tags` e `editals`, que herdam a visibilidade do pai.
+2. **Lixeira:** com a policy do item 1, remover o `withSystemRole` de `deleteDocument` (e o comentário de débito) e adicionar uma action `restoreDocument` (`deleted_at = NULL`, audit `document.updated`) mais o acesso a ela na listagem editorial — uma aba/filtro "Removidos" em `app/editorial/documentos/page.tsx`, no padrão dos filtros já existentes da tela. Sem hard delete.
+3. **Decidir o conjunto de papéis editoriais (perguntar ao Filipe antes de implementar):**
+   - **(a)** `conselheiro` é editor: incluí-lo em todas as policies de escrita de `documentos.*`;
+   - **(b)** `conselheiro` só lê (inclusive `restricted`, como hoje): removê-lo de `editorAction` e manter em `requireEditorSession` apenas se a área editorial for navegável em modo leitura — nesse caso a UI precisa esconder as ações de escrita para ele, não deixá-las falhar.
+     Seja qual for a saída, o conjunto de papéis passa a viver **em um único lugar** exportado (`lib/session.ts`), consumido por `safe-action.ts` e pela UI; hoje a lista está duplicada nos dois arquivos.
+4. **Testes de escrita em `rls.test.ts`:** a suíte só testa leitura. Adicionar, por papel (`anon`, `hospede`, `colaborador` autor, `colaborador` não-autor, `conselheiro`, `super_admin`): INSERT em `documents`, UPDATE do próprio vs. de terceiro, INSERT em `document_versions` com `created_by` alheio (deve falhar), e o par soft-delete/restore.
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/db/src/migrations/0062_documentos_rls_rascunho_lixeira.sql` (criar)
+- `apps/documentos/src/actions/documents.ts`
+- `apps/documentos/src/lib/safe-action.ts`
+- `apps/documentos/src/lib/session.ts`
+- `apps/documentos/src/app/editorial/documentos/page.tsx`
+- `apps/documentos/src/components/document-row-actions.tsx`
+- `apps/documentos/src/__tests__/rls.test.ts`
+- `PROMPTS.md` (nota da decisão do item 3 em P-1.19)
+
+**Critérios de aceite:**
+
+- [ ] `anon` não lê rascunho `public` nem documento soft-deletado — teste de regressão em `rls.test.ts`
+- [ ] Autor e `super_admin`/`diretor` leem os próprios rascunhos; `updateDocument` e `publishDocument` continuam funcionando sobre rascunho sob contexto autenticado
+- [ ] `deleteDocument` não usa mais `withSystemRole`; `grep -n "RLS debt" apps/documentos/src/actions/documents.ts` retorna vazio
+- [ ] Documento removido aparece em "Removidos" na listagem editorial e pode ser restaurado, com audit dos dois lados
+- [ ] Conjunto de papéis editoriais definido em um único lugar e coerente entre gate (`editorAction`), UI e policies — sem papel que passe no portão e falhe no banco
+- [ ] `rls.test.ts` cobre INSERT/UPDATE por papel, não só SELECT
+- [ ] `pnpm --filter documentos typecheck lint test` verdes; migration aplicada no Supabase de dev
+- [ ] Registrar em SESSIONS.md — incluindo a saída escolhida no item 3 e quem decidiu
+
+**Notas:**
+Ref: BRAIN.md §6.7 e "Defense in depth". Este é o prompt de maior risco de regressão do lote: mexer nas policies de SELECT afeta toda leitura autenticada do módulo. Rodar a suíte inteira de `apps/documentos` (não só os testes novos) antes de fechar. Não tocar em `views`/`subscriptions` aqui — têm prompt próprio.
+
+---
+
+### P-1.20b — Busca: acentos, índice e a action órfã (CORRETIVO)
+
+**Fase:** 1
+**Módulo:** documentos
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-1.20b-docs-busca`
+- Dependências: P-1.17b concluído (S-187)
+- Env vars: `DATABASE_URL`
+
+**Problema que este prompt resolve (contexto):**
+O critério de P-1.20 "Busca full-text por título, conteúdo Markdown e tags" está `[x]` e existe em **duas implementações que não se falam**:
+
+- `actions/search.ts:15` (`searchDocuments`) — gate `authenticatedAction`, ILIKE em título/conteúdo + subquery de tags. **Zero chamadores fora dos testes**: `grep -rn "searchDocuments" apps/documentos/src` só devolve o próprio arquivo e `__tests__/search.test.ts`. S-29b registrou o motivo (a busca pública não podia usar uma action autenticada) mas a action ficou no repositório, testada, mantida e morta.
+- `app/busca/page.tsx:139+` — cinco consultas inline no RSC, que são as que o usuário realmente executa, e que **nenhum teste cobre**. A suíte `search.test.ts` testa a implementação que ninguém usa.
+
+E as duas têm o mesmo defeito de fundo: `ILIKE '%termo%'` é **sensível a acento**. Num portal em português, buscar `orcamento` não encontra "Orçamento", `estatuto de missoes` não encontra "Missões" — o caso mais comum de digitação rápida no celular, num público que o BRAIN descreve como "em transição tecnológica". Não há `unaccent` nem `pg_trgm` em nenhuma migration do repositório (`grep -rn "unaccent\|pg_trgm\|tsvector" packages/db/src/migrations` → vazio), e o `ILIKE '%…%'` com curinga à esquerda não usa índice nenhum (débito registrado em S-29 e nunca endereçado).
+
+**Escopo (siga na ordem):**
+
+1. **Migration** (`0063_documentos_busca.sql`): `CREATE EXTENSION IF NOT EXISTS unaccent` e `pg_trgm`; coluna gerada `documents.search_text` (ou índice de expressão, se preferir não materializar) sobre `unaccent(lower(title || ' ' || coalesce(content_md,'')))`; índice GIN `gin_trgm_ops` sobre ela. Índice equivalente em `tags.name` e `categories.name`.
+2. **Um só lugar de busca:** extrair a consulta para `lib/search-query.ts` (função pura que recebe o handle Drizzle + filtros e devolve as linhas), consumida **tanto** por `app/busca/page.tsx` **quanto** por `actions/search.ts`. A action deixa de duplicar a lógica; se ela continuar sem chamador depois disso, removê-la e mover os testes para o módulo compartilhado — não manter action morta.
+3. **Normalização do termo:** comparar sempre `unaccent(lower(...))` dos dois lados; manter o comportamento atual de busca por substring (não migrar para `tsquery` — a expectativa do usuário aqui é "contém", não "palavra inteira", e o corpus é pequeno).
+4. **Testes:** `search.test.ts` passa a exercitar o módulo compartilhado (isto é, o caminho que a tela usa) e ganha casos de acento nas duas direções (`orcamento` → "Orçamento", `Orçamento` → "orcamento") e de maiúsculas/minúsculas.
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/db/src/migrations/0063_documentos_busca.sql` (criar)
+- `packages/db/src/schema/documentos.ts` (apenas se a coluna gerada for materializada)
+- `apps/documentos/src/lib/search-query.ts` (criar)
+- `apps/documentos/src/actions/search.ts`
+- `apps/documentos/src/app/busca/page.tsx`
+- `apps/documentos/src/__tests__/search.test.ts`
+
+**Critérios de aceite:**
+
+- [ ] Buscar sem acento encontra documento com acento, e vice-versa — coberto por teste
+- [ ] `/busca` e `actions/search.ts` compartilham a mesma consulta; nenhuma lógica de busca duplicada no RSC
+- [ ] Se a action seguir sem chamador, ela foi removida (não há action morta com teste próprio)
+- [ ] `EXPLAIN` do filtro de texto usa o índice GIN (registrar o plano em SESSIONS.md)
+- [ ] Testes cobrem o caminho que a tela `/busca` executa
+- [ ] `pnpm --filter documentos typecheck lint test` verdes; migration aplicada no Supabase de dev
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: BRAIN.md §6.7 e princípio "Simplicidade". Não introduzir ranking por relevância, destaque de trecho (`ts_headline`) nem paginação nova — o escopo é acento, índice e fim da duplicação. A visibilidade continua sendo filtrada pela RLS via `withAuthenticatedContext`, como já é hoje; nada neste prompt pode contornar isso.
+
+---
+
+### P-1.20c — Registro de leitura: a tabela `views` que ninguém escreve (CORRETIVO)
+
+**Fase:** 1
+**Módulo:** documentos
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-1.20c-docs-views`
+- Dependências: P-1.17b concluído (S-187)
+- Env vars: `DATABASE_URL`
+
+**Problema que este prompt resolve (contexto):**
+"Tabela `documentos.views` para analytics" está `[x]` em P-1.18 e "Registrar views" está no escopo de P-1.20 — a tabela existe, a action existe, a policy existe, a retenção existe, e **nenhuma linha é escrita jamais**: `grep -rn "registerView" apps/documentos/src` fora de `actions/documents.ts:421` retorna vazio. Nenhuma página chama a action.
+
+O efeito é visível para o usuário: `app/editorial/page.tsx:67-70` calcula "views nos últimos 30 dias" e o KPI (`:135`) exibe **0 permanentemente** no painel editorial. E o efeito é invisível no resto da pilha: P-0.13 construiu a máquina de retenção inteira em cima de dado que não existe — `documentos.views_monthly_agg` (`packages/db/src/schema/documentos.ts:233`) e a função `documentos.purge_old_views` (`0023_documentos_views_retention.sql`) agregam e expurgam uma tabela vazia todo mês.
+
+**Escopo (siga na ordem):**
+
+1. **Chamar `registerView`** na abertura de documento e de edital (`app/[slug]/page.tsx` e `app/editais/[slug]/page.tsx`). Como são RSC e a action é `authenticatedAction`, registrar de forma que a falha **nunca** derrube a página: chamada não bloqueante com `try/catch` silencioso, ou um pequeno client component `<ViewTracker documentId>` que dispara uma vez no mount. Escolher uma das duas e registrar o porquê.
+2. **Não contar duas vezes:** deduplicar leituras do mesmo usuário no mesmo documento dentro de uma janela curta (ex.: 30 min) — um `F5` não pode virar métrica. Fazer isso na action, não na página.
+3. **Decidir sobre o anônimo:** a policy `views_insert_authenticated` (`0005_documentos_rls.sql:227`) exige `auth.uid()`, então leitura anônima do portal público nunca é contada — o KPI mede só a fração autenticada. Registrar isso explicitamente na tela (rótulo do KPI: "leituras de usuários identificados") **ou** passar a contar anônimos sem `user_id`, o que exige nova policy e uma linha na política de privacidade. Recomendação: manter só autenticados e corrigir o rótulo — é a saída compatível com a LGPD sem trabalho novo de consentimento.
+4. **Dar destino ao dado:** exibir contagem de leituras na listagem editorial de documentos (coluna) e no painel, lendo de `views` + `views_monthly_agg` (o histórico agregado não pode sumir do total só porque passou de 6 meses).
+5. **Teste:** abrir o mesmo documento duas vezes na janela de dedupe grava uma linha; usuário diferente grava outra; anônimo não grava (ou grava sem `user_id`, conforme o item 3).
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/documentos/src/actions/documents.ts`
+- `apps/documentos/src/components/view-tracker.tsx` (criar — apenas na saída client component)
+- `apps/documentos/src/app/[slug]/page.tsx`
+- `apps/documentos/src/app/editais/[slug]/page.tsx`
+- `apps/documentos/src/app/editorial/page.tsx`
+- `apps/documentos/src/app/editorial/documentos/page.tsx`
+- `apps/documentos/src/__tests__/actions.test.ts`
+
+**Critérios de aceite:**
+
+- [ ] Abrir um documento autenticado grava linha em `documentos.views`
+- [ ] Recarregar a página dentro da janela de dedupe **não** duplica a linha — coberto por teste
+- [ ] Falha ao registrar leitura não quebra nem atrasa a renderização da página
+- [ ] KPI do painel editorial reflete dado real e o rótulo diz exatamente o que está sendo contado
+- [ ] Total de leituras considera `views` + `views_monthly_agg`
+- [ ] `pnpm --filter documentos typecheck lint test` verdes
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: BRAIN.md §6.7 e LGPD (P-0.13). `documentos.views` é dado comportamental pessoal: não expor leitura individual em nenhuma tela (quem leu o quê), só agregados. A retenção de 6 meses já está implementada e não deve ser alterada aqui.
+
+---
+
+### P-1.21b — A área editorial ainda lê como superusuário (CORRETIVO)
+
+**Fase:** 1
+**Módulo:** documentos
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-1.21b-docs-leitura-editorial`
+- Dependências: **P-1.19b concluído** (policy de rascunho/lixeira), P-1.17b concluído (S-187)
+- Env vars: `DATABASE_URL`
+
+**Problema que este prompt resolve (contexto):**
+S-61 (P-1.27) corrigiu F2-D1 migrando **as páginas públicas** para `withAuthenticatedContext`, para que a RLS fosse exercida de verdade. Nove páginas ficaram para trás e seguem lendo pelo client superusuário `db` (`@hebron/db/client`), que ignora RLS por construção:
+
+`app/assinaturas/page.tsx`, `app/editorial/page.tsx`, `app/editorial/documentos/page.tsx`, `app/editorial/editais/page.tsx`, `app/editorial/categorias/page.tsx`, `app/editorial/assinaturas/page.tsx`, `app/editorial/auditoria/page.tsx`, `app/editorial/novo/page.tsx`, `app/editorial/[id]/editar/page.tsx`.
+
+O portão de entrada é `requireEditorSession()`, que só verifica se o usuário tem **algum** papel editorial. Depois disso não há autorização por documento. Na prática: um `colaborador` abre `/editorial/documentos`, vê a lista completa — inclusive documentos `restricted`, que a RLS reserva a `super_admin`/`diretor`/`conselheiro` — e abre `/editorial/<id>/editar` de qualquer um deles, lendo o conteúdo inteiro. É a mesma classe de falha de F2-D1, um andar acima: a visibilidade que o portal público respeita some assim que se entra na área editorial.
+
+`app/assinaturas/page.tsx` é o caso mais claro: é tela de usuário comum (não editorial) lendo com superusuário e filtrando por `userId` só no código.
+
+**Escopo (siga na ordem):**
+
+1. **Migrar as nove páginas** para `withAuthenticatedContext` + o `actorId` da sessão já resolvida (`requireEditorSession` devolve a sessão; `assinaturas` usa `getOptionalActorId`/`resolveSession` como as públicas). Mesmo padrão de S-61 — nenhuma consulta nova, só a troca do handle.
+2. **Onde a RLS não bastar, dizer por quê:** o painel (`editorial/page.tsx`) agrega KPIs sobre todo o acervo e a auditoria (`editorial/auditoria/page.tsx`) lê `admin.audit_log`, que tem regra própria. Para cada consulta que **precisar** continuar como serviço, usar `withSystemRole` explicitamente, com comentário de uma linha justificando — não o client `db` genérico. Contagem agregada não é vazamento; conteúdo de documento é.
+3. **Consequência esperada e desejada:** a lista editorial de um `colaborador` passa a não incluir documentos `restricted` de terceiros. Se a diretoria quiser que todo editor veja tudo, isso é decisão de negócio e vira uma policy explícita em P-1.19b — não o efeito colateral de usar o client errado.
+4. **Teste de regressão:** `colaborador` autenticado não recebe documento `restricted` alheio pela consulta da listagem editorial nem pela consulta da tela de edição — no padrão do bloco "Regressão F2-D1/F2-D2" de `rls.test.ts`.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/documentos/src/app/assinaturas/page.tsx`
+- `apps/documentos/src/app/editorial/page.tsx`
+- `apps/documentos/src/app/editorial/documentos/page.tsx`
+- `apps/documentos/src/app/editorial/editais/page.tsx`
+- `apps/documentos/src/app/editorial/categorias/page.tsx`
+- `apps/documentos/src/app/editorial/assinaturas/page.tsx`
+- `apps/documentos/src/app/editorial/auditoria/page.tsx`
+- `apps/documentos/src/app/editorial/novo/page.tsx`
+- `apps/documentos/src/app/editorial/[id]/editar/page.tsx`
+- `apps/documentos/src/lib/session.ts` (se precisar expor a sessão já resolvida)
+- `apps/documentos/src/__tests__/rls.test.ts`
+
+**Critérios de aceite:**
+
+- [ ] `grep -rn "@hebron/db/client" apps/documentos/src/app` retorna vazio (ou só linhas com `withSystemRole` justificado em comentário)
+- [ ] `colaborador` não lê documento `restricted` alheio por nenhuma rota editorial — teste de regressão
+- [ ] Nenhuma tela editorial quebra para `super_admin`, `diretor` e `colaborador` autor (verificar rascunhos, que dependem da policy de P-1.19b)
+- [ ] `/assinaturas` lê as inscrições sob contexto do próprio usuário
+- [ ] `pnpm --filter documentos typecheck lint test` verdes
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: BRAIN.md "Defense in depth"; precedente S-61 (F2-D1/F2-D2). Executar **depois** de P-1.19b: sem a policy de rascunho, a fila de rascunhos do painel e a tela de edição ficam vazias sob contexto autenticado.
+
+---
+
+### P-1.22b — O alerta de "novas versões" que nunca chega (CORRETIVO)
+
+**Fase:** 1
+**Módulo:** documentos
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-1.22b-docs-alerta-versao`
+- Dependências: P-1.16b concluído (S-185)
+- Env vars: `DATABASE_URL`, `RESEND_API_KEY`
+
+**Problema que este prompt resolve (contexto):**
+P-1.16b acertou a persistência das preferências de assinatura, mas o alerta prometido pelo toggle continua não existindo. O rótulo é literal: `components/subscription-form.tsx:280` diz **"Novas versões"**, com `aria-label` "Notificar novas versões em {categoria}". A flag `on_new_version` gateia `notifyNewDocument` (`lib/notifications.ts:57-65`), que é chamada de um único lugar: `publishDocument` (`actions/documents.ts:296-300`) — ou seja, **na primeira publicação de um documento**. `updateDocument` cria a versão 2, 3, 4 (`:200-206`) e **não notifica ninguém, nunca**.
+
+O caso de uso real do módulo é justamente esse: o inscrito em "Políticas institucionais" quer saber quando a política **foi revisada**, não apenas quando uma política nova nasce. Hoje ele marca o toggle, é informado de que está inscrito, e a revisão passa em silêncio.
+
+O mesmo caminho tem um segundo defeito, de sinal oposto: `publishDocument` notifica **toda vez** que é chamada, e `components/document-row-actions.tsx:26-28` permite despublicar e republicar. Cada ciclo dispara um novo "Novo documento: …" para a lista inteira de inscritos — em um portal onde despublicar para corrigir e republicar é operação corriqueira.
+
+**Escopo (siga na ordem):**
+
+1. **Notificar nova versão:** ao concluir `updateDocument` sobre um documento **já publicado**, notificar os inscritos da categoria com `on_new_version = true`. Reusar `createNotification`/`makeNotificationInserter` no padrão de `notifyNewDocument`.
+2. **Controle editorial do disparo (evitar ruído):** a notificação de versão é **opt-in por edição** — checkbox "Avisar os inscritos desta categoria" no formulário de edição (desmarcado por default), enviado como campo da action. Correção de vírgula não vira e-mail; revisão de política vira. Aproveitar o campo `notes` da versão (criado em P-1.18b, se já executado) como resumo da mudança no corpo do e-mail; se P-1.18b ainda não tiver rodado, omitir o resumo — **não** criar coluna aqui.
+3. **Template:** `packages/email/src/templates/new-version.tsx`, no mesmo layout institucional dos três existentes, com número da versão, categoria e link. Não reaproveitar `new-document.tsx` com texto ambíguo — são eventos diferentes.
+4. **Não duplicar na republicação:** `publishDocument` só dispara `notifyNewDocument`/`notifyEditalOpen` na **primeira** publicação. Como `published_at` volta a `NULL` ao despublicar, marcar o fato de outra forma — a existência de notificação anterior do tipo `document.published` para aquele `entityId` no audit/`notifications` é a fonte disponível sem migration. Escolher e registrar o critério.
+5. **Testes** (`actions.test.ts`, que já cobre o caminho feliz desde S-61): inscrito com `on_new_version = true` recebe ao publicar nova versão com o opt-in ligado; não recebe com o opt-in desligado; não recebe nada ao republicar um documento já publicado antes.
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/email/src/templates/new-version.tsx` (criar)
+- `apps/documentos/src/lib/notifications.ts`
+- `apps/documentos/src/actions/documents.ts`
+- `apps/documentos/src/components/document-form.tsx`
+- `apps/documentos/src/app/editorial/[id]/editar/_client.tsx`
+- `apps/documentos/src/components/subscription-form.tsx` (só se o rótulo precisar de ajuste após a decisão)
+- `apps/documentos/src/__tests__/actions.test.ts`
+
+**Critérios de aceite:**
+
+- [ ] Publicar nova versão de documento publicado, com o opt-in ligado, envia e-mail aos inscritos com `on_new_version = true` — e só a eles
+- [ ] Opt-in desligado não envia nada
+- [ ] Despublicar e republicar não dispara segunda notificação de "novo documento" — coberto por teste
+- [ ] Template próprio de nova versão, com layout institucional e microcopy sem exclamação genérica
+- [ ] Nenhum toggle da UI de assinaturas sem evento correspondente de fato disparado (reauditar os dois, campo a campo, como pedia P-1.16b)
+- [ ] `pnpm --filter documentos typecheck lint test` verdes
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: BRAIN.md §6.7; P-1.16b (S-185) para o contrato das flags. Alternativa descartada: renomear o toggle para "Novas publicações" e não implementar nada — resolveria a mentira, mas apagaria o caso de uso mais citado do módulo (acompanhar revisão de política). Não introduzir digest/frequência aqui.
+
+---
+
+### P-1.23b — O botão "submeter projeto" que o wizard ignora (CORRETIVO)
+
+**Fase:** 1
+**Módulo:** documentos
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-1.23b-docs-projetos-params`
+- Dependências: P-2.9c concluído (S-62), P-1.17b concluído (S-187)
+- Env vars: nenhuma
+
+**Problema que este prompt resolve (contexto):**
+Os cinco critérios de P-1.23 estão `[x]` e o handshake entre os dois módulos está quebrado em três pontos independentes, cada um suficiente para zerar o outro:
+
+1. **Nome do parâmetro.** `components/edital-submit-button.tsx` emite `?edital_id=<uuid>` (exatamente como o escopo de P-1.23 especifica). O wizard lê `searchParams.get("editalId")` (`apps/projetos/src/app/(submissor)/novo/page.tsx:1178`, entregue em F2-P3). São chaves diferentes: o link abre o wizard, o `useEffect` não encontra nada, `getEditalPrefillForWizard` não é chamada, e o formulário abre em branco — sem erro, sem aviso. Os dois lados foram implementados, testados isoladamente, e nunca no mesmo teste.
+2. **A "categoria de projeto" nunca é gravada.** `components/edital-form.tsx:709-717` oferece um `<select>` "Categoria de projeto" com **slugs** (`evangelizacao`, `capacitacao-lideranca`, …). Os dois clients que salvam editais montam a chamada sem esse campo (`app/editorial/novo/_client.tsx` e `app/editorial/[id]/editar/_client.tsx:147` enviam `projectType` e param aí), e a action nem poderia recebê-lo: `actions/editals.ts:55` exige `projectCategoryId: z.string().uuid()`, referenciando `documentos.categories` (`packages/db/src/schema/documentos.ts:159`) — a árvore de categorias **do próprio módulo de documentos**, não as categorias de projeto. É o mesmo mapeamento inexistente já documentado em `packages/integrations/src/documentos-projetos.ts` e em F2-P3. Resultado: `editals.project_category_id` é sempre `NULL`, o botão nunca emite `categoria`, e o `<select>` é decorativo.
+3. **`tipo` significa coisas diferentes nos dois lados.** O botão emite `tipo` = `editals.project_type` (`missionario`, `educacional`, `saude`…, de `edital-form.tsx:180-187`), enquanto o wizard usa `tipo` para o ciclo do projeto (`anual` | `pontual`). Mesmo nome, domínios disjuntos.
+
+**Escopo (siga na ordem):**
+
+1. **Fechar o contrato em um lugar só:** definir os nomes e o formato dos parâmetros em `packages/integrations/src/documentos-projetos.ts` (constantes + função `buildProjetoNovoUrl(...)` e o parser correspondente), e fazer **os dois lados** consumirem dali. Nenhum literal `"edital_id"`/`"editalId"` solto em componente ou página depois deste prompt.
+2. **Escolher a chave canônica** (`edital_id`, como escrito em P-1.23 e no BRAIN §7) e aceitar `editalId` como alias de leitura por compatibilidade, com comentário de prazo. Renomear o parâmetro de ciclo para algo inequívoco (`ciclo`) e manter `tipo` apenas para o tipo de projeto do edital.
+3. **Corrigir a categoria de projeto:** trocar `editals.project_category_id` (FK para `documentos.categories`) por `editals.project_category_slug text`, alinhado ao vocabulário de `projetos.project_categories` — migration + schema + action + os dois clients passando `values.projectCategory`. Se a lista de slugs de `edital-form.tsx:189-196` divergir das categorias reais de Projetos, **a fonte da verdade é `projetos`**: importar a lista de `packages/integrations`, não redigitá-la.
+4. **Pré-preencher a categoria no wizard,** fechando o débito que F2-P3 deixou aberto por falta desse mapeamento.
+5. **Teste de ponta a ponta do contrato:** um teste em `packages/integrations` (ou em `apps/documentos`) que monta a URL com o builder e a devolve pelo parser com os mesmos valores — o teste que teria pego a divergência de nome.
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/integrations/src/documentos-projetos.ts`
+- `packages/db/src/migrations/0064_documentos_edital_project_category.sql` (criar)
+- `packages/db/src/schema/documentos.ts`
+- `apps/documentos/src/actions/editals.ts`
+- `apps/documentos/src/components/edital-submit-button.tsx`
+- `apps/documentos/src/components/edital-form.tsx`
+- `apps/documentos/src/app/editorial/novo/_client.tsx`
+- `apps/documentos/src/app/editorial/[id]/editar/_client.tsx`
+- `apps/documentos/src/app/editais/[slug]/page.tsx`
+- `apps/projetos/src/app/(submissor)/novo/page.tsx`
+- `apps/projetos/src/lib/queries.ts`
+- testes do contrato (`packages/integrations/src/__tests__/` ou `apps/documentos/src/__tests__/`)
+
+**Critérios de aceite:**
+
+- [ ] Clicar em "Submeter projeto neste edital" abre o wizard **com o edital vinculado visível** e o tipo pré-preenchido
+- [ ] Nome dos parâmetros vem de um único módulo compartilhado; `grep -rn "edital_id\|editalId" apps/documentos/src apps/projetos/src` só encontra usos derivados dele
+- [ ] "Categoria de projeto" escolhida no formulário do edital é persistida, aparece na página pública do edital e chega pré-preenchida no wizard
+- [ ] Nenhum campo do `EditalForm` sem correspondente persistido (auditar `EditalFormValues` campo a campo)
+- [ ] Teste de ida e volta do contrato de URL
+- [ ] `pnpm --filter documentos --filter projetos typecheck lint test` verdes; migration aplicada no Supabase de dev
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: BRAIN.md §7 (Documentos → Projetos); F2-P3 e o débito de mapeamento registrado em `packages/integrations/src/documentos-projetos.ts`. Este prompt cruza dois apps: rodar o build dos dois. Migration de renomeação de coluna precisa preservar os dados existentes (hoje todos `NULL`, o que torna a troca barata — confirmar com `SELECT count(*) FROM documentos.editals WHERE project_category_id IS NOT NULL` antes).
+
+---
+
+### P-1.24b — Testes: o audit mockado e o caminho de escrita sem cobertura (CORRETIVO)
+
+**Fase:** 1
+**Módulo:** documentos
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-1.24b-docs-testes`
+- Dependências: os demais corretivos deste bloco concluídos (executar por último)
+- Env vars: `DATABASE_URL`
+
+**Problema que este prompt resolve (contexto):**
+S-32 decidiu mockar `logDocumentAudit` em `__tests__/actions.test.ts:82-84` com uma justificativa que **deixou de valer no dia seguinte**: "o enum `admin.audit_action` não inclui valores de documento". A migration `0006_documentos_audit_actions.sql` adicionou os dez valores, e `lib/audit.ts` hoje só delega para `@hebron/db/audit`. O mock permaneceu: nenhum teste do módulo verifica que publicar, despublicar, mover categoria ou remover documento **grava audit** — justamente as mutações que o BRAIN exige auditar, e a tela `/editorial/auditoria` existe para mostrar.
+
+Somado a isso, o critério de P-1.24 "RLS: anon vê public; autenticado vê public+internal; restricted respeita papel" é verdadeiro mas parcial: `rls.test.ts` só testa SELECT (ver P-1.19b), e `search.test.ts` testa a action órfã, não a busca que a tela executa (ver P-1.20b).
+
+**Escopo (siga na ordem):**
+
+1. **Remover o mock de `../lib/audit`** de `actions.test.ts` e asseverar as linhas gravadas em `admin.audit_log` (ator, ação, entidade, `entity_id` e presença do diff) para: `document.created`, `document.updated`, `document.published`, `document.unpublished`, `document.deleted`, `category.*` e `edital.*`. Limpeza no `afterAll` pelo mesmo prefixo de id já usado no arquivo.
+2. **Cobrir os fluxos que ganharam código nos corretivos deste bloco** e que sobrevivem sem teste próprio: tipo do documento (P-1.18b), lixeira/restauração (P-1.19b), dedupe de leitura (P-1.20c), notificação de nova versão e não-duplicação na republicação (P-1.22b), contrato de URL com Projetos (P-1.23b). Onde o corretivo já tiver criado o teste, apenas verificar e não duplicar.
+3. **Documentar a fronteira do ambiente:** os testes deste módulo dependem de rede até o Supabase e falham por `ENOTFOUND` em sandbox — deixar isso explícito no cabeçalho do arquivo de setup, para que a próxima sessão não interprete a falha como regressão.
+4. **Bookkeeping em PROMPTS.md:** rever os critérios `[x]` de P-1.18 a P-1.24 à luz do que foi efetivamente entregue nos corretivos, marcando o que ficou de fora com `[~]` e uma nota apontando o corretivo responsável — o mesmo tratamento que P-1.15b deu ao critério de P-1.15.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/documentos/src/__tests__/actions.test.ts`
+- `apps/documentos/src/__tests__/rls.test.ts`
+- `apps/documentos/src/__tests__/search.test.ts`
+- `apps/documentos/src/__tests__/setup-env.ts`
+- `PROMPTS.md` (bookkeeping do item 4)
+
+**Critérios de aceite:**
+
+- [ ] `grep -n "vi.mock(\"../lib/audit\")" apps/documentos/src/__tests__` retorna vazio
+- [ ] Toda mutação crítica do módulo tem asserção de audit correspondente
+- [ ] Nenhum corretivo deste bloco fica sem teste de regressão
+- [ ] Critérios de P-1.18–P-1.24 refletem o estado real do código
+- [ ] `pnpm --filter documentos typecheck lint test` verdes (com `DATABASE_URL` alcançável)
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: BRAIN.md (audit log em toda mutação crítica). Executar por último: este prompt fecha a conta do bloco e é o único que pode marcar critérios de P-1.18–P-1.24 como cumpridos.
 
 ---
 

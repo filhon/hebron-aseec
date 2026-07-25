@@ -10,7 +10,7 @@ import type { EditalFormValues } from "../../../../components/edital-form";
 import { updateDocument, getUploadUrl } from "../../../../actions/documents";
 import { updateEdital } from "../../../../actions/editals";
 import { createTag } from "../../../../actions/tags";
-import type { Category, Tag } from "@hebron/types/documentos";
+import type { Category, DocumentType, Tag } from "@hebron/types/documentos";
 
 type Visibility = "public" | "internal" | "restricted";
 
@@ -20,6 +20,10 @@ interface InitialDocData {
   contentMd: string | null;
   fileUrl: string | null;
   visibility: Visibility;
+  /** Ausente na leitura atual de editorial/[id]/editar/page.tsx (fora do
+   * escopo de P-1.18b — não está entre os arquivos permitidos). O formulário
+   * cai para o default "other" do DocumentForm até essa lacuna ser fechada. */
+  type?: Exclude<DocumentType, "edital">;
   categoryId: string | null;
   tagIds: string[];
   isEdital: boolean;
@@ -29,20 +33,31 @@ interface InitialDocData {
   editalFaq: { q: string; a: string }[];
 }
 
-async function uploadFile(file: File): Promise<string> {
+interface UploadResult {
+  storagePath: string;
+  fileSizeBytes: number;
+  mimeType: string;
+}
+
+async function uploadFile(file: File): Promise<UploadResult> {
+  const mimeType = file.type || "application/pdf";
   const urlResult = await getUploadUrl({
     fileName: file.name,
-    mimeType: "application/pdf",
+    mimeType,
   });
   const uploadData = urlResult?.data;
   if (!uploadData) throw new Error("Não foi possível obter URL de upload.");
   const res = await fetch(uploadData.uploadUrl, {
     method: "PUT",
     body: file,
-    headers: { "Content-Type": "application/pdf" },
+    headers: { "Content-Type": mimeType },
   });
   if (!res.ok) throw new Error("Falha ao enviar arquivo para o storage.");
-  return uploadData.storagePath;
+  return {
+    storagePath: uploadData.storagePath,
+    fileSizeBytes: file.size,
+    mimeType,
+  };
 }
 
 async function resolveTagIds(
@@ -86,7 +101,7 @@ export function EditDocumentClient({
     setError(null);
     setSaved(false);
     try {
-      const [storagePath, tagIds] = await Promise.all([
+      const [uploaded, tagIds] = await Promise.all([
         values.contentMode === "pdf" && values.file
           ? uploadFile(values.file)
           : Promise.resolve(undefined),
@@ -98,8 +113,11 @@ export function EditDocumentClient({
         title: values.title,
         contentMd:
           values.contentMode === "markdown" ? values.content : undefined,
-        storagePath,
+        storagePath: uploaded?.storagePath,
+        fileSizeBytes: uploaded?.fileSizeBytes,
+        mimeType: uploaded?.mimeType,
         visibility: values.visibility,
+        type: values.type,
         categoryId: values.categoryId || null,
         tagIds,
       });
@@ -120,7 +138,7 @@ export function EditDocumentClient({
     setError(null);
     setSaved(false);
     try {
-      const [storagePath, tagIds] = await Promise.all([
+      const [uploaded, tagIds] = await Promise.all([
         values.contentMode === "pdf" && values.file
           ? uploadFile(values.file)
           : Promise.resolve(undefined),
@@ -132,7 +150,7 @@ export function EditDocumentClient({
         title: values.title,
         contentMd:
           values.contentMode === "markdown" ? values.content : undefined,
-        storagePath,
+        storagePath: uploaded?.storagePath,
         visibility: values.visibility,
         categoryId: values.categoryId || null,
         tagIds,
@@ -270,6 +288,7 @@ export function EditDocumentClient({
           initialValues={{
             title: doc.title,
             visibility: doc.visibility,
+            type: doc.type,
             categoryId: doc.categoryId ?? "",
             tagIds: doc.tagIds,
             content: doc.contentMd ?? "",
