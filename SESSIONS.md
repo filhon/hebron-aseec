@@ -209,6 +209,7 @@
 | S-186  | 2026-07-25 | P-1.16c — Documentos: reordenação de categorias, ligar a UI ao backend ou remover a promessa (CORRETIVO)                         | concluido                            |
 | S-187  | 2026-07-25 | P-1.17b — Documentos: fronteiras de erro e cópia de estados vazios (CORRETIVO)                                                   | concluido                            |
 | S-188  | 2026-07-25 | P-1.18b — Documentos: campos que a UI coleta e o banco não guarda (CORRETIVO)                                                    | concluido                            |
+| S-189  | 2026-07-25 | P-1.19b — Documentos: RLS de rascunho, lixeira e o papel conselheiro (CORRETIVO)                                                 | concluido                            |
 
 ---
 
@@ -15356,5 +15357,139 @@ DEFAULT 'other'` + índice; `document_versions.file_size_bytes` (bigint),
 - `apps/documentos/src/components/document-card.tsx`
 - `apps/documentos/src/components/document-viewer.tsx`
 - `apps/documentos/src/__tests__/actions.test.ts`
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+## S-189 — P-1.19b — Documentos: RLS de rascunho, lixeira e o papel conselheiro (CORRETIVO)
+
+**Branch:** `feat/P-1.19b-docs-rls-escrita`
+
+### Contexto
+
+P-1.19 nunca teve sessão própria (débito registrado em S-68) e seus seis
+critérios estavam `[x]`. `0005_documentos_rls.sql` cobria bem a leitura por
+visibilidade (e `rls.test.ts` cobria exatamente isso — só SELECT). Três
+buracos do lado da escrita, descritos no próprio prompt:
+
+1. As três policies de SELECT de `documents` filtravam `deleted_at IS NULL`
+   e `visibility`, mas não `published_at` — um rascunho `visibility='public'`
+   era legível por `anon` no banco (nenhuma tela vazava porque todas
+   filtravam `publishedAt` na query, mas a RLS — "última linha de defesa" —
+   não protegia por si só).
+2. Nenhuma policy de SELECT alcançava `deleted_at IS NOT NULL`: documento
+   soft-deletado ficava invisível para todo mundo, inclusive quem o apagou.
+   `deleteDocument` documentava o próprio contorno no código
+   (`withSystemRole`) porque o `UPDATE ... RETURNING` não conseguia
+   satisfazer nenhuma policy de SELECT sobre a linha resultante.
+3. `editorAction`/`EDITOR_ROLES` deixavam `conselheiro` passar no portão da
+   área editorial, mas nenhuma policy de escrita de `documentos.*` jamais o
+   incluiu (herdado de S-61 por conveniência, não por regra) — conselheiro
+   clicava em publicar/salvar e recebia um erro cru de banco.
+
+### Decisão do item 3 (pendente com o Filipe)
+
+Perguntado via `AskUserQuestion` antes de tocar em qualquer arquivo de
+escrita: conselheiro deveria ganhar escrita (opção a) ou permanecer
+somente-leitura, com a UI escondendo as ações (opção b)? **Decisão do
+Filipe: opção (b) — conselheiro é somente-leitura.** Nenhuma policy de
+escrita mudou (já excluíam conselheiro desde 0005); o trabalho foi remover
+conselheiro do portão de aplicação (`editorAction`) e esconder os controles
+de escrita na UI em vez de deixá-los falhar no clique.
+
+### O que foi feito
+
+1. **Migration `0062_documentos_rls_rascunho_lixeira.sql`**: acrescenta
+   `published_at IS NOT NULL` às três policies de SELECT de `documents`
+   (`documents_select_public/internal/restricted`) e cria
+   `documents_select_own_draft` (autor via `author_id = auth.uid()` OU
+   `has_role('super_admin','diretor')`, sem filtro de `deleted_at`/
+   `published_at` — cobre rascunho e lixeira ao mesmo tempo). Mesma regra
+   espelhada em `document_versions_select`, `document_tags_select` e
+   `editals_select` (que herdam visibilidade via `EXISTS` no documento pai).
+   Aplicada no Supabase de dev via `pnpm --filter @hebron/db db:migrate`.
+2. **Lixeira**: `deleteDocument` (`actions/documents.ts`) não usa mais
+   `withSystemRole` para o `UPDATE` — só o `logDocumentAudit` continua
+   rodando sob papel de sistema (mesmo padrão de `updateDocument`/
+   `publishDocument`). Nova action `restoreDocument` (`deleted_at = NULL`,
+   audit `document.updated` — reaproveita o valor de enum existente em vez
+   de estender `admin.audit_action`, conforme o prompt pedia). Efeito
+   colateral correto da correção: como o `UPDATE` agora roda sob RLS de
+   verdade, `colaborador` só consegue soft-deletar/restaurar os **próprios**
+   documentos (antes, via bypass, conseguia apagar qualquer um).
+3. **Papéis editoriais**: `lib/session.ts` ganhou `DOCUMENT_WRITE_ROLES`
+   (`super_admin`, `diretor`, `colaborador` — sem conselheiro) e
+   `hasDocumentWriteRole()`, único lugar que define o conjunto; `EDITOR_ROLES`
+   (as 4 papéis, para navegação) também passou a ser exportado.
+   `safe-action.ts`/`editorAction` importa `DOCUMENT_WRITE_ROLES` em vez de
+   duplicar o array. `document-row-actions.tsx` ganhou `canWrite?: boolean`
+   (default `true` — não quebra o uso em `editorial/editais/page.tsx`, fora
+   do escopo deste prompt) e `isDeleted?: boolean`; quando `!canWrite` não
+   renderiza nada, quando `isDeleted` renderiza só "Restaurar".
+   `editorial/documentos/page.tsx` resolve a sessão
+   (`requireEditorSession()`) para calcular `canWrite`, esconde "Novo
+   documento" e a aba "Removidos" quando `false`, e ganhou uma aba
+   `hb-tabs`/`hb-tab` "Ativos"/"Removidos" via `?filtro=removidos` (mesmo
+   padrão de tabs URL-based já usado em `apps/admin/.../configuracoes`).
+4. **Testes de escrita em `rls.test.ts`**: fixtures novas
+   (`colaboradorAuthor`, `colaboradorOther`, documento `draft`). Blocos
+   novos cobrindo, por papel: SELECT de rascunho/lixeira (anon, colaborador
+   não-autor, autor, super_admin), INSERT em `documents` (anon/hospede/
+   conselheiro/colaborador com `author_id` alheio → falha; colaborador/
+   super_admin com `author_id` próprio → sucesso — a policy de INSERT nunca
+   permitiu `author_id` de terceiros, nem para super_admin), UPDATE
+   (próprio vs. de terceiro, por papel), par soft-delete/restore, e INSERT
+   em `document_versions` com `created_by` alheio (falha) vs. próprio
+   (sucesso). 80 testes no total, todos verdes após a migration aplicada.
+
+### Débitos registrados (fora do escopo deste prompt)
+
+- `editorial/editais/page.tsx` não foi tocado (não estava nos arquivos
+  permitidos): `DocumentRowActions` ainda renderiza os botões de escrita lá
+  para conselheiro (default `canWrite=true`). Clicar neles agora falha com
+  o erro limpo de `editorAction` ("Acesso negado...") em vez de um erro cru
+  de banco — melhor que antes, mas não esconde os botões como no padrão
+  aplicado em `documentos/page.tsx`. Requer prompt próprio que inclua esse
+  arquivo.
+- `editorial/novo/page.tsx` e `editorial/[id]/editar/page.tsx` também ficam
+  de fora: se um conselheiro navegar direto pela URL, o formulário ainda
+  renderiza (só o botão de acesso na listagem some) e o submit falha limpo
+  via `editorAction`. Mesma observação acima.
+- A listagem editorial (`editorial/documentos/page.tsx`) continua lendo via
+  `db` (superuser, ignora RLS) — débito já registrado para P-1.21b
+  ("área editorial ainda lê como superusuário"), não fechado aqui.
+
+### Critérios de aceite
+
+- [x] `anon` não lê rascunho `public` nem documento soft-deletado —
+      regressão coberta em `rls.test.ts`
+- [x] Autor e `super_admin`/`diretor` leem os próprios rascunhos;
+      `updateDocument`/`publishDocument` continuam funcionando sobre
+      rascunho sob contexto autenticado (suíte `actions.test.ts` inteira
+      verde, não só os testes novos)
+- [x] `deleteDocument` não usa mais `withSystemRole`;
+      `grep -n "RLS debt" apps/documentos/src/actions/documents.ts` vazio
+- [x] Documento removido aparece em "Removidos" na listagem editorial e
+      pode ser restaurado, com audit dos dois lados (`document.deleted` /
+      `document.updated`)
+- [x] Conjunto de papéis editoriais definido em um único lugar
+      (`DOCUMENT_WRITE_ROLES`, `lib/session.ts`), consumido por
+      `editorAction` e pela UI de `documentos/page.tsx`
+- [x] `rls.test.ts` cobre INSERT/UPDATE por papel, não só SELECT
+- [x] `pnpm --filter documentos typecheck lint test` verdes (80 testes, 5
+      arquivos); migration aplicada no Supabase de dev
+- [x] Registrado em SESSIONS.md, incluindo a decisão do item 3 (Filipe,
+      via `AskUserQuestion`: opção b — conselheiro somente-leitura)
+
+### Arquivos criados/alterados
+
+- `packages/db/src/migrations/0062_documentos_rls_rascunho_lixeira.sql` (criado)
+- `apps/documentos/src/actions/documents.ts`
+- `apps/documentos/src/lib/safe-action.ts`
+- `apps/documentos/src/lib/session.ts`
+- `apps/documentos/src/app/editorial/documentos/page.tsx`
+- `apps/documentos/src/components/document-row-actions.tsx`
+- `apps/documentos/src/__tests__/rls.test.ts`
+- `PROMPTS.md` (nota da decisão do item 3)
 - `SESSIONS.md` (esta entrada + linha no índice)
 - `SESSIONS.md` (esta entrada + linha no índice)

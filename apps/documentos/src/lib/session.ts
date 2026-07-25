@@ -4,7 +4,29 @@ import { resolveSession } from "@hebron/auth/server";
 import { CANONICAL_LOGIN_URL } from "@hebron/auth";
 import type { ActionSession } from "@hebron/auth/server";
 
-const EDITOR_ROLES = ["super_admin", "diretor", "conselheiro", "colaborador"];
+/** Papéis que navegam a área editorial (todos, inclusive somente-leitura). */
+export const EDITOR_ROLES = [
+  "super_admin",
+  "diretor",
+  "conselheiro",
+  "colaborador",
+];
+
+/**
+ * Papéis que podem escrever (criar/editar/publicar/remover) documentos.
+ * `conselheiro` navega a área editorial mas só lê — decisão P-1.19b (item 3),
+ * registrada em SESSIONS.md: o conjunto do portão (editorAction) tinha
+ * herdado conselheiro de S-61 por conveniência, mas nenhuma policy de
+ * escrita de documentos.* em 0005_documentos_rls.sql jamais o incluiu.
+ * Único lugar que define este conjunto — consumido por `editorAction`
+ * (safe-action.ts) e pela UI (esconder ações de escrita em vez de deixá-las
+ * falhar no clique).
+ */
+export const DOCUMENT_WRITE_ROLES = ["super_admin", "diretor", "colaborador"];
+
+export function hasDocumentWriteRole(roles: string[]): boolean {
+  return roles.some((r) => DOCUMENT_WRITE_ROLES.includes(r));
+}
 
 /**
  * Resolves the current actor id without throwing — used by public pages to

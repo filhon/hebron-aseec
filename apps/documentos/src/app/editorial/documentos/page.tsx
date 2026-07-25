@@ -2,9 +2,13 @@ import Link from "next/link";
 import { ChevronRight, FileText, Plus } from "lucide-react";
 import { db } from "@hebron/db/client";
 import { documents, categories, editals } from "@hebron/db/schema";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull, isNotNull } from "drizzle-orm";
 import { DocumentRowActions } from "../../../components/document-row-actions";
 import { VisibilityBadge } from "../../../components/visibility-badge";
+import {
+  requireEditorSession,
+  hasDocumentWriteRole,
+} from "../../../lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +20,17 @@ function formatDate(date: Date): string {
   }).format(new Date(date));
 }
 
-export default async function EditorialDocumentosPage() {
+export default async function EditorialDocumentosPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ filtro?: string }>;
+}) {
+  const session = await requireEditorSession();
+  const canWrite = hasDocumentWriteRole(session.roles);
+
+  const { filtro } = await searchParams;
+  const showRemovidos = canWrite && filtro === "removidos";
+
   const rows = await db
     .select({
       id: documents.id,
@@ -24,12 +38,20 @@ export default async function EditorialDocumentosPage() {
       visibility: documents.visibility,
       categoryName: categories.name,
       publishedAt: documents.publishedAt,
+      deletedAt: documents.deletedAt,
       updatedAt: documents.updatedAt,
     })
     .from(documents)
     .leftJoin(categories, eq(categories.id, documents.categoryId))
     .leftJoin(editals, eq(editals.id, documents.id))
-    .where(and(isNull(documents.deletedAt), isNull(editals.id)))
+    .where(
+      and(
+        showRemovidos
+          ? isNotNull(documents.deletedAt)
+          : isNull(documents.deletedAt),
+        isNull(editals.id),
+      ),
+    )
     .orderBy(desc(documents.updatedAt));
 
   return (
@@ -71,25 +93,59 @@ export default async function EditorialDocumentosPage() {
             Documentos
           </h1>
           <p style={{ margin: 0, fontSize: 13, color: "var(--fg-muted)" }}>
-            {rows.length} documento{rows.length === 1 ? "" : "s"} (exclui
-            editais, listados separadamente).
+            {showRemovidos
+              ? `${rows.length} documento${rows.length === 1 ? "" : "s"} removido${rows.length === 1 ? "" : "s"}.`
+              : `${rows.length} documento${rows.length === 1 ? "" : "s"} (exclui editais, listados separadamente).`}
           </p>
         </div>
 
-        <Link href="/editorial/novo" className="hb-btn hb-btn-primary">
-          <Plus size={15} aria-hidden="true" />
-          Novo documento
-        </Link>
+        {canWrite && (
+          <Link href="/editorial/novo" className="hb-btn hb-btn-primary">
+            <Plus size={15} aria-hidden="true" />
+            Novo documento
+          </Link>
+        )}
       </div>
+
+      {canWrite && (
+        <div
+          className="hb-tabs"
+          role="tablist"
+          aria-label="Filtro de documentos"
+        >
+          <Link
+            href="/editorial/documentos"
+            role="tab"
+            aria-selected={!showRemovidos}
+            className={`hb-tab${!showRemovidos ? " active" : ""}`}
+          >
+            Ativos
+          </Link>
+          <Link
+            href="/editorial/documentos?filtro=removidos"
+            role="tab"
+            aria-selected={showRemovidos}
+            className={`hb-tab${showRemovidos ? " active" : ""}`}
+          >
+            Removidos
+          </Link>
+        </div>
+      )}
 
       {rows.length === 0 ? (
         <div className="hb-empty" style={{ padding: "40px 20px" }}>
           <div className="hb-empty-icon">
             <FileText size={24} aria-hidden="true" />
           </div>
-          <b>Nenhum documento ainda</b>
+          <b>
+            {showRemovidos
+              ? "Nenhum documento removido"
+              : "Nenhum documento ainda"}
+          </b>
           <p className="hb-empty-body">
-            Crie o primeiro documento da área editorial.
+            {showRemovidos
+              ? "Documentos removidos aparecem aqui e podem ser restaurados."
+              : "Crie o primeiro documento da área editorial."}
           </p>
         </div>
       ) : (
@@ -130,7 +186,11 @@ export default async function EditorialDocumentosPage() {
                     />
                   </td>
                   <td style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>
-                    {doc.publishedAt ? "Publicado" : "Rascunho"}
+                    {doc.deletedAt
+                      ? "Removido"
+                      : doc.publishedAt
+                        ? "Publicado"
+                        : "Rascunho"}
                   </td>
                   <td style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>
                     {formatDate(doc.updatedAt)}
@@ -140,6 +200,8 @@ export default async function EditorialDocumentosPage() {
                       id={doc.id}
                       isPublished={!!doc.publishedAt}
                       isEdital={false}
+                      isDeleted={!!doc.deletedAt}
+                      canWrite={canWrite}
                     />
                   </td>
                 </tr>

@@ -63,7 +63,7 @@ Corpo integral no próprio arquivo (as 4 originais) ou em `AUDIT/04-prompts-pend
 | P-1.16c   | Documentos: reordenação de categorias — UI ao backend (b)     | neste arquivo                    | S-186    |
 | P-1.17b   | Documentos: fronteiras de erro e cópia de estados vazios      | neste arquivo                    | S-187    |
 | P-1.18b   | Documentos: campos que a UI coleta e o banco não guarda       | neste arquivo                    | pendente |
-| P-1.19b   | Documentos: RLS de rascunho, lixeira e papel conselheiro      | neste arquivo                    | pendente |
+| P-1.19b   | Documentos: RLS de rascunho, lixeira e papel conselheiro      | neste arquivo                    | S-189    |
 | P-1.20b   | Documentos: busca com acento, índice e fim da action órfã     | neste arquivo                    | pendente |
 | P-1.20c   | Documentos: registro de leitura (`views`) que ninguém escreve | neste arquivo                    | pendente |
 | P-1.21b   | Documentos: área editorial ainda lê como superusuário         | neste arquivo                    | pendente |
@@ -2666,17 +2666,19 @@ P-1.19 nunca teve sessão própria em SESSIONS.md (débito de documentação reg
 
 **Critérios de aceite:**
 
-- [ ] `anon` não lê rascunho `public` nem documento soft-deletado — teste de regressão em `rls.test.ts`
-- [ ] Autor e `super_admin`/`diretor` leem os próprios rascunhos; `updateDocument` e `publishDocument` continuam funcionando sobre rascunho sob contexto autenticado
-- [ ] `deleteDocument` não usa mais `withSystemRole`; `grep -n "RLS debt" apps/documentos/src/actions/documents.ts` retorna vazio
-- [ ] Documento removido aparece em "Removidos" na listagem editorial e pode ser restaurado, com audit dos dois lados
-- [ ] Conjunto de papéis editoriais definido em um único lugar e coerente entre gate (`editorAction`), UI e policies — sem papel que passe no portão e falhe no banco
-- [ ] `rls.test.ts` cobre INSERT/UPDATE por papel, não só SELECT
-- [ ] `pnpm --filter documentos typecheck lint test` verdes; migration aplicada no Supabase de dev
-- [ ] Registrar em SESSIONS.md — incluindo a saída escolhida no item 3 e quem decidiu
+- [x] `anon` não lê rascunho `public` nem documento soft-deletado — teste de regressão em `rls.test.ts`
+- [x] Autor e `super_admin`/`diretor` leem os próprios rascunhos; `updateDocument` e `publishDocument` continuam funcionando sobre rascunho sob contexto autenticado
+- [x] `deleteDocument` não usa mais `withSystemRole`; `grep -n "RLS debt" apps/documentos/src/actions/documents.ts` retorna vazio
+- [x] Documento removido aparece em "Removidos" na listagem editorial e pode ser restaurado, com audit dos dois lados
+- [x] Conjunto de papéis editoriais definido em um único lugar e coerente entre gate (`editorAction`), UI e policies — sem papel que passe no portão e falhe no banco
+- [x] `rls.test.ts` cobre INSERT/UPDATE por papel, não só SELECT
+- [x] `pnpm --filter documentos typecheck lint test` verdes; migration aplicada no Supabase de dev
+- [x] Registrar em SESSIONS.md — incluindo a saída escolhida no item 3 e quem decidiu
 
 **Notas:**
 Ref: BRAIN.md §6.7 e "Defense in depth". Este é o prompt de maior risco de regressão do lote: mexer nas policies de SELECT afeta toda leitura autenticada do módulo. Rodar a suíte inteira de `apps/documentos` (não só os testes novos) antes de fechar. Não tocar em `views`/`subscriptions` aqui — têm prompt próprio.
+
+**Decisão do item 3 (registrada em S-189):** perguntado ao Filipe via `AskUserQuestion` antes de implementar — **opção (b): conselheiro é somente-leitura**. `conselheiro` foi removido de `editorAction` (portão de escrita); permanece em `EDITOR_ROLES` só para navegar a área editorial em modo leitura. `DOCUMENT_WRITE_ROLES` (`lib/session.ts`) é agora a fonte única do conjunto de escrita, consumida por `safe-action.ts` e por `editorial/documentos/page.tsx`/`document-row-actions.tsx` (esconde "Novo documento", a aba "Removidos" e os botões de ação por linha quando o papel não escreve). `editorial/editais/page.tsx` e as páginas `novo`/`[id]/editar` ficaram fora do escopo (não estavam nos arquivos permitidos) — nelas o clique ainda falha via erro limpo de `editorAction` em vez de esconder o botão; registrado como débito para prompt próprio.
 
 ---
 

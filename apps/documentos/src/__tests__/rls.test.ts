@@ -31,12 +31,15 @@ const IDS = {
   admin: "f1000000-0000-0000-0000-000000000001",
   conselheiro: "f1000000-0000-0000-0000-000000000002",
   hospede: "f1000000-0000-0000-0000-000000000003",
+  colaboradorAuthor: "f1000000-0000-0000-0000-000000000004",
+  colaboradorOther: "f1000000-0000-0000-0000-000000000005",
 } as const;
 
 const DOC_IDS = {
   public: "f1000000-0000-0000-0000-000000000010",
   internal: "f1000000-0000-0000-0000-000000000011",
   restricted: "f1000000-0000-0000-0000-000000000012",
+  draft: "f1000000-0000-0000-0000-000000000013",
 } as const;
 
 const CAT_ID = "f1000000-0000-0000-0000-000000000020";
@@ -98,6 +101,16 @@ beforeAll(async () => {
       email: "rls-docs-hospede@test.hebron",
       fullName: "RLS Docs Hóspede",
     },
+    {
+      id: IDS.colaboradorAuthor,
+      email: "rls-docs-colaborador-autor@test.hebron",
+      fullName: "RLS Docs Colaborador Autor",
+    },
+    {
+      id: IDS.colaboradorOther,
+      email: "rls-docs-colaborador-outro@test.hebron",
+      fullName: "RLS Docs Colaborador Outro",
+    },
   ];
   for (const u of userFixtures) {
     await db.insert(users).values(u).onConflictDoNothing();
@@ -112,6 +125,16 @@ beforeAll(async () => {
       grantedBy: IDS.admin,
     },
     { userId: IDS.hospede, role: "hospede" as const, grantedBy: IDS.admin },
+    {
+      userId: IDS.colaboradorAuthor,
+      role: "colaborador" as const,
+      grantedBy: IDS.admin,
+    },
+    {
+      userId: IDS.colaboradorOther,
+      role: "colaborador" as const,
+      grantedBy: IDS.admin,
+    },
   ];
   for (const r of roleFixtures) {
     await db.insert(roleAssignments).values(r).onConflictDoNothing();
@@ -155,6 +178,14 @@ beforeAll(async () => {
       visibility: "restricted" as const,
       authorId: IDS.admin,
       publishedAt: now,
+      categoryId: CAT_ID,
+    },
+    {
+      id: DOC_IDS.draft,
+      title: "RLS Draft Doc",
+      slug: "rls-draft-doc",
+      visibility: "internal" as const,
+      authorId: IDS.colaboradorAuthor,
       categoryId: CAT_ID,
     },
   ];
@@ -458,5 +489,223 @@ describe("Regressão P-1.15b — /categoria/[slug] respeita visibilidade na list
     expect(ids).toContain(DOC_IDS.public);
     expect(ids).toContain(DOC_IDS.internal);
     expect(ids).toContain(DOC_IDS.restricted);
+  });
+});
+
+// ── Regressão P-1.19b (item 1) — rascunho e lixeira ────────────────────────────
+// Antes desta migration, as 3 policies de SELECT em documents não filtravam
+// published_at (rascunho vazava por visibility) e nenhuma policy alcançava
+// deleted_at IS NOT NULL (soft-delete ficava invisível para todo mundo,
+// inclusive quem apagou). documents_select_own_draft cobre os dois casos.
+
+describe("RLS — documentos.documents (rascunho)", () => {
+  const Q = `SELECT id FROM documentos.documents WHERE id = '${DOC_IDS.draft}'`;
+
+  it("anon NÃO vê o rascunho, mesmo sendo visibility internal/public", async () => {
+    const rows = await queryAsAnon(Q);
+    expect(rows).toHaveLength(0);
+  });
+
+  it("colaborador não-autor NÃO vê o rascunho alheio", async () => {
+    const rows = await queryAs(IDS.colaboradorOther, Q);
+    expect(rows).toHaveLength(0);
+  });
+
+  it("autor vê o próprio rascunho", async () => {
+    const rows = await queryAs(IDS.colaboradorAuthor, Q);
+    expect(rows).toHaveLength(1);
+  });
+
+  it("super_admin vê o rascunho de outro autor", async () => {
+    const rows = await queryAs(IDS.admin, Q);
+    expect(rows).toHaveLength(1);
+  });
+});
+
+describe("RLS — documentos.documents (lixeira)", () => {
+  beforeAll(async () => {
+    await db
+      .update(documents)
+      .set({ deletedAt: new Date() })
+      .where(eq(documents.id, DOC_IDS.public));
+  });
+
+  afterAll(async () => {
+    await db
+      .update(documents)
+      .set({ deletedAt: null })
+      .where(eq(documents.id, DOC_IDS.public));
+  });
+
+  const Q = `SELECT id FROM documentos.documents WHERE id = '${DOC_IDS.public}'`;
+
+  it("anon NÃO vê o documento removido", async () => {
+    const rows = await queryAsAnon(Q);
+    expect(rows).toHaveLength(0);
+  });
+
+  it("colaborador não-autor NÃO vê o documento removido alheio", async () => {
+    const rows = await queryAs(IDS.colaboradorOther, Q);
+    expect(rows).toHaveLength(0);
+  });
+
+  it("autor (admin) vê o próprio documento removido", async () => {
+    const rows = await queryAs(IDS.admin, Q);
+    expect(rows).toHaveLength(1);
+  });
+});
+
+// ── Regressão P-1.19b (item 3) — escrita por papel ─────────────────────────────
+// documentos.documents: authenticated tem GRANT SELECT/INSERT/UPDATE (sem
+// DELETE — soft delete via UPDATE); anon só tem SELECT (0014_grants_authenticated).
+// Um INSERT/UPDATE como anon já falha no GRANT, antes de qualquer policy.
+
+describe("RLS — documentos.documents (INSERT)", () => {
+  const insertAs = (authorId: string) => `
+    INSERT INTO documentos.documents (id, title, slug, visibility, type, author_id)
+    VALUES (
+      'f1000000-0000-0000-0000-000000000040',
+      'RLS Insert Test',
+      'rls-insert-test-' || gen_random_uuid(),
+      'internal',
+      'other',
+      '${authorId}'
+    )
+    RETURNING id
+  `;
+
+  it("anon NÃO pode inserir documento (sem GRANT)", async () => {
+    await expect(queryAsAnon(insertAs(IDS.hospede))).rejects.toThrow();
+  });
+
+  it("hospede (autenticado, sem papel editorial) NÃO pode inserir documento", async () => {
+    await expect(queryAs(IDS.hospede, insertAs(IDS.hospede))).rejects.toThrow();
+  });
+
+  it("conselheiro NÃO pode inserir documento (é somente-leitura)", async () => {
+    await expect(
+      queryAs(IDS.conselheiro, insertAs(IDS.conselheiro)),
+    ).rejects.toThrow();
+  });
+
+  it("colaborador NÃO pode inserir documento com author_id alheio", async () => {
+    await expect(
+      queryAs(IDS.colaboradorAuthor, insertAs(IDS.admin)),
+    ).rejects.toThrow();
+  });
+
+  it("colaborador pode inserir documento com author_id = si mesmo", async () => {
+    const rows = await queryAs(
+      IDS.colaboradorAuthor,
+      insertAs(IDS.colaboradorAuthor),
+    );
+    expect(rows).toHaveLength(1);
+  });
+
+  it("super_admin pode inserir documento (author_id = si mesmo)", async () => {
+    // documents_insert_editor (0005_documentos_rls.sql, inalterada aqui)
+    // exige author_id = auth.uid() para todo mundo, inclusive super_admin —
+    // não existe insert em nome de terceiros.
+    const rows = await queryAs(IDS.admin, insertAs(IDS.admin));
+    expect(rows).toHaveLength(1);
+  });
+});
+
+describe("RLS — documentos.documents (UPDATE)", () => {
+  const updateTitle = (docId: string) => `
+    UPDATE documentos.documents SET title = 'RLS Update Test'
+    WHERE id = '${docId}'
+    RETURNING id
+  `;
+
+  it("anon NÃO pode atualizar documento (sem GRANT)", async () => {
+    await expect(queryAsAnon(updateTitle(DOC_IDS.public))).rejects.toThrow();
+  });
+
+  it("autor atualiza o próprio documento", async () => {
+    const rows = await queryAs(
+      IDS.colaboradorAuthor,
+      updateTitle(DOC_IDS.draft),
+    );
+    expect(rows).toHaveLength(1);
+  });
+
+  it("colaborador NÃO atualiza documento de terceiro (0 linhas, sem erro)", async () => {
+    const rows = await queryAs(
+      IDS.colaboradorOther,
+      updateTitle(DOC_IDS.draft),
+    );
+    expect(rows).toHaveLength(0);
+  });
+
+  it("conselheiro NÃO atualiza nenhum documento (é somente-leitura)", async () => {
+    const rows = await queryAs(IDS.conselheiro, updateTitle(DOC_IDS.public));
+    expect(rows).toHaveLength(0);
+  });
+
+  it("hospede NÃO atualiza nenhum documento", async () => {
+    const rows = await queryAs(IDS.hospede, updateTitle(DOC_IDS.public));
+    expect(rows).toHaveLength(0);
+  });
+
+  it("super_admin atualiza qualquer documento", async () => {
+    const rows = await queryAs(IDS.admin, updateTitle(DOC_IDS.public));
+    expect(rows).toHaveLength(1);
+  });
+});
+
+describe("RLS — documentos.documents (soft-delete / restore)", () => {
+  it("autor soft-deleta e restaura o próprio documento", async () => {
+    const deleted = await queryAs(
+      IDS.colaboradorAuthor,
+      `UPDATE documentos.documents SET deleted_at = now()
+       WHERE id = '${DOC_IDS.draft}' RETURNING id, deleted_at`,
+    );
+    expect(deleted).toHaveLength(1);
+    expect(deleted[0]?.["deleted_at"]).not.toBeNull();
+
+    const restored = await queryAs(
+      IDS.colaboradorAuthor,
+      `UPDATE documentos.documents SET deleted_at = NULL
+       WHERE id = '${DOC_IDS.draft}' RETURNING id, deleted_at`,
+    );
+    expect(restored).toHaveLength(1);
+    expect(restored[0]?.["deleted_at"]).toBeNull();
+  });
+
+  it("colaborador NÃO soft-deleta documento de terceiro (0 linhas)", async () => {
+    const rows = await queryAs(
+      IDS.colaboradorOther,
+      `UPDATE documentos.documents SET deleted_at = now()
+       WHERE id = '${DOC_IDS.public}' RETURNING id`,
+    );
+    expect(rows).toHaveLength(0);
+  });
+});
+
+// ── Regressão P-1.19b (item 4) — document_versions: created_by alheio ─────────
+// document_versions só recebe GRANT SELECT/INSERT (sem UPDATE/DELETE —
+// versões são imutáveis); WITH CHECK exige created_by = auth.uid().
+
+describe("RLS — documentos.document_versions (INSERT)", () => {
+  it("colaborador NÃO insere versão com created_by alheio", async () => {
+    await expect(
+      queryAs(
+        IDS.colaboradorAuthor,
+        `INSERT INTO documentos.document_versions (id, document_id, version_number, created_by)
+         VALUES ('f1000000-0000-0000-0000-000000000041', '${DOC_IDS.draft}', 99, '${IDS.admin}')
+         RETURNING id`,
+      ),
+    ).rejects.toThrow();
+  });
+
+  it("colaborador insere versão com created_by = si mesmo", async () => {
+    const rows = await queryAs(
+      IDS.colaboradorAuthor,
+      `INSERT INTO documentos.document_versions (id, document_id, version_number, created_by)
+       VALUES ('f1000000-0000-0000-0000-000000000042', '${DOC_IDS.draft}', 98, '${IDS.colaboradorAuthor}')
+       RETURNING id`,
+    );
+    expect(rows).toHaveLength(1);
   });
 });

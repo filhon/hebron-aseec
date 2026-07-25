@@ -405,28 +405,16 @@ export const deleteDocument = editorAction
         if (before.deletedAt) throw new Error("Documento já foi removido");
 
         const now = new Date();
+        const [updated] = await tx
+          .update(documents)
+          .set({ deletedAt: now, updatedAt: now })
+          .where(eq(documents.id, parsedInput.id))
+          .returning();
 
-        // RLS debt (0005_documentos_rls.sql): as 3 policies de SELECT em
-        // documentos.documents exigem deleted_at IS NULL — nenhuma permite
-        // ver a linha depois do soft delete. Postgres exige que a linha
-        // resultante satisfaça alguma policy de SELECT mesmo num UPDATE sem
-        // RETURNING, então SEM exceção NINGUÉM (nem super_admin) consegue
-        // hoje soft-deletar via client autenticado — não é específico de
-        // colaborador/autor. withSystemRole contorna (mesmo padrão de
-        // exceção documentado em apps/financeiro/src/actions/categories.ts);
-        // o RBAC de editorAction já validou o papel antes de chegar aqui.
-        // Débito registrado em SESSIONS.md — requer nova policy de SELECT
-        // para dono/admin de documento deletado.
-        const updated = await withSystemRole(tx, async (sysTx) => {
-          const [updated] = await sysTx
-            .update(documents)
-            .set({ deletedAt: now, updatedAt: now })
-            .where(eq(documents.id, parsedInput.id))
-            .returning();
+        if (!updated) throw new Error("Falha ao remover documento");
 
-          if (!updated) throw new Error("Falha ao remover documento");
-
-          await logDocumentAudit(
+        await withSystemRole(tx, (sysTx) =>
+          logDocumentAudit(
             {
               actorId: ctx.actorId,
               action: "document.deleted",
@@ -438,10 +426,58 @@ export const deleteDocument = editorAction
               },
             },
             sysTx,
-          );
+          ),
+        );
 
-          return updated;
-        });
+        return updated;
+      },
+    );
+
+    return { document: updated };
+  });
+
+// ─── restoreDocument ──────────────────────────────────────────────────────────
+// Reverte o soft delete: deleted_at = NULL. Sem hard delete — imutabilidade.
+
+export const restoreDocument = editorAction
+  .schema(z.object({ id: z.string().uuid() }))
+  .action(async ({ parsedInput, ctx }) => {
+    const updated = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const [before] = await tx
+          .select()
+          .from(documents)
+          .where(eq(documents.id, parsedInput.id))
+          .limit(1);
+
+        if (!before) throw new Error("Documento não encontrado");
+        if (!before.deletedAt) throw new Error("Documento não está na lixeira");
+
+        const now = new Date();
+        const [updated] = await tx
+          .update(documents)
+          .set({ deletedAt: null, updatedAt: now })
+          .where(eq(documents.id, parsedInput.id))
+          .returning();
+
+        if (!updated) throw new Error("Falha ao restaurar documento");
+
+        await withSystemRole(tx, (sysTx) =>
+          logDocumentAudit(
+            {
+              actorId: ctx.actorId,
+              action: "document.updated",
+              entity: "document",
+              entityId: parsedInput.id,
+              diff: {
+                deletedAt: { before: before.deletedAt, after: null },
+                title: before.title,
+              },
+            },
+            sysTx,
+          ),
+        );
 
         return updated;
       },
