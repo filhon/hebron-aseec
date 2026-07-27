@@ -210,6 +210,7 @@
 | S-187  | 2026-07-25 | P-1.17b — Documentos: fronteiras de erro e cópia de estados vazios (CORRETIVO)                                                   | concluido                            |
 | S-188  | 2026-07-25 | P-1.18b — Documentos: campos que a UI coleta e o banco não guarda (CORRETIVO)                                                    | concluido                            |
 | S-189  | 2026-07-25 | P-1.19b — Documentos: RLS de rascunho, lixeira e o papel conselheiro (CORRETIVO)                                                 | concluido                            |
+| S-190  | 2026-07-27 | P-1.20b — Documentos: busca com acento, índice e fim da action órfã (CORRETIVO)                                                  | concluido                            |
 
 ---
 
@@ -15492,4 +15493,112 @@ de escrita na UI em vez de deixá-los falhar no clique.
 - `apps/documentos/src/__tests__/rls.test.ts`
 - `PROMPTS.md` (nota da decisão do item 3)
 - `SESSIONS.md` (esta entrada + linha no índice)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+## S-190 — P-1.20b — Documentos: busca com acento, índice e fim da action órfã (CORRETIVO)
+
+**Branch:** `feat/P-1.20b-docs-busca`
+
+### Contexto
+
+O critério de P-1.20 "Busca full-text por título, conteúdo Markdown e tags"
+estava `[x]` mas existiam duas implementações que não se falavam:
+
+1. `actions/search.ts` (`searchDocuments`/`searchCategories`) — gate
+   `authenticatedAction`, ILIKE em título/conteúdo/tag. `grep -rn
+"searchDocuments\|searchCategories" apps/documentos/src` só devolvia o
+   próprio arquivo e `__tests__/search.test.ts` — zero chamadores reais desde
+   S-29b (a busca pública não pode usar uma action que exige sessão).
+2. `app/busca/page.tsx` — duas consultas inline no RSC (editais e
+   documentos), que são as que o usuário realmente executa e que nenhum
+   teste cobria.
+
+As duas com o mesmo defeito: `ILIKE '%termo%'` sensível a acento
+("orcamento" não encontra "Orçamento") e sem nenhum índice (curinga à
+esquerda não usa B-tree) — débito de S-29 nunca endereçado.
+
+### O que foi feito
+
+1. **Migration `0063_documentos_busca.sql`**: `CREATE EXTENSION unaccent` +
+   `pg_trgm`; função `documentos.f_unaccent(text)` — wrapper IMMUTABLE
+   padrão da comunidade Postgres em torno de `unaccent(regdictionary, text)`
+   (que é STABLE e não pode aparecer em coluna gerada/índice de expressão
+   sem essa fixação via `'public.unaccent'::regdictionary`). Coluna gerada
+   `documents.search_text` (STORED) = `f_unaccent(lower(title || ' ' ||
+coalesce(content_md, '')))`, com índice `gin (search_text
+gin_trgm_ops)`. Índices de expressão equivalentes em `tags.name` e
+   `categories.name` (sem materializar — tabelas pequenas). Aplicada no
+   Supabase de dev via `pnpm --filter @hebron/db db:migrate`.
+2. **Consulta única**: `apps/documentos/src/lib/search-query.ts` —
+   `searchDocumentsQuery(tx, filters)`, função pura que recebe o handle
+   Drizzle e devolve as linhas. Compara sempre `f_unaccent(lower(...))` dos
+   dois lados. Parâmetros: `categoryId`, `visibility`, `tagIds` (filtro
+   exato — chips da tela), `matchTagNames` (também casa por nome de tag,
+   comportamento herdado de `searchDocuments`), `editalFilter`
+   (`"only"|"exclude"|"any"`, via `EXISTS`/`NOT EXISTS` em `documentos.editals`
+   — evita a ginástica de tipos do Drizzle com joins condicionais),
+   `orderBy`, `limit`/`offset`.
+3. **`app/busca/page.tsx`** passou a chamar `searchDocumentsQuery` duas vezes
+   (editais com `editalFilter: "only"`, documentos com `"exclude"`) em vez de
+   duplicar a condição `ILIKE` duas vezes inline; `pattern`/`tagFilter`
+   locais removidos.
+4. **`actions/search.ts` removido por completo.** Depois de extrair a
+   lógica para o módulo compartilhado, a action continuou sem nenhum
+   chamador de produto (nem `searchDocuments` nem `searchCategories` — a
+   segunda também nunca teve consumidor, mesmo não citada no prompt;
+   removida junto por ser o mesmo defeito, decisão registrada aqui em vez de
+   inventada em silêncio). `__tests__/search.test.ts` reescrito para
+   exercitar `searchDocumentsQuery` diretamente (o caminho real da tela),
+   com casos novos de acento nas duas direções (`orcamento` → "Orçamento" e
+   o inverso) e de caixa, e um caso preservando `matchTagNames` (cobertura
+   antiga de busca por tag).
+
+### EXPLAIN do filtro de texto (Supabase de dev, pós-migration)
+
+Tabela pequena (~10 linhas no dev) — o planner escolhe Seq Scan por custo,
+comportamento correto do otimizador nesse volume:
+
+```
+Seq Scan on documents  (cost=0.00..1.04 rows=1 width=42) (actual time=0.112..0.113 rows=0 loops=1)
+  Filter: ((deleted_at IS NULL) AND (published_at IS NOT NULL) AND (search_text ~~* '%orcamento%'::text))
+  Rows Removed by Filter: 3
+Planning Time: 4.979 ms
+Execution Time: 0.145 ms
+```
+
+Com `SET enable_seqscan = off` (para provar que o índice atende o
+predicado, não que o planner o escolheria num volume maior):
+
+```
+Bitmap Heap Scan on documents  (cost=11.88..13.00 rows=1 width=16)
+  Recheck Cond: (search_text ~~* '%orcamento%'::text)
+  ->  Bitmap Index Scan on documents_search_text_trgm_idx  (cost=0.00..11.88 rows=1 width=0)
+        Index Cond: (search_text ~~* '%orcamento%'::text)
+```
+
+### Critérios de aceite
+
+- [x] Buscar sem acento encontra documento com acento, e vice-versa —
+      `search.test.ts` ("insensível a acento e caixa", 3 casos)
+- [x] `/busca` e o módulo compartilhado usam a mesma consulta; nenhuma
+      lógica de busca duplicada no RSC
+- [x] `actions/search.ts` removido (zero chamadores de produto após o
+      refactor) — não há action morta com teste próprio
+- [x] `EXPLAIN` do filtro de texto usa o índice GIN — plano registrado acima
+      (via `SET enable_seqscan = off`, dado o volume pequeno do dev)
+- [x] Testes cobrem o caminho que a tela `/busca` executa
+      (`searchDocumentsQuery`)
+- [x] `pnpm --filter documentos typecheck lint test` verdes (5 arquivos, 82
+      testes); migration aplicada no Supabase de dev
+- [x] Registrado em SESSIONS.md
+
+### Arquivos alterados
+
+- `packages/db/src/migrations/0063_documentos_busca.sql` (criado)
+- `packages/db/src/schema/documentos.ts` (coluna gerada `searchText`)
+- `apps/documentos/src/lib/search-query.ts` (criado)
+- `apps/documentos/src/actions/search.ts` (removido)
+- `apps/documentos/src/app/busca/page.tsx`
+- `apps/documentos/src/__tests__/search.test.ts`
+- `PROMPTS.md` (linha do índice)
 - `SESSIONS.md` (esta entrada + linha no índice)

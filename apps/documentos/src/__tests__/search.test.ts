@@ -1,20 +1,24 @@
 /**
- * search.test.ts — busca full-text e filtros do módulo documentos.
+ * search.test.ts — busca de documentos do módulo documentos.
  *
- * Semeia documentos diretamente via Drizzle e executa searchDocuments
- * para verificar resultados por título, conteúdo, tags e filtro de categoria.
- * Confirma que documentos não publicados e deletados não aparecem.
+ * Exercita `searchDocumentsQuery` (lib/search-query.ts) diretamente — o mesmo
+ * módulo consumido por `app/busca/page.tsx`, a tela que o usuário realmente
+ * usa. `actions/search.ts` foi removido em P-1.20b: `searchDocuments` nunca
+ * teve chamador fora deste arquivo (S-29b registrou o motivo, mas a action
+ * ficou órfã e testada em separado da consulta real).
  *
  * Mocks:
  *   - next/headers      → cookies sem contexto de request
  *   - @supabase/supabase-js → ACTOR_ID como usuário autenticado
  *
- * Requer: DATABASE_URL migrado.
+ * Requer: DATABASE_URL migrado (inclui 0063_documentos_busca.sql: unaccent,
+ * pg_trgm, documents.search_text).
  */
 
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@hebron/db/client";
+import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import {
   users,
   categories,
@@ -23,6 +27,7 @@ import {
   documentTags,
   documentVersions,
 } from "@hebron/db/schema";
+import { searchDocumentsQuery } from "../lib/search-query";
 
 // ── IDs fixos (prefixo e3) ────────────────────────────────────────────────────
 
@@ -40,6 +45,7 @@ const TOKEN_TAG = "srctag-charlie-4p8w";
 const TOKEN_CATFILT = "SRCCATFILT_DELTA_1n5r";
 const TOKEN_UNPUB = "SRCUNPUB_ECHO_6s0j";
 const TOKEN_DELETED = "SRCDEL_FOXTROT_2b7v";
+const TOKEN_ACCENT = "SRCHACC_GOLF_3q9z"; // combinado com "Orçamento" no título
 
 const DOC_IDS = {
   byTitle: "e3000000-0000-0000-0000-000000000030",
@@ -48,6 +54,7 @@ const DOC_IDS = {
   byCat: "e3000000-0000-0000-0000-000000000033",
   unpublished: "e3000000-0000-0000-0000-000000000034",
   deleted: "e3000000-0000-0000-0000-000000000035",
+  accented: "e3000000-0000-0000-0000-000000000036",
 } as const;
 
 // ── Mocks globais ─────────────────────────────────────────────────────────────
@@ -162,6 +169,17 @@ beforeAll(async () => {
         deletedAt: now,
         categoryId: CAT_A_ID,
       },
+      // Título acentuado — casos de acento/maiúsculas
+      {
+        id: DOC_IDS.accented,
+        title: `Orçamento ${TOKEN_ACCENT}`,
+        slug: `doc-accented-e3`,
+        contentMd: "conteúdo genérico",
+        visibility: "public" as const,
+        authorId: ACTOR_ID,
+        publishedAt: now,
+        categoryId: CAT_A_ID,
+      },
     ])
     .onConflictDoNothing();
 
@@ -196,104 +214,92 @@ afterAll(async () => {
   await db.delete(users).where(eq(users.id, ACTOR_ID));
 });
 
-// ── searchDocuments ────────────────────────────────────────────────────────────
+// Helper: roda searchDocumentsQuery sob o mesmo contexto autenticado que a
+// tela /busca usa (withAuthenticatedContext), como app/busca/page.tsx faz.
+async function search(filters: Parameters<typeof searchDocumentsQuery>[1]) {
+  return withAuthenticatedContext({ actorId: ACTOR_ID }, (tx) =>
+    searchDocumentsQuery(tx, filters),
+  );
+}
 
-describe("searchDocuments — busca por título", () => {
+// ── Busca por título / conteúdo ────────────────────────────────────────────────
+
+describe("searchDocumentsQuery — busca por título", () => {
   it("retorna documento cujo título contém o termo", async () => {
-    const { searchDocuments } = await import("../actions/search");
-
-    const result = await searchDocuments({ query: TOKEN_TITLE });
-
-    const ids = result?.data?.results.map((r) => r.id) ?? [];
-    expect(ids).toContain(DOC_IDS.byTitle);
+    const rows = await search({ query: TOKEN_TITLE });
+    expect(rows.map((r) => r.id)).toContain(DOC_IDS.byTitle);
   });
 
   it("NÃO retorna documentos sem o termo no título", async () => {
-    const { searchDocuments } = await import("../actions/search");
-
-    const result = await searchDocuments({ query: TOKEN_TITLE });
-
-    const ids = result?.data?.results.map((r) => r.id) ?? [];
-    expect(ids).not.toContain(DOC_IDS.byContent);
+    const rows = await search({ query: TOKEN_TITLE });
+    expect(rows.map((r) => r.id)).not.toContain(DOC_IDS.byContent);
   });
 });
 
-describe("searchDocuments — busca por conteúdo", () => {
+describe("searchDocumentsQuery — busca por conteúdo", () => {
   it("retorna documento cujo contentMd contém o termo", async () => {
-    const { searchDocuments } = await import("../actions/search");
-
-    const result = await searchDocuments({ query: TOKEN_CONTENT });
-
-    const ids = result?.data?.results.map((r) => r.id) ?? [];
-    expect(ids).toContain(DOC_IDS.byContent);
+    const rows = await search({ query: TOKEN_CONTENT });
+    expect(rows.map((r) => r.id)).toContain(DOC_IDS.byContent);
   });
 });
 
-describe("searchDocuments — busca por tag", () => {
+// ── Acento e caixa (P-1.20b) ────────────────────────────────────────────────────
+
+describe("searchDocumentsQuery — insensível a acento e caixa", () => {
+  it("termo sem acento encontra título acentuado (orcamento → Orçamento)", async () => {
+    const rows = await search({ query: `orcamento ${TOKEN_ACCENT}` });
+    expect(rows.map((r) => r.id)).toContain(DOC_IDS.accented);
+  });
+
+  it("termo acentuado encontra o mesmo documento (Orçamento → Orçamento)", async () => {
+    const rows = await search({ query: `Orçamento ${TOKEN_ACCENT}` });
+    expect(rows.map((r) => r.id)).toContain(DOC_IDS.accented);
+  });
+
+  it("é insensível a maiúsculas/minúsculas", async () => {
+    const rows = await search({ query: TOKEN_ACCENT.toLowerCase() });
+    expect(rows.map((r) => r.id)).toContain(DOC_IDS.accented);
+  });
+});
+
+// ── Busca por tag (comportamento legado de searchDocuments) ─────────────────────
+
+describe("searchDocumentsQuery — busca por nome de tag (matchTagNames)", () => {
   it("retorna documento que tem tag com nome correspondente", async () => {
-    const { searchDocuments } = await import("../actions/search");
+    const rows = await search({ query: TOKEN_TAG, matchTagNames: true });
+    expect(rows.map((r) => r.id)).toContain(DOC_IDS.byTag);
+  });
 
-    const result = await searchDocuments({ query: TOKEN_TAG });
-
-    const ids = result?.data?.results.map((r) => r.id) ?? [];
-    expect(ids).toContain(DOC_IDS.byTag);
+  it("sem matchTagNames, não casa pelo nome da tag", async () => {
+    const rows = await search({ query: TOKEN_TAG });
+    expect(rows.map((r) => r.id)).not.toContain(DOC_IDS.byTag);
   });
 });
 
-describe("searchDocuments — filtro por categoria", () => {
-  it("retorna apenas documentos da categoria especificada", async () => {
-    const { searchDocuments } = await import("../actions/search");
+// ── Filtros ──────────────────────────────────────────────────────────────────────
 
-    const result = await searchDocuments({
+describe("searchDocumentsQuery — filtro por categoria", () => {
+  it("retorna apenas documentos da categoria especificada", async () => {
+    const rows = await search({
       query: TOKEN_CATFILT,
       categoryId: CAT_B_ID,
     });
-
-    const ids = result?.data?.results.map((r) => r.id) ?? [];
+    const ids = rows.map((r) => r.id);
     expect(ids).toContain(DOC_IDS.byCat);
     expect(ids).not.toContain(DOC_IDS.byTitle);
   });
 });
 
-describe("searchDocuments — documentos não visíveis", () => {
+// ── Visibilidade ─────────────────────────────────────────────────────────────────
+
+describe("searchDocumentsQuery — documentos não visíveis", () => {
   it("NÃO retorna documentos não publicados (publishedAt nulo)", async () => {
-    const { searchDocuments } = await import("../actions/search");
-
-    const result = await searchDocuments({ query: TOKEN_UNPUB });
-
-    const ids = result?.data?.results.map((r) => r.id) ?? [];
-    expect(ids).not.toContain(DOC_IDS.unpublished);
+    const rows = await search({ query: TOKEN_UNPUB });
+    expect(rows.map((r) => r.id)).not.toContain(DOC_IDS.unpublished);
   });
 
   it("NÃO retorna documentos com soft delete (deletedAt preenchido)", async () => {
-    const { searchDocuments } = await import("../actions/search");
-
-    const result = await searchDocuments({ query: TOKEN_DELETED });
-
-    const ids = result?.data?.results.map((r) => r.id) ?? [];
-    expect(ids).not.toContain(DOC_IDS.deleted);
-  });
-});
-
-// ── searchCategories ───────────────────────────────────────────────────────────
-
-describe("searchCategories — busca por nome", () => {
-  it("retorna categoria cujo nome contém o termo", async () => {
-    const { searchCategories } = await import("../actions/search");
-
-    const result = await searchCategories({ query: "Search Category" });
-
-    const ids = result?.data?.results.map((r) => r.id) ?? [];
-    expect(ids).toContain(CAT_A_ID);
-    expect(ids).toContain(CAT_B_ID);
-  });
-
-  it("NÃO retorna categorias sem o termo", async () => {
-    const { searchCategories } = await import("../actions/search");
-
-    const result = await searchCategories({ query: "XYZ_INEXISTENTE_42" });
-
-    const ids = result?.data?.results.map((r) => r.id) ?? [];
-    expect(ids).not.toContain(CAT_A_ID);
+    const rows = await search({ query: TOKEN_DELETED });
+    expect(rows.map((r) => r.id)).not.toContain(DOC_IDS.deleted);
   });
 });

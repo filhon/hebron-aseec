@@ -64,7 +64,7 @@ Corpo integral no próprio arquivo (as 4 originais) ou em `AUDIT/04-prompts-pend
 | P-1.17b   | Documentos: fronteiras de erro e cópia de estados vazios      | neste arquivo                    | S-187    |
 | P-1.18b   | Documentos: campos que a UI coleta e o banco não guarda       | neste arquivo                    | pendente |
 | P-1.19b   | Documentos: RLS de rascunho, lixeira e papel conselheiro      | neste arquivo                    | S-189    |
-| P-1.20b   | Documentos: busca com acento, índice e fim da action órfã     | neste arquivo                    | pendente |
+| P-1.20b   | Documentos: busca com acento, índice e fim da action órfã     | neste arquivo                    | S-190    |
 | P-1.20c   | Documentos: registro de leitura (`views`) que ninguém escreve | neste arquivo                    | pendente |
 | P-1.21b   | Documentos: área editorial ainda lê como superusuário         | neste arquivo                    | pendente |
 | P-1.22b   | Documentos: alerta de "novas versões" que nunca chega         | neste arquivo                    | pendente |
@@ -2719,13 +2719,13 @@ E as duas têm o mesmo defeito de fundo: `ILIKE '%termo%'` é **sensível a acen
 
 **Critérios de aceite:**
 
-- [ ] Buscar sem acento encontra documento com acento, e vice-versa — coberto por teste
-- [ ] `/busca` e `actions/search.ts` compartilham a mesma consulta; nenhuma lógica de busca duplicada no RSC
-- [ ] Se a action seguir sem chamador, ela foi removida (não há action morta com teste próprio)
-- [ ] `EXPLAIN` do filtro de texto usa o índice GIN (registrar o plano em SESSIONS.md)
-- [ ] Testes cobrem o caminho que a tela `/busca` executa
-- [ ] `pnpm --filter documentos typecheck lint test` verdes; migration aplicada no Supabase de dev
-- [ ] Registrar em SESSIONS.md
+- [x] Buscar sem acento encontra documento com acento, e vice-versa — coberto por teste
+- [x] `/busca` e `actions/search.ts` compartilham a mesma consulta; nenhuma lógica de busca duplicada no RSC
+- [x] Se a action seguir sem chamador, ela foi removida (não há action morta com teste próprio)
+- [x] `EXPLAIN` do filtro de texto usa o índice GIN (registrar o plano em SESSIONS.md)
+- [x] Testes cobrem o caminho que a tela `/busca` executa
+- [x] `pnpm --filter documentos typecheck lint test` verdes; migration aplicada no Supabase de dev
+- [x] Registrar em SESSIONS.md
 
 **Notas:**
 Ref: BRAIN.md §6.7 e princípio "Simplicidade". Não introduzir ranking por relevância, destaque de trecho (`ts_headline`) nem paginação nova — o escopo é acento, índice e fim da duplicação. A visibilidade continua sendo filtrada pela RLS via `withAuthenticatedContext`, como já é hoje; nada neste prompt pode contornar isso.

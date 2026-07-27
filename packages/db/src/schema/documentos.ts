@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
@@ -86,6 +87,13 @@ export const documents = documentosSchema.table(
     slug: text("slug").notNull().unique(),
     contentMd: text("content_md"),
     fileUrl: text("file_url"),
+    // Coluna gerada (0063_documentos_busca.sql): título + conteúdo, sem
+    // acento e minúsculos, para busca por substring (ILIKE) usando o índice
+    // GIN trgm em vez de sensível a acento/maiúsculas — packages/db não pode
+    // fazer INSERT/UPDATE nela (STORED GENERATED), só ler.
+    searchText: text("search_text").generatedAlwaysAs(
+      sql`"documentos"."f_unaccent"(lower(title || ' ' || coalesce(content_md, '')))`,
+    ),
     visibility: visibilityEnum("visibility").notNull().default("internal"),
     type: documentTypeEnum("type").notNull().default("other"),
     categoryId: uuid("category_id").references(() => categories.id, {

@@ -14,24 +14,14 @@ import { BuscaSearchBar } from "./_search-bar-client";
 import { VisibilityBadge } from "../../components/visibility-badge";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import {
-  documents,
-  editals,
   categories,
   documentTags,
   tags,
   documentVersions,
 } from "@hebron/db/schema";
-import {
-  and,
-  or,
-  eq,
-  isNull,
-  isNotNull,
-  desc,
-  sql,
-  inArray,
-} from "drizzle-orm";
+import { eq, desc, inArray } from "drizzle-orm";
 import { getOptionalActorId } from "../../lib/session";
+import { searchDocumentsQuery } from "../../lib/search-query";
 
 export const dynamic = "force-dynamic";
 
@@ -129,17 +119,7 @@ export default async function BuscaPage({ searchParams }: PageProps) {
       : "all"
   ) as TipoFilter;
 
-  const pattern = `%${q}%`;
   const actorId = await getOptionalActorId();
-
-  const tagFilter =
-    tagIds.length > 0
-      ? sql`EXISTS (
-          SELECT 1 FROM ${documentTags}
-          WHERE ${documentTags.documentId} = ${documents.id}
-            AND ${inArray(documentTags.tagId, tagIds)}
-        )`
-      : undefined;
 
   // Build "try again" link from the raw search params, before the query
   // that can fail — same URL, RSC reload re-runs the search.
@@ -176,83 +156,60 @@ export default async function BuscaPage({ searchParams }: PageProps) {
             .from(tags)
             .orderBy(tags.name),
 
-          // Edital results
+          // Edital results — mesma consulta de lib/search-query.ts usada
+          // pela action de busca; ver P-1.20b (fim da duplicação ILIKE).
           tipo === "doc"
             ? Promise.resolve([] as ResultRow[])
-            : tx
-                .select({
-                  id: documents.id,
-                  title: documents.title,
-                  slug: documents.slug,
-                  contentMd: documents.contentMd,
-                  visibility: documents.visibility,
-                  categoryId: documents.categoryId,
-                  categoryName: categories.name,
-                  publishedAt: documents.publishedAt,
-                  updatedAt: documents.updatedAt,
-                })
-                .from(editals)
-                .innerJoin(documents, eq(editals.id, documents.id))
-                .leftJoin(categories, eq(categories.id, documents.categoryId))
-                .where(
-                  and(
-                    isNull(documents.deletedAt),
-                    isNotNull(documents.publishedAt),
-                    q
-                      ? or(
-                          sql`${documents.title} ILIKE ${pattern}`,
-                          sql`${documents.contentMd} ILIKE ${pattern}`,
-                        )
-                      : undefined,
-                    catId ? eq(documents.categoryId, catId) : undefined,
-                    tagFilter,
-                  ),
-                )
-                .orderBy(desc(documents.publishedAt))
-                .limit(tipo === "edital" ? 20 : 10)
-                .then((rows) =>
-                  rows.map((r) => ({ ...r, isEdital: true as const })),
+            : searchDocumentsQuery(tx, {
+                query: q,
+                categoryId: catId ?? undefined,
+                tagIds,
+                editalFilter: "only",
+                orderBy: "publishedAt",
+                limit: tipo === "edital" ? 20 : 10,
+              }).then((rows) =>
+                rows.map(
+                  (r): ResultRow => ({
+                    id: r.id,
+                    title: r.title,
+                    slug: r.slug,
+                    contentMd: r.contentMd,
+                    visibility: r.visibility,
+                    categoryId: r.categoryId,
+                    categoryName: r.categoryName,
+                    publishedAt: r.publishedAt,
+                    updatedAt: r.updatedAt,
+                    isEdital: true,
+                  }),
                 ),
+              ),
 
           // Document results (non-editals)
           tipo === "edital"
             ? Promise.resolve([] as ResultRow[])
-            : tx
-                .select({
-                  id: documents.id,
-                  title: documents.title,
-                  slug: documents.slug,
-                  contentMd: documents.contentMd,
-                  visibility: documents.visibility,
-                  categoryId: documents.categoryId,
-                  categoryName: categories.name,
-                  publishedAt: documents.publishedAt,
-                  updatedAt: documents.updatedAt,
-                  editalId: editals.id,
-                })
-                .from(documents)
-                .leftJoin(categories, eq(categories.id, documents.categoryId))
-                .leftJoin(editals, eq(editals.id, documents.id))
-                .where(
-                  and(
-                    isNull(documents.deletedAt),
-                    isNotNull(documents.publishedAt),
-                    isNull(editals.id),
-                    q
-                      ? or(
-                          sql`${documents.title} ILIKE ${pattern}`,
-                          sql`${documents.contentMd} ILIKE ${pattern}`,
-                        )
-                      : undefined,
-                    catId ? eq(documents.categoryId, catId) : undefined,
-                    tagFilter,
-                  ),
-                )
-                .orderBy(desc(documents.updatedAt))
-                .limit(tipo === "doc" ? 20 : 10)
-                .then((rows) =>
-                  rows.map((r) => ({ ...r, isEdital: false as const })),
+            : searchDocumentsQuery(tx, {
+                query: q,
+                categoryId: catId ?? undefined,
+                tagIds,
+                editalFilter: "exclude",
+                orderBy: "updatedAt",
+                limit: tipo === "doc" ? 20 : 10,
+              }).then((rows) =>
+                rows.map(
+                  (r): ResultRow => ({
+                    id: r.id,
+                    title: r.title,
+                    slug: r.slug,
+                    contentMd: r.contentMd,
+                    visibility: r.visibility,
+                    categoryId: r.categoryId,
+                    categoryName: r.categoryName,
+                    publishedAt: r.publishedAt,
+                    updatedAt: r.updatedAt,
+                    isEdital: false,
+                  }),
                 ),
+              ),
         ]);
 
         // Merge and sort all results
