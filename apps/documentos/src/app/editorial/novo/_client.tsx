@@ -141,6 +141,9 @@ export function NovoDocumentoClient({
             ? new Date(values.closesAt).toISOString()
             : null,
         projectType: values.projectType || null,
+        projectCategorySlug: (values.projectCategory || null) as Parameters<
+          typeof createEdital
+        >[0]["projectCategorySlug"],
         faq: values.faqItems.filter((item) => item.q.trim() && item.a.trim()),
       });
       const docId = result?.data?.document?.id;

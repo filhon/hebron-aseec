@@ -16,6 +16,12 @@ import {
   X,
 } from "lucide-react";
 import type { Category, Tag } from "@hebron/types/documentos";
+import {
+  PROJECT_CATEGORY_OPTIONS,
+  EDITAL_ID_PARAM,
+  TIPO_PARAM,
+  CATEGORIA_PARAM,
+} from "@hebron/integrations/documentos-projetos-client";
 import { CategoryTree } from "./category-tree";
 import { MarkdownEditor } from "./markdown-editor";
 
@@ -186,13 +192,13 @@ const PROJECT_TYPES = [
   { value: "outro", label: "Outro" },
 ];
 
+// Fonte única: packages/integrations/documentos-projetos (mesmo vocabulário
+// de projetos.categories usado pelo wizard de submissão). Antes de P-1.23b
+// esta lista tinha slugs próprios (evangelizacao, capacitacao-lideranca...)
+// que não existiam em nenhuma tabela — o select era decorativo.
 const PROJECT_CATEGORIES = [
   { value: "", label: "Sem vínculo" },
-  { value: "evangelizacao", label: "Evangelização" },
-  { value: "capacitacao-lideranca", label: "Capacitação de liderança" },
-  { value: "vulnerabilidade", label: "Vulnerabilidade social" },
-  { value: "missoes-transculturais", label: "Missões transculturais" },
-  { value: "outro", label: "Outro" },
+  ...PROJECT_CATEGORY_OPTIONS,
 ];
 
 // ─── Main component ────────────────────────────────────────────────────────────
@@ -732,9 +738,13 @@ export function EditalForm({
               fontFamily: "var(--font-mono)",
             }}
           >
-            URL gerada:{" "}
+            URL gerada ao publicar:{" "}
             <span style={{ color: "var(--brand)" }}>
-              projetos.hebronaseec.com.br/novo?edital={slugDisplay}
+              projetos.hebronaseec.com.br/novo?{EDITAL_ID_PARAM}=…&{TIPO_PARAM}=
+              {values.projectType}
+              {values.projectCategory
+                ? `&${CATEGORIA_PARAM}=${values.projectCategory}`
+                : ""}
             </span>
           </div>
         )}

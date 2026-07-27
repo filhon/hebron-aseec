@@ -17,6 +17,10 @@ import {
 } from "lucide-react";
 import { useAction } from "next-safe-action/hooks";
 import {
+  PROJECT_CATEGORY_OPTIONS as CATEGORIAS,
+  parseProjetoNovoParams,
+} from "@hebron/integrations/documentos-projetos-client";
+import {
   getMyOrganizations,
   getEditalPrefillForWizard,
   type OrgOption,
@@ -48,7 +52,7 @@ type AttachmentItem = {
 };
 
 type FormData = {
-  // Edital (prefill via ?editalId=, F2-P3)
+  // Edital (prefill via ?edital_id=, ver parseProjetoNovoParams — P-1.23b)
   editalId: string | null;
   editalTitle: string | null;
   // Step 1
@@ -111,19 +115,6 @@ const INITIAL: FormData = {
   cartaRecomendacao: false,
   anexos: [] as AttachmentItem[],
 };
-
-const CATEGORIAS = [
-  { value: "evangelismo", label: "Evangelismo" },
-  { value: "missoes_transculturais", label: "Missões Transculturais" },
-  { value: "educacao_crista", label: "Educação Cristã" },
-  { value: "assistencia_social", label: "Assistência Social" },
-  { value: "saude", label: "Saúde" },
-  { value: "capacitacao_lideranca", label: "Capacitação de Liderança" },
-  { value: "infraestrutura_ministerial", label: "Infraestrutura Ministerial" },
-  { value: "plantacao_de_igrejas", label: "Plantação de Igrejas" },
-  { value: "discipulado", label: "Discipulado" },
-  { value: "outros", label: "Outros" },
-];
 
 const MONTHS = [
   "Janeiro",
@@ -1167,15 +1158,12 @@ export default function NovoProjetoPage() {
     });
   }, []);
 
-  // F2-P3: o wizard nunca lia edital_id/tipo de searchParams nem chamava
-  // getEditalPrefill — o botão "submeter projeto" do edital não tinha efeito
-  // nenhum aqui. A categoria não é pré-preenchida: `projectCategoryId` do
-  // edital referencia `documentos.categories`, não o slug de
-  // `projetos.projectCategories` — mapeamento ainda não existe (débito
-  // pré-existente, documentado em
-  // `packages/integrations/src/documentos-projetos.ts`).
+  // P-1.23b: nome do parâmetro (edital_id, com editalId como alias de leitura),
+  // categoria (slug de projetos.categories) e ciclo (renomeado de `tipo`, que
+  // colidia com o tipo de projeto do próprio edital) agora vêm de um único
+  // contrato compartilhado — packages/integrations/documentos-projetos.
   useEffect(() => {
-    const editalId = searchParams.get("editalId");
+    const { editalId } = parseProjetoNovoParams(searchParams);
     if (!editalId) return;
     // Integração de leitura (G6.5): falha degrada para "sem prefill" — nunca
     // bloqueia o wizard — mas é logada de forma estruturada, não engolida.
@@ -1186,7 +1174,8 @@ export default function NovoProjetoPage() {
           ...prev,
           editalId: prefill.editalId,
           editalTitle: prefill.editalTitle,
-          projectType: prefill.tipo ?? prev.projectType,
+          projectType: prefill.ciclo,
+          categoria: prefill.categoria ?? prev.categoria,
         }));
       })
       .catch((err) => {

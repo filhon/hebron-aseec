@@ -8,6 +8,7 @@ import {
   withSystemRole,
 } from "@hebron/db/authenticated";
 import { documents, documentTags, editals } from "@hebron/db/schema";
+import { projectCategoryEnum } from "@hebron/validators/projetos";
 import { adminDocAction } from "../lib/safe-action";
 import { logDocumentAudit } from "../lib/audit";
 
@@ -52,7 +53,7 @@ export const createEdital = adminDocAction
           .nullable()
           .optional(),
         projectType: z.string().max(100).nullable().optional(),
-        projectCategoryId: z.string().uuid().nullable().optional(),
+        projectCategorySlug: projectCategoryEnum.nullable().optional(),
         tagIds: z.array(z.string().uuid()).optional(),
         faq: faqSchema,
       })
@@ -117,7 +118,7 @@ export const createEdital = adminDocAction
               ? new Date(parsedInput.closesAt)
               : null,
             projectType: parsedInput.projectType ?? null,
-            projectCategoryId: parsedInput.projectCategoryId ?? null,
+            projectCategorySlug: parsedInput.projectCategorySlug ?? null,
             faq: parsedInput.faq,
           })
           .returning();
@@ -174,7 +175,7 @@ export const updateEdital = adminDocAction
       opensAt: z.string().datetime().nullable().optional(),
       closesAt: z.string().datetime().nullable().optional(),
       projectType: z.string().max(100).nullable().optional(),
-      projectCategoryId: z.string().uuid().nullable().optional(),
+      projectCategorySlug: projectCategoryEnum.nullable().optional(),
       tagIds: z.array(z.string().uuid()).optional(),
       faq: z
         .array(z.object({ q: z.string().min(1), a: z.string().min(1) }))
@@ -187,7 +188,7 @@ export const updateEdital = adminDocAction
       opensAt,
       closesAt,
       projectType,
-      projectCategoryId,
+      projectCategorySlug,
       tagIds,
       faq,
       ...docFields
@@ -230,8 +231,8 @@ export const updateEdital = adminDocAction
           editalUpdate.closesAt = closesAt ? new Date(closesAt) : null;
         if (projectType !== undefined)
           editalUpdate.projectType = projectType ?? null;
-        if (projectCategoryId !== undefined)
-          editalUpdate.projectCategoryId = projectCategoryId ?? null;
+        if (projectCategorySlug !== undefined)
+          editalUpdate.projectCategorySlug = projectCategorySlug ?? null;
         if (faq !== undefined) editalUpdate.faq = faq;
 
         const [updatedEdital] = await tx

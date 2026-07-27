@@ -2,22 +2,33 @@ import { eq } from "drizzle-orm";
 import { db } from "@hebron/db/client";
 import { documents, editals } from "@hebron/db/schema";
 
+export * from "./documentos-projetos-client";
+
 // ---------------------------------------------------------------------------
 // getEditalPrefill — Documentos → Projetos
 //
 // Retorna dados do edital para pré-preencher o wizard de criação de projeto.
-// Chamada pelo wizard quando recebe ?editalId=<uuid> na URL.
+// Chamada pelo wizard quando recebe ?edital_id=<uuid> na URL.
 //
 // Integração de leitura: falha degrada para `null` (o wizard some sem
 // pré-preenchimento) e o erro é logado de forma estruturada pelo chamador —
 // nunca lançar sem contexto para o caller decidir o fallback.
+//
+// Fica neste arquivo (e não em documentos-projetos-client.ts) porque importa
+// `@hebron/db` — um componente "use client" que precisasse só do contrato de
+// URL deve importar de "@hebron/integrations/documentos-projetos-client"
+// para não puxar o driver Postgres para o bundle do navegador.
 // ---------------------------------------------------------------------------
 
 export type EditalPrefill = {
   editalId: string;
   editalTitle: string;
-  tipo: "pontual" | "anual" | null;
-  projectCategoryId: string | null;
+  /** Ciclo do edital — computado de opensAt/closesAt, igual à página pública do edital. */
+  ciclo: "anual" | "pontual";
+  /** Tipo de projeto do edital (missionário, educacional...) — só exibição. */
+  tipo: string | null;
+  /** Slug de projetos.categories, já pronto para pré-selecionar o wizard. */
+  categoria: string | null;
   closesAt: Date | null;
 };
 
@@ -29,7 +40,8 @@ export async function getEditalPrefill(
       id: editals.id,
       title: documents.title,
       projectType: editals.projectType,
-      projectCategoryId: editals.projectCategoryId,
+      projectCategorySlug: editals.projectCategorySlug,
+      opensAt: editals.opensAt,
       closesAt: editals.closesAt,
     })
     .from(editals)
@@ -39,16 +51,12 @@ export async function getEditalPrefill(
 
   if (!row) return null;
 
-  const tipo = row.projectType as "pontual" | "anual" | null;
-
   return {
     editalId: row.id,
     editalTitle: row.title,
-    tipo: tipo ?? null,
-    // projectCategoryId referencia documentos.categories; o wizard usa
-    // projetos.projectCategories — o mapeamento é feito pelo componente
-    // com base no slug da categoria quando o módulo financeiro estiver completo.
-    projectCategoryId: row.projectCategoryId,
+    ciclo: !row.opensAt && !row.closesAt ? "pontual" : "anual",
+    tipo: row.projectType,
+    categoria: row.projectCategorySlug,
     closesAt: row.closesAt ?? null,
   };
 }

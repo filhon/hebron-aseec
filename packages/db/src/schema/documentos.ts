@@ -181,16 +181,17 @@ export const editals = documentosSchema.table(
     opensAt: timestamp("opens_at", { withTimezone: true }),
     closesAt: timestamp("closes_at", { withTimezone: true }),
     projectType: text("project_type"),
-    projectCategoryId: uuid("project_category_id").references(
-      () => categories.id,
-      { onDelete: "set null" },
-    ),
+    // Slug de projetos.categories (não FK — cross-schema, ver
+    // packages/validators/src/projetos projectCategoryEnum para os valores
+    // válidos). Antes de P-1.23b era project_category_id, uma FK para
+    // documentos.categories: a árvore errada, nunca preenchida pelo form.
+    projectCategorySlug: text("project_category_slug"),
     faq: jsonb("faq").$type<{ q: string; a: string }[]>().notNull().default([]),
   },
   (table) => [
     index("editals_opens_at_idx").on(table.opensAt),
     index("editals_closes_at_idx").on(table.closesAt),
-    index("editals_project_category_id_idx").on(table.projectCategoryId),
+    index("editals_project_category_slug_idx").on(table.projectCategorySlug),
   ],
 );
 

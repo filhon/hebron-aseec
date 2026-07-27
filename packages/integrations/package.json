@@ -5,6 +5,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./documentos-projetos": "./src/documentos-projetos.ts",
+    "./documentos-projetos-client": "./src/documentos-projetos-client.ts",
     "./projetos-flats": "./src/projetos-flats.ts",
     "./projetos-tarefas": "./src/projetos-tarefas.ts",
     "./financeiro": "./src/financeiro.ts",
@@ -25,6 +26,7 @@
   "dependencies": {
     "@hebron/db": "workspace:*",
     "@hebron/types": "workspace:*",
+    "@hebron/validators": "workspace:*",
     "drizzle-orm": "catalog:"
   },
   "devDependencies": {

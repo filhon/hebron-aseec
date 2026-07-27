@@ -1,10 +1,11 @@
 import { ExternalLink } from "lucide-react";
+import { buildProjetoNovoUrl } from "@hebron/integrations/documentos-projetos";
+import type { EditalCycleType } from "@hebron/types/documentos";
 import type { EditalStatus } from "./edital-status-pill";
-
-const PROJETOS_NOVO = "https://projetos.hebronaseec.com.br/novo";
 
 interface EditalSubmitButtonProps {
   editalId: string;
+  cycleType: EditalCycleType;
   projectType: string | null;
   projectCategory: string | null;
   status: EditalStatus;
@@ -12,6 +13,7 @@ interface EditalSubmitButtonProps {
 
 export function EditalSubmitButton({
   editalId,
+  cycleType,
   projectType,
   projectCategory,
   status,
@@ -19,13 +21,16 @@ export function EditalSubmitButton({
   if (status !== "open" && status !== "closing_soon" && status !== "permanent")
     return null;
 
-  const params = new URLSearchParams({ edital_id: editalId });
-  if (projectType) params.set("tipo", projectType);
-  if (projectCategory) params.set("categoria", projectCategory);
+  const href = buildProjetoNovoUrl({
+    editalId,
+    ciclo: cycleType,
+    tipo: projectType,
+    categoria: projectCategory,
+  });
 
   return (
     <a
-      href={`${PROJETOS_NOVO}?${params.toString()}`}
+      href={href}
       target="_blank"
       rel="noopener noreferrer"
       className="hb-btn hb-btn-accent"

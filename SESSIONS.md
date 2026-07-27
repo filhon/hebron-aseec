@@ -214,6 +214,7 @@
 | S-191  | 2026-07-27 | P-1.20c — Documentos: registro de leitura (`views`) que ninguém escreve (CORRETIVO)                                              | concluido                            |
 | S-192  | 2026-07-27 | P-1.21b — Documentos: área editorial ainda lê como superusuário (CORRETIVO)                                                      | concluido                            |
 | S-193  | 2026-07-27 | P-1.22b — Documentos: alerta de "novas versões" que nunca chega (CORRETIVO)                                                      | concluido                            |
+| S-194  | 2026-07-27 | P-1.23b — O botão "submeter projeto" que o wizard ignora (CORRETIVO)                                                             | concluido                            |
 
 ---
 
@@ -15860,4 +15861,137 @@ Nenhum toggle ficou sem evento correspondente.
 - `apps/documentos/src/app/editorial/[id]/editar/_client.tsx`
 - `apps/documentos/src/__tests__/actions.test.ts`
 - `PROMPTS.md` (linha do índice)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+## S-194 — P-1.23b — O botão "submeter projeto" que o wizard ignora (CORRETIVO)
+
+**Branch:** `feat/P-1.22b-docs-alerta-versao` (sessão executada na branch corrente; renomear/mover para uma branch `feat/P-1.23b-*` antes do PR, se aplicável)
+
+### Contexto
+
+Os cinco critérios de P-1.23 estavam `[x]`, mas o handshake Documentos↔Projetos
+estava quebrado em três pontos independentes: (1) o botão emitia `?edital_id=`
+e o wizard lia `searchParams.get("editalId")` — chaves diferentes, prefill
+nunca disparava; (2) o `<select>` "Categoria de projeto" do `EditalForm`
+gravava slugs (`evangelizacao`, `capacitacao-lideranca`...) que não existem em
+nenhuma tabela — a action exigia `projectCategoryId: uuid` referenciando
+`documentos.categories` (árvore errada) e nenhum client sequer enviava o
+campo; (3) `tipo` significava coisas diferentes nos dois lados — o botão
+emitia o tipo de projeto do edital (missionário, educacional...) e o wizard
+usava o mesmo nome para ler o ciclo (anual/pontual), mas na prática
+`getEditalPrefill.tipo` fazia um cast forçado do `project_type` (texto livre)
+para `"anual" | "pontual"`, poluindo o toggle do wizard com valores como
+"missionario" quando o link chegava a funcionar.
+
+### O que foi feito
+
+1. **Contrato único** em `packages/integrations/src/documentos-projetos-client.ts`
+   (novo arquivo — ver item 7): `EDITAL_ID_PARAM` (`edital_id`, canônico) +
+   `EDITAL_ID_PARAM_ALIAS` (`editalId`, aceito só na leitura, para não quebrar
+   links já publicados), `TIPO_PARAM` (tipo de projeto do edital — só
+   exibição), `CICLO_PARAM` (renomeado do antigo uso de `tipo` para o ciclo
+   anual/pontual do edital), `CATEGORIA_PARAM`, `buildProjetoNovoUrl(...)` e
+   `parseProjetoNovoParams(...)`. `edital-submit-button.tsx` e o wizard
+   (`apps/projetos/.../novo/page.tsx`) passaram a consumir só essas funções —
+   nenhum literal `"edital_id"`/`"editalId"` solto fora do módulo.
+2. **Categoria de projeto corrigida de ponta a ponta:**
+   `editals.project_category_id` (FK para `documentos.categories`) virou
+   `editals.project_category_slug text` (migration `0064`, aplicada no
+   Supabase de dev — confirmado antes `SELECT count(*) FROM
+documentos.editals WHERE project_category_id IS NOT NULL` = 0, troca sem
+   perda de dados). O vocabulário passou a ser o mesmo de
+   `projectCategoryEnum` (`packages/validators/src/projetos`, os 10 slugs já
+   usados por `createAnnualProjectSchema`/`createPunctualProjectSchema`) — a
+   lista com rótulos (`PROJECT_CATEGORY_OPTIONS`) vive só em
+   `documentos-projetos-client.ts` e é importada tanto pelo `EditalForm`
+   quanto pelo wizard (`CATEGORIAS` local do wizard foi removida, era uma
+   cópia divergente). `actions/editals.ts`, os dois clients de
+   criação/edição de edital e a página pública do edital (`editais/[slug]`,
+   que agora mostra "Categoria de projeto" na aside "Detalhes") foram
+   atualizados para o novo campo.
+3. **`tipo` e `ciclo` separados:** `EditalPrefill` agora expõe `tipo` (texto
+   livre do edital, só exibição) e `ciclo` (`"anual" | "pontual"`, computado
+   de `opensAt`/`closesAt` — mesma regra da página pública) como campos
+   distintos; o wizard usa `ciclo` para pré-selecionar o toggle "Tipo de
+   Projeto" (Step 1) e `categoria` para pré-selecionar o `<select>` de
+   categoria (Step 2). `EditalSubmitButton` ganhou a prop `cycleType`.
+4. **Teste de contrato** (`packages/integrations/src/__tests__/documentos-projetos.test.ts`,
+   8 casos): ida e volta de `buildProjetoNovoUrl`/`parseProjetoNovoParams`
+   preserva `editalId`/`tipo`/`ciclo`/`categoria`; chave canônica é sempre
+   `edital_id`; o alias `editalId` é aceito na leitura mas nunca emitido;
+   `edital_id` tem prioridade sobre o alias quando os dois vêm juntos; valor
+   de `ciclo` fora de `anual|pontual` vira `null`; `PROJECT_CATEGORY_OPTIONS`
+   trava nos 10 slugs do enum canônico (nenhum slug inventado).
+5. **Auditoria campo a campo de `EditalFormValues`** (pedida no critério de
+   aceite): todos os campos têm correspondente persistido, exceto
+   `description` — o form coleta o texto mas nenhum dos dois clients o envia
+   e não existe coluna para ele; a página pública deriva a descrição exibida
+   direto da primeira linha de `contentMd` (`extractDescription`). Bug
+   pré-existente, não introduzido nem coberto pelo escopo deste prompt (exigiria
+   tocar `documents` — tabela genérica de todos os tipos de documento — e telas
+   de listagem fora da lista de arquivos permitidos); registrado aqui como
+   **débito** para um prompt futuro, não corrigido.
+6. **Débito adicional descoberto:** `components/edital-card.tsx` (fora da
+   lista de arquivos permitidos) monta sua própria URL de submissão com uma
+   _terceira_ chave (`edital`, nem `edital_id` nem `editalId`) e não usa
+   `buildProjetoNovoUrl`. Passa no grep do critério de aceite (que busca só
+   `edital_id|editalId`), mas é o mesmo tipo de bug — registrado como débito.
+7. **Bug introduzido e corrigido na própria sessão:** a primeira versão de
+   `documentos-projetos.ts` misturava `getEditalPrefill` (importa
+   `@hebron/db`, driver Postgres) com as funções puras de URL/categoria no
+   mesmo arquivo. Como `EditalForm` e o wizard são `"use client"`, importar
+   qualquer coisa desse módulo quebrava o build (`net`/`tls`/`fs`/`perf_hooks`
+   não resolvidos no bundle do navegador) — só apareceu ao rodar `next build`
+   dos dois apps (typecheck/lint não pegam). Corrigido separando o módulo em
+   `documentos-projetos-client.ts` (sem `@hebron/db`, novo path de export
+   `@hebron/integrations/documentos-projetos-client`) — `documentos-projetos.ts`
+   passou a reexportar tudo dali e manter só `getEditalPrefill`. Componentes
+   client-side importam do subpath `-client`; consumidores server-side
+   (`apps/projetos/src/lib/queries.ts`, `editais/[slug]/page.tsx`) continuam
+   no path completo.
+
+### Critérios de aceite
+
+- [x] Clicar em "Submeter projeto neste edital" abre o wizard com o edital
+      vinculado visível (badge com o título) e o ciclo (anual/pontual)
+      pré-selecionado no Step 1
+- [x] Nome dos parâmetros vem de um único módulo compartilhado; `grep -rn
+    "edital_id|editalId" apps/documentos/src apps/projetos/src` só encontra
+      usos derivados dele (nomes de propriedade/variável internos, não
+      literais de querystring) — ressalva do item 6 acima (`edital-card.tsx`,
+      fora de escopo)
+- [x] "Categoria de projeto" escolhida no formulário do edital é persistida
+      (`project_category_slug`), aparece na página pública do edital (aside
+      "Detalhes") e chega pré-preenchida no `<select>` de categoria do wizard
+- [x] Campo a campo de `EditalFormValues` auditado (item 5) — único gap
+      (`description`) registrado como débito pré-existente, fora de escopo
+- [x] Teste de ida e volta do contrato de URL (8 casos, `documentos-projetos.test.ts`)
+- [x] `pnpm --filter documentos --filter projetos typecheck lint test` verdes,
+      exceto 2 testes pré-existentes de `close-voting.test.ts` (F2-P5/F2-P6,
+      contagem de quórum) que falham também isoladamente e sem relação com
+      este diff — contaminação de dados no banco de dev compartilhado, mesmo
+      padrão já registrado em sessões anteriores (grants/system-actor); `next
+    build` dos dois apps também verde (pegou o bug do item 7); migration
+      0064 aplicada no Supabase de dev
+- [x] Registrado em SESSIONS.md
+
+### Arquivos criados/alterados
+
+- `packages/integrations/src/documentos-projetos-client.ts` (criado)
+- `packages/integrations/src/documentos-projetos.ts`
+- `packages/integrations/src/__tests__/documentos-projetos.test.ts` (criado)
+- `packages/integrations/package.json` (dep `@hebron/validators` + export do subpath `-client`)
+- `packages/db/src/migrations/0064_documentos_edital_project_category.sql` (criado, aplicado)
+- `packages/db/src/schema/documentos.ts`
+- `apps/documentos/package.json` (dep `@hebron/integrations`)
+- `apps/documentos/src/actions/editals.ts`
+- `apps/documentos/src/components/edital-form.tsx`
+- `apps/documentos/src/components/edital-submit-button.tsx`
+- `apps/documentos/src/app/editorial/novo/_client.tsx`
+- `apps/documentos/src/app/editorial/[id]/editar/_client.tsx`
+- `apps/documentos/src/app/editais/[slug]/page.tsx`
+- `apps/projetos/src/app/(submissor)/novo/page.tsx`
+- `apps/projetos/src/lib/queries.ts` (sem alteração de conteúdo — verificado compatível)
 - `SESSIONS.md` (esta entrada + linha no índice)

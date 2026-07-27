@@ -30,6 +30,11 @@ interface InitialDocData {
   editalOpensAt: Date | null;
   editalClosesAt: Date | null;
   editalProjectType: string | null;
+  /** Ausente na leitura atual de editorial/[id]/editar/page.tsx (fora do
+   * escopo de P-1.23b — não está entre os arquivos permitidos, mesma lacuna
+   * já documentada acima para `type`). O formulário cai para "" até essa
+   * leitura ser adicionada em um prompt futuro. */
+  editalProjectCategory?: string | null;
   editalFaq: { q: string; a: string }[];
 }
 
@@ -165,6 +170,9 @@ export function EditDocumentClient({
             ? new Date(values.closesAt).toISOString()
             : null,
         projectType: values.projectType || null,
+        projectCategorySlug: (values.projectCategory || null) as Parameters<
+          typeof updateEdital
+        >[0]["projectCategorySlug"],
         faq: values.faqItems.filter((item) => item.q.trim() && item.a.trim()),
       });
       if (!result?.data) throw new Error("Falha ao atualizar edital.");
@@ -276,6 +284,7 @@ export function EditDocumentClient({
             opensAt: toISODate(doc.editalOpensAt),
             closesAt: toISODate(doc.editalClosesAt),
             projectType: doc.editalProjectType ?? "",
+            projectCategory: doc.editalProjectCategory ?? "",
             faqItems: doc.editalFaq.length > 0 ? doc.editalFaq : undefined,
           }}
           onSubmit={(values) => void handleSubmitEdital(values)}

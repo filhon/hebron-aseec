@@ -25,6 +25,7 @@ import {
   EditalStatusPill,
   resolveEditalStatus,
 } from "../../../components/edital-status-pill";
+import { projectCategoryLabel } from "@hebron/integrations/documentos-projetos";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import {
   documents,
@@ -194,7 +195,7 @@ export default async function EditalDetailPage({ params }: PageProps) {
           editalOpensAt: editals.opensAt,
           editalClosesAt: editals.closesAt,
           editalProjectType: editals.projectType,
-          editalProjectCategoryId: editals.projectCategoryId,
+          editalProjectCategorySlug: editals.projectCategorySlug,
           editalFaq: editals.faq,
         })
         .from(editals)
@@ -282,7 +283,7 @@ export default async function EditalDetailPage({ params }: PageProps) {
     opensAt: row.editalOpensAt,
     closesAt: row.editalClosesAt,
     projectType: row.editalProjectType,
-    projectCategory: row.editalProjectCategoryId ?? null,
+    projectCategory: row.editalProjectCategorySlug ?? null,
     faq: row.editalFaq,
   };
 
@@ -568,6 +569,7 @@ export default async function EditalDetailPage({ params }: PageProps) {
                 >
                   <EditalSubmitButton
                     editalId={edital.id}
+                    cycleType={cycleType}
                     projectType={edital.projectType}
                     projectCategory={edital.projectCategory}
                     status={status}
@@ -695,6 +697,13 @@ export default async function EditalDetailPage({ params }: PageProps) {
                     <dd style={{ textTransform: "capitalize" }}>
                       {edital.projectType}
                     </dd>
+                  </>
+                )}
+
+                {edital.projectCategory && (
+                  <>
+                    <dt>Categoria de projeto</dt>
+                    <dd>{projectCategoryLabel(edital.projectCategory)}</dd>
                   </>
                 )}
 
