@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ChevronRight, Scroll, Plus } from "lucide-react";
-import { db } from "@hebron/db/client";
+import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { documents, categories, editals } from "@hebron/db/schema";
 import { desc, eq, isNull } from "drizzle-orm";
 import { DocumentRowActions } from "../../../components/document-row-actions";
@@ -8,6 +8,7 @@ import {
   EditalStatusPill,
   resolveEditalStatus,
 } from "../../../components/edital-status-pill";
+import { requireEditorSession } from "../../../lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -21,21 +22,27 @@ function formatDate(date: Date | null): string {
 }
 
 export default async function EditorialEditaisPage() {
-  const rows = await db
-    .select({
-      id: documents.id,
-      title: documents.title,
-      categoryName: categories.name,
-      publishedAt: documents.publishedAt,
-      opensAt: editals.opensAt,
-      closesAt: editals.closesAt,
-      updatedAt: documents.updatedAt,
-    })
-    .from(editals)
-    .innerJoin(documents, eq(editals.id, documents.id))
-    .leftJoin(categories, eq(categories.id, documents.categoryId))
-    .where(isNull(documents.deletedAt))
-    .orderBy(desc(documents.updatedAt));
+  const session = await requireEditorSession();
+
+  const rows = await withAuthenticatedContext(
+    { actorId: session.actorId },
+    (tx) =>
+      tx
+        .select({
+          id: documents.id,
+          title: documents.title,
+          categoryName: categories.name,
+          publishedAt: documents.publishedAt,
+          opensAt: editals.opensAt,
+          closesAt: editals.closesAt,
+          updatedAt: documents.updatedAt,
+        })
+        .from(editals)
+        .innerJoin(documents, eq(editals.id, documents.id))
+        .leftJoin(categories, eq(categories.id, documents.categoryId))
+        .where(isNull(documents.deletedAt))
+        .orderBy(desc(documents.updatedAt)),
+  );
 
   return (
     <div>

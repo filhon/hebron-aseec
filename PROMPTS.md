@@ -66,7 +66,7 @@ Corpo integral no próprio arquivo (as 4 originais) ou em `AUDIT/04-prompts-pend
 | P-1.19b   | Documentos: RLS de rascunho, lixeira e papel conselheiro      | neste arquivo                    | S-189    |
 | P-1.20b   | Documentos: busca com acento, índice e fim da action órfã     | neste arquivo                    | S-190    |
 | P-1.20c   | Documentos: registro de leitura (`views`) que ninguém escreve | neste arquivo                    | S-191    |
-| P-1.21b   | Documentos: área editorial ainda lê como superusuário         | neste arquivo                    | pendente |
+| P-1.21b   | Documentos: área editorial ainda lê como superusuário         | neste arquivo                    | S-192    |
 | P-1.22b   | Documentos: alerta de "novas versões" que nunca chega         | neste arquivo                    | pendente |
 | P-1.23b   | Documentos: botão "submeter projeto" que o wizard ignora      | neste arquivo                    | pendente |
 | P-1.24b   | Documentos: audit mockado e escrita sem cobertura de teste    | neste arquivo                    | pendente |
@@ -2824,12 +2824,12 @@ O portão de entrada é `requireEditorSession()`, que só verifica se o usuário
 
 **Critérios de aceite:**
 
-- [ ] `grep -rn "@hebron/db/client" apps/documentos/src/app` retorna vazio (ou só linhas com `withSystemRole` justificado em comentário)
-- [ ] `colaborador` não lê documento `restricted` alheio por nenhuma rota editorial — teste de regressão
-- [ ] Nenhuma tela editorial quebra para `super_admin`, `diretor` e `colaborador` autor (verificar rascunhos, que dependem da policy de P-1.19b)
-- [ ] `/assinaturas` lê as inscrições sob contexto do próprio usuário
-- [ ] `pnpm --filter documentos typecheck lint test` verdes
-- [ ] Registrar em SESSIONS.md
+- [x] `grep -rn "@hebron/db/client" apps/documentos/src/app` retorna vazio (ou só linhas com `withSystemRole` justificado em comentário)
+- [x] `colaborador` não lê documento `restricted` alheio por nenhuma rota editorial — teste de regressão
+- [x] Nenhuma tela editorial quebra para `super_admin`, `diretor` e `colaborador` autor (verificar rascunhos, que dependem da policy de P-1.19b)
+- [x] `/assinaturas` lê as inscrições sob contexto do próprio usuário
+- [x] `pnpm --filter documentos typecheck lint test` verdes
+- [x] Registrar em SESSIONS.md
 
 **Notas:**
 Ref: BRAIN.md "Defense in depth"; precedente S-61 (F2-D1/F2-D2). Executar **depois** de P-1.19b: sem a policy de rascunho, a fila de rascunhos do painel e a tela de edição ficam vazias sob contexto autenticado.

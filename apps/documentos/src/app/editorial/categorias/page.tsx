@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 import { and, eq, isNull, sql } from "drizzle-orm";
-import { db } from "@hebron/db/client";
+import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { categories, documents } from "@hebron/db/schema";
 import { CategoriesManager } from "../../../components/categories-manager";
 import type { Category } from "@hebron/types/documentos";
+import { requireEditorSession } from "../../../lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -63,23 +64,32 @@ function buildTree(
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function CategoriasPage() {
-  const rows = await db
-    .select({
-      id: categories.id,
-      name: categories.name,
-      slug: categories.slug,
-      parentId: categories.parentId,
-      createdAt: categories.createdAt,
-      updatedAt: categories.updatedAt,
-      documentCount: sql<number>`count(${documents.id})::int`,
-    })
-    .from(categories)
-    .leftJoin(
-      documents,
-      and(eq(documents.categoryId, categories.id), isNull(documents.deletedAt)),
-    )
-    .groupBy(categories.id)
-    .orderBy(categories.name);
+  const session = await requireEditorSession();
+
+  const rows = await withAuthenticatedContext(
+    { actorId: session.actorId },
+    (tx) =>
+      tx
+        .select({
+          id: categories.id,
+          name: categories.name,
+          slug: categories.slug,
+          parentId: categories.parentId,
+          createdAt: categories.createdAt,
+          updatedAt: categories.updatedAt,
+          documentCount: sql<number>`count(${documents.id})::int`,
+        })
+        .from(categories)
+        .leftJoin(
+          documents,
+          and(
+            eq(documents.categoryId, categories.id),
+            isNull(documents.deletedAt),
+          ),
+        )
+        .groupBy(categories.id)
+        .orderBy(categories.name),
+  );
 
   const tree = buildTree(rows);
 

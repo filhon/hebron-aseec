@@ -8,7 +8,10 @@ import {
   Edit,
   Clock,
 } from "lucide-react";
-import { db } from "@hebron/db/client";
+import {
+  withAuthenticatedContext,
+  withSystemRole,
+} from "@hebron/db/authenticated";
 import {
   documents,
   editals,
@@ -33,6 +36,7 @@ import {
   EditalStatusPill,
   resolveEditalStatus,
 } from "../../components/edital-status-pill";
+import { requireEditorSession } from "../../lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -45,100 +49,168 @@ function formatDate(date: Date): string {
 }
 
 export default async function EditorialDashboardPage() {
+  const session = await requireEditorSession();
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
-  const [
-    [totalRow],
-    [openEditaisRow],
-    [viewsRow],
-    [subscriptionsRow],
+  const {
+    totalRow,
+    openEditaisRow,
+    viewsRow,
+    subscriptionsRow,
     recentlyUpdated,
     activeEditais,
     draftQueue,
-  ] = await Promise.all([
-    // Total published documents
-    db
-      .select({ n: sql<number>`count(*)::int` })
-      .from(documents)
-      .where(
-        and(isNull(documents.deletedAt), isNotNull(documents.publishedAt)),
-      ),
-
-    // Open editals count
-    db
-      .select({ n: sql<number>`count(*)::int` })
-      .from(editals)
-      .innerJoin(documents, eq(editals.id, documents.id))
-      .where(
-        and(isNull(documents.deletedAt), isNotNull(documents.publishedAt)),
-      ),
-
-    // Views in last 30 days
-    db
-      .select({ n: sql<number>`count(*)::int` })
-      .from(views)
-      .where(gt(views.viewedAt, thirtyDaysAgo)),
-
-    // Active subscriptions
-    db.select({ n: sql<number>`count(*)::int` }).from(subscriptions),
-
-    // Recently updated documents (incl. editals)
-    db
-      .select({
-        id: documents.id,
-        title: documents.title,
-        slug: documents.slug,
-        visibility: documents.visibility,
-        categoryName: categories.name,
-        updatedAt: documents.updatedAt,
-        publishedAt: documents.publishedAt,
-        isEdital: sql<boolean>`${editals.id} IS NOT NULL`,
-        editalOpensAt: editals.opensAt,
-        editalClosesAt: editals.closesAt,
-        versionNumber: sql<number | null>`(
+    rawCounts,
+    aggCounts,
+  } = await withAuthenticatedContext(
+    { actorId: session.actorId },
+    async (tx) => {
+      // Conteúdo de documento: precisa respeitar a visibilidade RLS do papel
+      // do usuário (P-1.21b, item 3 do escopo) — corre na role
+      // `authenticated` (tx), sem withSystemRole.
+      const recentlyUpdated = await tx
+        .select({
+          id: documents.id,
+          title: documents.title,
+          slug: documents.slug,
+          visibility: documents.visibility,
+          categoryName: categories.name,
+          updatedAt: documents.updatedAt,
+          publishedAt: documents.publishedAt,
+          isEdital: sql<boolean>`${editals.id} IS NOT NULL`,
+          editalOpensAt: editals.opensAt,
+          editalClosesAt: editals.closesAt,
+          versionNumber: sql<number | null>`(
           SELECT MAX(${documentVersions.versionNumber})
           FROM ${documentVersions}
           WHERE ${documentVersions.documentId} = ${documents.id}
         )`,
-      })
-      .from(documents)
-      .leftJoin(categories, eq(categories.id, documents.categoryId))
-      .leftJoin(editals, eq(editals.id, documents.id))
-      .where(isNull(documents.deletedAt))
-      .orderBy(desc(documents.updatedAt))
-      .limit(8),
+        })
+        .from(documents)
+        .leftJoin(categories, eq(categories.id, documents.categoryId))
+        .leftJoin(editals, eq(editals.id, documents.id))
+        .where(isNull(documents.deletedAt))
+        .orderBy(desc(documents.updatedAt))
+        .limit(8);
 
-    // Active editais for pipeline
-    db
-      .select({
-        id: documents.id,
-        title: documents.title,
-        editalOpensAt: editals.opensAt,
-        editalClosesAt: editals.closesAt,
-      })
-      .from(editals)
-      .innerJoin(documents, eq(editals.id, documents.id))
-      .where(and(isNull(documents.deletedAt), isNotNull(documents.publishedAt)))
-      .orderBy(desc(documents.updatedAt))
-      .limit(5),
+      const activeEditais = await tx
+        .select({
+          id: documents.id,
+          title: documents.title,
+          editalOpensAt: editals.opensAt,
+          editalClosesAt: editals.closesAt,
+        })
+        .from(editals)
+        .innerJoin(documents, eq(editals.id, documents.id))
+        .where(
+          and(isNull(documents.deletedAt), isNotNull(documents.publishedAt)),
+        )
+        .orderBy(desc(documents.updatedAt))
+        .limit(5);
 
-    // Draft queue (unpublished, non-deleted)
-    db
-      .select({
-        id: documents.id,
-        title: documents.title,
-        categoryName: categories.name,
-        authorId: documents.authorId,
-        createdAt: documents.createdAt,
-        isEdital: sql<boolean>`${editals.id} IS NOT NULL`,
-      })
-      .from(documents)
-      .leftJoin(categories, eq(categories.id, documents.categoryId))
-      .leftJoin(editals, eq(editals.id, documents.id))
-      .where(and(isNull(documents.deletedAt), isNull(documents.publishedAt)))
-      .orderBy(desc(documents.createdAt))
-      .limit(5),
-  ]);
+      const draftQueue = await tx
+        .select({
+          id: documents.id,
+          title: documents.title,
+          categoryName: categories.name,
+          authorId: documents.authorId,
+          createdAt: documents.createdAt,
+          isEdital: sql<boolean>`${editals.id} IS NOT NULL`,
+        })
+        .from(documents)
+        .leftJoin(categories, eq(categories.id, documents.categoryId))
+        .leftJoin(editals, eq(editals.id, documents.id))
+        .where(and(isNull(documents.deletedAt), isNull(documents.publishedAt)))
+        .orderBy(desc(documents.createdAt))
+        .limit(5);
+
+      const recentIds = recentlyUpdated.map((d) => d.id);
+
+      // Contagens agregadas sobre todo o acervo (KPIs do painel + leituras
+      // por documento): contagem agregada não é vazamento de conteúdo
+      // (P-1.21b, item 2 do escopo) — usa withSystemRole para o número não
+      // ficar subordinado à visibilidade RLS do papel do usuário.
+      const {
+        totalRow,
+        openEditaisRow,
+        viewsRow,
+        subscriptionsRow,
+        rawCounts,
+        aggCounts,
+      } = await withSystemRole(tx, async (sysTx) => {
+        const [[totalRow], [openEditaisRow], [viewsRow], [subscriptionsRow]] =
+          await Promise.all([
+            sysTx
+              .select({ n: sql<number>`count(*)::int` })
+              .from(documents)
+              .where(
+                and(
+                  isNull(documents.deletedAt),
+                  isNotNull(documents.publishedAt),
+                ),
+              ),
+            sysTx
+              .select({ n: sql<number>`count(*)::int` })
+              .from(editals)
+              .innerJoin(documents, eq(editals.id, documents.id))
+              .where(
+                and(
+                  isNull(documents.deletedAt),
+                  isNotNull(documents.publishedAt),
+                ),
+              ),
+            sysTx
+              .select({ n: sql<number>`count(*)::int` })
+              .from(views)
+              .where(gt(views.viewedAt, thirtyDaysAgo)),
+            sysTx.select({ n: sql<number>`count(*)::int` }).from(subscriptions),
+          ]);
+
+        const [rawCounts, aggCounts] =
+          recentIds.length > 0
+            ? await Promise.all([
+                sysTx
+                  .select({
+                    documentId: views.documentId,
+                    n: sql<number>`count(*)::int`,
+                  })
+                  .from(views)
+                  .where(inArray(views.documentId, recentIds))
+                  .groupBy(views.documentId),
+                sysTx
+                  .select({
+                    documentId: viewsMonthlyAgg.documentId,
+                    n: sql<number>`coalesce(sum(${viewsMonthlyAgg.viewCount}), 0)::int`,
+                  })
+                  .from(viewsMonthlyAgg)
+                  .where(inArray(viewsMonthlyAgg.documentId, recentIds))
+                  .groupBy(viewsMonthlyAgg.documentId),
+              ])
+            : [[], []];
+
+        return {
+          totalRow,
+          openEditaisRow,
+          viewsRow,
+          subscriptionsRow,
+          rawCounts,
+          aggCounts,
+        };
+      });
+
+      return {
+        totalRow,
+        openEditaisRow,
+        viewsRow,
+        subscriptionsRow,
+        recentlyUpdated,
+        activeEditais,
+        draftQueue,
+        rawCounts,
+        aggCounts,
+      };
+    },
+  );
 
   const totalDocs = totalRow?.n ?? 0;
   const openEditaisCount = openEditaisRow?.n ?? 0;
@@ -148,36 +220,18 @@ export default async function EditorialDashboardPage() {
   // Total de leituras por documento (histórico completo): views (< 6 meses)
   // + views_monthly_agg (agregado retido após a purga mensal) — o total não
   // pode cair quando uma leitura antiga migra de uma tabela para a outra.
-  const recentIds = recentlyUpdated.map((d) => d.id);
   const readCounts = new Map<string, number>();
-  if (recentIds.length > 0) {
-    const [rawCounts, aggCounts] = await Promise.all([
-      db
-        .select({ documentId: views.documentId, n: sql<number>`count(*)::int` })
-        .from(views)
-        .where(inArray(views.documentId, recentIds))
-        .groupBy(views.documentId),
-      db
-        .select({
-          documentId: viewsMonthlyAgg.documentId,
-          n: sql<number>`coalesce(sum(${viewsMonthlyAgg.viewCount}), 0)::int`,
-        })
-        .from(viewsMonthlyAgg)
-        .where(inArray(viewsMonthlyAgg.documentId, recentIds))
-        .groupBy(viewsMonthlyAgg.documentId),
-    ]);
-    for (const row of rawCounts) {
-      readCounts.set(
-        row.documentId,
-        (readCounts.get(row.documentId) ?? 0) + row.n,
-      );
-    }
-    for (const row of aggCounts) {
-      readCounts.set(
-        row.documentId,
-        (readCounts.get(row.documentId) ?? 0) + row.n,
-      );
-    }
+  for (const row of rawCounts) {
+    readCounts.set(
+      row.documentId,
+      (readCounts.get(row.documentId) ?? 0) + row.n,
+    );
+  }
+  for (const row of aggCounts) {
+    readCounts.set(
+      row.documentId,
+      (readCounts.get(row.documentId) ?? 0) + row.n,
+    );
   }
 
   const kpis = [

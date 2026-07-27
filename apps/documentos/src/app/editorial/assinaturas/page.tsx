@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { ChevronRight, Bell, Mail } from "lucide-react";
-import { db } from "@hebron/db/client";
+import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { categories, subscriptions, users } from "@hebron/db/schema";
 import { desc, eq, sql } from "drizzle-orm";
+import { requireEditorSession } from "../../../lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -15,32 +16,38 @@ function formatDate(date: Date): string {
 }
 
 export default async function EditorialAssinaturasPage() {
-  const [perCategory, recent] = await Promise.all([
-    db
-      .select({
-        categoryId: categories.id,
-        categoryName: categories.name,
-        count: sql<number>`count(${subscriptions.id})::int`,
-      })
-      .from(categories)
-      .leftJoin(subscriptions, eq(subscriptions.categoryId, categories.id))
-      .groupBy(categories.id)
-      .orderBy(categories.name),
+  const session = await requireEditorSession();
 
-    db
-      .select({
-        id: subscriptions.id,
-        userName: users.fullName,
-        userEmail: users.email,
-        categoryName: categories.name,
-        createdAt: subscriptions.createdAt,
-      })
-      .from(subscriptions)
-      .innerJoin(users, eq(users.id, subscriptions.userId))
-      .innerJoin(categories, eq(categories.id, subscriptions.categoryId))
-      .orderBy(desc(subscriptions.createdAt))
-      .limit(20),
-  ]);
+  const [perCategory, recent] = await withAuthenticatedContext(
+    { actorId: session.actorId },
+    (tx) =>
+      Promise.all([
+        tx
+          .select({
+            categoryId: categories.id,
+            categoryName: categories.name,
+            count: sql<number>`count(${subscriptions.id})::int`,
+          })
+          .from(categories)
+          .leftJoin(subscriptions, eq(subscriptions.categoryId, categories.id))
+          .groupBy(categories.id)
+          .orderBy(categories.name),
+
+        tx
+          .select({
+            id: subscriptions.id,
+            userName: users.fullName,
+            userEmail: users.email,
+            categoryName: categories.name,
+            createdAt: subscriptions.createdAt,
+          })
+          .from(subscriptions)
+          .innerJoin(users, eq(users.id, subscriptions.userId))
+          .innerJoin(categories, eq(categories.id, subscriptions.categoryId))
+          .orderBy(desc(subscriptions.createdAt))
+          .limit(20),
+      ]),
+  );
 
   const total = perCategory.reduce((sum, c) => sum + c.count, 0);
 

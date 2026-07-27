@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { and, eq, isNull, sql } from "drizzle-orm";
-import { db } from "@hebron/db/client";
+import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import {
   categories,
   documentTags,
@@ -10,6 +10,7 @@ import {
 } from "@hebron/db/schema";
 import type { Category } from "@hebron/types/documentos";
 import { EditDocumentClient } from "./_client";
+import { requireEditorSession } from "../../../../lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -61,58 +62,68 @@ function buildTree(
 
 export default async function EditarDocumentoPage({ params }: PageProps) {
   const { id } = await params;
+  const session = await requireEditorSession();
 
-  const [row] = await db
-    .select({
-      id: documents.id,
-      title: documents.title,
-      contentMd: documents.contentMd,
-      fileUrl: documents.fileUrl,
-      visibility: documents.visibility,
-      categoryId: documents.categoryId,
-      isEdital: editals.id,
-      editalOpensAt: editals.opensAt,
-      editalClosesAt: editals.closesAt,
-      editalProjectType: editals.projectType,
-      editalFaq: editals.faq,
-    })
-    .from(documents)
-    .leftJoin(editals, eq(editals.id, documents.id))
-    .where(and(eq(documents.id, id), isNull(documents.deletedAt)))
-    .limit(1);
+  const { row, catRows, tagRows, docTagRows } = await withAuthenticatedContext(
+    { actorId: session.actorId },
+    async (tx) => {
+      const [row] = await tx
+        .select({
+          id: documents.id,
+          title: documents.title,
+          contentMd: documents.contentMd,
+          fileUrl: documents.fileUrl,
+          visibility: documents.visibility,
+          categoryId: documents.categoryId,
+          isEdital: editals.id,
+          editalOpensAt: editals.opensAt,
+          editalClosesAt: editals.closesAt,
+          editalProjectType: editals.projectType,
+          editalFaq: editals.faq,
+        })
+        .from(documents)
+        .leftJoin(editals, eq(editals.id, documents.id))
+        .where(and(eq(documents.id, id), isNull(documents.deletedAt)))
+        .limit(1);
+
+      if (!row) return { row: null, catRows: [], tagRows: [], docTagRows: [] };
+
+      const [catRows, tagRows, docTagRows] = await Promise.all([
+        tx
+          .select({
+            id: categories.id,
+            name: categories.name,
+            slug: categories.slug,
+            parentId: categories.parentId,
+            documentCount: sql<number>`count(${documents.id})::int`,
+          })
+          .from(categories)
+          .leftJoin(
+            documents,
+            and(
+              eq(documents.categoryId, categories.id),
+              isNull(documents.deletedAt),
+            ),
+          )
+          .groupBy(categories.id)
+          .orderBy(categories.name),
+
+        tx
+          .select({ id: tags.id, name: tags.name, slug: tags.slug })
+          .from(tags)
+          .orderBy(tags.name),
+
+        tx
+          .select({ tagId: documentTags.tagId })
+          .from(documentTags)
+          .where(eq(documentTags.documentId, id)),
+      ]);
+
+      return { row, catRows, tagRows, docTagRows };
+    },
+  );
 
   if (!row) notFound();
-
-  const [catRows, tagRows, docTagRows] = await Promise.all([
-    db
-      .select({
-        id: categories.id,
-        name: categories.name,
-        slug: categories.slug,
-        parentId: categories.parentId,
-        documentCount: sql<number>`count(${documents.id})::int`,
-      })
-      .from(categories)
-      .leftJoin(
-        documents,
-        and(
-          eq(documents.categoryId, categories.id),
-          isNull(documents.deletedAt),
-        ),
-      )
-      .groupBy(categories.id)
-      .orderBy(categories.name),
-
-    db
-      .select({ id: tags.id, name: tags.name, slug: tags.slug })
-      .from(tags)
-      .orderBy(tags.name),
-
-    db
-      .select({ tagId: documentTags.tagId })
-      .from(documentTags)
-      .where(eq(documentTags.documentId, id)),
-  ]);
 
   return (
     <EditDocumentClient

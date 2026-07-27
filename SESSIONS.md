@@ -212,6 +212,7 @@
 | S-189  | 2026-07-25 | P-1.19b — Documentos: RLS de rascunho, lixeira e o papel conselheiro (CORRETIVO)                                                 | concluido                            |
 | S-190  | 2026-07-27 | P-1.20b — Documentos: busca com acento, índice e fim da action órfã (CORRETIVO)                                                  | concluido                            |
 | S-191  | 2026-07-27 | P-1.20c — Documentos: registro de leitura (`views`) que ninguém escreve (CORRETIVO)                                              | concluido                            |
+| S-192  | 2026-07-27 | P-1.21b — Documentos: área editorial ainda lê como superusuário (CORRETIVO)                                                      | concluido                            |
 
 ---
 
@@ -15680,5 +15681,84 @@ todo mês.
 - `apps/documentos/src/app/editorial/page.tsx`
 - `apps/documentos/src/app/editorial/documentos/page.tsx`
 - `apps/documentos/src/__tests__/actions.test.ts`
+- `PROMPTS.md` (linha do índice)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+## S-192 — P-1.21b — Documentos: área editorial ainda lê como superusuário (CORRETIVO)
+
+**Branch:** `feat/P-1.21b-docs-leitura-editorial`
+
+### Contexto
+
+S-61 (P-1.27) migrou as páginas públicas para `withAuthenticatedContext`
+(F2-D1). Nove páginas da área editorial ficaram para trás e seguiam lendo
+pelo client superusuário `db` (`@hebron/db/client`), que ignora RLS por
+construção: `assinaturas/page.tsx`, `editorial/page.tsx`,
+`editorial/documentos/page.tsx`, `editorial/editais/page.tsx`,
+`editorial/categorias/page.tsx`, `editorial/assinaturas/page.tsx`,
+`editorial/auditoria/page.tsx`, `editorial/novo/page.tsx`,
+`editorial/[id]/editar/page.tsx`. `requireEditorSession()` só verificava se o
+usuário tinha algum papel editorial — depois disso não havia autorização por
+documento: um `colaborador` abria `/editorial/documentos` e via a lista
+completa, inclusive `restricted`, e abria `/editorial/<id>/editar` de
+qualquer um deles.
+
+### O que foi feito
+
+1. **As nove páginas** migraram para `withAuthenticatedContext({ actorId },
+...)`, usando o `actorId` de `requireEditorSession()` (chamada por página —
+   o layout já chama, mas descarta o resultado; convenção já usada por
+   `editorial/documentos/page.tsx` antes deste corretivo). `assinaturas/page.tsx`
+   trocou a resolução manual de sessão por `getOptionalActorId()`, como as
+   páginas públicas.
+2. **Duas exceções documentadas com `withSystemRole`** (item 2 do escopo do
+   prompt — contagem agregada não é vazamento, conteúdo de documento é):
+   - `editorial/page.tsx` (painel): os 4 contadores de KPI e a soma de
+     `views`/`views_monthly_agg` por documento rodam via `withSystemRole`
+     (agregados sobre todo o acervo); as listas de conteúdo real
+     (`recentlyUpdated`, `activeEditais`, `draftQueue`) continuam na role
+     `authenticated`, respeitando RLS por papel.
+   - `editorial/auditoria/page.tsx`: `admin.audit_log` só tem policy de
+     SELECT para `super_admin` (0003_admin_rls.sql) — não existe policy para
+     `diretor`/`conselheiro`/`colaborador`, que ainda assim navegam a área
+     editorial. A leitura usa `withSystemRole` com comentário justificando.
+3. **As demais seis páginas** (`documentos`, `editais`, `categorias`,
+   `assinaturas` editorial, `novo`, `[id]/editar`) não usam `withSystemRole` —
+   a consequência esperada é que `colaborador`/`conselheiro` não editorial-admin
+   passem a ver menos do que viam antes (ex.: `editorial/assinaturas` mostra
+   contagens/linhas restritas a `subscriptions_select_admin`
+   super_admin/diretor). Isso é efeito pretendido da RLS entrando em vigor, não
+   um bug a esconder — se a diretoria quiser todo editor vendo tudo, vira
+   policy explícita, não efeito colateral do client errado.
+4. **Testes de regressão** adicionados em `rls.test.ts` (bloco
+   "Regressão P-1.21b"): a mesma consulta que `/editorial/documentos` e
+   `/editorial/[id]/editar` executam, rodada via `withAuthenticatedContext`,
+   confirma que `colaborador` não-autor não recebe documento `restricted` nem
+   rascunho alheio, enquanto `conselheiro`/`super_admin` continuam recebendo.
+
+### Critérios de aceite
+
+- [x] `grep -rn "@hebron/db/client" apps/documentos/src/app` retorna vazio
+- [x] `colaborador` não lê documento `restricted` alheio por nenhuma rota
+      editorial — testes "Regressão P-1.21b" (listagem e edição)
+- [x] Nenhuma tela editorial quebra para `super_admin`, `diretor` e
+      `colaborador` autor — testes cobrem `super_admin` e `colaboradorAuthor`
+- [x] `/assinaturas` lê as inscrições sob contexto do próprio usuário
+- [x] `pnpm --filter documentos typecheck lint test` verdes (5 arquivos, 93
+      testes, incluindo os 7 novos de "Regressão P-1.21b")
+- [x] Registrado em SESSIONS.md
+
+### Arquivos alterados
+
+- `apps/documentos/src/app/assinaturas/page.tsx`
+- `apps/documentos/src/app/editorial/page.tsx`
+- `apps/documentos/src/app/editorial/documentos/page.tsx`
+- `apps/documentos/src/app/editorial/editais/page.tsx`
+- `apps/documentos/src/app/editorial/categorias/page.tsx`
+- `apps/documentos/src/app/editorial/assinaturas/page.tsx`
+- `apps/documentos/src/app/editorial/auditoria/page.tsx`
+- `apps/documentos/src/app/editorial/novo/page.tsx`
+- `apps/documentos/src/app/editorial/[id]/editar/page.tsx`
+- `apps/documentos/src/__tests__/rls.test.ts`
 - `PROMPTS.md` (linha do índice)
 - `SESSIONS.md` (esta entrada + linha no índice)

@@ -1,12 +1,11 @@
 import Link from "next/link";
 import { ChevronRight, Rss } from "lucide-react";
-import { cookies } from "next/headers";
 import { PublicNav } from "../../components/public-nav";
-import { db } from "@hebron/db/client";
+import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { categories, users } from "@hebron/db/schema";
 import { eq } from "drizzle-orm";
 import { CANONICAL_LOGIN_URL } from "@hebron/auth";
-import { resolveSession } from "@hebron/auth/server";
+import { getOptionalActorId } from "../../lib/session";
 import { listSubscriptions } from "../../actions/subscriptions";
 import { AssinaturasClient } from "./_client";
 import type { Category } from "@hebron/types/documentos";
@@ -60,14 +59,7 @@ function buildTree(
 }
 
 export default async function AssinaturasPage() {
-  const cookieStore = await cookies();
-  let actorId: string | null = null;
-  try {
-    const session = await resolveSession(cookieStore);
-    actorId = session.actorId;
-  } catch {
-    actorId = null;
-  }
+  const actorId = await getOptionalActorId();
 
   return (
     <>
@@ -141,22 +133,25 @@ export default async function AssinaturasPage() {
 }
 
 async function AssinaturasClientLoader({ actorId }: { actorId: string }) {
-  const [catRows, subsResult, [userRow]] = await Promise.all([
-    db
-      .select({
-        id: categories.id,
-        name: categories.name,
-        slug: categories.slug,
-        parentId: categories.parentId,
-      })
-      .from(categories)
-      .orderBy(categories.name),
+  const [{ catRows, userRow }, subsResult] = await Promise.all([
+    withAuthenticatedContext({ actorId }, async (tx) => {
+      const catRows = await tx
+        .select({
+          id: categories.id,
+          name: categories.name,
+          slug: categories.slug,
+          parentId: categories.parentId,
+        })
+        .from(categories)
+        .orderBy(categories.name);
+      const [userRow] = await tx
+        .select({ email: users.email })
+        .from(users)
+        .where(eq(users.id, actorId))
+        .limit(1);
+      return { catRows, userRow };
+    }),
     listSubscriptions({}),
-    db
-      .select({ email: users.email })
-      .from(users)
-      .where(eq(users.id, actorId))
-      .limit(1),
   ]);
 
   const tree = buildTree(catRows);

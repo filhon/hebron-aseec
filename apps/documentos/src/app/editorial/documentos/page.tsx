@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ChevronRight, FileText, Plus } from "lucide-react";
-import { db } from "@hebron/db/client";
+import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import {
   documents,
   categories,
@@ -37,63 +37,73 @@ export default async function EditorialDocumentosPage({
   const { filtro } = await searchParams;
   const showRemovidos = canWrite && filtro === "removidos";
 
-  const rows = await db
-    .select({
-      id: documents.id,
-      title: documents.title,
-      visibility: documents.visibility,
-      categoryName: categories.name,
-      publishedAt: documents.publishedAt,
-      deletedAt: documents.deletedAt,
-      updatedAt: documents.updatedAt,
-    })
-    .from(documents)
-    .leftJoin(categories, eq(categories.id, documents.categoryId))
-    .leftJoin(editals, eq(editals.id, documents.id))
-    .where(
-      and(
-        showRemovidos
-          ? isNotNull(documents.deletedAt)
-          : isNull(documents.deletedAt),
-        isNull(editals.id),
-      ),
-    )
-    .orderBy(desc(documents.updatedAt));
-
-  // Total de leituras por documento: views (< 6 meses) + views_monthly_agg
-  // (agregado retido após a purga mensal) — mesmo critério do painel
-  // editorial (P-1.20c).
-  const rowIds = rows.map((r) => r.id);
-  const readCounts = new Map<string, number>();
-  if (rowIds.length > 0) {
-    const [rawCounts, aggCounts] = await Promise.all([
-      db
-        .select({ documentId: views.documentId, n: sql<number>`count(*)::int` })
-        .from(views)
-        .where(inArray(views.documentId, rowIds))
-        .groupBy(views.documentId),
-      db
+  const { rows, readCounts } = await withAuthenticatedContext(
+    { actorId: session.actorId },
+    async (tx) => {
+      const rows = await tx
         .select({
-          documentId: viewsMonthlyAgg.documentId,
-          n: sql<number>`coalesce(sum(${viewsMonthlyAgg.viewCount}), 0)::int`,
+          id: documents.id,
+          title: documents.title,
+          visibility: documents.visibility,
+          categoryName: categories.name,
+          publishedAt: documents.publishedAt,
+          deletedAt: documents.deletedAt,
+          updatedAt: documents.updatedAt,
         })
-        .from(viewsMonthlyAgg)
-        .where(inArray(viewsMonthlyAgg.documentId, rowIds))
-        .groupBy(viewsMonthlyAgg.documentId),
-    ]);
-    for (const row of rawCounts) {
-      readCounts.set(
-        row.documentId,
-        (readCounts.get(row.documentId) ?? 0) + row.n,
-      );
-    }
-    for (const row of aggCounts) {
-      readCounts.set(
-        row.documentId,
-        (readCounts.get(row.documentId) ?? 0) + row.n,
-      );
-    }
-  }
+        .from(documents)
+        .leftJoin(categories, eq(categories.id, documents.categoryId))
+        .leftJoin(editals, eq(editals.id, documents.id))
+        .where(
+          and(
+            showRemovidos
+              ? isNotNull(documents.deletedAt)
+              : isNull(documents.deletedAt),
+            isNull(editals.id),
+          ),
+        )
+        .orderBy(desc(documents.updatedAt));
+
+      // Total de leituras por documento: views (< 6 meses) + views_monthly_agg
+      // (agregado retido após a purga mensal) — mesmo critério do painel
+      // editorial (P-1.20c).
+      const rowIds = rows.map((r) => r.id);
+      const readCounts = new Map<string, number>();
+      if (rowIds.length > 0) {
+        const [rawCounts, aggCounts] = await Promise.all([
+          tx
+            .select({
+              documentId: views.documentId,
+              n: sql<number>`count(*)::int`,
+            })
+            .from(views)
+            .where(inArray(views.documentId, rowIds))
+            .groupBy(views.documentId),
+          tx
+            .select({
+              documentId: viewsMonthlyAgg.documentId,
+              n: sql<number>`coalesce(sum(${viewsMonthlyAgg.viewCount}), 0)::int`,
+            })
+            .from(viewsMonthlyAgg)
+            .where(inArray(viewsMonthlyAgg.documentId, rowIds))
+            .groupBy(viewsMonthlyAgg.documentId),
+        ]);
+        for (const row of rawCounts) {
+          readCounts.set(
+            row.documentId,
+            (readCounts.get(row.documentId) ?? 0) + row.n,
+          );
+        }
+        for (const row of aggCounts) {
+          readCounts.set(
+            row.documentId,
+            (readCounts.get(row.documentId) ?? 0) + row.n,
+          );
+        }
+      }
+
+      return { rows, readCounts };
+    },
+  );
 
   return (
     <div>

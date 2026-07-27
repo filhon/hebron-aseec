@@ -1,8 +1,9 @@
-import { db } from "@hebron/db/client";
+import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { categories, documents, tags } from "@hebron/db/schema";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import type { Category } from "@hebron/types/documentos";
 import { NovoDocumentoClient } from "./_client";
+import { requireEditorSession } from "../../../lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -49,31 +50,37 @@ function buildTree(
 }
 
 export default async function NovoDocumentoPage() {
-  const [catRows, tagRows] = await Promise.all([
-    db
-      .select({
-        id: categories.id,
-        name: categories.name,
-        slug: categories.slug,
-        parentId: categories.parentId,
-        documentCount: sql<number>`count(${documents.id})::int`,
-      })
-      .from(categories)
-      .leftJoin(
-        documents,
-        and(
-          eq(documents.categoryId, categories.id),
-          isNull(documents.deletedAt),
-        ),
-      )
-      .groupBy(categories.id)
-      .orderBy(categories.name),
+  const session = await requireEditorSession();
 
-    db
-      .select({ id: tags.id, name: tags.name, slug: tags.slug })
-      .from(tags)
-      .orderBy(tags.name),
-  ]);
+  const [catRows, tagRows] = await withAuthenticatedContext(
+    { actorId: session.actorId },
+    (tx) =>
+      Promise.all([
+        tx
+          .select({
+            id: categories.id,
+            name: categories.name,
+            slug: categories.slug,
+            parentId: categories.parentId,
+            documentCount: sql<number>`count(${documents.id})::int`,
+          })
+          .from(categories)
+          .leftJoin(
+            documents,
+            and(
+              eq(documents.categoryId, categories.id),
+              isNull(documents.deletedAt),
+            ),
+          )
+          .groupBy(categories.id)
+          .orderBy(categories.name),
+
+        tx
+          .select({ id: tags.id, name: tags.name, slug: tags.slug })
+          .from(tags)
+          .orderBy(tags.name),
+      ]),
+  );
 
   const tree = buildTree(catRows);
   const availableTags = tagRows.map((t) => ({ ...t, color: null }));

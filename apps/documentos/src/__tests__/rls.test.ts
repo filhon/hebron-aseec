@@ -709,3 +709,88 @@ describe("RLS — documentos.document_versions (INSERT)", () => {
     expect(rows).toHaveLength(1);
   });
 });
+
+// ── Regressão P-1.21b — área editorial lê via client autenticado ──────────────
+// P-1.21b: nove páginas da área editorial liam via `db` (superuser), que
+// ignora RLS — um `colaborador` navegando `/editorial/documentos` ou
+// `/editorial/[id]/editar` enxergava documentos `restricted`/rascunhos de
+// terceiros por completo. Mesma classe de falha de F2-D1/F2-D2, um andar
+// acima do portal público: aqui a prova é a mesma consulta que a listagem e
+// a tela de edição fazem, rodada via `withAuthenticatedContext`.
+
+describe("Regressão P-1.21b — /editorial/documentos respeita RLS na listagem", () => {
+  it("colaborador não-autor não recebe documento restricted alheio na consulta da listagem editorial", async () => {
+    const rows = await withAuthenticatedContext(
+      { actorId: IDS.colaboradorOther },
+      (tx) =>
+        tx.execute(
+          drizzleSql`SELECT id FROM documentos.documents WHERE id = ${DOC_IDS.restricted}`,
+        ),
+    );
+    expect(Array.from(rows)).toHaveLength(0);
+  });
+
+  it("conselheiro recebe o documento restricted na consulta da listagem editorial", async () => {
+    const rows = await withAuthenticatedContext(
+      { actorId: IDS.conselheiro },
+      (tx) =>
+        tx.execute(
+          drizzleSql`SELECT id FROM documentos.documents WHERE id = ${DOC_IDS.restricted}`,
+        ),
+    );
+    expect(Array.from(rows)).toHaveLength(1);
+  });
+
+  it("super_admin recebe o documento restricted na consulta da listagem editorial", async () => {
+    const rows = await withAuthenticatedContext({ actorId: IDS.admin }, (tx) =>
+      tx.execute(
+        drizzleSql`SELECT id FROM documentos.documents WHERE id = ${DOC_IDS.restricted}`,
+      ),
+    );
+    expect(Array.from(rows)).toHaveLength(1);
+  });
+});
+
+describe("Regressão P-1.21b — /editorial/[id]/editar respeita RLS na leitura", () => {
+  it("colaborador não-autor não recebe o documento restricted alheio pela consulta de edição", async () => {
+    const rows = await withAuthenticatedContext(
+      { actorId: IDS.colaboradorOther },
+      (tx) =>
+        tx.execute(
+          drizzleSql`SELECT id FROM documentos.documents WHERE id = ${DOC_IDS.restricted}`,
+        ),
+    );
+    expect(Array.from(rows)).toHaveLength(0);
+  });
+
+  it("colaborador não-autor não recebe o rascunho alheio pela consulta de edição", async () => {
+    const rows = await withAuthenticatedContext(
+      { actorId: IDS.colaboradorOther },
+      (tx) =>
+        tx.execute(
+          drizzleSql`SELECT id FROM documentos.documents WHERE id = ${DOC_IDS.draft}`,
+        ),
+    );
+    expect(Array.from(rows)).toHaveLength(0);
+  });
+
+  it("colaborador autor recebe o próprio rascunho pela consulta de edição", async () => {
+    const rows = await withAuthenticatedContext(
+      { actorId: IDS.colaboradorAuthor },
+      (tx) =>
+        tx.execute(
+          drizzleSql`SELECT id FROM documentos.documents WHERE id = ${DOC_IDS.draft}`,
+        ),
+    );
+    expect(Array.from(rows)).toHaveLength(1);
+  });
+
+  it("super_admin recebe o rascunho de outro autor pela consulta de edição", async () => {
+    const rows = await withAuthenticatedContext({ actorId: IDS.admin }, (tx) =>
+      tx.execute(
+        drizzleSql`SELECT id FROM documentos.documents WHERE id = ${DOC_IDS.draft}`,
+      ),
+    );
+    expect(Array.from(rows)).toHaveLength(1);
+  });
+});

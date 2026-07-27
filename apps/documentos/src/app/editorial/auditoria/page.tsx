@@ -1,8 +1,12 @@
 import Link from "next/link";
 import { ChevronRight, ShieldAlert } from "lucide-react";
-import { db } from "@hebron/db/client";
+import {
+  withAuthenticatedContext,
+  withSystemRole,
+} from "@hebron/db/authenticated";
 import { auditLog, users } from "@hebron/db/schema";
 import { desc, eq, inArray } from "drizzle-orm";
+import { requireEditorSession } from "../../../lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -19,20 +23,33 @@ function formatDateTime(date: Date): string {
 }
 
 export default async function EditorialAuditoriaPage() {
-  const entries = await db
-    .select({
-      id: auditLog.id,
-      action: auditLog.action,
-      actorName: users.fullName,
-      entity: auditLog.entity,
-      entityId: auditLog.entityId,
-      createdAt: auditLog.createdAt,
-    })
-    .from(auditLog)
-    .innerJoin(users, eq(auditLog.actorId, users.id))
-    .where(inArray(auditLog.entity, [...DOCUMENTOS_ENTITIES]))
-    .orderBy(desc(auditLog.createdAt))
-    .limit(200);
+  const session = await requireEditorSession();
+
+  // admin.audit_log só tem policy de SELECT para super_admin (0003_admin_rls.sql)
+  // — não existe policy que alcance diretor/conselheiro/colaborador, que ainda
+  // assim navegam a área editorial (EDITOR_ROLES). Usa withSystemRole,
+  // explicitamente, porque a regra de visibilidade aqui é própria do audit
+  // trail, não da RLS de documentos.* (P-1.21b, item 2 do escopo).
+  const entries = await withAuthenticatedContext(
+    { actorId: session.actorId },
+    (tx) =>
+      withSystemRole(tx, (sysTx) =>
+        sysTx
+          .select({
+            id: auditLog.id,
+            action: auditLog.action,
+            actorName: users.fullName,
+            entity: auditLog.entity,
+            entityId: auditLog.entityId,
+            createdAt: auditLog.createdAt,
+          })
+          .from(auditLog)
+          .innerJoin(users, eq(auditLog.actorId, users.id))
+          .where(inArray(auditLog.entity, [...DOCUMENTOS_ENTITIES]))
+          .orderBy(desc(auditLog.createdAt))
+          .limit(200),
+      ),
+  );
 
   return (
     <div>
