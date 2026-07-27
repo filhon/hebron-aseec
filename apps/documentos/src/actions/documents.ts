@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNull, sql } from "drizzle-orm";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "node:crypto";
 import {
@@ -487,6 +487,11 @@ export const restoreDocument = editorAction
   });
 
 // ─── registerView ─────────────────────────────────────────────────────────────
+// Só conta leituras autenticadas: a policy views_insert_authenticated exige
+// auth.uid(), então anônimo nunca grava aqui (P-1.20c, item 3 — mantém o KPI
+// só na fração LGPD-compatível sem trabalho novo de consentimento).
+
+const VIEW_DEDUPE_WINDOW_MS = 30 * 60 * 1000;
 
 export const registerView = authenticatedAction
   .schema(z.object({ documentId: z.string().uuid() }))
@@ -506,6 +511,23 @@ export const registerView = authenticatedAction
         .limit(1);
 
       if (!doc) throw new Error("Documento não encontrado");
+
+      // Dedupe: mesmo usuário + mesmo documento dentro da janela não grava
+      // segunda linha (um F5 não pode virar métrica).
+      const dedupeSince = new Date(Date.now() - VIEW_DEDUPE_WINDOW_MS);
+      const [recent] = await tx
+        .select({ id: views.id })
+        .from(views)
+        .where(
+          and(
+            eq(views.documentId, parsedInput.documentId),
+            eq(views.userId, ctx.actorId),
+            gte(views.viewedAt, dedupeSince),
+          ),
+        )
+        .limit(1);
+
+      if (recent) return;
 
       await tx.insert(views).values({
         documentId: parsedInput.documentId,

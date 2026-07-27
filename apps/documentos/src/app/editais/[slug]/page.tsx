@@ -16,6 +16,7 @@ import { PublicNav } from "../../../components/public-nav";
 import { EditalSubmitButton } from "../../../components/edital-submit-button";
 import { DocumentViewer } from "../../../components/document-viewer";
 import { VersionHistory } from "../../../components/version-history";
+import { ViewTracker } from "../../../components/view-tracker";
 import {
   VISIBILITY,
   VisibilityBadge,
@@ -295,6 +296,7 @@ export default async function EditalDetailPage({ params }: PageProps) {
   return (
     <>
       <PublicNav />
+      {actorId && <ViewTracker documentId={edital.id} />}
 
       <main className="docs-page">
         {/* Breadcrumbs */}

@@ -211,6 +211,7 @@
 | S-188  | 2026-07-25 | P-1.18b — Documentos: campos que a UI coleta e o banco não guarda (CORRETIVO)                                                    | concluido                            |
 | S-189  | 2026-07-25 | P-1.19b — Documentos: RLS de rascunho, lixeira e o papel conselheiro (CORRETIVO)                                                 | concluido                            |
 | S-190  | 2026-07-27 | P-1.20b — Documentos: busca com acento, índice e fim da action órfã (CORRETIVO)                                                  | concluido                            |
+| S-191  | 2026-07-27 | P-1.20c — Documentos: registro de leitura (`views`) que ninguém escreve (CORRETIVO)                                              | concluido                            |
 
 ---
 
@@ -15600,5 +15601,84 @@ Bitmap Heap Scan on documents  (cost=11.88..13.00 rows=1 width=16)
 - `apps/documentos/src/actions/search.ts` (removido)
 - `apps/documentos/src/app/busca/page.tsx`
 - `apps/documentos/src/__tests__/search.test.ts`
+- `PROMPTS.md` (linha do índice)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+## S-191 — P-1.20c — Documentos: registro de leitura (`views`) que ninguém escreve (CORRETIVO)
+
+**Branch:** `feat/P-1.20c-docs-views`
+
+### Contexto
+
+"Tabela `documentos.views` para analytics" estava `[x]` em P-1.18 e "Registrar
+views" no escopo de P-1.20 — a tabela, a action (`registerView`), a policy e a
+retenção (P-0.13) existiam, mas nenhuma página chamava a action:
+`grep -rn "registerView" apps/documentos/src` fora da própria definição
+retornava vazio. `app/editorial/page.tsx` calculava "views nos últimos 30
+dias" e o KPI exibia 0 permanentemente; `documentos.views_monthly_agg` e a
+função `documentos.purge_old_views` agregavam e expurgavam uma tabela vazia
+todo mês.
+
+### O que foi feito
+
+1. **`registerView` (actions/documents.ts)** ganhou dedupe: mesmo
+   `documentId` + `userId` dentro de uma janela de 30 min (`VIEW_DEDUPE_WINDOW_MS`)
+   não grava segunda linha — checado por `SELECT` antes do `INSERT`, dentro
+   da mesma action (não na página).
+2. **`components/view-tracker.tsx` (criado)** — client component
+   `<ViewTracker documentId>` que chama `registerView` via `useAction` no
+   `useEffect` do mount, uma vez por `documentId`. Escolhida em vez de
+   fire-and-forget no RSC: função serverless (Vercel) pode encerrar a
+   execução assim que a resposta HTTP é enviada, derrubando uma promise não
+   aguardada disparada durante o render do Server Component — o client
+   component roda depois da página já estar na tela, e o hook absorve
+   qualquer erro (rede, ou anônimo sem sessão) sem afetar a renderização.
+3. **`app/[slug]/page.tsx` e `app/editais/[slug]/page.tsx`** passaram a
+   renderizar `<ViewTracker documentId={...} />` — só quando `actorId` existe
+   (`getOptionalActorId()`). Anônimo nunca dispara a chamada: a policy
+   `views_insert_authenticated` exige `auth.uid()` de qualquer forma
+   (rejeitaria com `serverError`), então gatear no cliente evita ruído de
+   chamadas fadadas a falhar sem mudar o resultado.
+4. **Rótulo do KPI (`app/editorial/page.tsx`)** corrigido de "Visualizações
+   (30 dias)" para "Leituras de usuários identificados (30 dias)", com nota
+   "Não inclui leitura anônima" — decisão do prompt (recomendação): manter a
+   contagem só autenticada é a saída compatível com LGPD sem exigir consentimento
+   novo para leitura anônima.
+5. **Coluna "Leituras"** adicionada em duas listagens editoriais —
+   `app/editorial/page.tsx` (tabela "Últimas atualizações") e
+   `app/editorial/documentos/page.tsx` (listagem principal de documentos) —
+   somando `views` (histórico < 6 meses) + `views_monthly_agg` (agregado
+   retido após a purga mensal, agrupado por `documentId`) para os IDs
+   exibidos na página, para que o total não caia quando uma leitura antiga
+   migra de uma tabela para a outra.
+
+### Critérios de aceite
+
+- [x] Abrir um documento autenticado grava linha em `documentos.views` —
+      `registerView > abrir documento autenticado grava linha`
+- [x] Recarregar dentro da janela de dedupe não duplica —
+      `registerView > recarregar dentro da janela de dedupe não duplica a linha`
+- [x] Falha ao registrar leitura não quebra nem atrasa a renderização —
+      garantido pela arquitetura (`ViewTracker` client, `useAction` absorve erro);
+      `registerView > leitura anônima (sem sessão) não grava linha` confirma que o
+      caminho de erro (resolveSession rejeitando) retorna `serverError` em vez de
+      lançar
+- [x] KPI do painel editorial reflete dado real e o rótulo diz o que está
+      sendo contado — rótulo alterado, query já somava só `views`
+- [x] Total de leituras considera `views` + `views_monthly_agg` — colunas
+      novas nas duas listagens editoriais
+- [x] `pnpm --filter documentos typecheck lint test` verdes (5 arquivos, 86
+      testes, incluindo os 4 novos de `registerView`)
+- [x] Registrado em SESSIONS.md
+
+### Arquivos alterados
+
+- `apps/documentos/src/actions/documents.ts` (dedupe em `registerView`)
+- `apps/documentos/src/components/view-tracker.tsx` (criado)
+- `apps/documentos/src/app/[slug]/page.tsx`
+- `apps/documentos/src/app/editais/[slug]/page.tsx`
+- `apps/documentos/src/app/editorial/page.tsx`
+- `apps/documentos/src/app/editorial/documentos/page.tsx`
+- `apps/documentos/src/__tests__/actions.test.ts`
 - `PROMPTS.md` (linha do índice)
 - `SESSIONS.md` (esta entrada + linha no índice)

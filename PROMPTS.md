@@ -65,7 +65,7 @@ Corpo integral no próprio arquivo (as 4 originais) ou em `AUDIT/04-prompts-pend
 | P-1.18b   | Documentos: campos que a UI coleta e o banco não guarda       | neste arquivo                    | pendente |
 | P-1.19b   | Documentos: RLS de rascunho, lixeira e papel conselheiro      | neste arquivo                    | S-189    |
 | P-1.20b   | Documentos: busca com acento, índice e fim da action órfã     | neste arquivo                    | S-190    |
-| P-1.20c   | Documentos: registro de leitura (`views`) que ninguém escreve | neste arquivo                    | pendente |
+| P-1.20c   | Documentos: registro de leitura (`views`) que ninguém escreve | neste arquivo                    | S-191    |
 | P-1.21b   | Documentos: área editorial ainda lê como superusuário         | neste arquivo                    | pendente |
 | P-1.22b   | Documentos: alerta de "novas versões" que nunca chega         | neste arquivo                    | pendente |
 | P-1.23b   | Documentos: botão "submeter projeto" que o wizard ignora      | neste arquivo                    | pendente |
@@ -2768,13 +2768,13 @@ O efeito é visível para o usuário: `app/editorial/page.tsx:67-70` calcula "vi
 
 **Critérios de aceite:**
 
-- [ ] Abrir um documento autenticado grava linha em `documentos.views`
-- [ ] Recarregar a página dentro da janela de dedupe **não** duplica a linha — coberto por teste
-- [ ] Falha ao registrar leitura não quebra nem atrasa a renderização da página
-- [ ] KPI do painel editorial reflete dado real e o rótulo diz exatamente o que está sendo contado
-- [ ] Total de leituras considera `views` + `views_monthly_agg`
-- [ ] `pnpm --filter documentos typecheck lint test` verdes
-- [ ] Registrar em SESSIONS.md
+- [x] Abrir um documento autenticado grava linha em `documentos.views`
+- [x] Recarregar a página dentro da janela de dedupe **não** duplica a linha — coberto por teste
+- [x] Falha ao registrar leitura não quebra nem atrasa a renderização da página
+- [x] KPI do painel editorial reflete dado real e o rótulo diz exatamente o que está sendo contado
+- [x] Total de leituras considera `views` + `views_monthly_agg`
+- [x] `pnpm --filter documentos typecheck lint test` verdes
+- [x] Registrar em SESSIONS.md
 
 **Notas:**
 Ref: BRAIN.md §6.7 e LGPD (P-0.13). `documentos.views` é dado comportamental pessoal: não expor leitura individual em nenhuma tela (quem leu o quê), só agregados. A retenção de 6 meses já está implementada e não deve ser alterada aqui.

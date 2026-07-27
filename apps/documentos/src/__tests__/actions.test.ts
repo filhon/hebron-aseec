@@ -14,7 +14,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
-import { desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@hebron/db/client";
 import {
   users,
@@ -25,6 +25,7 @@ import {
   documentVersions,
   editals,
   subscriptions,
+  views,
 } from "@hebron/db/schema";
 
 // ── IDs fixos (prefixo e2) ────────────────────────────────────────────────────
@@ -699,5 +700,97 @@ describe("saveSubscriptions — preferências por tipo de alerta", () => {
       .where(eq(subscriptions.id, flagSubId));
     expect(remaining).toHaveLength(0);
     flagSubId = null;
+  });
+});
+
+// ── registerView — registro de leitura (P-1.20c) ──────────────────────────────
+// Documento criado no describe é deletado (soft delete) no afterAll global via
+// authorId = ACTOR_ID; as linhas de `views` somem junto por FK ON DELETE CASCADE
+// em document_id, sem cleanup manual aqui.
+
+describe("registerView", () => {
+  let docId: string;
+
+  beforeAll(async () => {
+    const { createDocument, publishDocument } =
+      await import("../actions/documents");
+    const created = await createDocument({
+      title: "Documento para registrar leitura",
+      contentMd: "conteúdo",
+      visibility: "public",
+    });
+    docId = requireDefined(created?.data?.document.id, "docId");
+    await publishDocument({ id: docId });
+  });
+
+  it("abrir documento autenticado grava linha em documentos.views", async () => {
+    const { registerView } = await import("../actions/documents");
+
+    const result = await registerView({ documentId: docId });
+
+    expect(result?.data?.recorded).toBe(true);
+
+    const rows = await db
+      .select()
+      .from(views)
+      .where(and(eq(views.documentId, docId), eq(views.userId, ACTOR_ID)));
+    expect(rows).toHaveLength(1);
+  });
+
+  it("recarregar dentro da janela de dedupe não duplica a linha", async () => {
+    const { registerView } = await import("../actions/documents");
+
+    await registerView({ documentId: docId });
+    await registerView({ documentId: docId });
+
+    const rows = await db
+      .select()
+      .from(views)
+      .where(and(eq(views.documentId, docId), eq(views.userId, ACTOR_ID)));
+    expect(rows).toHaveLength(1);
+  });
+
+  it("usuário diferente grava a própria linha, independente da dedupe do primeiro", async () => {
+    const { resolveSession } = await import("@hebron/auth/server");
+    const { registerView } = await import("../actions/documents");
+
+    vi.mocked(resolveSession).mockResolvedValueOnce({
+      actorId: SUBSCRIBER_ID,
+      roles: ["hospede"],
+      designations: [],
+    });
+    const result = await registerView({ documentId: docId });
+
+    expect(result?.data?.recorded).toBe(true);
+
+    const rows = await db
+      .select()
+      .from(views)
+      .where(and(eq(views.documentId, docId), eq(views.userId, SUBSCRIBER_ID)));
+    expect(rows).toHaveLength(1);
+  });
+
+  it("leitura anônima (sem sessão) não grava linha", async () => {
+    const { resolveSession } = await import("@hebron/auth/server");
+    const { registerView } = await import("../actions/documents");
+
+    vi.mocked(resolveSession).mockRejectedValueOnce(
+      new Error("Não autenticado"),
+    );
+    const beforeCount = await db
+      .select()
+      .from(views)
+      .where(eq(views.documentId, docId));
+
+    const result = await registerView({ documentId: docId });
+
+    expect(result?.serverError).toBeDefined();
+    expect(result?.data?.recorded).toBeUndefined();
+
+    const afterCount = await db
+      .select()
+      .from(views)
+      .where(eq(views.documentId, docId));
+    expect(afterCount).toHaveLength(beforeCount.length);
   });
 });

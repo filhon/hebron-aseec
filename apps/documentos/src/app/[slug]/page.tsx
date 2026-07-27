@@ -14,6 +14,7 @@ import { PublicNav } from "../../components/public-nav";
 import { DocumentViewer } from "../../components/document-viewer";
 import { VersionHistory } from "../../components/version-history";
 import { VISIBILITY, VisibilityBadge } from "../../components/visibility-badge";
+import { ViewTracker } from "../../components/view-tracker";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import {
   documents,
@@ -263,6 +264,7 @@ export default async function DocumentPage({ params }: PageProps) {
   return (
     <>
       <PublicNav />
+      {actorId && <ViewTracker documentId={doc.id} />}
 
       <main className="docs-page">
         {/* Breadcrumbs */}

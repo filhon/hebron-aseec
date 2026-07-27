@@ -14,10 +14,20 @@ import {
   editals,
   categories,
   views,
+  viewsMonthlyAgg,
   subscriptions,
   documentVersions,
 } from "@hebron/db/schema";
-import { and, eq, isNull, isNotNull, desc, sql, gt } from "drizzle-orm";
+import {
+  and,
+  eq,
+  isNull,
+  isNotNull,
+  desc,
+  sql,
+  gt,
+  inArray,
+} from "drizzle-orm";
 import { VisibilityBadge } from "../../components/visibility-badge";
 import {
   EditalStatusPill,
@@ -135,6 +145,41 @@ export default async function EditorialDashboardPage() {
   const viewCount = viewsRow?.n ?? 0;
   const subscriptionCount = subscriptionsRow?.n ?? 0;
 
+  // Total de leituras por documento (histórico completo): views (< 6 meses)
+  // + views_monthly_agg (agregado retido após a purga mensal) — o total não
+  // pode cair quando uma leitura antiga migra de uma tabela para a outra.
+  const recentIds = recentlyUpdated.map((d) => d.id);
+  const readCounts = new Map<string, number>();
+  if (recentIds.length > 0) {
+    const [rawCounts, aggCounts] = await Promise.all([
+      db
+        .select({ documentId: views.documentId, n: sql<number>`count(*)::int` })
+        .from(views)
+        .where(inArray(views.documentId, recentIds))
+        .groupBy(views.documentId),
+      db
+        .select({
+          documentId: viewsMonthlyAgg.documentId,
+          n: sql<number>`coalesce(sum(${viewsMonthlyAgg.viewCount}), 0)::int`,
+        })
+        .from(viewsMonthlyAgg)
+        .where(inArray(viewsMonthlyAgg.documentId, recentIds))
+        .groupBy(viewsMonthlyAgg.documentId),
+    ]);
+    for (const row of rawCounts) {
+      readCounts.set(
+        row.documentId,
+        (readCounts.get(row.documentId) ?? 0) + row.n,
+      );
+    }
+    for (const row of aggCounts) {
+      readCounts.set(
+        row.documentId,
+        (readCounts.get(row.documentId) ?? 0) + row.n,
+      );
+    }
+  }
+
   const kpis = [
     {
       label: "Total publicado",
@@ -151,12 +196,12 @@ export default async function EditorialDashboardPage() {
       color: "var(--hb-orange)",
     },
     {
-      label: "Visualizações (30 dias)",
+      label: "Leituras de usuários identificados (30 dias)",
       value:
         viewCount >= 1000
           ? `${(viewCount / 1000).toFixed(1)}k`
           : String(viewCount),
-      delta: "Analytics do período",
+      delta: "Não inclui leitura anônima",
       up: true,
       color: "var(--hb-cyan)",
     },
@@ -277,6 +322,7 @@ export default async function EditorialDashboardPage() {
                     <th>Categoria</th>
                     <th>Visibilidade</th>
                     <th>Versão</th>
+                    <th>Leituras</th>
                     <th>Atualizado</th>
                     <th></th>
                   </tr>
@@ -331,6 +377,9 @@ export default async function EditorialDashboardPage() {
                         >
                           v{doc.versionNumber ?? 1}
                         </span>
+                      </td>
+                      <td style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>
+                        {readCounts.get(doc.id) ?? 0}
                       </td>
                       <td style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>
                         {formatDate(doc.updatedAt)}

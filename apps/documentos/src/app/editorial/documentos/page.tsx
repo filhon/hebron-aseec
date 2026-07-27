@@ -1,8 +1,14 @@
 import Link from "next/link";
 import { ChevronRight, FileText, Plus } from "lucide-react";
 import { db } from "@hebron/db/client";
-import { documents, categories, editals } from "@hebron/db/schema";
-import { and, desc, eq, isNull, isNotNull } from "drizzle-orm";
+import {
+  documents,
+  categories,
+  editals,
+  views,
+  viewsMonthlyAgg,
+} from "@hebron/db/schema";
+import { and, desc, eq, isNull, isNotNull, inArray, sql } from "drizzle-orm";
 import { DocumentRowActions } from "../../../components/document-row-actions";
 import { VisibilityBadge } from "../../../components/visibility-badge";
 import {
@@ -53,6 +59,41 @@ export default async function EditorialDocumentosPage({
       ),
     )
     .orderBy(desc(documents.updatedAt));
+
+  // Total de leituras por documento: views (< 6 meses) + views_monthly_agg
+  // (agregado retido após a purga mensal) — mesmo critério do painel
+  // editorial (P-1.20c).
+  const rowIds = rows.map((r) => r.id);
+  const readCounts = new Map<string, number>();
+  if (rowIds.length > 0) {
+    const [rawCounts, aggCounts] = await Promise.all([
+      db
+        .select({ documentId: views.documentId, n: sql<number>`count(*)::int` })
+        .from(views)
+        .where(inArray(views.documentId, rowIds))
+        .groupBy(views.documentId),
+      db
+        .select({
+          documentId: viewsMonthlyAgg.documentId,
+          n: sql<number>`coalesce(sum(${viewsMonthlyAgg.viewCount}), 0)::int`,
+        })
+        .from(viewsMonthlyAgg)
+        .where(inArray(viewsMonthlyAgg.documentId, rowIds))
+        .groupBy(viewsMonthlyAgg.documentId),
+    ]);
+    for (const row of rawCounts) {
+      readCounts.set(
+        row.documentId,
+        (readCounts.get(row.documentId) ?? 0) + row.n,
+      );
+    }
+    for (const row of aggCounts) {
+      readCounts.set(
+        row.documentId,
+        (readCounts.get(row.documentId) ?? 0) + row.n,
+      );
+    }
+  }
 
   return (
     <div>
@@ -157,6 +198,7 @@ export default async function EditorialDocumentosPage({
                 <th>Categoria</th>
                 <th>Visibilidade</th>
                 <th>Status</th>
+                <th>Leituras</th>
                 <th>Atualizado</th>
                 <th style={{ width: 120 }}></th>
               </tr>
@@ -191,6 +233,9 @@ export default async function EditorialDocumentosPage({
                       : doc.publishedAt
                         ? "Publicado"
                         : "Rascunho"}
+                  </td>
+                  <td style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>
+                    {readCounts.get(doc.id) ?? 0}
                   </td>
                   <td style={{ fontSize: 12.5, color: "var(--fg-muted)" }}>
                     {formatDate(doc.updatedAt)}
