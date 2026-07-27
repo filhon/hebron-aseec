@@ -9,6 +9,7 @@ import {
   withSystemRole,
 } from "@hebron/db/authenticated";
 import {
+  auditLog,
   documents,
   documentTags,
   documentVersions,
@@ -17,7 +18,11 @@ import {
 } from "@hebron/db/schema";
 import { editorAction, authenticatedAction } from "../lib/safe-action";
 import { logDocumentAudit } from "../lib/audit";
-import { notifyNewDocument, notifyEditalOpen } from "../lib/notifications";
+import {
+  notifyNewDocument,
+  notifyEditalOpen,
+  notifyVersionUpdate,
+} from "../lib/notifications";
 
 const visibilityEnum = z.enum(["public", "internal", "restricted"]);
 const documentTypeEnum = z.enum([
@@ -173,14 +178,15 @@ export const updateDocument = editorAction
       type: documentTypeEnum.optional(),
       categoryId: z.string().uuid().nullable().optional(),
       tagIds: z.array(z.string().uuid()).optional(),
+      notes: z.string().max(2000).optional(),
+      notifySubscribers: z.boolean().optional().default(false),
     }),
   )
   .action(async ({ parsedInput, ctx }) => {
-    const { id, tagIds, ...fields } = parsedInput;
+    const { id, tagIds, notes, notifySubscribers, ...fields } = parsedInput;
 
-    const { updated, nextVersion } = await withAuthenticatedContext(
-      { actorId: ctx.actorId },
-      async (tx) => {
+    const { updated, nextVersion, wasPublished } =
+      await withAuthenticatedContext({ actorId: ctx.actorId }, async (tx) => {
         const [before] = await tx
           .select()
           .from(documents)
@@ -227,6 +233,7 @@ export const updateDocument = editorAction
           fileSizeBytes:
             fields.fileSizeBytes ?? latestVersion?.fileSizeBytes ?? null,
           mimeType: fields.mimeType ?? latestVersion?.mimeType ?? null,
+          notes: notes ?? null,
           versionNumber: nextVersion,
           createdBy: ctx.actorId,
         });
@@ -266,9 +273,12 @@ export const updateDocument = editorAction
           ),
         );
 
-        return { updated, nextVersion };
-      },
-    );
+        return { updated, nextVersion, wasPublished: !!before.publishedAt };
+      });
+
+    if (wasPublished && notifySubscribers) {
+      await notifyVersionUpdate(id, nextVersion, notes ?? null);
+    }
 
     return { document: updated, version: nextVersion };
   });
@@ -278,9 +288,8 @@ export const updateDocument = editorAction
 export const publishDocument = editorAction
   .schema(z.object({ id: z.string().uuid() }))
   .action(async ({ parsedInput, ctx }) => {
-    const { updated, isEdital } = await withAuthenticatedContext(
-      { actorId: ctx.actorId },
-      async (tx) => {
+    const { updated, isEdital, alreadyNotifiedBefore } =
+      await withAuthenticatedContext({ actorId: ctx.actorId }, async (tx) => {
         const [before] = await tx
           .select({ publishedAt: documents.publishedAt })
           .from(documents)
@@ -291,6 +300,28 @@ export const publishDocument = editorAction
 
         if (!before) throw new Error("Documento não encontrado");
         if (before.publishedAt) throw new Error("Documento já está publicado");
+
+        // Republicar (despublicar + publicar de novo) não é primeira
+        // publicação: `published_at` volta a NULL ao despublicar, então o
+        // sinal disponível sem migration é a existência de um audit anterior
+        // de "document.published" para este id (P-1.22b).
+        const alreadyNotifiedBefore = await withSystemRole(
+          tx,
+          async (sysTx) => {
+            const [existing] = await sysTx
+              .select({ id: auditLog.id })
+              .from(auditLog)
+              .where(
+                and(
+                  eq(auditLog.entity, "document"),
+                  eq(auditLog.entityId, parsedInput.id),
+                  eq(auditLog.action, "document.published"),
+                ),
+              )
+              .limit(1);
+            return !!existing;
+          },
+        );
 
         const now = new Date();
         const [updated] = await tx
@@ -320,17 +351,20 @@ export const publishDocument = editorAction
           .where(eq(editals.id, parsedInput.id))
           .limit(1);
 
-        return { updated, isEdital: !!editalRow };
-      },
-    );
+        return { updated, isEdital: !!editalRow, alreadyNotifiedBefore };
+      });
 
     // Notificação por email: fan-out para todos os inscritos/submissores,
     // não escopado pelo papel/escopo do ator — mesmo padrão de exceção
     // service-level de lib/notifications.ts (ver decisão em SESSIONS.md).
-    if (isEdital) {
-      await notifyEditalOpen(parsedInput.id);
-    } else {
-      await notifyNewDocument(parsedInput.id);
+    // Só dispara na primeira publicação — republicar (P-1.22b) não repete o
+    // "novo documento"/"edital aberto".
+    if (!alreadyNotifiedBefore) {
+      if (isEdital) {
+        await notifyEditalOpen(parsedInput.id);
+      } else {
+        await notifyNewDocument(parsedInput.id);
+      }
     }
 
     return { document: updated };

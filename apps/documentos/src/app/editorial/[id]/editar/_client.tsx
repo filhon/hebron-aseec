@@ -120,6 +120,8 @@ export function EditDocumentClient({
         type: values.type,
         categoryId: values.categoryId || null,
         tagIds,
+        notes: values.versionNotes.trim() || undefined,
+        notifySubscribers: values.notifySubscribers,
       });
       if (!result?.data) throw new Error("Falha ao atualizar documento.");
       setSaved(true);

@@ -12,6 +12,7 @@ import {
 import { makeNotificationInserter } from "@hebron/db/notifications";
 import { createNotification } from "@hebron/email";
 import { NewDocumentEmail } from "@hebron/email/templates/new-document";
+import { NewVersionEmail } from "@hebron/email/templates/new-version";
 import { EditalOpenEmail } from "@hebron/email/templates/edital-open";
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -95,6 +96,95 @@ export async function notifyNewDocument(documentId: string): Promise<void> {
             categoryName: category.name,
             documentUrl,
             publishedAt,
+          }),
+        },
+      }),
+    ),
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// notifyVersionUpdate — dispara emails para subscribers da categoria quando
+// uma nova versão é publicada em um documento já publicado (P-1.22b). Opt-in
+// por edição: só é chamada quando o editor marca "avisar os inscritos" no
+// formulário — publishDocument/notifyNewDocument já cobre a primeira versão.
+// ──────────────────────────────────────────────────────────────────────────────
+
+export async function notifyVersionUpdate(
+  documentId: string,
+  versionNumber: number,
+  notes?: string | null,
+): Promise<void> {
+  const [doc] = await db
+    .select({
+      id: documents.id,
+      title: documents.title,
+      slug: documents.slug,
+      categoryId: documents.categoryId,
+    })
+    .from(documents)
+    .where(and(eq(documents.id, documentId), isNull(documents.deletedAt)))
+    .limit(1);
+
+  if (!doc?.categoryId) return;
+
+  const [category] = await db
+    .select({ name: categories.name })
+    .from(categories)
+    .where(eq(categories.id, doc.categoryId))
+    .limit(1);
+
+  if (!category) return;
+
+  const subscribers = await db
+    .select({
+      userId: users.id,
+      email: users.email,
+      fullName: users.fullName,
+    })
+    .from(subscriptions)
+    .innerJoin(users, eq(subscriptions.userId, users.id))
+    .where(
+      and(
+        eq(subscriptions.categoryId, doc.categoryId),
+        eq(subscriptions.onNewVersion, true),
+        isNull(users.suspendedAt),
+      ),
+    );
+
+  if (!subscribers.length) return;
+
+  const documentUrl = `${BASE_URL}/${doc.slug}`;
+  const resendApiKey = process.env.RESEND_API_KEY;
+
+  await Promise.all(
+    subscribers.map((sub) =>
+      createNotification({
+        insert: makeInsert(),
+        resendApiKey,
+        data: {
+          userId: sub.userId,
+          channel: "email",
+          type: "document.version_updated",
+          title: `Nova versão: ${doc.title}`,
+          body: `Versão ${versionNumber} publicada em ${category.name}`,
+          payload: {
+            module: "documentos",
+            documentId: doc.id,
+            categoryId: doc.categoryId,
+            versionNumber,
+          },
+        },
+        email: {
+          to: sub.email,
+          subject: `Nova versão em ${category.name}: ${doc.title}`,
+          template: React.createElement(NewVersionEmail, {
+            recipientName: sub.fullName ?? sub.email,
+            documentTitle: doc.title,
+            categoryName: category.name,
+            documentUrl,
+            versionNumber,
+            summary: notes,
           }),
         },
       }),

@@ -67,7 +67,7 @@ Corpo integral no próprio arquivo (as 4 originais) ou em `AUDIT/04-prompts-pend
 | P-1.20b   | Documentos: busca com acento, índice e fim da action órfã     | neste arquivo                    | S-190    |
 | P-1.20c   | Documentos: registro de leitura (`views`) que ninguém escreve | neste arquivo                    | S-191    |
 | P-1.21b   | Documentos: área editorial ainda lê como superusuário         | neste arquivo                    | S-192    |
-| P-1.22b   | Documentos: alerta de "novas versões" que nunca chega         | neste arquivo                    | pendente |
+| P-1.22b   | Documentos: alerta de "novas versões" que nunca chega         | neste arquivo                    | S-193    |
 | P-1.23b   | Documentos: botão "submeter projeto" que o wizard ignora      | neste arquivo                    | pendente |
 | P-1.24b   | Documentos: audit mockado e escrita sem cobertura de teste    | neste arquivo                    | pendente |
 
@@ -2874,13 +2874,13 @@ O mesmo caminho tem um segundo defeito, de sinal oposto: `publishDocument` notif
 
 **Critérios de aceite:**
 
-- [ ] Publicar nova versão de documento publicado, com o opt-in ligado, envia e-mail aos inscritos com `on_new_version = true` — e só a eles
-- [ ] Opt-in desligado não envia nada
-- [ ] Despublicar e republicar não dispara segunda notificação de "novo documento" — coberto por teste
-- [ ] Template próprio de nova versão, com layout institucional e microcopy sem exclamação genérica
-- [ ] Nenhum toggle da UI de assinaturas sem evento correspondente de fato disparado (reauditar os dois, campo a campo, como pedia P-1.16b)
-- [ ] `pnpm --filter documentos typecheck lint test` verdes
-- [ ] Registrar em SESSIONS.md
+- [x] Publicar nova versão de documento publicado, com o opt-in ligado, envia e-mail aos inscritos com `on_new_version = true` — e só a eles
+- [x] Opt-in desligado não envia nada
+- [x] Despublicar e republicar não dispara segunda notificação de "novo documento" — coberto por teste
+- [x] Template próprio de nova versão, com layout institucional e microcopy sem exclamação genérica
+- [x] Nenhum toggle da UI de assinaturas sem evento correspondente de fato disparado (reauditar os dois, campo a campo, como pedia P-1.16b)
+- [x] `pnpm --filter documentos typecheck lint test` verdes
+- [x] Registrar em SESSIONS.md
 
 **Notas:**
 Ref: BRAIN.md §6.7; P-1.16b (S-185) para o contrato das flags. Alternativa descartada: renomear o toggle para "Novas publicações" e não implementar nada — resolveria a mentira, mas apagaria o caso de uso mais citado do módulo (acompanhar revisão de política). Não introduzir digest/frequência aqui.

@@ -43,6 +43,10 @@ export interface DocumentFormValues {
   content: string;
   contentMode: ContentMode;
   file: File | null;
+  /** Opt-in por edição: avisa os inscritos da categoria da nova versão (P-1.22b). */
+  notifySubscribers: boolean;
+  /** Resumo da alteração, usado no corpo do e-mail quando notifySubscribers está ligado. */
+  versionNotes: string;
 }
 
 type FormErrors = Partial<Record<keyof DocumentFormValues, string>>;
@@ -184,6 +188,7 @@ export function DocumentForm({
   const titleId = useId();
   const descId = useId();
   const contentId = useId();
+  const versionNotesId = useId();
 
   const [values, setValues] = useState<DocumentFormValues>({
     title: initialValues?.title ?? "",
@@ -197,6 +202,8 @@ export function DocumentForm({
     content: initialValues?.content ?? "",
     contentMode: initialValues?.contentMode ?? "markdown",
     file: initialValues?.file ?? null,
+    notifySubscribers: initialValues?.notifySubscribers ?? false,
+    versionNotes: initialValues?.versionNotes ?? "",
   });
   const [errors, setErrors] = useState<FormErrors>({});
   const [touched, setTouched] = useState<Set<string>>(new Set());
@@ -1033,6 +1040,87 @@ export function DocumentForm({
           </div>
         </div>
       </section>
+
+      {/* ── Aviso aos inscritos ── */}
+      {isEdit && (
+        <section
+          className="hb-card"
+          style={{ padding: "22px 24px", marginBottom: 14 }}
+        >
+          <span className="hb-eyebrow">Aviso aos inscritos</span>
+
+          <div
+            className="hb-form-row"
+            style={{
+              marginTop: 16,
+              marginBottom: values.notifySubscribers ? 16 : 0,
+            }}
+          >
+            <label
+              style={{
+                display: "flex",
+                alignItems: "flex-start",
+                gap: 10,
+                cursor: "pointer",
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={values.notifySubscribers}
+                onChange={(e) => set("notifySubscribers", e.target.checked)}
+                style={{
+                  marginTop: 3,
+                  width: 16,
+                  height: 16,
+                  accentColor: "var(--brand)",
+                  flexShrink: 0,
+                  cursor: "pointer",
+                }}
+              />
+              <span>
+                <span
+                  style={{
+                    display: "block",
+                    fontSize: 13,
+                    fontWeight: 600,
+                    color: "var(--fg)",
+                  }}
+                >
+                  Avisar os inscritos desta categoria
+                </span>
+                <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>
+                  Envia um e-mail aos inscritos em &ldquo;Novas versões&rdquo;,
+                  se o documento já estiver publicado. Reserve para revisões
+                  relevantes — uma correção pontual não precisa de aviso.
+                </span>
+              </span>
+            </label>
+          </div>
+
+          {values.notifySubscribers && (
+            <div className="hb-form-row" style={{ marginBottom: 0 }}>
+              <label
+                htmlFor={versionNotesId}
+                style={{ fontSize: 12, fontWeight: 600 }}
+              >
+                Resumo da alteração
+              </label>
+              <div className="hb-form-hint">
+                Aparece no corpo do e-mail enviado aos inscritos.
+              </div>
+              <textarea
+                id={versionNotesId}
+                value={values.versionNotes}
+                onChange={(e) => set("versionNotes", e.target.value)}
+                rows={2}
+                maxLength={500}
+                placeholder="Ex.: Atualização da cláusula 4 com novo prazo de vigência."
+                className="hb-form-textarea"
+              />
+            </div>
+          )}
+        </section>
+      )}
 
       {/* ── Actions ── */}
       <div

@@ -42,6 +42,7 @@ let notifCatId: string | null = null;
 let _notifDocId: string | null = null;
 let notifSubId: string | null = null;
 let flagSubId: string | null = null;
+let versionSubId: string | null = null;
 
 // ── Mocks globais ─────────────────────────────────────────────────────────────
 
@@ -135,6 +136,9 @@ afterAll(async () => {
   }
   if (flagSubId) {
     await db.delete(subscriptions).where(eq(subscriptions.id, flagSubId));
+  }
+  if (versionSubId) {
+    await db.delete(subscriptions).where(eq(subscriptions.id, versionSubId));
   }
 
   // Documentos criados pelo ACTOR_ID
@@ -700,6 +704,102 @@ describe("saveSubscriptions — preferências por tipo de alerta", () => {
       .where(eq(subscriptions.id, flagSubId));
     expect(remaining).toHaveLength(0);
     flagSubId = null;
+  });
+});
+
+// ── Alerta de nova versão (P-1.22b) ───────────────────────────────────────────
+
+describe("updateDocument — alerta de nova versão", () => {
+  it("opt-in ligado notifica os inscritos com on_new_version=true ao editar documento já publicado", async () => {
+    const { createNotification } = await import("@hebron/email");
+    const { resolveSession } = await import("@hebron/auth/server");
+    const { createDocument, publishDocument, updateDocument } =
+      await import("../actions/documents");
+    const { createCategory } = await import("../actions/categories");
+    const { saveSubscriptions } = await import("../actions/subscriptions");
+
+    const catResult = await createCategory({ name: "Nova Versão Category" });
+    const cat = requireDefined(catResult?.data?.category, "cat");
+    createdCatIds.push(cat.id);
+
+    vi.mocked(resolveSession).mockResolvedValueOnce({
+      actorId: SUBSCRIBER_ID,
+      roles: ["hospede"],
+      designations: [],
+    });
+    const subResult = await saveSubscriptions({
+      items: [{ categoryId: cat.id, onNewVersion: true, onEditalOpen: false }],
+    });
+    const sub = requireDefined(subResult?.data?.subscriptions?.[0], "sub");
+    versionSubId = sub.id;
+
+    const created = await createDocument({
+      title: "Documento para Nova Versão",
+      contentMd: "v1",
+      visibility: "public",
+      categoryId: cat.id,
+    });
+    const docId = requireDefined(created?.data?.document.id, "docId");
+
+    await publishDocument({ id: docId });
+    vi.mocked(createNotification).mockClear();
+
+    const updated = await updateDocument({
+      id: docId,
+      contentMd: "v2 revisado",
+      notes: "Atualização da seção 2.",
+      notifySubscribers: true,
+    });
+    expect(updated?.data?.version).toBe(2);
+
+    expect(vi.mocked(createNotification)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          userId: SUBSCRIBER_ID,
+          type: "document.version_updated",
+        }),
+      }),
+    );
+  });
+
+  it("opt-in desligado não notifica ninguém, mesmo com documento já publicado", async () => {
+    const { createNotification } = await import("@hebron/email");
+    const { createDocument, publishDocument, updateDocument } =
+      await import("../actions/documents");
+
+    const created = await createDocument({
+      title: "Documento Sem Opt-in",
+      contentMd: "v1",
+      visibility: "internal",
+    });
+    const docId = requireDefined(created?.data?.document.id, "docId");
+    await publishDocument({ id: docId });
+
+    vi.mocked(createNotification).mockClear();
+    await updateDocument({ id: docId, contentMd: "v2 sem aviso" });
+
+    expect(vi.mocked(createNotification)).not.toHaveBeenCalled();
+  });
+
+  it("despublicar e republicar não dispara segunda notificação de novo documento", async () => {
+    const { createNotification } = await import("@hebron/email");
+    const { createDocument, publishDocument, unpublishDocument } =
+      await import("../actions/documents");
+
+    const created = await createDocument({
+      title: "Documento para Republicar",
+      visibility: "public",
+    });
+    const docId = requireDefined(created?.data?.document.id, "docId");
+
+    await publishDocument({ id: docId });
+    await unpublishDocument({ id: docId });
+
+    vi.mocked(createNotification).mockClear();
+    const result = await publishDocument({ id: docId });
+
+    expect(result?.data?.document.publishedAt).toBeDefined();
+    expect(vi.mocked(createNotification)).not.toHaveBeenCalled();
   });
 });
 

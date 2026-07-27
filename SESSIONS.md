@@ -213,6 +213,7 @@
 | S-190  | 2026-07-27 | P-1.20b — Documentos: busca com acento, índice e fim da action órfã (CORRETIVO)                                                  | concluido                            |
 | S-191  | 2026-07-27 | P-1.20c — Documentos: registro de leitura (`views`) que ninguém escreve (CORRETIVO)                                              | concluido                            |
 | S-192  | 2026-07-27 | P-1.21b — Documentos: área editorial ainda lê como superusuário (CORRETIVO)                                                      | concluido                            |
+| S-193  | 2026-07-27 | P-1.22b — Documentos: alerta de "novas versões" que nunca chega (CORRETIVO)                                                      | concluido                            |
 
 ---
 
@@ -15760,5 +15761,103 @@ qualquer um deles.
 - `apps/documentos/src/app/editorial/novo/page.tsx`
 - `apps/documentos/src/app/editorial/[id]/editar/page.tsx`
 - `apps/documentos/src/__tests__/rls.test.ts`
+- `PROMPTS.md` (linha do índice)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+## S-193 — P-1.22b — Documentos: alerta de "novas versões" que nunca chega (CORRETIVO)
+
+**Branch:** `feat/P-1.22b-docs-alerta-versao`
+
+### Contexto
+
+O toggle "Novas versões" (`subscription-form.tsx:280`) só era honrado na
+primeira publicação de um documento (`publishDocument` → `notifyNewDocument`).
+`updateDocument`, que cria as versões 2, 3, 4…, nunca notificava ninguém — o
+caso de uso mais citado do módulo (acompanhar a revisão de uma política)
+passava em silêncio. No sentido oposto, despublicar e republicar (operação
+corriqueira para corrigir um documento) disparava um segundo "Novo documento"
+para toda a lista de inscritos, porque `published_at` volta a `NULL` ao
+despublicar e `publishDocument` não distinguia repúblicação de primeira
+publicação.
+
+### O que foi feito
+
+1. **`notifyVersionUpdate`** (`lib/notifications.ts`), no mesmo formato de
+   `notifyNewDocument`: busca inscritos da categoria com `on_new_version =
+true` e envia o template `NewVersionEmail` com número da versão, categoria,
+   link e um resumo opcional.
+2. **`updateDocument`** (`actions/documents.ts`) ganhou dois campos opcionais:
+   `notifySubscribers` (default `false` — opt-in por edição, nunca automático)
+   e `notes` (resumo da alteração, gravado em `document_versions.notes` —
+   coluna criada em P-1.18b/S-188 mas nunca escrita até agora). Ao final da
+   transação, se o documento já estava publicado (`before.publishedAt`) e
+   `notifySubscribers` foi marcado, chama `notifyVersionUpdate` fora da tx
+   (mesmo padrão de `publishDocument`).
+3. **Critério de "primeira publicação" sem migration:** `publishDocument`
+   agora verifica, antes de atualizar `documents`, se já existe uma linha em
+   `admin.audit_log` com `action = 'document.published'` para aquele
+   `entity_id` (via `withSystemRole`, mesmo mecanismo já usado para a
+   escrita do audit — `RESET ROLE` reverte para o role privilegiado da
+   conexão e ignora a RLS `audit_log_select_super_admin`). Se existir,
+   é repúblicação: nem `notifyNewDocument` nem `notifyEditalOpen` disparam.
+   Escolhido em vez de consultar `notifications` (que ficaria vazio se o
+   documento nunca teve inscritos na primeira publicação) — o audit log
+   registra `document.published` em toda chamada bem-sucedida,
+   independentemente de haver subscriber.
+4. **Template** `packages/email/src/templates/new-version.tsx`: mesmo layout
+   institucional de `new-document.tsx`/`edital-open.tsx`, texto próprio
+   ("Documento revisado"), sem reaproveitar a cópia de `new-document.tsx`.
+5. **UI** (`components/document-form.tsx`): nova seção "Aviso aos inscritos",
+   renderizada só em `mode="edit"` — checkbox "Avisar os inscritos desta
+   categoria" (desmarcado por default) e, quando marcado, um campo "Resumo da
+   alteração" (vai para `notes`/corpo do e-mail). `editar/_client.tsx` passa
+   os dois valores para `updateDocument`. Como `editorial/[id]/editar/page.tsx`
+   não está entre os arquivos permitidos deste prompt, o formulário não sabe
+   se o documento já está publicado — a seção aparece sempre no modo edição,
+   e o servidor decide se de fato notifica (`wasPublished && notifySubscribers`),
+   então marcar o checkbox num rascunho não publicado é inofensivo (nenhuma
+   notificação sai). Registrada aqui como suposição, não como bug.
+6. **Testes** (`actions.test.ts`, describe "updateDocument — alerta de nova
+   versão"): opt-in ligado notifica só quem tem `on_new_version = true`;
+   opt-in desligado não notifica ninguém mesmo com documento publicado;
+   despublicar + republicar não dispara segunda notificação (nem de
+   "document.published" nem de qualquer outro tipo).
+
+### Reauditoria dos dois toggles de assinatura (pedida no critério de aceite)
+
+- `onNewVersion` → `notifyNewDocument` (primeira publicação) **e**, a partir
+  deste prompt, `notifyVersionUpdate` (revisões subsequentes, opt-in). Os
+  dois eventos que o rótulo "Novas versões" promete agora existem de fato.
+- `onEditalOpen` → `notifyEditalOpen`, disparado só na primeira publicação do
+  edital (mesmo guard de repúblicação do item 3 acima, que se aplica a ambos
+  os ramos de `publishDocument`).
+
+Nenhum toggle ficou sem evento correspondente.
+
+### Critérios de aceite
+
+- [x] Publicar nova versão de documento publicado, com o opt-in ligado, envia
+      e-mail aos inscritos com `on_new_version = true` — e só a eles
+- [x] Opt-in desligado não envia nada
+- [x] Despublicar e republicar não dispara segunda notificação de "novo
+      documento" — coberto por teste
+- [x] Template próprio de nova versão, com layout institucional e microcopy
+      sem exclamação genérica
+- [x] Nenhum toggle da UI de assinaturas sem evento correspondente de fato
+      disparado (reauditado acima)
+- [x] `pnpm --filter documentos typecheck lint test` verdes (5 arquivos, 96
+      testes, incluindo os 3 novos de "updateDocument — alerta de nova versão")
+- [x] Registrado em SESSIONS.md
+
+### Arquivos criados/alterados
+
+- `packages/email/src/templates/new-version.tsx` (criado)
+- `apps/documentos/src/lib/notifications.ts`
+- `apps/documentos/src/actions/documents.ts`
+- `apps/documentos/src/components/document-form.tsx`
+- `apps/documentos/src/app/editorial/[id]/editar/_client.tsx`
+- `apps/documentos/src/__tests__/actions.test.ts`
 - `PROMPTS.md` (linha do índice)
 - `SESSIONS.md` (esta entrada + linha no índice)
