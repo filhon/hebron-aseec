@@ -23,53 +23,53 @@
 | 8    | Rádio      | P-8.1 a P-8.12  | P-8.1–8.5   | P-8.6–8.12  |
 | 9    | Polimento  | P-9.1 a P-9.5   | —           | —           |
 
-### Correções (S1-26 — cabeçalho antigo dizia "3 correções"; eram 4; hoje são 41 no total, 11 pendentes: P-0.4b, P-7.1b, P-7.5b e as 8 do bloco B de Documentos abertas na auditoria de 2026-07-25 — P-1.18b a P-1.24b)
+### Correções (S1-26 — cabeçalho antigo dizia "3 correções"; eram 4; hoje são 41 no total, 3 pendentes: P-0.4b, P-7.1b, P-7.5b — o bloco B de Documentos aberto na auditoria de 2026-07-25 (P-1.18b a P-1.24b) fechou em 2026-07-27)
 
 Corpo integral no próprio arquivo (as 4 originais) ou em `AUDIT/04-prompts-pendentes.md` §4 (as 15 da auditoria de 2026-07 — convenção registrada em cada sessão de SESSIONS.md a partir de S-54; transcrever o texto para dentro deste arquivo é trabalho mecânico à parte, não feito em P-0.16 para não misturar prompts na mesma sessão).
 
-| Corretivo | Motivo                                                        | Corpo do prompt                  | Sessão    |
-| --------- | ------------------------------------------------------------- | -------------------------------- | --------- |
-| P-0.2b    | Unificação do design system (tokens `--hb-*`)                 | neste arquivo                    | S-20      |
-| P-0.3b    | Pipeline de migrations                                        | neste arquivo                    | S-22      |
-| P-1.12b   | Reconciliação do Admin ao design system unificado             | neste arquivo                    | S-22b¹    |
-| P-2.9b    | Usuário real no header de Projetos                            | neste arquivo                    | S-44      |
-| P-0.7     | Resgate do banco (partições, enum de audit, 0000 duplicada)   | AUDIT/04-prompts-pendentes.md §4 | S-54      |
-| P-0.8     | Kit de backend compartilhado (sessão/audit/notificações)      | AUDIT/04-prompts-pendentes.md §4 | S-55      |
-| P-0.9     | CI mínimo                                                     | AUDIT/04-prompts-pendentes.md §4 | S-56      |
-| P-0.10    | Decisão B: RLS ativa (grants + policies + adoção)             | AUDIT/04-prompts-pendentes.md §4 | S-57      |
-| P-0.11    | drizzle-kit reconciliado                                      | AUDIT/04-prompts-pendentes.md §4 | S-58      |
-| P-1.25    | Admin: leitura protegida e fiação completa                    | AUDIT/04-prompts-pendentes.md §4 | S-59      |
-| P-1.26    | Onboarding: convite, auto-signup e MFA bloqueante             | AUDIT/04-prompts-pendentes.md §4 | S-60      |
-| P-1.27    | Documentos: visibilidade e área editorial verdadeiras         | AUDIT/04-prompts-pendentes.md §4 | S-61      |
-| P-2.9c    | Projetos: operável de ponta a ponta                           | AUDIT/04-prompts-pendentes.md §4 | S-62      |
-| P-3.8b    | Financeiro: governança e conciliação verdadeiras              | AUDIT/04-prompts-pendentes.md §4 | S-63      |
-| P-0.12    | Storage: buckets e policies                                   | AUDIT/04-prompts-pendentes.md §4 | S-64      |
-| P-0.13    | LGPD: fundação                                                | AUDIT/04-prompts-pendentes.md §4 | S-65      |
-| P-0.14    | Jobs: Inngest de verdade                                      | AUDIT/04-prompts-pendentes.md §4 | S-66      |
-| P-0.15    | packages/integrations + contrato de settings                  | AUDIT/04-prompts-pendentes.md §4 | S-67      |
-| P-0.16    | Registro retroativo (este próprio corretivo)                  | AUDIT/04-prompts-pendentes.md §4 | S-68      |
-| P-0.4b    | Auth: simetria de decode de cookie no browser client          | neste arquivo                    | pendente  |
-| P-0.6b    | Notificações in_app operáveis: slot no AppShell + piloto      | neste arquivo                    | S-175     |
-| P-0.6c    | Notificações in_app: rollout do sino/central aos demais apps  | neste arquivo                    | S-176     |
-| P-0.6d    | Client Drizzle tipado (remoção do stub de notifications)      | neste arquivo                    | S-177     |
-| P-0.6e    | Emails: tipografia institucional (remover Inter)              | neste arquivo                    | S-178     |
-| P-7.1b    | Flats: máximo de scoring em BRAIN §6.8 (80 → 75)              | neste arquivo                    | pendente  |
-| P-7.5b    | Flats: fiação das telas do Bloco A para validação diretoria   | neste arquivo                    | pendente  |
-| P-1.10b   | Admin: editor de templates de email acessível (órfão→Config)  | neste arquivo                    | S-181     |
-| P-1.10c   | Emails enviados a partir dos templates do banco (DB-driven)   | neste arquivo                    | S-182     |
-| P-1.14b   | Documentos: badge de visibilidade e pílula de status únicos   | neste arquivo                    | S-183     |
-| P-1.15b   | Documentos: listagem por categoria — a rota que nunca existiu | neste arquivo                    | S-184     |
-| P-1.16b   | Documentos: assinaturas, preferência por tipo de alerta       | neste arquivo                    | S-185     |
-| P-1.16c   | Documentos: reordenação de categorias — UI ao backend (b)     | neste arquivo                    | S-186     |
-| P-1.17b   | Documentos: fronteiras de erro e cópia de estados vazios      | neste arquivo                    | S-187     |
-| P-1.18b   | Documentos: campos que a UI coleta e o banco não guarda       | neste arquivo                    | pendente  |
-| P-1.19b   | Documentos: RLS de rascunho, lixeira e papel conselheiro      | neste arquivo                    | S-189     |
-| P-1.20b   | Documentos: busca com acento, índice e fim da action órfã     | neste arquivo                    | S-190     |
-| P-1.20c   | Documentos: registro de leitura (`views`) que ninguém escreve | neste arquivo                    | S-191     |
-| P-1.21b   | Documentos: área editorial ainda lê como superusuário         | neste arquivo                    | S-192     |
-| P-1.22b   | Documentos: alerta de "novas versões" que nunca chega         | neste arquivo                    | S-193     |
-| P-1.23b   | Documentos: botão "submeter projeto" que o wizard ignora      | neste arquivo                    | concluido |
-| P-1.24b   | Documentos: audit mockado e escrita sem cobertura de teste    | neste arquivo                    | pendente  |
+| Corretivo | Motivo                                                        | Corpo do prompt                  | Sessão   |
+| --------- | ------------------------------------------------------------- | -------------------------------- | -------- |
+| P-0.2b    | Unificação do design system (tokens `--hb-*`)                 | neste arquivo                    | S-20     |
+| P-0.3b    | Pipeline de migrations                                        | neste arquivo                    | S-22     |
+| P-1.12b   | Reconciliação do Admin ao design system unificado             | neste arquivo                    | S-22b¹   |
+| P-2.9b    | Usuário real no header de Projetos                            | neste arquivo                    | S-44     |
+| P-0.7     | Resgate do banco (partições, enum de audit, 0000 duplicada)   | AUDIT/04-prompts-pendentes.md §4 | S-54     |
+| P-0.8     | Kit de backend compartilhado (sessão/audit/notificações)      | AUDIT/04-prompts-pendentes.md §4 | S-55     |
+| P-0.9     | CI mínimo                                                     | AUDIT/04-prompts-pendentes.md §4 | S-56     |
+| P-0.10    | Decisão B: RLS ativa (grants + policies + adoção)             | AUDIT/04-prompts-pendentes.md §4 | S-57     |
+| P-0.11    | drizzle-kit reconciliado                                      | AUDIT/04-prompts-pendentes.md §4 | S-58     |
+| P-1.25    | Admin: leitura protegida e fiação completa                    | AUDIT/04-prompts-pendentes.md §4 | S-59     |
+| P-1.26    | Onboarding: convite, auto-signup e MFA bloqueante             | AUDIT/04-prompts-pendentes.md §4 | S-60     |
+| P-1.27    | Documentos: visibilidade e área editorial verdadeiras         | AUDIT/04-prompts-pendentes.md §4 | S-61     |
+| P-2.9c    | Projetos: operável de ponta a ponta                           | AUDIT/04-prompts-pendentes.md §4 | S-62     |
+| P-3.8b    | Financeiro: governança e conciliação verdadeiras              | AUDIT/04-prompts-pendentes.md §4 | S-63     |
+| P-0.12    | Storage: buckets e policies                                   | AUDIT/04-prompts-pendentes.md §4 | S-64     |
+| P-0.13    | LGPD: fundação                                                | AUDIT/04-prompts-pendentes.md §4 | S-65     |
+| P-0.14    | Jobs: Inngest de verdade                                      | AUDIT/04-prompts-pendentes.md §4 | S-66     |
+| P-0.15    | packages/integrations + contrato de settings                  | AUDIT/04-prompts-pendentes.md §4 | S-67     |
+| P-0.16    | Registro retroativo (este próprio corretivo)                  | AUDIT/04-prompts-pendentes.md §4 | S-68     |
+| P-0.4b    | Auth: simetria de decode de cookie no browser client          | neste arquivo                    | pendente |
+| P-0.6b    | Notificações in_app operáveis: slot no AppShell + piloto      | neste arquivo                    | S-175    |
+| P-0.6c    | Notificações in_app: rollout do sino/central aos demais apps  | neste arquivo                    | S-176    |
+| P-0.6d    | Client Drizzle tipado (remoção do stub de notifications)      | neste arquivo                    | S-177    |
+| P-0.6e    | Emails: tipografia institucional (remover Inter)              | neste arquivo                    | S-178    |
+| P-7.1b    | Flats: máximo de scoring em BRAIN §6.8 (80 → 75)              | neste arquivo                    | pendente |
+| P-7.5b    | Flats: fiação das telas do Bloco A para validação diretoria   | neste arquivo                    | pendente |
+| P-1.10b   | Admin: editor de templates de email acessível (órfão→Config)  | neste arquivo                    | S-181    |
+| P-1.10c   | Emails enviados a partir dos templates do banco (DB-driven)   | neste arquivo                    | S-182    |
+| P-1.14b   | Documentos: badge de visibilidade e pílula de status únicos   | neste arquivo                    | S-183    |
+| P-1.15b   | Documentos: listagem por categoria — a rota que nunca existiu | neste arquivo                    | S-184    |
+| P-1.16b   | Documentos: assinaturas, preferência por tipo de alerta       | neste arquivo                    | S-185    |
+| P-1.16c   | Documentos: reordenação de categorias — UI ao backend (b)     | neste arquivo                    | S-186    |
+| P-1.17b   | Documentos: fronteiras de erro e cópia de estados vazios      | neste arquivo                    | S-187    |
+| P-1.18b   | Documentos: campos que a UI coleta e o banco não guarda       | neste arquivo                    | S-188    |
+| P-1.19b   | Documentos: RLS de rascunho, lixeira e papel conselheiro      | neste arquivo                    | S-189    |
+| P-1.20b   | Documentos: busca com acento, índice e fim da action órfã     | neste arquivo                    | S-190    |
+| P-1.20c   | Documentos: registro de leitura (`views`) que ninguém escreve | neste arquivo                    | S-191    |
+| P-1.21b   | Documentos: área editorial ainda lê como superusuário         | neste arquivo                    | S-192    |
+| P-1.22b   | Documentos: alerta de "novas versões" que nunca chega         | neste arquivo                    | S-193    |
+| P-1.23b   | Documentos: botão "submeter projeto" que o wizard ignora      | neste arquivo                    | S-194    |
+| P-1.24b   | Documentos: audit mockado e escrita sem cobertura de teste    | neste arquivo                    | S-195    |
 
 ¹ Sessão referenciada retroativamente como S-22b em SESSIONS.md S-68 (ponto 2 da entrada retificadora) — o bloco original nunca recebeu número.
 
@@ -2376,7 +2376,7 @@ RLS DENY-by-default para todas as tabelas documentos.\*. Público (anon): SELECT
 - [x] Anon: vê apenas documentos public
 - [x] Autenticado: vê public + internal
 - [x] Restricted: vê apenas se tem papel permitido
-- [x] Super_admin/editor: CRUD completo
+- [~] Super_admin/editor: CRUD completo (a escrita só ficou de fato coberta pela RLS depois de P-1.19b — antes, `deleteDocument` dependia de `withSystemRole` porque nenhuma policy de SELECT alcançava rascunho/lixeira, e nem `super_admin` conseguia soft-deletar via client autenticado)
 - [x] Versions herdam visibilidade do documento pai
 - [x] Subscriptions: apenas próprias (user_id = auth.uid())
 - [x] Types passam
@@ -2409,10 +2409,10 @@ Server Actions para Documentos: CRUD de documentos (criar, editar, publicar/desp
 
 - [x] createDocument com upload de PDF para Supabase Storage (signed URL)
 - [x] updateDocument cria nova versão automaticamente
-- [x] Busca full-text por título, conteúdo Markdown e tags
+- [~] Busca full-text por título, conteúdo Markdown e tags (a implementação testada aqui, `actions/search.ts`, nunca foi consumida pela tela `/busca`, que rodava uma segunda consulta sem `unaccent`/índice — unificadas em P-1.20b)
 - [x] publishDocument / unpublishDocument com audit log
 - [x] CRUD de categorias com reordenação na árvore
-- [x] createEdital com datas e vinculação a tipo+categoria de projeto
+- [~] createEdital com datas e vinculação a tipo+categoria de projeto (o campo apontava para `documentos.categories` — a árvore errada — e nenhum client o enviava; `editals.project_category_id` ficava sempre `NULL`; corrigido para `project_category_slug` em P-1.23b)
 - [x] subscribe/unsubscribe por categoria
 - [x] Todos os actions protegidos: super_admin ou editor
 - [x] Lint passa
@@ -2448,9 +2448,9 @@ Substituir mocks por dados reais em todas as telas. Conectar formulários editor
 **Critérios de aceite:**
 
 - [x] Portal público renderiza documentos do banco com SSR
-- [x] Busca funcional com resultados do banco
+- [~] Busca funcional com resultados do banco (funcional, mas sensível a acento — buscar "orcamento" não encontrava "Orçamento" — e sem índice; corrigido em P-1.20b)
 - [x] Viewer carrega PDFs do Supabase Storage
-- [x] Formulários editoriais conectados às actions
+- [~] Formulários editoriais conectados às actions (as leituras das nove páginas editoriais usavam o client superusuário `@hebron/db/client`, que ignora RLS — um `colaborador` via documentos `restricted` de terceiros na listagem e na edição; corrigido em P-1.21b)
 - [x] Versionamento: navegar entre versões de um documento
 - [x] Mock data removido
 - [x] Lint passa
@@ -2513,7 +2513,7 @@ Implementar integração entre edital e módulo Projetos. Botão "submeter proje
 **Critérios de aceite:**
 
 - [x] Botão "submeter projeto" visível em editais abertos
-- [x] URL gerada com edital_id, tipo e categoria como query params
+- [~] URL gerada com edital_id, tipo e categoria como query params (o botão emitia `edital_id`, mas o wizard lia `editalId` — o link nunca preenchia nada — e "categoria" nunca era persistida no edital; corrigido em P-1.23b com builder/parser compartilhado em `packages/integrations`)
 - [x] Tipo projetos/index.ts inclui campo edital_id opcional
 - [x] Botão oculto em editais fechados
 - [x] Lint passa
@@ -2976,12 +2976,12 @@ Somado a isso, o critério de P-1.24 "RLS: anon vê public; autenticado vê publ
 
 **Critérios de aceite:**
 
-- [ ] `grep -n "vi.mock(\"../lib/audit\")" apps/documentos/src/__tests__` retorna vazio
-- [ ] Toda mutação crítica do módulo tem asserção de audit correspondente
-- [ ] Nenhum corretivo deste bloco fica sem teste de regressão
-- [ ] Critérios de P-1.18–P-1.24 refletem o estado real do código
-- [ ] `pnpm --filter documentos typecheck lint test` verdes (com `DATABASE_URL` alcançável)
-- [ ] Registrar em SESSIONS.md
+- [x] `grep -n "vi.mock(\"../lib/audit\")" apps/documentos/src/__tests__` retorna vazio
+- [x] Toda mutação crítica do módulo tem asserção de audit correspondente
+- [x] Nenhum corretivo deste bloco fica sem teste de regressão
+- [x] Critérios de P-1.18–P-1.24 refletem o estado real do código
+- [x] `pnpm --filter documentos typecheck lint test` verdes (com `DATABASE_URL` alcançável)
+- [x] Registrar em SESSIONS.md
 
 **Notas:**
 Ref: BRAIN.md (audit log em toda mutação crítica). Executar por último: este prompt fecha a conta do bloco e é o único que pode marcar critérios de P-1.18–P-1.24 como cumpridos.

@@ -215,6 +215,7 @@
 | S-192  | 2026-07-27 | P-1.21b — Documentos: área editorial ainda lê como superusuário (CORRETIVO)                                                      | concluido                            |
 | S-193  | 2026-07-27 | P-1.22b — Documentos: alerta de "novas versões" que nunca chega (CORRETIVO)                                                      | concluido                            |
 | S-194  | 2026-07-27 | P-1.23b — O botão "submeter projeto" que o wizard ignora (CORRETIVO)                                                             | concluido                            |
+| S-195  | 2026-07-27 | P-1.24b — Testes: o audit mockado e o caminho de escrita sem cobertura (CORRETIVO) — fecha o bloco B de Documentos               | concluido                            |
 
 ---
 
@@ -15958,7 +15959,7 @@ documentos.editals WHERE project_category_id IS NOT NULL` = 0, troca sem
       vinculado visível (badge com o título) e o ciclo (anual/pontual)
       pré-selecionado no Step 1
 - [x] Nome dos parâmetros vem de um único módulo compartilhado; `grep -rn
-    "edital_id|editalId" apps/documentos/src apps/projetos/src` só encontra
+  "edital_id|editalId" apps/documentos/src apps/projetos/src` só encontra
       usos derivados dele (nomes de propriedade/variável internos, não
       literais de querystring) — ressalva do item 6 acima (`edital-card.tsx`,
       fora de escopo)
@@ -15973,7 +15974,7 @@ documentos.editals WHERE project_category_id IS NOT NULL` = 0, troca sem
       contagem de quórum) que falham também isoladamente e sem relação com
       este diff — contaminação de dados no banco de dev compartilhado, mesmo
       padrão já registrado em sessões anteriores (grants/system-actor); `next
-    build` dos dois apps também verde (pegou o bug do item 7); migration
+  build` dos dois apps também verde (pegou o bug do item 7); migration
       0064 aplicada no Supabase de dev
 - [x] Registrado em SESSIONS.md
 
@@ -15995,3 +15996,125 @@ documentos.editals WHERE project_category_id IS NOT NULL` = 0, troca sem
 - `apps/projetos/src/app/(submissor)/novo/page.tsx`
 - `apps/projetos/src/lib/queries.ts` (sem alteração de conteúdo — verificado compatível)
 - `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+## S-195 — P-1.24b — Testes: o audit mockado e o caminho de escrita sem cobertura (CORRETIVO)
+
+**Branch:** `feat/P-1.24b-docs-testes`
+
+### Contexto
+
+S-32 (P-1.24) mockou `logDocumentAudit` em `actions.test.ts` com a
+justificativa "o enum `admin.audit_action` não inclui valores de
+documento" — verdade em 2026-06-18, falsa no dia seguinte: a migration
+`0006_documentos_audit_actions.sql` já adicionava os dez valores
+(`document.*`, `category.*`, `edital.*`) e `lib/audit.ts` sempre delegou
+para `@hebron/db/audit`. O mock ficou, e nenhum teste do módulo provava que
+publicar, despublicar, mover categoria ou remover documento gravava audit de
+verdade — justamente as mutações que o BRAIN exige auditar e que
+`/editorial/auditoria` existe para mostrar. Era o último item pendente do
+bloco B de Documentos (P-1.18b–P-1.24b, auditoria de 2026-07-25); os outros
+sete já estavam concluídos.
+
+### O que foi feito
+
+1. **Mock removido.** `vi.mock("../lib/audit", ...)` saiu de
+   `actions.test.ts`; `logDocumentAudit` grava em `admin.audit_log` de
+   verdade durante a suíte. Novo helper `expectAuditLogged({ entityId,
+action, entity, actorId? })` consulta a linha gravada e verifica ator,
+   ação, entidade, `entity_id` e presença do diff — usado em vez de
+   inspecionar `vi.mocked(logDocumentAudit).mock.calls`.
+2. **Cobertura de audit por ação**, com asserção própria em cada mutação já
+   testada: `document.created` (createDocument), `document.updated`
+   (updateDocument — reaproveitou o teste de troca de `type` do P-1.18b, que
+   antes lia o diff do mock e passou a ler o diff gravado),
+   `document.published`/`document.unpublished` (publish/unpublishDocument),
+   `document.deleted` (deleteDocument), `category.created` (createCategory),
+   `edital.created`/`edital.updated` (createEdital/updateEdital — sem teste
+   próprio até agora).
+3. **Duas actions sem teste próprio ganharam cobertura nova:**
+   `updateCategory` (`category.updated`, com diff antes/depois do nome) e
+   `deleteCategory` (`category.deleted`, categoria vazia removida de
+   verdade).
+4. **`restoreDocument` (P-1.19b) sem teste próprio** ganhou
+   `describe("restoreDocument — lixeira e restauração")`: restaura
+   documento removido, confirma `deletedAt = NULL` no banco, audit de
+   `document.updated` com `diff.deletedAt.after = null`, e que o documento
+   volta a aceitar edição depois de restaurado; mais o caminho de erro
+   (restaurar o que não está na lixeira).
+5. **Fluxos dos demais corretivos do bloco já tinham teste** (verificado,
+   não duplicado): tipo do documento e metadados de arquivo (P-1.18b), RLS
+   de escrita/rascunho/lixeira por papel (P-1.19b, `rls.test.ts`), busca
+   com acento via `search-query.ts` (P-1.20b, `search.test.ts`), dedupe de
+   `registerView` (P-1.20c), RLS da leitura editorial (P-1.21b,
+   `rls.test.ts`), alerta de nova versão e não-duplicação na republicação
+   (P-1.22b), contrato de URL Documentos↔Projetos (P-1.23b,
+   `packages/integrations/src/__tests__/documentos-projetos.test.ts` —
+   fora dos arquivos permitidos deste prompt, só conferido).
+6. **`editais — createEdital / updateEdital` é describe novo** (nenhum
+   teste de `actions/editals.ts` existia neste arquivo). `adminDocAction`
+   exige `super_admin`/`diretor` — ACTOR_ID só tinha `colaborador` — e
+   descobri em runtime que **elevar o papel só no mock de `resolveSession`
+   não basta**: a policy de escrita de `editals`
+   (`editals_write_admin`, `0005_documentos_rls.sql`) chama
+   `public.has_role('super_admin','diretor')`, que consulta
+   `role_assignments` de verdade no banco, não os claims do mock (que só
+   satisfazem o portão de app, `adminDocAction`). Corrigido concedendo a
+   ACTOR_ID um segundo papel real (`super_admin`) no `beforeAll`, além do
+   `colaborador` já existente — múltiplos papéis por usuário é o padrão do
+   BRAIN §RBAC; o cleanup por `userId` do `afterAll` já cobria o registro
+   extra sem mudança.
+7. **Bug pré-existente descoberto e contornado, não corrigido:**
+   `updateEdital({ id, title })` sem nenhum campo específico de `editals`
+   (`opensAt`/`closesAt`/`projectType`/`projectCategorySlug`/`faq`) deixa
+   `editalUpdate` vazio e `tx.update(editals).set({})` lança "No values to
+   set", derrubando a action inteira (`serverError`, sem `data`).
+   `actions/editals.ts` não está nos arquivos permitidos deste prompt (só
+   testes); o teste passou a incluir `projectType` na chamada de
+   `updateEdital` para não pisar no bug, que fica **registrado aqui como
+   débito** para um corretivo dedicado (guard `Object.keys(editalUpdate)`
+   ou default no schema).
+8. **Fronteira de ambiente documentada:** cabeçalho de `setup-env.ts` agora
+   explicita que toda a suíte de `apps/documentos` depende de rede até o
+   Supabase de dev (`DATABASE_URL`) — falha por `ENOTFOUND`/timeout em
+   sandbox sem saída de rede é limitação do ambiente, não regressão.
+9. **Bookkeeping em PROMPTS.md** (item 4 do escopo): revisão de P-1.18–P-1.24
+   à luz do que os corretivos entregaram. Marcados `[~]` com nota do
+   corretivo responsável: "Super_admin/editor: CRUD completo" (P-1.19,
+   fechado por P-1.19b), "Busca full-text..." e "createEdital com...
+   categoria de projeto" (P-1.20, fechados por P-1.20b/P-1.23b), "Busca
+   funcional com resultados do banco" e "Formulários editoriais conectados
+   às actions" (P-1.21, fechados por P-1.20b/P-1.21b), "URL gerada com
+   edital_id, tipo e categoria" (P-1.23, fechado por P-1.23b). P-1.18,
+   P-1.22 e P-1.24 não tinham critério literal contradito pelos corretivos
+   — não alterados. Tabela de correções: linhas de P-1.18b (S-188, estava
+   "pendente" por atraso de registro) e P-1.23b (S-194, estava "concluido"
+   sem número) corrigidas; P-1.24b marcada S-195; cabeçalho de contagem
+   ("11 pendentes") atualizado para refletir que só P-0.4b/P-7.1b/P-7.5b
+   (fora deste bloco) seguem pendentes.
+
+### Critérios de aceite
+
+- [x] `grep -n "vi.mock(\"../lib/audit\")" apps/documentos/src/__tests__` retorna vazio
+- [x] Toda mutação crítica do módulo tem asserção de audit correspondente
+      (`document.*`, `category.*`, `edital.*` — 10 dos 10 valores do enum
+      de documentos exercitados)
+- [x] Nenhum corretivo deste bloco fica sem teste de regressão (item 5)
+- [x] Critérios de P-1.18–P-1.24 refletem o estado real do código (item 9)
+- [x] `pnpm --filter documentos typecheck lint test` verdes — 101 testes,
+      5 arquivos, banco de dev alcançável nesta sessão
+- [x] Registrado em SESSIONS.md
+
+### Arquivos criados/alterados
+
+- `apps/documentos/src/__tests__/actions.test.ts`
+- `apps/documentos/src/__tests__/setup-env.ts`
+- `PROMPTS.md` (critérios `[~]` de P-1.19/P-1.20/P-1.21/P-1.23; tabela de
+  correções; cabeçalho de contagem)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+### Débitos registrados
+
+- **`updateEdital` quebra com `editalUpdate` vazio** (item 7 acima) —
+  corretivo dedicado, fora dos arquivos permitidos deste prompt.

@@ -8,9 +8,17 @@
  *   - next/headers      → cookies sem contexto de request
  *   - @supabase/supabase-js → ACTOR_ID como usuário autenticado
  *   - @hebron/email     → createNotification como spy (sem envio real)
- *   - ../lib/audit      → logDocumentAudit como spy (sem chamada ao DB de enum)
  *
- * Requer: DATABASE_URL migrado.
+ * ../lib/audit NÃO é mockado (P-1.24b — antes mockado com a justificativa de
+ * que o enum admin.audit_action não tinha os valores de documento; a
+ * migration 0006_documentos_audit_actions.sql resolveu isso no dia seguinte
+ * e o mock ficou, escondendo que nenhum teste provava que publicar,
+ * despublicar, mover categoria ou remover documento grava audit de verdade).
+ * `logDocumentAudit` grava em admin.audit_log de verdade; os testes de cada
+ * mutação usam `expectAuditLogged` para consultar a linha gravada.
+ *
+ * Requer: DATABASE_URL migrado. Ver __tests__/setup-env.ts para a fronteira
+ * de rede (Supabase) que estes testes dependem.
  */
 
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
@@ -26,7 +34,9 @@ import {
   editals,
   subscriptions,
   views,
+  auditLog,
 } from "@hebron/db/schema";
+import type { DocumentAuditAction } from "../lib/audit";
 
 // ── IDs fixos (prefixo e2) ────────────────────────────────────────────────────
 
@@ -80,16 +90,42 @@ vi.mock("@hebron/email", () => ({
   createNotification: vi.fn().mockResolvedValue({ id: "mock-notification-id" }),
 }));
 
-// Mock de audit para evitar dependência do enum admin.audit_action
-vi.mock("../lib/audit", () => ({
-  logDocumentAudit: vi.fn().mockResolvedValue(undefined),
-}));
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function requireDefined<T>(value: T | undefined | null, label = "value"): T {
   if (value == null) throw new Error(`Expected ${label} to be defined`);
   return value;
+}
+
+// Consulta admin.audit_log de verdade (logDocumentAudit não é mockado neste
+// arquivo — P-1.24b) e verifica ator, ação, entidade, entity_id e diff
+// presente. Devolve as linhas (mais recente primeiro) para o chamador
+// inspecionar o diff quando precisar.
+async function expectAuditLogged(params: {
+  entityId: string;
+  action: DocumentAuditAction;
+  entity: string;
+  actorId?: string;
+}) {
+  const rows = await db
+    .select()
+    .from(auditLog)
+    .where(
+      and(
+        eq(auditLog.entityId, params.entityId),
+        eq(auditLog.action, params.action),
+      ),
+    )
+    .orderBy(desc(auditLog.createdAt));
+
+  expect(rows.length).toBeGreaterThanOrEqual(1);
+  const row = requireDefined(rows[0], "audit row");
+  expect(row.actorId).toBe(params.actorId ?? ACTOR_ID);
+  expect(row.entity).toBe(params.entity);
+  expect(row.entityId).toBe(params.entityId);
+  expect(row.diff).toBeTruthy();
+
+  return rows;
 }
 
 // ── Setup / Teardown ──────────────────────────────────────────────────────────
@@ -119,6 +155,19 @@ beforeAll(async () => {
       grantedBy: ACTOR_ID,
     })
     .onConflictDoNothing();
+  // Papel extra real (não só mockado em resolveSession) para os testes de
+  // editais: editals_write_admin (0005_documentos_rls.sql) exige
+  // has_role('super_admin','diretor') consultando role_assignments de
+  // verdade — o mock de resolveSession só satisfaz o portão de
+  // adminDocAction (camada de app), não a RLS (camada de banco).
+  await db
+    .insert(roleAssignments)
+    .values({
+      userId: ACTOR_ID,
+      role: "super_admin" as const,
+      grantedBy: ACTOR_ID,
+    })
+    .onConflictDoNothing();
   await db
     .insert(roleAssignments)
     .values({
@@ -130,6 +179,11 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  // Linhas reais de admin.audit_log gravadas por este arquivo (sem mock,
+  // P-1.24b) — precisa apagar antes de apagar ACTOR_ID, que audit_log.actor_id
+  // referencia via FK.
+  await db.delete(auditLog).where(eq(auditLog.actorId, ACTOR_ID));
+
   // Subscriptions criadas no teste de notificação
   if (notifSubId) {
     await db.delete(subscriptions).where(eq(subscriptions.id, notifSubId));
@@ -203,6 +257,12 @@ describe("createDocument", () => {
       .where(eq(documentVersions.documentId, doc.id));
     expect(versions).toHaveLength(1);
     expect(versions[0]?.versionNumber).toBe(1);
+
+    await expectAuditLogged({
+      entityId: doc.id,
+      action: "document.created",
+      entity: "document",
+    });
   });
 });
 
@@ -262,7 +322,6 @@ describe("createDocument / updateDocument — type e metadados de arquivo", () =
   });
 
   it("updateDocument altera o type e registra antes/depois no diff do audit", async () => {
-    const { logDocumentAudit } = await import("../lib/audit");
     const { createDocument, updateDocument } =
       await import("../actions/documents");
 
@@ -273,14 +332,16 @@ describe("createDocument / updateDocument — type e metadados de arquivo", () =
     });
     const docId = requireDefined(created?.data?.document.id, "docId");
 
-    vi.mocked(logDocumentAudit).mockClear();
     const updated = await updateDocument({ id: docId, type: "legal" });
 
     expect(updated?.data?.document.type).toBe("legal");
 
-    const call = vi.mocked(logDocumentAudit).mock.calls[0]?.[0];
-    expect(call?.action).toBe("document.updated");
-    const diff = call?.diff as {
+    const rows = await expectAuditLogged({
+      entityId: docId,
+      action: "document.updated",
+      entity: "document",
+    });
+    const diff = rows[0]?.diff as {
       before?: { type?: string };
       after?: { type?: string };
     };
@@ -411,6 +472,12 @@ describe("publishDocument / unpublishDocument", () => {
     const result = await publishDocument({ id: docId });
 
     expect(result?.data?.document.publishedAt).toBeDefined();
+
+    await expectAuditLogged({
+      entityId: docId,
+      action: "document.published",
+      entity: "document",
+    });
   });
 
   it("publicar documento já publicado retorna serverError", async () => {
@@ -427,6 +494,12 @@ describe("publishDocument / unpublishDocument", () => {
     const result = await unpublishDocument({ id: docId });
 
     expect(result?.data?.document.publishedAt).toBeNull();
+
+    await expectAuditLogged({
+      entityId: docId,
+      action: "document.unpublished",
+      entity: "document",
+    });
   });
 });
 
@@ -453,6 +526,12 @@ describe("deleteDocument — soft delete", () => {
       .from(documents)
       .where(eq(documents.id, docId));
     expect(row?.deletedAt).toBeDefined();
+
+    await expectAuditLogged({
+      entityId: docId,
+      action: "document.deleted",
+      entity: "document",
+    });
   });
 
   it("atualizar documento deletado retorna serverError", async () => {
@@ -467,6 +546,70 @@ describe("deleteDocument — soft delete", () => {
     await deleteDocument({ id: docId });
 
     const result = await updateDocument({ id: docId, title: "Título novo" });
+
+    expect(result?.serverError).toBeDefined();
+  });
+});
+
+// ── restoreDocument — lixeira (P-1.19b) ───────────────────────────────────────
+// P-1.19b adicionou a policy de rascunho/lixeira e a action restoreDocument
+// para tirar deleteDocument do withSystemRole; nenhum teste próprio cobria a
+// restauração em si (rls.test.ts só cobre o par soft-delete/restore por
+// papel via SQL direto — ver "RLS — documentos.documents (soft-delete /
+// restore)"). Aqui o caminho é a action, como a aba "Removidos" usa.
+
+describe("restoreDocument — lixeira e restauração", () => {
+  it("restaura documento removido, limpa deletedAt e grava audit de document.updated", async () => {
+    const { createDocument, deleteDocument, restoreDocument, updateDocument } =
+      await import("../actions/documents");
+
+    const created = await createDocument({
+      title: "Documento para Restaurar",
+      visibility: "internal",
+    });
+    const docId = requireDefined(created?.data?.document.id, "docId");
+
+    await deleteDocument({ id: docId });
+    const restored = await restoreDocument({ id: docId });
+
+    expect(restored?.data?.document.deletedAt).toBeNull();
+
+    const [row] = await db
+      .select({ deletedAt: documents.deletedAt })
+      .from(documents)
+      .where(eq(documents.id, docId));
+    expect(row?.deletedAt).toBeNull();
+
+    const rows = await expectAuditLogged({
+      entityId: docId,
+      action: "document.updated",
+      entity: "document",
+    });
+    const diff = rows[0]?.diff as {
+      deletedAt?: { before?: string | null; after?: string | null };
+    };
+    expect(diff?.deletedAt?.after).toBeNull();
+
+    // Restaurado, o documento volta a aceitar edição (deixou de retornar
+    // serverError como no teste de "atualizar documento deletado" acima).
+    const updated = await updateDocument({
+      id: docId,
+      title: "Título após restaurar",
+    });
+    expect(updated?.data?.document.title).toBe("Título após restaurar");
+  });
+
+  it("restaurar documento que não está na lixeira retorna serverError", async () => {
+    const { createDocument, restoreDocument } =
+      await import("../actions/documents");
+
+    const created = await createDocument({
+      title: "Documento nunca removido",
+      visibility: "internal",
+    });
+    const docId = requireDefined(created?.data?.document.id, "docId");
+
+    const result = await restoreDocument({ id: docId });
 
     expect(result?.serverError).toBeDefined();
   });
@@ -488,6 +631,12 @@ describe("categorias — hierarquia", () => {
     expect(cat.parentId).toBeNull();
     rootId = cat.id;
     createdCatIds.push(rootId);
+
+    await expectAuditLogged({
+      entityId: rootId,
+      action: "category.created",
+      entity: "category",
+    });
   });
 
   it("createCategory com parentId cria filho", async () => {
@@ -540,6 +689,110 @@ describe("categorias — hierarquia", () => {
     });
 
     expect(result?.serverError).toBeDefined();
+  });
+
+  it("updateCategory altera o nome e grava audit de category.updated", async () => {
+    const { createCategory, updateCategory } =
+      await import("../actions/categories");
+
+    const created = await createCategory({ name: "Categoria para Renomear" });
+    const cat = requireDefined(created?.data?.category, "category");
+    createdCatIds.push(cat.id);
+
+    const updated = await updateCategory({
+      id: cat.id,
+      name: "Categoria Renomeada",
+    });
+    expect(updated?.data?.category.name).toBe("Categoria Renomeada");
+
+    const rows = await expectAuditLogged({
+      entityId: cat.id,
+      action: "category.updated",
+      entity: "category",
+    });
+    const diff = rows[0]?.diff as {
+      before?: { name?: string };
+      after?: { name?: string };
+    };
+    expect(diff?.before?.name).toBe("Categoria para Renomear");
+    expect(diff?.after?.name).toBe("Categoria Renomeada");
+  });
+
+  it("deleteCategory remove categoria vazia e grava audit de category.deleted", async () => {
+    const { createCategory, deleteCategory } =
+      await import("../actions/categories");
+
+    const created = await createCategory({ name: "Categoria para Remover" });
+    const cat = requireDefined(created?.data?.category, "category");
+
+    const result = await deleteCategory({ id: cat.id });
+    expect(result?.data?.deleted).toBe(true);
+
+    const [row] = await db
+      .select({ id: categories.id })
+      .from(categories)
+      .where(eq(categories.id, cat.id));
+    expect(row).toBeUndefined();
+
+    await expectAuditLogged({
+      entityId: cat.id,
+      action: "category.deleted",
+      entity: "category",
+    });
+  });
+});
+
+// ── editais — createEdital / updateEdital ─────────────────────────────────────
+// Nenhum teste de actions/editals.ts existia neste arquivo. adminDocAction
+// exige super_admin/diretor (ACTOR_ID só tem colaborador) — eleva o papel
+// só para esta chamada, mantendo o mesmo actorId (ACTOR_ID) para que o
+// cleanup por authorId/actorId do afterAll global cubra o edital criado.
+
+describe("editais — createEdital / updateEdital", () => {
+  it("createEdital grava edital.created; updateEdital grava edital.updated", async () => {
+    const { resolveSession } = await import("@hebron/auth/server");
+    const { createEdital, updateEdital } = await import("../actions/editals");
+
+    vi.mocked(resolveSession).mockResolvedValueOnce({
+      actorId: ACTOR_ID,
+      roles: ["super_admin"],
+      designations: [],
+    });
+    const created = await createEdital({
+      title: "Edital de Teste de Auditoria",
+      visibility: "public",
+      cycleType: "pontual",
+    });
+    const doc = requireDefined(created?.data?.document, "document");
+
+    await expectAuditLogged({
+      entityId: doc.id,
+      action: "edital.created",
+      entity: "edital",
+    });
+
+    vi.mocked(resolveSession).mockResolvedValueOnce({
+      actorId: ACTOR_ID,
+      roles: ["super_admin"],
+      designations: [],
+    });
+    // Inclui um campo próprio de editals (projectType), não só de documents:
+    // com editalUpdate vazio, `tx.update(editals).set({})` lança "No values
+    // to set" e a action inteira falha (bug pré-existente fora do escopo
+    // deste prompt — actions/editals.ts não está nos arquivos permitidos de
+    // P-1.24b; registrado como débito em SESSIONS.md).
+    const updated = await updateEdital({
+      id: doc.id,
+      title: "Edital Atualizado",
+      projectType: "capacitacao",
+    });
+    expect(updated?.data?.document?.title).toBe("Edital Atualizado");
+
+    await expectAuditLogged({
+      entityId: doc.id,
+      action: "edital.updated",
+      entity: "edital",
+    });
   });
 });
 
