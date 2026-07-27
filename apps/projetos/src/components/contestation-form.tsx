@@ -65,9 +65,7 @@ export function ContestationForm({ projectId }: ContestationFormProps) {
         <button
           type="button"
           disabled={justification.trim().length < 30 || isPending}
-          onClick={() =>
-            execute({ projectId, justification: justification.trim() })
-          }
+          onClick={() => execute({ projectId, reason: justification.trim() })}
           className="flex-1 rounded-(--radius) px-3 py-1.5 text-xs font-bold text-white disabled:opacity-50"
           style={{ backgroundColor: "var(--hb-orange-deep)" }}
         >

@@ -634,6 +634,14 @@ export type DirectorEvaluation = {
   createdAt: Date;
 };
 
+// Mapeamento exaustivo (checado pelo compilador): se o enum do banco ganhar
+// um novo valor, este objeto literal para de compilar em vez de silenciosamente
+// coagir o valor novo em "nao" (P-2.1b — era o defeito de queries.ts:780).
+const RECOMMENDATION_LABEL: Record<"approved" | "rejected", "sim" | "nao"> = {
+  approved: "sim",
+  rejected: "nao",
+};
+
 export type DirectorContestation = {
   id: string;
   contestantName: string;
@@ -773,11 +781,14 @@ export async function getDirectorProjectDetail(
       .orderBy(evaluations.createdAt);
 
     const mappedEvaluations: DirectorEvaluation[] = evalRows
-      .filter((e) => e.recommendation !== null)
+      .filter(
+        (e): e is typeof e & { recommendation: "approved" | "rejected" } =>
+          e.recommendation !== null,
+      )
       .map((e) => ({
         id: e.id,
         evaluatorName: e.evaluatorName ?? "Avaliador",
-        recommendation: e.recommendation === "approved" ? "sim" : "nao",
+        recommendation: RECOMMENDATION_LABEL[e.recommendation],
         notes: e.notes,
         createdAt: e.createdAt,
       }));

@@ -165,47 +165,33 @@ export type CreatePunctualProjectInput = z.infer<
 >;
 
 // ─── createReportSchema ───────────────────────────────────────────────────────
+// Espelha projetos.reports: content é texto único (sem narrativa/resultados/
+// dificuldades/próximos-passos separados — esses campos não existem no banco).
 
 export const createReportSchema = z.object({
   projectId: z.string().uuid("Projeto inválido"),
-  period: z
+  periodStart: z.string().date("Data de início inválida"),
+  periodEnd: z.string().date("Data de fim inválida"),
+  dueDate: z.string().date("Data de entrega inválida"),
+  content: z
     .string()
-    .regex(/^\d{4}-Q[1-4]$/, "Período deve estar no formato AAAA-Q1"),
-  periodStart: z.string().datetime({ message: "Data de início inválida" }),
-  periodEnd: z.string().datetime({ message: "Data de fim inválida" }),
-  narrativa: z
-    .string()
-    .min(100, "Narrativa deve ter pelo menos 100 caracteres")
-    .max(10000),
-  resultadosAlcancados: z
-    .string()
-    .min(50, "Descreva os resultados alcançados")
-    .max(5000),
-  dificuldades: z.string().max(3000).nullable().optional(),
-  proximosPassos: z.string().max(3000).nullable().optional(),
-  beneficiariosAtingidos: z
-    .number()
-    .int()
-    .min(0, "Número de beneficiários inválido"),
-  attachmentKeys: z
-    .array(
-      z.object({
-        storageKey: z.string().min(1),
-        fileName: z.string().min(1),
-        fileSizeBytes: z.number().int().positive(),
-        mimeType: z.string().min(1),
-      }),
-    )
+    .min(100, "Relatório deve ter pelo menos 100 caracteres")
+    .max(10000)
     .optional(),
 });
 
 export type CreateReportInput = z.infer<typeof createReportSchema>;
 
 // ─── createEvaluationSchema ───────────────────────────────────────────────────
+// Vocabulário approved/rejected — o mesmo do enum do banco
+// (evaluation_recommendation) e da UI (Favorável/Desfavorável). BRAIN §6.2
+// descreve a opinião como "sim/não" no nível de produto; a tradução para
+// rótulo de exibição fica a cargo de quem lê (ex.: queries.ts), não do schema
+// de escrita.
 
 export const createEvaluationSchema = z.object({
   projectId: z.string().uuid("Projeto inválido"),
-  recommendation: z.enum(["sim", "nao"], {
+  recommendation: z.enum(["approved", "rejected"], {
     required_error: "Selecione uma recomendação",
   }),
   notes: z

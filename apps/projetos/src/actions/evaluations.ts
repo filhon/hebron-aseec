@@ -4,6 +4,7 @@ import { z } from "zod";
 import { eq, and, isNull } from "drizzle-orm";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { evaluations, projects } from "@hebron/db/schema";
+import { createEvaluationSchema } from "@hebron/validators/projetos";
 import { diretorAction, projetosAction } from "../lib/safe-action";
 import { logProjectAudit } from "../lib/audit";
 
@@ -16,15 +17,7 @@ const assignEvaluatorSchema = z.object({
   evaluatorId: z.string().uuid("Avaliador inválido"),
 });
 
-const submitEvaluationSchema = z.object({
-  projectId: z.string().uuid("Projeto inválido"),
-  recommendation: z.enum(["approved", "rejected", "needs_revision"], {
-    required_error: "Recomendação obrigatória",
-  }),
-  notes: z
-    .string()
-    .min(20, "Parecer deve ter pelo menos 20 caracteres")
-    .max(3000),
+const submitEvaluationSchema = createEvaluationSchema.extend({
   score: z.number().min(0).max(100).optional().nullable(),
   scoreBreakdown: z.record(z.number()).optional().nullable(),
 });

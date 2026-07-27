@@ -22,6 +22,7 @@ import type { ProjectStage } from "@hebron/db/schema";
 import {
   createAnnualProjectSchema,
   createPunctualProjectSchema,
+  createContestationSchema,
   deleteProjectSchema,
 } from "@hebron/validators/projetos";
 import {
@@ -722,16 +723,8 @@ export const transitionProjectStage = diretorAction
 // createContestation — max 2 per project, 1 per person; returns to votacao
 // ---------------------------------------------------------------------------
 
-const contestationSchema = z.object({
-  projectId: z.string().uuid("Projeto inválido"),
-  justification: z
-    .string()
-    .min(30, "Descreva o motivo da contestação (mín. 30 caracteres)")
-    .max(2000),
-});
-
 export const createContestation = projetosAction
-  .schema(contestationSchema)
+  .schema(createContestationSchema)
   .action(async ({ parsedInput, ctx }) => {
     const contestation = await withAuthenticatedContext(
       { actorId: ctx.actorId },
@@ -760,7 +753,7 @@ export const createContestation = projetosAction
           .values({
             projectId: parsedInput.projectId,
             userId: ctx.actorId,
-            justification: parsedInput.justification,
+            justification: parsedInput.reason,
             status: "pending",
           })
           .returning();
@@ -783,7 +776,7 @@ export const createContestation = projetosAction
             _source: "createContestation",
             contestationId: contestation.id,
             returnedBy: ctx.actorId,
-            reason: parsedInput.justification,
+            reason: parsedInput.reason,
             returnedAt: now.toISOString(),
           },
           ctx.actorId,

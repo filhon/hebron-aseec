@@ -7,24 +7,13 @@ import {
   type AuthenticatedTx,
 } from "@hebron/db/authenticated";
 import { reports, reportAttachments, projects } from "@hebron/db/schema";
+import { createReportSchema } from "@hebron/validators/projetos";
 import { diretorAction, projetosAction } from "../lib/safe-action";
 import { logProjectAudit } from "../lib/audit";
 
 // ---------------------------------------------------------------------------
 // Schemas
 // ---------------------------------------------------------------------------
-
-const createReportSchema = z.object({
-  projectId: z.string().uuid("Projeto inválido"),
-  periodStart: z.string().date("Data de início inválida"),
-  periodEnd: z.string().date("Data de fim inválida"),
-  dueDate: z.string().date("Data de entrega inválida"),
-  content: z
-    .string()
-    .min(100, "Relatório deve ter pelo menos 100 caracteres")
-    .max(10000)
-    .optional(),
-});
 
 const submitReportSchema = z.object({
   reportId: z.string().uuid("Relatório inválido"),

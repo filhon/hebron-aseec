@@ -182,16 +182,28 @@ export interface MeetingAgendaItem {
   durationMinutes: number | null;
 }
 
+// Tipo/status espelham admin.meetingTypeEnum / meetingStatusEnum.
+export type MeetingType = "mensal" | "ordinaria" | "extraordinaria";
+export type MeetingStatus =
+  | "scheduled"
+  | "in_progress"
+  | "concluded"
+  | "cancelled";
+
+// Campos date/type/status/chairUserId alinhados 1:1 com admin.meeting_sessions
+// (P-2.1b) — P-2.3b lê essa tabela direto e preenche este tipo sem redefini-lo.
 export interface MeetingAgenda {
   id: string;
+  date: Date;
+  type: MeetingType;
+  status: MeetingStatus;
   title: string;
-  scheduledAt: Date;
   location: string | null;
   items: MeetingAgendaItem[];
   minutesText: string | null;
   closedAt: Date | null;
-  presidentId: string; // user ID
-  presidentName: string;
+  chairUserId: string; // user ID — admin.meeting_sessions.chair_user_id
+  chairName: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -293,23 +305,6 @@ export interface CompactProjectView {
   pendingReports: number;
   createdAt: Date;
   updatedAt: Date;
-}
-
-// ─── Legacy aliases (kept for backwards compat with P-1.x consumers) ──────────
-
-/** @deprecated use ProjectStage */
-export type ProjetoStatus = ProjectStage;
-
-/** @deprecated use Project */
-export interface ProjetoBase {
-  id: string;
-  titulo: string;
-  status: ProjectStage;
-  editalId?: string;
-  tipo?: string;
-  categoria?: string;
-  criadoEm: Date;
-  atualizadoEm: Date;
 }
 
 export interface ProjetoNovoParams {

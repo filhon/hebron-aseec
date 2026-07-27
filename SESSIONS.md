@@ -216,6 +216,8 @@
 | S-193  | 2026-07-27 | P-1.22b — Documentos: alerta de "novas versões" que nunca chega (CORRETIVO)                                                      | concluido                            |
 | S-194  | 2026-07-27 | P-1.23b — O botão "submeter projeto" que o wizard ignora (CORRETIVO)                                                             | concluido                            |
 | S-195  | 2026-07-27 | P-1.24b — Testes: o audit mockado e o caminho de escrita sem cobertura (CORRETIVO) — fecha o bloco B de Documentos               | concluido                            |
+| S-196  | 2026-07-27 | Auditoria Bloco A Projetos (P-2.1–P-2.5) — patches P-2.1b/2.2b/2.3b/2.3c/2.4b/2.5b gerados                                       | concluido                            |
+| S-197  | 2026-07-27 | P-2.1b — O contrato compartilhado que a implementação abandonou (CORRETIVO)                                                      | concluido                            |
 
 ---
 
@@ -15959,7 +15961,7 @@ documentos.editals WHERE project_category_id IS NOT NULL` = 0, troca sem
       vinculado visível (badge com o título) e o ciclo (anual/pontual)
       pré-selecionado no Step 1
 - [x] Nome dos parâmetros vem de um único módulo compartilhado; `grep -rn
-  "edital_id|editalId" apps/documentos/src apps/projetos/src` só encontra
+"edital_id|editalId" apps/documentos/src apps/projetos/src` só encontra
       usos derivados dele (nomes de propriedade/variável internos, não
       literais de querystring) — ressalva do item 6 acima (`edital-card.tsx`,
       fora de escopo)
@@ -15974,7 +15976,7 @@ documentos.editals WHERE project_category_id IS NOT NULL` = 0, troca sem
       contagem de quórum) que falham também isoladamente e sem relação com
       este diff — contaminação de dados no banco de dev compartilhado, mesmo
       padrão já registrado em sessões anteriores (grants/system-actor); `next
-  build` dos dois apps também verde (pegou o bug do item 7); migration
+build` dos dois apps também verde (pegou o bug do item 7); migration
       0064 aplicada no Supabase de dev
 - [x] Registrado em SESSIONS.md
 
@@ -16118,3 +16120,280 @@ action, entity, actorId? })` consulta a linha gravada e verifica ator,
 
 - **`updateEdital` quebra com `editalUpdate` vazio** (item 7 acima) —
   corretivo dedicado, fora dos arquivos permitidos deste prompt.
+
+---
+
+## S-196 — 2026-07-27 — Auditoria Bloco A Projetos (P-2.1–P-2.5)
+
+**Prompt:** auditoria (não é prompt de PROMPTS.md)
+**Branch:** feat/P-1.24b-docs-testes
+**Modelo:** claude-opus-5
+**Status:** concluido (gera P-2.1b, P-2.2b, P-2.3b, P-2.3c, P-2.4b, P-2.5b)
+
+### Resumo
+
+Cruzamento dos prompts P-2.1 a P-2.5 (PROMPTS.md) e das sessões que os
+executaram (S-33 a S-37) com o código atual de `apps/projetos`,
+`packages/types/src/projetos` e `packages/validators/src/projetos`. O Bloco A
+foi executado em 2026-06-20/22 e depois atravessado por P-2.9c (S-62,
+commit `7c395c5`) e pelo polish da S-45, que reescreveram boa parte das telas
+sem revisitar os critérios de aceite — 12 critérios `[x]` descrevem hoje
+código que não existe mais ou que nunca fez o que o texto promete.
+
+Baseline verificada antes de qualquer conclusão: `pnpm --filter projetos
+typecheck` e `lint` verdes. Nenhum achado é falha de build — são divergências
+entre o que os critérios afirmam e o que o código faz.
+
+### Achados (agrupados por prompt de origem)
+
+**P-2.1 — contrato compartilhado abandonado**
+
+- `createReportSchema`, `createEvaluationSchema`, `createContestationSchema` e
+  `deleteProjectSchema` (`packages/validators/src/projetos`) não têm consumidor
+  fora do pacote; `actions/reports.ts:17`, `actions/evaluations.ts:19` e
+  `actions/projects.ts:725` redeclaram os seus, já divergentes.
+- Vocabulário de `recommendation` em três dialetos: `"sim" | "nao"` em types e
+  validators (BRAIN §6.2), `approved | rejected | needs_revision` no enum do
+  banco e na action, `Favorável/Desfavorável` na UI. A ponte é
+  `queries.ts:780` — `e.recommendation === "approved" ? "sim" : "nao"` —, que
+  **colapsa `needs_revision` em reprovação**. Latente hoje (o `EvaluationForm`
+  só oferece dois botões), não latente no dia em que a action for chamada com
+  o terceiro valor.
+- `createReportSchema` do pacote descreve um relatório que não existe:
+  `period`/`narrativa`/`resultadosAlcancados`/`beneficiariosAtingidos` contra
+  `periodStart`/`periodEnd`/`dueDate`/`content` no banco.
+- `ProjetoStatus` e `ProjetoBase` (types:301,304) sem nenhum consumidor —
+  aliases de retrocompatibilidade da S-33 que P-0.2c não alcançou.
+- `MeetingAgenda`/`MeetingAgendaItem` sem consumidor (endereçado em P-2.3b).
+- `apps/projetos/src/lib/mock-data.ts` removido em `bf35f78` — esperado no
+  Bloco B, mas o critério de P-2.1 ainda o afirma.
+
+**P-2.2 — componentes**
+
+- `VotePanel.handleVote` ainda usa `setTimeout(..., 600)` da S-34 (latência
+  simulada) e marca `localVote` **antes** de chamar `onVote`.
+  `VotePanelWrapper` faz `useAction(castVote)` **sem `onError`** e passa
+  `hasVoted={hasVoted || isPending}`. Falha de `castVote` deixa a tela em
+  "Voto registrado", com o anel de quórum incrementado, e nada informa o
+  votante. É a ação mais sensível do módulo falhando em silêncio.
+- Quórum nunca reconcilia: incremento otimista sem `router.refresh()`.
+- `ScoreIndicator` redeclara a união de papéis (a justificativa da S-34
+  caducou — `lib/safe-action.ts:4` já importa `@hebron/types/roles`).
+- `ProjectKanban` move projeto só por arrasto de mouse; sem caminho de teclado.
+- `project-card.tsx`, `report-card.tsx`, `organization-card.tsx` deletados em
+  `7c395c5`, substituídos por markup inline — desvio nunca registrado.
+
+**P-2.3 — telas**
+
+- `(diretoria)/reuniao/page.tsx` renderiza um estado vazio **fixo** como único
+  conteúdo possível da pauta: nenhum projeto pontual chega à tela,
+  `getMeetingBIData` nem seleciona `projects.type`, "meses restantes" não
+  aparece no arquivo, e "Saldo Alocado" é soma alocada, não saldo. Dos três
+  dados do critério, nenhum está inteiro.
+- "Próxima reunião a agendar" é texto estático embora `admin.meeting_sessions`
+  exista e o cron mensal de `packages/jobs` já crie a reunião da 1ª quarta.
+- Dashboard do submissor calcula "Orçamento disponível" contra
+  `ORCAMENTO_ANUAL_LIMITE = 150_000` (`page.tsx:22`, comentário "finance
+  module not yet built"), enquanto `checkOrganizationBudget`
+  (`packages/integrations/src/projetos.ts`) bloqueia a submissão pelo teto real
+  de `financeiro.organization_budgets`. A tela mostra um número, o servidor
+  aplica outro — e para instituição sem teto (que pelo BRAIN não tem limite) a
+  barra progride rumo a um limite inexistente.
+- "Responsivo" `[x]`: `gridTemplateColumns: "repeat(4, 1fr)"` e `"1.6fr 1fr"`
+  em estilo inline, que não aceita media query.
+
+**P-2.4 — formulários**
+
+- `project-wizard.tsx` e os cinco `project-wizard-steps/*` da S-36 foram
+  deletados em `7c395c5`; o wizard virou `(submissor)/novo/page.tsx`, 1400
+  linhas, **6** etapas, e `grep -n "zod|Schema|safeParse"` no arquivo volta
+  vazio. `handleNext` avança sem condição — dá para percorrer tudo em branco e
+  clicar "Submeter Projeto".
+- Na rejeição do servidor, `onError` lê `err.serverError`, mas falha de
+  validação em next-safe-action vem em `validationErrors` → o usuário recebe
+  "Erro ao submeter o projeto. Tente novamente." sem campo nem etapa, no fim de
+  um formulário de 18 campos.
+- Meses × parcelas: o `superRefine` exige igualdade e o seletor deixa marcar
+  quantos quiser (a S-36 desabilitava; a reescrita não).
+- Google Places: inexistente, sem chave em `packages/config`.
+- Vídeo (≤3min) e planilha: **estruturalmente impossíveis** — o bucket
+  `project-attachments` (`0020_storage_buckets.sql:99`) aceita só
+  `application/pdf`, `image/jpeg`, `image/png`, teto de 10 MB. A carta de
+  recomendação virou caixa de auto-declaração.
+
+**P-2.5 — estados**
+
+- `find apps/projetos/src -name "error.tsx" -o -name "global-error.tsx"`
+  **vazio** — nenhuma rota tem fronteira de erro (mesmo achado que P-1.17b
+  fechou em Documentos).
+- `(diretoria)/pipeline/page.tsx` busca em `useEffect` e o `return` só olha
+  `filtered.length === 0` → **toda** abertura do pipeline mostra primeiro
+  "Nenhum projeto no portfólio ainda" com versículo, depois troca pelo kanban.
+  `pipeline/loading.tsx` só cobre o trabalho de servidor do layout; o
+  `KanbanSkeleton` nunca aparece onde precisaria.
+- `DashboardSkeleton` desenha `max-w-4xl`, 3 cards e rodapé de duas colunas; o
+  dashboard reescrito na S-45 usa `hb-page`, 4 cards e layout lado a lado —
+  salto de layout visível.
+- Faltam `loading.tsx` em `/novo`, `/relatorios`, `/instituicao`, `/reuniao`,
+  `/relatorios-dir` e `/pipeline/[id]`.
+- "Ver todos" do dashboard aponta para `href="/"`, a própria página.
+- 16 literais de cor fora do sistema de tokens em `src/**/*.tsx`, incluindo
+  `rgba(32,44,133,…)` (o azul institucional `#202C85` à mão, com
+  `--brand-muted` disponível) — BRAIN §5.
+
+### Decisões da auditoria
+
+- Seis corretivos, não um só: os achados se agrupam por narrativa e por
+  conjunto de arquivos disjunto, o que mantém a regra "uma sessão = um prompt"
+  executável. P-2.3 rendeu dois (`b` pauta, `c` orçamento) pelo precedente de
+  P-1.16b/P-1.16c.
+- P-2.1b é pré-requisito de P-2.3b (alinha `MeetingAgenda`); P-2.5b executa por
+  último, pois é quem pode reavaliar os critérios de P-2.3 e P-2.5.
+- Places, vídeo e planilha (P-2.4b item 4) **não** viram implementação por
+  decisão da auditoria: exigem chave de API e mudança de bucket/Bunny. O
+  prompt exige decidir e registrar — implementar ou corrigir o critério com a
+  razão —, não deixar a promessa no papel.
+- Não se propõe restaurar `project-card`/`report-card`/`organization-card`: a
+  renderização inline é resultado legítimo da integração. O que o corretivo
+  cobra é o registro do desvio.
+- Não se propõe biblioteca de drag-and-drop: o caminho de teclado do kanban é
+  alternativa ao arrasto, não substituição.
+
+### Arquivos alterados
+
+- `PROMPTS.md` (6 prompts corretivos após P-2.5; 12 critérios de P-2.1–P-2.5
+  passados a `[~]` com a razão e o corretivo responsável; nota de rota da
+  diretoria em P-2.3, desvio da S-37 que só vivia em SESSIONS.md)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+### Verificações executadas
+
+- `pnpm --filter projetos typecheck` — verde
+- `pnpm --filter projetos lint` — verde
+- `git log --diff-filter=D` sobre `apps/projetos/src/components` e
+  `lib/mock-data.ts` — confirma `7c395c5` e `bf35f78` como origem das remoções
+
+### Débitos registrados (fora do escopo dos 6 corretivos)
+
+- `YEAR_OPTIONS` do filtro do pipeline para em 2026, enquanto o wizard sugere
+  `ano de referência = ano atual + 1` (2027) — projeto criado para 2027 não é
+  filtrável. Item pequeno; anexar ao próximo toque em `pipeline/page.tsx`.
+- `projects.score_ai_breakdown` é persistido e nunca exibido; o painel de IA
+  mostra só o score agregado (decisão da S-38, não regressão).
+
+---
+
+## S-197 — P-2.1b — O contrato compartilhado que a implementação abandonou (CORRETIVO)
+
+**Branch:** `feat/P-2.1b-projetos-contrato`
+
+### Contexto
+
+S-196 (auditoria do Bloco A Projetos) encontrou que, dos seis schemas Zod
+exportados por `packages/validators/src/projetos`, quatro não tinham
+consumidor: `actions/reports.ts`, `actions/evaluations.ts` e
+`actions/projects.ts` redeclaravam versões locais já divergentes do pacote
+(`deleteProjectSchema`, na verdade, já estava corretamente importado —
+achado impreciso nesse ponto específico). O vocabulário de `recommendation`
+vivia em três dialetos (`sim/nao` em types/validators, `approved|rejected|
+needs_revision` no enum do banco e na action, `Favorável/Desfavorável` na
+UI), ligados por uma coerção silenciosa em `queries.ts:780` que colapsava
+`needs_revision` em "reprovado" sem que nada avisasse. `createReportSchema`
+descrevia um relatório (`narrativa`/`resultadosAlcancados`/
+`beneficiariosAtingidos`) que não existe no banco (`content` único).
+`ProjetoStatus`/`ProjetoBase` eram aliases de retrocompatibilidade da S-33
+sem consumidor desde que P-0.2c aposentou os aliases DEPRECATED do design
+system.
+
+### O que foi feito
+
+1. **Vocabulário de `recommendation` — opção (a) escolhida.** Migration
+   `0065_evaluation_recommendation_two_values.sql` reduz
+   `projetos.evaluation_recommendation` de 3 para 2 valores
+   (`approved`/`rejected`), removendo `needs_revision`: nenhuma tela jamais
+   ofereceu esse valor (decisão deliberada da S-37, registrada em
+   SESSIONS.md:2785 — "simplificação deliberada para não introduzir um
+   terceiro estado sem fluxo de 'revisão solicitada' definido em prompt
+   algum") e o BRAIN §6.2 só prevê opinião "sim/não". Confirmado antes de
+   aplicar: `SELECT recommendation, count(*) FROM projetos.evaluations
+GROUP BY recommendation` no banco de dev não retornou nenhuma linha com
+   `needs_revision` (só 1 linha `null`) — troca sem perda de dados; o
+   `UPDATE` de segurança na migration é defensivo. `queries.ts` trocou a
+   ternária por `RECOMMENDATION_LABEL`, um `Record<"approved"|"rejected",
+"sim"|"nao">` que o compilador rejeita se o enum ganhar um terceiro
+   valor sem que o mapeamento seja atualizado — não é mais possível deixar
+   um caso descoberto em silêncio.
+2. **`createReportSchema` reconciliado** com o relatório real
+   (`periodStart`/`periodEnd`/`dueDate`/`content`, datas `.date()` não
+   `.datetime()` — o formulário envia `<input type="date">`).
+   `actions/reports.ts` importa do pacote em vez de redeclarar.
+3. **`createEvaluationSchema` movido para o vocabulário `approved/rejected`**
+   (era `sim/nao`, incompatível com o enum do banco). `actions/evaluations.ts`
+   importa e estende com `.extend({ score, scoreBreakdown })` para
+   `submitEvaluationSchema`.
+4. **`createContestationSchema` importado** em `actions/projects.ts`,
+   substituindo o `contestationSchema` local. Campo renomeado de
+   `justification` para `reason` no contrato de wire (a coluna do banco
+   continua `contestations.justification` — só o nome do campo do Zod
+   schema mudou); `contestation-form.tsx` atualizado para enviar `reason`.
+5. **`ProjetoStatus`/`ProjetoBase` removidos** de
+   `packages/types/src/projetos/index.ts` após confirmar via grep que não
+   têm consumidor em `apps`/`packages`.
+6. **`MeetingAgenda` alinhado com `admin.meeting_sessions`:** `scheduledAt`
+   → `date`, `presidentId`/`presidentName` → `chairUserId`/`chairName`,
+   mais os campos novos `type` (`MeetingType`) e `status` (`MeetingStatus`),
+   espelhando `meetingTypeEnum`/`meetingStatusEnum`. Campos sem
+   correspondente na tabela (`title`, `location`, `items`, `minutesText`,
+   `closedAt`) mantidos — são a forma da pauta que P-2.3b vai montar a
+   partir do pipeline, não colunas de `meeting_sessions`.
+7. **Bookkeeping em PROMPTS.md:** critério de schemas de P-2.1 passado a
+   `[x]`; critérios do próprio P-2.1b marcados.
+
+### Achado incidental na infraestrutura de migration
+
+`0064_documentos_edital_project_category.sql` (S-194) tinha sido aplicada
+no Supabase de dev via chamada direta da ferramenta MCP, sem passar pelo
+runner `packages/db/src/migrate.ts` — a tabela de bookkeeping
+`public._migrations` não tinha o registro correspondente, e o runner tentou
+reaplicá-la (`ALTER TABLE ... ADD COLUMN "project_category_slug"` colidiu
+com a coluna já existente). Corrigido inserindo o registro de bookkeeping
+faltante antes de aplicar a 0065 — não é um achado deste módulo, é uma nota
+para sessões futuras: aplicar migration via MCP direto e não pelo runner
+deixa o histórico de aplicação dessincronizado.
+
+### Critérios de aceite
+
+- [x] `grep -rn "recommendation" apps/projetos/src packages` não mostra
+      coerção que descarte um valor do enum
+- [x] Todo schema exportado por `packages/validators/src/projetos` tem
+      consumidor fora do pacote
+- [x] Nenhuma action de `apps/projetos` redeclara um schema do pacote
+      compartilhado
+- [x] `grep -rn "ProjetoStatus\|ProjetoBase" apps packages` retorna vazio
+- [x] Migration hand-written, numeração sequencial, sem `drizzle-kit
+    generate`; aplicada no Supabase de dev
+- [x] Critérios de P-2.1 refletem o estado real do código
+- [x] `pnpm --filter projetos typecheck lint test` — typecheck e lint
+      limpos; 105/107 testes (as 2 falhas são de `close-voting.test.ts`,
+      quórum sobre dados reais do banco compartilhado, pré-existentes e
+      documentadas desde S-158 — fora de escopo)
+- [x] Registrado em SESSIONS.md
+
+### Arquivos alterados
+
+- `packages/validators/src/projetos/index.ts`
+- `packages/types/src/projetos/index.ts`
+- `packages/db/src/schema/projetos.ts`
+- `packages/db/src/migrations/0065_evaluation_recommendation_two_values.sql` (criado)
+- `apps/projetos/src/actions/reports.ts`
+- `apps/projetos/src/actions/evaluations.ts`
+- `apps/projetos/src/actions/projects.ts`
+- `apps/projetos/src/lib/queries.ts`
+- `apps/projetos/src/components/contestation-form.tsx`
+- `PROMPTS.md` (bookkeeping de P-2.1 e do próprio P-2.1b)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+### Débitos registrados
+
+- Nenhum novo. `evaluation-card.tsx` não precisou de mudança — sempre leu
+  `"sim"/"nao"` de `Evaluation.recommendation`, vocabulário que não mudou.

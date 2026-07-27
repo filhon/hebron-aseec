@@ -3022,8 +3022,8 @@ Definir tipos e schemas Zod do módulo Projetos — o mais complexo do ecossiste
 - [x] Stages enum completo (9 estados)
 - [x] Formulário anual: 10+ campos obrigatórios (ver BRAIN.md 6.2)
 - [x] Formulário pontual: 6 campos obrigatórios (ver BRAIN.md 6.2)
-- [x] Schemas Zod: createAnnualProjectSchema, createPunctualProjectSchema, createReportSchema, createEvaluationSchema
-- [x] Mock data: 20+ projetos em vários stages, 5+ instituições, 10+ relatórios
+- [x] Schemas Zod: createAnnualProjectSchema, createPunctualProjectSchema, createReportSchema, createEvaluationSchema (os quatro com consumidor real em `actions/`; `createReportSchema` e `createEvaluationSchema` foram reconciliados com o banco e `deleteProjectSchema`/`createContestationSchema` também importados — P-2.1b)
+- [~] Mock data: 20+ projetos em vários stages, 5+ instituições, 10+ relatórios (`apps/projetos/src/lib/mock-data.ts` foi removido no P-2.9c, quando as telas passaram a ler o banco — esperado no Bloco B, registrado aqui para a lista de arquivos não mentir)
 - [x] Zero `any`
 - [x] Lint passa
 - [x] Types passam
@@ -3060,9 +3060,9 @@ Componentes para ambas as áreas (submissor e diretoria). ProjectCard (título, 
 
 **Critérios de aceite:**
 
-- [x] ProjectCard com badge de stage colorido e formatação de valor em BRL
-- [x] ProjectKanban com colunas por stage e drag-drop (somente para diretoria)
-- [x] VotePanel: pergunta "Você sente paz em investir neste projeto?", sim/não, contador de quórum
+- [~] ProjectCard com badge de stage colorido e formatação de valor em BRL (`project-card.tsx`, `report-card.tsx` e `organization-card.tsx` foram removidos no P-2.9c; as listas passaram a ser renderizadas inline nas páginas — desvio nunca registrado como decisão, ver P-2.2b)
+- [~] ProjectKanban com colunas por stage e drag-drop (somente para diretoria) (só há caminho de mouse; mover projeto é inacessível por teclado — ver P-2.2b)
+- [~] VotePanel: pergunta "Você sente paz em investir neste projeto?", sim/não, contador de quórum (a confirmação "Voto registrado" é otimista e sobrevive a uma falha de `castVote`, que não tem `onError` — ver P-2.2b)
 - [x] ScoreIndicator: barra de progresso com score IA (0-100), visível apenas para super_admin/diretor/conselheiro
 - [x] EvaluationCard: parecer (aprovação/reprovação) + observações (texto)
 - [x] Responsivo
@@ -3101,19 +3101,19 @@ Criar todas as páginas. Área do submissor: dashboard (meus projetos + status +
 
 **Critérios de aceite:**
 
-- [x] Dashboard submissor: meus projetos, projeção de pagamentos, relatórios pendentes, orçamento disponível
+- [~] Dashboard submissor: meus projetos, projeção de pagamentos, relatórios pendentes, orçamento disponível ("orçamento disponível" é calculado contra a constante literal `ORCAMENTO_ANUAL_LIMITE = 150_000`, não contra `financeiro.organization_budgets`, que é o teto que de fato bloqueia a submissão — ver P-2.3c)
 - [x] Wizard multi-step: instituição → proposta → orçamento → cronograma → anexos → revisão
 - [x] Detalhe do projeto com timeline de stages
 - [x] Pipeline kanban (diretoria) com todos os stages
 - [x] Detalhe analítico (diretoria): painel IA com score + resumo + riscos
-- [x] Pauta da reunião: projetos pontuais + saldo + meses restantes (data-driven)
+- [~] Pauta da reunião: projetos pontuais + saldo + meses restantes (data-driven) (a pauta é um placeholder fixo — nenhum projeto pontual chega à tela, "meses restantes" não existe, e "Saldo Alocado" é alocação, não saldo; ver P-2.3b)
 - [x] Navegação sidebar separada por área (submissor vs diretoria)
-- [x] Responsivo
+- [~] Responsivo (o dashboard do submissor fixa `repeat(4, 1fr)` e `1.6fr 1fr` em estilo inline, que não aceita media query — ver P-2.5b)
 - [x] Lint passa
 - [x] Types passam
 
 **Notas:**
-Ref: BRAIN.md seção 6.2. Dashboard do submissor: simplicidade e clareza (público em transição tecnológica).
+Ref: BRAIN.md seção 6.2. Dashboard do submissor: simplicidade e clareza (público em transição tecnológica). Rotas da diretoria: P-2.3 especificou `(diretoria)/page.tsx` e `(diretoria)/[id]/page.tsx`; a implementação adotou `(diretoria)/pipeline/page.tsx` e `(diretoria)/pipeline/[id]/page.tsx` (S-37) — `(diretoria)/page.tsx` não pode existir, colidiria com `(submissor)/page.tsx` em `/`.
 
 ---
 
@@ -3144,10 +3144,10 @@ Implementar formulários do módulo. Wizard de projeto anual (multi-step com val
 
 **Critérios de aceite:**
 
-- [x] Wizard anual: 5 steps com validação Zod por step, navegação prev/next
-- [x] Local com autocomplete (Google Places) + fallback texto livre
-- [x] Meses de pagamento: seleção múltipla (checkboxes dos 12 meses)
-- [x] Upload de vídeo (max 3min), planilha e carta (com preview)
+- [~] Wizard anual: 5 steps com validação Zod por step, navegação prev/next (o wizard foi reescrito no P-2.9c como um arquivo único de 1400 linhas com **6** etapas e **nenhuma** validação de cliente — `handleNext` avança incondicionalmente; ver P-2.4b)
+- [~] Local com autocomplete (Google Places) + fallback texto livre (não existe: `regiao` e `pais` são campos de texto simples, e não há chave de Places em `packages/config` — ver P-2.4b, item 4)
+- [~] Meses de pagamento: seleção múltipla (checkboxes dos 12 meses) (a seleção não é limitada ao número de parcelas; o `superRefine` do schema só reprova no servidor, com mensagem genérica — ver P-2.4b)
+- [~] Upload de vídeo (max 3min), planilha e carta (com preview) (o bucket `project-attachments` aceita apenas `application/pdf`, `image/jpeg` e `image/png` com teto de 10 MB — vídeo e planilha não são carregáveis; a carta virou caixa de auto-declaração — ver P-2.4b, item 4)
 - [x] Formulário pontual: 6 campos obrigatórios, anexos opcionais
 - [x] Formulário de relatório: texto estruturado + upload de anexos
 - [x] Recepção de query params (edital_id, tipo, categoria) para pré-preenchimento
@@ -3183,12 +3183,358 @@ Loading, empty e error states para todas as telas de Projetos. Skeletons para da
 
 **Critérios de aceite:**
 
-- [x] Skeleton por tela (dashboard, kanban, detalhe)
+- [~] Skeleton por tela (dashboard, kanban, detalhe) — `DashboardSkeleton` ficou com o layout anterior à reescrita da S-45 (3 cards, coluna dupla no rodapé) e `KanbanSkeleton` nunca cobre a busca real, que roda em `useEffect`; ver P-2.5b
 - [x] Estado vazio submissor: "Você ainda não submeteu nenhum projeto" + CTA
-- [x] Estado vazio diretoria: mensagem por coluna do kanban
+- [~] Estado vazio diretoria: mensagem por coluna do kanban (existe, mas o vazio de página inteira "Nenhum projeto no portfólio ainda" pisca a cada carga do pipeline, antes de qualquer dado chegar; ver P-2.5b)
 - [x] Wizard: indicador de progresso (step atual / total)
 - [x] Lint passa
 - [x] Types passam
+
+---
+
+### P-2.1b — O contrato compartilhado que a implementação abandonou (CORRETIVO)
+
+**Fase:** 2
+**Módulo:** projetos
+**Tipo:** schema
+**Pré-condições:**
+
+- Branch: `feat/P-2.1b-projetos-contrato`
+- Dependências: P-2.12 concluído (S-45); auditoria do Bloco A Projetos
+- Env vars: nenhuma
+
+**Problema que este prompt resolve (contexto):**
+P-2.1 entregou quatro schemas Zod em `packages/validators/src/projetos` e a família de tipos em `packages/types/src/projetos`. O Bloco B consumiu **dois** deles. `createReportSchema`, `createEvaluationSchema`, `createContestationSchema` e `deleteProjectSchema` não têm um único consumidor fora do próprio pacote — `apps/projetos/src/actions/` redeclara os seus (`reports.ts:17`, `evaluations.ts:19`, `projects.ts:725`), e as duas versões já divergiram sem que nada quebre.
+
+A divergência não é cosmética. `createEvaluationSchema` (validators) diz `recommendation: z.enum(["sim", "nao"])` e `Evaluation.recommendation` (types) diz `"sim" | "nao"` — o vocabulário do BRAIN §6.2 ("Opinião (sim/não + texto)"). O enum real do banco é `approved | rejected | needs_revision` (`packages/db/src/schema/projetos.ts:57`) e é ele que `submitEvaluationSchema` (`actions/evaluations.ts:19-28`) aceita. A ponte entre os dois está numa linha de leitura: `queries.ts:780` faz `e.recommendation === "approved" ? "sim" : "nao"` — ou seja, **`needs_revision` é apresentado à diretoria como reprovação**. Hoje o `EvaluationForm` só oferece dois botões, então o terceiro valor não é alcançável pela UI e o defeito é latente; ele deixa de ser latente no dia em que alguém escrever `needs_revision` pela action, que o aceita.
+
+`createReportSchema` conta a mesma história em campos: o pacote pede `period`/`narrativa`/`resultadosAlcancados`/`beneficiariosAtingidos`; a action que roda pede `periodStart`/`periodEnd`/`dueDate`/`content`. São dois modelos de relatório diferentes convivendo no repositório, e o que está no pacote compartilhado — o que um consumidor cross-app leria como fonte da verdade — é o que **não** existe no banco.
+
+Por fim, sobraram três órfãos declarados: `ProjetoStatus` e `ProjetoBase` (`types/src/projetos/index.ts:301,304`), aliases de retrocompatibilidade criados na S-33 para o P-1.23 e hoje sem nenhum consumidor — P-0.2c aposentou os aliases DEPRECATED do design system e estes passaram batido; e `MeetingAgenda`/`MeetingAgendaItem` (linhas 175-190), que descrevem a pauta da reunião e nunca foram consumidos por ninguém (ver P-2.3b, que os coloca em uso).
+
+**Escopo (siga na ordem):**
+
+1. **Decidir o vocabulário de `recommendation` e aplicá-lo em uma camada só.** BRAIN §6.2 é a fonte: opinião é sim/não + texto. Duas saídas aceitáveis, nesta ordem de preferência: (a) reduzir o enum do banco a dois valores via migration, eliminando `needs_revision` — que nenhuma tela oferece e nenhuma regra do BRAIN prevê; ou (b) manter os três no banco e tornar o mapeamento explícito e não-lossy, com `needs_revision` ganhando rótulo próprio em `EvaluationCard` e representação própria em `Evaluation`. **Não** deixar a coerção silenciosa de `queries.ts:780` de pé em nenhuma das duas.
+2. **Reconciliar `createReportSchema`** com o relatório que existe de fato (`reports.periodStart/periodEnd/dueDate/content` + `report_attachments`), e fazer `actions/reports.ts` importar do pacote em vez de redeclarar.
+3. **Fazer `createEvaluationSchema`, `createContestationSchema` e `deleteProjectSchema` serem os schemas que as actions usam** — importados, não copiados. Onde a action precisar de campos extras (ex.: `score`/`scoreBreakdown` em `submitEvaluation`), estender o schema compartilhado com `.extend()`, para que a base continue única.
+4. **Remover `ProjetoStatus` e `ProjetoBase`.** Confirmar com `grep -rn "ProjetoStatus\|ProjetoBase" apps packages` que não há consumidor antes de apagar.
+5. **Manter `MeetingAgenda`/`MeetingAgendaItem`** — não são órfãos por erro, são a interface que P-2.3b vai consumir; alinhá-los com `admin.meeting_sessions` (campos `date`, `type`, `status`, `chairUserId`) para que P-2.3b não precise redefini-los.
+6. **Bookkeeping em PROMPTS.md:** o critério de P-2.1 "Schemas Zod: createAnnualProjectSchema, createPunctualProjectSchema, createReportSchema, createEvaluationSchema" e o critério "Mock data: 20+ projetos…" precisam refletir o estado real (dois schemas consumidos; `apps/projetos/src/lib/mock-data.ts` foi removido no P-2.9c quando as telas passaram a ler o banco).
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/types/src/projetos/index.ts`
+- `packages/validators/src/projetos/index.ts`
+- `apps/projetos/src/actions/reports.ts`
+- `apps/projetos/src/actions/evaluations.ts`
+- `apps/projetos/src/actions/projects.ts` (apenas o bloco de schemas)
+- `apps/projetos/src/lib/queries.ts` (apenas o mapeamento de `recommendation`)
+- `apps/projetos/src/components/evaluation-card.tsx`
+- `packages/db/src/schema/projetos.ts` e `packages/db/src/migrations/NNNN_*.sql` (somente se escolhida a saída (a) do item 1)
+- `PROMPTS.md` (bookkeeping do item 6)
+
+**Critérios de aceite:**
+
+- [x] `grep -rn "recommendation" apps/projetos/src packages` não mostra nenhuma coerção que descarte um valor do enum — enum reduzido a `approved|rejected` (migration 0065) e `queries.ts` usa `RECOMMENDATION_LABEL`, um `Record` exaustivo checado pelo compilador
+- [x] Todo schema exportado por `packages/validators/src/projetos` tem ao menos um consumidor fora do pacote — `createReportSchema` (`actions/reports.ts`), `createEvaluationSchema` (`actions/evaluations.ts`, via `.extend()`), `createContestationSchema` e `deleteProjectSchema` (`actions/projects.ts`)
+- [x] Nenhuma action de `apps/projetos` redeclara um schema que já existe no pacote compartilhado
+- [x] `grep -rn "ProjetoStatus\|ProjetoBase" apps packages` retorna vazio
+- [x] Migration hand-written, numeração sequencial (`0065_evaluation_recommendation_two_values.sql`), sem `drizzle-kit generate` — aplicada no Supabase de dev
+- [x] Critérios de P-2.1 refletem o estado real do código
+- [x] `pnpm --filter projetos typecheck lint test` verdes — 105/107 testes; as 2 falhas restantes são de `close-voting.test.ts` (quórum sobre dados reais do banco de dev compartilhado), pré-existentes e documentadas desde S-158, fora do escopo deste prompt
+- [x] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: BRAIN.md §6.2 (avaliação: opinião sim/não + texto). Este prompt não muda comportamento de tela além do rótulo de avaliação — é higiene de contrato, e é pré-requisito de P-2.3b (que consome `MeetingAgenda`). Opção (a) escolhida para o vocabulário de `recommendation` (enum reduzido a 2 valores): `needs_revision` nunca teve affordance na UI (decisão registrada em S-37/SESSIONS.md:2785) nem regra no BRAIN, e o banco de dev não tinha nenhuma linha usando o valor (`SELECT recommendation, count(*) FROM projetos.evaluations GROUP BY recommendation` confirmado antes da migration).
+
+---
+
+### P-2.2b — O voto que se dá por registrado sem o servidor confirmar (CORRETIVO)
+
+**Fase:** 2
+**Módulo:** projetos
+**Tipo:** ui
+**Pré-condições:**
+
+- Branch: `feat/P-2.2b-projetos-voto`
+- Dependências: P-2.12 concluído (S-45)
+- Env vars: nenhuma
+- Skill: **invocar `/impeccable` antes de começar**
+
+**Problema que este prompt resolve (contexto):**
+`VotePanel` ainda carrega a mecânica que a S-34 escreveu para dados mockados. `handleVote` (`components/vote-panel.tsx:118-126`) chama `setTimeout(..., 600)` para simular latência, e só **depois** de marcar o voto localmente é que dispara `onVote`. Do outro lado, `VotePanelWrapper` (`components/vote-panel-wrapper.tsx:21-29`) faz `useAction(castVote)` sem `onError` e passa `hasVoted={hasVoted || isPending}`.
+
+O resultado é o pior comportamento possível na ação mais sensível do módulo: se `castVote` falhar — votação encerrada, quórum já apurado, papel inelegível, sessão expirada, rede caída — a tela mostra "Voto registrado. Seu voto é secreto e não será revelado.", o anel de quórum incrementa +1, e **nada** informa o votante de que o voto não existe. Um voto secreto que falha em silêncio é indistinguível de um voto computado; a diretoria delibera sobre uma contagem que pode não ser a real. Os 600 ms artificiais ainda atrasam a chamada real de propósito.
+
+No mesmo componente, o anel de quórum nunca reconcilia: o incremento é puramente otimista e não há `router.refresh()` no sucesso, então dois conselheiros votando na mesma janela veem contagens diferentes até recarregarem.
+
+Dois débitos menores no mesmo grupo de componentes: `ScoreIndicator` (`components/score-indicator.tsx:1-9`) redeclara a união de papéis localmente — a justificativa da S-34 ("`@hebron/types/roles` não está no entrypoint") caducou, `lib/safe-action.ts:4` importa exatamente esse caminho; e o `ProjectKanban` move projeto **só** por arrasto de mouse (`components/project-kanban.tsx`), sem nenhum caminho de teclado, embora arrastar entre estágios seja o gesto central da diretoria — o card tem `role="button"` mas Enter/Espaço só navegam.
+
+**Escopo (siga na ordem):**
+
+1. **Remover o `setTimeout` de 600 ms** de `VotePanel.handleVote`. A confirmação visual passa a ser função do estado real da action, não de um temporizador.
+2. **Inverter a ordem de confiança:** `VotePanel` deixa de marcar `localVote` por conta própria antes do servidor. O painel passa a receber o estado da chamada (pendente / confirmado / falhou) e a renderizar "Registrando…", "Voto registrado" ou o erro — nunca "registrado" sem confirmação.
+3. **Tratar o erro em `VotePanelWrapper`:** `onError` com mensagem legível (`serverError` quando houver, texto próprio quando não), botão para tentar de novo, e o painel voltando ao estado votável. Um voto que falhou tem de poder ser refeito.
+4. **Reconciliar a contagem:** `onSuccess` chama `router.refresh()` para que quórum e contagem venham do servidor em vez do incremento otimista.
+5. **`ScoreIndicator` importa `Role` de `@hebron/types/roles`** em vez de redeclarar a união.
+6. **Caminho de teclado no kanban:** cada card ganha uma forma acessível de mudar de estágio sem arrasto (ex.: menu "Mover para…" no card, alimentado pelos destinos válidos), disparando o mesmo `onMove`. O arrasto continua como está para quem usa mouse.
+7. **Bookkeeping em PROMPTS.md:** a lista de arquivos de P-2.2 nomeia `project-card.tsx`, `report-card.tsx` e `organization-card.tsx`, removidos no P-2.9c quando as telas passaram a renderizar as listas inline — corrigir a lista e anotar o desvio, que nunca foi registrado como decisão.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/projetos/src/components/vote-panel.tsx`
+- `apps/projetos/src/components/vote-panel-wrapper.tsx`
+- `apps/projetos/src/components/score-indicator.tsx`
+- `apps/projetos/src/components/project-kanban.tsx`
+- `apps/projetos/src/app/(diretoria)/pipeline/page.tsx` (apenas a fiação do item 6)
+- `apps/projetos/src/__tests__/voting.test.ts`
+- `PROMPTS.md` (bookkeeping do item 7)
+
+**Critérios de aceite:**
+
+- [ ] `grep -n "setTimeout" apps/projetos/src/components/vote-panel.tsx` retorna vazio
+- [ ] `castVote` falhando deixa a tela em estado de erro com retry — nunca em "Voto registrado"
+- [ ] Sucesso reconcilia quórum e contagem com o servidor (sem depender do incremento local)
+- [ ] Teste de regressão cobrindo o caminho de falha de `castVote` a partir do wrapper
+- [ ] `ScoreIndicator` não declara união de papéis própria
+- [ ] Kanban permite mover um projeto entre estágios apenas com teclado
+- [ ] Sigilo preservado: nenhuma superfície nova expõe quem votou
+- [ ] `pnpm --filter projetos typecheck lint test` verdes
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: BRAIN.md §6.2 (voto secreto; quórum ≥50% por pessoa distinta). O sigilo não é afetado por nada aqui — a contagem agregada já é a única coisa exibida. Não introduzir biblioteca de drag-and-drop: o item 6 é um caminho alternativo, não uma reescrita do arrasto.
+
+---
+
+### P-2.3b — A pauta da reunião que nunca teve pauta (CORRETIVO)
+
+**Fase:** 2
+**Módulo:** projetos
+**Tipo:** ui
+**Pré-condições:**
+
+- Branch: `feat/P-2.3b-projetos-pauta`
+- Dependências: P-2.1b concluído (`MeetingAgenda` alinhado)
+- Env vars: nenhuma
+- Skill: **invocar `/impeccable` antes de começar**
+
+**Problema que este prompt resolve (contexto):**
+O critério de P-2.3 "Pauta da reunião: projetos pontuais + saldo + meses restantes (data-driven)" está `[x]`. Dos três dados que ele nomeia, a tela entrega **zero e meio**.
+
+`app/(diretoria)/reuniao/page.tsx:47-78` renderiza um estado vazio fixo — "Nenhuma pauta cadastrada / A pauta da próxima reunião será exibida aqui quando for criada pelo administrador" — que é **o único conteúdo possível**: não há nenhum ramo que liste algo. Nenhum projeto pontual chega à tela; `getMeetingBIData` (`lib/queries.ts:1054`) nem seleciona `projects.type`. "Meses restantes" não aparece em lugar nenhum do arquivo. E o cabeçalho diz "Próxima reunião a agendar" como texto estático, embora `admin.meeting_sessions` exista e o cron mensal de `packages/jobs` já crie a reunião da 1ª quarta-feira (BRAIN §6.1, `packages/db/src/meetings.ts`) — a data real está no banco e a tela não a lê.
+
+O que existe e funciona é o painel financeiro da direita, mas rotulado errado: "Saldo Alocado (Portfólio Ativo)" é a **soma alocada** do portfólio, não um saldo — não há teto nenhum nessa consulta contra o qual restar algo.
+
+Isso importa porque é a tela em que a diretoria decide: BRAIN §6.2 define projeto pontual como "emergencial, avaliado mensalmente, consenso presencial". A reunião mensal é o rito em que o pontual é deliberado, e a tela da reunião não mostra nenhum.
+
+**Escopo (siga na ordem):**
+
+1. **Ligar o cabeçalho à reunião real:** ler a próxima `admin.meeting_sessions` com `status = 'scheduled'` e `date >= hoje`, exibindo data e tipo. Sem reunião agendada, dizer isso — e não fingir que há uma.
+2. **Montar a pauta a partir dos dados:** listar os projetos **pontuais** aguardando deliberação (estágios `validacao`/`votacao`/`homologacao`), com instituição, valor, categoria e link para o detalhe. Este é o corpo da pauta; o estado vazio atual passa a ser o que ele sempre deveria ter sido — o ramo de exceção, quando não há pontual em aberto.
+3. **Renomear e completar o painel financeiro:** "Saldo Alocado" vira o que é (valor alocado no portfólio ativo). Onde houver teto conhecido, mostrar o saldo de verdade; onde não houver, não inventar um.
+4. **"Meses restantes":** entregar o dado do critério — para os projetos anuais em execução, quantos meses de parcela ainda restam no ano-calendário (os `payment_schedules`/`meses de pagamento` já persistidos), agregado no painel. É a informação que sustenta a decisão de aprovar um pontual novo no meio do ano.
+5. **Consumir `MeetingAgenda`/`MeetingAgendaItem`** de `@hebron/types` como a forma da pauta, em vez de moldar tipos locais.
+6. **Bookkeeping em PROMPTS.md:** o critério de P-2.3 sobre a pauta só pode voltar a `[x]` com os três dados na tela.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/projetos/src/app/(diretoria)/reuniao/page.tsx`
+- `apps/projetos/src/lib/queries.ts`
+- `packages/types/src/projetos/index.ts` (apenas `MeetingAgenda*`, se P-2.1b tiver deixado ajuste)
+- `PROMPTS.md` (bookkeeping do item 6)
+
+**Critérios de aceite:**
+
+- [ ] A pauta lista os projetos pontuais aguardando deliberação, com link para o detalhe
+- [ ] Data da próxima reunião vem de `admin.meeting_sessions`, não de texto fixo
+- [ ] "Meses restantes" presente e derivado dos cronogramas de pagamento
+- [ ] Nenhum rótulo chama de "saldo" um valor que é alocação
+- [ ] Estado vazio da pauta só aparece quando de fato não há pontual em aberto
+- [ ] `MeetingAgenda`/`MeetingAgendaItem` têm consumidor
+- [ ] Leituras respeitam RLS (`withAuthenticatedContext`), sem client superusuário
+- [ ] `pnpm --filter projetos typecheck lint test` verdes
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: BRAIN.md §6.1 (reunião mensal na 1ª quarta-feira) e §6.2 (pontual: emergencial, avaliado mensalmente, consenso presencial). Não criar tabela nova de pauta: a pauta é derivada do pipeline, não um cadastro paralelo.
+
+---
+
+### P-2.3c — O teto de R$ 150 mil que ninguém definiu (CORRETIVO)
+
+**Fase:** 2
+**Módulo:** projetos
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-2.3c-projetos-orcamento`
+- Dependências: P-3.8b concluído (S-63) — `financeiro.organization_budgets` existente
+- Env vars: nenhuma
+
+**Problema que este prompt resolve (contexto):**
+O dashboard do submissor mostra um card "Orçamento disponível" e uma barra "X% comprometido" calculados contra `ORCAMENTO_ANUAL_LIMITE = 150_000`, uma constante literal no topo do arquivo (`app/(submissor)/page.tsx:22`) com o comentário "set by admin; finance module not yet built". O módulo financeiro **foi** construído: BRAIN §6.2 diz que o orçamento é "definido por instituição, por ano-calendário (jan-dez), no Financeiro (tabela `financeiro.organization_budgets`)", a tabela existe desde P-3.8b, tem UI de gestão, e `checkOrganizationBudget` (`packages/integrations/src/projetos.ts`) já a lê para bloquear submissão acima do teto — inclusive tratando corretamente o caso "sem orçamento configurado → sem teto".
+
+Ou seja: a submissão é barrada por um número, e a tela exibe outro. Uma instituição com teto real de R$ 40 mil vê "Orçamento disponível: R$ 96 mil", submete confiante, e leva o erro "Orçamento da instituição excedido" no fim do wizard. Uma instituição sem teto configurado — que pelo BRAIN não tem limite — vê uma barra de progresso rumo a um limite que não existe.
+
+Agrava o desencontro o texto logo abaixo da barra: "Acima do teto, a submissão é bloqueada — contate o administrador", que descreve com precisão uma regra real, ancorada num número falso.
+
+**Escopo (siga na ordem):**
+
+1. **Ler o teto de onde ele mora.** O dashboard passa a consultar `financeiro.organization_budgets` para a instituição e o ano-calendário corrente, pela mesma rota que `checkOrganizationBudget` usa — expor uma leitura em `packages/integrations/src/projetos.ts` (irmã da checagem, sem duplicar a consulta) em vez de acrescentar acesso direto à tabela do outro módulo dentro do app.
+2. **Tratar o caso "sem teto" como o BRAIN o define:** instituição sem orçamento configurado não tem limite. Nesse caso, não renderizar barra de progresso nem "disponível" — mostrar o comprometido e dizer que não há teto definido. Inventar 100% de nada é pior do que não mostrar.
+3. **Alinhar o comprometido:** o denominador da barra e o `committedBudget` já calculado precisam somar o mesmo conjunto de projetos que `checkOrganizationBudget` soma (mesmo ano, `deleted_at IS NULL`, excluindo `reprovado`) — hoje as duas contas podem discordar.
+4. **Corrigir a cópia** para descrever a regra que de fato roda, com o valor que de fato a governa.
+5. **Remover `ORCAMENTO_ANUAL_LIMITE`** e o comentário que o justificava.
+6. **Múltiplas instituições:** BRAIN §6.2 permite submissor vinculado a N instituições; hoje o card usa `data.institutions[0]`. Deixar explícito de qual instituição é o orçamento exibido, ou permitir a escolha — não apresentar o teto da primeira como se fosse o do usuário.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/projetos/src/app/(submissor)/page.tsx`
+- `apps/projetos/src/lib/queries.ts`
+- `packages/integrations/src/projetos.ts`
+- `packages/integrations/__tests__/` (teste da nova leitura)
+
+**Critérios de aceite:**
+
+- [ ] `grep -n "150_000\|150000" apps/projetos/src` retorna vazio
+- [ ] Teto exibido e teto aplicado na submissão vêm da mesma fonte e da mesma consulta
+- [ ] Instituição sem orçamento configurado não exibe barra nem "disponível"
+- [ ] O card nomeia a instituição a que o orçamento se refere
+- [ ] Teste cobrindo: com teto, sem teto, e comprometido acima do teto
+- [ ] `pnpm --filter projetos typecheck lint test` verdes
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: BRAIN.md §6.2 (orçamento por instituição/ano no Financeiro; "Instituições sem orçamento: sem teto"). PATCH-009/PATCH-013 já moveram a leitura para `packages/integrations` — este prompt faz a tela usar a mesma porta, não abrir uma segunda.
+
+---
+
+### P-2.4b — O wizard que não valida nada (CORRETIVO)
+
+**Fase:** 2
+**Módulo:** projetos
+**Tipo:** ui
+**Pré-condições:**
+
+- Branch: `feat/P-2.4b-projetos-wizard`
+- Dependências: P-1.23b concluído (S-194) — contrato de query params
+- Env vars: nenhuma
+- Skill: **invocar `/impeccable` antes de começar**
+
+**Problema que este prompt resolve (contexto):**
+O critério de P-2.4 "Wizard anual: 5 steps com validação Zod por step, navegação prev/next" está `[x]`. Os componentes que a S-36 escreveu para atendê-lo — `project-wizard.tsx` e os cinco `project-wizard-steps/*` — foram apagados no P-2.9c e substituídos por um único arquivo de 1400 linhas, `app/(submissor)/novo/page.tsx`, que **não importa Zod nem os validators**: `grep -n "zod\|Schema\|safeParse" app/(submissor)/novo/page.tsx` volta vazio, e `handleNext` (linha 1224) é `if (step < STEPS.length) setStep(s => s + 1)`, sem condição.
+
+Na prática: dá para percorrer as seis etapas com todos os campos em branco e clicar "Submeter Projeto". O que acontece então é o segundo defeito — `handleSubmit` chama a action, `createAnnualProjectSchema` rejeita no servidor, e o `onError` do wizard lê `err.serverError`, que em falha de **validação** vem `undefined` (next-safe-action devolve `validationErrors`, não `serverError`). O usuário recebe "Erro ao submeter o projeto. Tente novamente." — sem um campo apontado, sem uma etapa apontada, no fim de um formulário de dezoito campos. E ele _pode_ tentar de novo, indefinidamente, com o mesmo resultado.
+
+O mesmo vale para a coerência que o schema exige: `createAnnualProjectSchema` tem um `superRefine` que exige `mesesPagamento.length === numeroParcelas`, e o seletor de meses (`Step4`, linha 740) deixa marcar quantos quiser — a S-36 desabilitava os botões ao atingir a contagem, a reescrita não. A regra só se manifesta como erro genérico no último passo.
+
+Três outros critérios de P-2.4 descrevem coisas que não existem no arquivo: "Local com autocomplete (Google Places) + fallback texto livre" (hoje `regiao` e `pais` são dois `<input type=text>`; não há chave de API de Places em `packages/config`), "Upload de vídeo (max 3min), planilha e carta (com preview)" (o `Step5` só aceita PDF/JPEG/PNG — que é o que o bucket `project-attachments` permite: `allowed_mime_types` de três valores e teto de 10 MB, migration `0020_storage_buckets.sql`; vídeo e planilha são estruturalmente impossíveis ali, e a carta virou uma caixa de seleção de auto-declaração) e "Wizard anual: 5 steps" (são 6).
+
+**Escopo (siga na ordem):**
+
+1. **Validação por etapa com os schemas compartilhados.** Derivar de `createAnnualProjectSchema`/`createPunctualProjectSchema` o subconjunto de cada etapa e validar em `handleNext`: sem passar, não avança, e os erros aparecem **no campo**. Como os schemas usam `superRefine` (`ZodEffects`, sem `.pick()`), extrair a base em objetos por etapa no pacote de validators e compor — a validação cruzada de meses/parcelas continua no `superRefine` do todo.
+2. **Coerência de meses × parcelas na própria etapa 4**, com o estado da seleção comunicando a regra (contador, bloqueio ao atingir o total) em vez de deixá-la explodir na submissão.
+3. **Superfície de erro de submissão honesta:** tratar `validationErrors` além de `serverError`, mapeando cada erro à sua etapa e levando o usuário até ela. Um formulário longo que falha precisa dizer _onde_.
+4. **Decidir e registrar o destino de Places, vídeo e planilha.** Não deixar a promessa no papel: ou implementar (Places exige chave em `packages/config`; vídeo/planilha exigem alterar `allowed_mime_types` e `file_size_limit` do bucket, ou roteá-los ao Bunny Stream conforme BRAIN §Stack), ou corrigir os critérios de P-2.4 com a razão. Se a decisão mudar o que o BRAIN promete, abrir PATCH.
+5. **Quebrar o arquivo.** 1400 linhas num único client component é o que permitiu a validação sumir sem ninguém notar. Reextrair as etapas para `project-wizard-steps/*`, mantendo o estado no container — a estrutura que P-2.4 especificou e que se provou a mais legível.
+6. **Bookkeeping em PROMPTS.md:** critérios e lista de arquivos de P-2.4 passam a descrever o wizard que existe (6 etapas, arquivos reais), com `[~]` e nota no que ficar de fora.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/projetos/src/app/(submissor)/novo/page.tsx`
+- `apps/projetos/src/components/project-wizard.tsx` (recriar)
+- `apps/projetos/src/components/project-wizard-steps/*.tsx` (recriar)
+- `packages/validators/src/projetos/index.ts`
+- `PROMPTS.md` (bookkeeping do item 6)
+- `PATCHES/` (somente se o item 4 mudar decisão do BRAIN)
+
+**Critérios de aceite:**
+
+- [ ] Etapa com campo obrigatório vazio não avança, e o erro aparece no campo
+- [ ] Impossível chegar ao botão "Submeter Projeto" com o formulário inválido
+- [ ] Seleção de meses não permite divergir do número de parcelas
+- [ ] Falha de validação do servidor aponta etapa e campo, nunca só "Tente novamente"
+- [ ] Validação do cliente e do servidor derivam do mesmo schema (sem regra duplicada à mão)
+- [ ] Prefill por `edital_id` (P-1.23b) continua funcionando
+- [ ] Nenhum critério de P-2.4 descreve recurso inexistente
+- [ ] `pnpm --filter projetos typecheck lint test` verdes; `pnpm --filter projetos build` verde
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: BRAIN.md §6.2 (formulário anual estruturado; pontual com 6 campos; máx. 12 meses) e princípio "público-alvo em transição tecnológica — interfaces simples e claras". Um formulário que só reprova no fim é o oposto disso. Cuidado com o padrão registrado em memória: `page.tsx` de rota dinâmica não pode ser client component com `use(params)` — aqui a rota é estática, mas rodar `next build` antes de fechar continua obrigatório.
+
+---
+
+### P-2.5b — Nenhuma fronteira de erro, o skeleton errado e o vazio que pisca (CORRETIVO)
+
+**Fase:** 2
+**Módulo:** projetos
+**Tipo:** ui
+**Pré-condições:**
+
+- Branch: `feat/P-2.5b-projetos-estados`
+- Dependências: P-2.12 concluído (S-45)
+- Env vars: nenhuma
+- Skill: **invocar `/impeccable` antes de começar**
+
+**Problema que este prompt resolve (contexto):**
+`find apps/projetos/src -name "error.tsx" -o -name "global-error.tsx"` devolve **vazio** — o mesmo achado que P-1.17b fechou em Documentos, ainda aberto aqui. Nenhuma rota de Projetos tem fronteira de erro: uma indisponibilidade do Supabase em `/`, `/novo`, `/pipeline`, `/reuniao` ou `/relatorios` cai na tela genérica do Next, e o submissor — público em transição tecnológica, segundo o BRAIN — vê "Application error" numa página branca.
+
+O pipeline da diretoria tem um defeito de estado mais visível. `app/(diretoria)/pipeline/page.tsx` é client component e busca em `useEffect`; enquanto `loading` é `true`, `allProjects` é `[]`, e o `return` (linha 318) só olha para `filtered.length === 0`. Resultado: **toda** abertura do pipeline mostra primeiro o vazio de página inteira "Nenhum projeto no portfólio ainda / Sem visão o povo perece — Provérbios 29:18" e só depois troca pelo kanban. O `loading` é lido apenas para trocar uma linha de subtítulo. E `pipeline/loading.tsx` — que renderiza o `KanbanSkeleton` — só cobre o trabalho de servidor do layout, nunca essa busca; o skeleton que P-2.5 entregou não aparece onde precisa.
+
+`DashboardSkeleton` ficou para trás da tela que precede: ele desenha `max-w-4xl`, **três** cards de estatística (`sm:grid-cols-3`) e um bloco de duas colunas no rodapé; o dashboard reescrito na S-45 usa `hb-page`, **quatro** cards e um layout lado a lado de `1.6fr 1fr`. O salto de layout na transição é visível.
+
+Esse mesmo dashboard é a única tela do app que **não é responsiva**: `gridTemplateColumns: "repeat(4, 1fr)"` (linha 172) e `"1.6fr 1fr"` (linha 223) são estilos inline, e estilo inline não carrega media query. Em telefone, quatro cards e duas colunas ficam espremidos — enquanto o critério "Responsivo" de P-2.3 e P-2.5 está `[x]`.
+
+Faltam ainda `loading.tsx` em `/novo`, `/relatorios`, `/instituicao`, `/reuniao`, `/relatorios-dir` e `/pipeline/[id]`; o link "Ver todos" do dashboard aponta para `href="/"`, que é a própria página; e há 16 literais de cor fora do sistema de tokens em `src/**/*.tsx` — incluindo `rgba(32,44,133,…)` em `instituicao/page.tsx:119,203,204`, que é o azul institucional `#202C85` reescrito à mão quando `--brand-muted` existe (BRAIN §5 proíbe redefinir cor fora de `packages/ui`).
+
+**Escopo (siga na ordem):**
+
+1. **`error.tsx` na raiz** (`app/error.tsx`, client component) com `reset()`, mensagem humana e link para a home — sem exclamação genérica, sem versículo (versículo é dos vazios, não dos erros).
+2. **`error.tsx` por área** (`app/(submissor)/error.tsx` e `app/(diretoria)/error.tsx`), preservando o shell de navegação de cada uma.
+3. **`global-error.tsx`** mínimo, cobrindo falha no próprio layout raiz.
+4. **Corrigir o estado de carga do pipeline:** enquanto `loading`, renderizar `KanbanSkeleton` — nunca o vazio. O vazio de portfólio só quando a busca terminou e não trouxe nada.
+5. **Realinhar `DashboardSkeleton`** ao dashboard atual (4 cards, layout lado a lado, `hb-page`), de modo que a troca não desloque nada.
+6. **Tornar o dashboard responsivo:** substituir os dois `gridTemplateColumns` inline por classes com breakpoint (1 coluna no telefone, 2 no tablet, 4 no desktop; coluna única para o bloco principal abaixo de `lg`).
+7. **`loading.tsx` nas rotas restantes**, reusando os skeletons existentes onde couber.
+8. **"Ver todos":** apontar para uma listagem real ou remover o link. Um link para a própria página não é navegação.
+9. **Fechar os literais de cor:** os 16 casos de `#…`/`rgba(…)` em `src/**/*.tsx` passam a usar token — `--brand-muted`, `--fg-invert`, `--hb-orange-muted` e afins. Onde faltar token para o efeito desejado, o token nasce em `packages/ui/src/tokens.css`, nunca no app.
+10. **Bookkeeping em PROMPTS.md:** critérios "Responsivo" de P-2.3/P-2.5 e "Skeleton por tela" de P-2.5 voltam a `[x]` só com o que este prompt entregar.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/projetos/src/app/error.tsx` (criar)
+- `apps/projetos/src/app/global-error.tsx` (criar)
+- `apps/projetos/src/app/(submissor)/error.tsx` (criar)
+- `apps/projetos/src/app/(diretoria)/error.tsx` (criar)
+- `apps/projetos/src/app/(submissor)/novo/loading.tsx`, `relatorios/loading.tsx`, `instituicao/loading.tsx` (criar)
+- `apps/projetos/src/app/(diretoria)/reuniao/loading.tsx`, `relatorios-dir/loading.tsx`, `pipeline/[id]/loading.tsx` (criar)
+- `apps/projetos/src/app/(diretoria)/pipeline/page.tsx`
+- `apps/projetos/src/app/(submissor)/page.tsx`
+- `apps/projetos/src/app/(submissor)/instituicao/page.tsx`
+- `apps/projetos/src/app/(submissor)/relatorios/page.tsx`
+- `apps/projetos/src/components/dashboard-skeleton.tsx`
+- `apps/projetos/src/components/evaluation-form.tsx`
+- `apps/projetos/src/components/vote-panel.tsx` (apenas os literais de cor)
+- `packages/ui/src/tokens.css` (apenas se faltar token)
+- `PROMPTS.md` (bookkeeping do item 10)
+
+**Critérios de aceite:**
+
+- [ ] Toda rota do app é coberta por uma fronteira de erro (raiz + duas áreas + `global-error`)
+- [ ] Abrir `/pipeline` nunca mostra "Nenhum projeto no portfólio ainda" antes de a busca terminar
+- [ ] `KanbanSkeleton` aparece durante a busca do pipeline
+- [ ] `DashboardSkeleton` e o dashboard têm a mesma estrutura (sem salto de layout)
+- [ ] Dashboard legível em 360 px de largura, sem overflow horizontal
+- [ ] `grep -rn "\"#[0-9a-fA-F]\{3,8\}\"\|rgba(" apps/projetos/src --include=*.tsx` retorna vazio
+- [ ] Nenhum link do app aponta para a própria rota
+- [ ] Microcopy sem exclamação genérica; versículo só nos vazios
+- [ ] `pnpm --filter projetos typecheck lint test` verdes; `pnpm --filter projetos build` verde
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: BRAIN.md §5 (tokens canônicos, fonte única em `packages/ui`) e princípio "não parecer IA". `error.tsx` precisa ser client component com `reset`; não converter página RSC em client só para tratar erro — a fronteira resolve. Executar por último no bloco: é o prompt que pode reavaliar os critérios de P-2.3 e P-2.5.
 
 ---
 

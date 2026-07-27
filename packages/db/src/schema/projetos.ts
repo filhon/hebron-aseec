@@ -55,7 +55,7 @@ export const contestationStatusEnum = projetosSchema.enum(
 
 export const evaluationRecommendationEnum = projetosSchema.enum(
   "evaluation_recommendation",
-  ["approved", "rejected", "needs_revision"],
+  ["approved", "rejected"],
 );
 
 // ---------------------------------------------------------------------------
