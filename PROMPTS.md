@@ -3110,7 +3110,7 @@ Criar todas as páginas. Área do submissor: dashboard (meus projetos + status +
 - [x] Detalhe do projeto com timeline de stages
 - [x] Pipeline kanban (diretoria) com todos os stages
 - [x] Detalhe analítico (diretoria): painel IA com score + resumo + riscos
-- [~] Pauta da reunião: projetos pontuais + saldo + meses restantes (data-driven) (a pauta é um placeholder fixo — nenhum projeto pontual chega à tela, "meses restantes" não existe, e "Saldo Alocado" é alocação, não saldo; ver P-2.3b)
+- [x] Pauta da reunião: projetos pontuais + saldo + meses restantes (data-driven) (resolvido em P-2.3b: pauta lista pontuais em validacao/votacao/homologacao a partir de `admin.meeting_sessions` + `projects`; painel renomeado para "Valor Alocado" — sem teto de portfólio conhecido para calcular saldo; "Meses Restantes no Ano" adicionado a partir de `payment_schedules`)
 - [x] Navegação sidebar separada por área (submissor vs diretoria)
 - [~] Responsivo (o dashboard do submissor fixa `repeat(4, 1fr)` e `1.6fr 1fr` em estilo inline, que não aceita media query — ver P-2.5b)
 - [x] Lint passa
@@ -3350,15 +3350,15 @@ Isso importa porque é a tela em que a diretoria decide: BRAIN §6.2 define proj
 
 **Critérios de aceite:**
 
-- [ ] A pauta lista os projetos pontuais aguardando deliberação, com link para o detalhe
-- [ ] Data da próxima reunião vem de `admin.meeting_sessions`, não de texto fixo
-- [ ] "Meses restantes" presente e derivado dos cronogramas de pagamento
-- [ ] Nenhum rótulo chama de "saldo" um valor que é alocação
-- [ ] Estado vazio da pauta só aparece quando de fato não há pontual em aberto
-- [ ] `MeetingAgenda`/`MeetingAgendaItem` têm consumidor
-- [ ] Leituras respeitam RLS (`withAuthenticatedContext`), sem client superusuário
-- [ ] `pnpm --filter projetos typecheck lint test` verdes
-- [ ] Registrar em SESSIONS.md
+- [x] A pauta lista os projetos pontuais aguardando deliberação, com link para o detalhe
+- [x] Data da próxima reunião vem de `admin.meeting_sessions`, não de texto fixo
+- [x] "Meses restantes" presente e derivado dos cronogramas de pagamento
+- [x] Nenhum rótulo chama de "saldo" um valor que é alocação
+- [x] Estado vazio da pauta só aparece quando de fato não há pontual em aberto
+- [x] `MeetingAgenda`/`MeetingAgendaItem` têm consumidor
+- [x] Leituras respeitam RLS (`withAuthenticatedContext`), sem client superusuário
+- [x] `pnpm --filter projetos typecheck lint test` verdes
+- [x] Registrar em SESSIONS.md
 
 **Notas:**
 Ref: BRAIN.md §6.1 (reunião mensal na 1ª quarta-feira) e §6.2 (pontual: emergencial, avaliado mensalmente, consenso presencial). Não criar tabela nova de pauta: a pauta é derivada do pipeline, não um cadastro paralelo.

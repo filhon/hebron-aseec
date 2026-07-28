@@ -1,5 +1,7 @@
+import Link from "next/link";
 import {
   CalendarDays,
+  CalendarClock,
   Clock,
   TrendingUp,
   Wallet,
@@ -7,11 +9,20 @@ import {
   CheckCircle2,
   FileText,
 } from "lucide-react";
-import { getMeetingBIData } from "../../../lib/queries";
+import { getMeetingBIData, getMeetingAgenda } from "../../../lib/queries";
 import { BRL } from "../../../lib/stage-utils";
 
+const MEETING_DATE_FORMAT = new Intl.DateTimeFormat("pt-BR", {
+  day: "2-digit",
+  month: "long",
+  year: "numeric",
+});
+
 export default async function ReuniaoPage() {
-  const bi = await getMeetingBIData();
+  const [bi, agenda] = await Promise.all([
+    getMeetingBIData(),
+    getMeetingAgenda(),
+  ]);
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-8">
@@ -27,14 +38,16 @@ export default async function ReuniaoPage() {
         <div className="flex flex-wrap items-center gap-4 mt-2 text-sm text-(--fg-muted)">
           <span className="flex items-center gap-1.5">
             <CalendarDays className="w-4 h-4" aria-hidden />
-            Próxima reunião a agendar
+            {agenda
+              ? `${agenda.title} · ${MEETING_DATE_FORMAT.format(agenda.date)}`
+              : "Nenhuma reunião agendada"}
           </span>
         </div>
       </div>
 
-      {/* Main layout: agenda placeholder + BI */}
+      {/* Main layout: agenda + BI */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left 2/3: Agenda placeholder */}
+        {/* Left 2/3: Agenda */}
         <div className="lg:col-span-2 flex flex-col gap-6">
           <section>
             <h2
@@ -44,38 +57,69 @@ export default async function ReuniaoPage() {
               Pauta da Reunião
             </h2>
 
-            <div
-              className="rounded-lg border border-dashed border-(--border) px-8 py-16 flex flex-col items-center text-center gap-5"
-              style={{ backgroundColor: "var(--bg-alt)" }}
-            >
+            {agenda && agenda.items.length > 0 ? (
+              <div className="rounded-lg border border-(--border) bg-(--surface) shadow-(--shadow-xs) overflow-hidden">
+                {agenda.items.map((item, index) => (
+                  <Link
+                    key={item.id}
+                    href={`/pipeline/${item.projectId}`}
+                    className="flex items-start gap-4 px-5 py-4 hover:bg-(--bg-alt)"
+                    style={{
+                      borderTop:
+                        index > 0 ? "1px solid var(--divider)" : undefined,
+                    }}
+                  >
+                    <div
+                      className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-sm font-bold text-white"
+                      style={{ backgroundColor: "var(--hb-blue)" }}
+                    >
+                      {item.order}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-(--fg) truncate">
+                        {item.title}
+                      </p>
+                      <p className="text-xs text-(--fg-muted) mt-0.5">
+                        {item.description}
+                      </p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            ) : (
               <div
-                className="w-12 h-12 rounded-xl flex items-center justify-center"
-                style={{ backgroundColor: "var(--brand-muted)" }}
+                className="rounded-lg border border-dashed border-(--border) px-8 py-16 flex flex-col items-center text-center gap-5"
+                style={{ backgroundColor: "var(--bg-alt)" }}
               >
-                <FileText
-                  className="w-6 h-6"
-                  style={{ color: "var(--hb-blue)" }}
-                  aria-hidden
-                />
-              </div>
-              <div>
-                <h3
-                  className="text-base font-bold text-(--fg) mb-1"
-                  style={{ fontFamily: "var(--font-display)" }}
+                <div
+                  className="w-12 h-12 rounded-xl flex items-center justify-center"
+                  style={{ backgroundColor: "var(--brand-muted)" }}
                 >
-                  Nenhuma pauta cadastrada
-                </h3>
-                <p className="text-sm text-(--fg-muted) leading-relaxed">
-                  A pauta da próxima reunião será exibida aqui quando for criada
-                  pelo administrador.
-                </p>
-                <p className="text-xs text-(--fg-subtle) mt-4 italic">
-                  "Porque onde dois ou três estão reunidos em meu nome, aí estou
-                  eu no meio deles."
-                  <br />— Mateus 18:20
-                </p>
+                  <FileText
+                    className="w-6 h-6"
+                    style={{ color: "var(--hb-blue)" }}
+                    aria-hidden
+                  />
+                </div>
+                <div>
+                  <h3
+                    className="text-base font-bold text-(--fg) mb-1"
+                    style={{ fontFamily: "var(--font-display)" }}
+                  >
+                    Nenhum projeto pontual em aberto
+                  </h3>
+                  <p className="text-sm text-(--fg-muted) leading-relaxed">
+                    Não há projetos pontuais aguardando deliberação para a
+                    próxima reunião.
+                  </p>
+                  <p className="text-xs text-(--fg-subtle) mt-4 italic">
+                    "Porque onde dois ou três estão reunidos em meu nome, aí
+                    estou eu no meio deles."
+                    <br />— Mateus 18:20
+                  </p>
+                </div>
               </div>
-            </div>
+            )}
           </section>
 
           {/* Projects needing attention */}
@@ -162,7 +206,7 @@ export default async function ReuniaoPage() {
                   aria-hidden
                 />
                 <p className="text-xs font-bold uppercase tracking-wider text-(--fg-muted)">
-                  Saldo Alocado (Portfólio Ativo)
+                  Valor Alocado (Portfólio Ativo)
                 </p>
               </div>
               <p
@@ -176,6 +220,29 @@ export default async function ReuniaoPage() {
                 {bi.activeProjectsCount !== 1 ? "s" : ""} ativos
               </p>
             </div>
+          </div>
+
+          {/* Remaining months in calendar year */}
+          <div className="rounded-md border border-(--border) bg-(--surface) px-5 py-4 shadow-(--shadow-xs)">
+            <div className="flex items-center gap-2 mb-3">
+              <CalendarClock
+                className="w-4 h-4"
+                style={{ color: "var(--hb-cyan)" }}
+                aria-hidden
+              />
+              <p className="text-xs font-bold uppercase tracking-wider text-(--fg-muted)">
+                Meses Restantes no Ano
+              </p>
+            </div>
+            <p
+              className="text-2xl font-bold text-(--fg) tabular-nums"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              {bi.mesesRestantesAnoCalendario}
+            </p>
+            <p className="text-xs text-(--fg-muted) mt-0.5">
+              parcelas pendentes de projetos anuais em execução
+            </p>
           </div>
 
           {/* In execution */}

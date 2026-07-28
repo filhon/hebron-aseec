@@ -219,6 +219,7 @@
 | S-196  | 2026-07-27 | Auditoria Bloco A Projetos (P-2.1–P-2.5) — patches P-2.1b/2.2b/2.3b/2.3c/2.4b/2.5b gerados                                       | concluido                            |
 | S-197  | 2026-07-27 | P-2.1b — O contrato compartilhado que a implementação abandonou (CORRETIVO)                                                      | concluido                            |
 | S-198  | 2026-07-28 | P-2.2b — O voto que se dá por registrado sem o servidor confirmar (CORRETIVO)                                                    | concluido                            |
+| S-199  | 2026-07-28 | P-2.3b — A pauta da reunião que nunca teve pauta (CORRETIVO)                                                                     | concluido                            |
 
 ---
 
@@ -16372,7 +16373,7 @@ deixa o histórico de aplicação dessincronizado.
       compartilhado
 - [x] `grep -rn "ProjetoStatus\|ProjetoBase" apps packages` retorna vazio
 - [x] Migration hand-written, numeração sequencial, sem `drizzle-kit
-  generate`; aplicada no Supabase de dev
+generate`; aplicada no Supabase de dev
 - [x] Critérios de P-2.1 refletem o estado real do código
 - [x] `pnpm --filter projetos typecheck lint test` — typecheck e lint
       limpos; 105/107 testes (as 2 falhas são de `close-voting.test.ts`,
@@ -16524,3 +16525,95 @@ independentemente do nome da branch.
   `onMove`/`canDrag` da página, e o novo caminho de teclado reusa
   exatamente o mesmo `onMove` que o arrasto — a página não precisa saber
   que a chamada veio de um select em vez de um `drop`.
+
+## S-199 — P-2.3b — A pauta da reunião que nunca teve pauta (CORRETIVO)
+
+**Branch:** `feat/P-2.3b-projetos-pauta` (já existente e sincronizada com
+`origin` no início da sessão, no mesmo commit de `feat/P-2.2b-projetos-voto`)
+
+### Contexto
+
+S-196 (auditoria do Bloco A Projetos) encontrou que
+`app/(diretoria)/reuniao/page.tsx` renderizava um estado vazio fixo como
+único conteúdo possível: nenhum projeto pontual chegava à tela,
+`getMeetingBIData` nem selecionava `projects.tipo`, "meses restantes" não
+existia em lugar nenhum, e o cabeçalho dizia "Próxima reunião a agendar"
+como texto estático embora `admin.meeting_sessions` já existisse e o cron
+mensal de `packages/jobs` já criasse a reunião da 1ª quarta-feira. O painel
+financeiro rotulava de "Saldo Alocado" um valor que é soma alocada, não
+saldo — não há teto contra o qual restar algo.
+
+### O que foi feito
+
+1. **Cabeçalho ligado à reunião real.** Nova `getMeetingAgenda()` em
+   `lib/queries.ts` lê a próxima `admin.meeting_sessions` com
+   `status = 'scheduled'` e `date >= hoje` (a mais próxima, via
+   `orderBy(date).limit(1)`). Sem reunião agendada, o cabeçalho mostra
+   "Nenhuma reunião agendada" em vez de fingir uma data.
+2. **Pauta data-driven.** A mesma função busca os projetos `tipo = 'pontual'`
+   em `validacao`/`votacao`/`homologacao` (não deletados), com instituição
+   (`organizations.nome`) e categoria (`projectCategories.name`), montados
+   como `MeetingAgendaItem[]` (título = título do projeto; descrição =
+   instituição · categoria · valor formatado; `projectId` linkado para
+   `/pipeline/${projectId}`). O placeholder fixo virou o ramo de exceção
+   real: só aparece quando `agenda` é `null` ou `items` está vazio.
+3. **Painel financeiro renomeado, não inventado.** "Saldo Alocado
+   (Portfólio Ativo)" virou "Valor Alocado (Portfólio Ativo)" — o mesmo
+   número, rótulo correto. Não foi calculado um "saldo" porque não há teto
+   de portfólio conhecido nos arquivos permitidos desta sessão (o único
+   teto que existe no sistema é por instituição/ano em
+   `financeiro.organization_budgets`, fora do escopo — cross-app exigiria
+   `packages/integrations`, não listado nos arquivos permitidos deste
+   corretivo).
+4. **"Meses restantes" no ano-calendário.** `getMeetingBIData` agora também
+   seleciona `projects.id`/`tipo` (antes só `stage`/`budgetTotal`) para
+   isolar os projetos `anual` em `em_execucao`, e soma quantas parcelas de
+   `payment_schedules` (`status = 'pendente'`, `due_date <= 31/12` do ano
+   corrente) ainda restam entre eles. Exposto como
+   `mesesRestantesAnoCalendario` em `MeetingBIData` e como novo cartão
+   "Meses Restantes no Ano" no painel.
+5. **`MeetingAgenda`/`MeetingAgendaItem` de `@hebron/types` como forma da
+   pauta** — nenhuma alteração foi necessária no arquivo de tipos; o
+   formato definido em P-2.1b já cobria o necessário (`title` sintetizado a
+   partir do `type` da sessão: "Reunião Mensal/Ordinária/Extraordinária de
+   Diretoria"; `location`/`minutesText`/`closedAt` ficam `null` — não
+   persistidos em `admin.meeting_sessions`).
+6. **Bookkeeping em PROMPTS.md:** o critério de P-2.3 "Pauta da reunião:
+   projetos pontuais + saldo + meses restantes (data-driven)" passou de
+   `[~]` para `[x]`, com nota explicando a resolução e a ausência
+   deliberada de um "saldo" (renomeado para "valor", sem teto para calcular
+   restante).
+
+### Critérios de aceite
+
+- [x] A pauta lista os projetos pontuais aguardando deliberação, com link
+      para o detalhe
+- [x] Data da próxima reunião vem de `admin.meeting_sessions`, não de texto
+      fixo
+- [x] "Meses restantes" presente e derivado dos cronogramas de pagamento
+- [x] Nenhum rótulo chama de "saldo" um valor que é alocação
+- [x] Estado vazio da pauta só aparece quando de fato não há pontual em
+      aberto
+- [x] `MeetingAgenda`/`MeetingAgendaItem` têm consumidor
+- [x] Leituras respeitam RLS (`withAuthenticatedContext`), sem client
+      superusuário
+- [x] `pnpm --filter projetos typecheck lint test` — typecheck e lint
+      limpos; 110/112 testes (as 2 falhas são de `close-voting.test.ts`,
+      quórum sobre dados reais do banco compartilhado, pré-existentes desde
+      S-158/confirmadas de novo nesta sessão via stash no HEAD limpo da
+      branch — fora de escopo, não tocadas)
+- [x] Registrado em SESSIONS.md
+
+### Arquivos alterados
+
+- `apps/projetos/src/app/(diretoria)/reuniao/page.tsx`
+- `apps/projetos/src/lib/queries.ts`
+- `PROMPTS.md` (bookkeeping do critério de P-2.3)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+### Débitos registrados
+
+- Nenhum novo. `packages/types/src/projetos/index.ts` constava na lista de
+  arquivos permitidos "apenas se P-2.1b tivesse deixado ajuste" — não
+  precisou de nenhum, o formato já definido em P-2.1b cobria a pauta sem
+  mudanças.

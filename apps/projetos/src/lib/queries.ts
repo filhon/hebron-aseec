@@ -9,6 +9,7 @@ import {
   count,
   countDistinct,
   eq,
+  gte,
   inArray,
   isNull,
   sql,
@@ -17,6 +18,7 @@ import {
   compactVersions,
   contestations,
   evaluations,
+  meetingSessions,
   organizationMembers,
   organizations,
   paymentSchedules,
@@ -29,9 +31,15 @@ import {
   users,
   votes,
 } from "@hebron/db/schema";
-import type { CompactProjectView, ProjectStage } from "@hebron/types";
+import type {
+  CompactProjectView,
+  MeetingAgenda,
+  MeetingAgendaItem,
+  ProjectStage,
+} from "@hebron/types";
 import { getEditalPrefill as getEditalPrefillRaw } from "@hebron/integrations/documentos-projetos";
 import type { EditalPrefill } from "@hebron/integrations/documentos-projetos";
+import { BRL } from "./stage-utils";
 
 // ---------------------------------------------------------------------------
 // Auth
@@ -1060,6 +1068,10 @@ export type MeetingBIData = {
   inValidacaoCount: number;
   inExecucaoCount: number;
   approvedCount: number;
+  /** Parcelas pendentes ainda a vencer no ano-calendário corrente, somadas
+   * entre os projetos anuais em execução (critério "meses restantes" de
+   * P-2.3). */
+  mesesRestantesAnoCalendario: number;
 };
 
 export async function getMeetingBIData(): Promise<MeetingBIData> {
@@ -1073,12 +1085,15 @@ export async function getMeetingBIData(): Promise<MeetingBIData> {
       inValidacaoCount: 0,
       inExecucaoCount: 0,
       approvedCount: 0,
+      mesesRestantesAnoCalendario: 0,
     };
   }
 
   return withAuthenticatedContext({ actorId: authUser.id }, async (tx) => {
     const rows = await tx
       .select({
+        id: projects.id,
+        tipo: projects.tipo,
         stage: projects.stage,
         budgetTotal: projects.budgetTotal,
       })
@@ -1099,6 +1114,7 @@ export async function getMeetingBIData(): Promise<MeetingBIData> {
     let inExecucaoCount = 0;
     let approvedCount = 0;
     let activeProjectsCount = 0;
+    const anualEmExecucaoIds: string[] = [];
 
     for (const r of rows) {
       if (activeStages.has(r.stage)) {
@@ -1109,12 +1125,33 @@ export async function getMeetingBIData(): Promise<MeetingBIData> {
       if (r.stage === "validacao") inValidacaoCount++;
       if (r.stage === "em_execucao") inExecucaoCount++;
       if (r.stage === "aprovado") approvedCount++;
+      if (r.stage === "em_execucao" && r.tipo === "anual") {
+        anualEmExecucaoIds.push(r.id);
+      }
     }
 
     const pendingReportResult = await tx
       .select({ cnt: count() })
       .from(reports)
       .where(eq(reports.status, "pendente"));
+
+    let mesesRestantesAnoCalendario = 0;
+    if (anualEmExecucaoIds.length > 0) {
+      const currentYear = new Date().getUTCFullYear();
+      const yearEnd = `${currentYear}-12-31`;
+
+      const remainingResult = await tx
+        .select({ cnt: count() })
+        .from(paymentSchedules)
+        .where(
+          and(
+            inArray(paymentSchedules.projectId, anualEmExecucaoIds),
+            eq(paymentSchedules.status, "pendente"),
+            sql`${paymentSchedules.dueDate} <= ${yearEnd}`,
+          ),
+        );
+      mesesRestantesAnoCalendario = remainingResult[0]?.cnt ?? 0;
+    }
 
     return {
       activeProjectsCount,
@@ -1124,6 +1161,99 @@ export async function getMeetingBIData(): Promise<MeetingBIData> {
       inValidacaoCount,
       inExecucaoCount,
       approvedCount,
+      mesesRestantesAnoCalendario,
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Meeting agenda (pauta) — projetos pontuais aguardando deliberação
+// ---------------------------------------------------------------------------
+
+export async function getMeetingAgenda(): Promise<MeetingAgenda | null> {
+  const authUser = await getAuthUser();
+  if (!authUser) return null;
+
+  return withAuthenticatedContext({ actorId: authUser.id }, async (tx) => {
+    const sessionRows = await tx
+      .select({
+        id: meetingSessions.id,
+        date: meetingSessions.date,
+        type: meetingSessions.type,
+        status: meetingSessions.status,
+        chairUserId: meetingSessions.chairUserId,
+        chairName: users.fullName,
+        createdAt: meetingSessions.createdAt,
+        updatedAt: meetingSessions.updatedAt,
+      })
+      .from(meetingSessions)
+      .leftJoin(users, eq(meetingSessions.chairUserId, users.id))
+      .where(
+        and(
+          eq(meetingSessions.status, "scheduled"),
+          gte(meetingSessions.date, new Date()),
+        ),
+      )
+      .orderBy(meetingSessions.date)
+      .limit(1);
+
+    const session = sessionRows[0];
+    if (!session) return null;
+
+    const pontualRows = await tx
+      .select({
+        id: projects.id,
+        title: projects.title,
+        budgetTotal: projects.budgetTotal,
+        orgNome: organizations.nome,
+        categoryName: projectCategories.name,
+      })
+      .from(projects)
+      .leftJoin(organizations, eq(projects.organizationId, organizations.id))
+      .leftJoin(
+        projectCategories,
+        eq(projects.categoryId, projectCategories.id),
+      )
+      .where(
+        and(
+          eq(projects.tipo, "pontual"),
+          inArray(projects.stage, ["validacao", "votacao", "homologacao"]),
+          isNull(projects.deletedAt),
+        ),
+      )
+      .orderBy(projects.createdAt);
+
+    const items: MeetingAgendaItem[] = pontualRows.map((p, index) => ({
+      id: p.id,
+      order: index + 1,
+      title: p.title,
+      description: `${p.orgNome ?? "Instituição não informada"} · ${
+        p.categoryName ?? "Sem categoria"
+      } · ${BRL.format(parseFloat(p.budgetTotal ?? "0"))}`,
+      projectId: p.id,
+      durationMinutes: null,
+    }));
+
+    const meetingTitles: Record<string, string> = {
+      mensal: "Reunião Mensal de Diretoria",
+      ordinaria: "Reunião Ordinária de Diretoria",
+      extraordinaria: "Reunião Extraordinária de Diretoria",
+    };
+
+    return {
+      id: session.id,
+      date: session.date,
+      type: session.type,
+      status: session.status,
+      title: meetingTitles[session.type] ?? "Reunião de Diretoria",
+      location: null,
+      items,
+      minutesText: null,
+      closedAt: null,
+      chairUserId: session.chairUserId ?? "",
+      chairName: session.chairName ?? "A definir",
+      createdAt: session.createdAt,
+      updatedAt: session.updatedAt,
     };
   });
 }
