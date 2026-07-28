@@ -220,6 +220,7 @@
 | S-197  | 2026-07-27 | P-2.1b — O contrato compartilhado que a implementação abandonou (CORRETIVO)                                                      | concluido                            |
 | S-198  | 2026-07-28 | P-2.2b — O voto que se dá por registrado sem o servidor confirmar (CORRETIVO)                                                    | concluido                            |
 | S-199  | 2026-07-28 | P-2.3b — A pauta da reunião que nunca teve pauta (CORRETIVO)                                                                     | concluido                            |
+| S-200  | 2026-07-28 | P-2.3c — O teto de R$ 150 mil que ninguém definiu (CORRETIVO)                                                                    | concluido                            |
 
 ---
 
@@ -16617,3 +16618,92 @@ saldo — não há teto contra o qual restar algo.
   arquivos permitidos "apenas se P-2.1b tivesse deixado ajuste" — não
   precisou de nenhum, o formato já definido em P-2.1b cobria a pauta sem
   mudanças.
+
+## S-200 — P-2.3c — O teto de R$ 150 mil que ninguém definiu (CORRETIVO)
+
+**Branch:** `feat/P-2.3c-projetos-orcamento` (já existente e sincronizada com
+`origin` no início da sessão)
+
+### Contexto
+
+S-196 (auditoria do Bloco A Projetos) encontrou que o card "Orçamento
+disponível" do dashboard do submissor calculava contra
+`ORCAMENTO_ANUAL_LIMITE = 150_000`, uma constante literal em
+`app/(submissor)/page.tsx` com o comentário "set by admin; finance module
+not yet built". O módulo financeiro foi construído em P-3.8b:
+`financeiro.organization_budgets` existe, tem UI de gestão, e
+`checkOrganizationBudget` (`packages/integrations/src/projetos.ts`) já a lê
+para bloquear submissão acima do teto real. A tela mostrava um número; a
+submissão era barrada por outro.
+
+### O que foi feito
+
+1. **Leitura irmã da checagem.** Nova `getOrganizationBudgetStatus(organizationId, year)`
+   em `packages/integrations/src/projetos.ts`, extraída das mesmas
+   sub-consultas que `checkOrganizationBudget` já usava (`getBudgetLimit` +
+   `getCommittedBudget`, fatoradas em funções privadas do módulo — nenhuma
+   consulta duplicada). Retorna `{ limit: number | null; committed: number }`;
+   `limit: null` = instituição sem orçamento configurado (BRAIN §6.2: sem
+   teto).
+2. **`getSubmissorDashboard` (`lib/queries.ts`) chama a nova leitura** para
+   cada instituição do submissor, no ano-calendário corrente
+   (`new Date().getFullYear()`) — o mesmo ano que `checkOrganizationBudget`
+   recebe na submissão (`project.evaluationYear`, setado a partir do ano
+   corrente no wizard). `DashboardData.institutions` passou de
+   `{id,nome}[]` para `DashboardInstitutionBudget[]`
+   (`{id,nome,committed,limit}`); o campo solto `committedBudget` (que
+   somava só os projetos do usuário, todos os anos, excluindo rascunho —
+   um conjunto diferente do de `checkOrganizationBudget`) foi removido.
+3. **Página (`(submissor)/page.tsx`):** `ORCAMENTO_ANUAL_LIMITE` e o
+   comentário removidos. O card-resumo do topo ("Orçamento disponível")
+   só aparece quando o submissor tem exatamente uma instituição vinculada
+   — com mais de uma, mostrar o teto da primeira como se fosse "o do
+   usuário" é exatamente o desencontro deste corretivo, então o resumo do
+   topo fica de fora e o detalhe vive só na seção por instituição. Sem
+   teto configurado, o card do topo troca o rótulo para "Orçamento
+   comprometido" (sem "disponível" nem fração de nada). A seção inferior
+   virou um componente `InstitutionBudgetCard`, um por instituição
+   vinculada, sempre nomeando "Orçamento — {nome}"; sem teto, não renderiza
+   barra nem "de R$ X" — mostra o comprometido e o texto "Nenhum teto
+   definido para esta instituição — sem limite para submissão."
+4. **Teste novo:** `packages/integrations/src/__tests__/projetos.test.ts`
+   cobre `getOrganizationBudgetStatus` com teto, sem teto, comprometido
+   acima do teto, e o alinhamento do conjunto somado (inclui rascunho,
+   exclui reprovado — confirma que bate com o que `checkOrganizationBudget`
+   soma). O teste existente de `checkOrganizationBudget`
+   (`apps/projetos/src/__tests__/integrations-projetos-budget.test.ts`) não
+   foi tocado; a refatoração em `getBudgetLimit`/`getCommittedBudget`
+   preserva o comportamento (mesmas 3 asserções continuam verdes).
+
+### Critérios de aceite
+
+- [x] `grep -n "150_000\|150000" apps/projetos/src` retorna vazio
+- [x] Teto exibido e teto aplicado na submissão vêm da mesma fonte e da
+      mesma consulta (`getOrganizationBudgetStatus` reusa `getBudgetLimit`/
+      `getCommittedBudget`, as mesmas funções que `checkOrganizationBudget`
+      chama)
+- [x] Instituição sem orçamento configurado não exibe barra nem
+      "disponível"
+- [x] O card nomeia a instituição a que o orçamento se refere
+- [x] Teste cobrindo: com teto, sem teto, e comprometido acima do teto
+- [x] `pnpm --filter projetos typecheck lint test` — typecheck e lint
+      limpos; 110/112 testes (as 2 falhas são de `close-voting.test.ts`,
+      quórum sobre dados reais do banco compartilhado, pré-existentes —
+      confirmadas de novo nesta sessão via stash no HEAD limpo da branch,
+      já documentadas em S-199 — fora de escopo, não tocadas). Rodado
+      também `pnpm --filter @hebron/integrations typecheck lint`, ambos
+      limpos, e o teste novo isolado (4/4 verdes).
+- [x] Registrado em SESSIONS.md
+
+### Arquivos alterados
+
+- `packages/integrations/src/projetos.ts`
+- `packages/integrations/src/__tests__/projetos.test.ts` (novo)
+- `apps/projetos/src/lib/queries.ts`
+- `apps/projetos/src/app/(submissor)/page.tsx`
+- `PROMPTS.md` (bookkeeping do critério de P-2.3)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+### Débitos registrados
+
+- Nenhum novo.

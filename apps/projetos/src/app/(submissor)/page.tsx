@@ -8,6 +8,7 @@ import {
   type DashboardProject,
   type DashboardPayment,
   type DashboardReport,
+  type DashboardInstitutionBudget,
 } from "../../lib/queries";
 import { BRL, STAGE_LABELS, getStageBadge } from "../../lib/stage-utils";
 
@@ -17,9 +18,6 @@ function fmtMil(n: number) {
   if (n >= 1000) return `R$ ${Math.round(n / 1000)} mil`;
   return BRL.format(n);
 }
-
-// ─── Budget limit (set by admin; finance module not yet built) ────────────────
-const ORCAMENTO_ANUAL_LIMITE = 150_000;
 
 function executionProgress(p: DashboardProject): number | null {
   if (p.stage !== "em_execucao") return null;
@@ -51,18 +49,14 @@ export default async function SubmissorDashboard() {
 
   const pendingReports = data.pendingReports;
 
-  const orcamentoComprometido = data.committedBudget;
-  const orcamentoDisponivel = Math.max(
-    0,
-    ORCAMENTO_ANUAL_LIMITE - orcamentoComprometido,
-  );
-  const pctComprometido = Math.min(
-    100,
-    Math.round((orcamentoComprometido / ORCAMENTO_ANUAL_LIMITE) * 100),
-  );
+  // Card-resumo no topo só faz sentido para uma instituição só: com N
+  // instituições, apresentar o teto da primeira como se fosse "o do
+  // usuário" é exatamente o desencontro que este prompt corrige (P-2.3c).
+  // Com mais de uma, o detalhe fica só na seção "Orçamento" por instituição.
+  const soleInstitution =
+    data.institutions.length === 1 ? data.institutions[0] : null;
 
-  const institution = data.institutions[0] ?? null;
-  const institutionName = institution?.nome ?? null;
+  const institutionName = data.institutions[0]?.nome ?? null;
 
   const fullName = authUser.fullName;
   const firstName = fullName
@@ -169,7 +163,7 @@ export default async function SubmissorDashboard() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: institution
+          gridTemplateColumns: soleInstitution
             ? "repeat(4, 1fr)"
             : "repeat(3, 1fr)",
           gap: 16,
@@ -205,15 +199,26 @@ export default async function SubmissorDashboard() {
               : `${pendingReports.length > 1 ? "Vencem" : "Vence"} em breve`
           }
         />
-        {institution && (
-          <StatCard
-            dot="var(--hb-green)"
-            label="Orçamento disponível"
-            valueFmt={fmtMil(orcamentoDisponivel)}
-            sub={`de ${fmtMil(ORCAMENTO_ANUAL_LIMITE)} no ano`}
-            compact
-          />
-        )}
+        {soleInstitution &&
+          (soleInstitution.limit !== null ? (
+            <StatCard
+              dot="var(--hb-green)"
+              label="Orçamento disponível"
+              valueFmt={fmtMil(
+                Math.max(0, soleInstitution.limit - soleInstitution.committed),
+              )}
+              sub={`de ${fmtMil(soleInstitution.limit)} no ano`}
+              compact
+            />
+          ) : (
+            <StatCard
+              dot="var(--hb-green)"
+              label="Orçamento comprometido"
+              valueFmt={fmtMil(soleInstitution.committed)}
+              sub="Sem teto definido"
+              compact
+            />
+          ))}
       </div>
 
       {/* ── Main 2-col layout ─────────────────────────────────────────────── */}
@@ -440,93 +445,16 @@ export default async function SubmissorDashboard() {
             )}
           </section>
 
-          {/* Orçamento da instituição */}
-          {institution && (
-            <section
-              style={{
-                background: "var(--surface)",
-                border: "1px solid var(--border)",
-                borderRadius: "var(--radius-lg)",
-                boxShadow: "var(--shadow-sm)",
-                padding: 20,
-              }}
-            >
-              <h2
-                style={{
-                  fontFamily: "var(--font-display)",
-                  fontWeight: 700,
-                  fontSize: 16,
-                  margin: "0 0 6px",
-                  color: "var(--fg)",
-                }}
-              >
-                Orçamento da instituição
-              </h2>
-              <p
-                style={{
-                  fontSize: 12,
-                  color: "var(--fg-muted)",
-                  marginBottom: 14,
-                }}
-              >
-                Ano-calendário {currentYear}
-              </p>
-
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "baseline",
-                  justifyContent: "space-between",
-                  marginBottom: 8,
-                }}
-              >
-                <span
-                  style={{
-                    fontFamily: "var(--font-display)",
-                    fontWeight: 800,
-                    fontSize: 26,
-                    color: "var(--fg)",
-                  }}
-                >
-                  {fmtMil(orcamentoComprometido)}
-                </span>
-                <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>
-                  de {fmtMil(ORCAMENTO_ANUAL_LIMITE)}
-                </span>
-              </div>
-
-              <div
-                style={{
-                  height: 10,
-                  background: "var(--surface-alt)",
-                  borderRadius: "var(--radius-pill)",
-                  overflow: "hidden",
-                }}
-              >
-                <div
-                  style={{
-                    width: `${pctComprometido}%`,
-                    height: "100%",
-                    background:
-                      "linear-gradient(90deg, var(--hb-blue), var(--hb-cyan))",
-                    borderRadius: "var(--radius-pill)",
-                  }}
-                />
-              </div>
-
-              <p
-                style={{
-                  fontSize: 12,
-                  color: "var(--fg-muted)",
-                  marginTop: 10,
-                }}
-              >
-                {pctComprometido}% comprometido.
-                {pctComprometido >= 90 &&
-                  " Acima do teto, a submissão é bloqueada — contate o administrador."}
-              </p>
-            </section>
-          )}
+          {/* Orçamento por instituição — nomeia sempre a instituição a que
+              se refere (P-2.3c: nunca apresentar o teto da primeira como se
+              fosse o do usuário quando há mais de uma). */}
+          {data.institutions.map((inst) => (
+            <InstitutionBudgetCard
+              key={inst.id}
+              inst={inst}
+              year={currentYear}
+            />
+          ))}
 
           {/* Relatório pendente alert */}
           {pendingReports.length > 0 && (
@@ -539,6 +467,114 @@ export default async function SubmissorDashboard() {
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
+
+function InstitutionBudgetCard({
+  inst,
+  year,
+}: {
+  inst: DashboardInstitutionBudget;
+  year: number;
+}) {
+  const pctComprometido =
+    inst.limit !== null
+      ? Math.min(100, Math.round((inst.committed / inst.limit) * 100))
+      : null;
+
+  return (
+    <section
+      style={{
+        background: "var(--surface)",
+        border: "1px solid var(--border)",
+        borderRadius: "var(--radius-lg)",
+        boxShadow: "var(--shadow-sm)",
+        padding: 20,
+      }}
+    >
+      <h2
+        style={{
+          fontFamily: "var(--font-display)",
+          fontWeight: 700,
+          fontSize: 16,
+          margin: "0 0 6px",
+          color: "var(--fg)",
+        }}
+      >
+        Orçamento — {inst.nome}
+      </h2>
+      <p
+        style={{
+          fontSize: 12,
+          color: "var(--fg-muted)",
+          marginBottom: 14,
+        }}
+      >
+        Ano-calendário {year}
+      </p>
+
+      <div
+        style={{
+          display: "flex",
+          alignItems: "baseline",
+          justifyContent: "space-between",
+          marginBottom: 8,
+        }}
+      >
+        <span
+          style={{
+            fontFamily: "var(--font-display)",
+            fontWeight: 800,
+            fontSize: 26,
+            color: "var(--fg)",
+          }}
+        >
+          {fmtMil(inst.committed)}
+        </span>
+        <span style={{ fontSize: 12, color: "var(--fg-muted)" }}>
+          {inst.limit !== null ? `de ${fmtMil(inst.limit)}` : "comprometido"}
+        </span>
+      </div>
+
+      {pctComprometido !== null && (
+        <div
+          style={{
+            height: 10,
+            background: "var(--surface-alt)",
+            borderRadius: "var(--radius-pill)",
+            overflow: "hidden",
+          }}
+        >
+          <div
+            style={{
+              width: `${pctComprometido}%`,
+              height: "100%",
+              background:
+                "linear-gradient(90deg, var(--hb-blue), var(--hb-cyan))",
+              borderRadius: "var(--radius-pill)",
+            }}
+          />
+        </div>
+      )}
+
+      <p
+        style={{
+          fontSize: 12,
+          color: "var(--fg-muted)",
+          marginTop: 10,
+        }}
+      >
+        {pctComprometido !== null ? (
+          <>
+            {pctComprometido}% comprometido.
+            {pctComprometido >= 90 &&
+              " Acima do teto, a submissão é bloqueada — contate o administrador."}
+          </>
+        ) : (
+          "Nenhum teto definido para esta instituição."
+        )}
+      </p>
+    </section>
+  );
+}
 
 function StatCard({
   dot,

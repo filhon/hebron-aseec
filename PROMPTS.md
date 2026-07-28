@@ -3105,7 +3105,7 @@ Criar todas as páginas. Área do submissor: dashboard (meus projetos + status +
 
 **Critérios de aceite:**
 
-- [~] Dashboard submissor: meus projetos, projeção de pagamentos, relatórios pendentes, orçamento disponível ("orçamento disponível" é calculado contra a constante literal `ORCAMENTO_ANUAL_LIMITE = 150_000`, não contra `financeiro.organization_budgets`, que é o teto que de fato bloqueia a submissão — ver P-2.3c)
+- [x] Dashboard submissor: meus projetos, projeção de pagamentos, relatórios pendentes, orçamento disponível (resolvido em P-2.3c: `ORCAMENTO_ANUAL_LIMITE = 150_000` removida; teto e comprometido agora lidos de `financeiro.organization_budgets`/`projects` via `getOrganizationBudgetStatus`, mesma consulta de `checkOrganizationBudget` — sem teto configurado, sem barra/"disponível"; card nomeia a instituição, uma seção por instituição vinculada)
 - [x] Wizard multi-step: instituição → proposta → orçamento → cronograma → anexos → revisão
 - [x] Detalhe do projeto com timeline de stages
 - [x] Pipeline kanban (diretoria) com todos os stages
@@ -3401,13 +3401,13 @@ Agrava o desencontro o texto logo abaixo da barra: "Acima do teto, a submissão 
 
 **Critérios de aceite:**
 
-- [ ] `grep -n "150_000\|150000" apps/projetos/src` retorna vazio
-- [ ] Teto exibido e teto aplicado na submissão vêm da mesma fonte e da mesma consulta
-- [ ] Instituição sem orçamento configurado não exibe barra nem "disponível"
-- [ ] O card nomeia a instituição a que o orçamento se refere
-- [ ] Teste cobrindo: com teto, sem teto, e comprometido acima do teto
-- [ ] `pnpm --filter projetos typecheck lint test` verdes
-- [ ] Registrar em SESSIONS.md
+- [x] `grep -n "150_000\|150000" apps/projetos/src` retorna vazio
+- [x] Teto exibido e teto aplicado na submissão vêm da mesma fonte e da mesma consulta
+- [x] Instituição sem orçamento configurado não exibe barra nem "disponível"
+- [x] O card nomeia a instituição a que o orçamento se refere
+- [x] Teste cobrindo: com teto, sem teto, e comprometido acima do teto
+- [x] `pnpm --filter projetos typecheck lint test` verdes
+- [x] Registrar em SESSIONS.md
 
 **Notas:**
 Ref: BRAIN.md §6.2 (orçamento por instituição/ano no Financeiro; "Instituições sem orçamento: sem teto"). PATCH-009/PATCH-013 já moveram a leitura para `packages/integrations` — este prompt faz a tela usar a mesma porta, não abrir uma segunda.

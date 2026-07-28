@@ -39,6 +39,7 @@ import type {
 } from "@hebron/types";
 import { getEditalPrefill as getEditalPrefillRaw } from "@hebron/integrations/documentos-projetos";
 import type { EditalPrefill } from "@hebron/integrations/documentos-projetos";
+import { getOrganizationBudgetStatus } from "@hebron/integrations/projetos";
 import { BRL } from "./stage-utils";
 
 // ---------------------------------------------------------------------------
@@ -144,12 +145,22 @@ export type DashboardReport = {
   isOverdue: boolean;
 };
 
+/** Situação orçamentária de uma instituição, na fonte usada para bloquear
+ * submissão (financeiro.organization_budgets via getOrganizationBudgetStatus,
+ * P-2.3c). `limit: null` = instituição sem orçamento configurado para o
+ * ano-calendário corrente — BRAIN §6.2: sem orçamento configurado, sem teto. */
+export type DashboardInstitutionBudget = {
+  id: string;
+  nome: string;
+  committed: number;
+  limit: number | null;
+};
+
 export type DashboardData = {
   projects: DashboardProject[];
   upcomingPayments: DashboardPayment[];
   pendingReports: DashboardReport[];
-  committedBudget: number;
-  institutions: { id: string; nome: string }[];
+  institutions: DashboardInstitutionBudget[];
 };
 
 export async function getSubmissorDashboard(
@@ -329,10 +340,6 @@ export async function getSubmissorDashboard(
       isOverdue: r.dueDate !== null && r.dueDate < nowStr,
     }));
 
-    const committedBudget = mappedProjects
-      .filter((p) => !["reprovado", "rascunho"].includes(p.stage))
-      .reduce((s, p) => s + p.budgetTotal, 0);
-
     const myOrgs = await tx
       .select({ id: organizations.id, nome: organizations.nome })
       .from(organizations)
@@ -342,12 +349,26 @@ export async function getSubmissorDashboard(
       )
       .where(eq(organizationMembers.userId, userId));
 
+    // Mesmo ano-calendário e mesma consulta que checkOrganizationBudget usa
+    // para bloquear submissão (P-2.3c) — o teto exibido é o teto aplicado.
+    const currentYear = new Date().getFullYear();
+    const institutions: DashboardInstitutionBudget[] = await Promise.all(
+      myOrgs.map(async (org) => {
+        const status = await getOrganizationBudgetStatus(org.id, currentYear);
+        return {
+          id: org.id,
+          nome: org.nome,
+          committed: status.committed,
+          limit: status.limit,
+        };
+      }),
+    );
+
     return {
       projects: mappedProjects,
       upcomingPayments,
       pendingReports,
-      committedBudget,
-      institutions: myOrgs,
+      institutions,
     };
   });
 }
