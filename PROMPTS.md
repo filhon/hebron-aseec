@@ -3581,7 +3581,7 @@ Criar tabelas Drizzle no schema `projetos`: organizations, organization_members 
 - [x] contestations: project_id, user_id, justification, max 2 por projeto, 1 por pessoa
 - [x] reports: project_id, content, status, due_date, submitted_at
 - [x] payment_schedules: project_id, amount, month, due_date, status
-- [~] Transições de stage definidas (sem permitir pular stages) — o mapa existe, mas `votacao: ["homologacao"]` não prevê reprovação, e `castVote`/`closeVoting`/`triggerPanicButton` gravam `reprovado` mesmo assim (a primeira em silêncio, as outras duas sem consultar o mapa). **P-2.8b**
+- [x] Transições de stage definidas (sem permitir pular stages) — `votacao: ["homologacao"]` mantido (decisão do Filipe): toda votação conclusiva entra em homologação, nunca escreve `reprovado` direto. `castVote`/`closeVoting`/`triggerPanicButton` agora validam contra o mapa e lançam erro explícito em vez de gravar direto ou pular em silêncio. **P-2.8b**
 - [x] Migration aplica sem erros
 - [x] Types passam
 
@@ -3650,10 +3650,10 @@ Server Actions para Projetos. CRUD de projetos (criar rascunho, submeter, editar
 
 **Critérios de aceite:**
 
-- [~] State machine: transições válidas (rascunho→validacao→votacao→homologacao→aprovado/reprovado→em_execucao→concluido) — `closeVoting` e `triggerPanicButton` gravam `stage` sem passar pelo mapa; `castVote` pula a transição de reprovação em silêncio. **P-2.8b**
+- [x] State machine: transições válidas (rascunho→validacao→votacao→homologacao→aprovado/reprovado→em_execucao→concluido) — as três actions de fechamento de votação agora validam contra `VALID_STAGE_TRANSITIONS` e lançam erro explícito; nenhuma grava `stage` sem consultar o mapa. **P-2.8b**
 - [x] Bloqueio de submissão se orçamento da instituição excedido
-- [~] Votação: registra voto secreto; calcula quórum (>=50% diretores+conselheiros); maioria simples — o denominador conta `role_assignments` sem `revoked_at IS NULL`, o filtro canônico de papel ativo (`resolveSession`, `public.has_role()`); diretor revogado infla o quórum sem poder votar. **P-2.8b**
-- [~] Botão de pânico: super_admin encerra votação com maioria+1 dos existentes — implementado como maioria simples (`inFavor > against`); divergência de leitura do BRAIN a confirmar com o Filipe. **P-2.8b**
+- [x] Votação: registra voto secreto; calcula quórum (>=50% diretores+conselheiros); maioria simples — `countEligibleVoters`, `getDirectorProjectDetail` e `getEligibleEvaluators` agora filtram `revoked_at IS NULL`; papel revogado não infla o quórum nem aparece como avaliador designável. Corrigido também um bug de RLS achado ao testar: a contagem de votos rodava no contexto do próprio votante, que não tem SELECT em `projetos.votes` (cédula secreta) — sempre via 0 votos e o auto-close de `castVote` nunca disparava para um diretor/conselheiro comum; `computeVoteResult` agora eleva só a leitura agregada via `withSystemRole`, sem expor quem votou o quê. **P-2.8b**
+- [x] Botão de pânico: super_admin encerra votação forçando o resultado apurado nos votos existentes — confirmado com o Filipe: a regra real é maioria simples (`inFavor > against`, empate = reprovado); o texto "maioria+1" do BRAIN estava impreciso e foi corrigido (PATCH-026). O critério de decisão não mudou, só o caminho de escrita do estágio (vai para homologação, não `reprovado` direto). **P-2.8b**
 - [x] Contestação: max 2 por projeto, 1 por pessoa, retorna para votação
 - [~] Homologação: 7 dias sem contestação → notificar submissor — o cron existe (P-0.14) e notifica, mas o `href` da notificação aponta para `/projetos/<id>`, rota inexistente. **P-2.10b**
 - [x] Score IA: GPT-4.1 com critérios do Admin
@@ -3858,11 +3858,11 @@ Testes de integração para Projetos. RLS (submissor vê apenas próprios, votes
 
 - [x] RLS: submissor não vê projetos de outras instituições
 - [x] RLS: votes não visíveis para não-admin
-- [~] State machine: transição inválida retorna erro — os 25 testes verificam a constante `VALID_STAGE_TRANSITIONS`, não as actions; as três que fecham votação não a consultam (ou a ignoram em silêncio). **P-2.8b**, **P-2.12b**
-- [~] Votação: sem quórum → não aprova; com quórum + maioria → aprova — verificado contra `computeQuorum`, reimplementação da lógica dentro do próprio arquivo de teste ("espelha computeVoteResult", `voting.test.ts:73-95`), não contra a action. **P-2.12b**
+- [~] State machine: transição inválida retorna erro — os 25 testes de `state-machine.test.ts` seguem verificando a constante `VALID_STAGE_TRANSITIONS`, não as actions; **P-2.8b** fechou a lacuna especificamente para as três actions de fechamento de votação (agora testadas contra o banco em `voting.test.ts`/`close-voting.test.ts`). Cobertura mais ampla de transição-inválida-via-action para as demais actions do módulo permanece **P-2.12b**.
+- [x] Votação: sem quórum → não aprova; com quórum + maioria → aprova — além do `computeQuorum` (função pura, mantida como documentação da fórmula), `close-voting.test.ts` agora verifica quórum/maioria/reprovação diretamente contra `closeVoting`/`triggerPanicButton` rodando pelo pipeline real (banco + RLS). **P-2.8b**
 - [x] Contestação: 3a tentativa por projeto retorna erro; 2a por pessoa retorna erro
 - [x] Orçamento: submissão que excede orçamento é bloqueada
-- [~] Fluxo end-to-end funciona — `flow.test.ts` percorre o caminho de aprovação; o caminho de reprovação não tem cobertura em nenhum dos três fechamentos de votação. **P-2.12b**
+- [x] Fluxo end-to-end funciona — `flow.test.ts` cobre o caminho de aprovação; o caminho de reprovação agora tem cobertura própria nos três fechamentos de votação (`castVote`/`closeVoting`/`triggerPanicButton`, em `voting.test.ts`/`close-voting.test.ts`) e na resolução automática de homologação (`projetos-homologacao.test.ts`, packages/jobs). **P-2.8b**
 - [x] Testes passam
 - [x] Lint passa
 
@@ -3972,15 +3972,15 @@ Terceiro, menor: `getVotingProject` (`voting.ts:26-38`) não filtra `deletedAt`.
 
 **Critérios de aceite:**
 
-- [ ] A regra de `votacao → reprovado` foi confirmada com o Filipe e está registrada em SESSIONS.md (e em `PATCHES/` se mudar o BRAIN)
-- [ ] Nenhuma action de `apps/projetos` escreve `projects.stage` sem validar contra `VALID_STAGE_TRANSITIONS`
-- [ ] `castVote` com todos os elegíveis votando e maioria contra deixa o projeto em estágio terminal — nunca preso em `votacao`
-- [ ] Nenhuma transição inválida é ignorada em silêncio: ou acontece, ou retorna erro
-- [ ] Diretor/conselheiro com `revoked_at` preenchido não conta no quórum, nem em `getDirectorProjectDetail`, nem como avaliador designável
-- [ ] Projeto soft-deleted não aceita voto nem fechamento
-- [ ] Testes exercitam as actions contra o banco (não uma cópia da lógica) e cobrem os três caminhos de reprovação
-- [ ] `pnpm --filter projetos typecheck lint test` verdes
-- [ ] Registrar em SESSIONS.md
+- [x] A regra de `votacao → reprovado` foi confirmada com o Filipe e está registrada em SESSIONS.md (e em `PATCHES/` se mudar o BRAIN)
+- [x] Nenhuma action de `apps/projetos` escreve `projects.stage` sem validar contra `VALID_STAGE_TRANSITIONS`
+- [x] `castVote` com todos os elegíveis votando e maioria contra deixa o projeto em estágio terminal — nunca preso em `votacao`
+- [x] Nenhuma transição inválida é ignorada em silêncio: ou acontece, ou retorna erro
+- [x] Diretor/conselheiro com `revoked_at` preenchido não conta no quórum, nem em `getDirectorProjectDetail`, nem como avaliador designável
+- [x] Projeto soft-deleted não aceita voto nem fechamento
+- [x] Testes exercitam as actions contra o banco (não uma cópia da lógica) e cobrem os três caminhos de reprovação
+- [x] `pnpm --filter projetos typecheck lint test` verdes
+- [x] Registrar em SESSIONS.md
 
 **Notas:**
 Ref: BRAIN.md §6.2 e PATCH-007. **Pergunta aberta para o Filipe, além do item 1:** o BRAIN descreve o botão de pânico como "maioria + 1 dos votos existentes", mas `triggerPanicButton` implementa `inFavor > against` (maioria simples). Ler "maioria + 1" ao pé da letra tornaria o botão quase inacionável (com 3 votos exigiria os 3). Confirmar qual é a regra antes de mexer — este prompt **não** altera o critério de decisão do pânico sem essa resposta, só o caminho pelo qual ele grava o estágio.

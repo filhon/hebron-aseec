@@ -37,15 +37,20 @@ const IDS = {
   eligibleProject: "facc0000-0000-0000-0000-000000000001",
   contestedProject: "facc0000-0000-0000-0000-000000000002",
   recentProject: "facc0000-0000-0000-0000-000000000003",
+  rejectedProject: "facc0000-0000-0000-0000-000000000004",
   contester: "faaa0000-0000-0000-0000-000000000002",
 };
 
-async function insertHomologVersion(projectId: string, createdAt: Date) {
+async function insertHomologVersion(
+  projectId: string,
+  createdAt: Date,
+  data: Record<string, unknown> = { _source: "test-fixture" },
+) {
   await db.insert(projectVersions).values({
     projectId,
     versionNumber: 1,
     stage: "homologacao",
-    data: { _source: "test-fixture" },
+    data,
     createdBy: IDS.submitter,
     createdAt,
   });
@@ -114,11 +119,26 @@ beforeAll(async () => {
       submitterId: IDS.submitter,
       organizationId: IDS.org,
     },
+    {
+      id: IDS.rejectedProject,
+      title: "Projeto reprovado na votação — não deve auto-aprovar (P-2.8b)",
+      tipo: "anual",
+      stage: "homologacao",
+      submitterId: IDS.submitter,
+      organizationId: IDS.org,
+    },
   ]);
 
   await insertHomologVersion(IDS.eligibleProject, eightDaysAgo);
   await insertHomologVersion(IDS.contestedProject, eightDaysAgo);
   await insertHomologVersion(IDS.recentProject, twoDaysAgo);
+  // Snapshot como o gravado por castVote/closeVoting/triggerPanicButton
+  // (apps/projetos/src/actions/voting.ts) quando a votação REPROVA — sem o
+  // fix de P-2.8b, este cron aprovaria por omissão após 7 dias.
+  await insertHomologVersion(IDS.rejectedProject, eightDaysAgo, {
+    trigger: "vote_complete",
+    voteApproved: false,
+  });
 
   await db.insert(contestations).values({
     projectId: IDS.contestedProject,
@@ -163,14 +183,19 @@ afterAll(async () => {
   await db
     .delete(projectVersions)
     .where(eq(projectVersions.projectId, IDS.recentProject));
+  await db
+    .delete(projectVersions)
+    .where(eq(projectVersions.projectId, IDS.rejectedProject));
   await db.delete(projects).where(eq(projects.id, IDS.eligibleProject));
   await db.delete(projects).where(eq(projects.id, IDS.contestedProject));
   await db.delete(projects).where(eq(projects.id, IDS.recentProject));
+  await db.delete(projects).where(eq(projects.id, IDS.rejectedProject));
   await db
     .delete(organizationMembers)
     .where(eq(organizationMembers.organizationId, IDS.org));
   await db.delete(organizations).where(eq(organizations.id, IDS.org));
   await db.delete(auditLog).where(eq(auditLog.entityId, IDS.eligibleProject));
+  await db.delete(auditLog).where(eq(auditLog.entityId, IDS.rejectedProject));
   await db
     .delete(roleAssignments)
     .where(eq(roleAssignments.userId, IDS.submitter));
@@ -179,11 +204,13 @@ afterAll(async () => {
 });
 
 describe("runHomologacaoAutoApprove", () => {
-  it("aprova projeto elegível (>=7 dias, sem contestação) e gera payment schedule + cost center + audit", async () => {
-    const { approved } = await runHomologacaoAutoApprove();
+  it("aprova projeto elegível (>=7 dias, sem contestação) e gera payment schedule + cost center + audit; reprova projeto cuja votação decisiva foi contra (P-2.8b)", async () => {
+    const { approved, rejected } = await runHomologacaoAutoApprove();
     expect(approved).toContain(IDS.eligibleProject);
     expect(approved).not.toContain(IDS.contestedProject);
     expect(approved).not.toContain(IDS.recentProject);
+    expect(approved).not.toContain(IDS.rejectedProject);
+    expect(rejected).toContain(IDS.rejectedProject);
 
     const [project] = await db
       .select()
@@ -191,6 +218,23 @@ describe("runHomologacaoAutoApprove", () => {
       .where(eq(projects.id, IDS.eligibleProject));
     expect(project?.stage).toBe("aprovado");
     expect(project?.approvedAt).toBeTruthy();
+
+    // voteApproved=false não vira aprovação por omissão — confirma a
+    // reprovação (não fica preso em homologação nem inverte o resultado).
+    const [rejectedRow] = await db
+      .select()
+      .from(projects)
+      .where(eq(projects.id, IDS.rejectedProject));
+    expect(rejectedRow?.stage).toBe("reprovado");
+    expect(rejectedRow?.approvedAt).toBeNull();
+
+    const rejectedAudit = await db
+      .select()
+      .from(auditLog)
+      .where(eq(auditLog.entityId, IDS.rejectedProject));
+    expect(
+      rejectedAudit.some((a) => a.action === "project.stage_transition"),
+    ).toBe(true);
 
     const schedule = await db
       .select()
@@ -213,8 +257,9 @@ describe("runHomologacaoAutoApprove", () => {
     );
   });
 
-  it("é idempotente — segunda execução não aprova de novo (já não está mais em homologacao)", async () => {
-    const { approved } = await runHomologacaoAutoApprove();
+  it("é idempotente — segunda execução não aprova/reprova de novo (já não está mais em homologacao)", async () => {
+    const { approved, rejected } = await runHomologacaoAutoApprove();
     expect(approved).not.toContain(IDS.eligibleProject);
+    expect(rejected).not.toContain(IDS.rejectedProject);
   });
 });

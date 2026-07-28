@@ -145,6 +145,16 @@ export const evaluationRemindersCron = inngest.createFunction(
 // transição, inclusive a de entrada em homologação — não há coluna
 // dedicada). Replica o ramo "aprovado" de `transitionProjectStage`
 // (apps/projetos/src/actions/projects.ts) usando o ator sistema.
+//
+// P-2.8b: votacao → homologacao é o único destino que o mapa de estágios
+// permite, mesmo quando a votação REPROVA (castVote/closeVoting/
+// triggerPanicButton, apps/projetos/src/actions/voting.ts). Esses três
+// caminhos gravam `voteApproved: false` no snapshot de entrada em
+// homologação. Sem esse ramo, este cron aprovaria por omissão qualquer
+// projeto reprovado que ninguém lembrasse de contestar manualmente em 7
+// dias — invertendo o resultado da votação. Snapshots sem o campo (entrada
+// manual via transitionProjectStage) preservam o comportamento histórico
+// de aprovação automática.
 // ---------------------------------------------------------------------------
 
 async function getNextVersionNumber(projectId: string): Promise<number> {
@@ -157,6 +167,7 @@ async function getNextVersionNumber(projectId: string): Promise<number> {
 
 export async function runHomologacaoAutoApprove(): Promise<{
   approved: string[];
+  rejected: string[];
 }> {
   const actorId = await getSystemActorId();
   const cutoff = new Date();
@@ -168,6 +179,7 @@ export async function runHomologacaoAutoApprove(): Promise<{
     .where(and(eq(projects.stage, "homologacao"), isNull(projects.deletedAt)));
 
   const approved: string[] = [];
+  const rejected: string[] = [];
 
   for (const project of candidates) {
     const [existingContestation] = await db
@@ -178,7 +190,10 @@ export async function runHomologacaoAutoApprove(): Promise<{
     if (existingContestation) continue; // defensivo — createContestation já reverte para votacao
 
     const [latestHomologVersion] = await db
-      .select({ createdAt: projectVersions.createdAt })
+      .select({
+        createdAt: projectVersions.createdAt,
+        data: projectVersions.data,
+      })
       .from(projectVersions)
       .where(
         and(
@@ -195,6 +210,50 @@ export async function runHomologacaoAutoApprove(): Promise<{
       continue;
 
     const now = new Date();
+    const snapshotData = latestHomologVersion.data as {
+      voteApproved?: boolean;
+    };
+
+    if (snapshotData.voteApproved === false) {
+      const [updated] = await db
+        .update(projects)
+        .set({ stage: "reprovado", updatedAt: now })
+        .where(eq(projects.id, project.id))
+        .returning();
+      if (!updated) continue;
+
+      const versionNumber = await getNextVersionNumber(project.id);
+      await db.insert(projectVersions).values({
+        projectId: project.id,
+        versionNumber,
+        stage: "reprovado",
+        data: {
+          ...updated,
+          _source: "homologacao-auto-resolve-cron",
+          transitionedAt: now.toISOString(),
+          transitionedBy: actorId,
+        },
+        createdBy: actorId,
+      });
+
+      await logAudit({
+        actorId,
+        action: "project.stage_transition",
+        entity: "project",
+        entityId: project.id,
+        diff: {
+          from: "homologacao",
+          to: "reprovado",
+          notes: `Reprovação confirmada automaticamente após ${HOMOLOGACAO_WINDOW_DAYS} dias sem contestação.`,
+          transitionedAt: now.toISOString(),
+        },
+      });
+
+      await notifyProjectDecision(project.id, false);
+      rejected.push(project.id);
+      continue;
+    }
+
     const [updated] = await db
       .update(projects)
       .set({ stage: "aprovado", approvedAt: now, updatedAt: now })
@@ -240,13 +299,13 @@ export async function runHomologacaoAutoApprove(): Promise<{
     approved.push(project.id);
   }
 
-  return { approved };
+  return { approved, rejected };
 }
 
 export const homologacaoAutoApproveCron = inngest.createFunction(
   {
     id: "projetos-homologacao-auto-approve",
-    name: "Projetos: aprovação automática após 7 dias sem contestação",
+    name: "Projetos: resolução automática de homologação após 7 dias sem contestação",
   },
   { cron: "0 3 * * *" },
   async ({ step }) =>

@@ -225,6 +225,7 @@
 | S-202  | 2026-07-28 | P-2.5b — Nenhuma fronteira de erro, o skeleton errado e o vazio que pisca (CORRETIVO)                                            | concluido                            |
 | S-203  | 2026-07-28 | Auditoria Bloco B Projetos (P-2.6–P-2.12) — patches P-2.6b/2.8b/2.8c/2.10b/2.12b gerados                                         | concluido                            |
 | S-204  | 2026-07-28 | P-2.6b — O relatório que é rejeitado sem motivo e não pode voltar (CORRETIVO)                                                    | concluido                            |
+| S-205  | 2026-07-28 | P-2.8b — A reprovação que o mapa de estágios não permite e o quórum que conta quem já saiu (CORRETIVO)                           | concluido                            |
 
 ---
 
@@ -17353,3 +17354,188 @@ anterior permanece recuperável em `admin.audit_log`, que é imutável).
   Documentos, não tocado nesta sessão — não investigadas a fundo)
 - `pnpm db:migrate` — `0066`, `0067`, `0068` aplicadas no Supabase de dev
   sem erro
+
+---
+
+## S-205 — P-2.8b — A reprovação que o mapa de estágios não permite e o quórum que conta quem já saiu (CORRETIVO)
+
+**Branch:** `feat/P-2.8b-projetos-votacao`
+
+### Contexto
+
+`VALID_STAGE_TRANSITIONS` declara `votacao: ["homologacao"]`. As três
+actions que encerram uma votação discordavam desse mapa de três formas
+diferentes: `castVote` calculava `newStage = "reprovado"` numa reprovação
+decisiva, testava contra o mapa, falhava, e pulava o bloco inteiro **em
+silêncio** — sem erro, sem log, projeto preso em `votacao` para sempre.
+`closeVoting` e `triggerPanicButton` escreviam `stage: "reprovado"` direto,
+sem consultar o mapa — a transição que `transitionProjectStage` recusaria.
+Um segundo defeito, de mesma classe que PATCH-007 (F2-P5): o denominador do
+quórum (`countEligibleVoters`, e os espelhos em `getDirectorProjectDetail`
+e `getEligibleEvaluators`) contava `role_assignments` sem `revoked_at IS
+NULL` — um diretor revogado inflava o quórum sem poder votar, e continuava
+oferecido como avaliador designável. Terceiro, menor: `getVotingProject`
+não filtrava `deletedAt`.
+
+### Perguntas ao Filipe (quatro, no total — duas previstas pelo prompt, duas
+
+descobertas durante a implementação)
+
+1. **Para onde vai uma reprovação no mapa?** Resposta: manter `votacao:
+["homologacao"]` — nenhuma mudança no mapa (rejeitada a leitura
+   alternativa sugerida pelo prompt, `votacao: ["homologacao",
+"reprovado"]`).
+2. **Conflito descoberto ao aplicar a resposta acima:**
+   `runHomologacaoAutoApprove` (`packages/jobs/src/crons/projetos.ts`)
+   aprova **incondicionalmente** qualquer projeto parado em `homologacao`
+   há 7+ dias sem contestação, sem checar o resultado da votação. Manter o
+   mapa como estava faria uma reprovação decisiva entrar em homologação e,
+   sem contestação manual em 7 dias, ser **auto-aprovada** pelo cron —
+   invertendo o resultado da votação (pior que o bug original). Perguntado
+   como proceder, o Filipe optou por ampliar o escopo do corretivo para
+   também corrigir o cron, em vez de reconsiderar o mapa.
+3. **Regra real do botão de pânico:** BRAIN dizia "maioria + 1 dos votos
+   existentes"; o código sempre implementou maioria simples (`inFavor >
+against`, empate = reprovado). Confirmado: a implementação está certa,
+   o texto do BRAIN é que estava impreciso.
+4. **Segundo achado durante a implementação, mais sério que os dois
+   primeiros:** ao escrever o teste de `castVote` contra o pipeline real
+   (não a cópia de lógica), o auto-close nunca disparava para um
+   diretor/conselheiro comum. Causa raiz confirmada por consulta direta ao
+   banco (`SET LOCAL ROLE authenticated` + `request.jwt.claims` de um
+   diretor real): `projetos.votes` tem SELECT restrito a `super_admin`
+   (cédula secreta, migration 0009 — "nem o próprio diretor lê a cédula que
+   lançou"). `computeVoteResult`, chamado de dentro do contexto autenticado
+   do PRÓPRIO votante, sempre via 0 votos — o auto-close de `castVote`
+   literalmente só podia disparar se o voto decisivo fosse de um
+   super_admin. Perguntado como proceder, o Filipe optou por corrigir
+   agora, dentro do P-2.8b.
+
+Todas as quatro respostas estão registradas acima; nenhuma exigiu mudança
+de regra de negócio documentada no BRAIN além do item 3 (PATCH-026).
+
+### O que foi feito
+
+1. **`apps/projetos/src/actions/voting.ts`:**
+   - `getVotingProject` passa a filtrar `isNull(projects.deletedAt)`.
+   - `countEligibleVoters` passa a filtrar `isNull(roleAssignments.revokedAt)`.
+   - `castVote`, `closeVoting`, `triggerPanicButton` convergem no mesmo
+     destino (`homologacao`) para qualquer votação conclusiva, validando
+     contra `VALID_STAGE_TRANSITIONS` e lançando erro explícito
+     (`Transição inválida: ...`) em vez de gravar `stage` direto ou pular
+     em silêncio. A decisão real da votação fica registrada como
+     `voteApproved: boolean` no snapshot de `project_versions` (distinto de
+     `result.approved`, que é `null` quando o botão de pânico força
+     encerramento sem quórum).
+   - `computeVoteResult` passa a ler `projetos.votes` via `withSystemRole`
+     (achado 4) — só a contagem agregada é elevada; a identidade de quem
+     votou o quê continua inacessível fora daqui.
+2. **`apps/projetos/src/lib/queries.ts`:** `getDirectorProjectDetail`
+   (eligibleRows) e `getEligibleEvaluators` passam a filtrar
+   `isNull(roleAssignments.revokedAt)`. Avaliada a extração do predicado
+   "eleitor elegível" para um helper único (sugestão do prompt) — não
+   aplicada: `queries.ts` e `voting.ts` são ambos arquivos `"use server"`
+   (só podem exportar async functions), e um helper compartilhável entre os
+   dois exigiria um arquivo novo fora da lista de arquivos permitidos.
+3. **`packages/jobs/src/crons/projetos.ts`** (escopo ampliado, pergunta 2):
+   `runHomologacaoAutoApprove` lê `voteApproved` do snapshot de entrada em
+   homologação — `false` confirma a reprovação após 7 dias sem contestação
+   (novo ramo, espelha o ramo "aprovado": update, version snapshot, audit,
+   `notifyProjectDecision(id, false)`); ausente (entrada manual via
+   `transitionProjectStage`) preserva o comportamento histórico de
+   aprovação automática. Retorno da função ganhou `rejected: string[]`
+   junto de `approved: string[]`. Nome descritivo do cron atualizado.
+4. **`BRAIN.md` §6.2 + `PATCHES/026-...md`** (não estava na lista original
+   de arquivos permitidos; adicionado por ser o mecanismo padrão do
+   workflow SDD para registrar decisão que corrige documentação — pergunta
+   3): texto do botão de pânico corrigido; nova linha explicitando que, sem
+   contestação em 7 dias, o resultado apurado na votação se confirma
+   (aprovado ou reprovado).
+5. **Testes** — todos exercitando as actions reais contra o banco, não uma
+   cópia da lógica:
+   - `voting.test.ts`: `castVote` com turnout total e maioria contra.
+     Reformulado duas vezes durante a implementação: a primeira versão
+     (loop sequencial de N `castVote`, um por elegível) sofria de uma
+     corrida real com outros arquivos de teste que inserem/removem seus
+     próprios diretores concorrentemente (`fileParallelism` do vitest);
+     resolvida inserindo o voto de N-1 elegíveis direto no banco (rápido,
+     mesmo padrão de `voteAllEligible` abaixo) e só o último voto passando
+     pelo caminho real (`castVote`), que é o que precisa disparar o
+     auto-close.
+   - `close-voting.test.ts`: `closeVoting` com quórum e maioria contra;
+     `triggerPanicButton` sem quórum e maioria contra; diretor revogado não
+     conta no quórum (assert relativo — compara contra uma contagem
+     independente com o mesmo predicado, não um número fixo); soft-delete
+     bloqueia `closeVoting`. Adicionado helper `voteAllEligible` (consulta
+     quem está elegível _agora_ e vota por todos) porque o banco de dev
+     compartilhado tem fixtures órfãs de outros apps (`flats-rls-*`,
+     `search-diretor-*` — 8 contas reais encontradas) inflando o
+     denominador global do quórum; os dois testes pré-existentes que
+     assumiam um total fixo (F2-P5, "com quórum e maioria") já estavam
+     flaky por isso (registrado desde S-158/S-204) e foram migrados para o
+     mesmo padrão, agora deterministicamente verdes.
+   - `packages/jobs/src/__tests__/projetos-homologacao.test.ts`: projeto
+     com `voteApproved: false` no snapshot de homologação é reprovado após
+     7 dias, não aprovado por omissão.
+
+### Achados fora do escopo original, corrigidos com autorização do Filipe
+
+Ver perguntas 2 e 4 acima — ambos descobertos durante a implementação,
+ambos confirmados com o Filipe antes de tocar código fora da lista original
+de arquivos permitidos.
+
+### Critérios de aceite
+
+- [x] A regra de `votacao → reprovado` foi confirmada com o Filipe e está
+      registrada acima (mantido `votacao: ["homologacao"]` — não gerou
+      PATCH por já ser a leitura literal do ciclo de vida em BRAIN §6.2)
+- [x] Nenhuma action de `apps/projetos` escreve `projects.stage` sem
+      validar contra `VALID_STAGE_TRANSITIONS`
+- [x] `castVote` com todos os elegíveis votando e maioria contra deixa o
+      projeto fora de `votacao` (vai para `homologacao`, nunca preso —
+      "estágio terminal" do critério original reinterpretado à luz da
+      resposta à pergunta 1: a decisão se confirma como `reprovado` na
+      homologação, via cron ou contestação, não direto na votação)
+- [x] Nenhuma transição inválida é ignorada em silêncio: ou acontece, ou
+      retorna erro
+- [x] Diretor/conselheiro com `revoked_at` preenchido não conta no quórum,
+      nem em `getDirectorProjectDetail`, nem como avaliador designável
+- [x] Projeto soft-deleted não aceita voto nem fechamento
+- [x] Testes exercitam as actions contra o banco e cobrem os três caminhos
+      de reprovação, mais a resolução automática de homologação
+- [x] `pnpm --filter projetos typecheck lint test` verdes (123/123)
+- [x] `pnpm --filter jobs typecheck lint test` verdes (19/19, inclui o novo
+      ramo do cron)
+- [x] Registrado em SESSIONS.md
+
+### Arquivos criados
+
+- `PATCHES/026-votacao-reprovacao-via-homologacao-panico-maioria-simples.md`
+
+### Arquivos modificados
+
+- `apps/projetos/src/actions/voting.ts`
+- `apps/projetos/src/lib/queries.ts`
+- `packages/jobs/src/crons/projetos.ts`
+- `apps/projetos/src/__tests__/voting.test.ts`
+- `apps/projetos/src/__tests__/close-voting.test.ts`
+- `packages/jobs/src/__tests__/projetos-homologacao.test.ts`
+- `BRAIN.md` (§6.2)
+- `PROMPTS.md` (bookkeeping de critérios de P-2.6, P-2.8, P-2.12)
+
+`packages/db/src/schema/projetos.ts` (`VALID_STAGE_TRANSITIONS`) e
+`apps/projetos/src/__tests__/state-machine.test.ts` estavam na lista
+original de arquivos permitidos "se a resposta à pergunta 1 mudasse o
+mapa" — não mudou, então nenhum dos dois foi tocado.
+
+### Verificações executadas
+
+- `pnpm --filter projetos typecheck` — verde
+- `pnpm --filter projetos lint` — verde
+- `pnpm --filter projetos test` — 123/123, rodado três vezes (a última
+  reprodução isolando `voting.test.ts` + `close-voting.test.ts`) para
+  confirmar que a correção de RLS eliminou o problema de fato — não apenas
+  mascarou uma corrida
+- `pnpm --filter jobs typecheck` — verde
+- `pnpm --filter jobs lint` — verde
+- `pnpm --filter jobs test` — 19/19

@@ -891,11 +891,18 @@ export async function getDirectorProjectDetail(
         .where(eq(votes.projectId, projectId));
 
       // Quórum conta PESSOAS distintas, não atribuições de papel (F2-P5:
-      // um usuário com diretor+conselheiro contava duas vezes).
+      // um usuário com diretor+conselheiro contava duas vezes). Espelha
+      // countEligibleVoters (actions/voting.ts), incluindo o filtro de
+      // papel ATIVO (P-2.8b).
       const eligibleRows = await tx
         .select({ cnt: countDistinct(roleAssignments.userId) })
         .from(roleAssignments)
-        .where(inArray(roleAssignments.role, ["diretor", "conselheiro"]));
+        .where(
+          and(
+            inArray(roleAssignments.role, ["diretor", "conselheiro"]),
+            isNull(roleAssignments.revokedAt),
+          ),
+        );
 
       const totalEligible = eligibleRows[0]?.cnt ?? 0;
       const totalVoted = voteRows.length;
@@ -979,7 +986,12 @@ export async function getEligibleEvaluators(
       .selectDistinct({ id: users.id, fullName: users.fullName })
       .from(users)
       .innerJoin(roleAssignments, eq(roleAssignments.userId, users.id))
-      .where(inArray(roleAssignments.role, ["diretor", "conselheiro"]));
+      .where(
+        and(
+          inArray(roleAssignments.role, ["diretor", "conselheiro"]),
+          isNull(roleAssignments.revokedAt),
+        ),
+      );
 
     return rows.filter((r) => !assignedIds.has(r.id));
   });

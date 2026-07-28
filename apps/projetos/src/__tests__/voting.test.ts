@@ -9,9 +9,17 @@
  *  - Contrato de falha de `castVote` no cliente (VotePanelWrapper) — P-2.2b
  */
 
-import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterAll,
+  afterEach,
+  vi,
+} from "vitest";
 import postgres from "postgres";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, isNull, desc } from "drizzle-orm";
 import { db } from "@hebron/db/client";
 import {
   users,
@@ -19,9 +27,22 @@ import {
   organizations,
   organizationMembers,
   projects,
+  projectVersions,
   votes,
+  auditLog,
 } from "@hebron/db/schema";
 import { deriveVoteState } from "../components/vote-panel-wrapper";
+
+// castVote roda pelo pipeline real de Server Action (conselheiroDiretorAction)
+// — precisa de sessão mockada. Cada teste injeta o ator via
+// mockResolvedValueOnce (um por voto, já que cada voto é uma pessoa distinta).
+const resolveSessionMock = vi.fn();
+vi.mock("next/headers", () => ({
+  cookies: async () => ({ getAll: () => [], set: () => undefined }),
+}));
+vi.mock("@hebron/auth/server", () => ({
+  resolveSession: (...args: unknown[]) => resolveSessionMock(...args),
+}));
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -39,6 +60,7 @@ const IDS = {
   projects: {
     projectVoting: "bbcc0000-0000-0000-0000-000000000001",
     projectPanic: "bbcc0000-0000-0000-0000-000000000002",
+    projectCastReject: "bbcc0000-0000-0000-0000-000000000003",
   },
 } as const;
 
@@ -200,6 +222,18 @@ beforeAll(async () => {
         parcelas: 3,
         meses: 3,
       },
+      {
+        id: IDS.projects.projectCastReject,
+        title: "Projeto Reprovação Decisiva Test",
+        tipo: "anual",
+        stage: "votacao",
+        organizationId: IDS.orgs.orgVoting,
+        submitterId: IDS.users.submissor1,
+        evaluationYear: 2026,
+        budgetTotal: "5000.00",
+        parcelas: 1,
+        meses: 1,
+      },
     ])
     .onConflictDoNothing();
 });
@@ -215,6 +249,14 @@ afterAll(async () => {
   await db
     .delete(organizations)
     .where(eq(organizations.id, IDS.orgs.orgVoting));
+  // castVote (P-2.8b) grava audit_log com actorId = votante — precisa ser
+  // limpo antes de deletar os usuários (audit_log_actor_id_fkey).
+  await db
+    .delete(auditLog)
+    .where(eq(auditLog.entityId, IDS.projects.projectCastReject));
+  for (const id of Object.values(IDS.users)) {
+    await db.delete(auditLog).where(eq(auditLog.actorId, id));
+  }
   for (const id of Object.values(IDS.users)) {
     await db.delete(roleAssignments).where(eq(roleAssignments.userId, id));
   }
@@ -309,6 +351,89 @@ describe("Votação — Botão de pânico (force-close sem quórum)", () => {
   it("pânico com quórum já atingido: maioria ainda decide", () => {
     // 4 elegíveis, 4 votos (quórum atingido), 3×1 → aprovado
     expect(panicApproved(3, 1)).toBe(true);
+  });
+});
+
+// ── castVote: fechamento por reprovação decisiva (P-2.8b) ──────────────────
+//
+// VALID_STAGE_TRANSITIONS não permite votacao → reprovado direto — antes
+// deste fix, castVote calculava newStage="reprovado", a checagem contra o
+// mapa falhava e o `if` inteiro era pulado em silêncio: quórum total,
+// maioria contra, projeto ficava preso em votação para sempre. Agora toda
+// votação conclusiva (aprovação ou reprovação) entra em homologação —
+// nunca fica presa em votação — carregando `voteApproved` no snapshot para
+// runHomologacaoAutoApprove (packages/jobs) resolver depois.
+
+describe("Votação — castVote: reprovação decisiva não fica presa em votação (P-2.8b)", () => {
+  it("turnout total (100% dos elegíveis) + maioria contra: projeto sai de votacao para homologacao, snapshot registra voteApproved=false", async () => {
+    const { castVote } = await import("../actions/voting");
+
+    // countEligibleVoters (voting.ts) conta diretor+conselheiro no sistema
+    // inteiro, não escopado por org — o banco de dev compartilhado acumula
+    // fixtures órfãs de outros apps (ver SESSIONS.md) e outros arquivos de
+    // teste deste mesmo app rodam concorrentemente (vitest
+    // fileParallelism), então o total elegível pode crescer entre a
+    // leitura e o voto. Uma sequência de N chamadas reais a castVote (uma
+    // por pessoa) alonga demais a janela de corrida — em vez disso,
+    // inserimos o voto de todos menos um diretamente (rápido, uma única
+    // ida ao banco, mesmo padrão de voteAllEligible em
+    // close-voting.test.ts) e só o último voto passa pelo caminho real
+    // (castVote), que é o que precisa disparar o auto-close.
+    const eligibleRows = await db
+      .select({ userId: roleAssignments.userId })
+      .from(roleAssignments)
+      .where(
+        and(
+          inArray(roleAssignments.role, ["diretor", "conselheiro"]),
+          isNull(roleAssignments.revokedAt),
+        ),
+      );
+    const eligibleIds = [...new Set(eligibleRows.map((r) => r.userId))];
+    const [lastVoter, ...restVoters] = eligibleIds;
+    if (!lastVoter)
+      throw new Error("Nenhum diretor/conselheiro elegível encontrado");
+
+    if (restVoters.length > 0) {
+      await db
+        .insert(votes)
+        .values(
+          restVoters.map((userId) => ({
+            projectId: IDS.projects.projectCastReject,
+            userId,
+            value: false,
+          })),
+        )
+        .onConflictDoNothing();
+    }
+
+    resolveSessionMock.mockResolvedValueOnce({
+      actorId: lastVoter,
+      roles: ["diretor"],
+    });
+    const result = await castVote({
+      projectId: IDS.projects.projectCastReject,
+      value: false,
+    });
+
+    expect(result?.serverError).toBeUndefined();
+    expect(result?.data?.stageTransitioned).toBe(true);
+
+    const [project] = await db
+      .select({ stage: projects.stage })
+      .from(projects)
+      .where(eq(projects.id, IDS.projects.projectCastReject));
+    expect(project?.stage).toBe("homologacao");
+    expect(project?.stage).not.toBe("votacao");
+
+    const [version] = await db
+      .select({ data: projectVersions.data })
+      .from(projectVersions)
+      .where(eq(projectVersions.projectId, IDS.projects.projectCastReject))
+      .orderBy(desc(projectVersions.versionNumber))
+      .limit(1);
+    expect((version?.data as { voteApproved?: boolean })?.voteApproved).toBe(
+      false,
+    );
   });
 });
 

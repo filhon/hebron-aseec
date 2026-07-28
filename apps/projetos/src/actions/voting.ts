@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { eq, and, count, countDistinct, inArray } from "drizzle-orm";
+import { eq, and, count, countDistinct, inArray, isNull } from "drizzle-orm";
 import {
   withAuthenticatedContext,
   withSystemRole,
@@ -27,7 +27,7 @@ async function getVotingProject(executor: DbExecutor, projectId: string) {
   const rows = await executor
     .select()
     .from(projects)
-    .where(and(eq(projects.id, projectId)))
+    .where(and(eq(projects.id, projectId), isNull(projects.deletedAt)))
     .limit(1);
 
   const project = rows[0];
@@ -39,12 +39,20 @@ async function getVotingProject(executor: DbExecutor, projectId: string) {
 
 // Conta PESSOAS distintas, não atribuições de papel (F2-P5): um usuário com
 // diretor+conselheiro simultaneamente não pode contar duas vezes no quórum
-// nem no total de elegíveis do fechamento automático.
+// nem no total de elegíveis do fechamento automático. `revokedAt IS NULL`
+// (P-2.8b): um papel revogado não deve contar no denominador — o mesmo
+// filtro de "papel ativo" usado por resolveSession/has_role, que já barra o
+// voto desse usuário no gate da action.
 async function countEligibleVoters(executor: DbExecutor): Promise<number> {
   const result = await executor
     .select({ count: countDistinct(roleAssignments.userId) })
     .from(roleAssignments)
-    .where(inArray(roleAssignments.role, ["diretor", "conselheiro"]));
+    .where(
+      and(
+        inArray(roleAssignments.role, ["diretor", "conselheiro"]),
+        isNull(roleAssignments.revokedAt),
+      ),
+    );
 
   return result[0]?.count ?? 0;
 }
@@ -59,15 +67,25 @@ interface VoteResult {
 }
 
 async function computeVoteResult(
-  executor: DbExecutor,
+  executor: AuthenticatedTx,
   projectId: string,
 ): Promise<VoteResult> {
   const totalEligible = await countEligibleVoters(executor);
 
-  const projectVotes = await executor
-    .select({ value: votes.value })
-    .from(votes)
-    .where(eq(votes.projectId, projectId));
+  // O SELECT em votes é restrito a super_admin por RLS ("cédula secreta" —
+  // nem o próprio diretor lê a cédula que lançou, migration 0009). Sem
+  // isso, computeVoteResult rodando no contexto autenticado de um
+  // diretor/conselheiro comum sempre veria 0 votos, e o auto-close de
+  // castVote nunca dispararia a não ser que o voto decisivo fosse de um
+  // super_admin (achado P-2.8b). withSystemRole eleva só esta leitura
+  // agregada, dentro da mesma transação — nunca expõe quem votou o quê,
+  // só o total/maioria retornados aqui.
+  const projectVotes = await withSystemRole(executor, (sysTx) =>
+    sysTx
+      .select({ value: votes.value })
+      .from(votes)
+      .where(eq(votes.projectId, projectId)),
+  );
 
   const totalVoted = projectVotes.length;
   const inFavor = projectVotes.filter((v) => v.value).length;
@@ -134,54 +152,69 @@ export const castVote = conselheiroDiretorAction
         // All eligible voted or quorum reached with decisive majority — auto-close
         const totalEligible = await countEligibleVoters(tx);
         if (result.totalVoted >= totalEligible) {
-          const newStage = result.approved
-            ? "homologacao"
-            : ("reprovado" as const);
+          // O mapa de estágios (VALID_STAGE_TRANSITIONS) não permite
+          // votacao → reprovado direto — toda votação conclusiva
+          // (aprovação OU reprovação) entra em homologação; a reprovação se
+          // confirma lá se ninguém contestar em 7 dias, no lugar de ficar
+          // presa em votação sem decisão nenhuma (P-2.8b).
+          const newStage = "homologacao" as const;
 
           const validNextStages = VALID_STAGE_TRANSITIONS[project.stage];
-          if ((validNextStages as string[]).includes(newStage)) {
-            const versionNumber = await getNextVersionNumber(
-              tx,
-              parsedInput.projectId,
-            );
-
-            await tx
-              .update(projects)
-              .set({ stage: newStage, updatedAt: new Date() })
-              .where(eq(projects.id, parsedInput.projectId));
-
-            await tx.insert(projectVersions).values({
-              projectId: parsedInput.projectId,
-              versionNumber,
-              stage: newStage,
-              data: {
-                trigger: "vote_complete",
-                result,
-                transitionedAt: new Date().toISOString(),
-              },
-              createdBy: ctx.actorId,
-            });
-
-            stageTransitioned = true;
-
-            await withSystemRole(tx, (sysTx) =>
-              logProjectAudit(
-                {
-                  actorId: ctx.actorId,
-                  action: "project.stage_transition",
-                  entity: "project",
-                  entityId: parsedInput.projectId,
-                  diff: {
-                    from: project.stage,
-                    to: newStage,
-                    trigger: "vote_complete",
-                    result,
-                  },
-                },
-                sysTx,
-              ),
+          if (!(validNextStages as string[]).includes(newStage)) {
+            throw new Error(
+              `Transição inválida: ${project.stage} → ${newStage}. ` +
+                `Próximos estágios válidos: ${validNextStages.join(", ")}`,
             );
           }
+
+          const versionNumber = await getNextVersionNumber(
+            tx,
+            parsedInput.projectId,
+          );
+
+          await tx
+            .update(projects)
+            .set({ stage: newStage, updatedAt: new Date() })
+            .where(eq(projects.id, parsedInput.projectId));
+
+          await tx.insert(projectVersions).values({
+            projectId: parsedInput.projectId,
+            versionNumber,
+            stage: newStage,
+            data: {
+              trigger: "vote_complete",
+              result,
+              // Decisão real da votação — distinta de result.approved, que
+              // é null quando o quórum não foi atingido (não é o caso
+              // aqui, mas mantém o campo com o mesmo nome usado por
+              // triggerPanicButton). Consultado por
+              // runHomologacaoAutoApprove (packages/jobs) para não
+              // aprovar por omissão uma votação que reprovou.
+              voteApproved: result.approved,
+              transitionedAt: new Date().toISOString(),
+            },
+            createdBy: ctx.actorId,
+          });
+
+          stageTransitioned = true;
+
+          await withSystemRole(tx, (sysTx) =>
+            logProjectAudit(
+              {
+                actorId: ctx.actorId,
+                action: "project.stage_transition",
+                entity: "project",
+                entityId: parsedInput.projectId,
+                diff: {
+                  from: project.stage,
+                  to: newStage,
+                  trigger: "vote_complete",
+                  result,
+                },
+              },
+              sysTx,
+            ),
+          );
         }
       }
 
@@ -238,9 +271,17 @@ export const closeVoting = superAdminAction
         );
       }
 
-      const newStage = result.approved
-        ? ("homologacao" as const)
-        : ("reprovado" as const);
+      // Mesma regra de castVote: o mapa não permite votacao → reprovado
+      // direto (P-2.8b).
+      const newStage = "homologacao" as const;
+
+      const validNextStages = VALID_STAGE_TRANSITIONS[project.stage];
+      if (!(validNextStages as string[]).includes(newStage)) {
+        throw new Error(
+          `Transição inválida: ${project.stage} → ${newStage}. ` +
+            `Próximos estágios válidos: ${validNextStages.join(", ")}`,
+        );
+      }
 
       const versionNumber = await getNextVersionNumber(
         tx,
@@ -260,6 +301,7 @@ export const closeVoting = superAdminAction
           trigger: "manual_close",
           actorId: ctx.actorId,
           result,
+          voteApproved: result.approved,
           transitionedAt: new Date().toISOString(),
         },
         createdBy: ctx.actorId,
@@ -305,11 +347,22 @@ export const triggerPanicButton = superAdminAction
       const result = await computeVoteResult(tx, parsedInput.projectId);
 
       // Force-decide: whichever side has majority among existing votes wins;
-      // tie resolves to reprovado (conservative default).
+      // tie resolves to reprovado (conservative default). A decisão é
+      // aplicada em homologação, não escrita direto — mesmo mapa de
+      // castVote/closeVoting (P-2.8b). Note que `approved` aqui é a decisão
+      // FORÇADA (maioria entre os votos existentes, ignorando quórum) —
+      // diferente de `result.approved`, que é null quando o quórum não foi
+      // atingido (o caso normal de uso do botão de pânico).
       const approved = result.inFavor > result.against;
-      const newStage = approved
-        ? ("homologacao" as const)
-        : ("reprovado" as const);
+      const newStage = "homologacao" as const;
+
+      const validNextStages = VALID_STAGE_TRANSITIONS[project.stage];
+      if (!(validNextStages as string[]).includes(newStage)) {
+        throw new Error(
+          `Transição inválida: ${project.stage} → ${newStage}. ` +
+            `Próximos estágios válidos: ${validNextStages.join(", ")}`,
+        );
+      }
 
       const versionNumber = await getNextVersionNumber(
         tx,
@@ -329,6 +382,7 @@ export const triggerPanicButton = superAdminAction
           trigger: "panic_button",
           actorId: ctx.actorId,
           result,
+          voteApproved: approved,
           transitionedAt: new Date().toISOString(),
         },
         createdBy: ctx.actorId,

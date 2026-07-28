@@ -300,7 +300,7 @@ Todo o estilo visual compartilhado vive em **`packages/ui`**. O arquivo **`packa
 - Voto **SECRETO** (ninguém vê quem votou o quê)
 - Quórum: ≥50% dos diretores + conselheiros (contagem por **pessoa distinta**, não por atribuição — PATCH-007)
 - Aprovação: maioria simples
-- Sem quórum: votação estendida; super_admin pode acionar "botão de pânico" (maioria + 1 dos votos existentes)
+- Sem quórum: votação estendida; super_admin pode acionar "botão de pânico" (maioria simples entre os votos existentes; empate resolve para reprovado — PATCH-026)
 - Encerramento manual: super_admin pode encerrar a votação a qualquer momento, aplicando o resultado apurado até então — mecanismo geral, distinto do "botão de pânico" acima, que só se aplica à falta de quórum (PATCH-007)
 
 **Homologação:**
@@ -308,6 +308,7 @@ Todo o estilo visual compartilhado vive em **`packages/ui`**. O arquivo **`packa
 - 7 dias para contestação por qualquer diretor/conselheiro
 - Máximo 2 contestações por projeto, cada pessoa pode contestar 1 vez
 - Contestação retorna projeto para votação
+- Sem contestação em 7 dias: resultado apurado na votação se confirma automaticamente — aprovado ou reprovado, conforme o voto (mapa de estágios não permite votação decidir "reprovado" fora da homologação — PATCH-026)
 
 **Avaliação:**
 

@@ -14,7 +14,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, and, isNull, desc } from "drizzle-orm";
 import { db } from "@hebron/db/client";
 import {
   users,
@@ -22,11 +22,43 @@ import {
   organizations,
   organizationMembers,
   projects,
+  projectVersions,
   votes,
   auditLog,
 } from "@hebron/db/schema";
 
 const SUPER_ADMIN_ID = "ceaa0000-0000-0000-0000-000000000001";
+
+// O banco de dev compartilhado acumula fixtures órfãs de outros apps (ver
+// SESSIONS.md) em role_assignments — o total elegível real não é
+// previsível. Em vez de fixar um número de votos, consultamos o mesmo
+// predicado usado por countEligibleVoters (voting.ts) e fazemos 100% desses
+// votarem, o que bate quórum de forma determinística independente da
+// poluição ambiente (P-2.8b).
+async function activeEligibleVoterIds(): Promise<string[]> {
+  const rows = await db
+    .select({ userId: roleAssignments.userId })
+    .from(roleAssignments)
+    .where(
+      and(
+        inArray(roleAssignments.role, ["diretor", "conselheiro"]),
+        isNull(roleAssignments.revokedAt),
+      ),
+    );
+  return [...new Set(rows.map((r) => r.userId))];
+}
+
+async function voteAllEligible(
+  projectId: string,
+  value: boolean,
+): Promise<string[]> {
+  const ids = await activeEligibleVoterIds();
+  await db
+    .insert(votes)
+    .values(ids.map((userId) => ({ projectId, userId, value })))
+    .onConflictDoNothing();
+  return ids;
+}
 
 vi.mock("next/headers", () => ({
   cookies: async () => ({ getAll: () => [], set: () => undefined }),
@@ -46,12 +78,17 @@ const IDS = {
     dualRole: "ceaa0000-0000-0000-0000-000000000002",
     diretor2: "ceaa0000-0000-0000-0000-000000000003",
     submissor: "ceaa0000-0000-0000-0000-000000000004",
+    revokedDiretor: "ceaa0000-0000-0000-0000-000000000005",
   },
   org: "cebb0000-0000-0000-0000-000000000001",
   projects: {
     quorumCount: "cecc0000-0000-0000-0000-000000000001",
     noQuorum: "cecc0000-0000-0000-0000-000000000002",
     quorumMajority: "cecc0000-0000-0000-0000-000000000003",
+    quorumRejected: "cecc0000-0000-0000-0000-000000000004",
+    panicReject: "cecc0000-0000-0000-0000-000000000005",
+    revokedQuorum: "cecc0000-0000-0000-0000-000000000006",
+    softDeleted: "cecc0000-0000-0000-0000-000000000007",
   },
 } as const;
 
@@ -76,6 +113,11 @@ beforeAll(async () => {
       id: IDS.users.submissor,
       email: "close-sub@test.hebron",
       fullName: "Close Submissor",
+    },
+    {
+      id: IDS.users.revokedDiretor,
+      email: "close-revoked@test.hebron",
+      fullName: "Close Diretor Revogado",
     },
   ];
   for (const u of userFixtures) {
@@ -109,6 +151,14 @@ beforeAll(async () => {
       userId: IDS.users.submissor,
       role: "submissor" as const,
       grantedBy: IDS.users.superAdmin,
+    },
+    // Papel revogado (P-2.8b) — não deve contar no denominador do quórum.
+    {
+      userId: IDS.users.revokedDiretor,
+      role: "diretor" as const,
+      grantedBy: IDS.users.superAdmin,
+      revokedAt: new Date(),
+      revokedBy: IDS.users.superAdmin,
     },
   ];
   for (const r of roleSeed) {
@@ -168,6 +218,55 @@ beforeAll(async () => {
         parcelas: 1,
         meses: 1,
       },
+      {
+        id: IDS.projects.quorumRejected,
+        title: "Projeto Quorum Reprovado Test",
+        tipo: "anual",
+        stage: "votacao",
+        organizationId: IDS.org,
+        submitterId: IDS.users.submissor,
+        evaluationYear: 2026,
+        budgetTotal: "1000.00",
+        parcelas: 1,
+        meses: 1,
+      },
+      {
+        id: IDS.projects.panicReject,
+        title: "Projeto Pânico Reprovado Test",
+        tipo: "anual",
+        stage: "votacao",
+        organizationId: IDS.org,
+        submitterId: IDS.users.submissor,
+        evaluationYear: 2026,
+        budgetTotal: "1000.00",
+        parcelas: 1,
+        meses: 1,
+      },
+      {
+        id: IDS.projects.revokedQuorum,
+        title: "Projeto Quorum Diretor Revogado Test",
+        tipo: "anual",
+        stage: "votacao",
+        organizationId: IDS.org,
+        submitterId: IDS.users.submissor,
+        evaluationYear: 2026,
+        budgetTotal: "1000.00",
+        parcelas: 1,
+        meses: 1,
+      },
+      {
+        id: IDS.projects.softDeleted,
+        title: "Projeto Soft-Deleted Test",
+        tipo: "anual",
+        stage: "votacao",
+        organizationId: IDS.org,
+        submitterId: IDS.users.submissor,
+        evaluationYear: 2026,
+        budgetTotal: "1000.00",
+        parcelas: 1,
+        meses: 1,
+        deletedAt: new Date(),
+      },
     ])
     .onConflictDoNothing();
 });
@@ -195,39 +294,26 @@ afterAll(async () => {
 });
 
 describe("F2-P5 — quórum conta pessoas distintas, não atribuições de papel", () => {
-  it("dualRole (diretor+conselheiro) conta 1x: 3 pessoas elegíveis, não 4", async () => {
-    // 1 voto do diretor2 — se o total elegível fosse contado por linha
-    // (4), 1/4 não bateria quórum (ceil(4/2)=2). Contado por pessoa (3),
-    // ainda não bate (ceil(3/2)=2), então usamos 2 votos para provar a
-    // diferença: 2 votos de 3 pessoas atinge quórum (ceil(3/2)=2), mas
-    // 2 de 4 (contagem errada) também atingiria — o teste decisivo é
-    // com super_admin fechando manualmente e observando o total_eligible
-    // retornado.
-    await db
-      .insert(votes)
-      .values([
-        {
-          projectId: IDS.projects.quorumCount,
-          userId: IDS.users.dualRole,
-          value: true,
-        },
-        {
-          projectId: IDS.projects.quorumCount,
-          userId: IDS.users.diretor2,
-          value: true,
-        },
-      ])
-      .onConflictDoNothing();
+  it("dualRole (diretor+conselheiro) conta 1x: turnout de 100% dos elegíveis bate o total elegível calculado por pessoa distinta", async () => {
+    // dualRole tem DUAS linhas em role_assignments (diretor + conselheiro)
+    // — se o total elegível fosse contado por linha em vez de pessoa
+    // distinta, o total_eligible retornado seria maior que a contagem de
+    // IDs distintos que fizemos aqui, e este assert pegaria a diferença
+    // independente de quantas outras pessoas elegíveis existirem no banco
+    // (P-2.8b: banco de dev compartilhado tem fixtures órfãs de outros
+    // apps — não fixamos mais um número absoluto).
+    const eligibleIds = await voteAllEligible(IDS.projects.quorumCount, true);
+    expect(eligibleIds).toContain(IDS.users.dualRole);
+    expect(eligibleIds).toContain(IDS.users.diretor2);
 
     const { closeVoting } = await import("../actions/voting");
     const result = await closeVoting({
       projectId: IDS.projects.quorumCount,
     });
 
-    // super_admin também é elegível? Não — countEligibleVoters filtra só
-    // diretor/conselheiro. Elegíveis: dualRole (1 pessoa) + diretor2 = 2.
-    expect(result?.data?.result.totalEligible).toBe(2);
-    expect(result?.data?.result.totalVoted).toBe(2);
+    expect(result?.serverError).toBeUndefined();
+    expect(result?.data?.result.totalEligible).toBe(eligibleIds.length);
+    expect(result?.data?.result.totalVoted).toBe(eligibleIds.length);
     expect(result?.data?.result.quorumMet).toBe(true);
   });
 });
@@ -255,21 +341,7 @@ describe("F2-P6/F2-Q5 — closeVoting: fechamento manual pelo super_admin", () =
   });
 
   it("com quórum e maioria: closeVoting encerra e transiciona para homologacao", async () => {
-    await db
-      .insert(votes)
-      .values([
-        {
-          projectId: IDS.projects.quorumMajority,
-          userId: IDS.users.dualRole,
-          value: true,
-        },
-        {
-          projectId: IDS.projects.quorumMajority,
-          userId: IDS.users.diretor2,
-          value: true,
-        },
-      ])
-      .onConflictDoNothing();
+    await voteAllEligible(IDS.projects.quorumMajority, true);
 
     const { closeVoting } = await import("../actions/voting");
     const result = await closeVoting({
@@ -293,5 +365,122 @@ describe("F2-P6/F2-Q5 — closeVoting: fechamento manual pelo super_admin", () =
       projectId: IDS.projects.quorumMajority,
     });
     expect(result?.serverError).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// P-2.8b — reprovação decisiva não fica presa em votacao. VALID_STAGE_
+// TRANSITIONS não permite votacao → reprovado direto: closeVoting e
+// triggerPanicButton escreviam "reprovado" sem validar contra o mapa (o
+// caminho que transitionProjectStage recusaria). Agora as três actions
+// convergem no mesmo destino — homologacao — carregando `voteApproved` no
+// snapshot para runHomologacaoAutoApprove (packages/jobs) resolver.
+// ---------------------------------------------------------------------------
+
+describe("F2-P6/P-2.8b — closeVoting: reprovação decisiva vai para homologacao", () => {
+  it("com quórum e maioria contra: closeVoting encerra e transiciona para homologacao (não 'reprovado' direto)", async () => {
+    await voteAllEligible(IDS.projects.quorumRejected, false);
+
+    const { closeVoting } = await import("../actions/voting");
+    const result = await closeVoting({
+      projectId: IDS.projects.quorumRejected,
+    });
+
+    expect(result?.serverError).toBeUndefined();
+    expect(result?.data?.newStage).toBe("homologacao");
+    expect(result?.data?.result.approved).toBe(false);
+
+    const projectRows = await db
+      .select({ stage: projects.stage })
+      .from(projects)
+      .where(eq(projects.id, IDS.projects.quorumRejected));
+    expect(projectRows[0]?.stage).toBe("homologacao");
+
+    const [version] = await db
+      .select({ data: projectVersions.data })
+      .from(projectVersions)
+      .where(eq(projectVersions.projectId, IDS.projects.quorumRejected))
+      .orderBy(desc(projectVersions.versionNumber))
+      .limit(1);
+    expect((version?.data as { voteApproved?: boolean })?.voteApproved).toBe(
+      false,
+    );
+  });
+});
+
+describe("P-2.8b — triggerPanicButton: reprovação sem quórum vai para homologacao", () => {
+  it("maioria contra sem quórum: projeto sai de votacao para homologacao (não 'reprovado' direto)", async () => {
+    // 1 voto contra de 2 elegíveis (dualRole + diretor2) — sem quórum
+    // (ceil(2/2)=2). O botão de pânico ignora o quórum de propósito.
+    await db
+      .insert(votes)
+      .values({
+        projectId: IDS.projects.panicReject,
+        userId: IDS.users.dualRole,
+        value: false,
+      })
+      .onConflictDoNothing();
+
+    const { triggerPanicButton } = await import("../actions/voting");
+    const result = await triggerPanicButton({
+      projectId: IDS.projects.panicReject,
+    });
+
+    expect(result?.serverError).toBeUndefined();
+    expect(result?.data?.newStage).toBe("homologacao");
+
+    const projectRows = await db
+      .select({ stage: projects.stage })
+      .from(projects)
+      .where(eq(projects.id, IDS.projects.panicReject));
+    expect(projectRows[0]?.stage).toBe("homologacao");
+
+    const [version] = await db
+      .select({ data: projectVersions.data })
+      .from(projectVersions)
+      .where(eq(projectVersions.projectId, IDS.projects.panicReject))
+      .orderBy(desc(projectVersions.versionNumber))
+      .limit(1);
+    expect((version?.data as { voteApproved?: boolean })?.voteApproved).toBe(
+      false,
+    );
+  });
+});
+
+describe("P-2.8b — diretor com papel revogado não conta no denominador do quórum", () => {
+  it("countEligibleVoters (via closeVoting) ignora role_assignments com revoked_at preenchido", async () => {
+    // revokedDiretor tem uma linha ativa de papel "diretor", mas com
+    // revoked_at preenchido. voteAllEligible consulta o mesmo predicado que
+    // countEligibleVoters (revokedAt IS NULL) — se a implementação real
+    // regredisse e voltasse a contar papéis revogados, totalEligible viria
+    // 1 a mais que eligibleIds.length e este assert pegaria a diferença.
+    const eligibleIds = await voteAllEligible(IDS.projects.revokedQuorum, true);
+    expect(eligibleIds).not.toContain(IDS.users.revokedDiretor);
+
+    const { closeVoting } = await import("../actions/voting");
+    const result = await closeVoting({
+      projectId: IDS.projects.revokedQuorum,
+    });
+
+    expect(result?.serverError).toBeUndefined();
+    expect(result?.data?.result.totalEligible).toBe(eligibleIds.length);
+    expect(result?.data?.result.totalVoted).toBe(eligibleIds.length);
+  });
+});
+
+describe("P-2.8b — projeto soft-deleted não aceita voto nem fechamento", () => {
+  it("closeVoting em projeto com deletedAt preenchido rejeita como 'não encontrado'", async () => {
+    const { closeVoting } = await import("../actions/voting");
+    const result = await closeVoting({
+      projectId: IDS.projects.softDeleted,
+    });
+    expect(result?.serverError).toBeDefined();
+
+    const projectRows = await db
+      .select({ stage: projects.stage })
+      .from(projects)
+      .where(eq(projects.id, IDS.projects.softDeleted));
+    // Stage inalterado — a rejeição aconteceu antes de qualquer escrita.
+    expect(projectRows[0]?.stage).toBe("votacao");
   });
 });
