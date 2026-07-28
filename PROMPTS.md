@@ -3049,20 +3049,24 @@ Componentes para ambas as áreas (submissor e diretoria). ProjectCard (título, 
 
 **Arquivos permitidos para criação/edição:**
 
-- `apps/projetos/src/components/project-card.tsx`
 - `apps/projetos/src/components/project-kanban.tsx`
 - `apps/projetos/src/components/project-timeline.tsx`
 - `apps/projetos/src/components/vote-panel.tsx`
 - `apps/projetos/src/components/evaluation-card.tsx`
-- `apps/projetos/src/components/report-card.tsx`
 - `apps/projetos/src/components/score-indicator.tsx`
-- `apps/projetos/src/components/organization-card.tsx`
+
+> **Correção (P-2.2b):** `project-card.tsx`, `report-card.tsx` e
+> `organization-card.tsx` — listados aqui originalmente — foram removidos
+> no P-2.9c quando as telas passaram a renderizar as listas de projetos,
+> relatórios e organizações inline, em vez de via componente dedicado.
+> Desvio nunca registrado como decisão até agora; lista acima já reflete o
+> estado real do código.
 
 **Critérios de aceite:**
 
-- [~] ProjectCard com badge de stage colorido e formatação de valor em BRL (`project-card.tsx`, `report-card.tsx` e `organization-card.tsx` foram removidos no P-2.9c; as listas passaram a ser renderizadas inline nas páginas — desvio nunca registrado como decisão, ver P-2.2b)
-- [~] ProjectKanban com colunas por stage e drag-drop (somente para diretoria) (só há caminho de mouse; mover projeto é inacessível por teclado — ver P-2.2b)
-- [~] VotePanel: pergunta "Você sente paz em investir neste projeto?", sim/não, contador de quórum (a confirmação "Voto registrado" é otimista e sobrevive a uma falha de `castVote`, que não tem `onError` — ver P-2.2b)
+- [~] ProjectCard com badge de stage colorido e formatação de valor em BRL (`project-card.tsx`, `report-card.tsx` e `organization-card.tsx` foram removidos no P-2.9c; as listas passaram a ser renderizadas inline nas páginas — desvio arquitetural permanente, registrado em P-2.2b, lista de arquivos deste prompt corrigida)
+- [x] ProjectKanban com colunas por stage e drag-drop (somente para diretoria) (mover projeto por teclado — via menu "Mover para…" no card — corrigido em P-2.2b)
+- [x] VotePanel: pergunta "Você sente paz em investir neste projeto?", sim/não, contador de quórum (confirmação agora depende do retorno real de `castVote`, com `onError`/retry — corrigido em P-2.2b)
 - [x] ScoreIndicator: barra de progresso com score IA (0-100), visível apenas para super_admin/diretor/conselheiro
 - [x] EvaluationCard: parecer (aprovação/reprovação) + observações (texto)
 - [x] Responsivo
@@ -3292,15 +3296,15 @@ Dois débitos menores no mesmo grupo de componentes: `ScoreIndicator` (`componen
 
 **Critérios de aceite:**
 
-- [ ] `grep -n "setTimeout" apps/projetos/src/components/vote-panel.tsx` retorna vazio
-- [ ] `castVote` falhando deixa a tela em estado de erro com retry — nunca em "Voto registrado"
-- [ ] Sucesso reconcilia quórum e contagem com o servidor (sem depender do incremento local)
-- [ ] Teste de regressão cobrindo o caminho de falha de `castVote` a partir do wrapper
-- [ ] `ScoreIndicator` não declara união de papéis própria
-- [ ] Kanban permite mover um projeto entre estágios apenas com teclado
-- [ ] Sigilo preservado: nenhuma superfície nova expõe quem votou
-- [ ] `pnpm --filter projetos typecheck lint test` verdes
-- [ ] Registrar em SESSIONS.md
+- [x] `grep -n "setTimeout" apps/projetos/src/components/vote-panel.tsx` retorna vazio
+- [x] `castVote` falhando deixa a tela em estado de erro com retry — nunca em "Voto registrado"
+- [x] Sucesso reconcilia quórum e contagem com o servidor (sem depender do incremento local)
+- [x] Teste de regressão cobrindo o caminho de falha de `castVote` a partir do wrapper
+- [x] `ScoreIndicator` não declara união de papéis própria
+- [x] Kanban permite mover um projeto entre estágios apenas com teclado
+- [x] Sigilo preservado: nenhuma superfície nova expõe quem votou
+- [x] `pnpm --filter projetos typecheck lint test` verdes (typecheck/lint limpos; 110/112 testes — as 2 falhas são de `close-voting.test.ts`, quórum sobre dados reais do banco compartilhado, pré-existentes desde S-158 — fora de escopo)
+- [x] Registrar em SESSIONS.md
 
 **Notas:**
 Ref: BRAIN.md §6.2 (voto secreto; quórum ≥50% por pessoa distinta). O sigilo não é afetado por nada aqui — a contagem agregada já é a única coisa exibida. Não introduzir biblioteca de drag-and-drop: o item 6 é um caminho alternativo, não uma reescrita do arrasto.

@@ -1,12 +1,4 @@
-type Role =
-  | "super_admin"
-  | "diretor"
-  | "conselheiro"
-  | "colaborador"
-  | "submissor"
-  | "aluno"
-  | "hospede"
-  | "ouvinte";
+import type { Role } from "@hebron/types/roles";
 
 const SCORE_ROLES = new Set<Role>(["super_admin", "diretor", "conselheiro"]);
 

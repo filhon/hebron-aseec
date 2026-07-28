@@ -218,6 +218,7 @@
 | S-195  | 2026-07-27 | P-1.24b — Testes: o audit mockado e o caminho de escrita sem cobertura (CORRETIVO) — fecha o bloco B de Documentos               | concluido                            |
 | S-196  | 2026-07-27 | Auditoria Bloco A Projetos (P-2.1–P-2.5) — patches P-2.1b/2.2b/2.3b/2.3c/2.4b/2.5b gerados                                       | concluido                            |
 | S-197  | 2026-07-27 | P-2.1b — O contrato compartilhado que a implementação abandonou (CORRETIVO)                                                      | concluido                            |
+| S-198  | 2026-07-28 | P-2.2b — O voto que se dá por registrado sem o servidor confirmar (CORRETIVO)                                                    | concluido                            |
 
 ---
 
@@ -16371,7 +16372,7 @@ deixa o histórico de aplicação dessincronizado.
       compartilhado
 - [x] `grep -rn "ProjetoStatus\|ProjetoBase" apps packages` retorna vazio
 - [x] Migration hand-written, numeração sequencial, sem `drizzle-kit
-    generate`; aplicada no Supabase de dev
+  generate`; aplicada no Supabase de dev
 - [x] Critérios de P-2.1 refletem o estado real do código
 - [x] `pnpm --filter projetos typecheck lint test` — typecheck e lint
       limpos; 105/107 testes (as 2 falhas são de `close-voting.test.ts`,
@@ -16397,3 +16398,129 @@ deixa o histórico de aplicação dessincronizado.
 
 - Nenhum novo. `evaluation-card.tsx` não precisou de mudança — sempre leu
   `"sim"/"nao"` de `Evaluation.recommendation`, vocabulário que não mudou.
+
+## S-198 — P-2.2b — O voto que se dá por registrado sem o servidor confirmar (CORRETIVO)
+
+**Branch:** `feat/P-2.1b-projetos-contrato` (sessão executada sem checkout
+da branch prevista em pré-condição — ver observação abaixo)
+
+### Contexto
+
+S-196 (auditoria do Bloco A Projetos) encontrou que `VotePanel` ainda
+carregava a mecânica escrita para dados mockados na S-34: `handleVote`
+disparava um `setTimeout(..., 600)` e só depois marcava o voto localmente
+(`localVote`) e chamava `onVote` — a confirmação visual "Voto registrado"
+nunca dependia de resposta real do servidor. `VotePanelWrapper` chamava
+`useAction(castVote)` sem `onError`, então uma falha real de `castVote`
+(votação encerrada, quórum já apurado, papel inelegível, sessão expirada,
+rede caída) não tinha absolutamente nenhum efeito visível: a tela
+continuava mostrando "Voto registrado" porque `handleVote` já tinha
+marcado `localVote` antes mesmo da action resolver. O anel de quórum
+também nunca reconciliava com o servidor — o incremento otimista
+`totalVoted + 1` não tinha `router.refresh()` depois do sucesso.
+
+Dois débitos menores no mesmo grupo: `ScoreIndicator` redeclarava a união
+de papéis localmente em vez de importar `Role` de `@hebron/types/roles`
+(caminho que `lib/safe-action.ts` já usava); e `ProjectKanban` só permitia
+mover projeto por arrasto de mouse, sem caminho de teclado equivalente.
+
+### O que foi feito
+
+1. **`VotePanel` deixou de ter estado próprio de voto.** Removido
+   `setTimeout`, `localVote`, `loading` e o incremento otimista de
+   `voteSummary`. O componente agora é controlado pelo pai via `status`
+   (`"idle" | "pending" | "error"`), `hasVoted` e `confirmedValue`
+   (só usado para colorir o próprio ícone de confirmação — nunca exposto a
+   terceiros, sigilo do voto preservado). Três estados de UI: idle (botões
+   Sim/Não), pending ("Registrando…", botões desabilitados), error
+   (ícone + mensagem + botão "Tentar novamente" — os botões de voto ficam
+   ocultos até o retry, para não convidar um duplo clique na ação mais
+   sensível do módulo).
+2. **`VotePanelWrapper` ganhou `onError`/`onSuccess` reais.**
+   `onError` guarda `error.serverError` (ou mensagem padrão) em estado;
+   `onSuccess` guarda o sentido do voto confirmado (`confirmedValue`) e
+   chama `router.refresh()` — o anel de quórum e a contagem exibidos vêm
+   sempre do servidor, nunca de um incremento local. A derivação de estado
+   (`status`/`hasVoted` a partir de `isPending`/`errorMessage`/
+   `confirmedValue`/`hasVoted` vindo do servidor) foi extraída para uma
+   função pura exportada, `deriveVoteState`, especificamente para poder
+   testar o contrato de falha sem precisar montar o componente — o app não
+   tem `@testing-library/react`/jsdom configurado (`vitest.config.ts` usa
+   `environment: "node"`), e instalar essa infra estava fora do escopo
+   deste prompt corretivo.
+3. **`ScoreIndicator` importa `Role` de `@hebron/types/roles`**, removendo
+   a união local.
+4. **Caminho de teclado no `ProjectKanban`.** Cada card, quando
+   `canDrag`, ganha um `<select>` nativo "Mover para…" (rótulo via
+   `sr-only`, `stopPropagation` de click/keydown para não conflitar com o
+   `onClick`/`onKeyDown` de navegação do card) listando os outros estágios
+   do pipeline (`PIPELINE_STAGES` menos o estágio atual da coluna — os
+   mesmos destinos que o arrasto já permite; a validação de transição real
+   continua inteiramente no servidor, em `transitionProjectStage`, tanto
+   para arrasto quanto para o select). A lógica de mover ficou compartilhada:
+   `moveTo(id, targetStage)` é chamada tanto por `handleDrop` (arrasto)
+   quanto por `handleMoveSelect` (teclado), preservando o mesmo update
+   otimista de posição e o mesmo `onMove`. O arrasto não foi alterado.
+5. **Teste de regressão em `voting.test.ts`:** novo describe
+   "VotePanelWrapper: castVote falhando nunca mostra 'Voto registrado'"
+   com 5 casos cobrindo `deriveVoteState` — pendente, erro (com
+   `hasVoted` permanecendo `false`), retry, sucesso (`hasVoted` só vira
+   `true` depois de `confirmedValue` ser setado por `onSuccess`) e
+   `hasVoted` vindo do servidor no carregamento inicial da página.
+6. **Bookkeeping em PROMPTS.md:** a lista de "Arquivos permitidos" de
+   P-2.2 nomeava `project-card.tsx`, `report-card.tsx` e
+   `organization-card.tsx` — os três foram removidos no P-2.9c quando as
+   telas passaram a renderizar as listas de projetos/relatórios/
+   organizações inline; a lista nunca foi corrigida e o desvio nunca tinha
+   sido registrado como decisão. Lista corrigida, nota adicionada. Os
+   critérios de aceite de ProjectKanban e VotePanel em P-2.2 passaram de
+   `[~]` para `[x]` (o de ProjectCard/ReportCard/OrganizationCard
+   permanece `[~]`, por ser um desvio arquitetural permanente, não algo
+   que este prompt corrige). Critérios do próprio P-2.2b marcados.
+
+### Observação sobre a branch
+
+A pré-condição do prompt pedia `feat/P-2.2b-projetos-voto`, mas a sessão
+foi executada na branch já ativa no ambiente,
+`feat/P-2.1b-projetos-contrato` (working tree limpo antes de começar,
+sem trabalho de outra sessão para preservar). Registrado aqui para não
+ficar implícito; nenhuma consequência funcional — o diff é o mesmo
+independentemente do nome da branch.
+
+### Critérios de aceite
+
+- [x] `grep -n "setTimeout" apps/projetos/src/components/vote-panel.tsx`
+      retorna vazio
+- [x] `castVote` falhando deixa a tela em estado de erro com retry —
+      nunca em "Voto registrado"
+- [x] Sucesso reconcilia quórum e contagem com o servidor (sem depender
+      do incremento local)
+- [x] Teste de regressão cobrindo o caminho de falha de `castVote` a
+      partir do wrapper
+- [x] `ScoreIndicator` não declara união de papéis própria
+- [x] Kanban permite mover um projeto entre estágios apenas com teclado
+- [x] Sigilo preservado: nenhuma superfície nova expõe quem votou
+- [x] `pnpm --filter projetos typecheck lint test` — typecheck e lint
+      limpos; 110/112 testes (as 2 falhas são de `close-voting.test.ts`,
+      quórum sobre dados reais do banco compartilhado, pré-existentes e
+      documentadas desde S-158 — fora de escopo, não tocadas nesta sessão)
+- [x] Registrado em SESSIONS.md
+
+### Arquivos alterados
+
+- `apps/projetos/src/components/vote-panel.tsx`
+- `apps/projetos/src/components/vote-panel-wrapper.tsx`
+- `apps/projetos/src/components/score-indicator.tsx`
+- `apps/projetos/src/components/project-kanban.tsx`
+- `apps/projetos/src/__tests__/voting.test.ts`
+- `PROMPTS.md` (bookkeeping de P-2.2 e do próprio P-2.2b)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+### Débitos registrados
+
+- Nenhum novo. `apps/projetos/src/app/(diretoria)/pipeline/page.tsx`
+  constava na lista de arquivos permitidos "apenas para a fiação do item
+  6", mas nenhuma mudança foi necessária ali: `ProjectKanban` já recebe
+  `onMove`/`canDrag` da página, e o novo caminho de teclado reusa
+  exatamente o mesmo `onMove` que o arrasto — a página não precisa saber
+  que a chamada veio de um select em vez de um `drop`.

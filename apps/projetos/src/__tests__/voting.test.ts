@@ -6,6 +6,7 @@
  *  - Botão de pânico (super_admin force-close)
  *  - Restrição DB: 1 voto por pessoa por projeto (UNIQUE constraint)
  *  - RLS: cédula secreta — apenas super_admin pode SELECT votos
+ *  - Contrato de falha de `castVote` no cliente (VotePanelWrapper) — P-2.2b
  */
 
 import { describe, it, expect, beforeAll, afterAll, afterEach } from "vitest";
@@ -20,6 +21,7 @@ import {
   projects,
   votes,
 } from "@hebron/db/schema";
+import { deriveVoteState } from "../components/vote-panel-wrapper";
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -307,6 +309,65 @@ describe("Votação — Botão de pânico (force-close sem quórum)", () => {
   it("pânico com quórum já atingido: maioria ainda decide", () => {
     // 4 elegíveis, 4 votos (quórum atingido), 3×1 → aprovado
     expect(panicApproved(3, 1)).toBe(true);
+  });
+});
+
+// ── Cliente: caminho de falha de castVote (VotePanelWrapper) ───────────────────
+
+describe("Votação — VotePanelWrapper: castVote falhando nunca mostra 'Voto registrado'", () => {
+  it("pendente: status='pending', não confirmado", () => {
+    const result = deriveVoteState({
+      isPending: true,
+      errorMessage: null,
+      confirmedValue: null,
+      hasVoted: false,
+    });
+    expect(result.status).toBe("pending");
+    expect(result.hasVoted).toBe(false);
+  });
+
+  it("castVote rejeita (onError disparou): status='error', hasVoted continua false", () => {
+    const result = deriveVoteState({
+      isPending: false,
+      errorMessage: "Votação encerrada.",
+      confirmedValue: null,
+      hasVoted: false,
+    });
+    expect(result.status).toBe("error");
+    expect(result.hasVoted).toBe(false);
+  });
+
+  it("retry limpa o erro e devolve ao estado votável (idle)", () => {
+    // onRetry apenas zera errorMessage — isPending e confirmedValue não mudam
+    const result = deriveVoteState({
+      isPending: false,
+      errorMessage: null,
+      confirmedValue: null,
+      hasVoted: false,
+    });
+    expect(result.status).toBe("idle");
+    expect(result.hasVoted).toBe(false);
+  });
+
+  it("castVote confirma (onSuccess disparou): status='idle', hasVoted=true — só depois do servidor responder", () => {
+    const result = deriveVoteState({
+      isPending: false,
+      errorMessage: null,
+      confirmedValue: true,
+      hasVoted: false,
+    });
+    expect(result.status).toBe("idle");
+    expect(result.hasVoted).toBe(true);
+  });
+
+  it("hasVoted vindo do servidor no carregamento da página é respeitado mesmo sem confirmedValue local", () => {
+    const result = deriveVoteState({
+      isPending: false,
+      errorMessage: null,
+      confirmedValue: null,
+      hasVoted: true,
+    });
+    expect(result.hasVoted).toBe(true);
   });
 });
 

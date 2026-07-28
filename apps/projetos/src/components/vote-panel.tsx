@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import type { VoteSummary } from "@hebron/types";
 
 interface QuorumRingProps {
@@ -95,11 +94,24 @@ function QuorumRing({ voted, eligible, quorumMet }: QuorumRingProps) {
   );
 }
 
+/**
+ * Estado da chamada de `castVote` — a UI nunca declara "registrado" por
+ * conta própria; ela só reflete o que `VotePanelWrapper` já recebeu do
+ * servidor (BRAIN §6.2: um voto secreto que falha em silêncio é
+ * indistinguível de um voto computado).
+ */
+export type VoteStatus = "idle" | "pending" | "error";
+
 export interface VotePanelProps {
   projectTitle: string;
   voteSummary: VoteSummary;
   hasVoted?: boolean;
+  status?: VoteStatus;
+  errorMessage?: string | null;
+  /** Sentido do voto confirmado nesta sessão (só para colorir o próprio ícone de confirmação — nunca exposto a terceiros). */
+  confirmedValue?: boolean | null;
   onVote?: (inFavor: boolean) => void;
+  onRetry?: () => void;
   className?: string;
 }
 
@@ -107,36 +119,19 @@ export function VotePanel({
   projectTitle,
   voteSummary,
   hasVoted = false,
+  status = "idle",
+  errorMessage = null,
+  confirmedValue = null,
   onVote,
+  onRetry,
   className,
 }: VotePanelProps) {
-  const [localVote, setLocalVote] = useState<boolean | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  const voted = hasVoted || localVote !== null;
+  const pending = status === "pending";
 
   function handleVote(inFavor: boolean) {
-    if (voted || loading) return;
-    setLoading(true);
-    setTimeout(() => {
-      setLocalVote(inFavor);
-      setLoading(false);
-      onVote?.(inFavor);
-    }, 600);
+    if (hasVoted || pending) return;
+    onVote?.(inFavor);
   }
-
-  const displaySummary: VoteSummary =
-    localVote !== null
-      ? {
-          ...voteSummary,
-          totalVoted: voteSummary.totalVoted + 1,
-          inFavor: localVote ? voteSummary.inFavor + 1 : voteSummary.inFavor,
-          against: !localVote ? voteSummary.against + 1 : voteSummary.against,
-          quorumMet:
-            voteSummary.totalVoted + 1 >=
-            Math.ceil(voteSummary.totalEligible / 2),
-        }
-      : voteSummary;
 
   return (
     <div
@@ -179,15 +174,15 @@ export function VotePanel({
 
       {/* Vote buttons */}
       <div className="px-6 pt-10 pb-6 flex flex-col items-center gap-6">
-        {voted ? (
+        {hasVoted ? (
           <div className="flex flex-col items-center gap-2 py-2">
             <div
               className="w-14 h-14 rounded-full flex items-center justify-center"
               style={{
                 backgroundColor:
-                  localVote === true || (hasVoted && localVote === null)
-                    ? "var(--hb-green-muted)"
-                    : "var(--color-destructive-muted)",
+                  confirmedValue === false
+                    ? "var(--color-destructive-muted)"
+                    : "var(--hb-green-muted)",
               }}
             >
               <svg
@@ -200,9 +195,9 @@ export function VotePanel({
                 <path
                   d="M5 12l5 5L20 7"
                   stroke={
-                    localVote !== false
-                      ? "var(--hb-green-fg)"
-                      : "var(--color-destructive)"
+                    confirmedValue === false
+                      ? "var(--color-destructive)"
+                      : "var(--hb-green-fg)"
                   }
                   strokeWidth="2.5"
                   strokeLinecap="round"
@@ -215,90 +210,134 @@ export function VotePanel({
               Seu voto é secreto e não será revelado.
             </p>
           </div>
+        ) : status === "error" ? (
+          <div
+            className="flex flex-col items-center gap-3 py-2 w-full max-w-xs"
+            role="alert"
+          >
+            <div
+              className="w-14 h-14 rounded-full flex items-center justify-center"
+              style={{ backgroundColor: "var(--color-destructive-muted)" }}
+            >
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                aria-hidden
+              >
+                <path
+                  d="M7 7l10 10M17 7L7 17"
+                  stroke="var(--color-destructive)"
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </div>
+            <p className="text-sm font-semibold text-(--color-destructive) text-center">
+              {errorMessage ?? "Não foi possível registrar o voto."}
+            </p>
+            <button
+              type="button"
+              onClick={onRetry}
+              className="rounded-md border-2 px-5 py-2 text-sm font-bold transition-colors duration-(--dur-fast) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2"
+              style={{ borderColor: "var(--hb-blue)", color: "var(--hb-blue)" }}
+            >
+              Tentar novamente
+            </button>
+          </div>
         ) : (
-          <div className="flex gap-4 w-full max-w-xs">
-            <button
-              type="button"
-              onClick={() => handleVote(true)}
-              disabled={loading}
-              className="flex-1 flex flex-col items-center justify-center gap-2 rounded-md border-2 py-4 transition-all duration-(--dur-fast) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-60 disabled:pointer-events-none"
-              style={{
-                borderColor: "var(--hb-green)",
-                backgroundColor: "var(--hb-green-muted)",
-                color: "var(--hb-green-fg)",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = "var(--hb-green)";
-                e.currentTarget.style.color = "#fff";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = "var(--hb-green-muted)";
-                e.currentTarget.style.color = "var(--hb-green-fg)";
-              }}
-            >
-              <svg
-                width="28"
-                height="28"
-                viewBox="0 0 28 28"
-                fill="none"
-                aria-hidden
+          <div className="flex flex-col items-center gap-3 w-full max-w-xs">
+            <div className="flex gap-4 w-full">
+              <button
+                type="button"
+                onClick={() => handleVote(true)}
+                disabled={pending}
+                className="flex-1 flex flex-col items-center justify-center gap-2 rounded-md border-2 py-4 transition-all duration-(--dur-fast) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-60 disabled:pointer-events-none"
+                style={{
+                  borderColor: "var(--hb-green)",
+                  backgroundColor: "var(--hb-green-muted)",
+                  color: "var(--hb-green-fg)",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = "var(--hb-green)";
+                  e.currentTarget.style.color = "#fff";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor =
+                    "var(--hb-green-muted)";
+                  e.currentTarget.style.color = "var(--hb-green-fg)";
+                }}
               >
-                <path
-                  d="M4 14l8 8L24 6"
-                  stroke="currentColor"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-              <span className="font-bold text-base">Sim</span>
-            </button>
+                <svg
+                  width="28"
+                  height="28"
+                  viewBox="0 0 28 28"
+                  fill="none"
+                  aria-hidden
+                >
+                  <path
+                    d="M4 14l8 8L24 6"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                <span className="font-bold text-base">Sim</span>
+              </button>
 
-            <button
-              type="button"
-              onClick={() => handleVote(false)}
-              disabled={loading}
-              className="flex-1 flex flex-col items-center justify-center gap-2 rounded-md border-2 py-4 transition-all duration-(--dur-fast) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-60 disabled:pointer-events-none"
-              style={{
-                borderColor: "var(--color-destructive)",
-                backgroundColor: "var(--color-destructive-muted)",
-                color: "var(--color-destructive)",
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor =
-                  "var(--color-destructive)";
-                e.currentTarget.style.color = "#fff";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor =
-                  "var(--color-destructive-muted)";
-                e.currentTarget.style.color = "var(--color-destructive)";
-              }}
-            >
-              <svg
-                width="28"
-                height="28"
-                viewBox="0 0 28 28"
-                fill="none"
-                aria-hidden
+              <button
+                type="button"
+                onClick={() => handleVote(false)}
+                disabled={pending}
+                className="flex-1 flex flex-col items-center justify-center gap-2 rounded-md border-2 py-4 transition-all duration-(--dur-fast) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-60 disabled:pointer-events-none"
+                style={{
+                  borderColor: "var(--color-destructive)",
+                  backgroundColor: "var(--color-destructive-muted)",
+                  color: "var(--color-destructive)",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor =
+                    "var(--color-destructive)";
+                  e.currentTarget.style.color = "#fff";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor =
+                    "var(--color-destructive-muted)";
+                  e.currentTarget.style.color = "var(--color-destructive)";
+                }}
               >
-                <path
-                  d="M6 6l16 16M22 6L6 22"
-                  stroke="currentColor"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                />
-              </svg>
-              <span className="font-bold text-base">Não</span>
-            </button>
+                <svg
+                  width="28"
+                  height="28"
+                  viewBox="0 0 28 28"
+                  fill="none"
+                  aria-hidden
+                >
+                  <path
+                    d="M6 6l16 16M22 6L6 22"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                  />
+                </svg>
+                <span className="font-bold text-base">Não</span>
+              </button>
+            </div>
+            {pending && (
+              <p className="text-xs text-(--fg-muted)" role="status">
+                Registrando…
+              </p>
+            )}
           </div>
         )}
 
-        {/* Quorum indicator */}
+        {/* Quorum indicator — vem sempre do servidor, nunca de um incremento local */}
         <QuorumRing
-          voted={displaySummary.totalVoted}
-          eligible={displaySummary.totalEligible}
-          quorumMet={displaySummary.quorumMet}
+          voted={voteSummary.totalVoted}
+          eligible={voteSummary.totalEligible}
+          quorumMet={voteSummary.quorumMet}
         />
 
         {/* Secret ballot notice */}

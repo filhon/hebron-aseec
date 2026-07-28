@@ -109,7 +109,9 @@ interface KanbanCardProps {
   project: CompactProjectView;
   draggable: boolean;
   isDragging: boolean;
+  moveOptions: ProjectStage[];
   onClick?: () => void;
+  onMoveSelect?: (targetStage: ProjectStage) => void;
   onDragStart: (id: string) => void;
   onDragEnd: () => void;
 }
@@ -118,7 +120,9 @@ function KanbanCard({
   project,
   draggable,
   isDragging,
+  moveOptions,
   onClick,
+  onMoveSelect,
   onDragStart,
   onDragEnd,
 }: KanbanCardProps) {
@@ -194,6 +198,34 @@ function KanbanCard({
           {project.pendingReports > 1 ? "s" : ""}
         </div>
       )}
+      {onMoveSelect && moveOptions.length > 0 && (
+        <div
+          className="mt-2"
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+        >
+          <label htmlFor={`move-${project.id}`} className="sr-only">
+            Mover "{project.titulo}" para outro estágio
+          </label>
+          <select
+            id={`move-${project.id}`}
+            value=""
+            onChange={(e) => {
+              const value = e.target.value as ProjectStage | "";
+              if (value) onMoveSelect(value);
+              e.currentTarget.value = "";
+            }}
+            className="w-full rounded-sm border border-(--border) bg-(--surface-alt) px-1.5 py-1 text-xs text-(--fg-muted) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--hb-blue)"
+          >
+            <option value="">Mover para…</option>
+            {moveOptions.map((s) => (
+              <option key={s} value={s}>
+                {STAGE_CFG[s].label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
     </div>
   );
 }
@@ -206,6 +238,7 @@ interface KanbanColumnProps {
   isDragTarget: boolean;
   draggedId: string | null;
   onCardClick?: (id: string) => void;
+  onMoveSelect?: (id: string, targetStage: ProjectStage) => void;
   onDragStart: (id: string) => void;
   onDragEnd: () => void;
   onDrop: (stage: ProjectStage) => void;
@@ -219,12 +252,17 @@ function KanbanColumn({
   isDragTarget,
   draggedId,
   onCardClick,
+  onMoveSelect,
   onDragStart,
   onDragEnd,
   onDrop,
   onDragOver,
 }: KanbanColumnProps) {
   const cfg = STAGE_CFG[stage];
+  // Mesmos destinos que o arrasto já permite (qualquer outra coluna do
+  // pipeline) — o servidor (transitionProjectStage) é quem valida a
+  // transição de fato, tanto para o arrasto quanto para este menu.
+  const moveOptions = PIPELINE_STAGES.filter((s) => s !== stage);
 
   return (
     <div
@@ -287,7 +325,13 @@ function KanbanColumn({
             project={p}
             draggable={canDrag}
             isDragging={draggedId === p.id}
+            moveOptions={moveOptions}
             onClick={onCardClick ? () => onCardClick(p.id) : undefined}
+            onMoveSelect={
+              canDrag && onMoveSelect
+                ? (target) => onMoveSelect(p.id, target)
+                : undefined
+            }
             onDragStart={onDragStart}
             onDragEnd={onDragEnd}
           />
@@ -357,22 +401,33 @@ export function ProjectKanban({
     dragTimer.current = setTimeout(() => setDragOverStage(null), 300);
   }
 
-  function handleDrop(targetStage: ProjectStage) {
-    if (draggedId === null) return;
+  // Compartilhado pelo arrasto (handleDrop) e pelo caminho de teclado
+  // (handleMoveSelect) — mesmo update otimista, mesmo onMove.
+  function moveTo(id: string, targetStage: ProjectStage) {
     setPositions((prev) => {
       const next = new Map(prev);
-      next.set(draggedId, targetStage);
+      next.set(id, targetStage);
       return next;
     });
-    onMove?.(draggedId, targetStage);
+    onMove?.(id, targetStage);
+  }
+
+  function handleDrop(targetStage: ProjectStage) {
+    if (draggedId === null) return;
+    moveTo(draggedId, targetStage);
     setDraggedId(null);
     setDragOverStage(null);
+  }
+
+  function handleMoveSelect(id: string, targetStage: ProjectStage) {
+    moveTo(id, targetStage);
   }
 
   const columnProps = {
     canDrag,
     draggedId,
     onCardClick,
+    onMoveSelect: handleMoveSelect,
     onDragStart: handleDragStart,
     onDragEnd: handleDragEnd,
     onDrop: handleDrop,
