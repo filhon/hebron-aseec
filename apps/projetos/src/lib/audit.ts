@@ -19,6 +19,7 @@ export type ProjectAuditAction =
   | "contestation.created"
   | "report.created"
   | "report.submitted"
+  | "report.reviewed"
   | "organization.created"
   | "organization.updated";
 

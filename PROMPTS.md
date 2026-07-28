@@ -3581,9 +3581,12 @@ Criar tabelas Drizzle no schema `projetos`: organizations, organization_members 
 - [x] contestations: project_id, user_id, justification, max 2 por projeto, 1 por pessoa
 - [x] reports: project_id, content, status, due_date, submitted_at
 - [x] payment_schedules: project_id, amount, month, due_date, status
-- [x] Transições de stage definidas (sem permitir pular stages)
+- [~] Transições de stage definidas (sem permitir pular stages) — o mapa existe, mas `votacao: ["homologacao"]` não prevê reprovação, e `castVote`/`closeVoting`/`triggerPanicButton` gravam `reprovado` mesmo assim (a primeira em silêncio, as outras duas sem consultar o mapa). **P-2.8b**
 - [x] Migration aplica sem erros
 - [x] Types passam
+
+**Notas (auditoria do Bloco B, 2026-07-28):**
+`projetos.reports` não tem coluna para o parecer da revisão, que `reviewReport` coleta e descarta — **P-2.6b**. `scoreProject` (`packages/ai`) devolve `aiJustification` e `submitProject` não o persiste (não há coluna): a diretoria vê o número sem a razão. Somado ao `score_ai_breakdown` persistido e nunca exibido (débito da S-196), a saída da IA chega à tela reduzida a um inteiro.
 
 ---
 
@@ -3647,18 +3650,21 @@ Server Actions para Projetos. CRUD de projetos (criar rascunho, submeter, editar
 
 **Critérios de aceite:**
 
-- [x] State machine: transições válidas (rascunho→validacao→votacao→homologacao→aprovado/reprovado→em_execucao→concluido)
+- [~] State machine: transições válidas (rascunho→validacao→votacao→homologacao→aprovado/reprovado→em_execucao→concluido) — `closeVoting` e `triggerPanicButton` gravam `stage` sem passar pelo mapa; `castVote` pula a transição de reprovação em silêncio. **P-2.8b**
 - [x] Bloqueio de submissão se orçamento da instituição excedido
-- [x] Votação: registra voto secreto; calcula quórum (>=50% diretores+conselheiros); maioria simples
-- [x] Botão de pânico: super_admin encerra votação com maioria+1 dos existentes
+- [~] Votação: registra voto secreto; calcula quórum (>=50% diretores+conselheiros); maioria simples — o denominador conta `role_assignments` sem `revoked_at IS NULL`, o filtro canônico de papel ativo (`resolveSession`, `public.has_role()`); diretor revogado infla o quórum sem poder votar. **P-2.8b**
+- [~] Botão de pânico: super_admin encerra votação com maioria+1 dos existentes — implementado como maioria simples (`inFavor > against`); divergência de leitura do BRAIN a confirmar com o Filipe. **P-2.8b**
 - [x] Contestação: max 2 por projeto, 1 por pessoa, retorna para votação
-- [x] Homologação: 7 dias sem contestação → notificar submissor
+- [~] Homologação: 7 dias sem contestação → notificar submissor — o cron existe (P-0.14) e notifica, mas o `href` da notificação aponta para `/projetos/<id>`, rota inexistente. **P-2.10b**
 - [x] Score IA: GPT-4.1 com critérios do Admin
 - [x] Versão compacta: GPT-4.1 com template do Admin
 - [x] Soft-delete com justificativa obrigatória
-- [x] Audit log em toda mutação
+- [x] Audit log em toda mutação — `reviewReport` agora audita como `report.reviewed` (valor dedicado no enum), distinto de `report.submitted` do envio pelo submissor. **P-2.6b**
 - [x] Lint passa
 - [x] Types passam
+
+**Notas (auditoria do Bloco B, 2026-07-28):**
+O escopo prometia "editar em rascunho" e "CRUD de organizações e membros". `updateDraftProject`, `updateOrganization`, `addOrganizationMember` e `removeOrganizationMember` existem, auditam, e não têm um único chamador em `app/` ou `components/` — **P-2.8c**.
 
 ---
 
@@ -3771,18 +3777,21 @@ Implementar todas as notificações do módulo Projetos (ver lista no BRAIN.md s
 
 **Critérios de aceite:**
 
-- [x] Submissão → super_admins (in_app + email)
-- [x] Validação → submissor (in_app + email)
-- [x] Votação aberta → diretores/conselheiros (in_app + email)
-- [x] Aprovado/reprovado (após homologação) → submissor (email)
-- [~] Relatório pendente: 3 lembretes (7d antes, no dia, 7d antes de expirar)
-- [x] Pagamento realizado → submissor (email com comprovante)
-- [x] Bloqueio por falta de relatório → submissor + super_admins
-- [x] Contestação de diretor → todos diretores/conselheiros
-- [~] Lista de projetos designados → avaliador (7d antes da reunião)
+- [~] Submissão → super_admins (in_app + email) — `notifyProjectSubmitted` existe e **nenhuma action a chama**. **P-2.10b**
+- [~] Validação → submissor (in_app + email) — `notifyProjectInValidation` sem chamador. **P-2.10b**
+- [~] Votação aberta → diretores/conselheiros (in_app + email) — `notifyVotingOpen` sem chamador: a votação abre e ninguém é avisado. **P-2.10b**
+- [~] Aprovado/reprovado (após homologação) → submissor (email) — dispara pelo cron de homologação automática (P-0.14), mas o link vai para `/projetos/<id>`, rota inexistente. **P-2.10b**
+- [x] Relatório pendente: 3 lembretes (7d antes, no dia, 7d antes de expirar) — cron `reportRemindersCron` (P-0.14)
+- [~] Pagamento realizado → submissor (email com comprovante) — `notifyPaymentMade` sem chamador; quem sabe do pagamento é o Financeiro. **P-2.10b**
+- [~] Bloqueio por falta de relatório → submissor + super_admins — `notifyProjectBlocked` sem chamador; o cron de inadimplência bloqueia os payables e não notifica ninguém. **P-2.10b**
+- [~] Contestação de diretor → todos diretores/conselheiros — `notifyContestation` sem chamador. **P-2.10b**
+- [~] Lista de projetos designados → avaliador (7d antes da reunião) — `evaluationRemindersCron` (P-0.14) cobre o lembrete; `notifyEvaluatorDesignated` (aviso no ato da designação) segue sem chamador. **P-2.10b**
 - [x] Templates editáveis no Admin
 - [x] Lint passa
 - [x] Types passam
+
+**Notas (auditoria do Bloco B, 2026-07-28):**
+As sete funções de `apps/projetos/src/lib/notifications.ts` não têm um único chamador no repositório — o próprio arquivo registra o fato em comentário desde P-0.14 (linhas 335-339). Os critérios acima descreviam a existência dos arquivos, não o envio das mensagens.
 
 ---
 
@@ -3807,10 +3816,12 @@ Integração Projetos → Financeiro: aprovação cria centro de custo + payment
 - `apps/projetos/src/lib/integrations/documentos.ts`
 - `packages/db/src/schema/financeiro-stubs.ts`
 
+> **Lista desatualizada (auditoria do Bloco B, 2026-07-28).** `apps/projetos/src/lib/integrations/` não existe mais: as quatro integrações foram realocadas para `packages/integrations` (`projetos.ts`, `projetos-tarefas.ts`, `projetos-flats.ts`, `documentos-projetos.ts`) em P-0.13/P-0.14 e por PATCH-013, e `financeiro-stubs.ts` foi absorvido por `packages/db/src/schema/financeiro.ts` quando a Fase 3 tornou as tabelas reais. Nenhuma das quatro é stub hoje — todas têm implementação e chamador. Realocação registrada aqui porque nunca constou de PROMPTS.md.
+
 **Critérios de aceite:**
 
-- [x] Aprovação de projeto dispara criação de centro de custo (stub ou real)
-- [x] Aprovação cria payment_schedules baseado nas parcelas definidas
+- [x] Aprovação de projeto dispara criação de centro de custo (stub ou real) — real desde P-3.11
+- [~] Aprovação cria payment_schedules baseado nas parcelas definidas — `generatePaymentSchedule` divide o orçamento por `parcelas` mas emite uma linha por `meses`. Iguais na criação (`checkMesesPagamentoCoherence`, P-2.4b); `updateDraftProject` aceita `parcelas` sem `meses` e desfaz a igualdade, gerando cronograma cuja soma não bate com `budget_total` — e cada linha vira um `payable` real. **P-2.8c**
 - [x] Submissão dispara criação de checklist de análise (stub)
 - [x] Wizard recebe edital_id e pré-preenche tipo + categoria (wiring completo em P-2.9c, S-62; ver SESSIONS S-68 ponto 6)
 - [x] Stubs documentados para integração futura
@@ -3847,13 +3858,294 @@ Testes de integração para Projetos. RLS (submissor vê apenas próprios, votes
 
 - [x] RLS: submissor não vê projetos de outras instituições
 - [x] RLS: votes não visíveis para não-admin
-- [x] State machine: transição inválida retorna erro
-- [x] Votação: sem quórum → não aprova; com quórum + maioria → aprova
+- [~] State machine: transição inválida retorna erro — os 25 testes verificam a constante `VALID_STAGE_TRANSITIONS`, não as actions; as três que fecham votação não a consultam (ou a ignoram em silêncio). **P-2.8b**, **P-2.12b**
+- [~] Votação: sem quórum → não aprova; com quórum + maioria → aprova — verificado contra `computeQuorum`, reimplementação da lógica dentro do próprio arquivo de teste ("espelha computeVoteResult", `voting.test.ts:73-95`), não contra a action. **P-2.12b**
 - [x] Contestação: 3a tentativa por projeto retorna erro; 2a por pessoa retorna erro
 - [x] Orçamento: submissão que excede orçamento é bloqueada
-- [x] Fluxo end-to-end funciona
+- [~] Fluxo end-to-end funciona — `flow.test.ts` percorre o caminho de aprovação; o caminho de reprovação não tem cobertura em nenhum dos três fechamentos de votação. **P-2.12b**
 - [x] Testes passam
 - [x] Lint passa
+
+---
+
+### P-2.6b — O relatório que é rejeitado sem motivo e não pode voltar (CORRETIVO)
+
+**Fase:** 2
+**Módulo:** projetos
+**Tipo:** schema
+**Pré-condições:**
+
+- Branch: `feat/P-2.6b-projetos-relatorios`
+- Dependências: P-2.5b concluído (S-202); auditoria do Bloco B Projetos
+- Env vars: `DATABASE_URL`
+
+**Problema que este prompt resolve (contexto):**
+O ciclo de relatório de prestação de contas tem três pontas — diretor solicita, submissor envia, diretor revisa (P-2.9c, S-62) — e a terceira ponta perde tudo o que produz.
+
+`reviewReport` (`actions/reports.ts:228-283`) aceita `notes: z.string().max(2000).optional()` no schema. A tabela `projetos.reports` (`packages/db/src/schema/projetos.ts:388-416`) não tem coluna para guardá-lo: as colunas de revisão são `reviewedBy` e `reviewedAt`, mais nada. O parecer do diretor entra na action, é escrito no `diff` do audit log — onde nenhum submissor tem SELECT — e desaparece. `ReportReviewActions` (`components/report-review-actions.tsx:27,40`) sequer coleta o campo: são dois botões que chamam `execute({ reportId, decision })` direto. Do lado do submissor, um relatório rejeitado aparece como a palavra "rejected" e nada mais. Ele não sabe o que corrigir.
+
+E não teria como corrigir. `submitReport` (`reports.ts:167-169`) exige `report.status !== "pendente"` → erro; `reviewReport` (`reports.ts:242-244`) exige `status === "submitted"`. Depois de `rejected`, nenhuma action do módulo devolve o relatório a `pendente`. O estado é terminal e não há caminho de volta: o relatório fica rejeitado para sempre, o projeto segue contando um relatório não aprovado, e o cron de inadimplência (`packages/jobs/src/crons/projetos-inadimplencia.ts`) — que só olha `status = "pendente"` com `due_date` vencida — nem chega a bloquear os pagamentos, porque o relatório já não é "pendente". Uma rejeição hoje é, simultaneamente, um beco sem saída para o submissor e uma saída silenciosa do controle de inadimplência.
+
+A terceira ponta é o audit. `reviewReport` registra `action: "report.submitted"` (`reports.ts:270`) — a mesma ação que o submissor gera ao enviar. O enum `auditActionEnum` (`packages/db/src/schema/admin.ts:55-56`) só tem `report.created` e `report.submitted`; não existe `report.reviewed`. O log não consegue responder "quem aprovou este relatório", que é exatamente a pergunta que um audit trail de prestação de contas existe para responder.
+
+**Escopo (siga na ordem):**
+
+1. **Coluna de parecer:** adicionar `review_notes text` a `projetos.reports` (migration hand-written, numeração sequencial — `drizzle-kit generate` está aposentado desde P-0.3c/S-171) e persistir `parsedInput.notes` em `reviewReport`.
+2. **Coletar o parecer na UI:** `ReportReviewActions` ganha campo de texto. Decidir e registrar a regra: parecer **obrigatório** na rejeição (o submissor precisa saber o que corrigir) e opcional na aprovação é a leitura natural do BRAIN §6.2 — se for essa a escolha, refletir no schema Zod com um refinamento, não só no componente.
+3. **Exibir o parecer ao submissor** na listagem de relatórios do próprio projeto (`app/(submissor)/[id]/page.tsx`), junto do status. Rejeição sem motivo visível é o defeito; mostrar o motivo é a correção.
+4. **Reabrir o ciclo:** definir como um relatório rejeitado volta a ser enviável. Duas saídas aceitáveis: (a) `reviewReport` com `decision: "rejected"` devolve o relatório a `pendente` (mantendo `reviewedBy`/`reviewedAt`/`review_notes` do ciclo anterior), o que reativa o cron de inadimplência automaticamente; ou (b) `submitReport` passa a aceitar `pendente` **e** `rejected`, e o cron de inadimplência passa a considerar os dois status. Escolher uma, aplicar em uma camada só, e registrar a razão em SESSIONS.md.
+5. **`report.reviewed` no audit:** novo valor no `auditActionEnum` (migration `ALTER TYPE ... ADD VALUE IF NOT EXISTS`, mesmo padrão de S-40) + `packages/db/src/schema/admin.ts` em sincronia, e `reviewReport` passa a usá-lo. O diff deve conter a decisão e o parecer.
+6. **Bookkeeping em PROMPTS.md:** o critério de P-2.8 "Audit log em toda mutação" descreve um log que não distingue submissão de revisão — corrigir para `[~]` até este prompt fechar, ou para `[x]` com a razão depois.
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/db/src/schema/projetos.ts` (coluna `reviewNotes`)
+- `packages/db/src/schema/admin.ts` (valor `report.reviewed`)
+- `packages/db/src/migrations/NNNN_projetos_report_review.sql` (hand-written)
+- `packages/validators/src/projetos/index.ts` (schema de revisão, se o item 2 exigir)
+- `apps/projetos/src/actions/reports.ts`
+- `apps/projetos/src/components/report-review-actions.tsx`
+- `apps/projetos/src/app/(submissor)/[id]/page.tsx` (apenas o bloco de relatórios)
+- `apps/projetos/src/lib/queries.ts` (apenas o mapeamento de relatórios)
+- `packages/jobs/src/crons/projetos-inadimplencia.ts` (somente se escolhida a saída (b) do item 4)
+- `apps/projetos/src/__tests__/reports.test.ts` (criar)
+- `PROMPTS.md` (bookkeeping do item 6)
+
+**Critérios de aceite:**
+
+- [x] `projetos.reports` tem coluna para o parecer da revisão e `reviewReport` a persiste
+- [x] Rejeição sem parecer é recusada pelo schema (não só pelo componente)
+- [x] Submissor vê o motivo da rejeição na tela do próprio projeto
+- [x] Relatório rejeitado tem caminho de volta ao envio; a regra escolhida está registrada em SESSIONS.md
+- [x] Relatório rejeitado continua alcançável pelo cron de inadimplência (não some do controle)
+- [x] `reviewReport` audita como `report.reviewed`, com decisão e parecer no diff
+- [x] Teste cobre: rejeição → reenvio → aprovação, e a distinção das duas ações no audit
+- [x] Migration hand-written, numeração sequencial, aplicada no Supabase de dev
+- [x] `pnpm --filter projetos typecheck lint test` verdes
+- [x] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: BRAIN.md §6.2 (prestação de contas, inadimplência bloqueia pagamentos) e o princípio de imutabilidade — o parecer anterior não deve ser apagado quando o ciclo reabre. Mesma narrativa de P-1.18b em Documentos ("campos que a UI coleta e o banco não guarda"), aqui com o agravante de a rejeição ser terminal.
+
+---
+
+### P-2.8b — A reprovação que o mapa de estágios não permite e o quórum que conta quem já saiu (CORRETIVO)
+
+**Fase:** 2
+**Módulo:** projetos
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-2.8b-projetos-votacao`
+- Dependências: P-2.6b concluído
+- Env vars: `DATABASE_URL`
+
+**Problema que este prompt resolve (contexto):**
+`VALID_STAGE_TRANSITIONS` (`packages/db/src/schema/projetos.ts:79-88`) declara `votacao: ["homologacao"]` — a votação só sai para homologação. `state-machine.test.ts:167` consagra a regra: "votacao → reprovado lança erro (deve passar por homologacao)". As três actions que encerram uma votação discordam, cada uma à sua maneira:
+
+- **`castVote`** (`actions/voting.ts:133-186`) calcula `newStage = result.approved ? "homologacao" : "reprovado"` e só então testa `validNextStages.includes(newStage)`. Para uma reprovação o teste é falso, o `if` inteiro é pulado — **sem erro, sem log, sem nada**. Um projeto com 100% de comparecimento e maioria contra permanece em `votacao` indefinidamente. Ninguém é avisado; a tela continua pedindo votos que já foram todos dados.
+- **`closeVoting`** (`voting.ts:241-253`) e **`triggerPanicButton`** (`voting.ts:310-322`) escrevem `stage: "reprovado"` direto no `update`, sem consultar o mapa. Elas conseguem fazer a transição que o mapa proíbe e que `transitionProjectStage` (`actions/projects.ts:634-641`) recusaria.
+
+Ou seja: o mesmo desfecho — "a votação reprovou o projeto" — produz três comportamentos diferentes conforme o caminho, e o único caminho que respeita o mapa é o que não faz nada. Os testes não pegaram porque testam a **constante**, não as actions: nenhum teste exercita o fechamento por reprovação contra o banco.
+
+O segundo defeito é no denominador do quórum. `countEligibleVoters` (`voting.ts:43-50`) conta `countDistinct(roleAssignments.userId)` filtrando só por `role IN ('diretor','conselheiro')` — sem `revokedAt IS NULL`. `resolveSession` (`packages/auth/src/server.ts:95-101`) e `public.has_role()` filtram; é o filtro canônico de "papel ativo" do ecossistema. Consequência: um diretor cujo papel foi revogado continua no denominador do quórum, mas o gate da action (`conselheiroDiretorAction`) já não o deixa votar. Ele é contado e não pode contar-se — o quórum sobe sem que exista alguém a mais para atingi-lo, e basta revogar papéis suficientes para tornar o quórum matematicamente inalcançável. É o mesmo defeito de classe que F2-P5/PATCH-007 corrigiu (contar atribuições em vez de pessoas), sobrevivendo na dimensão que aquele fix não olhou. O cálculo está espelhado — com o mesmo furo — em `lib/queries.ts:892-895` (`getDirectorProjectDetail`) e em `getEligibleEvaluators` (`queries.ts:975-979`), que oferece diretores revogados como avaliadores designáveis.
+
+Terceiro, menor: `getVotingProject` (`voting.ts:26-38`) não filtra `deletedAt`. Um projeto soft-deleted em `votacao` continua recebendo votos e pode ser fechado — todas as demais leituras do módulo filtram.
+
+**Escopo (siga na ordem):**
+
+1. **Decidir onde `reprovado` entra no mapa.** BRAIN §6.2 diz "Aprovação: maioria simples" e não obriga um projeto reprovado a passar por homologação — homologação é a janela de contestação de uma **aprovação**. A leitura natural é `votacao: ["homologacao", "reprovado"]`. Confirmar com o Filipe antes de aplicar (regra de negócio, não detalhe de implementação) e registrar a resposta. Se confirmada, atualizar o mapa **e** `state-machine.test.ts:167`, que hoje afirma o contrário.
+2. **Fazer as três actions passarem pelo mesmo mapa.** `closeVoting` e `triggerPanicButton` deixam de escrever `stage` direto e passam a validar contra `VALID_STAGE_TRANSITIONS` como `transitionProjectStage` já faz. `castVote` deixa de pular em silêncio: se a transição calculada for inválida, é erro explícito, não no-op.
+3. **`revokedAt IS NULL` no denominador do quórum** — `countEligibleVoters` (`voting.ts`), o cálculo espelhado em `lib/queries.ts:892-895` e `getEligibleEvaluators` (`queries.ts:975-979`). Avaliar extrair o predicado "eleitor elegível" para um único helper em vez de manter três cópias que já divergiram uma vez.
+4. **`isNull(projects.deletedAt)` em `getVotingProject`.**
+5. **Testes contra o banco, não contra a constante:** fechamento por reprovação nos três caminhos (`castVote` com turnout total e maioria contra, `closeVoting` com quórum e maioria contra, `triggerPanicButton` sem quórum e maioria contra) verificando o `stage` persistido; e quórum com um diretor revogado, verificando que o denominador não o conta.
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/db/src/schema/projetos.ts` (apenas `VALID_STAGE_TRANSITIONS`)
+- `apps/projetos/src/actions/voting.ts`
+- `apps/projetos/src/lib/queries.ts` (apenas quórum e elegibilidade de avaliador)
+- `apps/projetos/src/__tests__/state-machine.test.ts`
+- `apps/projetos/src/__tests__/close-voting.test.ts`
+- `apps/projetos/src/__tests__/voting.test.ts`
+- `PROMPTS.md` (bookkeeping dos critérios de P-2.6, P-2.8 e P-2.12)
+
+**Critérios de aceite:**
+
+- [ ] A regra de `votacao → reprovado` foi confirmada com o Filipe e está registrada em SESSIONS.md (e em `PATCHES/` se mudar o BRAIN)
+- [ ] Nenhuma action de `apps/projetos` escreve `projects.stage` sem validar contra `VALID_STAGE_TRANSITIONS`
+- [ ] `castVote` com todos os elegíveis votando e maioria contra deixa o projeto em estágio terminal — nunca preso em `votacao`
+- [ ] Nenhuma transição inválida é ignorada em silêncio: ou acontece, ou retorna erro
+- [ ] Diretor/conselheiro com `revoked_at` preenchido não conta no quórum, nem em `getDirectorProjectDetail`, nem como avaliador designável
+- [ ] Projeto soft-deleted não aceita voto nem fechamento
+- [ ] Testes exercitam as actions contra o banco (não uma cópia da lógica) e cobrem os três caminhos de reprovação
+- [ ] `pnpm --filter projetos typecheck lint test` verdes
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: BRAIN.md §6.2 e PATCH-007. **Pergunta aberta para o Filipe, além do item 1:** o BRAIN descreve o botão de pânico como "maioria + 1 dos votos existentes", mas `triggerPanicButton` implementa `inFavor > against` (maioria simples). Ler "maioria + 1" ao pé da letra tornaria o botão quase inacionável (com 3 votos exigiria os 3). Confirmar qual é a regra antes de mexer — este prompt **não** altera o critério de decisão do pânico sem essa resposta, só o caminho pelo qual ele grava o estágio.
+
+---
+
+### P-2.8c — Quatro actions sem porta de entrada: rascunho, instituição e membros (CORRETIVO)
+
+**Fase:** 2
+**Módulo:** projetos
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-2.8c-projetos-actions-orfas`
+- Dependências: P-2.8b concluído
+- Env vars: `DATABASE_URL`
+- Skill: **invocar `/impeccable` antes de começar** (este prompt cria telas)
+
+**Problema que este prompt resolve (contexto):**
+P-2.9c (S-62) fez a varredura "quais actions não têm caminho de UI" e ligou 14 delas. Quatro ficaram para trás, e `grep -rn "<action>" apps/projetos/src/components apps/projetos/src/app` devolve **zero** para cada uma:
+
+- **`updateDraftProject`** (`actions/projects.ts:329-408`). O escopo de P-2.8 diz, literalmente, "CRUD de projetos (criar rascunho, submeter, **editar em rascunho**)". Não existe nenhuma tela de edição: `grep -n "Editar\|editar" app/(submissor)/[id]/page.tsx` volta vazio. Um submissor que percorreu as 6 etapas e 18 campos do wizard e errou o valor total não tem como corrigir — só excluir e recomeçar do zero. A action existe, valida, audita, e ninguém a alcança.
+- **`updateOrganization`** (`actions/organizations.ts:100-157`). Instituição criada em `/instituicao` (P-2.9c) não pode ser corrigida: CNPJ, endereço, telefone, responsável legal e estatuto entram uma vez e ficam. Pior, o comentário acima da action diz "creator OR diretor/super_admin" e o gate é `diretorAction` — o submissor que criou a instituição não passa. Nem ele nem ninguém, porque também não há tela na diretoria.
+- **`addOrganizationMember` / `removeOrganizationMember`** (`organizations.ts:163-...`). A tabela N:N `organization_members` só recebe uma linha na vida: a auto-inserção do criador em `createOrganization` (`organizations.ts:76-79`). E ela não é decorativa — a policy `projects_select_own_or_org` (`0007_projetos_rls.sql:40`) usa exatamente essa tabela para decidir quem enxerga os projetos de uma instituição. Sem caminho para adicionar membro, uma instituição com dois representantes é impossível: o segundo não vê nada. Mesma inversão de comentário/gate (`// diretor or the org creator` sobre `diretorAction`).
+
+`updateDraftProject` traz junto um defeito que só se manifesta quando ele for ligado: o schema aceita `parcelas` e **não** aceita `meses`, e não sincroniza os dois. Na criação eles são mantidos iguais por `checkMesesPagamentoCoherence` (`packages/validators/src/projetos/index.ts:38-58`, P-2.4b). Um update que mude só `parcelas` desfaz a igualdade, e `generatePaymentSchedule` (`packages/db/src/projetos-approval.ts:17-60`) divide o orçamento por `parcelas` mas emite uma linha por `meses` — com `parcelas: 6` e `meses: 3` o projeto aprovado desembolsa metade do valor aprovado; ao contrário, o dobro. Como `onProjectApproved` transforma cada `payment_schedule` em um `payable` real no Financeiro, o erro sai do módulo.
+
+**Escopo (siga na ordem):**
+
+1. **Edição de rascunho.** Tela de edição para projeto em `rascunho`, alcançável a partir de `app/(submissor)/[id]/page.tsx`. Reaproveitar o formulário do wizard (`app/(submissor)/novo/page.tsx`) em vez de criar um segundo formulário com as mesmas 18 regras — dois formulários para o mesmo objeto é como as regras divergem. O botão só aparece em `rascunho`, coerente com o guard da action.
+2. **Fechar o furo `meses`/`parcelas`:** `updateDraftProject` passa a tratar os dois campos como um par indivisível, aplicando `checkMesesPagamentoCoherence` — a mesma função da criação, não uma segunda cópia da regra.
+3. **Resolver a contradição comentário × gate** em `updateOrganization`, `addOrganizationMember` e `removeOrganizationMember`. O comentário diz "creator OR diretor"; o gate diz só diretor. Decidir qual é a regra (o BRAIN não trata do assunto — **perguntar ao Filipe**: o submissor pode editar os dados da própria instituição e convidar um segundo representante, ou isso é sempre ato da diretoria?) e deixar código e comentário dizendo a mesma coisa.
+4. **Tela de instituição operável** em `/instituicao`: editar os dados e gerenciar membros, conforme a resposta do item 3. Se a decisão for "só diretoria", a tela vai para o grupo `(diretoria)` e `/instituicao` ganha o caminho de solicitação; não deixar a promessa sem porta em nenhum dos dois casos.
+5. **Verificar que não sobrou nenhuma outra action órfã** — rodar a mesma varredura de P-2.9c sobre `apps/projetos/src/actions/*` e registrar o resultado, para que o próximo corretivo não precise redescobrir.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/projetos/src/actions/projects.ts` (apenas `updateDraftSchema`/`updateDraftProject`)
+- `apps/projetos/src/actions/organizations.ts` (apenas os gates)
+- `apps/projetos/src/app/(submissor)/[id]/editar/page.tsx` (criar — Server Component)
+- `apps/projetos/src/app/(submissor)/[id]/editar/_client.tsx` (criar — Client Component)
+- `apps/projetos/src/app/(submissor)/[id]/page.tsx` (link de edição)
+- `apps/projetos/src/app/(submissor)/instituicao/page.tsx`
+- `apps/projetos/src/components/organization-form.tsx` (criar)
+- `apps/projetos/src/components/organization-members.tsx` (criar)
+- `apps/projetos/src/lib/queries.ts` (leituras novas)
+- `apps/projetos/src/__tests__/organizations.test.ts` (criar)
+
+**Critérios de aceite:**
+
+- [ ] `grep -rn "updateDraftProject\|updateOrganization\|addOrganizationMember\|removeOrganizationMember" apps/projetos/src/app apps/projetos/src/components` retorna ≥1 chamador para cada
+- [ ] Submissor edita o próprio rascunho e a alteração persiste; botão ausente fora de `rascunho`
+- [ ] `updateDraftProject` não deixa `meses` e `parcelas` divergirem — regra vinda de `checkMesesPagamentoCoherence`, não reimplementada
+- [ ] Teste cobre: rascunho editado com novo número de parcelas → aprovação gera cronograma cuja soma bate com `budget_total`
+- [ ] Comentário e gate de cada action de organização dizem a mesma coisa; a regra escolhida está registrada em SESSIONS.md
+- [ ] Instituição com dois membros é alcançável pela UI, e o segundo membro enxerga os projetos da instituição (RLS `projects_select_own_or_org`)
+- [ ] Varredura de actions órfãs registrada em SESSIONS.md
+- [ ] Página de edição segue os padrões do design system (sem CSS de app, sem hex hardcoded — BRAIN §5)
+- [ ] `pnpm --filter projetos typecheck lint test` verdes; `pnpm --filter projetos build` verde
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: escopo de P-2.8 ("editar em rascunho", "CRUD de organizações e membros") — os dois itens que o prompt original prometeu e nenhuma sessão entregou até o fim. Atenção à regra G-dynamic-route: `page.tsx` Server Component + `_client.tsx` colocado, nunca `"use client"` com `use(params)`.
+
+---
+
+### P-2.10b — Sete notificações que nunca disparam e um link que leva a lugar nenhum (CORRETIVO)
+
+**Fase:** 2
+**Módulo:** projetos
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-2.10b-projetos-notificacoes`
+- Dependências: P-2.8b e P-2.8c concluídos
+- Env vars: `RESEND_API_KEY`, `DATABASE_URL`
+
+**Problema que este prompt resolve (contexto):**
+`apps/projetos/src/lib/notifications.ts` tem 697 linhas e sete funções exportadas — `notifyProjectSubmitted`, `notifyProjectInValidation`, `notifyVotingOpen`, `notifyPaymentMade`, `notifyProjectBlocked`, `notifyContestation`, `notifyEvaluatorDesignated`. Nenhuma tem chamador. `grep -rn` sobre todo o repositório devolve apenas as próprias declarações; nenhuma action de `apps/projetos/src/actions/` importa o arquivo. O próprio código já sabe: o comentário das linhas 335-339 registra que "todo o módulo Projetos ainda não invoca este arquivo", observação feita de passagem em P-0.14 ao mover duas outras funções para `packages/jobs`.
+
+Seis critérios `[x]` de P-2.10 descrevem, um a um, notificações que não acontecem. Submeter um projeto não avisa nenhum super_admin. Abrir a votação não avisa nenhum diretor — a votação existe e ninguém sabe que ela abriu. Registrar uma contestação, que devolve o projeto para votação, não avisa quem terá de votar de novo. Bloquear um projeto por inadimplência não avisa o submissor bloqueado. As funções estão escritas, testadas contra o schema, com override de template do Admin e `Promise.allSettled` por destinatário — e desligadas.
+
+O que **de fato** dispara hoje são as três funções que P-0.14 moveu para `packages/jobs/src/notify/projetos.ts`, chamadas pelos crons de homologação automática, lembrete de relatório e lembrete de avaliação. E elas carregam o segundo defeito: `buildProjectUrl` monta `${PROJETOS_BASE_URL}/projetos/${projectId}` (`notify/projetos.ts:19`, e idêntico em `lib/notifications.ts:59`). Não existe rota `/projetos/*` em `apps/projetos` — as rotas são `/[id]` para o submissor e `/pipeline/[id]` para a diretoria, e `next.config` não tem rewrite. Todo e-mail que o ecossistema manda hoje sobre um projeto leva a um 404, e o mesmo caminho errado vai no `payload.href` do sino (`resolveNotificationHref`, `packages/ui/src/components/ecosystem-apps.ts:90-107`, usa o `href` do payload tal como está).
+
+Há ainda um produtor de in_app fora dos dois arquivos: `notifyHomologacao`, inline em `actions/projects.ts:886-910`. Ele grava `payload: { projectId, homologacaoDeadline }` — sem `module` e sem `href`. P-0.6c passou por todos os `lib/notifications.ts` do monorepo garantindo `payload.module`; este escreve notificações e não é um `lib/notifications.ts`, então escapou. No sino, cai no fallback `"/"`.
+
+**Escopo (siga na ordem):**
+
+1. **Corrigir o destino antes de ligar qualquer coisa.** Definir o caminho certo por papel — submissor vai para `/[id]`, diretoria vai para `/pipeline/[id]` — e aplicá-lo em `lib/notifications.ts`, `packages/jobs/src/notify/projetos.ts` e `notifyHomologacao`. Onde a mesma notificação vai para os dois públicos (contestação, votação aberta), o destino segue o papel do destinatário, não um caminho único. Ligar notificações com o link errado só multiplica o 404.
+2. **`payload.module: "projetos"` e `href` em todo produtor de in_app do módulo**, incluindo `notifyHomologacao` e `notifyPendingEvaluations` (`notify/projetos.ts:243`, hoje sem os dois).
+3. **Ligar as sete funções nas actions correspondentes**, seguindo a convenção já estabelecida no módulo: `await` com `try/catch` que loga e não derruba a operação principal (o padrão de `submitProject` → `onProjectSubmitted`, `actions/projects.ts:589-601`), nunca fire-and-forget. Os pontos de ligação: `submitProject` → `notifyProjectSubmitted` + `notifyProjectInValidation`; `transitionProjectStage` para `votacao` (e `castVote`/`closeVoting`/`triggerPanicButton` quando devolverem a `votacao`) → `notifyVotingOpen`; `createContestation` → `notifyContestation`; `assignEvaluator` → `notifyEvaluatorDesignated`; o cron de inadimplência → `notifyProjectBlocked`; o Financeiro, ao marcar uma parcela como paga → `notifyPaymentMade`.
+4. **`notifyPaymentMade` atravessa módulo.** Quem sabe que um pagamento aconteceu é o Financeiro (`apps/financeiro/src/actions/approval.ts`, que já tem `notifyPayablePaid`). Decidir: ou a função migra para `packages/integrations`/`packages/jobs` e o Financeiro a chama pelo `payment_schedule_id` do payable, ou `notifyPayablePaid` passa a cobrir o caso e a função daqui é removida. Não deixar duas funções concorrentes para o mesmo e-mail.
+5. **Remover o que sobrar sem chamador.** Se ao fim do item 4 alguma função continuar órfã, ela sai — código morto que descreve uma promessa de PROMPTS.md é pior do que a ausência, porque a auditoria seguinte volta a contá-lo como pronto.
+6. **Bookkeeping em PROMPTS.md:** os seis critérios `[x]` de P-2.10 que descrevem notificações sem chamador voltam a `[~]` até este prompt fechá-los.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/projetos/src/lib/notifications.ts`
+- `apps/projetos/src/actions/projects.ts` (pontos de ligação + `notifyHomologacao`)
+- `apps/projetos/src/actions/voting.ts` (ponto de ligação)
+- `apps/projetos/src/actions/evaluations.ts` (ponto de ligação)
+- `packages/jobs/src/notify/projetos.ts`
+- `packages/jobs/src/crons/projetos-inadimplencia.ts` (ponto de ligação de `notifyProjectBlocked`)
+- `packages/integrations/src/financeiro.ts` ou `apps/financeiro/src/actions/approval.ts` (somente conforme a decisão do item 4)
+- `apps/projetos/src/__tests__/notifications.test.ts` (criar)
+- `PROMPTS.md` (bookkeeping do item 6)
+
+**Critérios de aceite:**
+
+- [ ] `grep -rn "notify" apps/projetos/src/actions packages/jobs/src/crons` mostra chamador para toda função exportada de `lib/notifications.ts` — ou a função foi removida
+- [ ] Nenhum `href` de notificação de projetos aponta para `/projetos/<id>`; os destinos existem como rota real
+- [ ] Todo in_app do módulo (inclusive `notifyHomologacao` e `notifyPendingEvaluations`) tem `payload.module` e `payload.href`
+- [ ] Falha de notificação não derruba a operação que a originou, e é logada
+- [ ] Existe um único caminho para o e-mail de pagamento realizado; a decisão está registrada em SESSIONS.md
+- [ ] Teste cobre: submissão gera notificação para super_admin, e o `href` gerado corresponde a uma rota existente
+- [ ] `pnpm --filter projetos typecheck lint test` verdes; `pnpm --filter jobs typecheck` verde
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: BRAIN.md §6.2 (lista de notificações do módulo) e P-0.6c (regra do `payload.module`). Este prompt é o que transforma os `[x]` de P-2.10 em algo verificável na caixa de entrada; até aqui eles descreviam apenas a existência dos arquivos.
+
+---
+
+### P-2.12b — O teste que examina a cópia em vez do original (CORRETIVO)
+
+**Fase:** 2
+**Módulo:** projetos
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-2.12b-projetos-testes`
+- Dependências: P-2.6b, P-2.8b, P-2.8c e P-2.10b concluídos
+- Env vars: `DATABASE_URL`
+
+**Escopo:**
+`voting.test.ts` declara, no próprio cabeçalho, que testa uma "função pura que espelha voting.ts": `computeQuorum` (linhas 74-95) é uma reimplementação da lógica de `computeVoteResult`, escrita dentro do arquivo de teste. Onze dos 26 testes do arquivo — incluindo os dois que sustentam o critério de P-2.12 "sem quórum → não aprova; com quórum + maioria → aprova" — exercitam essa cópia. `panicApproved` faz o mesmo pelo botão de pânico. Um espelho passa verde enquanto o original apodrece: foi assim que o furo de `revoked_at` (P-2.8b) e o desencontro `votacao → reprovado` (idem) sobreviveram a uma suíte de 26 testes de votação. `state-machine.test.ts` tem a variante do mesmo problema: 25 testes sobre a constante `VALID_STAGE_TRANSITIONS`, nenhum sobre as actions que deveriam obedecê-la.
+
+Este prompt executa por último no bloco porque os quatro anteriores mexem justamente nas superfícies a cobrir — e porque é ele quem pode reavaliar os critérios de P-2.12.
+
+1. **Extrair `computeVoteResult`** de `actions/voting.ts` para um módulo importável (a parte pura: quórum, maioria, decisão) e fazer a action e os testes usarem a mesma função. Zero reimplementação em arquivo de teste.
+2. **Cobrir as actions, não só as constantes**, nos pontos que os corretivos anteriores tocaram: fechamento por reprovação nos três caminhos, quórum com papel revogado, ciclo de relatório rejeitado → reenviado → aprovado, edição de rascunho que altera parcelas.
+3. **Varrer o restante da suíte** de `apps/projetos/src/__tests__` atrás de outros espelhos e registrar os que encontrar — convertendo os que puderem ser convertidos.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/projetos/src/actions/voting.ts` (apenas a extração da lógica pura)
+- `apps/projetos/src/lib/vote-result.ts` (criar)
+- `apps/projetos/src/__tests__/voting.test.ts`
+- `apps/projetos/src/__tests__/state-machine.test.ts`
+- `apps/projetos/src/__tests__/close-voting.test.ts`
+- `apps/projetos/src/__tests__/flow.test.ts`
+- `PROMPTS.md` (critérios de P-2.12)
+
+**Critérios de aceite:**
+
+- [ ] Nenhum arquivo de `__tests__` reimplementa lógica de produção; `grep -n "espelha\|mirror\|reimplementa"` na suíte volta vazio ou aponta só para comentários históricos
+- [ ] `computeVoteResult` tem uma única definição no repositório, importada pela action e pelos testes
+- [ ] Os critérios de votação de P-2.12 são sustentados por testes que chamam a action
+- [ ] Cobertura nova para: reprovação nos três caminhos, papel revogado no quórum, ciclo de relatório rejeitado, edição de rascunho
+- [ ] Espelhos remanescentes na suíte estão registrados em SESSIONS.md (convertidos ou justificados)
+- [ ] `pnpm --filter projetos typecheck lint test` verdes
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: princípio "defense in depth" — um teste que não toca o código de produção não é uma camada de defesa, é a aparência de uma.
 
 ---
 

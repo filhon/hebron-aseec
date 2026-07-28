@@ -426,6 +426,7 @@ export type SubmissorReport = {
   submittedByName: string | null;
   submittedAt: Date | null;
   reviewedAt: Date | null;
+  reviewNotes: string | null;
 };
 
 export type SubmissorVersion = {
@@ -522,6 +523,7 @@ export async function getSubmissorProjectDetail(
         periodEnd: reports.periodEnd,
         submittedAt: reports.submittedAt,
         reviewedAt: reports.reviewedAt,
+        reviewNotes: reports.reviewNotes,
         submitterName: users.fullName,
       })
       .from(reports)
@@ -549,6 +551,7 @@ export async function getSubmissorProjectDetail(
         submittedByName: r.submitterName,
         submittedAt: r.submittedAt,
         reviewedAt: r.reviewedAt,
+        reviewNotes: r.reviewNotes,
       };
     });
 

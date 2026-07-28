@@ -32,13 +32,22 @@ const submitReportSchema = z.object({
     .optional(),
 });
 
-const reviewReportSchema = z.object({
-  reportId: z.string().uuid("Relatório inválido"),
-  decision: z.enum(["approved", "rejected"], {
-    required_error: "Decisão obrigatória",
-  }),
-  notes: z.string().max(2000).optional(),
-});
+const reviewReportSchema = z
+  .object({
+    reportId: z.string().uuid("Relatório inválido"),
+    decision: z.enum(["approved", "rejected"], {
+      required_error: "Decisão obrigatória",
+    }),
+    notes: z.string().max(2000).optional(),
+  })
+  .refine(
+    (data) =>
+      data.decision !== "rejected" || (data.notes?.trim().length ?? 0) > 0,
+    {
+      message: "Parecer obrigatório para rejeitar um relatório",
+      path: ["notes"],
+    },
+  );
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -228,6 +237,8 @@ export const submitReport = projetosAction
 export const reviewReport = diretorAction
   .schema(reviewReportSchema)
   .action(async ({ parsedInput, ctx }) => {
+    const notes = parsedInput.notes?.trim() || null;
+
     const { finalReport, projectId, now } = await withAuthenticatedContext(
       { actorId: ctx.actorId },
       async (tx) => {
@@ -243,8 +254,12 @@ export const reviewReport = diretorAction
           throw new Error("Apenas relatórios submetidos podem ser revisados");
         }
 
+        // Rejeição reabre o ciclo: o relatório volta a "pendente" (não fica
+        // em "rejected", estado terminal) para que o submissor possa
+        // reenviar e o cron de inadimplência — que só olha status
+        // "pendente" — continue alcançando o projeto (P-2.6b).
         const newStatus =
-          parsedInput.decision === "approved" ? "approved" : "rejected";
+          parsedInput.decision === "approved" ? "approved" : "pendente";
         const now = new Date();
 
         const updated = await tx
@@ -253,6 +268,17 @@ export const reviewReport = diretorAction
             status: newStatus,
             reviewedBy: ctx.actorId,
             reviewedAt: now,
+            reviewNotes: notes,
+            // Limpa o envio anterior ao reabrir: "submitted_at" também é o
+            // portão da policy de RLS que libera UPDATE para o submissor
+            // (reports_update_own_or_admin exige submitted_at IS NULL) — sem
+            // isso o relatório reaberto ficaria com status "pendente" mas
+            // ainda travado para reenvio. O envio original permanece
+            // recuperável via admin.audit_log (report.submitted), que é
+            // imutável.
+            ...(newStatus === "pendente"
+              ? { submittedAt: null, submittedBy: null }
+              : {}),
             updatedAt: now,
           })
           .where(eq(reports.id, parsedInput.reportId))
@@ -267,14 +293,14 @@ export const reviewReport = diretorAction
 
     await logProjectAudit({
       actorId: ctx.actorId,
-      action: "report.submitted",
+      action: "report.reviewed",
       entity: "report",
       entityId: parsedInput.reportId,
       diff: {
         projectId,
         status: { before: "submitted", after: finalReport.status },
         decision: parsedInput.decision,
-        notes: parsedInput.notes,
+        notes,
         reviewedAt: now.toISOString(),
       },
     });

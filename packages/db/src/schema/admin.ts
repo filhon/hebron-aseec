@@ -54,6 +54,9 @@ export const auditActionEnum = adminSchema.enum("audit_action", [
   "contestation.created",
   "report.created",
   "report.submitted",
+  // report.reviewed — decisão do diretor (aprovação/rejeição) separada do
+  // envio do submissor, added via ALTER TYPE in P-2.6b migration
+  "report.reviewed",
   "organization.created",
   "organization.updated",
   // Financeiro module — added via ALTER TYPE in P-0.7 migration

@@ -275,6 +275,40 @@ export default async function ProjectDetailPage({
                       <ReportStatusBadge status={r.status} />
                     </div>
                     <div className="p-4 flex flex-col gap-3">
+                      {r.reviewNotes && (
+                        <div
+                          className="rounded-md px-3 py-2"
+                          style={{
+                            backgroundColor:
+                              r.status === "aceito"
+                                ? "var(--hb-green-muted)"
+                                : "var(--color-destructive-muted)",
+                          }}
+                        >
+                          <p
+                            className="text-xs font-semibold"
+                            style={{
+                              color:
+                                r.status === "aceito"
+                                  ? "var(--hb-green-fg)"
+                                  : "var(--color-destructive)",
+                            }}
+                          >
+                            Parecer da diretoria
+                          </p>
+                          <p
+                            className="text-xs leading-relaxed mt-0.5"
+                            style={{
+                              color:
+                                r.status === "aceito"
+                                  ? "var(--hb-green-fg)"
+                                  : "var(--color-destructive)",
+                            }}
+                          >
+                            {r.reviewNotes}
+                          </p>
+                        </div>
+                      )}
                       {(r.status === "em_atraso" ||
                         r.status === "pendente") && (
                         <div className="flex flex-col gap-2">

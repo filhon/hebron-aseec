@@ -223,6 +223,8 @@
 | S-200  | 2026-07-28 | P-2.3c — O teto de R$ 150 mil que ninguém definiu (CORRETIVO)                                                                    | concluido                            |
 | S-201  | 2026-07-28 | P-2.4b — O wizard que não valida nada (CORRETIVO)                                                                                | concluido                            |
 | S-202  | 2026-07-28 | P-2.5b — Nenhuma fronteira de erro, o skeleton errado e o vazio que pisca (CORRETIVO)                                            | concluido                            |
+| S-203  | 2026-07-28 | Auditoria Bloco B Projetos (P-2.6–P-2.12) — patches P-2.6b/2.8b/2.8c/2.10b/2.12b gerados                                         | concluido                            |
+| S-204  | 2026-07-28 | P-2.6b — O relatório que é rejeitado sem motivo e não pode voltar (CORRETIVO)                                                    | concluido                            |
 
 ---
 
@@ -16994,3 +16996,360 @@ de cor (`#fff`/`rgba(...)`) fora do sistema de tokens.
   mas um refinamento futuro poderia extrair um padrão de skeleton
   compartilhado em `packages/ui` em vez da duplicação local de `Bone` em
   cada arquivo.
+
+---
+
+## S-203 — 2026-07-28 — Auditoria Bloco B Projetos (P-2.6–P-2.12)
+
+**Prompt:** auditoria (não é prompt de PROMPTS.md)
+**Branch:** feat/P-2.5b-projetos-estados
+**Modelo:** claude-opus-5
+**Status:** concluido (gera P-2.6b, P-2.8b, P-2.8c, P-2.10b, P-2.12b)
+
+### Resumo
+
+Cruzamento dos prompts P-2.6 a P-2.12 (PROMPTS.md) e das sessões que os
+executaram (S-38 a S-44, mais S-62/P-2.9c e as sessões de P-0.13/P-0.14 que
+realocaram parte do código) com o estado atual de `apps/projetos`,
+`packages/db`, `packages/jobs`, `packages/integrations` e `packages/ai`.
+
+Baseline verificada antes de qualquer conclusão: `pnpm --filter projetos
+typecheck` e `lint` verdes. Nenhum achado é falha de build — são divergências
+entre o que os critérios afirmam e o que o código faz, no mesmo espírito da
+S-196 (Bloco A).
+
+O padrão do bloco é diferente do Bloco A. Lá, os critérios descreviam telas
+que P-2.9c e a S-45 haviam reescrito. Aqui o backend está, em larga medida,
+correto e completo — o que falta é ligação. Três dos cinco corretivos são
+sobre código que existe, valida, audita e **não tem chamador**.
+
+### Achados (agrupados por prompt de origem)
+
+**P-2.6 — schema**
+
+- `VALID_STAGE_TRANSITIONS.votacao = ["homologacao"]` (`schema/projetos.ts:82`)
+  não prevê reprovação, e as três actions que encerram votação discordam do
+  mapa cada uma à sua maneira — ver P-2.8 abaixo. `state-machine.test.ts:167`
+  consagra o mapa ("votacao → reprovado lança erro").
+- `projetos.reports` não tem coluna para o parecer da revisão.
+  `reviewReport` aceita `notes` (`actions/reports.ts:40`), escreve no diff do
+  audit — onde submissor nenhum tem SELECT — e descarta.
+  `report-review-actions.tsx` sequer coleta o campo: são dois botões sem
+  formulário. Submissor vê "rejected" e nada mais.
+- `rejected` é terminal: `submitReport` exige `pendente`
+  (`reports.ts:167`), `reviewReport` exige `submitted` (`reports.ts:242`),
+  e nenhuma action devolve o relatório a `pendente`. Efeito colateral não
+  óbvio: o cron de inadimplência (`crons/projetos-inadimplencia.ts`) só olha
+  `status = "pendente"`, então rejeitar um relatório o **remove** do controle
+  de bloqueio de pagamentos.
+- `scoreProject` (`packages/ai/src/projects/scoring.ts:161-165`) devolve
+  `aiJustification`; `submitProject` persiste só `scoreAi` e
+  `scoreAiBreakdown` — não há coluna para a justificativa. Somado ao
+  `score_ai_breakdown` persistido e nunca exibido (débito da S-196), a saída
+  da IA chega à diretoria reduzida a um inteiro.
+
+**P-2.7 — RLS**
+
+- Sem achados. As 12 tabelas do schema têm RLS habilitada e policies
+  coerentes com o prompt; `0009`, `0025`, `0026` e `0056` já fecharam os
+  furos de grant/visibilidade que apareceram depois. O único ponto que o
+  prompt reconhece como fora do alcance da RLS — mascaramento de `score_ai`
+  por coluna — está resolvido na camada de gate desde P-2.9c
+  (`requireDiretorSession`).
+
+**P-2.8 — server actions**
+
+- **Quórum conta papel revogado.** `countEligibleVoters`
+  (`actions/voting.ts:43-50`) filtra `role IN ('diretor','conselheiro')` sem
+  `revoked_at IS NULL` — o filtro canônico de papel ativo do ecossistema,
+  usado por `resolveSession` (`packages/auth/src/server.ts:95-101`) e por
+  `public.has_role()`. Um diretor revogado entra no denominador e o gate da
+  action já não o deixa votar: o quórum sobe sem que exista quem o atinja.
+  Mesmo defeito de classe que F2-P5/PATCH-007, na dimensão que aquele fix
+  não olhou. Espelhado em `lib/queries.ts:892-895` e em
+  `getEligibleEvaluators` (`queries.ts:975-979`, que oferece diretores
+  revogados como avaliadores designáveis).
+- **A reprovação que não acontece.** `castVote` (`voting.ts:133-186`) calcula
+  `newStage = "reprovado"` e depois testa contra o mapa; o teste falha, o
+  `if` inteiro é pulado — sem erro, sem log. Turnout de 100% com maioria
+  contra deixa o projeto em `votacao` para sempre. `closeVoting`
+  (`voting.ts:250-253`) e `triggerPanicButton` (`voting.ts:319-322`) escrevem
+  `reprovado` direto, sem consultar o mapa — conseguem a transição que
+  `transitionProjectStage` recusaria.
+- **Audit não distingue envio de revisão.** `reviewReport` registra
+  `action: "report.submitted"` (`reports.ts:270`), a mesma ação do submissor.
+  Não existe `report.reviewed` no `auditActionEnum`
+  (`schema/admin.ts:55-56`). O log não responde "quem aprovou este relatório".
+- **Quatro actions sem chamador.** `grep` em `app/` + `components/` devolve
+  zero para `updateDraftProject`, `updateOrganization`,
+  `addOrganizationMember` e `removeOrganizationMember` — os dois itens do
+  escopo de P-2.8 ("editar em rascunho", "CRUD de organizações e membros")
+  que nenhuma sessão entregou. Consequências concretas: rascunho de 18
+  campos só se corrige apagando e refazendo; instituição não se corrige;
+  e `organization_members`, que a policy `projects_select_own_or_org` usa
+  para decidir visibilidade, só recebe a linha do criador — instituição com
+  dois representantes é impossível.
+- Em `updateOrganization` e `addOrganizationMember` o comentário diz
+  "creator OR diretor/super_admin" e o gate é `diretorAction`. Código e
+  comentário afirmam regras diferentes.
+- `updateDraftProject` aceita `parcelas` sem `meses` e não os sincroniza.
+  `generatePaymentSchedule` (`packages/db/src/projetos-approval.ts:17-60`)
+  divide por `parcelas` e emite uma linha por `meses`: dessincronizados, o
+  cronograma não soma `budget_total` — e cada linha vira um `payable` real
+  no Financeiro via `onProjectApproved`.
+- `getVotingProject` (`voting.ts:26-38`) não filtra `deletedAt`; projeto
+  soft-deleted em `votacao` ainda aceita voto e fechamento.
+
+**P-2.10 — notificações**
+
+- As sete funções de `apps/projetos/src/lib/notifications.ts` (697 linhas)
+  **não têm um único chamador no repositório**. O próprio arquivo registra o
+  fato em comentário desde P-0.14 (linhas 335-339), observação feita de
+  passagem ao mover outras duas funções para `packages/jobs`. Seis critérios
+  `[x]` descreviam, um a um, notificações que não acontecem — submeter não
+  avisa super_admin, abrir votação não avisa diretor, contestar não avisa
+  quem vai votar de novo, bloquear não avisa o bloqueado.
+- **Todo link de projeto é 404.** `buildProjectUrl` monta `/projetos/<id>`
+  (`lib/notifications.ts:59` e, idêntico, `jobs/src/notify/projetos.ts:19`).
+  Não existe rota `/projetos/*`: são `/[id]` (submissor) e `/pipeline/[id]`
+  (diretoria), e `next.config` não tem rewrite. Diferente do item acima,
+  este **está em produção**: as três funções de `packages/jobs` disparam por
+  cron hoje, e o mesmo caminho vai no `payload.href` do sino.
+- `notifyHomologacao`, inline em `actions/projects.ts:886-910`, grava in_app
+  sem `module` e sem `href` — cai no fallback `"/"` do sino. P-0.6c varreu
+  os `lib/notifications.ts` do monorepo; este produtor não é um deles e
+  escapou. Mesma lacuna em `notifyPendingEvaluations`
+  (`jobs/src/notify/projetos.ts:243`).
+- Os dois critérios `[~]` de lembretes foram de fato fechados por P-0.14
+  (`reportRemindersCron`, `evaluationRemindersCron`) — passados a `[x]`.
+
+**P-2.11 — cross-app**
+
+- Nenhum defeito funcional: as quatro integrações estão implementadas, reais
+  (não stubs) e com chamador. O que está errado é o registro — a lista de
+  arquivos permitidos aponta para `apps/projetos/src/lib/integrations/`, que
+  não existe mais, e para `schema/financeiro-stubs.ts`, absorvido por
+  `schema/financeiro.ts`. Realocação feita em P-0.13/P-0.14 e PATCH-013,
+  nunca refletida em PROMPTS.md.
+
+**P-2.12 — testes**
+
+- `voting.test.ts` declara no cabeçalho que testa "função pura que espelha
+  voting.ts": `computeQuorum` (linhas 74-95) e `panicApproved` são
+  reimplementações escritas dentro do arquivo de teste. Onze dos 26 testes
+  exercitam a cópia — inclusive os dois que sustentam o critério "sem quórum
+  → não aprova; com quórum + maioria → aprova". Foi assim que o furo de
+  `revoked_at` e o desencontro `votacao → reprovado` atravessaram uma suíte
+  de 26 testes de votação.
+- `state-machine.test.ts`: 25 testes sobre a constante, nenhum sobre as
+  actions que deveriam obedecê-la.
+- `flow.test.ts` percorre só o caminho de aprovação. O fechamento por
+  reprovação não tem cobertura em nenhum dos três caminhos — exatamente o
+  ponto cego onde o defeito vive.
+
+### Decisões da auditoria
+
+- Cinco corretivos, agrupados por narrativa e por conjunto de arquivos: o
+  ciclo de relatório (P-2.6b), a votação (P-2.8b), as actions sem porta de
+  entrada (P-2.8c), as notificações (P-2.10b) e os testes (P-2.12b). P-2.8
+  rendeu dois pelo mesmo precedente de P-1.16b/P-1.16c e P-2.3b/P-2.3c.
+- Ordem de execução declarada nas pré-condições: P-2.6b → P-2.8b → P-2.8c →
+  P-2.10b → P-2.12b. P-2.10b depende dos dois anteriores porque liga
+  notificações aos pontos de transição que eles alteram; P-2.12b executa por
+  último porque cobre as quatro superfícies e pode reavaliar os critérios de
+  P-2.12.
+- **Duas regras de negócio ficam como pergunta ao Filipe, não como decisão
+  da auditoria** (princípio "sem suposições"): (1) se `votacao → reprovado`
+  entra no mapa de transições — a leitura natural do BRAIN §6.2 é que
+  homologação é a janela de contestação de uma _aprovação_, mas isso não
+  está escrito; (2) se o botão de pânico é "maioria + 1" ao pé da letra
+  (BRAIN §6.2) ou maioria simples, como está implementado — a leitura
+  literal o tornaria quase inacionável. P-2.8b não altera o critério de
+  decisão do pânico sem essa resposta.
+- Uma terceira pergunta em P-2.8c: se o submissor pode editar os dados da
+  própria instituição e convidar um segundo representante, ou se isso é
+  sempre ato da diretoria. O BRAIN não trata do assunto e o código diz as
+  duas coisas (comentário × gate).
+- **Não** se propõe middleware para `apps/projetos`, apesar de CLAUDE.md
+  pedir três camadas: dos 9 apps, só `intranet` tem `middleware.ts`. É
+  convenção vigente do ecossistema, não lacuna de Projetos — tratá-la aqui
+  seria decidir por todos os módulos a partir de um.
+- Não se propõe restaurar `lib/integrations/`: a realocação para
+  `packages/integrations` é resultado legítimo de P-0.13/P-0.14. O que a
+  auditoria cobra é o registro.
+
+### Arquivos alterados
+
+- `PROMPTS.md` (5 prompts corretivos após P-2.12; 16 critérios de
+  P-2.6/2.8/2.10/2.11/2.12 revisados — 14 passados a `[~]` com a razão e o
+  corretivo responsável, 2 de P-2.10 promovidos a `[x]` por P-0.14; nota de
+  realocação em P-2.11; notas de auditoria em P-2.6 e P-2.8)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+### Verificações executadas
+
+- `pnpm --filter projetos typecheck` — verde
+- `pnpm --filter projetos lint` — verde
+- `grep -rn` de cada função de `lib/notifications.ts` sobre o repositório
+  inteiro — só as declarações
+- `grep -rn` de cada uma das 19 actions do módulo sobre `app/` + `components/`
+  — 4 com zero chamadores
+- Rotas de `apps/projetos/src/app` enumeradas e confrontadas com
+  `buildProjectUrl`; `next.config` verificado por rewrite
+- `packages/auth/src/server.ts` e `schema/public.ts:102-132` confrontados com
+  `countEligibleVoters` para o filtro `revoked_at`
+
+### Débitos registrados (fora do escopo dos 5 corretivos)
+
+- `castVote` usa `onConflictDoNothing()` no segundo voto da mesma pessoa: a
+  action devolve `ok: true` sem ter alterado nada. Correto como proteção
+  contra duplo clique, silencioso demais como resposta a uma tentativa real
+  de mudar de voto. Decidir se mudar de voto é permitido (o BRAIN não diz)
+  antes de mexer.
+- `generatePaymentSchedule` usa `amountPerInstallment.toFixed(2)` por
+  parcela: R$ 10.000 em 3 parcelas soma R$ 9.999,99. Um centavo por projeto,
+  mas em um módulo cuja cultura é estorno e imutabilidade. Anexar ao próximo
+  toque no arquivo.
+- `EvaluationForm` sem affordance para o terceiro valor de recomendação
+  deixou de ser débito: P-2.1b reduziu o enum a dois valores (migration
+  0065).
+
+---
+
+## S-204 — P-2.6b — O relatório que é rejeitado sem motivo e não pode voltar (CORRETIVO)
+
+**Branch:** `feat/P-2.6b-projetos-relatorios`
+
+### Contexto
+
+Achado da auditoria S-203: `reviewReport` aceitava `notes` no schema Zod,
+escrevia no `diff` do audit log (onde nenhum submissor tem SELECT) e
+descartava. `projetos.reports` não tinha coluna para o parecer.
+`rejected` era estado terminal — nenhuma action devolvia o relatório a
+`pendente` — o que também tirava o relatório do alcance do cron de
+inadimplência (só olha `status = 'pendente'`). `reviewReport` auditava como
+`report.submitted`, a mesma ação do envio pelo submissor.
+
+### O que foi feito
+
+1. **Coluna `review_notes`** em `projetos.reports`
+   (`packages/db/src/schema/projetos.ts`) + migration `0066` (hand-written,
+   com `UPDATE` defensivo normalizando qualquer linha hoje travada em
+   `status = 'rejected'` de volta a `pendente`).
+2. **`report.reviewed`** novo valor em `auditActionEnum`
+   (`packages/db/src/schema/admin.ts`) e em `ProjectAuditAction`
+   (`apps/projetos/src/lib/audit.ts`) — migration `0067`, isolada em arquivo
+   próprio (convenção do monorepo: `ALTER TYPE ... ADD VALUE` nunca dividide
+   arquivo com outro DDL — ver 0029/0030). `reviewReport` passou a auditar
+   com esse valor, com `decision`/`notes` no diff.
+3. **Parecer obrigatório na rejeição.** `reviewReportSchema`
+   (`apps/projetos/src/actions/reports.ts`) ganhou `.refine()`: `notes`
+   vazio/ausente é recusado pelo schema quando `decision === "rejected"` —
+   não só pelo componente. Opcional na aprovação (leitura natural do BRAIN
+   §6.2).
+4. **Reabertura do ciclo — decisão (a) do prompt.** `reviewReport` com
+   `decision: "rejected"` devolve `status` a `pendente` (preservando
+   `reviewedBy`/`reviewedAt`/`review_notes` do ciclo — imutabilidade) em vez
+   de gravar `"rejected"` (estado terminal antigo). Escolhida sobre a opção
+   (b) (fazer `submitReport` aceitar `rejected` + ensinar o cron a olhar os
+   dois status) por ser uma mudança em uma única camada, e porque
+   `mapReportStatus` (`lib/queries.ts`) já mapeava `"rejected"` → `"pendente"`
+   na UI do submissor antes desta sessão — um indício de que essa era a
+   leitura pretendida desde o início, nunca conectada ao backend. O cron de
+   inadimplência (`packages/jobs/src/crons/projetos-inadimplencia.ts`) não
+   precisou de alteração: volta a alcançar o relatório automaticamente por já
+   filtrar `status = 'pendente'`.
+5. **UI do submissor** (`app/(submissor)/[id]/page.tsx`, bloco de
+   relatórios): novo card exibindo `reviewNotes` ("Parecer da diretoria"),
+   verde quando `status === "aceito"`, laranja/destrutivo caso contrário.
+   `queries.ts` (`getSubmissorProjectDetail`) passou a selecionar e mapear
+   `reviewNotes`.
+6. **`ReportReviewActions`** ganhou `<textarea>` para o parecer, com guard
+   client-side (não deixa clicar em Rejeitar sem texto) e leitura do
+   `validationErrors.notes` do servidor como reforço.
+7. **Bookkeeping em PROMPTS.md:** critério de P-2.8 "Audit log em toda
+   mutação" passou de `[~]` para `[x]`.
+
+### Achado fora do escopo original, corrigido com autorização do Filipe
+
+Ao escrever o teste do critério "rejeição → reenvio → aprovação" contra o
+pipeline real (RLS ativo via `withAuthenticatedContext`, não o `db` cru), o
+primeiro `submitReport` de um submissor real falhou com "new row violates
+row-level security policy for table reports". Causa: `reports_update_own_or_admin`
+(`0007_projetos.sql`, nunca alterada desde então) tem
+`WITH CHECK ("submitted_at" IS NULL OR has_role(...))` no ramo do
+submissor — `WITH CHECK` avalia a linha **nova** (pós-update), e
+`submitReport` grava `submitted_at = now()` na própria UPDATE que essa
+policy deveria permitir. Resultado: nenhum submissor jamais conseguiu
+submeter um relatório pelo caminho real com RLS — só não apareceu antes
+porque nenhum teste existente chamava `submitReport` pelo pipeline
+autenticado (os que tocam `reports` escrevem direto no banco, como
+`flow.test.ts`).
+
+Perguntei ao Filipe se corrigia dentro deste corretivo (fora da lista de
+arquivos permitidos, mudança de RLS) ou registrava como achado novo para um
+corretivo dedicado — optou por corrigir agora. Migration `0068`
+(`reports_update_own_or_admin` recriada: `WITH CHECK` do ramo submissor
+passa a exigir só posse do projeto, igual a `reports_insert_own_project`,
+já que `USING` já garante que a linha antiga não estava submetida).
+
+Efeito colateral descoberto em seguida: como a reabertura (item 4) só
+zerava `status`, o reenvio depois de uma rejeição continuava bloqueado —
+`submitted_at` da submissão anterior seguia não-nulo, e é exatamente o
+portão que `USING` verifica. Ajuste final em `reviewReport`: ao reabrir para
+`pendente`, `submittedAt`/`submittedBy` também voltam a `null` (o envio
+anterior permanece recuperável em `admin.audit_log`, que é imutável).
+
+### Critérios de aceite
+
+- [x] `projetos.reports` tem coluna para o parecer da revisão e
+      `reviewReport` a persiste
+- [x] Rejeição sem parecer é recusada pelo schema (não só pelo componente)
+- [x] Submissor vê o motivo da rejeição na tela do próprio projeto
+- [x] Relatório rejeitado tem caminho de volta ao envio; regra (a) registrada
+      acima
+- [x] Relatório rejeitado continua alcançável pelo cron de inadimplência
+- [x] `reviewReport` audita como `report.reviewed`, com decisão e parecer no
+      diff
+- [x] Teste cobre rejeição → reenvio → aprovação e a distinção das duas
+      ações no audit (`reports.test.ts`, 6 testes)
+- [x] Migrations hand-written, numeração sequencial (0066–0068), aplicadas
+      no Supabase de dev
+- [x] `pnpm --filter projetos typecheck lint test` — typecheck e lint
+      limpos; 116/118 testes (as 2 falhas são de `close-voting.test.ts`,
+      quórum sobre dados reais do banco compartilhado — mesma flakiness
+      pré-existente registrada desde S-158, reconfirmada isolando o arquivo)
+- [x] Registrado em SESSIONS.md
+
+### Arquivos criados
+
+- `packages/db/src/migrations/0066_projetos_report_review.sql`
+- `packages/db/src/migrations/0067_projetos_report_reviewed_audit_action.sql`
+- `packages/db/src/migrations/0068_projetos_reports_submit_rls_fix.sql`
+- `apps/projetos/src/__tests__/reports.test.ts`
+
+### Arquivos modificados
+
+- `packages/db/src/schema/projetos.ts` (`reviewNotes`)
+- `packages/db/src/schema/admin.ts` (`report.reviewed`)
+- `apps/projetos/src/lib/audit.ts` (`ProjectAuditAction`)
+- `apps/projetos/src/actions/reports.ts` (`reviewReportSchema` com refine,
+  `reviewReport` reescrito)
+- `apps/projetos/src/components/report-review-actions.tsx`
+- `apps/projetos/src/lib/queries.ts` (mapeamento de relatórios)
+- `apps/projetos/src/app/(submissor)/[id]/page.tsx` (bloco de relatórios)
+- `PROMPTS.md` (bookkeeping do critério de P-2.8)
+
+### Verificações executadas
+
+- `pnpm --filter projetos typecheck` — verde
+- `pnpm --filter projetos lint` — verde
+- `pnpm --filter db typecheck lint` — verdes
+- `pnpm --filter projetos test` — 116/118 (2 falhas pré-existentes,
+  `close-voting.test.ts`, confirmadas também em isolamento)
+- `pnpm --filter db test` — 67/70 (falhas pré-existentes e não relacionadas
+  a esta sessão: `system-actor.test.ts`, drift conhecido desde S-164; e 2 em
+  `storage.test.ts` sobre visibilidade do bucket `hebron-docs`, módulo
+  Documentos, não tocado nesta sessão — não investigadas a fundo)
+- `pnpm db:migrate` — `0066`, `0067`, `0068` aplicadas no Supabase de dev
+  sem erro

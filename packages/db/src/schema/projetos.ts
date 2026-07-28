@@ -401,6 +401,10 @@ export const reports = projetosSchema.table(
     submittedAt: timestamp("submitted_at", { withTimezone: true }),
     reviewedBy: uuid("reviewed_by").references(() => users.id),
     reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    // Parecer do diretor na revisão (P-2.6b): obrigatório na rejeição, opcional
+    // na aprovação. Preservado quando a rejeição reabre o ciclo (imutabilidade)
+    // até a próxima revisão sobrescrever.
+    reviewNotes: text("review_notes"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
