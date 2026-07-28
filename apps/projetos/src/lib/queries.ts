@@ -8,6 +8,7 @@ import {
   and,
   count,
   countDistinct,
+  desc,
   eq,
   gte,
   inArray,
@@ -87,7 +88,15 @@ export async function getAuthUser(): Promise<{
 // Organizations (wizard)
 // ---------------------------------------------------------------------------
 
-export type OrgOption = { id: string; nome: string; cnpj: string | null };
+export type OrgOption = {
+  id: string;
+  nome: string;
+  cnpj: string | null;
+  createdBy: string;
+  endereco: string | null;
+  telefone: string | null;
+  responsavelLegal: string | null;
+};
 
 export async function getMyOrganizations(): Promise<OrgOption[]> {
   const authUser = await getAuthUser();
@@ -99,6 +108,10 @@ export async function getMyOrganizations(): Promise<OrgOption[]> {
         id: organizations.id,
         nome: organizations.nome,
         cnpj: organizations.cnpj,
+        createdBy: organizations.createdBy,
+        endereco: organizations.endereco,
+        telefone: organizations.telefone,
+        responsavelLegal: organizations.responsavelLegal,
       })
       .from(organizations)
       .innerJoin(
@@ -107,6 +120,104 @@ export async function getMyOrganizations(): Promise<OrgOption[]> {
       )
       .where(eq(organizationMembers.userId, authUser.id)),
   );
+}
+
+// ---------------------------------------------------------------------------
+// Organization members & lookup (P-2.8c — edição de instituição e membros)
+// ---------------------------------------------------------------------------
+
+export type OrganizationMemberRow = {
+  userId: string;
+  fullName: string | null;
+  email: string;
+};
+
+export async function getOrganizationMembers(
+  organizationId: string,
+): Promise<OrganizationMemberRow[]> {
+  const authUser = await getAuthUser();
+  if (!authUser) return [];
+
+  return withAuthenticatedContext({ actorId: authUser.id }, (tx) =>
+    tx
+      .select({
+        userId: organizationMembers.userId,
+        fullName: users.fullName,
+        email: users.email,
+      })
+      .from(organizationMembers)
+      .innerJoin(users, eq(organizationMembers.userId, users.id))
+      .where(eq(organizationMembers.organizationId, organizationId))
+      .orderBy(users.fullName),
+  );
+}
+
+export type UserLookup = { id: string; fullName: string | null; email: string };
+
+/** Localiza um usuário pelo e-mail para a diretoria convidar como representante
+ * de uma organização (organization-members.tsx). Não lista usuários — apenas
+ * resolve um e-mail conhecido, evitando expor o diretório completo. */
+export async function findUserByEmail(
+  email: string,
+): Promise<UserLookup | null> {
+  const authUser = await getAuthUser();
+  if (!authUser) return null;
+
+  return withAuthenticatedContext({ actorId: authUser.id }, async (tx) => {
+    const rows = await tx
+      .select({ id: users.id, fullName: users.fullName, email: users.email })
+      .from(users)
+      .where(eq(users.email, email.trim().toLowerCase()))
+      .limit(1);
+    return rows[0] ?? null;
+  });
+}
+
+export type DiretoriaOrgRow = {
+  id: string;
+  nome: string;
+  cnpj: string | null;
+  memberCount: number;
+};
+
+/** Todas as organizações, para a tela de gerenciamento da diretoria
+ * (apps/projetos/src/app/(diretoria)/instituicoes) — RLS
+ * organizations_select_member_or_admin já libera diretor/conselheiro/super_admin
+ * para todas as linhas. */
+export async function getAllOrganizationsForDiretoria(): Promise<
+  DiretoriaOrgRow[]
+> {
+  const authUser = await getAuthUser();
+  if (!authUser) return [];
+
+  return withAuthenticatedContext({ actorId: authUser.id }, async (tx) => {
+    const rows = await tx
+      .select({
+        id: organizations.id,
+        nome: organizations.nome,
+        cnpj: organizations.cnpj,
+      })
+      .from(organizations)
+      .orderBy(organizations.nome);
+
+    const orgIds = rows.map((r) => r.id);
+    const memberCounts =
+      orgIds.length > 0
+        ? await tx
+            .select({
+              organizationId: organizationMembers.organizationId,
+              cnt: count(),
+            })
+            .from(organizationMembers)
+            .where(inArray(organizationMembers.organizationId, orgIds))
+            .groupBy(organizationMembers.organizationId)
+        : [];
+    const countMap = new Map(
+      memberCounts.map((r) => [r.organizationId, r.cnt]),
+    );
+
+    return rows.map((r) => ({ ...r, memberCount: countMap.get(r.id) ?? 0 }));
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -574,6 +685,93 @@ export async function getSubmissorProjectDetail(
       submitterName: project.submitterName,
       reports: submissorReports,
       versions: submissorVersions,
+    };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Draft project edit (P-2.8c — updateDraftProject não tinha porta de UI)
+// ---------------------------------------------------------------------------
+
+export type DraftProjectForEdit = {
+  id: string;
+  tipo: "anual" | "pontual";
+  title: string;
+  objectives: string | null;
+  justification: string | null;
+  targetAudience: string | null;
+  expectedResults: string | null;
+  ministryRegion: string | null;
+  ministryArea: string | null;
+  budgetTotal: number;
+  parcelas: number | null;
+  mesesSelecionados: number[];
+};
+
+/** Retorna null se o projeto não existir, não pertencer ao usuário, ou não
+ * estiver em `rascunho` — a mesma condição que updateDraftProject exige
+ * (actions/projects.ts), para que a tela de edição nunca abra fora do guard
+ * real da action. */
+export async function getDraftProjectForEdit(
+  projectId: string,
+  userId: string,
+): Promise<DraftProjectForEdit | null> {
+  return withAuthenticatedContext({ actorId: userId }, async (tx) => {
+    const rows = await tx
+      .select({
+        id: projects.id,
+        tipo: projects.tipo,
+        stage: projects.stage,
+        title: projects.title,
+        objectives: projects.objectives,
+        justification: projects.justification,
+        targetAudience: projects.targetAudience,
+        expectedResults: projects.expectedResults,
+        ministryRegion: projects.ministryRegion,
+        ministryArea: projects.ministryArea,
+        budgetTotal: projects.budgetTotal,
+        parcelas: projects.parcelas,
+        submitterId: projects.submitterId,
+      })
+      .from(projects)
+      .where(and(eq(projects.id, projectId), isNull(projects.deletedAt)))
+      .limit(1);
+
+    const project = rows[0];
+    if (
+      !project ||
+      project.submitterId !== userId ||
+      project.stage !== "rascunho"
+    ) {
+      return null;
+    }
+
+    // DB só guarda a contagem em `meses` — os meses selecionados
+    // (mesesPagamento) só existem na versão mais recente do snapshot.
+    const versionRows = await tx
+      .select({ data: projectVersions.data })
+      .from(projectVersions)
+      .where(eq(projectVersions.projectId, projectId))
+      .orderBy(desc(projectVersions.versionNumber))
+      .limit(1);
+
+    const snapshot = versionRows[0]?.data as
+      | { mesesPagamento?: number[] }
+      | undefined;
+
+    return {
+      id: project.id,
+      tipo: project.tipo,
+      title: project.title,
+      objectives: project.objectives,
+      justification: project.justification,
+      targetAudience: project.targetAudience,
+      expectedResults: project.expectedResults,
+      ministryRegion: project.ministryRegion,
+      ministryArea: project.ministryArea,
+      budgetTotal: parseFloat(project.budgetTotal ?? "0"),
+      parcelas: project.parcelas,
+      mesesSelecionados: snapshot?.mesesPagamento ?? [],
     };
   });
 }

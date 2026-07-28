@@ -8,6 +8,7 @@ import {
   DollarSign,
   FileText,
   Building2,
+  Pencil,
 } from "lucide-react";
 import { getAuthUser, getSubmissorProjectDetail } from "../../../lib/queries";
 import { ProjectTimeline } from "../../../components/project-timeline";
@@ -130,7 +131,16 @@ export default async function ProjectDetailPage({
             </div>
 
             {project.stage === "rascunho" && (
-              <SubmitProjectButton projectId={project.id} />
+              <div className="flex items-center gap-2 shrink-0">
+                <Link
+                  href={`/${project.id}/editar`}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-(--border) px-3.5 py-2.5 text-sm font-semibold text-(--fg-muted) hover:border-(--brand) hover:text-(--brand) transition-colors"
+                >
+                  <Pencil className="w-4 h-4" aria-hidden />
+                  Editar
+                </Link>
+                <SubmitProjectButton projectId={project.id} />
+              </div>
             )}
           </div>
 

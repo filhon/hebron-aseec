@@ -24,6 +24,7 @@ import {
   createPunctualProjectSchema,
   createContestationSchema,
   deleteProjectSchema,
+  checkMesesPagamentoCoherence,
 } from "@hebron/validators/projetos";
 import {
   scoreProject,
@@ -312,19 +313,46 @@ export const createPunctualDraft = submissorAction
 // updateDraftProject — edit a project while it is still a rascunho
 // ---------------------------------------------------------------------------
 
-const updateDraftSchema = z.object({
-  projectId: z.string().uuid("Projeto inválido"),
-  title: z.string().min(5).max(200).optional(),
-  objectives: z.string().min(50).max(5000).optional(),
-  justification: z.string().min(50).max(5000).optional(),
-  targetAudience: z.string().max(2000).optional().nullable(),
-  expectedResults: z.string().min(50).max(5000).optional(),
-  ministryRegion: z.string().max(200).optional().nullable(),
-  ministryArea: z.string().max(100).optional().nullable(),
-  budgetTotal: z.number().positive().optional(),
-  parcelas: z.number().int().min(1).max(12).optional(),
-  extendedData: z.record(z.unknown()).optional(),
-});
+// `parcelas` e `mesesPagamento` só podem mudar juntos: a mesma
+// checkMesesPagamentoCoherence usada em createAnnualProjectSchema (P-2.4b),
+// não uma segunda cópia da regra. Sem isso, um update que altere só
+// `parcelas` desfaz a igualdade parcelas===meses mantida desde a criação,
+// e generatePaymentSchedule (packages/db/projetos-approval.ts) divide o
+// orçamento por `parcelas` mas emite uma linha por `meses` — a causa raiz
+// do defeito registrado em P-2.8c.
+const updateDraftSchema = z
+  .object({
+    projectId: z.string().uuid("Projeto inválido"),
+    title: z.string().min(5).max(200).optional(),
+    objectives: z.string().min(50).max(5000).optional(),
+    justification: z.string().min(50).max(5000).optional(),
+    targetAudience: z.string().max(2000).optional().nullable(),
+    expectedResults: z.string().min(50).max(5000).optional(),
+    ministryRegion: z.string().max(200).optional().nullable(),
+    ministryArea: z.string().max(100).optional().nullable(),
+    budgetTotal: z.number().positive().optional(),
+    parcelas: z.number().int().min(1).max(12).optional(),
+    mesesPagamento: z
+      .array(z.number().int().min(1).max(12))
+      .min(1, "Selecione pelo menos um mês de pagamento")
+      .optional(),
+    extendedData: z.record(z.unknown()).optional(),
+  })
+  .superRefine((data, ctx) => {
+    const { parcelas, mesesPagamento } = data;
+    if ((parcelas === undefined) !== (mesesPagamento === undefined)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [parcelas === undefined ? "parcelas" : "mesesPagamento"],
+        message:
+          "Parcelas e meses de pagamento devem ser alterados juntos — informe os dois.",
+      });
+      return;
+    }
+    if (parcelas !== undefined && mesesPagamento !== undefined) {
+      checkMesesPagamentoCoherence(mesesPagamento, parcelas, ctx);
+    }
+  });
 
 export const updateDraftProject = submissorAction
   .schema(updateDraftSchema)
@@ -366,6 +394,10 @@ export const updateDraftProject = submissorAction
           patch.budgetTotal = parsedInput.budgetTotal.toString();
         if (parsedInput.parcelas !== undefined)
           patch.parcelas = parsedInput.parcelas;
+        // meses acompanha mesesPagamento.length — nunca gravado sozinho,
+        // mesma invariante de createAnnualDraft (meses === parcelas).
+        if (parsedInput.mesesPagamento !== undefined)
+          patch.meses = parsedInput.mesesPagamento.length;
 
         const updated = await tx
           .update(projects)

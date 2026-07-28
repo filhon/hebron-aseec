@@ -226,6 +226,7 @@
 | S-203  | 2026-07-28 | Auditoria Bloco B Projetos (P-2.6–P-2.12) — patches P-2.6b/2.8b/2.8c/2.10b/2.12b gerados                                         | concluido                            |
 | S-204  | 2026-07-28 | P-2.6b — O relatório que é rejeitado sem motivo e não pode voltar (CORRETIVO)                                                    | concluido                            |
 | S-205  | 2026-07-28 | P-2.8b — A reprovação que o mapa de estágios não permite e o quórum que conta quem já saiu (CORRETIVO)                           | concluido                            |
+| S-206  | 2026-07-28 | P-2.8c — Quatro actions sem porta de entrada: rascunho, instituição e membros (CORRETIVO)                                        | concluido                            |
 
 ---
 
@@ -17539,3 +17540,143 @@ mapa" — não mudou, então nenhum dos dois foi tocado.
 - `pnpm --filter jobs typecheck` — verde
 - `pnpm --filter jobs lint` — verde
 - `pnpm --filter jobs test` — 19/19
+
+## S-206 — P-2.8c — Quatro actions sem porta de entrada: rascunho, instituição e membros (CORRETIVO)
+
+**Branch:** `feat/P-2.8c-projetos-actions-orfas`
+
+### Contexto
+
+P-2.9c ligou 14 actions órfãs; quatro ficaram para trás:
+`updateDraftProject` (sem tela de edição de rascunho — escopo original de
+P-2.8 prometia "editar em rascunho" e nunca foi entregue), `updateOrganization`
+e `addOrganizationMember`/`removeOrganizationMember` (gate `diretorAction`
+contradizendo o próprio comentário da action, "creator OR diretor", e sem
+tela em nenhum dos dois papéis). `updateDraftProject` também tinha um
+defeito latente: o schema aceitava `parcelas` mas não `mesesPagamento`, então
+um update que mudasse só `parcelas` desfazia a igualdade `parcelas === meses`
+mantida desde a criação — `generatePaymentSchedule`
+(`packages/db/projetos-approval.ts`) divide o orçamento por `parcelas` mas
+emite uma linha por `meses`, então a divergência sai do módulo como
+cronograma de pagamento errado (metade ou o dobro do valor aprovado).
+
+### Pergunta ao Filipe
+
+**Quem pode editar os dados da instituição e gerenciar membros?** O prompt
+original perguntava se era self-service do submissor ou sempre ato da
+diretoria. Resposta: **híbrido** — dados cadastrais (nome, CNPJ, endereço,
+telefone, responsável legal) são self-service de quem criou a organização;
+gerenciar membros (adicionar/remover representante) é ato exclusivo da
+diretoria, porque a lista de membros decide quem enxerga os projetos da
+organização via RLS (`projects_select_own_or_org`).
+
+Aplicando essa resposta ao gate real: `updateOrganization` mudou de
+`diretorAction` para `projetosAction` (qualquer autenticado) + checagem de
+posse no handler (`createdBy === ctx.actorId` OU diretor/super_admin) — isso
+espelha exatamente a RLS já existente `organizations_update_owner_or_admin`
+(`created_by = auth.uid() OR has_role('super_admin','diretor')`,
+`0007_projetos.sql`), sem exigir migration nova. `addOrganizationMember` e
+`removeOrganizationMember` continuam em `diretorAction` sem mudança de
+comportamento — só o comentário, que estava errado, foi corrigido para
+bater com o gate e com a RLS `org_members_write_admin` (só diretor/super_admin).
+
+### Escopo entregue
+
+1. **Edição de rascunho:** `app/(submissor)/[id]/editar/page.tsx` (Server) +
+   `_client.tsx` (Client), reaproveitando os primitivos de campo do wizard
+   (`components/project-wizard-steps/field-controls.tsx` — `FieldLabel`,
+   `TextInput`, `Textarea`, `FieldError`, `MONTHS`) em vez de duplicar a
+   validação. A tela expõe só os campos que `updateDraftSchema` realmente
+   persiste (título, objetivos/justificativa — rotulados conforme
+   anual/pontual —, beneficiários e resultados esperados quando anual,
+   região, país, valor total e, para anual, parcelas + meses de pagamento).
+   Campos que só existem no snapshot da criação (categoria, metodologia,
+   contexto ministerial, tempo de ministério, cofinanciamento) foram
+   deixados de fora deliberadamente — expô-los editáveis sem persistir a
+   mudança seria uma perda silenciosa de dados. Link "Editar" adicionado em
+   `[id]/page.tsx`, visível só em `rascunho`.
+2. **Fechado o furo meses/parcelas:** `updateDraftSchema` ganhou
+   `mesesPagamento` e um `.superRefine` que exige os dois campos juntos e
+   chama `checkMesesPagamentoCoherence` (a mesma função de
+   `createAnnualProjectSchema`, P-2.4b) — não uma segunda cópia da regra.
+   `updateDraftProject` grava `meses = mesesPagamento.length` sempre que
+   `parcelas` muda, nunca um sozinho.
+3. **Gates de organização** corrigidos conforme a resposta acima.
+4. **Tela de instituição operável:**
+   - `(submissor)/instituicao/page.tsx`: `OrganizationForm` (novo) renderiza
+     para quem criou a organização; quem não criou vê uma nota orientando a
+     contatar quem criou ou a diretoria. `OrganizationMembers` (novo, em
+     modo `canManage={false}`) lista os representantes e orienta contato
+     com a diretoria para adicionar/remover.
+   - `(diretoria)/instituicoes/page.tsx` (**fora da lista original de
+     arquivos permitidos** — infraestrutura óbvia faltante per G1: sem essa
+     tela, um diretor sem o papel `submissor` nunca alcançaria
+     `addOrganizationMember`/`removeOrganizationMember`, já que
+     `(submissor)` exige `requireSubmissorSession`. Criada com
+     `loading.tsx` a mais e um item de nav em `(diretoria)/shell.tsx`
+     ["Instituições"] — mesmo padrão que os demais itens de
+     `(diretoria)`). Lista todas as organizações com contagem de membros e
+     `OrganizationMembers` em `canManage={true}` (adicionar por e-mail via
+     nova query `findUserByEmail`, remover com o guard existente de "não
+     remover o último membro").
+5. **Varredura de actions órfãs** (mesmo método de P-2.9c — grep de cada
+   `export const` de `apps/projetos/src/actions/*.ts` contra
+   `components/` e `app/`): as 22 actions exportadas hoje têm pelo menos um
+   chamador. Nenhuma órfã restante.
+
+### Critérios de aceite
+
+- [x] `grep -rn "updateDraftProject\|updateOrganization\|addOrganizationMember\|removeOrganizationMember" apps/projetos/src/app apps/projetos/src/components` — ≥1 chamador cada
+- [x] Submissor edita o próprio rascunho e a alteração persiste; botão
+      ausente fora de `rascunho`
+- [x] `updateDraftProject` nunca deixa `meses`/`parcelas` divergir —
+      `checkMesesPagamentoCoherence` reusada, não reimplementada
+- [x] Teste cobre rascunho editado com novo número de parcelas → cronograma
+      aprovado soma o `budget_total` (`organizations.test.ts`, usa a
+      `generatePaymentSchedule` real, não uma simulação)
+- [x] Comentário e gate de cada action de organização dizem a mesma coisa;
+      decisão registrada acima
+- [x] Instituição com dois membros alcançável pela UI (diretoria adiciona);
+      segundo membro enxerga os projetos da organização — coberto em
+      `organizations.test.ts` via RLS direta (`queryAs`) e
+      `withAuthenticatedContext`
+- [x] Varredura de actions órfãs registrada acima — zero restantes
+- [x] Tela de edição segue o design system (sem CSS de app, sem hex —
+      reaproveita tokens e primitivos já usados no wizard)
+- [x] `pnpm --filter projetos typecheck lint test build` — todos verdes
+      (133/133 testes, incluindo os 10 novos)
+- [x] Registrado em SESSIONS.md
+
+### Arquivos criados
+
+- `apps/projetos/src/app/(submissor)/[id]/editar/page.tsx`
+- `apps/projetos/src/app/(submissor)/[id]/editar/_client.tsx`
+- `apps/projetos/src/components/organization-form.tsx`
+- `apps/projetos/src/components/organization-members.tsx`
+- `apps/projetos/src/__tests__/organizations.test.ts`
+- `apps/projetos/src/app/(diretoria)/instituicoes/page.tsx` (fora da lista
+  original — ver nota no item 4 acima)
+- `apps/projetos/src/app/(diretoria)/instituicoes/loading.tsx` (idem)
+
+### Arquivos modificados
+
+- `apps/projetos/src/actions/projects.ts` (`updateDraftSchema`,
+  `updateDraftProject`)
+- `apps/projetos/src/actions/organizations.ts` (`updateOrganization` e
+  comentários de `addOrganizationMember`/`removeOrganizationMember`)
+- `apps/projetos/src/lib/queries.ts` (`OrgOption` ganhou `createdBy` +
+  campos de contato; `getOrganizationMembers`, `findUserByEmail`,
+  `getAllOrganizationsForDiretoria`, `getDraftProjectForEdit`)
+- `apps/projetos/src/app/(submissor)/[id]/page.tsx` (link "Editar")
+- `apps/projetos/src/app/(submissor)/instituicao/page.tsx`
+- `apps/projetos/src/app/(diretoria)/shell.tsx` (nav "Instituições", fora
+  da lista original — ver nota no item 4 acima)
+
+### Verificações executadas
+
+- `pnpm --filter projetos typecheck` — verde
+- `pnpm --filter projetos lint` — verde
+- `pnpm --filter projetos test` — 133/133 (12 arquivos, inclui os 10 novos
+  testes de `organizations.test.ts`)
+- `pnpm --filter projetos build` — verde (`/[id]/editar` e `/instituicoes`
+  compilam e aparecem no route map)

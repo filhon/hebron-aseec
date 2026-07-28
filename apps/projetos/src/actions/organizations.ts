@@ -4,7 +4,11 @@ import { z } from "zod";
 import { eq, and } from "drizzle-orm";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { organizations, organizationMembers } from "@hebron/db/schema";
-import { submissorAction, diretorAction } from "../lib/safe-action";
+import {
+  submissorAction,
+  diretorAction,
+  projetosAction,
+} from "../lib/safe-action";
 import { logProjectAudit, computeDiff } from "../lib/audit";
 
 // ---------------------------------------------------------------------------
@@ -95,9 +99,18 @@ export const createOrganization = submissorAction
 
 // ---------------------------------------------------------------------------
 // updateOrganization — creator OR diretor/super_admin
+//
+// Decisão P-2.8c (perguntado ao Filipe, ver SESSIONS.md): dados cadastrais
+// da organização são self-service de quem a criou — a diretoria também pode
+// corrigi-los, mas não precisa ser acionada para cada edição. O gate mirroa
+// exatamente a RLS "organizations_update_owner_or_admin" (0007_projetos.sql:
+// created_by = auth.uid() OR has_role('super_admin','diretor')) — por isso
+// usa `projetosAction` (qualquer autenticado) e valida a posse no handler,
+// não um client de papel fixo: nem todo criador tem o papel "diretor", e
+// nem todo diretor é o criador.
 // ---------------------------------------------------------------------------
 
-export const updateOrganization = diretorAction
+export const updateOrganization = projetosAction
   .schema(updateOrganizationSchema)
   .action(async ({ parsedInput, ctx }) => {
     const { before, after } = await withAuthenticatedContext(
@@ -111,6 +124,14 @@ export const updateOrganization = diretorAction
 
         const before = rows[0];
         if (!before) throw new Error("Organização não encontrada");
+
+        const isPrivileged =
+          ctx.roles.includes("super_admin") || ctx.roles.includes("diretor");
+        if (!isPrivileged && before.createdBy !== ctx.actorId) {
+          throw new Error(
+            "Apenas quem cadastrou a organização ou a diretoria pode editar seus dados",
+          );
+        }
 
         const patch: Partial<typeof organizations.$inferInsert> = {
           updatedAt: new Date(),
@@ -157,7 +178,13 @@ export const updateOrganization = diretorAction
   });
 
 // ---------------------------------------------------------------------------
-// addOrganizationMember — diretor or the org creator
+// addOrganizationMember — diretor/super_admin only
+//
+// Decisão P-2.8c (ver SESSIONS.md): diferente de updateOrganization, a
+// lista de membros NÃO é self-service do criador — ela decide quem enxerga
+// os projetos da organização (RLS projects_select_own_or_org,
+// 0007_projetos_rls.sql), então é ato de governança, não de cadastro.
+// Mirrora a RLS "org_members_write_admin" (has_role('super_admin','diretor')).
 // ---------------------------------------------------------------------------
 
 export const addOrganizationMember = diretorAction
@@ -199,7 +226,11 @@ export const addOrganizationMember = diretorAction
   });
 
 // ---------------------------------------------------------------------------
-// removeOrganizationMember — diretor only (cannot remove self if last member)
+// removeOrganizationMember — diretor/super_admin only (cannot remove last member)
+//
+// Mesma decisão de governança de addOrganizationMember (P-2.8c, ver
+// SESSIONS.md): remover representante afeta quem enxerga os projetos da
+// organização, então não é self-service do criador.
 // ---------------------------------------------------------------------------
 
 export const removeOrganizationMember = diretorAction

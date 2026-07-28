@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   CalendarDays,
   BarChart3,
+  Building2,
   Settings,
 } from "lucide-react";
 import { logoutAction } from "../../actions/auth";
@@ -38,6 +39,11 @@ const SECTIONS: NavSection[] = [
         label: "Relatórios",
         href: "/relatorios-dir",
         icon: BarChart3,
+      },
+      {
+        label: "Instituições",
+        href: "/instituicoes",
+        icon: Building2,
       },
     ],
   },

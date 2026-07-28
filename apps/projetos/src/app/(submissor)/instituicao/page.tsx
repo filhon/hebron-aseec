@@ -1,9 +1,14 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
-import { Building2, ArrowRight, Hash } from "lucide-react";
+import { Building2, Hash } from "lucide-react";
 import { CANONICAL_LOGIN_URL } from "@hebron/auth";
-import { getAuthUser, getMyOrganizations } from "../../../lib/queries";
+import {
+  getAuthUser,
+  getMyOrganizations,
+  getOrganizationMembers,
+} from "../../../lib/queries";
 import { CreateOrganizationForm } from "../../../components/create-organization-form";
+import { OrganizationForm } from "../../../components/organization-form";
+import { OrganizationMembers } from "../../../components/organization-members";
 
 export default async function InstituicaoPage() {
   const authUser = await getAuthUser();
@@ -11,6 +16,8 @@ export default async function InstituicaoPage() {
 
   const orgs = await getMyOrganizations();
   const org = orgs[0] ?? null;
+  const isCreator = org !== null && org.createdBy === authUser.id;
+  const members = org !== null ? await getOrganizationMembers(org.id) : [];
 
   return (
     <div className="hb-page">
@@ -197,21 +204,18 @@ export default async function InstituicaoPage() {
             )}
           </section>
 
-          {/* Ação de atualizar */}
-          <div
-            style={{
-              background: "var(--brand-tint-subtle)",
-              border: "1px solid var(--brand-tint-border)",
-              borderRadius: "var(--radius-lg)",
-              padding: 20,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 16,
-              flexWrap: "wrap",
-            }}
-          >
-            <div>
+          {/* Edição de dados — self-service de quem cadastrou (P-2.8c) */}
+          {isCreator ? (
+            <OrganizationForm organization={org} />
+          ) : (
+            <div
+              style={{
+                background: "var(--brand-tint-subtle)",
+                border: "1px solid var(--brand-tint-border)",
+                borderRadius: "var(--radius-lg)",
+                padding: 20,
+              }}
+            >
               <p
                 style={{
                   fontFamily: "var(--font-display)",
@@ -226,30 +230,19 @@ export default async function InstituicaoPage() {
               <p
                 style={{ fontSize: 13, color: "var(--fg-muted)", marginTop: 4 }}
               >
-                Entre em contato com o administrador para atualizar o cadastro.
+                Apenas quem cadastrou esta instituição pode editar os dados.
+                Entre em contato com essa pessoa ou com a diretoria.
               </p>
             </div>
-            <Link
-              href="mailto:admin@hebronaseec.com.br"
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 8,
-                background: "var(--hb-blue)",
-                color: "var(--fg-invert)",
-                textDecoration: "none",
-                fontFamily: "var(--font-display)",
-                fontWeight: 600,
-                fontSize: 14,
-                padding: "10px 18px",
-                borderRadius: 99,
-                whiteSpace: "nowrap",
-              }}
-            >
-              Contatar administrador
-              <ArrowRight width={15} height={15} aria-hidden />
-            </Link>
-          </div>
+          )}
+
+          {/* Representantes da instituição — gerenciamento é ato da
+              diretoria (P-2.8c), aqui só leitura + orientação de contato. */}
+          <OrganizationMembers
+            organizationId={org.id}
+            members={members}
+            canManage={false}
+          />
 
           {/* Cadastrar outra instituição — submissor pode estar vinculado a
               múltiplas instituições (N:N, BRAIN §6.2). */}

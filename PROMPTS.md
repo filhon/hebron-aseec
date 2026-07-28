@@ -3664,7 +3664,7 @@ Server Actions para Projetos. CRUD de projetos (criar rascunho, submeter, editar
 - [x] Types passam
 
 **Notas (auditoria do Bloco B, 2026-07-28):**
-O escopo prometia "editar em rascunho" e "CRUD de organizações e membros". `updateDraftProject`, `updateOrganization`, `addOrganizationMember` e `removeOrganizationMember` existem, auditam, e não têm um único chamador em `app/` ou `components/` — **P-2.8c**.
+O escopo prometia "editar em rascunho" e "CRUD de organizações e membros". `updateDraftProject`, `updateOrganization`, `addOrganizationMember` e `removeOrganizationMember` existem, auditam, e não têm um único chamador em `app/` ou `components/` — **P-2.8c**. Resolvido em P-2.8c (S-206): as quatro actions têm tela hoje; varredura repetida sobre `apps/projetos/src/actions/*` não encontrou nenhuma outra órfã.
 
 ---
 
@@ -3821,7 +3821,7 @@ Integração Projetos → Financeiro: aprovação cria centro de custo + payment
 **Critérios de aceite:**
 
 - [x] Aprovação de projeto dispara criação de centro de custo (stub ou real) — real desde P-3.11
-- [~] Aprovação cria payment_schedules baseado nas parcelas definidas — `generatePaymentSchedule` divide o orçamento por `parcelas` mas emite uma linha por `meses`. Iguais na criação (`checkMesesPagamentoCoherence`, P-2.4b); `updateDraftProject` aceita `parcelas` sem `meses` e desfaz a igualdade, gerando cronograma cuja soma não bate com `budget_total` — e cada linha vira um `payable` real. **P-2.8c**
+- [x] Aprovação cria payment_schedules baseado nas parcelas definidas — `generatePaymentSchedule` divide o orçamento por `parcelas` e emite uma linha por `meses`; `updateDraftSchema` agora exige os dois juntos e reaplica `checkMesesPagamentoCoherence` (P-2.4b), e `updateDraftProject` só grava `meses = mesesPagamento.length`, nunca `parcelas` sozinho. Corrigido em **P-2.8c** (S-206).
 - [x] Submissão dispara criação de checklist de análise (stub)
 - [x] Wizard recebe edital_id e pré-preenche tipo + categoria (wiring completo em P-2.9c, S-62; ver SESSIONS S-68 ponto 6)
 - [x] Stubs documentados para integração futura
@@ -4031,16 +4031,16 @@ P-2.9c (S-62) fez a varredura "quais actions não têm caminho de UI" e ligou 14
 
 **Critérios de aceite:**
 
-- [ ] `grep -rn "updateDraftProject\|updateOrganization\|addOrganizationMember\|removeOrganizationMember" apps/projetos/src/app apps/projetos/src/components` retorna ≥1 chamador para cada
-- [ ] Submissor edita o próprio rascunho e a alteração persiste; botão ausente fora de `rascunho`
-- [ ] `updateDraftProject` não deixa `meses` e `parcelas` divergirem — regra vinda de `checkMesesPagamentoCoherence`, não reimplementada
-- [ ] Teste cobre: rascunho editado com novo número de parcelas → aprovação gera cronograma cuja soma bate com `budget_total`
-- [ ] Comentário e gate de cada action de organização dizem a mesma coisa; a regra escolhida está registrada em SESSIONS.md
-- [ ] Instituição com dois membros é alcançável pela UI, e o segundo membro enxerga os projetos da instituição (RLS `projects_select_own_or_org`)
-- [ ] Varredura de actions órfãs registrada em SESSIONS.md
-- [ ] Página de edição segue os padrões do design system (sem CSS de app, sem hex hardcoded — BRAIN §5)
-- [ ] `pnpm --filter projetos typecheck lint test` verdes; `pnpm --filter projetos build` verde
-- [ ] Registrar em SESSIONS.md
+- [x] `grep -rn "updateDraftProject\|updateOrganization\|addOrganizationMember\|removeOrganizationMember" apps/projetos/src/app apps/projetos/src/components` retorna ≥1 chamador para cada
+- [x] Submissor edita o próprio rascunho e a alteração persiste; botão ausente fora de `rascunho`
+- [x] `updateDraftProject` não deixa `meses` e `parcelas` divergirem — regra vinda de `checkMesesPagamentoCoherence`, não reimplementada
+- [x] Teste cobre: rascunho editado com novo número de parcelas → aprovação gera cronograma cuja soma bate com `budget_total`
+- [x] Comentário e gate de cada action de organização dizem a mesma coisa; a regra escolhida está registrada em SESSIONS.md
+- [x] Instituição com dois membros é alcançável pela UI, e o segundo membro enxerga os projetos da instituição (RLS `projects_select_own_or_org`)
+- [x] Varredura de actions órfãs registrada em SESSIONS.md
+- [x] Página de edição segue os padrões do design system (sem CSS de app, sem hex hardcoded — BRAIN §5)
+- [x] `pnpm --filter projetos typecheck lint test` verdes; `pnpm --filter projetos build` verde
+- [x] Registrar em SESSIONS.md
 
 **Notas:**
 Ref: escopo de P-2.8 ("editar em rascunho", "CRUD de organizações e membros") — os dois itens que o prompt original prometeu e nenhuma sessão entregou até o fim. Atenção à regra G-dynamic-route: `page.tsx` Server Component + `_client.tsx` colocado, nunca `"use client"` com `use(params)`.
