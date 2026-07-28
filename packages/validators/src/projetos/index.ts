@@ -14,118 +14,175 @@ const projectStageEnum = z.enum([
   "cancelado",
 ]);
 
-const projectCategoryEnum = z.enum([
-  "evangelismo",
-  "missoes_transculturais",
-  "educacao_crista",
-  "assistencia_social",
-  "saude",
-  "capacitacao_lideranca",
-  "infraestrutura_ministerial",
-  "plantacao_de_igrejas",
-  "discipulado",
-  "outros",
-]);
+const projectCategoryEnum = z.enum(
+  [
+    "evangelismo",
+    "missoes_transculturais",
+    "educacao_crista",
+    "assistencia_social",
+    "saude",
+    "capacitacao_lideranca",
+    "infraestrutura_ministerial",
+    "plantacao_de_igrejas",
+    "discipulado",
+    "outros",
+  ],
+  { errorMap: () => ({ message: "Selecione uma categoria" }) },
+);
+
+// ─── Regra cruzada meses × parcelas ───────────────────────────────────────────
+// Compartilhada entre o schema completo (superRefine abaixo) e o schema da
+// etapa 4 do wizard (annualStep4Schema) — nenhum dos dois reimplementa a
+// regra, ambos chamam esta função (P-2.4b, critério "sem regra duplicada").
+
+export function checkMesesPagamentoCoherence(
+  mesesPagamento: number[],
+  numeroParcelas: number,
+  ctx: z.RefinementCtx,
+): void {
+  if (mesesPagamento.length !== numeroParcelas) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["mesesPagamento"],
+      message: `Selecione exatamente ${numeroParcelas} mês(es) de pagamento`,
+    });
+  }
+  const uniqueMonths = new Set(mesesPagamento);
+  if (uniqueMonths.size !== mesesPagamento.length) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["mesesPagamento"],
+      message: "Cada mês pode ser selecionado apenas uma vez",
+    });
+  }
+}
 
 // ─── createAnnualProjectSchema ────────────────────────────────────────────────
 // 10+ required fields per BRAIN.md 6.2 formulário estruturado.
+//
+// A base fica separada do `.superRefine` (`annualProjectFields`, ZodObject)
+// porque `ZodEffects` não tem `.pick()` — os schemas de etapa do wizard
+// (annualStepNSchema, abaixo) precisam recortar subconjuntos desta base.
 
-export const createAnnualProjectSchema = z
-  .object({
-    titulo: z
-      .string()
-      .min(5, "Título deve ter pelo menos 5 caracteres")
-      .max(200),
-    categoria: projectCategoryEnum,
-    organizacaoId: z.string().uuid("Selecione uma instituição válida"),
-    anoReferencia: z
-      .number()
-      .int()
-      .min(2020, "Ano inválido")
-      .max(2100, "Ano inválido"),
-    objetivos: z
-      .string()
-      .min(50, "Objetivos devem ter pelo menos 50 caracteres")
-      .max(5000),
-    justificativa: z
-      .string()
-      .min(50, "Justificativa deve ter pelo menos 50 caracteres")
-      .max(5000),
-    metodologia: z
-      .string()
-      .min(50, "Metodologia deve ter pelo menos 50 caracteres")
-      .max(5000),
-    contextoMinisterial: z
-      .string()
-      .min(30, "Descreva o contexto ministerial")
-      .max(3000),
-    tempoMinisterioAnos: z
-      .number()
-      .int()
-      .min(0, "Tempo inválido")
-      .max(70, "Tempo inválido"),
-    regiao: z.string().min(2, "Informe a região de atuação").max(200),
-    pais: z.string().min(2, "Informe o país").max(100),
-    beneficiariosQuantidade: z
-      .number()
-      .int()
-      .min(1, "Informe o número de beneficiários"),
-    beneficiariosDescricao: z
-      .string()
-      .min(20, "Descreva os beneficiários")
-      .max(2000),
-    resultadosEsperados: z
-      .string()
-      .min(50, "Descreva os resultados esperados")
-      .max(5000),
-    cartaRecomendacao: z.boolean(),
-    valorTotal: z.number().positive("Valor deve ser positivo"),
-    numeroParcelas: z
-      .number()
-      .int()
-      .min(1, "Mínimo 1 parcela")
-      .max(12, "Máximo 12 parcelas"),
-    mesesPagamento: z
-      .array(z.number().int().min(1).max(12))
-      .min(1, "Selecione pelo menos um mês de pagamento"),
-    // Optional
-    editalId: z.string().uuid().nullable().optional(),
-    parentProjectId: z.string().uuid().nullable().optional(),
-    cofinancimento: z.string().max(2000).nullable().optional(),
-    parcerias: z.string().max(2000).nullable().optional(),
-    riscos: z.string().max(2000).nullable().optional(),
-    indicadoresExito: z.string().max(2000).nullable().optional(),
-    attachments: z
-      .array(
-        z.object({
-          fileUrl: z.string().min(1),
-          fileName: z.string().min(1),
-          fileSize: z.number().int().positive().optional(),
-        }),
-      )
-      .optional(),
-  })
-  .superRefine((data, ctx) => {
-    if (data.mesesPagamento.length !== data.numeroParcelas) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["mesesPagamento"],
-        message: `Selecione exatamente ${data.numeroParcelas} mês(es) de pagamento`,
-      });
-    }
-    const uniqueMonths = new Set(data.mesesPagamento);
-    if (uniqueMonths.size !== data.mesesPagamento.length) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: ["mesesPagamento"],
-        message: "Cada mês pode ser selecionado apenas uma vez",
-      });
-    }
-  });
+export const annualProjectFields = z.object({
+  titulo: z.string().min(5, "Título deve ter pelo menos 5 caracteres").max(200),
+  categoria: projectCategoryEnum,
+  organizacaoId: z.string().uuid("Selecione uma instituição válida"),
+  anoReferencia: z
+    .number()
+    .int()
+    .min(2020, "Ano inválido")
+    .max(2100, "Ano inválido"),
+  objetivos: z
+    .string()
+    .min(50, "Objetivos devem ter pelo menos 50 caracteres")
+    .max(5000),
+  justificativa: z
+    .string()
+    .min(50, "Justificativa deve ter pelo menos 50 caracteres")
+    .max(5000),
+  metodologia: z
+    .string()
+    .min(50, "Metodologia deve ter pelo menos 50 caracteres")
+    .max(5000),
+  contextoMinisterial: z
+    .string()
+    .min(30, "Descreva o contexto ministerial")
+    .max(3000),
+  tempoMinisterioAnos: z
+    .number()
+    .int()
+    .min(0, "Tempo inválido")
+    .max(70, "Tempo inválido"),
+  regiao: z.string().min(2, "Informe a região de atuação").max(200),
+  pais: z.string().min(2, "Informe o país").max(100),
+  beneficiariosQuantidade: z
+    .number()
+    .int()
+    .min(1, "Informe o número de beneficiários"),
+  beneficiariosDescricao: z
+    .string()
+    .min(20, "Descreva os beneficiários")
+    .max(2000),
+  resultadosEsperados: z
+    .string()
+    .min(50, "Descreva os resultados esperados")
+    .max(5000),
+  cartaRecomendacao: z.boolean(),
+  valorTotal: z.number().positive("Valor deve ser positivo"),
+  numeroParcelas: z
+    .number()
+    .int()
+    .min(1, "Mínimo 1 parcela")
+    .max(12, "Máximo 12 parcelas"),
+  mesesPagamento: z
+    .array(z.number().int().min(1).max(12))
+    .min(1, "Selecione pelo menos um mês de pagamento"),
+  // Optional
+  editalId: z.string().uuid().nullable().optional(),
+  parentProjectId: z.string().uuid().nullable().optional(),
+  cofinancimento: z.string().max(2000).nullable().optional(),
+  parcerias: z.string().max(2000).nullable().optional(),
+  riscos: z.string().max(2000).nullable().optional(),
+  indicadoresExito: z.string().max(2000).nullable().optional(),
+  attachments: z
+    .array(
+      z.object({
+        fileUrl: z.string().min(1),
+        fileName: z.string().min(1),
+        fileSize: z.number().int().positive().optional(),
+      }),
+    )
+    .optional(),
+});
+
+export const createAnnualProjectSchema = annualProjectFields.superRefine(
+  (data, ctx) =>
+    checkMesesPagamentoCoherence(data.mesesPagamento, data.numeroParcelas, ctx),
+);
 
 export type CreateAnnualProjectInput = z.infer<
   typeof createAnnualProjectSchema
 >;
+
+// ─── Schemas por etapa do wizard anual (P-2.4b) ───────────────────────────────
+// Cada etapa valida só o subconjunto de campos que ela coleta. Recortados de
+// `annualProjectFields` — nunca redeclarados — para que o cliente e o
+// servidor derivem do mesmo schema (critério de aceite de P-2.4b).
+
+export const annualStep1Schema = annualProjectFields.pick({
+  organizacaoId: true,
+});
+
+export const annualStep2Schema = annualProjectFields.pick({
+  titulo: true,
+  categoria: true,
+  objetivos: true,
+  justificativa: true,
+  metodologia: true,
+  contextoMinisterial: true,
+  tempoMinisterioAnos: true,
+  regiao: true,
+  pais: true,
+  beneficiariosQuantidade: true,
+  beneficiariosDescricao: true,
+  resultadosEsperados: true,
+});
+
+export const annualStep3Schema = annualProjectFields.pick({
+  valorTotal: true,
+  numeroParcelas: true,
+});
+
+export const annualStep4Schema = annualProjectFields
+  .pick({
+    anoReferencia: true,
+    numeroParcelas: true,
+    mesesPagamento: true,
+  })
+  .superRefine((data, ctx) =>
+    checkMesesPagamentoCoherence(data.mesesPagamento, data.numeroParcelas, ctx),
+  );
 
 // ─── createPunctualProjectSchema ─────────────────────────────────────────────
 // 6 required fields per BRAIN.md 6.2 — emergencial, avaliado mensalmente.
@@ -163,6 +220,30 @@ export const createPunctualProjectSchema = z.object({
 export type CreatePunctualProjectInput = z.infer<
   typeof createPunctualProjectSchema
 >;
+
+// ─── Schemas por etapa do wizard pontual (P-2.4b) ─────────────────────────────
+// `createPunctualProjectSchema` já é um ZodObject puro (sem superRefine),
+// então as etapas recortam direto dele. Não existe etapa "Cronograma" para
+// projeto pontual — BRAIN §6.2: "sem parcelas (pagamento único)" — por isso
+// não há annualStep4Schema equivalente aqui.
+
+export const pontualStep1Schema = createPunctualProjectSchema.pick({
+  organizacaoId: true,
+});
+
+export const pontualStep2Schema = createPunctualProjectSchema.pick({
+  titulo: true,
+  categoria: true,
+  motivoEmergencial: true,
+  prazoNecessidade: true,
+  descricao: true,
+  regiao: true,
+  pais: true,
+});
+
+export const pontualStep3Schema = createPunctualProjectSchema.pick({
+  valorTotal: true,
+});
 
 // ─── createReportSchema ───────────────────────────────────────────────────────
 // Espelha projetos.reports: content é texto único (sem narrativa/resultados/

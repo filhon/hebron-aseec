@@ -221,6 +221,7 @@
 | S-198  | 2026-07-28 | P-2.2b — O voto que se dá por registrado sem o servidor confirmar (CORRETIVO)                                                    | concluido                            |
 | S-199  | 2026-07-28 | P-2.3b — A pauta da reunião que nunca teve pauta (CORRETIVO)                                                                     | concluido                            |
 | S-200  | 2026-07-28 | P-2.3c — O teto de R$ 150 mil que ninguém definiu (CORRETIVO)                                                                    | concluido                            |
+| S-201  | 2026-07-28 | P-2.4b — O wizard que não valida nada (CORRETIVO)                                                                                | concluido                            |
 
 ---
 
@@ -16707,3 +16708,131 @@ submissão era barrada por outro.
 ### Débitos registrados
 
 - Nenhum novo.
+
+## S-201 — P-2.4b — O wizard que não valida nada (CORRETIVO)
+
+**Branch:** `feat/P-2.4b-projetos-wizard`
+
+### Contexto
+
+O critério de P-2.4 "Wizard anual: 5 steps com validação Zod por step" estava
+`[x]`, mas o P-2.9c reescreveu `project-wizard.tsx` e os cinco
+`project-wizard-steps/*` num único `app/(submissor)/novo/page.tsx` de 1400
+linhas sem nenhuma validação de cliente: `handleNext` avançava
+incondicionalmente, e o `superRefine` de coerência meses×parcelas só
+reprovava no servidor, com `onError` lendo `err.serverError` (que em falha de
+validação vem `undefined` — next-safe-action devolve `validationErrors`). O
+resultado: dá para percorrer as seis etapas em branco e receber só "Erro ao
+submeter o projeto. Tente novamente.", sem campo nem etapa apontados, ao
+final de um formulário de dezoito campos.
+
+### O que foi feito
+
+1. **`packages/validators/src/projetos/index.ts`:** extraída a base
+   `annualProjectFields` (ZodObject) de `createAnnualProjectSchema`
+   (ZodEffects não tem `.pick()`), e a regra cruzada meses×parcelas
+   isolada em `checkMesesPagamentoCoherence`, chamada tanto pelo
+   `superRefine` do schema completo quanto pelo novo `annualStep4Schema` —
+   nenhuma reimplementação da regra. `.pick()` do base gerou
+   `annualStep1-4Schema`; `createPunctualProjectSchema` (já ZodObject puro)
+   gerou `pontualStep1-3Schema` direto. `projectCategoryEnum` ganhou
+   `errorMap` ("Selecione uma categoria") em vez do erro cru do Zod.
+2. **Arquivo único quebrado** em `project-wizard.tsx` (container: estado,
+   validação por etapa, submissão) + `project-wizard-steps/{field-controls,
+step-institution,step-proposal,step-budget,step-schedule,step-attachments,
+step-review}.tsx`. `FormData` renomeado para `WizardFormData` (não
+   sombrear o tipo DOM).
+3. **Validação por etapa:** `handleNext` roda o schema da etapa (recortado
+   do mesmo schema que o servidor usa) contra um payload construído por
+   `buildAnnualPayload`/`buildPontualPayload` — as mesmas funções usadas no
+   envio final, então cliente e servidor derivam exatamente da mesma fonte.
+   Erro bloqueia o avanço e aparece no campo (`FieldError` em cada input).
+4. **Etapa 4 (Cronograma) — só existe para o anual.** `createPunctualProjectSchema`
+   não tem `anoReferencia`/`mesesPagamento`/`numeroParcelas` (BRAIN §6.2:
+   pontual é pagamento único, sem parcelas) — mostrar a etapa colheria dado
+   que nenhuma action lê. Decisão registrada aqui (não havia critério
+   explícito de P-2.4b sobre isso): `ProjectWizard` usa `ANNUAL_STEPS`
+   (6) ou `PONTUAL_STEPS` (5) conforme `data.projectType`.
+5. **Coerência meses×parcelas na própria etapa:** `StepSchedule` trava o
+   botão do mês ao atingir o número de parcelas (`atLimit`) e mostra
+   contador "X de Y selecionados" — antes era possível marcar os 12 meses
+   independente do número de parcelas.
+6. **Erro de submissão honesto:** `handleSubmit` roda o schema completo
+   client-side antes de chamar a action (pega qualquer inconsistência entre
+   etapas, ex. usuário volta e muda `numeroParcelas` depois de validar a
+   etapa 4) e, em caso de falha, mapeia cada issue ao campo + etapa e navega
+   até a primeira. `onError` das duas actions (`createAnnualDraft`/
+   `createPunctualDraft`) passou a tratar `err.validationErrors` (formato
+   aninhado padrão do next-safe-action v7, `{campo: {_errors: [...]}}`) da
+   mesma forma — nunca mais só "Tente novamente" sem apontar nada.
+7. **Places / vídeo / planilha (item 4 do prompt) — decisão: não
+   implementar, corrigir os critérios de P-2.4.** `regiao`/`pais` seguem
+   texto livre (sem chave de Google Places em `packages/config`, e
+   adicionar uma está fora dos arquivos permitidos deste corretivo — só
+   schema/UI). Vídeo/planilha continuam impossíveis no bucket
+   `project-attachments` (`0020_storage_buckets.sql`: só
+   `application/pdf`/`image/jpeg`/`image/png`, 10 MB) — mudar
+   `allowed_mime_types`/`file_size_limit` ou rotear a um provedor de vídeo
+   (Bunny Stream) é migration/infra, fora do escopo de UI. Nenhuma das duas
+   é promessa do BRAIN (§6.2 não cita Places nem vídeo) — sem PATCH.
+8. **PROMPTS.md:** critérios e lista de arquivos de P-2.4 corrigidos para o
+   wizard real (6 etapas anual / 5 pontual, arquivos reais incluindo
+   `field-controls.tsx` e `step-schedule.tsx`; `punctual-project-form.tsx`
+   e `report-form.tsx` nunca existiram como arquivos próprios — corrigido
+   para `submit-report-form.tsx`, que já existia).
+
+### Critérios de aceite
+
+- [x] Etapa com campo obrigatório vazio não avança, e o erro aparece no campo
+- [x] Impossível chegar ao botão "Submeter Projeto" com o formulário inválido
+      (handleNext valida por etapa; handleSubmit revalida o schema completo
+      antes de chamar a action)
+- [x] Seleção de meses não permite divergir do número de parcelas (botão
+      trava ao atingir o total, na própria etapa 4)
+- [x] Falha de validação do servidor aponta etapa e campo, nunca só "Tente
+      novamente" (`err.validationErrors` mapeado por campo, com navegação
+      à primeira etapa com erro)
+- [x] Validação do cliente e do servidor derivam do mesmo schema — sem
+      regra duplicada à mão (`annualStep1-4Schema`/`pontualStep1-3Schema`
+      são `.pick()` dos schemas que a action usa; `checkMesesPagamentoCoherence`
+      é a única implementação da regra cruzada)
+- [x] Prefill por `edital_id` (P-1.23b) continua funcionando (lógica movida
+      sem alteração para dentro de `ProjectWizard`)
+- [x] Nenhum critério de P-2.4 descreve recurso inexistente
+- [x] `pnpm --filter projetos typecheck lint test` — typecheck e lint
+      limpos; 110/112 testes (as 2 falhas são de `close-voting.test.ts`,
+      quórum sobre dados reais do banco compartilhado, pré-existentes desde
+      S-158/documentadas em S-199/S-200 — não tocadas nesta sessão, git
+      status confirma). `pnpm --filter projetos build` verde (rota `/novo`
+      compila e prerenderiza como dinâmica, sem boundary de Suspense
+      necessário). `pnpm --filter @hebron/validators typecheck` também
+      verde.
+- [x] Registrado em SESSIONS.md
+
+### Arquivos alterados
+
+- `packages/validators/src/projetos/index.ts`
+- `apps/projetos/src/app/(submissor)/novo/page.tsx`
+- `apps/projetos/src/components/project-wizard.tsx` (novo, recriado)
+- `apps/projetos/src/components/project-wizard-steps/field-controls.tsx` (novo)
+- `apps/projetos/src/components/project-wizard-steps/step-institution.tsx` (novo, recriado)
+- `apps/projetos/src/components/project-wizard-steps/step-proposal.tsx` (novo, recriado)
+- `apps/projetos/src/components/project-wizard-steps/step-budget.tsx` (novo, recriado)
+- `apps/projetos/src/components/project-wizard-steps/step-schedule.tsx` (novo)
+- `apps/projetos/src/components/project-wizard-steps/step-attachments.tsx` (novo, recriado)
+- `apps/projetos/src/components/project-wizard-steps/step-review.tsx` (novo, recriado)
+- `PROMPTS.md` (bookkeeping do critério e lista de arquivos de P-2.4)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+### Débitos registrados
+
+- Verificação em navegador não foi possível nesta sessão: uma outra
+  instância do dev server já ocupava a porta padrão do app (processo não
+  iniciado por esta sessão) e não foi encerrada para não interromper
+  trabalho em andamento do usuário. Verificação feita via
+  `pnpm --filter projetos typecheck lint test build` (todos verdes, exceto
+  as 2 falhas pré-existentes já documentadas) — recomenda-se um passe manual
+  no wizard (`/novo`, ambos os tipos de projeto) antes de mesclar.
+- Google Places e upload de vídeo/planilha permanecem não implementados —
+  decisão registrada no item 7 acima; não são débito novo, são o estado
+  final aceito por este corretivo.

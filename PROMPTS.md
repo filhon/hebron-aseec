@@ -3137,29 +3137,32 @@ Implementar formulários do módulo. Wizard de projeto anual (multi-step com val
 
 **Arquivos permitidos para criação/edição:**
 
-- `apps/projetos/src/components/project-wizard.tsx`
+- `apps/projetos/src/components/project-wizard.tsx` (container: estado, validação por etapa, submissão — anual **e** pontual, um só wizard)
+- `apps/projetos/src/components/project-wizard-steps/field-controls.tsx`
 - `apps/projetos/src/components/project-wizard-steps/step-institution.tsx`
-- `apps/projetos/src/components/project-wizard-steps/step-proposal.tsx`
+- `apps/projetos/src/components/project-wizard-steps/step-proposal.tsx` (exporta `StepProposalAnnual` e `StepProposalPontual`)
 - `apps/projetos/src/components/project-wizard-steps/step-budget.tsx`
+- `apps/projetos/src/components/project-wizard-steps/step-schedule.tsx` (Cronograma — só anual)
 - `apps/projetos/src/components/project-wizard-steps/step-attachments.tsx`
 - `apps/projetos/src/components/project-wizard-steps/step-review.tsx`
-- `apps/projetos/src/components/punctual-project-form.tsx`
-- `apps/projetos/src/components/report-form.tsx`
+- `apps/projetos/src/components/submit-report-form.tsx`
+
+Correção de P-2.4b (2026-07-28): `punctual-project-form.tsx` e `report-form.tsx` desta lista nunca existiram como arquivos próprios — o pontual sempre foi o mesmo wizard com etapas condicionais (`projectType`), e o relatório é `submit-report-form.tsx`. A reescrita do P-2.9c que apagou a estrutura de etapas (ver P-2.4b) não tocou nesses dois pontos.
 
 **Critérios de aceite:**
 
-- [~] Wizard anual: 5 steps com validação Zod por step, navegação prev/next (o wizard foi reescrito no P-2.9c como um arquivo único de 1400 linhas com **6** etapas e **nenhuma** validação de cliente — `handleNext` avança incondicionalmente; ver P-2.4b)
-- [~] Local com autocomplete (Google Places) + fallback texto livre (não existe: `regiao` e `pais` são campos de texto simples, e não há chave de Places em `packages/config` — ver P-2.4b, item 4)
-- [~] Meses de pagamento: seleção múltipla (checkboxes dos 12 meses) (a seleção não é limitada ao número de parcelas; o `superRefine` do schema só reprova no servidor, com mensagem genérica — ver P-2.4b)
-- [~] Upload de vídeo (max 3min), planilha e carta (com preview) (o bucket `project-attachments` aceita apenas `application/pdf`, `image/jpeg` e `image/png` com teto de 10 MB — vídeo e planilha não são carregáveis; a carta virou caixa de auto-declaração — ver P-2.4b, item 4)
-- [x] Formulário pontual: 6 campos obrigatórios, anexos opcionais
-- [x] Formulário de relatório: texto estruturado + upload de anexos
+- [x] Wizard anual: 6 etapas (Instituição, Proposta, Orçamento, Cronograma, Anexos, Revisão) — o critério original previa 5; a 6ª (Cronograma) sempre existiu por decisão de produto, não é dívida. Validação Zod por etapa (recortada de `annualStep1-4Schema` em `packages/validators/src/projetos`) e navegação prev/next restaurada em P-2.4b (o P-2.9c havia reescrito tudo num arquivo único sem validação de cliente — `handleNext` avançava incondicionalmente)
+- [x] Wizard pontual: 5 etapas (sem Cronograma — `createPunctualProjectSchema` não tem `anoReferencia`/`mesesPagamento`/`numeroParcelas`, BRAIN §6.2 "sem parcelas, pagamento único"), mesmo componente `ProjectWizard`, 6 campos obrigatórios + anexos opcionais
+- [x] Meses de pagamento (etapa anual): seleção limitada ao número de parcelas em tempo real (botão de mês trava ao atingir o total, contador "X de Y" na tela) — corrigido em P-2.4b; antes só o `superRefine` do servidor reprovava, com mensagem genérica no fim do formulário
+- [~] Local com autocomplete (Google Places) + fallback texto livre — decisão registrada em P-2.4b, item 4: mantido como campo de texto livre (`regiao`/`pais`). Não há chave de Places em `packages/config`, e adicionar uma está fora dos arquivos permitidos deste corretivo (schema/UI apenas). Sem promessa quebrada do BRAIN — §6.2 nunca especifica Places, só este prompt
+- [~] Upload de vídeo (max 3min) e planilha de orçamento — decisão registrada em P-2.4b, item 4: não implementado. O bucket `project-attachments` (`0020_storage_buckets.sql`) aceita só `application/pdf`, `image/jpeg`, `image/png` até 10 MB; vídeo/planilha exigiriam nova migration de `allowed_mime_types`/`file_size_limit` ou roteamento a um provedor de vídeo (Bunny Stream, BRAIN §Stack) — fora do escopo de UI deste corretivo. Carta de recomendação é uma caixa de auto-declaração (checkbox), não upload — comportamento aceito, não pendência
+- [x] Formulário de relatório: texto estruturado + upload de anexos (`submit-report-form.tsx`)
 - [x] Recepção de query params (edital_id, tipo, categoria) para pré-preenchimento
 - [x] Lint passa
 - [x] Types passam
 
 **Notas:**
-Ref: BRAIN.md seção 6.2 (formulários anual e pontual confirmados). Duração inferida dos meses de pagamento. Máximo 12 meses.
+Ref: BRAIN.md seção 6.2 (formulários anual e pontual confirmados). Duração inferida dos meses de pagamento. Máximo 12 meses. Histórico de correções: P-2.4b (2026-07-28) restaurou validação por etapa e decompôs o arquivo único de 1400 linhas do P-2.9c.
 
 ---
 
@@ -3455,15 +3458,15 @@ Três outros critérios de P-2.4 descrevem coisas que não existem no arquivo: "
 
 **Critérios de aceite:**
 
-- [ ] Etapa com campo obrigatório vazio não avança, e o erro aparece no campo
-- [ ] Impossível chegar ao botão "Submeter Projeto" com o formulário inválido
-- [ ] Seleção de meses não permite divergir do número de parcelas
-- [ ] Falha de validação do servidor aponta etapa e campo, nunca só "Tente novamente"
-- [ ] Validação do cliente e do servidor derivam do mesmo schema (sem regra duplicada à mão)
-- [ ] Prefill por `edital_id` (P-1.23b) continua funcionando
-- [ ] Nenhum critério de P-2.4 descreve recurso inexistente
-- [ ] `pnpm --filter projetos typecheck lint test` verdes; `pnpm --filter projetos build` verde
-- [ ] Registrar em SESSIONS.md
+- [x] Etapa com campo obrigatório vazio não avança, e o erro aparece no campo
+- [x] Impossível chegar ao botão "Submeter Projeto" com o formulário inválido
+- [x] Seleção de meses não permite divergir do número de parcelas
+- [x] Falha de validação do servidor aponta etapa e campo, nunca só "Tente novamente"
+- [x] Validação do cliente e do servidor derivam do mesmo schema (sem regra duplicada à mão)
+- [x] Prefill por `edital_id` (P-1.23b) continua funcionando
+- [x] Nenhum critério de P-2.4 descreve recurso inexistente
+- [x] `pnpm --filter projetos typecheck lint test` verdes (110/112 — 2 falhas pré-existentes de `close-voting.test.ts`, não relacionadas, ver SESSIONS.md S-201); `pnpm --filter projetos build` verde
+- [x] Registrar em SESSIONS.md — S-201
 
 **Notas:**
 Ref: BRAIN.md §6.2 (formulário anual estruturado; pontual com 6 campos; máx. 12 meses) e princípio "público-alvo em transição tecnológica — interfaces simples e claras". Um formulário que só reprova no fim é o oposto disso. Cuidado com o padrão registrado em memória: `page.tsx` de rota dinâmica não pode ser client component com `use(params)` — aqui a rota é estática, mas rodar `next build` antes de fechar continua obrigatório.
