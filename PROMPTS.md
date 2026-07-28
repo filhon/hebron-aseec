@@ -3112,7 +3112,7 @@ Criar todas as páginas. Área do submissor: dashboard (meus projetos + status +
 - [x] Detalhe analítico (diretoria): painel IA com score + resumo + riscos
 - [x] Pauta da reunião: projetos pontuais + saldo + meses restantes (data-driven) (resolvido em P-2.3b: pauta lista pontuais em validacao/votacao/homologacao a partir de `admin.meeting_sessions` + `projects`; painel renomeado para "Valor Alocado" — sem teto de portfólio conhecido para calcular saldo; "Meses Restantes no Ano" adicionado a partir de `payment_schedules`)
 - [x] Navegação sidebar separada por área (submissor vs diretoria)
-- [~] Responsivo (o dashboard do submissor fixa `repeat(4, 1fr)` e `1.6fr 1fr` em estilo inline, que não aceita media query — ver P-2.5b)
+- [x] Responsivo (resolvido em P-2.5b: os dois `gridTemplateColumns` inline do dashboard do submissor foram substituídos por classes Tailwind com breakpoint — 1 coluna no telefone, 2 no tablet, 4 no desktop para os cards de estatística; coluna única abaixo de `lg` para o bloco principal)
 - [x] Lint passa
 - [x] Types passam
 
@@ -3190,9 +3190,9 @@ Loading, empty e error states para todas as telas de Projetos. Skeletons para da
 
 **Critérios de aceite:**
 
-- [~] Skeleton por tela (dashboard, kanban, detalhe) — `DashboardSkeleton` ficou com o layout anterior à reescrita da S-45 (3 cards, coluna dupla no rodapé) e `KanbanSkeleton` nunca cobre a busca real, que roda em `useEffect`; ver P-2.5b
+- [x] Skeleton por tela (dashboard, kanban, detalhe) — resolvido em P-2.5b: `DashboardSkeleton` realinhado à estrutura atual da S-45 (4 cards, `hb-page`, layout lado a lado `1.6fr 1fr`); `pipeline/page.tsx` passou a retornar `KanbanSkeleton` enquanto `loading` é `true`, cobrindo a busca em `useEffect` que antes escapava do skeleton de rota; `loading.tsx` adicionado nas demais rotas do módulo
 - [x] Estado vazio submissor: "Você ainda não submeteu nenhum projeto" + CTA
-- [~] Estado vazio diretoria: mensagem por coluna do kanban (existe, mas o vazio de página inteira "Nenhum projeto no portfólio ainda" pisca a cada carga do pipeline, antes de qualquer dado chegar; ver P-2.5b)
+- [x] Estado vazio diretoria: mensagem por coluna do kanban (resolvido em P-2.5b: o vazio de página inteira só renderiza depois que a busca termina sem resultado — enquanto `loading`, a página retorna `KanbanSkeleton`)
 - [x] Wizard: indicador de progresso (step atual / total)
 - [x] Lint passa
 - [x] Types passam
@@ -3529,16 +3529,16 @@ Faltam ainda `loading.tsx` em `/novo`, `/relatorios`, `/instituicao`, `/reuniao`
 
 **Critérios de aceite:**
 
-- [ ] Toda rota do app é coberta por uma fronteira de erro (raiz + duas áreas + `global-error`)
-- [ ] Abrir `/pipeline` nunca mostra "Nenhum projeto no portfólio ainda" antes de a busca terminar
-- [ ] `KanbanSkeleton` aparece durante a busca do pipeline
-- [ ] `DashboardSkeleton` e o dashboard têm a mesma estrutura (sem salto de layout)
-- [ ] Dashboard legível em 360 px de largura, sem overflow horizontal
-- [ ] `grep -rn "\"#[0-9a-fA-F]\{3,8\}\"\|rgba(" apps/projetos/src --include=*.tsx` retorna vazio
-- [ ] Nenhum link do app aponta para a própria rota
-- [ ] Microcopy sem exclamação genérica; versículo só nos vazios
-- [ ] `pnpm --filter projetos typecheck lint test` verdes; `pnpm --filter projetos build` verde
-- [ ] Registrar em SESSIONS.md
+- [x] Toda rota do app é coberta por uma fronteira de erro (raiz + duas áreas + `global-error`)
+- [x] Abrir `/pipeline` nunca mostra "Nenhum projeto no portfólio ainda" antes de a busca terminar
+- [x] `KanbanSkeleton` aparece durante a busca do pipeline
+- [x] `DashboardSkeleton` e o dashboard têm a mesma estrutura (sem salto de layout)
+- [x] Dashboard legível em 360 px de largura, sem overflow horizontal
+- [x] `grep -rn "\"#[0-9a-fA-F]\{3,8\}\"\|rgba(" apps/projetos/src --include=*.tsx` retorna vazio
+- [x] Nenhum link do app aponta para a própria rota
+- [x] Microcopy sem exclamação genérica; versículo só nos vazios
+- [x] `pnpm --filter projetos typecheck lint test` verdes; `pnpm --filter projetos build` verde
+- [x] Registrar em SESSIONS.md
 
 **Notas:**
 Ref: BRAIN.md §5 (tokens canônicos, fonte única em `packages/ui`) e princípio "não parecer IA". `error.tsx` precisa ser client component com `reset`; não converter página RSC em client só para tratar erro — a fronteira resolve. Executar por último no bloco: é o prompt que pode reavaliar os critérios de P-2.3 e P-2.5.

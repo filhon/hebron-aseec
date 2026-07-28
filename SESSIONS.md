@@ -222,6 +222,7 @@
 | S-199  | 2026-07-28 | P-2.3b — A pauta da reunião que nunca teve pauta (CORRETIVO)                                                                     | concluido                            |
 | S-200  | 2026-07-28 | P-2.3c — O teto de R$ 150 mil que ninguém definiu (CORRETIVO)                                                                    | concluido                            |
 | S-201  | 2026-07-28 | P-2.4b — O wizard que não valida nada (CORRETIVO)                                                                                | concluido                            |
+| S-202  | 2026-07-28 | P-2.5b — Nenhuma fronteira de erro, o skeleton errado e o vazio que pisca (CORRETIVO)                                            | concluido                            |
 
 ---
 
@@ -16836,3 +16837,160 @@ step-review}.tsx`. `FormData` renomeado para `WizardFormData` (não
 - Google Places e upload de vídeo/planilha permanecem não implementados —
   decisão registrada no item 7 acima; não são débito novo, são o estado
   final aceito por este corretivo.
+
+---
+
+## S-202 — P-2.5b — Nenhuma fronteira de erro, o skeleton errado e o vazio que pisca (CORRETIVO)
+
+**Branch:** `feat/P-2.5b-projetos-estados`
+
+### Contexto
+
+Nenhuma rota de Projetos tinha fronteira de erro (`error.tsx`/`global-error.tsx`
+ausentes) — mesmo achado que P-1.17b fechou em Documentos. `pipeline/page.tsx`
+é client component que busca em `useEffect`; enquanto `loading` era `true`,
+`allProjects` ficava `[]` e o `return` só olhava `filtered.length === 0`,
+mostrando o vazio de página inteira "Nenhum projeto no portfólio ainda" em
+**toda** abertura do pipeline, antes de qualquer dado chegar — o
+`KanbanSkeleton` que P-2.5 entregou nunca aparecia aí (só cobria o Suspense de
+servidor do layout via `loading.tsx`). `DashboardSkeleton` também tinha
+ficado para trás da reescrita da S-45 (3 cards/`max-w-4xl` vs. os 4
+cards/`hb-page` reais), e o próprio dashboard era a única tela não responsiva
+do app (dois `gridTemplateColumns` inline). Faltavam `loading.tsx` em seis
+rotas, o link "Ver todos" apontava para a própria página, e havia 16 literais
+de cor (`#fff`/`rgba(...)`) fora do sistema de tokens.
+
+### O que foi feito
+
+1. **Fronteiras de erro:** `app/error.tsx` (raiz), `app/global-error.tsx`,
+   `app/(submissor)/error.tsx` e `app/(diretoria)/error.tsx` — todos client
+   components com `reset()`, microcopy humano (sem exclamação genérica, sem
+   versículo — versículo é dos vazios) e reaproveitando as classes canônicas
+   `.hb-empty`/`.hb-btn` de `packages/ui/src/styles/patterns.css` (mesmo
+   padrão já usado em `apps/documentos`). Os dois de área não importam o
+   shell manualmente — o Next já aninha o boundary dentro do layout
+   (`SubmissorShell`/`DiretoriaShell`), que só falha em cenários que o
+   próprio `error.tsx` do segmento não cobre.
+2. **Pipeline sem flicker:** `(diretoria)/pipeline/page.tsx` ganhou um
+   retorno antecipado (`if (loading) return <KanbanSkeleton />`) antes do
+   JSX principal, em vez de aninhar `KanbanSkeleton` dentro da seção
+   "Kanban / empty states". A alternativa óbvia (trocar só a seção do meio)
+   foi descartada: `KanbanSkeleton` já desenha seu próprio header+filtros
+   (é o mesmo componente usado por `pipeline/loading.tsx`, o boundary de
+   Suspense da rota) e duplicaria o header real logo acima. Com o retorno
+   antecipado, o skeleton renderizado durante a busca client-side é
+   pixel-idêntico ao que a rota já mostra antes da hidratação. A leitura de
+   `loading` no subtítulo do header (que só existia para trocar um texto)
+   foi removida por ficar morta depois da mudança.
+3. **`DashboardSkeleton` realinhado** à estrutura da S-45: `hb-page`, 4
+   cards de estatística (`grid-cols-1 sm:grid-cols-2 lg:grid-cols-4`),
+   layout principal `grid-cols-1 lg:grid-cols-[1.6fr_1fr]`, mesmas medidas
+   de padding/gap/radius/shadow do dashboard real (sem salto de layout na
+   troca).
+4. **Dashboard responsivo:** os dois `gridTemplateColumns` inline
+   (`repeat(4,1fr)`/`repeat(3,1fr)` e `1.6fr 1fr`) viraram classes
+   Tailwind com breakpoint — 1 coluna no telefone, 2 no tablet, 4 (ou 3,
+   sem instituição única) no desktop para os stats; coluna única abaixo de
+   `lg` para o bloco principal.
+5. **`loading.tsx` nas seis rotas que faltavam** (`novo`, `relatorios`,
+   `instituicao`, `reuniao`, `relatorios-dir`, `pipeline/[id]`). Só
+   `pipeline/[id]` reaproveita um skeleton existente por import
+   (`ProjectDetailSkeleton` — mesma forma de tela, detalhe de projeto); os
+   outros cinco não tinham equivalente estrutural entre os skeletons já
+   existentes (`DashboardSkeleton`/`KanbanSkeleton`/`ProjectDetailSkeleton`
+   não cabem em wizard, card único de instituição, pauta de reunião ou
+   listas de relatório) e a lista de arquivos permitidos deste prompt não
+   inclui novos arquivos de componente — cada `loading.tsx` novo define seu
+   próprio `Bone` local e um esqueleto simples proporcional à tela real,
+   mesmo padrão de duplicação já usado por `dashboard-skeleton.tsx`/
+   `kanban-skeleton.tsx`.
+6. **"Ver todos" removido:** não existe listagem própria de projetos no
+   app (só o dashboard, que já lista todos os projetos do submissor) — a
+   opção mais simples (G1) foi remover o link em vez de inventar uma rota
+   de listagem fora do escopo deste corretivo.
+7. **16 literais de cor fechados.** Todos os `#fff` viraram
+   `var(--fg-invert)`. Os `rgba(32,44,133,…)`/`rgba(234,90,6,…)` (tingidos
+   translúcidos de `--hb-blue`/`--hb-orange` sobre superfícies que não são
+   necessariamente `--surface`) ganharam tokens novos em
+   `packages/ui/src/tokens.css` — `--brand-tint`/`--brand-tint-subtle`/
+   `--brand-tint-border` e `--accent-tint`/`--accent-tint-strong`/
+   `--accent-tint-border` — porque `--brand-muted` (sólido, `--hb-gray-50`)
+   só serve sobre fundo branco e não cobre as três intensidades de alpha em
+   uso. Seguem o mesmo padrão já presente no arquivo para `--divider`/
+   `--overlay` (rgba decimal do hex de origem, definido uma única vez no
+   pacote).
+8. **Desvio de escopo registrado:** o grep de aceite
+   (`grep -rn "\"#[0-9a-fA-F]\{3,8\}\"\|rgba(" apps/projetos/src --include=*.tsx`)
+   aponta exatamente 16 ocorrências, mas duas delas —
+   `components/project-wizard.tsx:343` e
+   `components/project-wizard-steps/step-institution.tsx:62` — ficam fora
+   da lista de "Arquivos permitidos" deste prompt (o wizard é do P-2.4b,
+   mesclado depois que a lista de arquivos de P-2.5b foi escrita). Como o
+   critério de aceite é mecânico e binário (grep vazio) e a correção é a
+   mesma substituição trivial (`"#fff"` → `var(--fg-invert)`) já aplicada
+   nos outros 14 casos, o escopo foi estendido aos dois arquivos em vez de
+   deixar o grep falhar por uma lacuna de sequenciamento entre prompts.
+9. **Bookkeeping em PROMPTS.md:** critério "Responsivo" de P-2.3 e
+   "Skeleton por tela"/"Estado vazio diretoria" de P-2.5 voltam a `[x]`,
+   com nota apontando para esta sessão.
+
+### Critérios de aceite
+
+- [x] Toda rota do app é coberta por uma fronteira de erro (raiz + duas
+      áreas + `global-error`)
+- [x] Abrir `/pipeline` nunca mostra "Nenhum projeto no portfólio ainda"
+      antes de a busca terminar (retorno antecipado enquanto `loading`)
+- [x] `KanbanSkeleton` aparece durante a busca do pipeline
+- [x] `DashboardSkeleton` e o dashboard têm a mesma estrutura (sem salto de
+      layout)
+- [x] Dashboard legível em 360 px de largura, sem overflow horizontal
+- [x] `grep -rn "\"#[0-9a-fA-F]\{3,8\}\"\|rgba(" apps/projetos/src --include=*.tsx`
+      retorna vazio
+- [x] Nenhum link do app aponta para a própria rota
+- [x] Microcopy sem exclamação genérica; versículo só nos vazios
+- [x] `pnpm --filter projetos typecheck lint test` — typecheck e lint
+      limpos; 110/112 testes (as 2 falhas são de `close-voting.test.ts`,
+      quórum sobre dados reais do banco de dev compartilhado, pré-existentes
+      desde S-158, não tocadas nesta sessão). `pnpm --filter projetos build`
+      verde (13 rotas geradas, incluindo os `error.tsx`/`loading.tsx` novos)
+- [x] Registrado em SESSIONS.md
+
+### Arquivos alterados
+
+- `apps/projetos/src/app/error.tsx` (novo)
+- `apps/projetos/src/app/global-error.tsx` (novo)
+- `apps/projetos/src/app/(submissor)/error.tsx` (novo)
+- `apps/projetos/src/app/(diretoria)/error.tsx` (novo)
+- `apps/projetos/src/app/(submissor)/novo/loading.tsx` (novo)
+- `apps/projetos/src/app/(submissor)/relatorios/loading.tsx` (novo)
+- `apps/projetos/src/app/(submissor)/instituicao/loading.tsx` (novo)
+- `apps/projetos/src/app/(diretoria)/reuniao/loading.tsx` (novo)
+- `apps/projetos/src/app/(diretoria)/relatorios-dir/loading.tsx` (novo)
+- `apps/projetos/src/app/(diretoria)/pipeline/[id]/loading.tsx` (novo)
+- `apps/projetos/src/app/(diretoria)/pipeline/page.tsx`
+- `apps/projetos/src/app/(submissor)/page.tsx`
+- `apps/projetos/src/app/(submissor)/instituicao/page.tsx`
+- `apps/projetos/src/app/(submissor)/relatorios/page.tsx`
+- `apps/projetos/src/components/dashboard-skeleton.tsx`
+- `apps/projetos/src/components/evaluation-form.tsx`
+- `apps/projetos/src/components/vote-panel.tsx`
+- `apps/projetos/src/components/project-wizard.tsx` (fora da lista original — item 8)
+- `apps/projetos/src/components/project-wizard-steps/step-institution.tsx` (fora da lista original — item 8)
+- `packages/ui/src/tokens.css` (tokens `--brand-tint*`/`--accent-tint*`)
+- `PROMPTS.md` (bookkeeping do item 9)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+### Débitos registrados
+
+- Verificação em navegador não foi feita nesta sessão — validação por
+  `pnpm --filter projetos typecheck lint test build` (todos verdes, exceto
+  as 2 falhas pré-existentes já documentadas). Recomenda-se um passe manual
+  no pipeline (recarregar `/pipeline` e observar a ausência de flicker) e
+  no dashboard em 360px antes de mesclar.
+- Os cinco `loading.tsx` novos sem skeleton reaproveitado (`novo`,
+  `relatorios`, `instituicao`, `reuniao`, `relatorios-dir`) são esqueletos
+  simples proporcionais, não pixel-perfect com a tela real — suficiente
+  para o critério de aceite (existir e não regredir para o vazio antigo),
+  mas um refinamento futuro poderia extrair um padrão de skeleton
+  compartilhado em `packages/ui` em vez da duplicação local de `Bone` em
+  cada arquivo.

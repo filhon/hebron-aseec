@@ -58,7 +58,7 @@ export function EvaluationForm({ projectId }: EvaluationFormProps) {
                       : "var(--color-destructive-muted)",
                 color:
                   recommendation === opt.key
-                    ? "#fff"
+                    ? "var(--fg-invert)"
                     : opt.key === "approved"
                       ? "var(--hb-green-fg)"
                       : "var(--color-destructive)",

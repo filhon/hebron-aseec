@@ -142,8 +142,8 @@ export default async function RelatoriosPage() {
                       height: 40,
                       borderRadius: 10,
                       background: report.isOverdue
-                        ? "rgba(234,90,6,0.10)"
-                        : "rgba(32,44,133,0.08)",
+                        ? "var(--accent-tint-strong)"
+                        : "var(--brand-tint)",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",

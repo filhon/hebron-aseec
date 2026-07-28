@@ -142,7 +142,7 @@ export default async function SubmissorDashboard() {
             alignItems: "center",
             gap: 9,
             background: "var(--hb-orange)",
-            color: "#fff",
+            color: "var(--fg-invert)",
             textDecoration: "none",
             fontFamily: "var(--font-display)",
             fontWeight: 600,
@@ -161,14 +161,9 @@ export default async function SubmissorDashboard() {
 
       {/* ── 4 Stats cards ─────────────────────────────────────────────────── */}
       <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: soleInstitution
-            ? "repeat(4, 1fr)"
-            : "repeat(3, 1fr)",
-          gap: 16,
-          marginBottom: 24,
-        }}
+        className={`grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6 ${
+          soleInstitution ? "lg:grid-cols-4" : "lg:grid-cols-3"
+        }`}
       >
         <StatCard
           dot="var(--hb-blue)"
@@ -222,14 +217,7 @@ export default async function SubmissorDashboard() {
       </div>
 
       {/* ── Main 2-col layout ─────────────────────────────────────────────── */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1.6fr 1fr",
-          gap: 20,
-          alignItems: "start",
-        }}
-      >
+      <div className="grid grid-cols-1 lg:grid-cols-[1.6fr_1fr] gap-5 items-start">
         {/* ── Left: Meus projetos ─────────────────────────────────────────── */}
         <section
           style={{
@@ -259,17 +247,6 @@ export default async function SubmissorDashboard() {
             >
               Meus projetos
             </h2>
-            <Link
-              href="/"
-              style={{
-                color: "var(--hb-blue)",
-                fontWeight: 600,
-                fontSize: 13,
-                textDecoration: "none",
-              }}
-            >
-              Ver todos
-            </Link>
           </div>
 
           {data.projects.length === 0 ? (
@@ -739,8 +716,8 @@ function PendingReportAlert({
   return (
     <section
       style={{
-        background: "rgba(234, 90, 6, 0.06)",
-        border: "1px solid rgba(234, 90, 6, 0.25)",
+        background: "var(--accent-tint)",
+        border: "1px solid var(--accent-tint-border)",
         borderRadius: "var(--radius-lg)",
         padding: 20,
       }}
@@ -786,7 +763,7 @@ function PendingReportAlert({
           width: "100%",
           textAlign: "center",
           background: "var(--hb-blue)",
-          color: "#fff",
+          color: "var(--fg-invert)",
           textDecoration: "none",
           fontFamily: "var(--font-display)",
           fontWeight: 600,
@@ -841,7 +818,7 @@ function EmptyProjects() {
           alignItems: "center",
           gap: 8,
           background: "var(--hb-blue)",
-          color: "#fff",
+          color: "var(--fg-invert)",
           textDecoration: "none",
           fontFamily: "var(--font-display)",
           fontWeight: 600,

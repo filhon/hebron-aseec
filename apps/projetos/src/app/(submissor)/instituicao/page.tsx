@@ -116,7 +116,7 @@ export default async function InstituicaoPage() {
                   width: 56,
                   height: 56,
                   borderRadius: 14,
-                  background: "rgba(32,44,133,0.08)",
+                  background: "var(--brand-tint)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -200,8 +200,8 @@ export default async function InstituicaoPage() {
           {/* Ação de atualizar */}
           <div
             style={{
-              background: "rgba(32,44,133,0.04)",
-              border: "1px solid rgba(32,44,133,0.12)",
+              background: "var(--brand-tint-subtle)",
+              border: "1px solid var(--brand-tint-border)",
               borderRadius: "var(--radius-lg)",
               padding: 20,
               display: "flex",
@@ -236,7 +236,7 @@ export default async function InstituicaoPage() {
                 alignItems: "center",
                 gap: 8,
                 background: "var(--hb-blue)",
-                color: "#fff",
+                color: "var(--fg-invert)",
                 textDecoration: "none",
                 fontFamily: "var(--font-display)",
                 fontWeight: 600,

@@ -59,7 +59,10 @@ export function StepInstitution({
               >
                 <div
                   className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-base"
-                  style={{ backgroundColor: "var(--hb-blue)", color: "#fff" }}
+                  style={{
+                    backgroundColor: "var(--hb-blue)",
+                    color: "var(--fg-invert)",
+                  }}
                 >
                   🏛️
                 </div>

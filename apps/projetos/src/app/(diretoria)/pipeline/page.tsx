@@ -7,6 +7,7 @@ import { Filter, LayoutGrid, X, AlertTriangle } from "lucide-react";
 import { getKanbanProjects } from "../../../lib/queries";
 import { transitionProjectStage } from "../../../actions/projects";
 import { ProjectKanban } from "../../../components/project-kanban";
+import { KanbanSkeleton } from "../../../components/kanban-skeleton";
 import { BRL } from "../../../lib/stage-utils";
 import type { CompactProjectView, ProjectStage } from "@hebron/types";
 
@@ -203,6 +204,10 @@ export default function DiretoriaPipelinePage() {
     router.push(`/pipeline/${projectId}`);
   }
 
+  if (loading) {
+    return <KanbanSkeleton />;
+  }
+
   return (
     <div className="px-4 sm:px-6 py-8 flex flex-col gap-6">
       {/* Header */}
@@ -216,9 +221,7 @@ export default function DiretoriaPipelinePage() {
             Pipeline de Projetos
           </h1>
           <p className="text-sm text-(--fg-muted) mt-1">
-            {loading
-              ? "Carregando..."
-              : `${allProjects.length} projetos no portfólio · ${activeCount} ativos`}
+            {allProjects.length} projetos no portfólio · {activeCount} ativos
           </p>
         </div>
 

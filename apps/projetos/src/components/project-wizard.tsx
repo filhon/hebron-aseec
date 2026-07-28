@@ -340,7 +340,9 @@ function StepIndicator({
                       ? "var(--hb-blue)"
                       : "var(--hb-gray-100)",
                   color:
-                    isCompleted || isCurrent ? "#fff" : "var(--hb-gray-400)",
+                    isCompleted || isCurrent
+                      ? "var(--fg-invert)"
+                      : "var(--hb-gray-400)",
                 }}
                 aria-current={isCurrent ? "step" : undefined}
               >

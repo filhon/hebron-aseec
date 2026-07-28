@@ -73,7 +73,16 @@
   --brand: var(--hb-blue);
   --brand-fg: var(--hb-white);
   --brand-muted: var(--hb-gray-50);
+  /* Tingidos translúcidos de --hb-blue — usar sobre superfícies que não
+     sejam necessariamente brancas (--brand-muted é sólido, só serve sobre --surface) */
+  --brand-tint-subtle: rgba(32, 44, 133, 0.04);
+  --brand-tint: rgba(32, 44, 133, 0.08);
+  --brand-tint-border: rgba(32, 44, 133, 0.12);
   --accent: var(--hb-orange);
+  /* Tingidos translúcidos de --hb-orange — mesmo raciocínio acima */
+  --accent-tint: rgba(234, 90, 6, 0.06);
+  --accent-tint-strong: rgba(234, 90, 6, 0.1);
+  --accent-tint-border: rgba(234, 90, 6, 0.25);
   --highlight-warm: var(--hb-orange);
   --highlight-cool: var(--hb-cyan);
   --highlight-life: var(--hb-green);

@@ -261,7 +261,7 @@ export function VotePanel({
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.backgroundColor = "var(--hb-green)";
-                  e.currentTarget.style.color = "#fff";
+                  e.currentTarget.style.color = "var(--fg-invert)";
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.backgroundColor =
@@ -300,7 +300,7 @@ export function VotePanel({
                 onMouseEnter={(e) => {
                   e.currentTarget.style.backgroundColor =
                     "var(--color-destructive)";
-                  e.currentTarget.style.color = "#fff";
+                  e.currentTarget.style.color = "var(--fg-invert)";
                 }}
                 onMouseLeave={(e) => {
                   e.currentTarget.style.backgroundColor =
