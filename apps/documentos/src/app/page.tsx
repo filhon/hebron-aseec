@@ -489,14 +489,14 @@ export default async function HomePage() {
               Não foi possível carregar os documentos e editais. Verifique sua
               conexão e tente novamente.
             </p>
-            <a
+            <Link
               href="/"
               className="hb-btn hb-btn-primary"
               style={{ marginTop: 20 }}
             >
               <RefreshCw size={14} aria-hidden="true" />
               Tentar novamente
-            </a>
+            </Link>
           </div>
         </main>
       </>

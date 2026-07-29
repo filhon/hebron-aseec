@@ -5,6 +5,7 @@ import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
 import { Bell, Check, CheckCheck } from "lucide-react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { DefaultLink, type LinkComponent } from "./navigation-sidebar";
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -26,6 +27,7 @@ export interface NotificationBellProps {
   centerHref: string;
   onRead: (id: string, href?: string) => void;
   onMarkAllRead: () => void;
+  LinkComponent?: LinkComponent;
   className?: string;
 }
 
@@ -59,6 +61,7 @@ export function NotificationBell({
   centerHref,
   onRead,
   onMarkAllRead,
+  LinkComponent: Link = DefaultLink,
   className,
 }: NotificationBellProps) {
   const displayed = notifications.slice(0, 10);
@@ -207,7 +210,7 @@ export function NotificationBell({
           </div>
 
           <div className="border-t border-(--border) px-4 py-2.5">
-            <a
+            <Link
               href={centerHref}
               className={cn(
                 "block w-full text-center text-xs",
@@ -216,7 +219,7 @@ export function NotificationBell({
               )}
             >
               Ver todas as notificações
-            </a>
+            </Link>
           </div>
         </DropdownMenuPrimitive.Content>
       </DropdownMenuPrimitive.Portal>

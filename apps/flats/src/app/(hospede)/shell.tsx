@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   AppShell,
   ModuleLogo,
@@ -60,10 +61,12 @@ export default function HospedeShell({ user, children }: ShellProps) {
       appName="Flats"
       logo={<ModuleLogo module="flats" />}
       sidebarDark
+      LinkComponent={Link}
       headerActions={
         <NotificationBellContainer
           currentAppId="flats"
           centerHref="/notificacoes"
+          LinkComponent={Link}
           listNotifications={async () => {
             const result = await listBellNotifications({});
             if (!result?.data) {

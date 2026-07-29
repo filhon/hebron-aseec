@@ -26,7 +26,9 @@ export default async function EditorAulaPage({
           description="Esta aula não existe ou foi removida."
           action={
             <Button asChild variant="outline">
-              <a href={`/instrutor/curso/${id}`}>Voltar ao editor do curso</a>
+              <Link href={`/instrutor/curso/${id}`}>
+                Voltar ao editor do curso
+              </Link>
             </Button>
           }
           hideQuote

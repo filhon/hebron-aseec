@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
+import Link from "next/link";
 import { useAction } from "next-safe-action/hooks";
 import type { Task } from "@hebron/types/tarefas";
 import {
@@ -136,10 +137,12 @@ export default function TarefasShell({ user, tasks, children }: ShellProps) {
       appName="Tarefas"
       logo={<ModuleLogo module="tarefas" />}
       sidebarDark
+      LinkComponent={Link}
       headerActions={
         <NotificationBellContainer
           currentAppId="tarefas"
           centerHref="/notificacoes"
+          LinkComponent={Link}
           listNotifications={async () => {
             const result = await listBellNotifications({});
             if (!result?.data) {

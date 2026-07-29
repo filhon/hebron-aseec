@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   AppShell,
   ModuleLogo,
@@ -60,10 +61,12 @@ export default function AlunoShell({ user, children }: AlunoShellProps) {
       currentPath={pathname}
       appName="Plataforma"
       logo={<ModuleLogo module="plataforma" />}
+      LinkComponent={Link}
       headerActions={
         <NotificationBellContainer
           currentAppId="plataforma"
           centerHref="/notificacoes"
+          LinkComponent={Link}
           listNotifications={async () => {
             const result = await listBellNotifications({});
             if (!result?.data) {

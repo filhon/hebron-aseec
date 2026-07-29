@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { EmptyState, Button } from "@hebron/ui";
 import { GraduationCap } from "lucide-react";
 import { LessonView } from "../../../../../../components/lesson-view";
@@ -25,7 +26,7 @@ export default async function AulaPage({
           description="Esta aula não existe, foi removida ou ainda está bloqueada na sua trilha."
           action={
             <Button asChild variant="outline">
-              <a href={`/curso/${slug}`}>Voltar ao curso</a>
+              <Link href={`/curso/${slug}`}>Voltar ao curso</Link>
             </Button>
           }
           hideQuote

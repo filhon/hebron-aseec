@@ -55,7 +55,7 @@ export interface NavigationSidebarProps {
   dark?: boolean;
 }
 
-const DefaultLink: LinkComponent = React.forwardRef<
+export const DefaultLink: LinkComponent = React.forwardRef<
   HTMLAnchorElement,
   React.AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }
 >(({ href, children, ...props }, ref) => (
@@ -195,19 +195,17 @@ function NavItemButton({
 
 interface AppShortcutTileProps {
   app: AppShortcut;
-  LinkComponent: LinkComponent;
   dark?: boolean;
 }
 
-function AppShortcutTile({
-  app,
-  LinkComponent: Link,
-  dark,
-}: AppShortcutTileProps) {
+// Atalho para outro app do ecossistema: href é sempre um subdomínio absoluto
+// (ecosystem-apps.ts), então isto é navegação de documento por definição.
+// Não trocar por LinkComponent — quem usa LinkComponent aqui é NavItemButton.
+function AppShortcutTile({ app, dark }: AppShortcutTileProps) {
   const Icon = app.icon;
 
   return (
-    <Link
+    <a
       href={app.href}
       aria-label={app.label}
       className={cn(
@@ -230,7 +228,7 @@ function AppShortcutTile({
       <span className="w-full truncate text-center text-xs leading-none">
         {app.label}
       </span>
-    </Link>
+    </a>
   );
 }
 
@@ -302,12 +300,7 @@ export function NavigationSidebar({
           >
             <div className="grid grid-cols-3 gap-1">
               {apps.map((app) => (
-                <AppShortcutTile
-                  key={app.id}
-                  app={app}
-                  LinkComponent={LinkComponent}
-                  dark={dark}
-                />
+                <AppShortcutTile key={app.id} app={app} dark={dark} />
               ))}
             </div>
           </div>

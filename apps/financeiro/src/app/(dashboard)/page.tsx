@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import Link from "next/link";
 import { ArrowUp, ArrowDown, Info, ArrowRight } from "lucide-react";
 import {
   getBankAccounts,
@@ -461,13 +462,13 @@ async function DashboardContent() {
                 >
                   Lançamentos recentes
                 </p>
-                <a
+                <Link
                   href="/lancamentos"
                   className="flex items-center gap-1 text-xs font-semibold"
                   style={{ color: "var(--hb-blue)" }}
                 >
                   Ver todos <ArrowRight className="h-3 w-3" />
-                </a>
+                </Link>
               </div>
               <div className="overflow-x-auto">
                 <table
@@ -609,7 +610,7 @@ async function DashboardContent() {
                   </p>
                 </div>
                 <div className="flex gap-2 px-5 pb-4">
-                  <a
+                  <Link
                     href="/contas-pagar"
                     className="flex-1 flex items-center justify-center py-2 rounded-lg text-xs font-semibold transition-colors"
                     style={{
@@ -618,7 +619,7 @@ async function DashboardContent() {
                     }}
                   >
                     Revisar lote
-                  </a>
+                  </Link>
                 </div>
               </div>
             )}
@@ -741,13 +742,13 @@ async function DashboardContent() {
                     Conciliação bancária
                   </p>
                 </div>
-                <a
+                <Link
                   href="/conciliacao"
                   className="flex items-center gap-1 text-xs font-semibold"
                   style={{ color: "var(--hb-blue)" }}
                 >
                   Conciliar <ArrowRight className="h-3 w-3" />
-                </a>
+                </Link>
               </div>
               <div className="flex items-center gap-5 px-5 py-4">
                 <div className="flex-1">

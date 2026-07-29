@@ -2,6 +2,7 @@
 
 import * as React from "react";
 import { NotificationBell, type NotificationItem } from "./notification-bell";
+import type { LinkComponent } from "./navigation-sidebar";
 import { resolveNotificationHref } from "./ecosystem-apps";
 
 export interface NotificationBellListResult {
@@ -22,6 +23,8 @@ export interface NotificationBellContainerProps {
   markAllRead: () => Promise<void>;
   /** Navegação — o app injeta router.push (ou equivalente). */
   navigate: (href: string) => void;
+  /** Componente de link do roteador do app (ex.: next/link), usado no rodapé "Ver todas". */
+  LinkComponent?: LinkComponent;
   className?: string;
 }
 
@@ -37,6 +40,7 @@ export function NotificationBellContainer({
   markRead,
   markAllRead,
   navigate,
+  LinkComponent,
   className,
 }: NotificationBellContainerProps) {
   const [notifications, setNotifications] = React.useState<NotificationItem[]>(
@@ -81,6 +85,7 @@ export function NotificationBellContainer({
       centerHref={centerHref}
       onRead={handleRead}
       onMarkAllRead={handleMarkAllRead}
+      LinkComponent={LinkComponent}
       className={className}
     />
   );

@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import Link from "next/link";
 import { Upload, CheckCircle2 } from "lucide-react";
 import {
   getLatestBankImport,
@@ -29,14 +30,14 @@ function EmptyNoImport() {
         Faça upload de um arquivo OFX ou CSV para iniciar a conciliação
         automática com seus lançamentos registrados.
       </p>
-      <a
+      <Link
         href="/importacao"
         className="flex items-center gap-2 px-5 py-2.5 rounded-(--radius) text-sm font-semibold"
         style={{ background: "var(--hb-blue)", color: "var(--fg-invert)" }}
       >
         <Upload className="h-4 w-4" />
         Importar extrato
-      </a>
+      </Link>
       <div
         className="mt-10 w-full max-w-sm rounded-(--radius) px-5 py-4 text-left"
         style={{ background: "var(--hb-blue)" }}
@@ -90,13 +91,13 @@ function EmptyAllConciliated() {
         Excelente! Não há itens pendentes de conciliação neste extrato. Importe
         um novo extrato para continuar.
       </p>
-      <a
+      <Link
         href="/importacao"
         className="flex items-center gap-2 px-5 py-2.5 rounded-(--radius) border text-sm font-semibold"
         style={{ borderColor: "var(--border)", color: "var(--fg-muted)" }}
       >
         Importar novo extrato
-      </a>
+      </Link>
       <div
         className="mt-10 w-full max-w-sm rounded-(--radius) px-5 py-4 text-left"
         style={{ background: "var(--hb-blue)" }}

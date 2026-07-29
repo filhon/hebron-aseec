@@ -163,7 +163,7 @@ export default async function ReunioesPage({
 
       {/* Tab chips — URL-based */}
       <div className="hb-chip-row">
-        <a
+        <Link
           href="/reunioes"
           className={`hb-chip${filter === "upcoming" ? " active" : ""}`}
         >
@@ -171,8 +171,8 @@ export default async function ReunioesPage({
           <span style={{ opacity: 0.6, fontSize: 11 }}>
             · {upcomingRows.length}
           </span>
-        </a>
-        <a
+        </Link>
+        <Link
           href="/reunioes?filter=past"
           className={`hb-chip${filter === "past" ? " active" : ""}`}
         >
@@ -180,7 +180,7 @@ export default async function ReunioesPage({
           <span style={{ opacity: 0.6, fontSize: 11 }}>
             · {pastRows.length}
           </span>
-        </a>
+        </Link>
       </div>
 
       {/* Meeting list */}

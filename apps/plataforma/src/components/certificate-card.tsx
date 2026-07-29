@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useAction } from "next-safe-action/hooks";
 import type { Certificate } from "@hebron/types/plataforma";
 import { Button } from "@hebron/ui";
@@ -124,7 +125,7 @@ export function CertificateCard({
         >
           Baixar certificado
         </Button>
-        <a
+        <Link
           href={`/certificado/verificar?hash=${encodeURIComponent(certificate.hash)}`}
           target="_blank"
           rel="noopener noreferrer"
@@ -132,7 +133,7 @@ export function CertificateCard({
         >
           <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
           Verificar
-        </a>
+        </Link>
       </div>
     </div>
   );

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useAction } from "next-safe-action/hooks";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   Check,
   Sparkles,
@@ -237,13 +238,13 @@ export function ConciliationView({
                 {total} linhas importadas
               </p>
             </div>
-            <a
+            <Link
               href="/importacao"
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-(--border) text-xs font-semibold text-(--fg-muted) hover:border-(--border-strong) hover:text-(--fg) transition-colors"
             >
               <Upload className="h-3 w-3" />
               Novo extrato
-            </a>
+            </Link>
           </div>
 
           <div style={{ maxHeight: 520, overflowY: "auto" }}>

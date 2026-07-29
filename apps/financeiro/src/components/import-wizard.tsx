@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Link from "next/link";
 import { useAction } from "next-safe-action/hooks";
 import {
   Upload,
@@ -487,7 +488,7 @@ export function ImportWizard({ accounts }: { accounts: BankAccountOption[] }) {
               lançamentos aguardando conciliação.
             </p>
             <div className="flex gap-3 mt-6 w-full">
-              <a
+              <Link
                 href="/conciliacao"
                 className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-(--radius) text-sm font-semibold"
                 style={{
@@ -496,8 +497,8 @@ export function ImportWizard({ accounts }: { accounts: BankAccountOption[] }) {
                 }}
               >
                 Ir para conciliação
-              </a>
-              <a
+              </Link>
+              <Link
                 href="/lancamentos"
                 className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-(--radius) border text-sm font-semibold"
                 style={{
@@ -506,7 +507,7 @@ export function ImportWizard({ accounts }: { accounts: BankAccountOption[] }) {
                 }}
               >
                 Ver lançamentos
-              </a>
+              </Link>
             </div>
           </div>
         </div>

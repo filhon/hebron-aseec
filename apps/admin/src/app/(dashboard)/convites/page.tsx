@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import Link from "next/link";
 import { eq, desc } from "drizzle-orm";
 import { db } from "@hebron/db/client";
 import { users } from "@hebron/db/schema";
@@ -187,10 +188,10 @@ export default async function ConvitesPage({
         </div>
         <div className="hb-page-header-actions">
           <Button asChild size="sm" className="rounded-full">
-            <a href="/convites/novo">
+            <Link href="/convites/novo">
               <Plus size={14} aria-hidden="true" />
               Novo convite
-            </a>
+            </Link>
           </Button>
         </div>
       </div>
@@ -235,7 +236,7 @@ export default async function ConvitesPage({
         style={{ display: "flex", gap: 6, marginBottom: 18, flexWrap: "wrap" }}
       >
         {STATUS_TABS.map((t) => (
-          <a
+          <Link
             key={t.value}
             href={tabUrl(t.value)}
             className={`hb-chip${filter === t.value ? " active" : ""}`}
@@ -244,7 +245,7 @@ export default async function ConvitesPage({
             <span style={{ opacity: 0.6, fontSize: 11 }}>
               · {counts[t.value] ?? 0}
             </span>
-          </a>
+          </Link>
         ))}
       </div>
 
@@ -266,10 +267,10 @@ export default async function ConvitesPage({
             </div>
             <div style={{ marginTop: 18 }}>
               <Button asChild size="sm" className="rounded-full">
-                <a href="/convites/novo">
+                <Link href="/convites/novo">
                   <Plus size={14} aria-hidden="true" />
                   Novo convite
-                </a>
+                </Link>
               </Button>
             </div>
           </div>

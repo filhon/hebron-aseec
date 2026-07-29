@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Course } from "@hebron/types/plataforma";
 import { GraduationCap } from "lucide-react";
 import { ProgressBar } from "./progress-bar";
@@ -97,9 +98,9 @@ export function CourseCard({
 
   if (href) {
     return (
-      <a href={href} onClick={onClick} className={wrapperClassName}>
+      <Link href={href} onClick={onClick} className={wrapperClassName}>
         {content}
-      </a>
+      </Link>
     );
   }
 

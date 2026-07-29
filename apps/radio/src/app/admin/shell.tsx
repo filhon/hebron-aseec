@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   AppShell,
   ModuleLogo,
@@ -52,10 +53,12 @@ export default function AdminShell({ user, children }: ShellProps) {
       appName="Rádio — Gestão"
       logo={<ModuleLogo module="radio" />}
       sidebarDark
+      LinkComponent={Link}
       headerActions={
         <NotificationBellContainer
           currentAppId="radio"
           centerHref="/admin/notificacoes"
+          LinkComponent={Link}
           listNotifications={async () => {
             const result = await listBellNotifications({});
             if (!result?.data) {

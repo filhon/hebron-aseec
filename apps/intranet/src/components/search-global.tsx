@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { Search } from "lucide-react";
 import { EmptyState, Input } from "@hebron/ui";
 import { globalSearch } from "../actions/search";
@@ -92,12 +93,15 @@ export function SearchGlobal({
                 <ul
                   style={{ display: "flex", flexDirection: "column", gap: 2 }}
                 >
-                  {items.map((result) => (
-                    <li key={result.id}>
-                      <a
-                        href={result.href}
-                        className="block rounded-xs p-2 transition-colors duration-(--transition-fast) hover:bg-(--surface-alt)"
-                      >
+                  {items.map((result) => {
+                    // Busca cobre todo o ecossistema: href pode ser rota
+                    // interna (intranet) ou absoluta para outro subdomínio.
+                    // Só a interna navega pelo cliente.
+                    const isInternal = result.href.startsWith("/");
+                    const resultClassName =
+                      "block rounded-xs p-2 transition-colors duration-(--transition-fast) hover:bg-(--surface-alt)";
+                    const resultContent = (
+                      <>
                         <span className="text-sm" style={{ fontWeight: 600 }}>
                           {result.title}
                         </span>
@@ -109,9 +113,22 @@ export function SearchGlobal({
                             {result.description}
                           </span>
                         )}
-                      </a>
-                    </li>
-                  ))}
+                      </>
+                    );
+                    return (
+                      <li key={result.id}>
+                        {isInternal ? (
+                          <Link href={result.href} className={resultClassName}>
+                            {resultContent}
+                          </Link>
+                        ) : (
+                          <a href={result.href} className={resultClassName}>
+                            {resultContent}
+                          </a>
+                        )}
+                      </li>
+                    );
+                  })}
                 </ul>
               </div>
             ))

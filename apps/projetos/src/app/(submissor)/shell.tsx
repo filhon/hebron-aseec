@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   AppShell,
   ModuleLogo,
@@ -53,10 +54,12 @@ export default function SubmissorShell({ user, children }: Props) {
       appName="Projetos"
       logo={<ModuleLogo module="projetos" />}
       sidebarDark
+      LinkComponent={Link}
       headerActions={
         <NotificationBellContainer
           currentAppId="projetos"
           centerHref="/notificacoes"
+          LinkComponent={Link}
           listNotifications={async () => {
             const result = await listBellNotifications({});
             if (!result?.data) {

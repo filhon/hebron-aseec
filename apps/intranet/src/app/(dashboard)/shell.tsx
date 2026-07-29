@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   LayoutDashboard,
   Megaphone,
@@ -98,10 +99,12 @@ export default function IntranetShell({ user, children }: IntranetShellProps) {
       appName="Intranet"
       logo={<ModuleLogo module="intranet" />}
       sidebarDark
+      LinkComponent={Link}
       headerActions={
         <NotificationBellContainer
           currentAppId="intranet"
           centerHref="/notificacoes"
+          LinkComponent={Link}
           listNotifications={async () => {
             const result = await listBellNotifications({});
             if (!result?.data) {

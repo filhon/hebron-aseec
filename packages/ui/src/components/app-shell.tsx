@@ -295,7 +295,12 @@ export function AppShell({
 
         {headerActions}
 
-        <UserMenu user={user} profileHref={profileHref} onLogout={onLogout} />
+        <UserMenu
+          user={user}
+          profileHref={profileHref}
+          onLogout={onLogout}
+          LinkComponent={LinkComponent}
+        />
       </header>
 
       {/* ── Content ── */}

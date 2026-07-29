@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { EmptyState, Button } from "@hebron/ui";
 import { HelpCircle } from "lucide-react";
 import { QuizEditorView } from "../../../../../../components/quiz-editor-view";
@@ -35,7 +36,9 @@ export default async function EditorQuizPage({
           description="Este quiz não existe ou foi removido."
           action={
             <Button asChild variant="outline">
-              <a href={`/instrutor/curso/${id}`}>Voltar ao editor do curso</a>
+              <Link href={`/instrutor/curso/${id}`}>
+                Voltar ao editor do curso
+              </Link>
             </Button>
           }
           hideQuote

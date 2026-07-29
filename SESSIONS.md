@@ -229,6 +229,7 @@
 | S-206  | 2026-07-28 | P-2.8c — Quatro actions sem porta de entrada: rascunho, instituição e membros (CORRETIVO)                                        | concluido                            |
 | S-207  | 2026-07-28 | P-2.10b — Sete notificações que nunca disparam e um link que leva a lugar nenhum (CORRETIVO)                                     | concluido                            |
 | S-208  | 2026-07-29 | P-2.12b — O teste que examina a cópia em vez do original (CORRETIVO)                                                             | concluido                            |
+| S-209  | 2026-07-29 | P-0.5d — A navegação que recarrega a página inteira a cada clique (CORRETIVO)                                                    | concluido                            |
 
 ---
 
@@ -18017,3 +18018,171 @@ votacao` — se essa lacuna de RLS for real (um diretor genuinamente não
   projetos + cost centers + payables deixados por execuções anteriores da
   suíte que falharam no teardown por causa da corrida descrita na decisão
   2 (antes do ajuste para `aprovado → em_execucao`).
+
+---
+
+## S-209 — P-0.5d — A navegação que recarrega a página inteira a cada clique (CORRETIVO)
+
+**Branch:** `feat/P-0.5d-navegacao-cliente`
+
+### Contexto
+
+Débito da S-48 (2026-06-25, P-3.3): "`LinkComponent` removido do shell (usa
+`<a>` nativo em Bloco A); será adicionado no Bloco B com auth real". O Bloco B
+do Financeiro (P-3.6–P-3.12) passou inteiro sem religar o componente —
+`grep -rn "LinkComponent" apps/` voltava vazio nos onze pontos de montagem do
+`AppShell`. Cada clique na barra lateral era navegação de documento: JS
+reavaliado, layout de servidor rodando de novo, `desktopCollapsed`
+(`app-shell.tsx`, `useState` sem persistência) descartado a cada clique.
+Mesma raiz em `user-menu.tsx` ("Meu perfil") e `notification-bell.tsx` ("Ver
+todas as notificações"), e 17+ âncoras internas espalhadas pelos apps.
+
+### Decisões
+
+1. **`AppShortcutTile` (atalho cross-subdomínio) permanece `<a>` sempre,
+   sem receber `LinkComponent`** — seu `href` é sempre uma URL absoluta de
+   outro subdomínio (`ecosystem-apps.ts`), navegação de documento por
+   definição. `NavItemButton` (itens de menu internos) continua recebendo
+   `LinkComponent`. Comentário curto deixado no código para não
+   "uniformizar" de volta no futuro.
+2. **`DefaultLink` exportado de `navigation-sidebar.tsx`** (antes interno,
+   não exportado) e reutilizado por `user-menu.tsx` e `notification-bell.tsx`
+   via import relativo direto (`./navigation-sidebar`) — não passa por
+   `index.ts` do pacote (fora da lista de arquivos permitidos), então não
+   altera a API pública do `@hebron/ui`.
+3. **`NotificationBellContainer` ganhou `LinkComponent?` só de repasse**
+   (prop nova, opcional, encaminhada para `NotificationBell`) — o container é
+   renderizado pelos apps dentro de `headerActions` do `AppShell`, não como
+   filho direto; por isso cada um dos onze `shell.tsx` passa `LinkComponent`
+   duas vezes: uma vez em `<AppShell>`, outra em `<NotificationBellContainer>`
+   dentro do `headerActions` que o próprio shell monta.
+4. **Escopo de "âncoras internas" ampliado além das 17 do enunciado.** A
+   varredura sistemática (todo `<a` em `apps/{admin,financeiro,intranet,
+plataforma,documentos}/**/*.tsx`, não só o padrão `href="/…"` literal)
+   achou mais candidatas legítimas do que a contagem da auditoria original
+   (8 financeiro, 4 admin, 2 intranet, 2 plataforma, 1 documentos = 17):
+   `admin/(dashboard)/configuracoes/page.tsx` tinha 2 abas de URL
+   (`?tab=…`) que a auditoria não contou, `admin/(dashboard)/convites/
+page.tsx` tinha uma 3ª (`tabUrl()`, via função, não string literal) além
+   das 2 contadas, e `plataforma` tinha 5 páginas "voltar" com o mesmo
+   padrão (`/instrutor`, `/`, mais 3 rotas via template literal) mais
+   `course-card.tsx` (link reusável, href sempre interno — confirmado nos 3
+   call sites) e `certificate-card.tsx` (link de verificação, `target=
+_blank`, ainda assim rota interna). Total convertido: 23 âncoras em 17
+   arquivos. Nenhuma foi deixada de fora por "já bater a meta de 17".
+5. **`search-global.tsx` (intranet) é o único caso de href misto** — a
+   busca cobre o ecossistema inteiro; `buildHref()` (`actions/search.ts`)
+   retorna rota relativa para resultados da própria intranet e URL absoluta
+   de outro subdomínio para os demais módulos. Corrigido com checagem
+   `href.startsWith("/")` em runtime: `Link` para interno, `<a>` para
+   externo — não dá para resolver estaticamente qual é qual.
+6. **Guarda de regressão: `@next/eslint-plugin-next` adicionado a
+   `tooling/eslint-config`, regra `no-html-link-for-pages` ligada
+   condicionalmente.** Sem essa condição, a regra roda em todo package do
+   monorepo (incluindo `packages/ui`, `packages/db` etc., nenhum dos quais é
+   um app Next.js) e imprime "Pages directory cannot be found" em cada `pnpm
+turbo lint` — confirmado experimentalmente antes do ajuste. Fix:
+   `base.js` detecta `next.config.{js,mjs,ts}` no `cwd` de quem importa o
+   config (cada app roda `eslint .` a partir da própria raiz) e só inclui o
+   bloco do plugin quando esse arquivo existe — os 9 apps Next.js pegam a
+   regra, os 12 packages não. Sanity check: um `<a href="/usuarios">`
+   plantado deliberadamente em `apps/admin/src/app/` foi pego pela regra
+   (`@next/next/no-html-link-for-pages`) e removido em seguida.
+7. **Verificação da persistência do colapso da sidebar foi estrutural, não
+   por clique no navegador.** Os onze `shell.tsx` exigem sessão real
+   (`requireAdminSession()`/equivalente) atrás de SSO — `curl` no app admin
+   local confirmou redirect 307 para `app.hebronaseec.com.br/login`. O
+   projeto não tem infraestrutura de teste E2E (nenhum Playwright/Puppeteer
+   instalado, confirmado por busca) e criar login real + browser headless
+   só para este corretivo seria desproporcional ao escopo (wiring, não
+   feature nova). Verificação alternativa: confirmado que em todos os
+   onze pontos de montagem o componente que guarda `desktopCollapsed`
+   (`AppShell`, dentro do `*Shell` do app) é instanciado **uma única vez**
+   por um `(grupo)/layout.tsx` Server Component que envolve `{children}` —
+   o padrão App Router que garante que o layout não remonta entre
+   navegações do mesmo segmento. Com `next/link` no lugar de `<a>`, a
+   navegação entre páginas do mesmo grupo agora é client-side (soft
+   navigation) por definição do Next.js, então o estado sobrevive
+   estruturalmente. **Atualização pós-sessão:** Filipe verificou na mão em
+   Financeiro e Plataforma (aluno) — colapsar a barra e navegar entre itens
+   do menu mantém o estado recolhido nos dois. Critério fechado por clique
+   real, não só por inferência estrutural.
+8. **`pnpm turbo build`/`test` no workspace inteiro, concorrência padrão,
+   crashou** (`@hebron/tarefas` build com exit Windows 3221226505) —
+   reproduzido como contenção de recursos, não regressão: `tarefas` sozinho
+   builda limpo, e o workspace inteiro builda limpo com `--concurrency=3`.
+   O mesmo padrão apareceu em test: a run cheia reportou falha em
+   admin/financeiro/plataforma/projetos, mas rodados isolados,
+   plataforma (21/21) e projetos (142/142) passam 100%; admin e financeiro
+   têm falhas reais em isolamento, mas em arquivos que este diff não toca
+   (`security-audit.test.ts`, `settings-actions.test.ts` no admin;
+   `designation-governance.test.ts`, `runtime-rls.test.ts` no financeiro) —
+   erros de FK/unique constraint e de estado do banco de dev compartilhado,
+   mesma classe de drift já documentada para `system-actor.test.ts`
+   (`packages/db`, também falhando aqui, pré-existente). Nenhuma delas
+   toca `navigation-sidebar`, `app-shell`, `user-menu`, `notification-bell`,
+   shells ou âncoras convertidas.
+
+### Escopo entregue
+
+1. `packages/ui/src/components/navigation-sidebar.tsx`: `AppShortcutTile`
+   sem `LinkComponent` (sempre `<a>`); `DefaultLink` exportado.
+2. `packages/ui/src/components/app-shell.tsx`: `UserMenu` recebe
+   `LinkComponent` (já recebia na sidebar/drawer).
+3. `packages/ui/src/components/user-menu.tsx`: prop `LinkComponent?`
+   (default `DefaultLink`), usado no link "Meu perfil".
+4. `packages/ui/src/components/notification-bell.tsx`: prop
+   `LinkComponent?` (default `DefaultLink`), usado em "Ver todas as
+   notificações".
+5. `packages/ui/src/components/notification-bell-container.tsx`: prop
+   `LinkComponent?` de repasse para `NotificationBell`.
+6. Onze `shell.tsx`/`admin-shell.tsx` (admin, financeiro, flats×2, intranet,
+   plataforma×2, projetos×2, radio, tarefas): `import Link from "next/link"`,
+   `LinkComponent={Link}` no `<AppShell>` e no `<NotificationBellContainer>`.
+7. 23 âncoras internas convertidas para `next/link` em 17 arquivos —
+   `import-wizard.tsx`, `conciliation-view.tsx`, `(dashboard)/page.tsx`,
+   `(dashboard)/conciliacao/page.tsx` (financeiro); `convites/page.tsx`,
+   `reunioes/page.tsx`, `configuracoes/page.tsx` (admin); `search-global.tsx`
+   (intranet, condicional interno/externo); `document-row-actions.tsx`,
+   `app/page.tsx` (documentos); 5 páginas "voltar" + `course-card.tsx` +
+   `certificate-card.tsx` (plataforma).
+8. `tooling/eslint-config/package.json`: dependência
+   `@next/eslint-plugin-next` adicionada.
+9. `tooling/eslint-config/base.js`: detecção de `next.config.*` no cwd +
+   bloco condicional com a regra `@next/next/no-html-link-for-pages`.
+
+### Critérios de aceite
+
+- [x] `grep -rn "LinkComponent" apps/ --include=*.tsx` mostra os onze shells
+- [x] `grep -rEn "<a\s[^>]*href=\"/" apps/ --include=*.tsx` vazio — âncoras
+      remanescentes são URL absoluta (cross-subdomínio), `mailto:`,
+      `tel:`, download de arquivo, ou string de template de email (não são
+      JSX real)
+- [x] `AppShortcutTile` renderiza `<a>` mesmo com `LinkComponent` presente
+- [x] "Meu perfil" e "Ver todas as notificações" navegam pelo cliente
+- [x] Barra lateral recolhida — verificado na mão por Filipe em Financeiro e
+      Plataforma (aluno), pós-sessão: colapsar e navegar entre itens do menu
+      mantém o estado recolhido nos dois. Verificação estrutural (decisão 7)
+      confirmada por clique real; nenhum app testado apresentou regressão
+- [x] Nenhuma dependência de `next` em `packages/ui/package.json`
+- [x] `pnpm turbo build` verde (com `--concurrency=3`, ver decisão 8);
+      `pnpm turbo lint typecheck` verdes (concorrência padrão); `pnpm turbo
+    test` verde nos pacotes tocados por este diff, isolando falhas
+      pré-existentes não relacionadas (decisão 8)
+- [x] Registrado em SESSIONS.md — decisão do item 5 (guarda ligada, não
+      recusada) e débito da S-48 liquidado
+
+### Verificações executadas
+
+- `pnpm turbo lint` (workspace inteiro) — verde, sem o aviso "Pages
+  directory cannot be found" em nenhum package não-Next.js
+- `pnpm turbo typecheck` (workspace inteiro) — verde
+- `pnpm turbo build --concurrency=3` (workspace inteiro) — verde, 9/9 apps
+- `pnpm turbo test --concurrency=3` — `@hebron/db` falhou
+  (`system-actor.test.ts`, `storage.test.ts`, pré-existente, ver
+  [[project_system_actor_test_drift]]); reruns isolados de
+  admin/financeiro/plataforma/projetos confirmaram plataforma (21/21) e
+  projetos (142/142) 100% verdes, e isolaram as falhas reais de
+  admin/financeiro em arquivos não tocados por este diff (decisão 8)
+- Sanity check manual da regra eslint nova: `<a href="/usuarios">` plantado
+  em `apps/admin/src/app/` foi pego e removido

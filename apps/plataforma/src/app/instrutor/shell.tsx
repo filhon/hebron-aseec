@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   AppShell,
   ModuleLogo,
@@ -58,10 +59,12 @@ export default function InstrutorShell({
       appName="Plataforma — Instrutor"
       logo={<ModuleLogo module="plataforma" />}
       sidebarDark
+      LinkComponent={Link}
       headerActions={
         <NotificationBellContainer
           currentAppId="plataforma"
           centerHref="/instrutor/notificacoes"
+          LinkComponent={Link}
           listNotifications={async () => {
             const result = await listBellNotifications({});
             if (!result?.data) {

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { EmptyState, Button } from "@hebron/ui";
 import { BookOpen } from "lucide-react";
 import { CourseEditorView } from "../../../../components/course-editor-view";
@@ -25,7 +26,7 @@ export default async function EditorCursoPage({
           description="Este curso não existe ou foi removido."
           action={
             <Button asChild variant="outline">
-              <a href="/instrutor">Voltar ao painel</a>
+              <Link href="/instrutor">Voltar ao painel</Link>
             </Button>
           }
           hideQuote

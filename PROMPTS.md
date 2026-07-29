@@ -995,6 +995,82 @@ Ref: BRAIN.md §5 (simplicidade; não parecer IA) e nota do P-0.5 (app launcher)
 
 ---
 
+### P-0.5d — A navegação que recarrega a página inteira a cada clique (CORRETIVO — `LinkComponent` prometido na S-48 e nunca ligado)
+
+**Fase:** 0
+**Módulo:** fundacao
+**Tipo:** ui
+**Pré-condições:**
+
+- Branch: `feat/P-0.5d-navegacao-cliente`
+- Dependências: P-0.5c (S-174) e P-0.6c (S-176) concluídos — os três tocam `navigation-sidebar.tsx`, `app-shell.tsx` e os mesmos onze shells
+- Env vars: nenhuma
+- Skill: **invocar `/impeccable` antes de começar**
+
+**Problema que este prompt resolve (contexto — débito da S-48, auditoria do Bloco A do Financeiro):**
+
+A S-48 (P-3.3) registrou a decisão: "`LinkComponent` removido do shell (usa `<a>` nativo em Bloco A); será adicionado no Bloco B com auth real". O Bloco B do Financeiro passou inteiro — P-3.6 a P-3.12, S-51 a S-72 — e o `LinkComponent` nunca voltou. Ao conferir, o débito não é do Financeiro: **`grep -rn "LinkComponent" apps/` volta vazio.** Nenhum dos onze pontos de montagem do `AppShell`, nos nove apps, passa a prop. Todos caem no `DefaultLink` (`packages/ui/src/components/navigation-sidebar.tsx:58-66`), que é um `<a href>` cru.
+
+O `LinkComponent` não é um enfeite de API: `packages/ui` não declara `next` entre suas dependências (`packages/ui/package.json`) — é deliberadamente agnóstico de framework, e a injeção do componente de link é o contrato pelo qual o app entrega seu roteador. O contrato existe desde P-0.5 e nunca foi honrado por ninguém.
+
+Consequência: **cada clique na barra lateral é uma navegação de documento.** O JS é reavaliado, o layout de servidor roda de novo, e o estado de cliente do shell é descartado — inclusive `desktopCollapsed` (`app-shell.tsx:187`), um `useState` sem persistência. O sintoma é reproduzível em dois cliques: recolher a barra lateral, clicar em qualquer item do menu, vê-la expandida de novo. Toda vez, em todos os apps.
+
+Mesma raiz em outras três superfícies de `packages/ui`:
+
+- `user-menu.tsx:169-170` — "Meu perfil" é `<a href={profileHref}>` (admin, plataforma e projetos passam `profileHref`)
+- `notification-bell.tsx:210-211` — "Ver todas as notificações" é `<a href={centerHref}>`, presente nos onze shells, embora o **mesmo componente** já receba um `navigate` e roteie os itens individuais pelo cliente desde P-0.6b/P-0.6c: o dropdown navega por cliente e o rodapé dele não
+- `AppShortcutTile` (`navigation-sidebar.tsx:210`) usa **o mesmo** `LinkComponent` dos itens de menu — mas seus `href` são URLs absolutas cross-subdomínio (`ecosystem-apps.ts:18-73`). Ali o `<a>` é o comportamento correto, e preservá-lo é requisito deste prompt, não detalhe.
+
+Do lado dos apps sobram 17 `<a href="/…">` apontando para rota interna: 8 no financeiro (a origem da S-48), 4 no admin, 2 na intranet, 2 na plataforma, 1 em documentos. Os outros quatro apps já usam `next/link` nas suas páginas — o que torna a navegação do ecossistema inconsistente consigo mesma: dentro da página é instantânea, pelo menu lateral não.
+
+Verificado nesta auditoria: `export const probe: LinkComponent = Link` (de `next/link`) **passa no typecheck sem adaptador** — `LinkProps` é atribuível ao tipo `LinkComponent` como está. Não há nada a projetar; há uma prop a passar.
+
+**Escopo (siga na ordem):**
+
+1. **Separar as duas naturezas de link no `NavigationSidebar`.** `AppShortcutTile` deixa de usar `LinkComponent` e passa a renderizar `<a>` sempre — atalho para outro subdomínio é navegação de documento por definição, e essa é a única razão pela qual o `<a>` continua correto em algum lugar do shell. `NavItemButton` continua com `LinkComponent`. Documentar a distinção num comentário curto, para o próximo a mexer não "uniformizar" de volta.
+2. **Estender a injeção às outras superfícies:** `UserMenu` e `NotificationBell` passam a aceitar `LinkComponent?` (opcional, `DefaultLink` como padrão — nenhum consumidor quebra), e o `AppShell` repassa a mesma prop que já recebe para os dois, como já faz com a sidebar e o drawer mobile.
+3. **Passar `next/link` nos onze shells:** `apps/admin/src/components/admin-shell.tsx`, `apps/financeiro/src/app/(dashboard)/shell.tsx`, `apps/flats/src/app/(hospede)/shell.tsx`, `apps/flats/src/app/admin/shell.tsx`, `apps/intranet/src/app/(dashboard)/shell.tsx`, `apps/plataforma/src/app/(aluno)/shell.tsx`, `apps/plataforma/src/app/instrutor/shell.tsx`, `apps/projetos/src/app/(diretoria)/shell.tsx`, `apps/projetos/src/app/(submissor)/shell.tsx`, `apps/radio/src/app/admin/shell.tsx`, `apps/tarefas/src/app/(dashboard)/shell.tsx`.
+4. **Converter os 17 âncoras internos** dos apps para `next/link`, preservando classe, `style` e atributos de acessibilidade de cada um. Âncoras para URL absoluta, `mailto:` e download de arquivo **não** entram — continuam `<a>`.
+5. **Guarda de regressão.** Preferência: adicionar `@next/eslint-plugin-next` ao `tooling/eslint-config` e ligar `no-html-link-for-pages`, que pega exatamente esta classe de erro no lint. Se a adição da dependência for indesejada agora, registrar a recusa em SESSIONS.md e fechar com o critério de grep abaixo — mas então diga isso na sessão, para não descobrirmos daqui a três fases que o guarda não existe.
+6. **Conferir a barra lateral recolhida:** depois da mudança, recolher e navegar mantém o estado. Se o `AppShell` ainda perder o colapso em alguma rota, é porque aquela navegação continua sendo de documento — investigar antes de fechar.
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/ui/src/components/navigation-sidebar.tsx`
+- `packages/ui/src/components/app-shell.tsx`
+- `packages/ui/src/components/user-menu.tsx`
+- `packages/ui/src/components/notification-bell.tsx`
+- `packages/ui/src/components/notification-bell-container.tsx` (apenas o repasse da prop, se necessário)
+- `apps/admin/src/components/admin-shell.tsx`
+- `apps/financeiro/src/app/(dashboard)/shell.tsx`
+- `apps/flats/src/app/(hospede)/shell.tsx`, `apps/flats/src/app/admin/shell.tsx`
+- `apps/intranet/src/app/(dashboard)/shell.tsx`
+- `apps/plataforma/src/app/(aluno)/shell.tsx`, `apps/plataforma/src/app/instrutor/shell.tsx`
+- `apps/projetos/src/app/(diretoria)/shell.tsx`, `apps/projetos/src/app/(submissor)/shell.tsx`
+- `apps/radio/src/app/admin/shell.tsx`
+- `apps/tarefas/src/app/(dashboard)/shell.tsx`
+- `apps/{admin,financeiro,intranet,plataforma,documentos}/src/**/*.tsx` (**apenas** os 17 âncoras do item 4)
+- `tooling/eslint-config/base.js` e `tooling/eslint-config/package.json` (apenas na saída com plugin do item 5)
+- `PROMPTS.md` (nota da decisão do item 5)
+
+**Critérios de aceite:**
+
+- [x] `grep -rn "LinkComponent" apps/ --include=*.tsx` mostra os onze shells — hoje volta vazio
+- [x] `grep -rEn "<a\s[^>]*href=\"/" apps/ --include=*.tsx` retorna vazio; os `<a>` remanescentes apontam para URL absoluta, `mailto:` ou download
+- [x] `AppShortcutTile` renderiza `<a>` mesmo com `LinkComponent` presente — atalho cross-subdomínio não vira navegação de cliente
+- [x] "Meu perfil" e "Ver todas as notificações" navegam pelo cliente nos apps que os expõem
+- [x] Barra lateral recolhida continua recolhida ao navegar entre itens do menu, em pelo menos dois apps verificados na mão — confirmado por Filipe em Financeiro e Plataforma (aluno) (ver SESSIONS.md S-209)
+- [x] Nenhuma dependência de `next` em `packages/ui/package.json` — a injeção continua vindo do app
+- [x] `pnpm turbo build` verde (garante que a mudança de assinatura não quebrou consumidor nenhum); `pnpm turbo lint typecheck test` verdes — build/test exigiram `--concurrency=3` nesta máquina (contenção de recursos com concorrência padrão, ver SESSIONS.md S-209)
+- [x] Registrar em SESSIONS.md — incluindo a decisão do item 5 e o débito da S-48 declarado como liquidado
+
+**Notas:**
+Ref: P-0.5 (nota do app launcher), P-0.5c (higiene de API do sidebar) e P-0.6b/P-0.6c (navegação do sino). Este prompt fecha um débito registrado na S-48 em 2026-06-25 e endereçado a um "Bloco B" que veio e passou — é o segundo caso do padrão PD-4 do `AUDIT/02-codigo-SINTESE.md` (débito anotado sem dono). Vale a observação de método: a S-48 tomou uma decisão razoável para o Bloco A e a registrou corretamente; o que falhou foi não existir prompt que a resgatasse. A dependência de "auth real" que a nota alegava nunca foi real — `LinkComponent` não tem relação com autenticação.
+
+Decisão do item 5 (guarda de regressão): `@next/eslint-plugin-next` foi adicionado (não recusado) — regra `no-html-link-for-pages` ligada condicionalmente a apps com `next.config.*` no cwd, para não poluir packages sem Next.js. Ver SESSIONS.md S-209 para o racional completo.
+
+---
+
 ### P-0.6 — Sistema de Notificações
 
 **Fase:** 0
@@ -4613,6 +4689,249 @@ Testes de integração. RLS (super_admin full, diretor gestor aprova, submissor 
 - [x] Inadimplência: payable bloqueado não entra em lote; override auditado (teste — P-3.11)
 - [x] Testes passam
 - [x] Lint passa
+
+---
+
+## Financeiro — Corretivos do Bloco A
+
+> Os quatro prompts abaixo fecham o que os critérios de P-3.1 a P-3.5 marcaram `[x]` e o Bloco B (P-3.6 a P-3.12) não converteu em comportamento. Executar em ordem; cada um é independente dos demais, mas P-3.5b toca arquivos dos três anteriores e por isso vai por último.
+
+---
+
+### P-3.2b — Sete botões que não fazem nada e um CSV com extensão de Excel (CORRETIVO)
+
+**Fase:** 3
+**Módulo:** financeiro
+**Tipo:** ui
+**Pré-condições:**
+
+- Branch: `feat/P-3.2b-financeiro-afordancias`
+- Dependências: P-3.12 concluído (S-72)
+- Env vars: `DATABASE_URL`
+- Skill: **invocar `/impeccable` antes de começar**
+
+**Problema que este prompt resolve (contexto):**
+O critério de P-3.2 "TransactionTable com filtros: data, categoria, conta, tipo, valor; **exportação CSV/Excel**" está `[x]`. Os filtros existem e funcionam. A exportação, não: `transaction-table.tsx:200-225` monta um CSV — separador vírgula, BOM UTF-8, `type: "text/csv;charset=utf-8;"` — e salva o arquivo como `lancamentos-AAAA-MM-DD.xlsx` (`:222`). O Excel abre com o aviso "o formato e a extensão do arquivo não coincidem"; o LibreOffice recusa direto. Não existe XLSX em lugar nenhum do cliente, embora `exceljs` já seja dependência do app e já produza planilha de verdade no servidor (`actions/reports.ts`).
+
+Sete botões renderizam rótulo, cursor de ponteiro e estado de hover, e não têm handler algum:
+
+- `transaction-table.tsx:631` — o "…" de cada linha de lançamento, revelado no hover da linha
+- `payable-card.tsx:130` — "Mais opções", com `aria-label` — o leitor de tela anuncia um botão que não faz nada
+- `budget-comparison.tsx:224` — "Exportar", na tela de orçamento
+- `category-tree.tsx:650` — quatro itens sob o título "Operações comuns": "Importar plano padrão CFC", "Vincular a centros de custo", "Gerar DRE preliminar" e "Exportar para contabilidade". São quatro funcionalidades anunciadas em uma tela de produção que não existem em nenhum ponto do repositório.
+
+Ainda em `transaction-table.tsx:668`: a paginação numérica renderiza `Array.from({ length: Math.min(totalPages, 7) }, (_, i) => i + 1)` — sempre começando em 1. Acima de sete páginas (500 lançamentos já bastam, com `PAGE_SIZE = 20`) os números param no 7, não acompanham a página corrente e a única forma de chegar à página 20 é clicar "próxima" treze vezes.
+
+**Escopo (siga na ordem):**
+
+1. **Extensão × conteúdo:** o arquivo baixado passa a se chamar `.csv`, que é o que ele é. Se a diretoria quiser planilha de verdade, a saída correta é uma server action que reusa `exceljs` (o mesmo caminho de `actions/reports.ts`) e devolve XLSX — não renomear CSV. Escolha uma das duas e registre qual em SESSIONS.md; a saída barata (`.csv`) é a recomendada, porque a tela de Demonstrativos já entrega XLSX de verdade para quem precisa.
+2. **Afordâncias mortas:** para cada um dos sete botões, **ligar ou remover** — nenhum fica como está. Sugestões, na ordem de menor invenção:
+   - "…" da linha de lançamento e "Mais opções" do payable: ou abrem um menu com as ações que já existem (estornar, ver anexo, marcar como pago — conforme o estado do registro), ou saem.
+   - "Exportar" do orçamento: reusar o mesmo helper de CSV do item 1, ou sair.
+   - "Operações comuns" do plano de contas: os quatro saem. Nenhum tem backend, prompt ou critério em lugar nenhum, e o painel lateral fica melhor sem eles do que com quatro promessas.
+3. **Paginação:** janela deslizante em torno da página corrente, com acesso à primeira e à última. Nenhum número exibido pode ser inalcançável, e a página corrente sempre aparece na régua.
+4. **Bookkeeping em PROMPTS.md:** o critério "exportação CSV/Excel" de P-3.2 passa a dizer o que o código faz depois deste prompt.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/financeiro/src/components/transaction-table.tsx`
+- `apps/financeiro/src/components/payable-card.tsx`
+- `apps/financeiro/src/components/budget-comparison.tsx`
+- `apps/financeiro/src/components/category-tree.tsx` (apenas o bloco "Operações comuns")
+- `apps/financeiro/src/lib/export-csv.ts` (criar — apenas se o item 1 justificar um helper compartilhado)
+- `apps/financeiro/src/actions/reports.ts` (apenas na saída XLSX do item 1)
+- `PROMPTS.md` (critério de P-3.2)
+
+**Critérios de aceite:**
+
+- [ ] Toda extensão em `a.download` corresponde ao `type` do `Blob` que a origina — `grep -rn "download = " apps/financeiro/src` confere um a um
+- [ ] Nenhum `<button>` sem `onClick`, `type="submit"` ou `form=` em `apps/financeiro/src/**/*.tsx`
+- [ ] Nenhum rótulo de funcionalidade inexistente na UI (as quatro "Operações comuns" saíram ou ganharam implementação)
+- [ ] Com 30 páginas de lançamentos, a régua mostra a página corrente e permite ir à última em um clique
+- [ ] Filtros, ordenação e o resumo de entradas/saídas continuam funcionando após a mudança
+- [ ] `pnpm --filter @hebron/financeiro typecheck lint test` verdes; `pnpm --filter @hebron/financeiro build` verde
+- [ ] Registrar em SESSIONS.md — incluindo a saída escolhida no item 1 e o destino de cada um dos sete botões
+
+**Notas:**
+Ref: princípio "público-alvo em transição tecnológica" do CLAUDE.md. Um botão que não responde não é neutro: quem não tem repertório para supor que "ainda não foi implementado" conclui que errou o clique, ou que o sistema quebrou.
+
+---
+
+### P-3.3b — O plano de contas que esconde a categoria recém-criada (CORRETIVO)
+
+**Fase:** 3
+**Módulo:** financeiro
+**Tipo:** ui
+**Pré-condições:**
+
+- Branch: `feat/P-3.3b-financeiro-plano-contas`
+- Dependências: P-3.12 concluído (S-72)
+- Env vars: `DATABASE_URL`
+- Skill: **invocar `/impeccable` antes de começar**
+
+**Problema que este prompt resolve (contexto):**
+`CategoryTree` guarda a ordem dos irmãos num `orderMap` de estado local, inicializado **uma única vez**, a partir das categorias do primeiro render (`category-tree.tsx:458-462`). `applyOrder` (`:465-482`) reconstrói a árvore a partir desse mapa e **descarta em silêncio todo nó cujo id não esteja nele**: `order.map((id) => nodes.find((n) => n.id === id)).filter((n) => n !== undefined)`.
+
+Criar categoria chama `router.refresh()` (`:396-399`), que atualiza a prop `categories` sem remontar o componente — o `orderMap` continua com a lista antiga. Consequência: **uma categoria-raiz nova, ou uma subcategoria criada sob um pai que já tinha filhos, não aparece na árvore.** O modal fecha, nenhum erro é exibido, e a categoria só surge depois de um recarregamento completo da página. O usuário conclui que a criação falhou e cria de novo; a segunda tentativa bate no `unique("fin_categories_code_uniq")` (`packages/db/src/schema/financeiro.ts:130`) e aí, sim, mostra erro — um erro sobre um código duplicado que ele não sabe que criou.
+
+A alça de arrastar tem a metade oposta do mesmo problema. `financeiro.categories` (`packages/db/src/schema/financeiro.ts:107-131`) **não tem coluna de ordem**: `handleReorder` (`:484-497`) só reescreve estado local, e a ordem que o usuário arrastou desaparece no primeiro reload sem nunca ter chegado ao banco. A tela, enquanto isso, anuncia "Arraste para reordenar" (`:565-567`). É exatamente o débito que P-1.16c fechou em Documentos, aberto aqui.
+
+Terceiro, menor: `exportCategoriesCsv` (`:365-372`) chama `.sort()` **na prop** `categories` — ordenação in-place de um array vindo do servidor.
+
+**Escopo (siga na ordem):**
+
+1. **Decidir a alça** (o prompt aceita as duas saídas, mas exige uma delas):
+   - **(a) Ordem explícita:** migration adicionando `sort_order integer NOT NULL DEFAULT 0` em `financeiro.categories`, `ORDER BY sort_order, code` em `getCategories` (`lib/queries.ts`) e no `buildTree`, e uma action `reorderCategory({ id, newIndex })` com audit `financeiro.category.updated` — mais alternativa por teclado (mover acima / abaixo), porque arrastar não pode ser o único caminho.
+   - **(b) Escopo reduzido:** remover a alça, o `GripVertical`, o rótulo "Arraste para reordenar" e todo o `orderMap` — a árvore passa a ser ordenada só por `code`, que é como `buildTree` já ordena hoje (`:62-67`).
+2. **Corrigir o sumiço da categoria nova.** Na saída (b) isso é consequência direta de remover o `orderMap`. Na saída (a), a ordem vem do servidor e o estado local deixa de existir de qualquer forma. Em nenhuma das duas pode sobrar um mapa de ids local que filtre a árvore.
+3. **Confirmar a criação na tela:** depois de criar, a categoria aparece, o pai fica expandido e ela é visível sem rolar à procura.
+4. **`exportCategoriesCsv` sobre uma cópia** (`[...categories].sort(...)`), nunca sobre a prop.
+5. **Bookkeeping em PROMPTS.md:** o critério de P-3.3 "Plano de contas: árvore hierárquica editável (drag-drop para reordenar)" passa a descrever a saída escolhida.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/financeiro/src/components/category-tree.tsx`
+- `apps/financeiro/src/lib/queries.ts` (apenas a ordenação de `getCategories`)
+- `apps/financeiro/src/actions/categories.ts` (apenas na saída (a))
+- `packages/db/src/migrations/NNNN_financeiro_category_order.sql` (criar — apenas na saída (a); próximo número livre, escrito à mão conforme P-0.3c)
+- `packages/db/src/schema/financeiro.ts` (apenas na saída (a))
+- `apps/financeiro/src/__tests__/categories.test.ts` (criar)
+- `PROMPTS.md` (critério de P-3.3)
+
+**Critérios de aceite:**
+
+- [ ] Criar categoria-raiz e criar subcategoria sob um pai que já tem filhos: ambas aparecem na árvore imediatamente, sem recarregar a página
+- [ ] Nenhuma afordância de arrastar sem persistência — `grep -n "Arraste para reordenar\|GripVertical" apps/financeiro/src` volta vazio **ou** a ordem sobrevive a um reload e está gravada no banco
+- [ ] Nenhum estado local filtra a árvore por lista de ids
+- [ ] `exportCategoriesCsv` não muta a prop `categories`
+- [ ] Teste cobre: criar categoria → ela consta da árvore devolvida pela query; e, na saída (a), reordenar → nova ordem persiste
+- [ ] `pnpm --filter @hebron/financeiro typecheck lint test` verdes; `pnpm --filter @hebron/financeiro build` verde
+- [ ] Registrar em SESSIONS.md — incluindo qual saída foi escolhida e por quê
+
+**Notas:**
+Ref: BRAIN.md §6.5 e o precedente de P-1.16c. Recomendação: saída **(b)**. Em plano de contas o código **é** a ordem — `1`, `1.1`, `1.1.2` é a convenção contábil, e a árvore já ordena por ele. Uma ordem manual divergente do código seria uma segunda fonte da verdade sobre a mesma coisa, e a DRE sairia numa ordem que o plano não explica.
+
+---
+
+### P-3.4b — O comprovante que a tela pede e o sistema descarta (CORRETIVO)
+
+**Fase:** 3
+**Módulo:** financeiro
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-3.4b-financeiro-comprovantes`
+- Dependências: P-3.12 concluído (S-72)
+- Env vars: `DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+- Skill: **invocar `/impeccable` antes de começar**
+
+**Problema que este prompt resolve (contexto):**
+O critério de P-3.4 "Despesa: categorização via plano de contas (dropdown hierárquico), **upload de comprovante**" está `[x]`. O dropdown existe. O upload é cenário: `expense-form.tsx:285-320` renderiza a área de arrastar-e-soltar, aceita `.pdf,.jpg,.jpeg,.png`, e o `onChange` (`:296-299`) guarda **apenas o nome do arquivo** num `useState<string | null>` (`:117`). O `File` nunca é lido, nunca sobe para lugar nenhum, e `createPayable` (`actions/transactions.ts:41`) não tem parâmetro para recebê-lo. O usuário vê o nome do PDF na tela, salva a despesa e o comprovante evapora com o componente.
+
+`RevenueForm` não tem nem a área de upload — embora o escopo de P-3.4 diga "Nova receita (mesma estrutura)".
+
+Toda a infraestrutura do outro lado está pronta e ociosa:
+
+- `financeiro.attachments` existe desde a migration `0010` (`packages/db/src/schema/financeiro.ts:411-428`): `ref_type`/`ref_id` polimórficos, `file_url`, `file_name`, `file_size`, `uploaded_by`
+- o bucket `financeiro-recibos` existe com policies desde `0020_storage_buckets.sql:136-170` — SELECT para super_admin/diretor/colaborador, INSERT para super_admin/colaborador, DELETE só super_admin, retenção de 5 anos (BRAIN §5)
+- o tipo `Attachment` existe (`packages/types/src/financeiro/index.ts:86`)
+- e `actions/reports.ts:384-396` **baixa** esses anexos para montar o ZIP da prestação de contas mensal
+
+Ou seja: existe um caminho de leitura completo e nenhum caminho de escrita. Hoje `attachmentRows` volta sempre vazio, o ZIP mensal nunca leva um recibo, e o audit `financeiro.report.exported` grava `receiptCount: 0` (`reports.ts:415`) todo mês — um número que parece informação e é só o eco de um campo que ninguém preenche.
+
+O padrão de upload já existe **dentro do mesmo app**: `import-wizard.tsx:165-175` sobe o extrato para `financeiro-extratos` com `crypto.randomUUID()` no path e devolve `uploadData.path` para a action. Não há nada a inventar.
+
+**Escopo (siga na ordem):**
+
+1. **Ligar o upload do `ExpenseForm`** ao bucket `financeiro-recibos`, seguindo o padrão de `import-wizard.tsx:165-175`: path `{uploaded_by}/{uuid}.{ext}` (a convenção registrada no BRAIN §5 e na migration `0020`), estado de envio, erro legível se o Storage recusar, e o `path` devolvido entregue à action.
+2. **`RevenueForm` ganha a mesma área de anexo** — o escopo de P-3.4 já dizia "mesma estrutura", e recibo de doação é o documento que a prestação de contas mais precisa.
+3. **Persistir em `financeiro.attachments`** dentro da mesma action que cria o payable/receivable, sob `withAuthenticatedContext` (RLS participa) e no mesmo audit da criação — o anexo não é uma mutação à parte. Se a action falhar depois do upload, o objeto órfão no bucket é aceitável (mesmo trade-off já assumido no `import-wizard`), mas **registro sem arquivo não é**: a linha em `attachments` só existe se o upload tiver retornado path.
+4. **Poder ver o comprovante:** um anexo que não pode ser lido não presta contas. Signed URL com expiração curta, a partir do card do payable ou da linha do lançamento — o mesmo lugar onde P-3.2b decidir o destino dos botões "…"/"Mais opções".
+5. **Teste** cobrindo: criar despesa com anexo grava `financeiro.attachments` com `ref_type = 'payable'`; `exportMonthlyReport` de um mês com comprovante devolve um ZIP que **contém** o recibo e um audit com `receiptCount > 0`.
+6. **Bookkeeping em PROMPTS.md:** o critério de P-3.4 volta a `[x]` com o que este prompt entregar.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/financeiro/src/components/expense-form.tsx`
+- `apps/financeiro/src/components/revenue-form.tsx`
+- `apps/financeiro/src/components/payable-card.tsx` (apenas o acesso ao comprovante)
+- `apps/financeiro/src/components/transaction-table.tsx` (idem)
+- `apps/financeiro/src/actions/transactions.ts`
+- `apps/financeiro/src/actions/attachments.ts` (criar — signed URL de leitura)
+- `apps/financeiro/src/lib/queries.ts` (leitura dos anexos por registro)
+- `packages/validators/src/financeiro/index.ts` (campos de anexo em `createPayableSchema`/`createReceivableSchema`)
+- `apps/financeiro/src/__tests__/attachments.test.ts` (criar)
+- `PROMPTS.md` (critério de P-3.4)
+
+**Critérios de aceite:**
+
+- [ ] `grep -rn "financialAttachments" apps/financeiro/src` mostra pelo menos um INSERT — hoje só há SELECT, em `reports.ts`
+- [ ] Despesa com comprovante: arquivo no bucket `financeiro-recibos` **e** linha em `financeiro.attachments` apontando para ele
+- [ ] Receita com recibo: mesmo comportamento, `ref_type = 'receivable'`
+- [ ] Nenhuma linha em `attachments` sem objeto correspondente no Storage
+- [ ] O comprovante pode ser aberto a partir da tela, por signed URL com expiração
+- [ ] Falha de upload não cria o payable em silêncio: ou o usuário vê o erro, ou o registro é criado com a ausência do anexo explícita na tela
+- [ ] `exportMonthlyReport` de um mês com comprovante devolve ZIP contendo o recibo; audit `financeiro.report.exported` com `receiptCount` real
+- [ ] `pnpm --filter @hebron/financeiro typecheck lint test` verdes; `pnpm --filter @hebron/financeiro build` verde
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: BRAIN.md §5 (bucket `financeiro-recibos`, path `{uploaded_by}/{uuid}.{ext}`, retenção de 5 anos) e §6.5. Este é o corretivo de maior consequência do bloco: prestação de contas de ONG sem comprovante anexado não é uma tela incompleta, é um problema de conformidade — e o ZIP mensal que a diretoria recebe hoje já sai sem eles.
+
+---
+
+### P-3.5b — Nenhuma fronteira de erro, doze telas sem carregamento e 45 cores fora do sistema (CORRETIVO)
+
+**Fase:** 3
+**Módulo:** financeiro
+**Tipo:** ui
+**Pré-condições:**
+
+- Branch: `feat/P-3.5b-financeiro-estados`
+- Dependências: P-3.2b, P-3.3b e P-3.4b concluídos
+- Env vars: `DATABASE_URL`
+- Skill: **invocar `/impeccable` antes de começar**
+
+**Problema que este prompt resolve (contexto):**
+`find apps/financeiro/src -name "error.tsx" -o -name "global-error.tsx" -o -name "loading.tsx"` devolve **vazio**. É o mesmo achado que P-1.17b fechou em Documentos e P-2.5b em Projetos; o Financeiro — único módulo onde a tela mostra saldo bancário — ficou de fora das duas vezes. Uma indisponibilidade do Supabase em qualquer rota cai na tela genérica do Next: em produção, "Application error" numa página branca, para um diretor que acabou de clicar em "Contas a pagar".
+
+P-3.5 entregou três skeletons e marcou "[x] Skeletons específicos por tela". O que sobrou: `dashboard-skeleton` e `conciliation-skeleton` estão ligados por `<Suspense>` (`(dashboard)/page.tsx:855` e `conciliacao/page.tsx:177`), e `transaction-table-skeleton` foi removido em Bloco B por estar órfão (S-69, P-3.9). Hoje **doze das catorze rotas** são server components `async` que não têm `loading.tsx` nem `<Suspense>` — `lancamentos`, `contas-pagar`, `contas-receber`, `plano-contas`, `orcamento`, `orcamento-organizacoes`, `importacao`, `fluxo-caixa`, `relatorios`, `centros-custo`, `notificacoes` e `meus-dados`. Enquanto a consulta corre no servidor, a navegação fica parada na tela anterior, sem sinal nenhum de que algo está acontecendo. O estado de carregamento existe para as duas telas que já eram as mais rápidas.
+
+Por fim, `grep -rn "\"#[0-9a-fA-F]\{3,8\}\"\|rgba(" apps/financeiro/src --include=*.tsx` devolve **45 ocorrências em 21 arquivos**. Entre elas: o azul institucional reescrito à mão em `cash-flow-chart.tsx:165-166` (`#202C85`, com `--hb-blue` a um `var()` de distância), um vermelho que não pertence a paleta nenhuma (`#c0392b`, `:169-170`), e três cores de "logo" de banco inventadas em `(dashboard)/page.tsx:380` e aplicadas por índice de array — a terceira conta bancária cadastrada ganha a cor que sobrar. BRAIN §5 proíbe cor fora de `packages/ui`.
+
+**Escopo (siga na ordem):**
+
+1. **`app/error.tsx`** (client component) com `reset()`, mensagem humana e caminho de volta ao painel — sem exclamação genérica e sem versículo (versículo é dos vazios, não dos erros).
+2. **`app/(dashboard)/error.tsx`**, preservando o shell de navegação, e **`app/global-error.tsx`** mínimo, cobrindo falha no próprio layout raiz.
+3. **`loading.tsx` nas doze rotas sem estado de carga**, reusando skeleton onde já existir e criando os que faltarem. `transaction-table-skeleton` volta, agora com chamador (`lancamentos`). Skeleton tem que ter a forma da tela que precede: mesma contagem de cards, mesmo grid — o critério é não haver salto de layout na troca.
+4. **Fechar os 45 literais de cor:** cada um passa a usar token (`--hb-blue`, `--fg-invert`, `--hb-orange-muted`, `--color-destructive` e afins). Onde faltar token para o efeito — as faixas translúcidas de `rgba(32,44,133,0.10)`, o véu de overlay `rgba(19,23,55,0.42)` repetido em seis formulários — **o token nasce em `packages/ui/src/tokens.css`**, nunca no app. As três cores de banco de `page.tsx:380` saem: a faixa lateral já distingue as contas por token.
+5. **Bookkeeping em PROMPTS.md:** o critério "Skeletons específicos por tela" de P-3.5 volta a `[x]` só com o que este prompt entregar.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/financeiro/src/app/error.tsx` (criar)
+- `apps/financeiro/src/app/global-error.tsx` (criar)
+- `apps/financeiro/src/app/(dashboard)/error.tsx` (criar)
+- `apps/financeiro/src/app/(dashboard)/{lancamentos,contas-pagar,contas-receber,plano-contas,orcamento,orcamento-organizacoes,importacao,fluxo-caixa,relatorios,centros-custo,notificacoes,meus-dados}/loading.tsx` (criar)
+- `apps/financeiro/src/components/transaction-table-skeleton.tsx` (recriar)
+- `apps/financeiro/src/components/*-skeleton.tsx` (criar os que faltarem)
+- `apps/financeiro/src/**/*.tsx` (**apenas** os literais de cor do item 4)
+- `packages/ui/src/tokens.css` (apenas se faltar token)
+- `PROMPTS.md` (critério de P-3.5)
+
+**Critérios de aceite:**
+
+- [ ] Toda rota do app é coberta por fronteira de erro (raiz + `(dashboard)` + `global-error`)
+- [ ] Nenhuma rota `async` sem `loading.tsx` ou `<Suspense>` — as catorze têm estado de carga
+- [ ] Nenhum skeleton desloca o layout na troca para o conteúdo real
+- [ ] `grep -rn "\"#[0-9a-fA-F]\{3,8\}\"\|rgba(" apps/financeiro/src --include=*.tsx` retorna vazio
+- [ ] Nenhum token novo definido fora de `packages/ui/src/tokens.css`
+- [ ] Microcopy sem exclamação genérica; versículo só nos vazios
+- [ ] `pnpm --filter @hebron/financeiro typecheck lint test` verdes; `pnpm --filter @hebron/financeiro build` verde
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: BRAIN.md §5 e os precedentes de P-1.17b e P-2.5b — este prompt é a terceira execução do mesmo corretivo, e vale conferir os dois anteriores antes de escrever do zero. O erro que este módulo pode mostrar tem peso próprio: quem vê "Application error" na tela de saldos não conclui "o servidor caiu", conclui que o dinheiro sumiu.
 
 ---
 

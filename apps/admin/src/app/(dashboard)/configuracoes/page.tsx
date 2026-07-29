@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
+import Link from "next/link";
 import { db } from "@hebron/db/client";
 import { and, eq, asc, isNull } from "drizzle-orm";
 import { users, designations, roleAssignments } from "@hebron/db/schema";
@@ -663,7 +664,7 @@ function EmailTemplatesPanel({
               const row = templateRows.find((t) => t.slug === meta.slug);
               const active = meta.slug === selectedSlug;
               return (
-                <a
+                <Link
                   key={meta.slug}
                   href={`/configuracoes?tab=email-templates&template=${meta.slug}`}
                   className={`hb-tpl-sidebar-item${active ? " active" : ""}`}
@@ -675,7 +676,7 @@ function EmailTemplatesPanel({
                       Atualizado em {formatDate(row.updatedAt)}
                     </div>
                   )}
-                </a>
+                </Link>
               );
             })}
           </div>
@@ -1041,7 +1042,7 @@ export default async function ConfiguracoesPage({
         aria-label="Seções de configuração"
       >
         {TABS.map((tab) => (
-          <a
+          <Link
             key={tab.id}
             href={`/configuracoes?tab=${tab.id}`}
             role="tab"
@@ -1050,7 +1051,7 @@ export default async function ConfiguracoesPage({
           >
             {tab.icon}
             {tab.label}
-          </a>
+          </Link>
         ))}
       </div>
 

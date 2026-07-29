@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Edit, Send, Undo2, Trash2, Loader2, RotateCcw } from "lucide-react";
 import {
   publishDocument,
@@ -84,13 +85,13 @@ export function DocumentRowActions({
 
   return (
     <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
-      <a
+      <Link
         href={`/editorial/${id}/editar`}
         className="hb-btn hb-btn-ghost hb-btn-xs"
         title="Editar"
       >
         <Edit size={13} aria-hidden="true" />
-      </a>
+      </Link>
 
       <button
         type="button"

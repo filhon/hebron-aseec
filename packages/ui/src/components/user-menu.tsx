@@ -5,6 +5,7 @@ import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
 import { LogOut, User, ChevronDown } from "lucide-react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { DefaultLink, type LinkComponent } from "./navigation-sidebar";
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -89,6 +90,7 @@ export interface UserMenuProps {
   user: UserMenuUser;
   profileHref?: string;
   onLogout: () => void;
+  LinkComponent?: LinkComponent;
   className?: string;
 }
 
@@ -96,6 +98,7 @@ export function UserMenu({
   user,
   profileHref,
   onLogout,
+  LinkComponent: Link = DefaultLink,
   className,
 }: UserMenuProps) {
   const [open, setOpen] = React.useState(false);
@@ -166,7 +169,7 @@ export function UserMenu({
           {profileHref && (
             <div className="py-1">
               <DropdownMenuPrimitive.Item asChild>
-                <a
+                <Link
                   href={profileHref}
                   className={cn(
                     "group mx-1 flex cursor-pointer items-center gap-2.5 rounded-(--radius-sm)",
@@ -184,7 +187,7 @@ export function UserMenu({
                     aria-hidden="true"
                   />
                   Meu perfil
-                </a>
+                </Link>
               </DropdownMenuPrimitive.Item>
             </div>
           )}

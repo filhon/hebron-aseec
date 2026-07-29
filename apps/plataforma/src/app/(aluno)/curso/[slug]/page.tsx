@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { EmptyState, Button } from "@hebron/ui";
 import { GraduationCap } from "lucide-react";
 import { CourseDetailView } from "../../../../components/course-detail-view";
@@ -28,7 +29,7 @@ export default async function CursoDetalhePage({
           description="O curso que você procura não existe ou foi removido."
           action={
             <Button asChild variant="outline">
-              <a href="/">Voltar ao catálogo</a>
+              <Link href="/">Voltar ao catálogo</Link>
             </Button>
           }
           hideQuote
