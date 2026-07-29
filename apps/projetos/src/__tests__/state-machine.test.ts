@@ -1,14 +1,14 @@
 /**
  * state-machine.test.ts — Máquina de estados de projetos
  *
- * Testa o mapa VALID_STAGE_TRANSITIONS (lógica pura) e a persistência
- * de estágios no banco de dados.
- *
- * Não invoca Server Actions (dependem do contexto Supabase Auth);
- * em vez disso, testa o invariante que as actions usam diretamente.
+ * Testa o mapa VALID_STAGE_TRANSITIONS (lógica pura), a persistência
+ * de estágios no banco de dados, e — a partir de P-2.12b — a action
+ * `transitionProjectStage` que de fato aplica o mapa em produção
+ * (achado do corretivo: os testes anteriores só verificavam a constante,
+ * nunca a action que deveria obedecê-la).
  */
 
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@hebron/db/client";
 import {
@@ -20,33 +20,60 @@ import {
   organizationMembers,
   users,
   roleAssignments,
+  auditLog,
 } from "@hebron/db/schema";
 import type { ProjectStage } from "@hebron/db/schema";
+
+// transitionProjectStage roda pelo pipeline real de Server Action
+// (diretorAction) — precisa de sessão mockada, mesmo padrão de
+// voting.test.ts/close-voting.test.ts.
+const resolveSessionMock = vi.fn();
+vi.mock("next/headers", () => ({
+  cookies: async () => ({ getAll: () => [], set: () => undefined }),
+}));
+vi.mock("@hebron/auth/server", () => ({
+  resolveSession: (...args: unknown[]) => resolveSessionMock(...args),
+}));
 
 // ── Fixtures DB (usados apenas nos testes de persistência) ────────────────────
 
 const SM_IDS = {
   submissor: "ddaa0000-0000-0000-0000-000000000001",
+  diretor: "ddaa0000-0000-0000-0000-000000000002",
   org: "ddbb0000-0000-0000-0000-000000000001",
 } as const;
 
 beforeAll(async () => {
   await db
     .insert(users)
-    .values({
-      id: SM_IDS.submissor,
-      email: "sm-sub@test.hebron",
-      fullName: "SM Submissor",
-    })
+    .values([
+      {
+        id: SM_IDS.submissor,
+        email: "sm-sub@test.hebron",
+        fullName: "SM Submissor",
+      },
+      {
+        id: SM_IDS.diretor,
+        email: "sm-dir@test.hebron",
+        fullName: "SM Diretor",
+      },
+    ])
     .onConflictDoNothing();
 
   await db
     .insert(roleAssignments)
-    .values({
-      userId: SM_IDS.submissor,
-      role: "submissor",
-      grantedBy: SM_IDS.submissor,
-    })
+    .values([
+      {
+        userId: SM_IDS.submissor,
+        role: "submissor",
+        grantedBy: SM_IDS.submissor,
+      },
+      {
+        userId: SM_IDS.diretor,
+        role: "diretor",
+        grantedBy: SM_IDS.submissor,
+      },
+    ])
     .onConflictDoNothing();
 
   await db
@@ -71,10 +98,17 @@ afterAll(async () => {
     .delete(organizationMembers)
     .where(eq(organizationMembers.organizationId, SM_IDS.org));
   await db.delete(organizations).where(eq(organizations.id, SM_IDS.org));
+  // transitionProjectStage (P-2.12b) grava audit_log com actorId = diretor —
+  // precisa ser limpo antes de deletar o usuário (audit_log_actor_id_fkey).
+  await db.delete(auditLog).where(eq(auditLog.actorId, SM_IDS.diretor));
   await db
     .delete(roleAssignments)
     .where(eq(roleAssignments.userId, SM_IDS.submissor));
+  await db
+    .delete(roleAssignments)
+    .where(eq(roleAssignments.userId, SM_IDS.diretor));
   await db.delete(users).where(eq(users.id, SM_IDS.submissor));
+  await db.delete(users).where(eq(users.id, SM_IDS.diretor));
 });
 
 // ── Cobertura do mapa ─────────────────────────────────────────────────────────
@@ -362,6 +396,158 @@ describe("State Machine — DB: estágio persiste e transita corretamente", () =
     const active = rows.filter((r) => r.deletedAt === null);
     expect(active).toHaveLength(0);
     expect(rows.at(0)?.deletedAt).not.toBeNull(); // audit trail preservado
+
+    await db.delete(projects).where(eq(projects.id, proj.id));
+  });
+});
+
+// ── Action: transitionProjectStage obedece o mapa de verdade ──────────────────
+//
+// P-2.12b: os 25 testes acima verificam a constante VALID_STAGE_TRANSITIONS
+// e checagens manuais equivalentes ao `if` de produção — nenhum chamava a
+// action que de fato aplica o mapa. transitionProjectStage (diretorAction,
+// actions/projects.ts) é a action genérica de avanço de estágio; castVote/
+// closeVoting/triggerPanicButton (voting.ts) já são cobertas contra o mapa
+// em voting.test.ts/close-voting.test.ts.
+
+describe("State Machine — transitionProjectStage (action real) aplica e recusa conforme o mapa", () => {
+  // Os cenários usam projetos em "aprovado"/"homologacao", não "validacao"/
+  // "rascunho": a RLS "projects_select_reviewer" (0007_projetos_rls.sql)
+  // só dá SELECT a diretor/conselheiro em projetos com stage IN (votacao,
+  // homologacao, aprovado, reprovado, em_execucao, concluido) — um projeto
+  // em rascunho/validacao é invisível para o ator diretor usado aqui, e
+  // getProjectOrThrow lançaria "Projeto não encontrado" antes mesmo de
+  // chegar na checagem do mapa, testando a RLS por acidente em vez da
+  // transição. Achado registrado em SESSIONS.md: a página
+  // (diretoria)/pipeline chama esta mesma action para validacao → votacao,
+  // o que sugere uma lacuna de RLS pré-existente fora do escopo de arquivos
+  // permitidos deste corretivo (actions/projects.ts).
+  it("aprovado → em_execucao: transição válida é aplicada pela action, versão registrada", async () => {
+    // "aprovado" (não "homologacao → aprovado") de propósito: toStage
+    // "aprovado" dispara onProjectApproved (cross-app fire-and-forget,
+    // packages/db/projetos-approval.ts) que cria financeiro.cost_centers/
+    // payables — uma corrida entre esse insert assíncrono e o cleanup do
+    // teste (cost_centers_project_id_fkey é onDelete: restrict). "aprovado
+    // → em_execucao" exercita o mesmo mapa sem esse efeito colateral.
+    const [proj] = await db
+      .insert(projects)
+      .values({
+        title: "SM Test — Action Transição Válida",
+        tipo: "anual",
+        stage: "aprovado",
+        organizationId: SM_IDS.org,
+        submitterId: SM_IDS.submissor,
+        evaluationYear: 2026,
+        budgetTotal: "5000.00",
+        parcelas: 1,
+        meses: 1,
+      })
+      .returning();
+    if (!proj) throw new Error("Falha ao inserir projeto");
+
+    resolveSessionMock.mockResolvedValueOnce({
+      actorId: SM_IDS.diretor,
+      roles: ["diretor"],
+    });
+    const { transitionProjectStage } = await import("../actions/projects");
+    const result = await transitionProjectStage({
+      projectId: proj.id,
+      toStage: "em_execucao",
+    });
+
+    expect(result?.serverError).toBeUndefined();
+
+    const [updated] = await db
+      .select({ stage: projects.stage, startedAt: projects.startedAt })
+      .from(projects)
+      .where(eq(projects.id, proj.id));
+    expect(updated?.stage).toBe("em_execucao");
+    expect(updated?.startedAt).not.toBeNull();
+
+    const versions = await db
+      .select()
+      .from(projectVersions)
+      .where(eq(projectVersions.projectId, proj.id));
+    expect(versions.some((v) => v.stage === "em_execucao")).toBe(true);
+
+    await db.delete(projects).where(eq(projects.id, proj.id));
+  });
+
+  it("homologacao → votacao: transição inválida é recusada pela action, estágio não muda", async () => {
+    const [proj] = await db
+      .insert(projects)
+      .values({
+        title: "SM Test — Action Transição Inválida",
+        tipo: "anual",
+        stage: "homologacao",
+        organizationId: SM_IDS.org,
+        submitterId: SM_IDS.submissor,
+        evaluationYear: 2026,
+        budgetTotal: "5000.00",
+        parcelas: 1,
+        meses: 1,
+      })
+      .returning();
+    if (!proj) throw new Error("Falha ao inserir projeto");
+
+    resolveSessionMock.mockResolvedValueOnce({
+      actorId: SM_IDS.diretor,
+      roles: ["diretor"],
+    });
+    const { transitionProjectStage } = await import("../actions/projects");
+    const result = await transitionProjectStage({
+      projectId: proj.id,
+      toStage: "votacao",
+    });
+
+    // next-safe-action generaliza a mensagem do Error lançado (sem
+    // handleReturnedServerError customizado) — só "houve erro" é
+    // observável no cliente; o efeito real é o que importa aqui.
+    expect(result?.serverError).toBeDefined();
+
+    const [row] = await db
+      .select({ stage: projects.stage })
+      .from(projects)
+      .where(eq(projects.id, proj.id));
+    expect(row?.stage).toBe("homologacao");
+
+    await db.delete(projects).where(eq(projects.id, proj.id));
+  });
+
+  it("reprovado → qualquer estágio: action recusa (terminal), mesmo para super_admin", async () => {
+    const [proj] = await db
+      .insert(projects)
+      .values({
+        title: "SM Test — Action Terminal Reprovado",
+        tipo: "anual",
+        stage: "reprovado",
+        organizationId: SM_IDS.org,
+        submitterId: SM_IDS.submissor,
+        evaluationYear: 2026,
+        budgetTotal: "5000.00",
+        parcelas: 1,
+        meses: 1,
+      })
+      .returning();
+    if (!proj) throw new Error("Falha ao inserir projeto");
+
+    resolveSessionMock.mockResolvedValueOnce({
+      actorId: SM_IDS.diretor,
+      roles: ["diretor"],
+    });
+    const { transitionProjectStage } = await import("../actions/projects");
+    const result = await transitionProjectStage({
+      projectId: proj.id,
+      toStage: "em_execucao",
+    });
+
+    expect(result?.serverError).toBeDefined();
+
+    const [row] = await db
+      .select({ stage: projects.stage })
+      .from(projects)
+      .where(eq(projects.id, proj.id));
+    expect(row?.stage).toBe("reprovado");
 
     await db.delete(projects).where(eq(projects.id, proj.id));
   });

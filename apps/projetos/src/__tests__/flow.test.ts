@@ -1,16 +1,19 @@
 /**
  * flow.test.ts — Fluxo end-to-end do módulo projetos
  *
- * Testa diretamente no DB (sem invocar Server Actions, que dependem
- * do contexto Supabase Auth) os invariantes de negócio:
+ * Testa majoritariamente direto no DB (transições de estágio anteriores a
+ * P-2.12b evitavam Server Actions por causa de uma lacuna de RLS em
+ * `submitProject` para submissor comum — ver SESSIONS.md P-2.10b) os
+ * invariantes de negócio:
  *
  *  - Ciclo de vida completo: rascunho → concluido
  *  - Bloqueio de orçamento (financeiro.organization_budgets + soma de projetos)
  *  - Limites de contestação (max 2/projeto, 1/pessoa)
  *  - Soft-delete e imutabilidade (audit trail preservado)
+ *  - Edição de rascunho via `updateDraftProject` (action real) — P-2.12b
  */
 
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { eq, and, isNull, not, sum, count } from "drizzle-orm";
 import { db } from "@hebron/db/client";
 import {
@@ -24,7 +27,20 @@ import {
   paymentSchedules,
   organizationBudgets,
   votes,
+  auditLog,
 } from "@hebron/db/schema";
+import { generatePaymentSchedule } from "@hebron/db/projetos-approval";
+
+// updateDraftProject roda pelo pipeline real de Server Action
+// (submissorAction) — precisa de sessão mockada, mesmo padrão de
+// voting.test.ts/close-voting.test.ts.
+const resolveSessionMock = vi.fn();
+vi.mock("next/headers", () => ({
+  cookies: async () => ({ getAll: () => [], set: () => undefined }),
+}));
+vi.mock("@hebron/auth/server", () => ({
+  resolveSession: (...args: unknown[]) => resolveSessionMock(...args),
+}));
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -48,6 +64,7 @@ const BUDGET_EXISTING_ID = "cccc0000-0000-0000-0000-000000000002";
 const BUDGET_REPROVADO_ID = "cccc0000-0000-0000-0000-000000000003";
 const CONTEST_PROJECT_ID = "cccc0000-0000-0000-0000-000000000004";
 const DELETE_PROJECT_ID = "cccc0000-0000-0000-0000-000000000005";
+const DRAFT_EDIT_PROJECT_ID = "cccc0000-0000-0000-0000-000000000006";
 
 // Budget uses year 2027 to avoid interference with the E2E flow project (2026)
 const BUDGET_YEAR = 2027;
@@ -153,6 +170,7 @@ afterAll(async () => {
     BUDGET_REPROVADO_ID,
     CONTEST_PROJECT_ID,
     DELETE_PROJECT_ID,
+    DRAFT_EDIT_PROJECT_ID,
   ];
 
   // Cascade delete handles versions, votes, contestations, payment_schedules
@@ -172,6 +190,11 @@ afterAll(async () => {
     .delete(organizationMembers)
     .where(eq(organizationMembers.organizationId, IDS.orgs.orgFlow));
   await db.delete(organizations).where(eq(organizations.id, IDS.orgs.orgFlow));
+  // updateDraftProject (P-2.12b) grava audit_log com actorId = submissor —
+  // precisa ser limpo antes de deletar os usuários (audit_log_actor_id_fkey).
+  for (const id of Object.values(IDS.users)) {
+    await db.delete(auditLog).where(eq(auditLog.actorId, id));
+  }
   for (const id of Object.values(IDS.users)) {
     await db.delete(roleAssignments).where(eq(roleAssignments.userId, id));
   }
@@ -321,30 +344,15 @@ describe("Fluxo — Ciclo de vida completo do projeto anual", () => {
       .set({ stage: "aprovado", approvedAt, updatedAt: approvedAt })
       .where(eq(projects.id, FLOW_PROJECT_ID));
 
-    // Simula generatePaymentSchedule (12000 / 3 parcelas = 4000/mês)
-    await db.insert(paymentSchedules).values([
-      {
-        projectId: FLOW_PROJECT_ID,
-        amount: "4000.00",
-        month: 1,
-        dueDate: "2026-01-01",
-        status: "pendente",
-      },
-      {
-        projectId: FLOW_PROJECT_ID,
-        amount: "4000.00",
-        month: 2,
-        dueDate: "2026-02-01",
-        status: "pendente",
-      },
-      {
-        projectId: FLOW_PROJECT_ID,
-        amount: "4000.00",
-        month: 3,
-        dueDate: "2026-03-01",
-        status: "pendente",
-      },
-    ]);
+    // generatePaymentSchedule real (packages/db/projetos-approval.ts) —
+    // não uma reimplementação da divisão 12000 / 3 parcelas = 4000/mês
+    // (P-2.12b).
+    const [projectForSchedule] = await db
+      .select()
+      .from(projects)
+      .where(eq(projects.id, FLOW_PROJECT_ID));
+    if (!projectForSchedule) throw new Error("Projeto não encontrado");
+    await generatePaymentSchedule(projectForSchedule);
 
     const [project] = await db
       .select()
@@ -731,5 +739,103 @@ describe("Imutabilidade — Soft-delete preserva audit trail", () => {
     const total = parseFloat(result?.total ?? "0");
     // BUDGET_EXISTING_ID (40000) foi deletado — não deve contar
     expect(total).toBeLessThan(40000);
+  });
+});
+
+// ── Edição de rascunho: updateDraftProject (action real) ───────────────────────
+//
+// P-2.12b: o único teste anterior desta regra (organizations.test.ts) fazia
+// um UPDATE direto no banco simulando "o efeito de updateDraftProject", sem
+// chamar a action — registrado em SESSIONS.md como espelho remanescente
+// (organizations.test.ts não está na lista de arquivos permitidos deste
+// corretivo). Aqui a action real é exercitada de ponta a ponta.
+
+describe("Edição de rascunho — updateDraftProject altera parcelas (action real)", () => {
+  beforeAll(async () => {
+    await db
+      .insert(projects)
+      .values({
+        id: DRAFT_EDIT_PROJECT_ID,
+        title: "Projeto Edição de Rascunho Test",
+        tipo: "anual",
+        stage: "rascunho",
+        organizationId: IDS.orgs.orgFlow,
+        submitterId: IDS.users.submissor1,
+        evaluationYear: 2026,
+        budgetTotal: "12000.00",
+        parcelas: 3,
+        meses: 3,
+      })
+      .onConflictDoNothing();
+  });
+
+  it("submissor edita parcelas/mesesPagamento do próprio rascunho: patch persiste, meses acompanha mesesPagamento.length", async () => {
+    resolveSessionMock.mockResolvedValueOnce({
+      actorId: IDS.users.submissor1,
+      roles: ["submissor"],
+    });
+
+    const { updateDraftProject } = await import("../actions/projects");
+    const result = await updateDraftProject({
+      projectId: DRAFT_EDIT_PROJECT_ID,
+      parcelas: 6,
+      mesesPagamento: [1, 2, 3, 4, 5, 6],
+    });
+
+    expect(result?.serverError).toBeUndefined();
+
+    const [updated] = await db
+      .select({ parcelas: projects.parcelas, meses: projects.meses })
+      .from(projects)
+      .where(eq(projects.id, DRAFT_EDIT_PROJECT_ID));
+
+    expect(updated?.parcelas).toBe(6);
+    // meses nunca diverge de mesesPagamento.length — invariante do fix P-2.8c
+    expect(updated?.meses).toBe(6);
+  });
+
+  it("outro submissor (não é o dono do rascunho) tem a edição recusada pela action", async () => {
+    resolveSessionMock.mockResolvedValueOnce({
+      actorId: IDS.users.submissor2,
+      roles: ["submissor"],
+    });
+
+    const { updateDraftProject } = await import("../actions/projects");
+    const result = await updateDraftProject({
+      projectId: DRAFT_EDIT_PROJECT_ID,
+      parcelas: 12,
+      mesesPagamento: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+    });
+
+    expect(result?.serverError).toBeDefined();
+
+    const [row] = await db
+      .select({ parcelas: projects.parcelas })
+      .from(projects)
+      .where(eq(projects.id, DRAFT_EDIT_PROJECT_ID));
+    // Continua com o valor do teste anterior (6) — recusa não escreveu nada
+    expect(row?.parcelas).toBe(6);
+  });
+
+  it("cronograma pós-aprovação reflete o novo número de parcelas/meses gravado pela edição", async () => {
+    const [project] = await db
+      .select()
+      .from(projects)
+      .where(eq(projects.id, DRAFT_EDIT_PROJECT_ID));
+    if (!project) throw new Error("Projeto de teste não encontrado");
+
+    await generatePaymentSchedule(project);
+
+    const schedule = await db
+      .select()
+      .from(paymentSchedules)
+      .where(eq(paymentSchedules.projectId, DRAFT_EDIT_PROJECT_ID));
+
+    const total = schedule.reduce(
+      (sum, row) => sum + parseFloat(row.amount),
+      0,
+    );
+    expect(schedule).toHaveLength(6);
+    expect(total).toBeCloseTo(12000, 2);
   });
 });

@@ -16,6 +16,11 @@ import {
 import { VALID_STAGE_TRANSITIONS } from "@hebron/db/schema";
 import { conselheiroDiretorAction, superAdminAction } from "../lib/safe-action";
 import { logProjectAudit } from "../lib/audit";
+import {
+  computeVoteResult,
+  computeMajority,
+  type VoteResult,
+} from "../lib/vote-result";
 
 // ---------------------------------------------------------------------------
 // Helpers — take an explicit tx executor from withAuthenticatedContext.
@@ -57,16 +62,10 @@ async function countEligibleVoters(executor: DbExecutor): Promise<number> {
   return result[0]?.count ?? 0;
 }
 
-interface VoteResult {
-  totalEligible: number;
-  totalVoted: number;
-  inFavor: number;
-  against: number;
-  quorumMet: boolean;
-  approved: boolean | null;
-}
-
-async function computeVoteResult(
+// Busca os números no banco e delega o cálculo (quórum, maioria, decisão)
+// a computeVoteResult (lib/vote-result.ts) — única definição da fórmula no
+// repositório, importada também pelos testes (P-2.12b).
+async function getVoteResult(
   executor: AuthenticatedTx,
   projectId: string,
 ): Promise<VoteResult> {
@@ -74,7 +73,7 @@ async function computeVoteResult(
 
   // O SELECT em votes é restrito a super_admin por RLS ("cédula secreta" —
   // nem o próprio diretor lê a cédula que lançou, migration 0009). Sem
-  // isso, computeVoteResult rodando no contexto autenticado de um
+  // isso, getVoteResult rodando no contexto autenticado de um
   // diretor/conselheiro comum sempre veria 0 votos, e o auto-close de
   // castVote nunca dispararia a não ser que o voto decisivo fosse de um
   // super_admin (achado P-2.8b). withSystemRole eleva só esta leitura
@@ -89,15 +88,8 @@ async function computeVoteResult(
 
   const totalVoted = projectVotes.length;
   const inFavor = projectVotes.filter((v) => v.value).length;
-  const against = totalVoted - inFavor;
 
-  // Quorum: ≥ 50% of eligible voters cast their vote
-  const quorumMet = totalVoted >= Math.ceil(totalEligible / 2);
-
-  // Simple majority among votes cast; null if quorum not met
-  const approved = quorumMet ? inFavor > against : null;
-
-  return { totalEligible, totalVoted, inFavor, against, quorumMet, approved };
+  return computeVoteResult(totalEligible, totalVoted, inFavor);
 }
 
 async function getNextVersionNumber(
@@ -144,7 +136,7 @@ export const castVote = conselheiroDiretorAction
         .onConflictDoNothing();
 
       // After every vote, re-check if quorum is now met and all eligible have voted
-      const result = await computeVoteResult(tx, parsedInput.projectId);
+      const result = await getVoteResult(tx, parsedInput.projectId);
 
       let stageTransitioned = false;
 
@@ -263,7 +255,7 @@ export const closeVoting = superAdminAction
   .action(async ({ parsedInput, ctx }) => {
     return withAuthenticatedContext({ actorId: ctx.actorId }, async (tx) => {
       const project = await getVotingProject(tx, parsedInput.projectId);
-      const result = await computeVoteResult(tx, parsedInput.projectId);
+      const result = await getVoteResult(tx, parsedInput.projectId);
 
       if (!result.quorumMet) {
         throw new Error(
@@ -344,7 +336,7 @@ export const triggerPanicButton = superAdminAction
     return withAuthenticatedContext({ actorId: ctx.actorId }, async (tx) => {
       const project = await getVotingProject(tx, parsedInput.projectId);
 
-      const result = await computeVoteResult(tx, parsedInput.projectId);
+      const result = await getVoteResult(tx, parsedInput.projectId);
 
       // Force-decide: whichever side has majority among existing votes wins;
       // tie resolves to reprovado (conservative default). A decisão é
@@ -353,7 +345,7 @@ export const triggerPanicButton = superAdminAction
       // FORÇADA (maioria entre os votos existentes, ignorando quórum) —
       // diferente de `result.approved`, que é null quando o quórum não foi
       // atingido (o caso normal de uso do botão de pânico).
-      const approved = result.inFavor > result.against;
+      const approved = computeMajority(result.inFavor, result.against);
       const newStage = "homologacao" as const;
 
       const validNextStages = VALID_STAGE_TRANSITIONS[project.stage];

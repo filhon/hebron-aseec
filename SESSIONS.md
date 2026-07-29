@@ -228,6 +228,7 @@
 | S-205  | 2026-07-28 | P-2.8b — A reprovação que o mapa de estágios não permite e o quórum que conta quem já saiu (CORRETIVO)                           | concluido                            |
 | S-206  | 2026-07-28 | P-2.8c — Quatro actions sem porta de entrada: rascunho, instituição e membros (CORRETIVO)                                        | concluido                            |
 | S-207  | 2026-07-28 | P-2.10b — Sete notificações que nunca disparam e um link que leva a lugar nenhum (CORRETIVO)                                     | concluido                            |
+| S-208  | 2026-07-29 | P-2.12b — O teste que examina a cópia em vez do original (CORRETIVO)                                                             | concluido                            |
 
 ---
 
@@ -17844,3 +17845,175 @@ as rotas reais são `(submissor)/[id]` e `(diretoria)/pipeline/[id]`.
 - `pnpm --filter financeiro typecheck lint test` — verde, 49/49 (11
   arquivos, inclui o fluxo `governance.test.ts` completo de
   aprova→autoriza→paga passando pelo novo branch de `paymentScheduleId`)
+
+---
+
+## S-208 — P-2.12b — O teste que examina a cópia em vez do original (CORRETIVO)
+
+**Branch:** `feat/P-2.12b-projetos-testes`
+
+### Contexto
+
+`voting.test.ts` declarava no próprio cabeçalho que testava uma "função pura
+que espelha voting.ts": `computeQuorum` (11 dos 26 testes do arquivo,
+incluindo os dois que sustentavam o critério de P-2.12 "sem quórum → não
+aprova; com quórum + maioria → aprova") e `panicApproved` eram
+reimplementações locais da lógica de `computeVoteResult`/decisão do botão de
+pânico, escritas dentro do arquivo de teste — nunca importavam de
+`actions/voting.ts`. Um espelho passa verde enquanto o original apodrece: foi
+assim que o furo de `revoked_at` e o desencontro `votacao → reprovado`
+(ambos P-2.8b) sobreviveram a uma suíte de 26 testes de votação.
+`state-machine.test.ts` tinha a variante do mesmo problema: 25 testes sobre a
+constante `VALID_STAGE_TRANSITIONS`, nenhum sobre as actions que deveriam
+obedecê-la.
+
+### Decisões
+
+1. **`computeVoteResult` extraída para `apps/projetos/src/lib/vote-result.ts`**
+   — módulo novo, só a parte pura (quórum, maioria, decisão). A função
+   assíncrona que busca os números no banco em `actions/voting.ts` foi
+   renomeada para `getVoteResult` (evita colisão de nome com a importada) e
+   passou a delegar o cálculo à função pura. `triggerPanicButton` também
+   passou a usar uma segunda função pura extraída, `computeMajority`
+   (maioria entre votos existentes, ignorando quórum — a mesma fórmula que
+   `computeVoteResult` usa internamente para decidir `approved`), no lugar
+   do `inFavor > against` que tinha antes. `voting.test.ts` importa as duas
+   funções em vez de reimplementá-las; os `describe` de quórum/maioria/
+   pânico continuam com a mesma cobertura, só trocando a chamada local pela
+   importada.
+2. **`state-machine.test.ts` ganhou cobertura de `transitionProjectStage`**
+   (a action `diretorAction` que de fato aplica `VALID_STAGE_TRANSITIONS`
+   em produção — `castVote`/`closeVoting`/`triggerPanicButton` já eram
+   cobertas contra o mapa desde P-2.8b). Os cenários usam projetos em
+   `aprovado`/`homologacao`, não `validacao`/`rascunho`: a RLS
+   `projects_select_reviewer` (`0007_projetos_rls.sql`) só dá `SELECT` a
+   diretor/conselheiro em projetos com `stage IN (votacao, homologacao,
+aprovado, reprovado, em_execucao, concluido)` — um projeto em
+   rascunho/validacao é invisível para um ator diretor, e
+   `getProjectOrThrow` lançaria "Projeto não encontrado" antes mesmo de
+   chegar na checagem do mapa, testando a RLS por acidente em vez da
+   transição. **Achado fora de escopo, não corrigido aqui:** a página
+   `(diretoria)/pipeline` chama esta mesma action para `validacao →
+votacao` — se essa lacuna de RLS for real (um diretor genuinamente não
+   consegue avançar um projeto de `validacao` hoje), é um defeito de
+   produção em `actions/projects.ts`/RLS, fora da lista de arquivos
+   permitidos deste corretivo (só testes + `voting.ts` + `vote-result.ts` +
+   PROMPTS.md). Registrado aqui para um corretivo futuro investigar.
+   O teste de transição válida usa `aprovado → em_execucao` (não
+   `homologacao → aprovado`): `toStage="aprovado"` dispara
+   `onProjectApproved` (cross-app fire-and-forget,
+   `packages/db/projetos-approval.ts`) que cria `financeiro.cost_centers` +
+   `payables` — uma corrida entre esse insert assíncrono não aguardado e o
+   cleanup do teste (`cost_centers_project_id_fkey` é `onDelete: restrict`)
+   quebrava o teardown de forma intermitente. `aprovado → em_execucao`
+   exercita o mesmo mapa sem esse efeito colateral. Duas execuções da
+   suíte antes desse ajuste deixaram projetos+cost-centers órfãos no banco
+   de dev compartilhado (mesmo projeto nunca deletado por causa da FK);
+   limpos manualmente antes da run final.
+3. **`flow.test.ts` ganhou `updateDraftProject` (ação real) alterando
+   parcelas** — o único teste anterior dessa regra
+   (`organizations.test.ts`, P-2.8c) fazia um `UPDATE` direto no banco
+   "simulando o efeito de `updateDraftProject`", sem chamar a action.
+   `organizations.test.ts` não está na lista de arquivos permitidos deste
+   corretivo (ver item 4) — em vez de convertê-lo, `flow.test.ts` ganhou
+   cobertura própria chamando `updateDraftProject` de verdade: dono edita
+   parcelas/mesesPagamento (persiste, `meses` acompanha
+   `mesesPagamento.length`), outro submissor tem a edição recusada pela
+   action, e o cronograma pós-aprovação (`generatePaymentSchedule` real)
+   reflete o novo número de parcelas. O mirror de `generatePaymentSchedule`
+   em `flow.test.ts` (step 6, "Simula generatePaymentSchedule... 12000 / 3
+   parcelas") também foi convertido para chamar a função real importada de
+   `@hebron/db/projetos-approval`, igual ao padrão já usado em
+   `organizations.test.ts`.
+4. **Ciclo de relatório rejeitado → reenviado → aprovado**: já tinha
+   cobertura completa chamando as actions reais (`submitReport`/
+   `reviewReport`) em `reports.test.ts` (P-2.6b, seis testes, incluindo a
+   distinção `report.submitted`/`report.reviewed` no audit) — não é um
+   espelho e não precisou de trabalho novo. `reports.test.ts` não está na
+   lista de arquivos permitidos deste corretivo; nada foi tocado nele.
+5. **Varredura da suíte inteira** (`apps/projetos/src/__tests__`) atrás de
+   outros espelhos: além do já convertido em `flow.test.ts`, o único achado
+   real foi `organizations.test.ts:299-327` ("Simula o efeito de
+   `updateDraftProject` mudando parcelas de 3 para 6" via `UPDATE` direto,
+   descrito no item 3). Fora da lista de arquivos permitidos — não
+   convertido diretamente, mas neutralizado pela cobertura equivalente
+   nova em `flow.test.ts` (item 3). Os demais hits de "mirror" no grep de
+   varredura (`organizations.test.ts:8,11,172,200`) são de uma categoria
+   diferente: descrevem testes de RLS que **intencionalmente** duplicam,
+   via SQL real contra a policy do Postgres, o mesmo gate que a action já
+   aplica (defense in depth — BRAIN §3) — não são reimplementações em JS
+   de lógica de produção, e o arquivo está fora do escopo de edição deste
+   corretivo de qualquer forma. Os demais helpers locais da suíte
+   (`queryAs`, `mockActor`, `voteAllEligible`/`activeEligibleVoterIds`) são
+   infraestrutura de teste (RLS via SQL cru, mock de sessão, consulta ao
+   mesmo predicado de `countEligibleVoters` para tornar turnout
+   determinístico), não reimplementações da lógica testada.
+6. **Critérios de P-2.12 reavaliados em PROMPTS.md**: os dois marcados
+   `[~]`/parcialmente `[x]` (state machine via action, fórmula de quórum
+   sem duplicação) viraram `[x]` com a referência a P-2.12b.
+
+### Escopo entregue
+
+1. `apps/projetos/src/lib/vote-result.ts` (novo): `computeVoteResult`
+   (quórum/maioria/decisão, pura) + `computeMajority` (maioria entre votos
+   existentes, usada por `computeVoteResult` e por `triggerPanicButton`).
+2. `apps/projetos/src/actions/voting.ts`: função local `computeVoteResult`
+   renomeada para `getVoteResult` (mantém a busca no banco, delega o
+   cálculo à função pura importada); `triggerPanicButton` usa
+   `computeMajority` importada no lugar do comparador inline.
+3. `apps/projetos/src/__tests__/voting.test.ts`: removidas as
+   reimplementações locais `computeQuorum`/`panicApproved`; todos os
+   `describe` de quórum/maioria/pânico importam de `lib/vote-result.ts`.
+4. `apps/projetos/src/__tests__/state-machine.test.ts`: novo describe
+   "transitionProjectStage (action real) aplica e recusa conforme o mapa"
+   — transição válida aplicada (`aprovado → em_execucao`, com versão
+   registrada), transição inválida recusada sem alterar o estágio
+   (`homologacao → votacao`), estágio terminal recusado mesmo para diretor
+   (`reprovado → em_execucao`). Ganhou mock de sessão (`vi.mock` de
+   `next/headers`/`@hebron/auth/server`) e um segundo usuário fixture
+   (diretor) para exercitar a action.
+5. `apps/projetos/src/__tests__/flow.test.ts`: mock de sessão adicionado;
+   step 6 (homologação → aprovado) troca o `INSERT` manual de
+   `payment_schedules` pela chamada real a `generatePaymentSchedule`; novo
+   describe "Edição de rascunho — updateDraftProject altera parcelas
+   (action real)" com três testes (dono edita, não-dono é recusado,
+   cronograma pós-aprovação reflete a edição).
+6. `PROMPTS.md`: critérios de P-2.12 (state machine, fórmula de quórum)
+   atualizados para `[x]` referenciando P-2.12b; critérios de aceite do
+   próprio P-2.12b marcados `[x]`.
+
+### Critérios de aceite
+
+- [x] Nenhum arquivo de `__tests__` reimplementa lógica de produção —
+      `grep -n "espelha\|mirror\|reimplementa"` na suíte volta só em
+      comentários documentais (`flow.test.ts`/`voting.test.ts` explicando
+      que NÃO há reimplementação; `organizations.test.ts` descrevendo
+      testes de RLS que duplicam um gate por design, categoria diferente
+      do antipadrão — ver decisão 5)
+- [x] `computeVoteResult` tem uma única definição (`lib/vote-result.ts`),
+      importada por `actions/voting.ts` e por `voting.test.ts`
+- [x] Critérios de votação de P-2.12 sustentados por testes que chamam a
+      action (`close-voting.test.ts`/`voting.test.ts`, já cobertos desde
+      P-2.8b, agora sem duplicar a fórmula)
+- [x] Cobertura nova: reprovação nos três caminhos (já existia desde
+      P-2.8b em `voting.test.ts`/`close-voting.test.ts`, confirmada),
+      papel revogado no quórum (idem, `close-voting.test.ts`), ciclo de
+      relatório rejeitado (já existia em `reports.test.ts`, P-2.6b,
+      confirmado), edição de rascunho alterando parcelas (novo, ação real,
+      `flow.test.ts`)
+- [x] Espelhos remanescentes registrados: `organizations.test.ts:299-327`
+      (fora da lista de arquivos permitidos, neutralizado por cobertura
+      equivalente em `flow.test.ts`) — ver decisão 5
+- [x] `pnpm --filter projetos typecheck lint test` verdes — 142/142 testes,
+      13/13 arquivos
+- [x] Registrado em SESSIONS.md
+
+### Verificações executadas
+
+- `pnpm --filter projetos typecheck` — verde
+- `pnpm --filter projetos lint` — verde
+- `pnpm --filter projetos test` — verde, 142/142 (13 arquivos)
+- Limpeza manual de dados órfãos no banco de dev compartilhado: dois
+  projetos + cost centers + payables deixados por execuções anteriores da
+  suíte que falharam no teardown por causa da corrida descrita na decisão
+  2 (antes do ajuste para `aprovado → em_execucao`).

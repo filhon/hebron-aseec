@@ -3858,8 +3858,8 @@ Testes de integração para Projetos. RLS (submissor vê apenas próprios, votes
 
 - [x] RLS: submissor não vê projetos de outras instituições
 - [x] RLS: votes não visíveis para não-admin
-- [~] State machine: transição inválida retorna erro — os 25 testes de `state-machine.test.ts` seguem verificando a constante `VALID_STAGE_TRANSITIONS`, não as actions; **P-2.8b** fechou a lacuna especificamente para as três actions de fechamento de votação (agora testadas contra o banco em `voting.test.ts`/`close-voting.test.ts`). Cobertura mais ampla de transição-inválida-via-action para as demais actions do módulo permanece **P-2.12b**.
-- [x] Votação: sem quórum → não aprova; com quórum + maioria → aprova — além do `computeQuorum` (função pura, mantida como documentação da fórmula), `close-voting.test.ts` agora verifica quórum/maioria/reprovação diretamente contra `closeVoting`/`triggerPanicButton` rodando pelo pipeline real (banco + RLS). **P-2.8b**
+- [x] State machine: transição inválida retorna erro — `state-machine.test.ts` cobria só a constante `VALID_STAGE_TRANSITIONS`; **P-2.8b** fechou a lacuna para as três actions de fechamento de votação (`voting.test.ts`/`close-voting.test.ts`); **P-2.12b** fechou a lacuna restante adicionando cobertura de `transitionProjectStage` (a action genérica de avanço de estágio) contra o mapa, chamada de fato pelo pipeline real — transição válida aplicada, transição inválida recusada, estágio terminal recusado mesmo para diretor.
+- [x] Votação: sem quórum → não aprova; com quórum + maioria → aprova — a fórmula pura vive em `apps/projetos/src/lib/vote-result.ts` (`computeVoteResult`/`computeMajority`), única definição no repositório, importada tanto por `actions/voting.ts` quanto pelos testes (nenhuma reimplementação local desde **P-2.12b**); `close-voting.test.ts` verifica quórum/maioria/reprovação diretamente contra `closeVoting`/`triggerPanicButton` rodando pelo pipeline real (banco + RLS). **P-2.8b**/**P-2.12b**
 - [x] Contestação: 3a tentativa por projeto retorna erro; 2a por pessoa retorna erro
 - [x] Orçamento: submissão que excede orçamento é bloqueada
 - [x] Fluxo end-to-end funciona — `flow.test.ts` cobre o caminho de aprovação; o caminho de reprovação agora tem cobertura própria nos três fechamentos de votação (`castVote`/`closeVoting`/`triggerPanicButton`, em `voting.test.ts`/`close-voting.test.ts`) e na resolução automática de homologação (`projetos-homologacao.test.ts`, packages/jobs). **P-2.8b**
@@ -4090,14 +4090,14 @@ Há ainda um produtor de in_app fora dos dois arquivos: `notifyHomologacao`, inl
 
 **Critérios de aceite:**
 
-- [ ] `grep -rn "notify" apps/projetos/src/actions packages/jobs/src/crons` mostra chamador para toda função exportada de `lib/notifications.ts` — ou a função foi removida
-- [ ] Nenhum `href` de notificação de projetos aponta para `/projetos/<id>`; os destinos existem como rota real
-- [ ] Todo in_app do módulo (inclusive `notifyHomologacao` e `notifyPendingEvaluations`) tem `payload.module` e `payload.href`
-- [ ] Falha de notificação não derruba a operação que a originou, e é logada
-- [ ] Existe um único caminho para o e-mail de pagamento realizado; a decisão está registrada em SESSIONS.md
-- [ ] Teste cobre: submissão gera notificação para super_admin, e o `href` gerado corresponde a uma rota existente
-- [ ] `pnpm --filter projetos typecheck lint test` verdes; `pnpm --filter jobs typecheck` verde
-- [ ] Registrar em SESSIONS.md
+- [x] `grep -rn "notify" apps/projetos/src/actions packages/jobs/src/crons` mostra chamador para toda função exportada de `lib/notifications.ts` — ou a função foi removida
+- [x] Nenhum `href` de notificação de projetos aponta para `/projetos/<id>`; os destinos existem como rota real
+- [x] Todo in_app do módulo (inclusive `notifyHomologacao` e `notifyPendingEvaluations`) tem `payload.module` e `payload.href`
+- [x] Falha de notificação não derruba a operação que a originou, e é logada
+- [x] Existe um único caminho para o e-mail de pagamento realizado; a decisão está registrada em SESSIONS.md
+- [x] Teste cobre: submissão gera notificação para super_admin, e o `href` gerado corresponde a uma rota existente
+- [x] `pnpm --filter projetos typecheck lint test` verdes; `pnpm --filter jobs typecheck` verde
+- [x] Registrar em SESSIONS.md
 
 **Notas:**
 Ref: BRAIN.md §6.2 (lista de notificações do módulo) e P-0.6c (regra do `payload.module`). Este prompt é o que transforma os `[x]` de P-2.10 em algo verificável na caixa de entrada; até aqui eles descreviam apenas a existência dos arquivos.
@@ -4136,13 +4136,13 @@ Este prompt executa por último no bloco porque os quatro anteriores mexem justa
 
 **Critérios de aceite:**
 
-- [ ] Nenhum arquivo de `__tests__` reimplementa lógica de produção; `grep -n "espelha\|mirror\|reimplementa"` na suíte volta vazio ou aponta só para comentários históricos
-- [ ] `computeVoteResult` tem uma única definição no repositório, importada pela action e pelos testes
-- [ ] Os critérios de votação de P-2.12 são sustentados por testes que chamam a action
-- [ ] Cobertura nova para: reprovação nos três caminhos, papel revogado no quórum, ciclo de relatório rejeitado, edição de rascunho
-- [ ] Espelhos remanescentes na suíte estão registrados em SESSIONS.md (convertidos ou justificados)
-- [ ] `pnpm --filter projetos typecheck lint test` verdes
-- [ ] Registrar em SESSIONS.md
+- [x] Nenhum arquivo de `__tests__` reimplementa lógica de produção; `grep -n "espelha\|mirror\|reimplementa"` na suíte volta vazio ou aponta só para comentários históricos — os hits remanescentes são documentais (ver SESSIONS.md)
+- [x] `computeVoteResult` tem uma única definição no repositório (`apps/projetos/src/lib/vote-result.ts`), importada pela action (`voting.ts`) e pelos testes (`voting.test.ts`)
+- [x] Os critérios de votação de P-2.12 são sustentados por testes que chamam a action (`castVote`/`closeVoting`/`triggerPanicButton`)
+- [x] Cobertura nova para: reprovação nos três caminhos, papel revogado no quórum, ciclo de relatório rejeitado, edição de rascunho — ver SESSIONS.md para onde cada um vive
+- [x] Espelhos remanescentes na suíte estão registrados em SESSIONS.md (convertidos ou justificados)
+- [x] `pnpm --filter projetos typecheck lint test` verdes
+- [x] Registrar em SESSIONS.md
 
 **Notas:**
 Ref: princípio "defense in depth" — um teste que não toca o código de produção não é uma camada de defesa, é a aparência de uma.

@@ -2,7 +2,9 @@
  * voting.test.ts — Votação de projetos
  *
  * Cobre:
- *  - Lógica de quórum e maioria (função pura que espelha voting.ts)
+ *  - Lógica de quórum e maioria — computeVoteResult/computeMajority
+ *    (lib/vote-result.ts), a mesma função importada por actions/voting.ts;
+ *    nenhuma reimplementação aqui (P-2.12b)
  *  - Botão de pânico (super_admin force-close)
  *  - Restrição DB: 1 voto por pessoa por projeto (UNIQUE constraint)
  *  - RLS: cédula secreta — apenas super_admin pode SELECT votos
@@ -32,6 +34,7 @@ import {
   auditLog,
 } from "@hebron/db/schema";
 import { deriveVoteState } from "../components/vote-panel-wrapper";
+import { computeVoteResult, computeMajority } from "../lib/vote-result";
 
 // castVote roda pelo pipeline real de Server Action (conselheiroDiretorAction)
 // — precisa de sessão mockada. Cada teste injeta o ator via
@@ -88,29 +91,6 @@ async function queryAs(userId: string, query: string): Promise<postgres.Row[]> {
   }
 
   return rows;
-}
-
-/**
- * Espelha computeVoteResult em voting.ts (lógica pura, sem acesso ao DB).
- * totalEligible: contagem de diretor + conselheiro no sistema
- */
-function computeQuorum(
-  totalEligible: number,
-  totalVoted: number,
-  inFavor: number,
-): { quorumMet: boolean; approved: boolean | null } {
-  const quorumMet = totalVoted >= Math.ceil(totalEligible / 2);
-  const against = totalVoted - inFavor;
-  const approved = quorumMet ? inFavor > against : null;
-  return { quorumMet, approved };
-}
-
-/**
- * Espelha a decisão do botão de pânico em voting.ts:
- * maioria entre votos existentes vence; empate resolve para reprovado.
- */
-function panicApproved(inFavor: number, against: number): boolean {
-  return inFavor > against;
 }
 
 // ── Setup / Teardown ──────────────────────────────────────────────────────────
@@ -271,59 +251,59 @@ afterAll(async () => {
 
 describe("Votação — Quórum: sem quórum → não aprova", () => {
   it("1 voto de 3 elegíveis → quorumMet=false, approved=null", () => {
-    const result = computeQuorum(3, 1, 1);
+    const result = computeVoteResult(3, 1, 1);
     expect(result.quorumMet).toBe(false);
     expect(result.approved).toBeNull();
   });
 
   it("0 votos de 4 elegíveis → quorumMet=false", () => {
-    const result = computeQuorum(4, 0, 0);
+    const result = computeVoteResult(4, 0, 0);
     expect(result.quorumMet).toBe(false);
     expect(result.approved).toBeNull();
   });
 
   it("quórum é ceil(elegíveis/2): 3 elegíveis → precisa de 2 votos (ceil(3/2)=2)", () => {
     expect(Math.ceil(3 / 2)).toBe(2);
-    const semQuorum = computeQuorum(3, 1, 1);
-    const comQuorum = computeQuorum(3, 2, 2);
+    const semQuorum = computeVoteResult(3, 1, 1);
+    const comQuorum = computeVoteResult(3, 2, 2);
     expect(semQuorum.quorumMet).toBe(false);
     expect(comQuorum.quorumMet).toBe(true);
   });
 
   it("4 elegíveis → precisa de 2 votos (ceil(4/2)=2)", () => {
     expect(Math.ceil(4 / 2)).toBe(2);
-    const comQuorum = computeQuorum(4, 2, 2);
+    const comQuorum = computeVoteResult(4, 2, 2);
     expect(comQuorum.quorumMet).toBe(true);
   });
 });
 
 describe("Votação — Quórum: com quórum + maioria → aprova", () => {
   it("todos votaram, maioria a favor → approved=true", () => {
-    const result = computeQuorum(2, 2, 2);
+    const result = computeVoteResult(2, 2, 2);
     expect(result.quorumMet).toBe(true);
     expect(result.approved).toBe(true);
   });
 
   it("quórum atingido, mais a favor do que contra → approved=true", () => {
-    const result = computeQuorum(4, 3, 2); // 2 a favor, 1 contra
+    const result = computeVoteResult(4, 3, 2); // 2 a favor, 1 contra
     expect(result.quorumMet).toBe(true);
     expect(result.approved).toBe(true);
   });
 
   it("quórum atingido, empate (1×1) → approved=false (não é maioria)", () => {
-    const result = computeQuorum(2, 2, 1); // 1 a favor, 1 contra
+    const result = computeVoteResult(2, 2, 1); // 1 a favor, 1 contra
     expect(result.quorumMet).toBe(true);
     expect(result.approved).toBe(false);
   });
 
   it("quórum atingido, maioria contra → approved=false", () => {
-    const result = computeQuorum(4, 4, 1); // 1 a favor, 3 contra
+    const result = computeVoteResult(4, 4, 1); // 1 a favor, 3 contra
     expect(result.quorumMet).toBe(true);
     expect(result.approved).toBe(false);
   });
 
   it("votação completa (todos votaram) → quórum garantido", () => {
-    const result = computeQuorum(4, 4, 3);
+    const result = computeVoteResult(4, 4, 3);
     expect(result.quorumMet).toBe(true);
     expect(result.approved).toBe(true);
   });
@@ -333,24 +313,24 @@ describe("Votação — Quórum: com quórum + maioria → aprova", () => {
 
 describe("Votação — Botão de pânico (force-close sem quórum)", () => {
   it("maioria a favor → aprovado", () => {
-    expect(panicApproved(3, 1)).toBe(true);
+    expect(computeMajority(3, 1)).toBe(true);
   });
 
   it("maioria contra → reprovado", () => {
-    expect(panicApproved(1, 3)).toBe(false);
+    expect(computeMajority(1, 3)).toBe(false);
   });
 
   it("empate → reprovado (padrão conservador: inFavor > against é false)", () => {
-    expect(panicApproved(2, 2)).toBe(false);
+    expect(computeMajority(2, 2)).toBe(false);
   });
 
   it("0 votos → reprovado (0 não é > 0)", () => {
-    expect(panicApproved(0, 0)).toBe(false);
+    expect(computeMajority(0, 0)).toBe(false);
   });
 
   it("pânico com quórum já atingido: maioria ainda decide", () => {
     // 4 elegíveis, 4 votos (quórum atingido), 3×1 → aprovado
-    expect(panicApproved(3, 1)).toBe(true);
+    expect(computeMajority(3, 1)).toBe(true);
   });
 });
 
