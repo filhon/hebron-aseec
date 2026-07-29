@@ -1,10 +1,12 @@
 ﻿"use client";
 
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAction } from "next-safe-action/hooks";
 import { useRouter } from "next/navigation";
-import { X, ChevronDown, AlertCircle } from "lucide-react";
+import { X, Paperclip, Upload, ChevronDown, AlertCircle } from "lucide-react";
+import { getSupabaseBrowserClient, getSession } from "@hebron/auth/client";
 import {
   createReceivableSchema,
   type CreateReceivableInput,
@@ -108,6 +110,9 @@ export function RevenueForm({
   onClose,
   onSuccess,
 }: RevenueFormProps) {
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const router = useRouter();
   const categoryOptions = buildCategoryOptions(categories, "receita");
 
@@ -133,8 +138,46 @@ export function RevenueForm({
     },
   });
 
-  function onSubmit(data: CreateReceivableInput) {
-    execute(data);
+  async function onSubmit(data: CreateReceivableInput) {
+    if (!attachmentFile) {
+      execute(data);
+      return;
+    }
+
+    setAttachmentError(null);
+    setIsUploadingAttachment(true);
+    try {
+      const { session } = await getSession();
+      if (!session) {
+        throw new Error(
+          "Sessão expirada. Atualize a página e tente novamente.",
+        );
+      }
+
+      const supabase = getSupabaseBrowserClient();
+      const ext = attachmentFile.name.split(".").pop() ?? "bin";
+      const path = `${session.user.id}/${crypto.randomUUID()}.${ext}`;
+
+      const { data: uploadData, error: storageError } = await supabase.storage
+        .from("financeiro-recibos")
+        .upload(path, attachmentFile, { contentType: attachmentFile.type });
+      if (storageError) throw new Error(storageError.message);
+
+      execute({
+        ...data,
+        attachment: {
+          path: uploadData.path,
+          fileName: attachmentFile.name,
+          fileSize: attachmentFile.size,
+        },
+      });
+    } catch (err) {
+      setAttachmentError(
+        err instanceof Error ? err.message : "Falha ao enviar o comprovante.",
+      );
+    } finally {
+      setIsUploadingAttachment(false);
+    }
   }
 
   return (
@@ -298,6 +341,64 @@ export function RevenueForm({
               </div>
             </div>
 
+            {/* Comprovante */}
+            <div>
+              <Label>Comprovante</Label>
+              <label
+                className="flex flex-col items-center justify-center gap-3 rounded-(--radius) border-2 border-dashed py-8 px-4 cursor-pointer transition-colors"
+                style={{
+                  borderColor: "var(--border-strong)",
+                  background: "var(--bg-alt)",
+                }}
+              >
+                <input
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  className="sr-only"
+                  onChange={(e) => {
+                    setAttachmentFile(e.target.files?.[0] ?? null);
+                    setAttachmentError(null);
+                  }}
+                />
+                {attachmentFile ? (
+                  <div
+                    className="flex items-center gap-2 text-sm font-semibold"
+                    style={{ color: "var(--hb-blue)" }}
+                  >
+                    <Paperclip className="h-4 w-4" />
+                    {attachmentFile.name}
+                  </div>
+                ) : (
+                  <>
+                    <span
+                      className="flex items-center justify-center w-12 h-12 rounded-full"
+                      style={{
+                        background: "var(--hb-blue)",
+                        color: "var(--fg-invert)",
+                      }}
+                    >
+                      <Upload className="h-5 w-5" />
+                    </span>
+                    <div className="text-center">
+                      <p
+                        className="text-sm font-semibold"
+                        style={{ color: "var(--fg)" }}
+                      >
+                        Arraste ou clique para selecionar
+                      </p>
+                      <p
+                        className="text-xs mt-1"
+                        style={{ color: "var(--fg-muted)" }}
+                      >
+                        PDF, JPG ou PNG · até 10 MB
+                      </p>
+                    </div>
+                  </>
+                )}
+              </label>
+              <FieldError message={attachmentError ?? undefined} />
+            </div>
+
             {/* Observações */}
             <div>
               <Label>Observações</Label>
@@ -352,11 +453,15 @@ export function RevenueForm({
           <button
             type="submit"
             form="revenue-form"
-            disabled={isSubmitting || isPending}
+            disabled={isSubmitting || isPending || isUploadingAttachment}
             className="px-5 py-2.5 rounded-(--radius) text-sm font-semibold transition-colors disabled:opacity-60"
             style={{ background: "var(--hb-green)", color: "var(--hb-blue)" }}
           >
-            {isSubmitting || isPending ? "Salvando…" : "Registrar receita"}
+            {isUploadingAttachment
+              ? "Enviando comprovante…"
+              : isSubmitting || isPending
+                ? "Salvando…"
+                : "Registrar receita"}
           </button>
         </div>
       </div>

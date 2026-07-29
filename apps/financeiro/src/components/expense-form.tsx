@@ -6,6 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useAction } from "next-safe-action/hooks";
 import { useRouter } from "next/navigation";
 import { X, Paperclip, Upload, ChevronDown, AlertCircle } from "lucide-react";
+import { getSupabaseBrowserClient, getSession } from "@hebron/auth/client";
 import {
   createPayableSchema,
   type CreatePayableInput,
@@ -114,7 +115,9 @@ export function ExpenseForm({
   onClose,
   onSuccess,
 }: ExpenseFormProps) {
-  const [attachmentName, setAttachmentName] = useState<string | null>(null);
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const router = useRouter();
 
   const categoryOptions = buildCategoryOptions(categories, "despesa");
@@ -141,8 +144,46 @@ export function ExpenseForm({
     },
   });
 
-  function onSubmit(data: CreatePayableInput) {
-    execute(data);
+  async function onSubmit(data: CreatePayableInput) {
+    if (!attachmentFile) {
+      execute(data);
+      return;
+    }
+
+    setAttachmentError(null);
+    setIsUploadingAttachment(true);
+    try {
+      const { session } = await getSession();
+      if (!session) {
+        throw new Error(
+          "Sessão expirada. Atualize a página e tente novamente.",
+        );
+      }
+
+      const supabase = getSupabaseBrowserClient();
+      const ext = attachmentFile.name.split(".").pop() ?? "bin";
+      const path = `${session.user.id}/${crypto.randomUUID()}.${ext}`;
+
+      const { data: uploadData, error: storageError } = await supabase.storage
+        .from("financeiro-recibos")
+        .upload(path, attachmentFile, { contentType: attachmentFile.type });
+      if (storageError) throw new Error(storageError.message);
+
+      execute({
+        ...data,
+        attachment: {
+          path: uploadData.path,
+          fileName: attachmentFile.name,
+          fileSize: attachmentFile.size,
+        },
+      });
+    } catch (err) {
+      setAttachmentError(
+        err instanceof Error ? err.message : "Falha ao enviar o comprovante.",
+      );
+    } finally {
+      setIsUploadingAttachment(false);
+    }
   }
 
   return (
@@ -294,17 +335,18 @@ export function ExpenseForm({
                   type="file"
                   accept=".pdf,.jpg,.jpeg,.png"
                   className="sr-only"
-                  onChange={(e) =>
-                    setAttachmentName(e.target.files?.[0]?.name ?? null)
-                  }
+                  onChange={(e) => {
+                    setAttachmentFile(e.target.files?.[0] ?? null);
+                    setAttachmentError(null);
+                  }}
                 />
-                {attachmentName ? (
+                {attachmentFile ? (
                   <div
                     className="flex items-center gap-2 text-sm font-semibold"
                     style={{ color: "var(--hb-blue)" }}
                   >
                     <Paperclip className="h-4 w-4" />
-                    {attachmentName}
+                    {attachmentFile.name}
                   </div>
                 ) : (
                   <>
@@ -334,6 +376,7 @@ export function ExpenseForm({
                   </>
                 )}
               </label>
+              <FieldError message={attachmentError ?? undefined} />
             </div>
 
             {/* Observações */}
@@ -375,11 +418,15 @@ export function ExpenseForm({
           <button
             type="submit"
             form="expense-form"
-            disabled={isSubmitting || isPending}
+            disabled={isSubmitting || isPending || isUploadingAttachment}
             className="px-5 py-2.5 rounded-(--radius) text-sm font-semibold transition-colors disabled:opacity-60"
             style={{ background: "var(--hb-blue)", color: "var(--fg-invert)" }}
           >
-            {isSubmitting || isPending ? "Salvando…" : "Registrar despesa"}
+            {isUploadingAttachment
+              ? "Enviando comprovante…"
+              : isSubmitting || isPending
+                ? "Salvando…"
+                : "Registrar despesa"}
           </button>
         </div>
       </div>

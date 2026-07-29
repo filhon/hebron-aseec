@@ -11,6 +11,7 @@ import {
   receivables,
   transactions,
   transactionReversals,
+  financialAttachments,
 } from "@hebron/db/schema";
 import {
   createPayableSchema,
@@ -64,6 +65,28 @@ export const createPayable = colaboradorAction
           .returning();
         if (!row) throw new Error("Falha ao criar conta a pagar");
 
+        // Comprovante já foi enviado ao bucket financeiro-recibos pelo
+        // formulário antes do submit — aqui só gravamos a referência. Mesma
+        // transação/audit da criação do payable: a linha em attachments só
+        // existe se o payable existir, e vice-versa (P-3.4b).
+        let attachmentId: string | null = null;
+        if (input.attachment) {
+          const [attachmentRow] = await tx
+            .insert(financialAttachments)
+            .values({
+              refType: "payable",
+              refId: row.id,
+              fileUrl: input.attachment.path,
+              fileName: input.attachment.fileName,
+              fileSize: input.attachment.fileSize,
+              uploadedBy: ctx.actorId,
+            })
+            .returning();
+          if (!attachmentRow)
+            throw new Error("Falha ao registrar o comprovante");
+          attachmentId = attachmentRow.id;
+        }
+
         await withSystemRole(tx, (sysTx) =>
           logFinanceiroAudit(
             {
@@ -77,6 +100,7 @@ export const createPayable = colaboradorAction
                 dueDate: row.dueDate,
                 supplier: row.supplier,
                 status: "pendente",
+                ...(attachmentId ? { attachmentId } : {}),
               },
             },
             sysTx,
@@ -172,6 +196,26 @@ export const createReceivable = colaboradorAction
           .returning();
         if (!row) throw new Error("Falha ao criar conta a receber");
 
+        // Mesmo padrão de createPayable: comprovante já está no bucket, só
+        // gravamos a referência na mesma transação/audit da criação.
+        let attachmentId: string | null = null;
+        if (input.attachment) {
+          const [attachmentRow] = await tx
+            .insert(financialAttachments)
+            .values({
+              refType: "receivable",
+              refId: row.id,
+              fileUrl: input.attachment.path,
+              fileName: input.attachment.fileName,
+              fileSize: input.attachment.fileSize,
+              uploadedBy: ctx.actorId,
+            })
+            .returning();
+          if (!attachmentRow)
+            throw new Error("Falha ao registrar o comprovante");
+          attachmentId = attachmentRow.id;
+        }
+
         await withSystemRole(tx, (sysTx) =>
           logFinanceiroAudit(
             {
@@ -184,6 +228,7 @@ export const createReceivable = colaboradorAction
                 amount: row.amount,
                 expectedDate: row.expectedDate,
                 status: "pendente",
+                ...(attachmentId ? { attachmentId } : {}),
               },
             },
             sysTx,

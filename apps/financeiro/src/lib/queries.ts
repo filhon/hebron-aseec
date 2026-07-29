@@ -24,6 +24,7 @@ import {
   bankImportRows,
   batchApprovals,
   batchApprovalItems,
+  financialAttachments,
   users,
 } from "@hebron/db/schema";
 import type {
@@ -35,6 +36,7 @@ import type {
   Transaction,
   BankImport,
   BankImportItem,
+  Attachment,
 } from "@hebron/types/financeiro";
 
 // ---------------------------------------------------------------------------
@@ -257,6 +259,44 @@ export async function getTransactions(): Promise<Transaction[]> {
 }
 
 // ---------------------------------------------------------------------------
+// financialAttachments (DB) → Attachment (packages/types) — mapeamento entre
+// as colunas polimórficas (ref_type/ref_id/file_url/file_size) e a interface
+// já publicada em @hebron/types/financeiro. mime_type não é persistido (a
+// tabela não tem essa coluna) — derivado da extensão do arquivo.
+// ---------------------------------------------------------------------------
+
+function mimeFromFileName(fileName: string): string {
+  const ext = fileName.split(".").pop()?.toLowerCase();
+  switch (ext) {
+    case "pdf":
+      return "application/pdf";
+    case "jpg":
+    case "jpeg":
+      return "image/jpeg";
+    case "png":
+      return "image/png";
+    default:
+      return "application/octet-stream";
+  }
+}
+
+function toAttachment(
+  row: typeof financialAttachments.$inferSelect,
+): Attachment {
+  return {
+    id: row.id,
+    parentType: row.refType,
+    parentId: row.refId,
+    storageKey: row.fileUrl,
+    fileName: row.fileName,
+    fileSizeBytes: row.fileSize ?? 0,
+    mimeType: mimeFromFileName(row.fileName),
+    uploadedBy: row.uploadedBy,
+    uploadedAt: row.createdAt,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Payables — junta nomes de aprovador/autorizador, o lote (se houver) e a
 // transação de pagamento. cancellationReason/cancelledBy não são persistidos
 // pela action cancelPayable (só vão para o audit log) — permanecem null aqui.
@@ -266,7 +306,7 @@ export async function getPayables(): Promise<Payable[]> {
   const actorId = await getActorId();
   const usersMap = await getUsersMap();
 
-  const { rows, ccRows, batchItemRows, paidTxRows } =
+  const { rows, ccRows, batchItemRows, paidTxRows, attachmentRows } =
     await withAuthenticatedContext({ actorId }, async (tx) => {
       const rows = await tx.select().from(payables);
 
@@ -281,7 +321,12 @@ export async function getPayables(): Promise<Payable[]> {
         .from(transactions)
         .where(eq(transactions.referenceType, "payable"));
 
-      return { rows, ccRows, batchItemRows, paidTxRows };
+      const attachmentRows = await tx
+        .select()
+        .from(financialAttachments)
+        .where(eq(financialAttachments.refType, "payable"));
+
+      return { rows, ccRows, batchItemRows, paidTxRows, attachmentRows };
     });
 
   const projectByCc = new Map(ccRows.map((c) => [c.id, c.projectId]));
@@ -295,6 +340,13 @@ export async function getPayables(): Promise<Payable[]> {
       .filter((r) => r.referenceId !== null)
       .map((r) => [r.referenceId as string, r.id]),
   );
+
+  const attachmentsByPayable = new Map<string, Attachment[]>();
+  for (const row of attachmentRows) {
+    const list = attachmentsByPayable.get(row.refId) ?? [];
+    list.push(toAttachment(row));
+    attachmentsByPayable.set(row.refId, list);
+  }
 
   return rows.map((p) => ({
     id: p.id,
@@ -310,7 +362,7 @@ export async function getPayables(): Promise<Payable[]> {
       ? (projectByCc.get(p.costCenterId) ?? null)
       : null,
     batchApprovalId: batchByPayable.get(p.id) ?? null,
-    attachments: [],
+    attachments: attachmentsByPayable.get(p.id) ?? [],
     approvedBy: p.approvedBy,
     approvedByName: p.approvedBy ? (usersMap.get(p.approvedBy) ?? null) : null,
     approvedAt: p.approvedAt,

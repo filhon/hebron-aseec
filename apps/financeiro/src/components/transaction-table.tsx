@@ -15,7 +15,9 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Plus,
+  Paperclip,
 } from "lucide-react";
+import { useAction } from "next-safe-action/hooks";
 import type {
   Transaction,
   AccountCategory,
@@ -27,6 +29,7 @@ import { csvField, downloadCsv } from "../lib/export-csv";
 import { ExpenseForm } from "./expense-form";
 import { RevenueForm } from "./revenue-form";
 import { ReversalForm } from "./reversal-form";
+import { getAttachmentUrl } from "../actions/attachments";
 
 interface TransactionTableProps {
   transactions: Transaction[];
@@ -87,6 +90,20 @@ export function TransactionTable({
   );
   const [newMenuOpen, setNewMenuOpen] = useState(false);
   const [openRowMenu, setOpenRowMenu] = useState<string | null>(null);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const { execute: openAttachment, isPending: isOpeningAttachment } = useAction(
+    getAttachmentUrl,
+    {
+      onSuccess({ data }) {
+        if (data?.url) window.open(data.url, "_blank", "noopener,noreferrer");
+      },
+      onError({ error }) {
+        setAttachmentError(
+          error.serverError ?? "Não foi possível abrir o comprovante.",
+        );
+      },
+    },
+  );
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | TransactionType>("all");
   const [accountFilter, setAccountFilter] = useState("all");
@@ -260,6 +277,17 @@ export function TransactionTable({
   return (
     <>
       <div className="rounded-(--radius) border border-(--border) bg-(--surface) overflow-hidden">
+        {attachmentError && (
+          <div className="flex items-center justify-between gap-3 px-4 py-2 border-b border-(--border) bg-(--color-destructive-muted) text-xs font-medium text-(--color-destructive)">
+            {attachmentError}
+            <button
+              onClick={() => setAttachmentError(null)}
+              className="shrink-0 hover:opacity-70"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          </div>
+        )}
         {/* ── Toolbar ─────────────────────────────────────────────────────────────── */}
         <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-(--border)">
           {/* Search */}
@@ -589,6 +617,14 @@ export function TransactionTable({
                 const isCredit = t.type === "credito";
                 const isReconciled = !!t.reconciledAt;
                 const isReversible = !t.isReversed && t.reversalOf === null;
+                const attachmentRef: {
+                  refType: "payable" | "receivable";
+                  refId: string;
+                } | null = t.payableId
+                  ? { refType: "payable", refId: t.payableId }
+                  : t.receivableId
+                    ? { refType: "receivable", refId: t.receivableId }
+                    : null;
 
                 return (
                   <tr
@@ -656,7 +692,7 @@ export function TransactionTable({
                     </td>
 
                     <td className="px-3 py-3.5 border-b border-(--divider)">
-                      {isReversible && (
+                      {(isReversible || attachmentRef) && (
                         <div className="relative inline-block">
                           <button
                             onClick={() =>
@@ -681,17 +717,33 @@ export function TransactionTable({
                                 boxShadow: "0 4px 20px rgba(0,0,0,0.12)",
                               }}
                             >
-                              <button
-                                onClick={() => {
-                                  setReversalTxId(t.id);
-                                  setFormMode("estorno");
-                                  setOpenRowMenu(null);
-                                }}
-                                className="flex items-center gap-2 w-full text-left px-4 py-2.5 text-sm font-semibold text-(--fg) hover:bg-(--surface-alt) transition-colors"
-                              >
-                                <RotateCcw className="h-3.5 w-3.5 text-(--fg-muted)" />
-                                Estornar lançamento
-                              </button>
+                              {attachmentRef && (
+                                <button
+                                  onClick={() => {
+                                    setAttachmentError(null);
+                                    openAttachment(attachmentRef);
+                                    setOpenRowMenu(null);
+                                  }}
+                                  disabled={isOpeningAttachment}
+                                  className="flex items-center gap-2 w-full text-left px-4 py-2.5 text-sm font-semibold text-(--fg) hover:bg-(--surface-alt) transition-colors disabled:opacity-60"
+                                >
+                                  <Paperclip className="h-3.5 w-3.5 text-(--fg-muted)" />
+                                  Ver comprovante
+                                </button>
+                              )}
+                              {isReversible && (
+                                <button
+                                  onClick={() => {
+                                    setReversalTxId(t.id);
+                                    setFormMode("estorno");
+                                    setOpenRowMenu(null);
+                                  }}
+                                  className="flex items-center gap-2 w-full text-left px-4 py-2.5 text-sm font-semibold text-(--fg) hover:bg-(--surface-alt) transition-colors"
+                                >
+                                  <RotateCcw className="h-3.5 w-3.5 text-(--fg-muted)" />
+                                  Estornar lançamento
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>

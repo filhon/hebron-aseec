@@ -29,6 +29,18 @@ const receivableStatusEnum = z.enum([
 
 const transactionTypeEnum = z.enum(["credito", "debito"]);
 
+// ─── attachmentInputSchema ────────────────────────────────────────────────────
+// Comprovante já enviado ao bucket financeiro-recibos pelo formulário antes do
+// submit; a action só grava a referência (path retornado pelo Storage).
+
+const attachmentInputSchema = z.object({
+  path: z.string().min(1, "Caminho do arquivo inválido"),
+  fileName: z.string().min(1, "Nome do arquivo inválido").max(255),
+  fileSize: z.number().int().positive().nullable().optional().default(null),
+});
+
+export type AttachmentInput = z.infer<typeof attachmentInputSchema>;
+
 // ─── createPayableSchema ──────────────────────────────────────────────────────
 // Validates the creation of a new payable. Governance fields (approvedBy,
 // authorizedBy) are set by separate action handlers, never on creation.
@@ -61,6 +73,7 @@ export const createPayableSchema = z.object({
     .nullable()
     .optional()
     .default(null),
+  attachment: attachmentInputSchema.nullable().optional().default(null),
 });
 
 export type CreatePayableInput = z.infer<typeof createPayableSchema>;
@@ -120,6 +133,7 @@ export const createReceivableSchema = z.object({
     .optional()
     .default(null),
   notes: z.string().max(1000).nullable().optional().default(null),
+  attachment: attachmentInputSchema.nullable().optional().default(null),
 });
 
 export type CreateReceivableInput = z.infer<typeof createReceivableSchema>;

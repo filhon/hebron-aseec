@@ -4374,7 +4374,7 @@ Formulários: nova despesa (valor, data, categoria, centro de custo, descrição
 
 **Critérios de aceite:**
 
-- [x] Despesa: categorização via plano de contas (dropdown hierárquico), upload de comprovante
+- [x] Despesa: categorização via plano de contas (dropdown hierárquico), upload de comprovante (upload real ao bucket `financeiro-recibos` + persistência em `financeiro.attachments` entregues em P-3.4b, S-212 — o `[x]` original só cobria o nome do arquivo em estado local, nunca o upload)
 - [x] Estorno: seleciona transação original, justificativa obrigatória, valor preenchido automaticamente
 - [x] Aprovação de lote: lista de payables com checkbox individual + aprovar todos
 - [x] Import OFX/CSV: upload → preview tabular → mapear colunas → confirmar
@@ -4865,15 +4865,15 @@ O padrão de upload já existe **dentro do mesmo app**: `import-wizard.tsx:165-1
 
 **Critérios de aceite:**
 
-- [ ] `grep -rn "financialAttachments" apps/financeiro/src` mostra pelo menos um INSERT — hoje só há SELECT, em `reports.ts`
-- [ ] Despesa com comprovante: arquivo no bucket `financeiro-recibos` **e** linha em `financeiro.attachments` apontando para ele
-- [ ] Receita com recibo: mesmo comportamento, `ref_type = 'receivable'`
-- [ ] Nenhuma linha em `attachments` sem objeto correspondente no Storage
-- [ ] O comprovante pode ser aberto a partir da tela, por signed URL com expiração
-- [ ] Falha de upload não cria o payable em silêncio: ou o usuário vê o erro, ou o registro é criado com a ausência do anexo explícita na tela
-- [ ] `exportMonthlyReport` de um mês com comprovante devolve ZIP contendo o recibo; audit `financeiro.report.exported` com `receiptCount` real
-- [ ] `pnpm --filter @hebron/financeiro typecheck lint test` verdes; `pnpm --filter @hebron/financeiro build` verde
-- [ ] Registrar em SESSIONS.md
+- [x] `grep -rn "financialAttachments" apps/financeiro/src` mostra pelo menos um INSERT — hoje só há SELECT, em `reports.ts`
+- [x] Despesa com comprovante: arquivo no bucket `financeiro-recibos` **e** linha em `financeiro.attachments` apontando para ele
+- [x] Receita com recibo: mesmo comportamento, `ref_type = 'receivable'`
+- [x] Nenhuma linha em `attachments` sem objeto correspondente no Storage
+- [x] O comprovante pode ser aberto a partir da tela, por signed URL com expiração
+- [x] Falha de upload não cria o payable em silêncio: ou o usuário vê o erro, ou o registro é criado com a ausência do anexo explícita na tela
+- [x] `exportMonthlyReport` de um mês com comprovante devolve ZIP contendo o recibo; audit `financeiro.report.exported` com `receiptCount` real
+- [x] `pnpm --filter @hebron/financeiro typecheck lint test` verdes; `pnpm --filter @hebron/financeiro build` verde
+- [x] Registrar em SESSIONS.md
 
 **Notas:**
 Ref: BRAIN.md §5 (bucket `financeiro-recibos`, path `{uploaded_by}/{uuid}.{ext}`, retenção de 5 anos) e §6.5. Este é o corretivo de maior consequência do bloco: prestação de contas de ONG sem comprovante anexado não é uma tela incompleta, é um problema de conformidade — e o ZIP mensal que a diretoria recebe hoje já sai sem eles.

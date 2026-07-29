@@ -1,7 +1,10 @@
 ﻿"use client";
 
-import { Calendar, Link2, Check } from "lucide-react";
+import { useState } from "react";
+import { Calendar, Link2, Check, Paperclip } from "lucide-react";
+import { useAction } from "next-safe-action/hooks";
 import type { Payable } from "@hebron/types/financeiro";
+import { getAttachmentUrl } from "../actions/attachments";
 
 interface PayableCardProps {
   payable: Payable;
@@ -93,6 +96,22 @@ const STATUS_ORDER = [
 ];
 
 export function PayableCard({ payable, onAction }: PayableCardProps) {
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const { execute: openAttachment, isPending: isOpeningAttachment } = useAction(
+    getAttachmentUrl,
+    {
+      onSuccess({ data }) {
+        if (data?.url) window.open(data.url, "_blank", "noopener,noreferrer");
+      },
+      onError({ error }) {
+        setAttachmentError(
+          error.serverError ?? "Não foi possível abrir o comprovante.",
+        );
+      },
+    },
+  );
+
+  const firstAttachment = payable.attachments[0];
   const dueStatus = getDueStatus(payable.dueAt);
   const cfg = DUE_CONFIG[dueStatus];
   const diffDays = Math.ceil(
@@ -235,6 +254,27 @@ export function PayableCard({ payable, onAction }: PayableCardProps) {
           <p className="text-xs text-(--fg-muted) italic border-t border-(--divider) pt-2">
             {payable.notes}
           </p>
+        )}
+
+        {/* Comprovante */}
+        {firstAttachment && (
+          <div className="mt-3 pt-3 border-t border-(--divider)">
+            <button
+              onClick={() =>
+                openAttachment({ attachmentId: firstAttachment.id })
+              }
+              disabled={isOpeningAttachment}
+              className="flex items-center gap-1.5 text-xs font-semibold text-(--hb-blue) hover:underline disabled:opacity-60"
+            >
+              <Paperclip className="h-3 w-3" />
+              {isOpeningAttachment ? "Abrindo…" : "Ver comprovante"}
+            </button>
+            {attachmentError && (
+              <p className="text-xs text-(--color-destructive) mt-1">
+                {attachmentError}
+              </p>
+            )}
+          </div>
         )}
 
         {/* Action button */}

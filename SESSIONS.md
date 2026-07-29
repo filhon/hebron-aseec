@@ -232,6 +232,7 @@
 | S-209  | 2026-07-29 | P-0.5d — A navegação que recarrega a página inteira a cada clique (CORRETIVO)                                                    | concluido                            |
 | S-210  | 2026-07-29 | P-3.2b — Sete botões que não fazem nada e um CSV com extensão de Excel (CORRETIVO)                                               | concluido                            |
 | S-211  | 2026-07-29 | P-3.3b — O plano de contas que esconde a categoria recém-criada (CORRETIVO)                                                      | concluido                            |
+| S-212  | 2026-07-29 | P-3.4b — O comprovante que a tela pede e o sistema descarta (CORRETIVO)                                                          | concluido                            |
 
 ---
 
@@ -18378,3 +18379,130 @@ antes quanto depois deste diff, mesmo rodado isoladamente — drift de dados
 com id fixo no banco de dev compartilhado, mesma classe documentada em
 [[project_projetos_schema_grant_drift]] e
 [[project_system_actor_test_drift]]. Arquivo não tocado por este prompt.
+
+## S-212 — P-3.4b — O comprovante que a tela pede e o sistema descarta (CORRETIVO)
+
+**Branch:** `feat/P-3.4b-financeiro-comprovantes`
+
+### Contexto
+
+O critério de P-3.4 "upload de comprovante" estava `[x]`, mas
+`expense-form.tsx` só guardava o **nome** do arquivo selecionado num
+`useState<string | null>` — o `File` nunca era lido, nunca subia a lugar
+nenhum, e `createPayable` não tinha campo para recebê-lo. `RevenueForm` não
+tinha nem a área de upload, apesar do escopo original dizer "mesma
+estrutura". Do outro lado, toda a infraestrutura já existia ociosa desde
+migrations anteriores: `financeiro.attachments` (ref polimórfico), o bucket
+`financeiro-recibos` com policies completas, e `exportMonthlyReport` já
+**lendo** anexos que nunca existiam — o ZIP mensal de prestação de contas
+saía sem recibo nenhum e o audit gravava `receiptCount: 0` todo mês.
+
+### Decisões
+
+1. **Upload real, seguindo o padrão de `import-wizard.tsx`:** ambos os
+   formulários agora fazem `supabase.storage.from("financeiro-recibos")
+.upload(path, file)` no client, no submit, com `path =
+{uploaded_by}/{uuid}.{ext}` (convenção do BRAIN §5 / migration `0020`).
+   O `uploaded_by` vem de `getSession()` (`@hebron/auth/client`) — não havia
+   prop de usuário atual nos dois formulários, e adicionar uma quebraria os
+   outros três lugares que os renderizam (`contas-pagar-view.tsx`,
+   `receivables-view.tsx`, `dashboard-quick-actions.tsx`, nenhum na lista de
+   arquivos permitidos deste prompt).
+2. **Persistência atômica:** `createPayable`/`createReceivable` ganharam um
+   campo `attachment` opcional (`packages/validators`) com `path`,
+   `fileName`, `fileSize` — a action insere em `financeiro.attachments`
+   (`ref_type`/`ref_id` = o payable/receivable recém-criado) **dentro da
+   mesma `withAuthenticatedContext`** e inclui `attachmentId` no diff do
+   mesmo audit de criação, exatamente como o escopo pedia ("o anexo não é
+   uma mutação à parte"). Sem anexo, nenhuma linha é criada — verificado
+   por teste (regressão do bug original, que sempre "criava" um anexo fantasma
+   só visualmente).
+3. **Leitura:** `actions/attachments.ts` (novo) — `getAttachmentUrl` aceita
+   `{attachmentId}` OU `{refType, refId}`, resolve o registro mais recente
+   e devolve uma signed URL de 5 minutos (`createSignedUrl`, expiração
+   curta pedida no escopo). Gate `colaboradorAction`, o mesmo trio
+   (colaborador/diretor/super_admin) da RLS `attachments_select_staff`.
+4. **`queries.ts#getPayables`** para de devolver `attachments: []`
+   hardcoded — agora busca `financialAttachments` (`ref_type = 'payable'`)
+   e popula o campo de verdade, mapeando as colunas do banco
+   (`file_url`/`file_size`) para o shape já publicado em
+   `Attachment` (`packages/types`, fora da lista de arquivos permitidos —
+   `mimeType` é derivado da extensão do nome do arquivo, já que a tabela
+   não persiste isso).
+5. **Acesso na tela:** `PayableCard` mostra "Ver comprovante" quando
+   `payable.attachments` não está vazio (dado real vindo de `getPayables`,
+   não mais um placeholder) e chama `getAttachmentUrl({attachmentId})`.
+   `TransactionTable` não tem esse dado pré-carregado (o `Transaction` de
+   `packages/types` não tem campo de anexo, e a página que monta a tabela
+   não está nos arquivos permitidos) — o item "Ver comprovante" do menu
+   "…" aparece sempre que a transação referencia um payable/receivable
+   (`t.payableId`/`t.receivableId`) e resolve sob demanda via
+   `{refType, refId}`; se não houver anexo, o erro do servidor
+   ("Nenhum comprovante anexado a este registro") aparece numa faixa
+   dispensável no topo da tabela, em vez de falhar em silêncio.
+6. **Recibo de receita ainda sem tela própria antes do recebimento:** não
+   existe um card de contas-a-receber na lista de arquivos permitidos deste
+   prompt (só `payable-card.tsx` e `transaction-table.tsx` foram
+   autorizados para "acesso ao comprovante") — um recibo de doação anexado
+   numa receita `pendente` só fica visível depois que ela é marcada como
+   recebida (`markReceivableReceived` cria a transação com `receivableId`,
+   que o `TransactionTable` já cobre). Suposição registrada aqui em vez de
+   tocar `receivables-view.tsx`, fora de escopo.
+7. **`exportMonthlyReport` (reports.ts) não precisou de nenhuma mudança:**
+   a query que junta `financialAttachments` por `payable`/`receivable`
+   pago/recebido no mês já existia (lendo um caminho que nunca tinha nada
+   para ler) — bastou o lado da escrita passar a existir.
+8. **Bookkeeping em PROMPTS.md:** critério de P-3.4 (linha ~4377) anotado —
+   o `[x]` original só cobria o nome do arquivo em estado local, nunca o
+   upload; permanece `[x]` porque agora é verdade de fato.
+
+### Escopo entregue
+
+1. `packages/validators/src/financeiro/index.ts`: `attachmentInputSchema`
+   (`path`, `fileName`, `fileSize`) e campo `attachment` opcional em
+   `createPayableSchema`/`createReceivableSchema`.
+2. `apps/financeiro/src/actions/transactions.ts`: `createPayable` e
+   `createReceivable` inserem em `financialAttachments` na mesma
+   transação/audit quando `input.attachment` está presente.
+3. `apps/financeiro/src/actions/attachments.ts` (novo): `getAttachmentUrl`.
+4. `apps/financeiro/src/lib/queries.ts`: `getPayables` popula
+   `attachments` de verdade (helper `toAttachment`/`mimeFromFileName`).
+5. `apps/financeiro/src/components/expense-form.tsx` e `revenue-form.tsx`:
+   upload real ao bucket antes do submit, estado de envio/erro, botão
+   reflete "Enviando comprovante…"; `RevenueForm` ganhou a área de anexo
+   que não existia.
+6. `apps/financeiro/src/components/payable-card.tsx`: "Ver comprovante".
+7. `apps/financeiro/src/components/transaction-table.tsx`: item "Ver
+   comprovante" no menu "…", condicionado a `payableId`/`receivableId`.
+8. `apps/financeiro/src/__tests__/attachments.test.ts` (novo): 6 testes —
+   `createPayable`/`createReceivable` com anexo grava a linha certa (e sem
+   anexo não grava nenhuma); `getAttachmentUrl` resolve a signed URL
+   mockada e erra claro sem anexo; `exportMonthlyReport` de um mês com um
+   payable pago e anexado devolve um ZIP contendo `recibos/<nome>` e um
+   audit com `receiptCount > 0`. `@supabase/supabase-js` mockado (mesmo
+   padrão de `apps/documentos` e `apps/tarefas`) — nenhuma chamada real a
+   Storage.
+9. `PROMPTS.md`: critério de P-3.4 anotado.
+
+### Critérios de aceite
+
+- [x] `grep -rn "financialAttachments" apps/financeiro/src` mostra INSERT
+      (`transactions.ts`) além do SELECT pré-existente (`reports.ts`)
+- [x] Despesa com comprovante: arquivo no bucket + linha em `attachments`
+      (upload real via client, verificado por teste no lado da persistência)
+- [x] Receita com recibo: mesmo comportamento, `ref_type = 'receivable'`
+- [x] Nenhuma linha em `attachments` sem objeto correspondente no Storage —
+      a action só recebe `attachment.path` depois do upload já ter
+      retornado sucesso; nunca fabrica um path
+- [x] Comprovante pode ser aberto a partir da tela por signed URL
+      (`PayableCard`/`TransactionTable` → `getAttachmentUrl`, 5 min)
+- [x] Falha de upload não cria o payable em silêncio: erro fica visível no
+      formulário (`attachmentError`) e o submit da action nem é chamado
+- [x] `exportMonthlyReport` de um mês com comprovante devolve ZIP com o
+      recibo e audit com `receiptCount` real — coberto por teste
+- [x] `pnpm --filter @hebron/financeiro typecheck lint test build` verdes
+      (test: 56/57 — a falha isolada em `designation-governance.test.ts >
+    createWeeklyBatch` é a mesma drift pré-existente do dev DB
+      compartilhado documentada em S-211/[[project_projetos_schema_grant_drift]],
+      não relacionada a este diff)
+- [x] Registrado em SESSIONS.md
