@@ -231,6 +231,7 @@
 | S-208  | 2026-07-29 | P-2.12b — O teste que examina a cópia em vez do original (CORRETIVO)                                                             | concluido                            |
 | S-209  | 2026-07-29 | P-0.5d — A navegação que recarrega a página inteira a cada clique (CORRETIVO)                                                    | concluido                            |
 | S-210  | 2026-07-29 | P-3.2b — Sete botões que não fazem nada e um CSV com extensão de Excel (CORRETIVO)                                               | concluido                            |
+| S-211  | 2026-07-29 | P-3.3b — O plano de contas que esconde a categoria recém-criada (CORRETIVO)                                                      | concluido                            |
 
 ---
 
@@ -18168,7 +18169,7 @@ turbo lint` — confirmado experimentalmente antes do ajuste. Fix:
 - [x] Nenhuma dependência de `next` em `packages/ui/package.json`
 - [x] `pnpm turbo build` verde (com `--concurrency=3`, ver decisão 8);
       `pnpm turbo lint typecheck` verdes (concorrência padrão); `pnpm turbo
-  test` verde nos pacotes tocados por este diff, isolando falhas
+test` verde nos pacotes tocados por este diff, isolando falhas
       pré-existentes não relacionadas (decisão 8)
 - [x] Registrado em SESSIONS.md — decisão do item 5 (guarda ligada, não
       recusada) e débito da S-48 liquidado
@@ -18283,3 +18284,97 @@ afordância sem função.
       [[project_system_actor_test_drift]]; reproduzida em isolamento antes
       e depois deste diff, arquivo não tocado por nenhuma das mudanças
 - [x] Registrado em SESSIONS.md — saída do item 1 e destino dos sete botões
+
+## S-211 — P-3.3b — O plano de contas que esconde a categoria recém-criada (CORRETIVO)
+
+**Branch:** `feat/P-3.2b-financeiro-afordancias`
+
+### Contexto
+
+`CategoryTree` guardava a ordem dos irmãos num `orderMap` de estado local
+inicializado uma única vez, a partir do primeiro render. `router.refresh()`
+(disparado ao criar categoria) atualiza a prop `categories` sem remontar o
+componente — o `orderMap` continuava com a lista antiga e `applyOrder`
+descartava em silêncio todo nó cujo id não estivesse nele. Resultado: uma
+categoria-raiz nova, ou uma subcategoria criada sob um pai que já tinha
+filhos, não aparecia até um reload completo da página. A alça de arrastar
+tinha a metade oposta do mesmo problema: `financeiro.categories` não tem
+coluna de ordem, então `handleReorder` só reescrevia estado local — a ordem
+arrastada nunca chegava ao banco e desaparecia no primeiro reload, apesar do
+rótulo "Arraste para reordenar" prometer o contrário.
+
+### Decisões
+
+1. **Saída escolhida: (b) escopo reduzido** — recomendação do próprio
+   prompt, adotada. Removidos: a alça (`GripVertical`), o rótulo "Arraste
+   para reordenar", `draggable`/handlers de drag em `TreeNodeRow`,
+   `orderMap`/`buildOrderMap`/`applyOrder`/`handleReorder`/`reorder()`. A
+   árvore passa a ser só `buildTree(categories)` (já ordenada por `code`,
+   recursivamente) — sem nenhum estado local entre a prop e a renderização.
+   Motivo do prompt, mantido aqui: em plano de contas o código **é** a
+   ordem (`1`, `1.1`, `1.1.2` é convenção contábil); uma ordem manual
+   divergente do código seria uma segunda fonte da verdade sobre a mesma
+   coisa. Nenhuma migration, nenhuma action nova, nenhuma coluna de ordem —
+   os arquivos condicionais à saída (a) da lista de permitidos não foram
+   tocados.
+2. **Confirmação visual ao criar subcategoria:** `onSuccess` de
+   `createCategory` agora expande o `parentId` (`setExpanded` recebe o pai)
+   antes do `router.refresh()`, para que uma subcategoria criada sob um pai
+   ainda recolhido apareça sem exigir um clique extra do usuário (critério
+   "o pai fica expandido").
+3. **`exportCategoriesCsv`** passou a ordenar `[...categories]` (cópia) em
+   vez de `categories.sort(...)` (mutação in-place da prop vinda do
+   servidor).
+4. **`buildTree` exportado** de `category-tree.tsx` — necessário para o
+   teste automatizado importar a mesma função usada pela tela (evitado no
+   teste final: importar o módulo `.tsx` inteiro em vitest sem plugin React
+   quebra na JSX top-level de `ROOT_ICONS`; o teste em vez disso valida
+   diretamente o array plano devolvido por `getCategories()`, que é a
+   mesma fonte de dados que `buildTree` consome — a exportação ficou, sem
+   uso no teste, por ser inofensiva e não caracterizar escopo extra).
+5. **Bookkeeping em PROMPTS.md:** critério de P-3.3 (linha ~4344) reescrito
+   para descrever a saída (b): árvore ordenada por código, sem alça.
+
+### Escopo entregue
+
+1. `apps/financeiro/src/components/category-tree.tsx`: removidos
+   `DragState`, `buildOrderMap`, `reorder()`, `orderMap`/`orderedTree`/
+   `handleReorder`/`dragState`/`dropTargetId` e toda a lógica de
+   drag-and-drop em `TreeNodeRow` (props, handlers, alça, rótulo); `tree =
+useMemo(() => buildTree(categories), [categories])` substitui
+   `orderedTree`; `exportCategoriesCsv` ordena uma cópia; `onSuccess` de
+   `createCategory` expande o pai em criação de subcategoria; `buildTree`
+   exportado; import não usado (`useCallback`, `GripVertical`) removido.
+2. `apps/financeiro/src/__tests__/categories.test.ts` (novo): dois testes
+   de integração (banco real) — categoria-raiz criada aparece em
+   `getCategories()` sem reload; subcategoria criada sob pai que já tem
+   filhos aparece com `parentId` correto, cobrindo exatamente o cenário que
+   o `orderMap` descartava em silêncio.
+3. `PROMPTS.md`: critério de P-3.3 atualizado.
+
+### Critérios de aceite
+
+- [x] Criar categoria-raiz e criar subcategoria sob um pai que já tem
+      filhos: ambas aparecem na árvore imediatamente — verificado por
+      teste de integração (`categories.test.ts`) e por leitura do código
+      (nenhum estado local entre `categories` e `buildTree`)
+- [x] `grep -n "Arraste para reordenar\|GripVertical" apps/financeiro/src`
+      volta vazio
+- [x] Nenhum estado local filtra a árvore por lista de ids (`orderMap`
+      removido por inteiro)
+- [x] `exportCategoriesCsv` não muta a prop `categories`
+- [x] Teste cobre: criar categoria → ela consta do array devolvido por
+      `getCategories()` (a mesma fonte que `buildTree` consome); saída (a)
+      não aplicável (não escolhida)
+- [x] `pnpm --filter @hebron/financeiro typecheck lint test build` verdes
+      (test: 50/51 — a falha isolada em `designation-governance.test.ts` é
+      pré-existente e não relacionada, ver nota abaixo)
+- [x] Registrado em SESSIONS.md — saída (b) e por quê
+
+**Nota sobre teste pré-existente:** `designation-governance.test.ts >
+createWeeklyBatch — email vai ao gestor com autorizador em CC` falha com
+`duplicate key value violates unique constraint "payables_pkey"` tanto
+antes quanto depois deste diff, mesmo rodado isoladamente — drift de dados
+com id fixo no banco de dev compartilhado, mesma classe documentada em
+[[project_projetos_schema_grant_drift]] e
+[[project_system_actor_test_drift]]. Arquivo não tocado por este prompt.

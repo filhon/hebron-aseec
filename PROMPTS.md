@@ -4341,7 +4341,7 @@ Páginas: Dashboard (saldo por conta, fluxo do mês, contas a pagar próximas). 
 - [x] Lista de lançamentos com filtros avançados e exportação
 - [x] Conciliação: split view extrato × lançamentos com match visual
 - [x] Orçamento: planejado vs executado por centro de custo
-- [x] Plano de contas: árvore hierárquica editável (drag-drop para reordenar)
+- [x] Plano de contas: árvore hierárquica editável, ordenada por código (P-3.3b: sem alça de arrastar — o código já é a ordem contábil)
 - [x] Importação de extrato: upload OFX/CSV com preview antes de confirmar
 - [x] Responsivo
 - [x] Lint passa
@@ -4800,13 +4800,13 @@ Terceiro, menor: `exportCategoriesCsv` (`:365-372`) chama `.sort()` **na prop** 
 
 **Critérios de aceite:**
 
-- [ ] Criar categoria-raiz e criar subcategoria sob um pai que já tem filhos: ambas aparecem na árvore imediatamente, sem recarregar a página
-- [ ] Nenhuma afordância de arrastar sem persistência — `grep -n "Arraste para reordenar\|GripVertical" apps/financeiro/src` volta vazio **ou** a ordem sobrevive a um reload e está gravada no banco
-- [ ] Nenhum estado local filtra a árvore por lista de ids
-- [ ] `exportCategoriesCsv` não muta a prop `categories`
-- [ ] Teste cobre: criar categoria → ela consta da árvore devolvida pela query; e, na saída (a), reordenar → nova ordem persiste
-- [ ] `pnpm --filter @hebron/financeiro typecheck lint test` verdes; `pnpm --filter @hebron/financeiro build` verde
-- [ ] Registrar em SESSIONS.md — incluindo qual saída foi escolhida e por quê
+- [x] Criar categoria-raiz e criar subcategoria sob um pai que já tem filhos: ambas aparecem na árvore imediatamente, sem recarregar a página
+- [x] Nenhuma afordância de arrastar sem persistência — `grep -n "Arraste para reordenar\|GripVertical" apps/financeiro/src` volta vazio **ou** a ordem sobrevive a um reload e está gravada no banco
+- [x] Nenhum estado local filtra a árvore por lista de ids
+- [x] `exportCategoriesCsv` não muta a prop `categories`
+- [x] Teste cobre: criar categoria → ela consta da árvore devolvida pela query; e, na saída (a), reordenar → nova ordem persiste
+- [x] `pnpm --filter @hebron/financeiro typecheck lint test` verdes; `pnpm --filter @hebron/financeiro build` verde
+- [x] Registrar em SESSIONS.md — incluindo qual saída foi escolhida e por quê
 
 **Notas:**
 Ref: BRAIN.md §6.5 e o precedente de P-1.16c. Recomendação: saída **(b)**. Em plano de contas o código **é** a ordem — `1`, `1.1`, `1.1.2` é a convenção contábil, e a árvore já ordena por ele. Uma ordem manual divergente do código seria uma segunda fonte da verdade sobre a mesma coisa, e a DRE sairia numa ordem que o plano não explica.
