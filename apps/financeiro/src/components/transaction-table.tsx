@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState, useMemo, useCallback } from "react";
 import {
@@ -11,6 +11,7 @@ import {
   Filter,
   X,
   MoreHorizontal,
+  RotateCcw,
   ArrowUpRight,
   ArrowDownRight,
   Plus,
@@ -22,6 +23,7 @@ import type {
   TransactionType,
 } from "@hebron/types/financeiro";
 import type { CostCenterOption } from "../lib/queries";
+import { csvField, downloadCsv } from "../lib/export-csv";
 import { ExpenseForm } from "./expense-form";
 import { RevenueForm } from "./revenue-form";
 import { ReversalForm } from "./reversal-form";
@@ -57,6 +59,20 @@ function clsx(...cls: (string | false | null | undefined)[]): string {
   return cls.filter(Boolean).join(" ");
 }
 
+/** Janela deslizante de páginas ao redor da corrente, com 1 e a última sempre visíveis. */
+function pageWindow(current: number, total: number): (number | "ellipsis")[] {
+  const delta = 2;
+  const left = Math.max(2, current - delta);
+  const right = Math.min(total - 1, current + delta);
+
+  const items: (number | "ellipsis")[] = [1];
+  if (left > 2) items.push("ellipsis");
+  for (let p = left; p <= right; p++) items.push(p);
+  if (right < total - 1) items.push("ellipsis");
+  if (total > 1) items.push(total);
+  return items;
+}
+
 type FormMode = null | "despesa" | "receita" | "estorno";
 
 export function TransactionTable({
@@ -66,7 +82,11 @@ export function TransactionTable({
   costCenters,
 }: TransactionTableProps) {
   const [formMode, setFormMode] = useState<FormMode>(null);
+  const [reversalTxId, setReversalTxId] = useState<string | undefined>(
+    undefined,
+  );
   const [newMenuOpen, setNewMenuOpen] = useState(false);
+  const [openRowMenu, setOpenRowMenu] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | TransactionType>("all");
   const [accountFilter, setAccountFilter] = useState("all");
@@ -198,31 +218,35 @@ export function TransactionTable({
   };
 
   const exportCsv = useCallback(() => {
-    const header =
-      "Data,Descrição,Categoria,Centro de Custo,Conta,Tipo,Valor (R$)";
-    const body = filtered
-      .map((t) =>
-        [
-          fmtDate(t.occurredAt),
-          `"${t.description.replace(/"/g, '""')}"`,
-          t.categoryId ? `"${catMap[t.categoryId] ?? ""}"` : "",
-          t.costCenterId ? (ccMap[t.costCenterId] ?? "") : "",
-          acctMap[t.bankAccountId] ?? "",
-          t.type === "credito" ? "Entrada" : "Saída",
-          ((t.type === "credito" ? 1 : -1) * t.amount).toFixed(2),
-        ].join(","),
-      )
-      .join("\n");
-    const blob = new Blob(["\uFEFF" + header + "\n" + body], {
-      type: "text/csv;charset=utf-8;",
-    });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `lancamentos-${new Date().toISOString().slice(0, 10)}.xlsx`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const header = [
+      "Data",
+      "Descrição",
+      "Categoria",
+      "Centro de Custo",
+      "Conta",
+      "Tipo",
+      "Valor (R$)",
+    ];
+    const rows = filtered.map((t) => [
+      fmtDate(t.occurredAt),
+      csvField(t.description),
+      t.categoryId ? csvField(catMap[t.categoryId] ?? "") : "",
+      t.costCenterId ? (ccMap[t.costCenterId] ?? "") : "",
+      acctMap[t.bankAccountId] ?? "",
+      t.type === "credito" ? "Entrada" : "Saída",
+      ((t.type === "credito" ? 1 : -1) * t.amount).toFixed(2),
+    ]);
+    downloadCsv(
+      `lancamentos-${new Date().toISOString().slice(0, 10)}.csv`,
+      header,
+      rows,
+    );
   }, [filtered, catMap, ccMap, acctMap]);
+
+  const closeReversalForm = () => {
+    setFormMode(null);
+    setReversalTxId(undefined);
+  };
 
   const SortIndicator = ({ k }: { k: SortKey }) =>
     sort.key === k ? (
@@ -349,10 +373,13 @@ export function TransactionTable({
             </div>
           </div>
         </div>
-        {newMenuOpen && (
+        {(newMenuOpen || openRowMenu) && (
           <div
             className="fixed inset-0 z-10"
-            onClick={() => setNewMenuOpen(false)}
+            onClick={() => {
+              setNewMenuOpen(false);
+              setOpenRowMenu(null);
+            }}
           />
         )}
 
@@ -561,6 +588,7 @@ export function TransactionTable({
               {paged.map((t) => {
                 const isCredit = t.type === "credito";
                 const isReconciled = !!t.reconciledAt;
+                const isReversible = !t.isReversed && t.reversalOf === null;
 
                 return (
                   <tr
@@ -628,9 +656,46 @@ export function TransactionTable({
                     </td>
 
                     <td className="px-3 py-3.5 border-b border-(--divider)">
-                      <button className="opacity-0 group-hover:opacity-100 transition-opacity h-7 w-7 flex items-center justify-center rounded-lg text-(--fg-muted) hover:text-(--fg) hover:bg-(--surface-alt)">
-                        <MoreHorizontal className="h-3.5 w-3.5" />
-                      </button>
+                      {isReversible && (
+                        <div className="relative inline-block">
+                          <button
+                            onClick={() =>
+                              setOpenRowMenu((id) =>
+                                id === t.id ? null : t.id,
+                              )
+                            }
+                            aria-label="Mais ações"
+                            className={clsx(
+                              "transition-opacity h-7 w-7 flex items-center justify-center rounded-lg text-(--fg-muted) hover:text-(--fg) hover:bg-(--surface-alt)",
+                              openRowMenu === t.id
+                                ? "opacity-100"
+                                : "opacity-0 group-hover:opacity-100",
+                            )}
+                          >
+                            <MoreHorizontal className="h-3.5 w-3.5" />
+                          </button>
+                          {openRowMenu === t.id && (
+                            <div
+                              className="absolute right-0 top-full mt-1 w-48 rounded-(--radius) border py-1 z-20 bg-(--bg) border-(--border)"
+                              style={{
+                                boxShadow: "0 4px 20px rgba(0,0,0,0.12)",
+                              }}
+                            >
+                              <button
+                                onClick={() => {
+                                  setReversalTxId(t.id);
+                                  setFormMode("estorno");
+                                  setOpenRowMenu(null);
+                                }}
+                                className="flex items-center gap-2 w-full text-left px-4 py-2.5 text-sm font-semibold text-(--fg) hover:bg-(--surface-alt) transition-colors"
+                              >
+                                <RotateCcw className="h-3.5 w-3.5 text-(--fg-muted)" />
+                                Estornar lançamento
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </td>
                   </tr>
                 );
@@ -665,23 +730,29 @@ export function TransactionTable({
               >
                 <ChevronLeft className="h-3.5 w-3.5" />
               </button>
-              {Array.from(
-                { length: Math.min(totalPages, 7) },
-                (_, i) => i + 1,
-              ).map((p) => (
-                <button
-                  key={p}
-                  onClick={() => setPage(p)}
-                  className={clsx(
-                    "h-7 w-7 flex items-center justify-center rounded-lg text-xs font-semibold transition-colors",
-                    page === p
-                      ? "bg-(--hb-blue) text-(--fg-invert)"
-                      : "border border-(--border) hover:bg-(--surface-alt)",
-                  )}
-                >
-                  {p}
-                </button>
-              ))}
+              {pageWindow(page, totalPages).map((p, i) =>
+                p === "ellipsis" ? (
+                  <span
+                    key={`ellipsis-${i}`}
+                    className="h-7 w-7 flex items-center justify-center text-(--fg-muted)"
+                  >
+                    …
+                  </span>
+                ) : (
+                  <button
+                    key={p}
+                    onClick={() => setPage(p)}
+                    className={clsx(
+                      "h-7 w-7 flex items-center justify-center rounded-lg text-xs font-semibold transition-colors",
+                      page === p
+                        ? "bg-(--hb-blue) text-(--fg-invert)"
+                        : "border border-(--border) hover:bg-(--surface-alt)",
+                    )}
+                  >
+                    {p}
+                  </button>
+                ),
+              )}
               <button
                 onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                 disabled={page === totalPages}
@@ -712,7 +783,8 @@ export function TransactionTable({
       {formMode === "estorno" && (
         <ReversalForm
           transactions={transactions}
-          onClose={() => setFormMode(null)}
+          preselectedTransactionId={reversalTxId}
+          onClose={closeReversalForm}
         />
       )}
     </>

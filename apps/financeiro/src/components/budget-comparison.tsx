@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Download, Plus, TrendingUp } from "lucide-react";
 import type {
   AccountCategory,
@@ -8,6 +8,7 @@ import type {
   Transaction,
 } from "@hebron/types/financeiro";
 import type { CostCenterOption } from "../lib/queries";
+import { csvField, downloadCsv } from "../lib/export-csv";
 import { BudgetForm } from "./budget-form";
 
 interface BudgetComparisonProps {
@@ -126,6 +127,22 @@ export function BudgetComparison({
   const overallPct =
     totalPlanned > 0 ? Math.round((totalExecuted / totalPlanned) * 100) : 0;
 
+  const exportCsv = useCallback(() => {
+    const header = ["Categoria", "Planejado (R$)", "Executado (R$)", "% exec."];
+    const csvRows = rows.map((r) => [
+      csvField(r.label),
+      r.plannedAmount.toFixed(2),
+      r.executedAmount.toFixed(2),
+      String(r.pct),
+    ]);
+    const suffix = viewMode === "categorias" ? "categorias" : "projetos";
+    downloadCsv(
+      `orcamento-${suffix}-${new Date().toISOString().slice(0, 10)}.csv`,
+      header,
+      csvRows,
+    );
+  }, [rows, viewMode]);
+
   const barColor = (pct: number) => {
     if (pct >= 95) return "bg-(--color-destructive)";
     if (pct >= 80) return "bg-(--hb-orange)";
@@ -221,7 +238,10 @@ export function BudgetComparison({
           </div>
 
           <div className="ml-auto flex gap-2">
-            <button className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-(--border) text-xs font-semibold text-(--fg-muted) hover:border-(--border-strong) hover:text-(--fg) transition-colors">
+            <button
+              onClick={exportCsv}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-(--border) text-xs font-semibold text-(--fg-muted) hover:border-(--border-strong) hover:text-(--fg) transition-colors"
+            >
               <Download className="h-3 w-3" />
               Exportar
             </button>

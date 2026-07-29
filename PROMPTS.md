@@ -4298,7 +4298,7 @@ Componentes: TransactionTable (TanStack Table com filtros avançados e exportaç
 
 **Critérios de aceite:**
 
-- [x] TransactionTable com filtros: data, categoria, conta, tipo, valor; exportação CSV/Excel
+- [x] TransactionTable com filtros: data, categoria, conta, tipo, valor; exportação CSV (extensão `.csv`, real — não XLSX; planilha de verdade é a exportação de Demonstrativos em `actions/reports.ts`. Corrigido em P-3.2b)
 - [x] PayableCard com cores: verde (em dia), amarelo (próximo), vermelho (vencido)
 - [x] ConciliationView: split view com match automático destacado
 - [x] CategoryTree: plano de contas hierárquico editável
@@ -4744,13 +4744,13 @@ Ainda em `transaction-table.tsx:668`: a paginação numérica renderiza `Array.f
 
 **Critérios de aceite:**
 
-- [ ] Toda extensão em `a.download` corresponde ao `type` do `Blob` que a origina — `grep -rn "download = " apps/financeiro/src` confere um a um
-- [ ] Nenhum `<button>` sem `onClick`, `type="submit"` ou `form=` em `apps/financeiro/src/**/*.tsx`
-- [ ] Nenhum rótulo de funcionalidade inexistente na UI (as quatro "Operações comuns" saíram ou ganharam implementação)
-- [ ] Com 30 páginas de lançamentos, a régua mostra a página corrente e permite ir à última em um clique
-- [ ] Filtros, ordenação e o resumo de entradas/saídas continuam funcionando após a mudança
-- [ ] `pnpm --filter @hebron/financeiro typecheck lint test` verdes; `pnpm --filter @hebron/financeiro build` verde
-- [ ] Registrar em SESSIONS.md — incluindo a saída escolhida no item 1 e o destino de cada um dos sete botões
+- [x] Toda extensão em `a.download` corresponde ao `type` do `Blob` que a origina — `grep -rn "download = " apps/financeiro/src` confere um a um
+- [x] Nenhum `<button>` sem `onClick`, `type="submit"` ou `form=` em `apps/financeiro/src/**/*.tsx`
+- [x] Nenhum rótulo de funcionalidade inexistente na UI (as quatro "Operações comuns" saíram ou ganharam implementação)
+- [x] Com 30 páginas de lançamentos, a régua mostra a página corrente e permite ir à última em um clique
+- [x] Filtros, ordenação e o resumo de entradas/saídas continuam funcionando após a mudança
+- [x] `pnpm --filter @hebron/financeiro typecheck lint test` verdes; `pnpm --filter @hebron/financeiro build` verde
+- [x] Registrar em SESSIONS.md — incluindo a saída escolhida no item 1 e o destino de cada um dos sete botões
 
 **Notas:**
 Ref: princípio "público-alvo em transição tecnológica" do CLAUDE.md. Um botão que não responde não é neutro: quem não tem repertório para supor que "ainda não foi implementado" conclui que errou o clique, ou que o sistema quebrou.

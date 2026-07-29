@@ -12,8 +12,6 @@ import {
   Heart,
   FileText,
   Download,
-  Link,
-  BarChart3,
   GripVertical,
   X,
   Trash2,
@@ -622,43 +620,6 @@ export function CategoryTree({ categories }: CategoryTreeProps) {
               despesas operacionais, missionárias e tributos. Tudo pode ser
               editado e expandido conforme a operação cresce.
             </p>
-          </div>
-
-          <div className="rounded-(--radius) border border-(--border) bg-(--surface) px-5 py-4">
-            <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-(--fg-muted) mb-3">
-              Operações comuns
-            </p>
-            <div className="flex flex-col gap-2">
-              {[
-                {
-                  label: "Importar plano padrão CFC",
-                  icon: <Download className="h-3.5 w-3.5" />,
-                },
-                {
-                  label: "Vincular a centros de custo",
-                  icon: <Link className="h-3.5 w-3.5" />,
-                },
-                {
-                  label: "Gerar DRE preliminar",
-                  icon: <BarChart3 className="h-3.5 w-3.5" />,
-                },
-                {
-                  label: "Exportar para contabilidade",
-                  icon: <FileText className="h-3.5 w-3.5" />,
-                },
-              ].map((action) => (
-                <button
-                  key={action.label}
-                  className="flex items-center gap-3 px-4 py-3 rounded-(--radius) border border-(--border) bg-(--bg) text-sm font-medium text-(--fg) text-left hover:border-(--border-strong) hover:bg-(--bg-alt) transition-colors"
-                >
-                  <span className="flex items-center justify-center w-7 h-7 rounded-lg bg-(--surface-alt) text-(--hb-blue) shrink-0">
-                    {action.icon}
-                  </span>
-                  <span className="flex-1">{action.label}</span>
-                  <ChevronRight className="h-3.5 w-3.5 text-(--fg-muted)" />
-                </button>
-              ))}
-            </div>
           </div>
 
           <div className="rounded-(--radius) bg-(--hb-blue) text-(--fg-invert) px-5 py-4">

@@ -230,6 +230,7 @@
 | S-207  | 2026-07-28 | P-2.10b — Sete notificações que nunca disparam e um link que leva a lugar nenhum (CORRETIVO)                                     | concluido                            |
 | S-208  | 2026-07-29 | P-2.12b — O teste que examina a cópia em vez do original (CORRETIVO)                                                             | concluido                            |
 | S-209  | 2026-07-29 | P-0.5d — A navegação que recarrega a página inteira a cada clique (CORRETIVO)                                                    | concluido                            |
+| S-210  | 2026-07-29 | P-3.2b — Sete botões que não fazem nada e um CSV com extensão de Excel (CORRETIVO)                                               | concluido                            |
 
 ---
 
@@ -18167,7 +18168,7 @@ turbo lint` — confirmado experimentalmente antes do ajuste. Fix:
 - [x] Nenhuma dependência de `next` em `packages/ui/package.json`
 - [x] `pnpm turbo build` verde (com `--concurrency=3`, ver decisão 8);
       `pnpm turbo lint typecheck` verdes (concorrência padrão); `pnpm turbo
-    test` verde nos pacotes tocados por este diff, isolando falhas
+  test` verde nos pacotes tocados por este diff, isolando falhas
       pré-existentes não relacionadas (decisão 8)
 - [x] Registrado em SESSIONS.md — decisão do item 5 (guarda ligada, não
       recusada) e débito da S-48 liquidado
@@ -18186,3 +18187,99 @@ turbo lint` — confirmado experimentalmente antes do ajuste. Fix:
   admin/financeiro em arquivos não tocados por este diff (decisão 8)
 - Sanity check manual da regra eslint nova: `<a href="/usuarios">` plantado
   em `apps/admin/src/app/` foi pego e removido
+
+## S-210 — P-3.2b — Sete botões que não fazem nada e um CSV com extensão de Excel (CORRETIVO)
+
+**Branch:** `feat/P-3.2b-financeiro-afordancias`
+
+### Contexto
+
+Débito de P-3.2 (S-72): o critério "exportação CSV/Excel" ficou `[x]` sem
+nunca ter existido exportação de verdade — `transaction-table.tsx` montava
+CSV (vírgula, BOM UTF-8, `type: "text/csv;..."`) e baixava como `.xlsx`, que
+o Excel/LibreOffice recusam por extensão×conteúdo divergente. Sete botões
+sem `onClick` (auditoria confirmada por varredura de todo
+`apps/financeiro/src/**/*.tsx`: exatamente 4 arquivos, 7 ocorrências) davam
+afordância sem função.
+
+### Decisões
+
+1. **Item 1 — saída escolhida: CSV real, extensão `.csv`** (a opção barata
+   recomendada pelo prompt). Nada tocado em `actions/reports.ts` — a
+   exportação XLSX de verdade já existe ali (Demonstrativos, `exceljs`
+   server-side) e continua sendo o caminho para quem precisa de planilha.
+2. **Helper compartilhado criado:** `apps/financeiro/src/lib/export-csv.ts`
+   (`downloadCsv` + `csvField`) — justificado porque dois componentes
+   (`transaction-table.tsx`, `budget-comparison.tsx`) passaram a exportar
+   CSV. `category-tree.tsx` já tinha `exportCategoriesCsv` correta
+   (`.csv` de verdade) e não foi tocado — fora do escopo permitido do item
+   (só o bloco "Operações comuns").
+3. **Destino dos sete botões:**
+   - `transaction-table.tsx:631` ("…" por linha) — **ligado**: menu com
+     "Estornar lançamento", reaproveitando `ReversalForm` + `createReversal`
+     já existentes neste mesmo arquivo (`ReversalForm` já aceita
+     `preselectedTransactionId`, só não estava sendo usado). Só renderiza
+     quando a transação é estornável (`!isReversed && reversalOf === null`)
+     — nada a fazer nas demais, então o botão nem aparece.
+   - `payable-card.tsx:130` ("Mais opções") — **removido**. `onAction`
+     já tem um contrato `"cancel"` nunca consumido por nenhum caller, mas
+     `contas-pagar-view.tsx` (o único consumidor) não está na lista de
+     arquivos permitidos deste prompt — não dava para fechar o ciclo sem
+     inventar/tocar fora do escopo. Registrado aqui como débito: se um
+     "cancelar pagamento" for pedido depois, o contrato já existe, falta a
+     UI + o caller.
+   - `budget-comparison.tsx:224` ("Exportar") — **ligado** ao helper de CSV
+     (linhas da view atual — categorias ou projetos/CC, conforme a aba).
+   - `category-tree.tsx:650` (quatro itens de "Operações comuns": importar
+     plano CFC, vincular centros de custo, gerar DRE preliminar, exportar
+     contabilidade) — **removidos por inteiro**, junto com o painel que os
+     continha. Nenhum tinha backend, prompt ou critério em lugar nenhum do
+     repositório.
+4. **Paginação:** janela deslizante (`pageWindow()`, delta 2 de cada lado da
+   página corrente) com 1 e a última página sempre visíveis; lacunas viram
+   "…" não clicável. Substitui `Array.from({length: min(totalPages,7)})`
+   que travava em 7 e nunca acompanhava a página corrente.
+5. **Bookkeeping em PROMPTS.md:** critério de P-3.2 (linha ~4301) reescrito
+   para descrever CSV real (não XLSX), com nota apontando para a exportação
+   de Demonstrativos como caminho de planilha de verdade.
+
+### Escopo entregue
+
+1. `apps/financeiro/src/lib/export-csv.ts` (novo): `downloadCsv`,
+   `csvField`.
+2. `apps/financeiro/src/components/transaction-table.tsx`: `exportCsv`
+   reescrito com o helper e extensão `.csv`; estado `reversalTxId` +
+   `openRowMenu`; menu por linha com "Estornar lançamento" (condicional a
+   `isReversible`); `pageWindow()` substitui a régua fixa de 7 números;
+   `ReversalForm` recebe `preselectedTransactionId`.
+3. `apps/financeiro/src/components/payable-card.tsx`: botão "Mais opções"
+   e import de `MoreHorizontal` removidos.
+4. `apps/financeiro/src/components/budget-comparison.tsx`: `exportCsv`
+   novo (helper compartilhado) ligado ao botão "Exportar".
+5. `apps/financeiro/src/components/category-tree.tsx`: bloco "Operações
+   comuns" removido; imports `Link`/`BarChart3` (ficaram órfãos) removidos.
+6. `PROMPTS.md`: critério de exportação de P-3.2 atualizado.
+
+### Critérios de aceite
+
+- [x] `grep -rn "download = " apps/financeiro/src` — toda extensão
+      corresponde ao `type` do `Blob` de origem (4 ocorrências, todas
+      `.csv`/`.zip` corretas)
+- [x] Nenhum `<button>` sem `onClick`/`type="submit"`/`form=` em
+      `apps/financeiro/src/**/*.tsx` — verificado por script que varre todo
+      `<button` do app, zero ocorrências
+- [x] Nenhum rótulo de funcionalidade inexistente — as quatro "Operações
+      comuns" saíram
+- [x] Paginação: janela deslizante testada via `pageWindow()`, primeira e
+      última sempre alcançáveis, página corrente sempre presente
+- [x] Filtros/ordenação/resumo intactos (nenhuma lógica de `filtered`
+      tocada)
+- [x] `pnpm --filter @hebron/financeiro typecheck lint build` verdes
+- [x] `pnpm --filter @hebron/financeiro test` — 48/49 verdes; a falha
+      (`designation-governance.test.ts`, e-mail de lote gestor/CC) é
+      `duplicate key value violates unique constraint "payables_pkey"` —
+      drift de dados no banco de dev compartilhado, mesma classe já
+      documentada em [[project_projetos_schema_grant_drift]] e
+      [[project_system_actor_test_drift]]; reproduzida em isolamento antes
+      e depois deste diff, arquivo não tocado por nenhuma das mudanças
+- [x] Registrado em SESSIONS.md — saída do item 1 e destino dos sete botões

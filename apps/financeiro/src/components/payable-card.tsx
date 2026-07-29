@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { Calendar, Link2, Check, MoreHorizontal } from "lucide-react";
+import { Calendar, Link2, Check } from "lucide-react";
 import type { Payable } from "@hebron/types/financeiro";
 
 interface PayableCardProps {
@@ -110,29 +110,21 @@ export function PayableCard({ payable, onAction }: PayableCardProps) {
 
       <div className="pl-5 pr-4 pt-4 pb-4">
         {/* Header row */}
-        <div className="flex items-start gap-2 mb-3">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-0.5">
-              {payable.projectId && (
-                <span
-                  title="Vinculado a projeto aprovado"
-                  className="flex items-center justify-center w-5 h-5 rounded bg-(--hb-cyan-muted) shrink-0"
-                >
-                  <Link2 className="h-3 w-3 text-(--hb-cyan-deep)" />
-                </span>
-              )}
-              <p className="text-sm font-semibold text-(--fg) leading-tight line-clamp-2">
-                {payable.description}
-              </p>
-            </div>
-            <p className="text-xs text-(--fg-muted)">{payable.supplierName}</p>
+        <div className="mb-3">
+          <div className="flex items-center gap-2 mb-0.5">
+            {payable.projectId && (
+              <span
+                title="Vinculado a projeto aprovado"
+                className="flex items-center justify-center w-5 h-5 rounded bg-(--hb-cyan-muted) shrink-0"
+              >
+                <Link2 className="h-3 w-3 text-(--hb-cyan-deep)" />
+              </span>
+            )}
+            <p className="text-sm font-semibold text-(--fg) leading-tight line-clamp-2">
+              {payable.description}
+            </p>
           </div>
-          <button
-            className="h-7 w-7 flex items-center justify-center rounded-lg text-(--fg-muted) hover:text-(--fg) hover:bg-(--surface-alt) transition-colors shrink-0"
-            aria-label="Mais opções"
-          >
-            <MoreHorizontal className="h-4 w-4" />
-          </button>
+          <p className="text-xs text-(--fg-muted)">{payable.supplierName}</p>
         </div>
 
         {/* Amount + due date */}
