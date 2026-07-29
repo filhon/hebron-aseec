@@ -27,6 +27,7 @@ import {
 } from "../lib/safe-action";
 import { logFinanceiroAudit } from "../lib/audit";
 import { checkBudgetAlert, notifyPayablePaid } from "../lib/notifications";
+import { notifyProjectPaymentMade } from "@hebron/integrations/financeiro";
 
 const FINANCEIRO_BASE_URL =
   process.env.NEXT_PUBLIC_FINANCEIRO_URL ??
@@ -552,7 +553,11 @@ export const markPayableAsPaid = superAdminAction
           ),
         );
 
-        return { ledgerTx, costCenterId: payable.costCenterId };
+        return {
+          ledgerTx,
+          costCenterId: payable.costCenterId,
+          paymentScheduleId: payable.paymentScheduleId,
+        };
       },
     );
 
@@ -565,6 +570,19 @@ export const markPayableAsPaid = superAdminAction
         transactionDate: paymentTx.ledgerTx.date,
         newTransactionAmount: parseFloat(paymentTx.ledgerTx.amount),
       });
+    }
+    // Payable com origem em um projeto aprovado (payment_schedule_id
+    // preenchido, P-2.10b) — avisa por email o submissor do projeto,
+    // distinto do in_app acima que avisa quem criou o payable.
+    if (paymentTx.paymentScheduleId) {
+      try {
+        await notifyProjectPaymentMade(paymentTx.paymentScheduleId);
+      } catch (err) {
+        console.error(
+          "[financeiro/approval] notifyProjectPaymentMade failed:",
+          err,
+        );
+      }
     }
 
     return {

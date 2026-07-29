@@ -8,12 +8,10 @@ import {
   roleAssignments,
   projects,
   organizations,
-  paymentSchedules,
   emailTemplates,
 } from "@hebron/db/schema";
 import { ProjectSubmittedEmail } from "@hebron/email/templates/project-submitted";
 import { ProjectStatusChangeEmail } from "@hebron/email/templates/project-status-change";
-import { PaymentConfirmationEmail } from "@hebron/email/templates/payment-confirmation";
 import type { ProjectStatusEvent } from "@hebron/email/templates/project-status-change";
 
 // ---------------------------------------------------------------------------
@@ -55,8 +53,25 @@ function applyVars(
 const PROJETOS_BASE_URL =
   process.env.NEXT_PUBLIC_PROJETOS_URL ?? "https://projetos.hebronaseec.com.br";
 
-function buildProjectUrl(projectId: string) {
-  return `${PROJETOS_BASE_URL}/projetos/${projectId}`;
+// Rotas reais do app (P-2.10b — não existe `/projetos/<id>`): o submissor
+// vê o próprio projeto em `(submissor)/[id]`, a diretoria em
+// `(diretoria)/pipeline/[id]`. Toda notificação escolhe uma das duas
+// conforme o papel do destinatário — nunca um caminho único para os dois
+// públicos.
+function submissorHref(projectId: string): string {
+  return `/${projectId}`;
+}
+
+function diretoriaHref(projectId: string): string {
+  return `/pipeline/${projectId}`;
+}
+
+function buildSubmissorProjectUrl(projectId: string): string {
+  return `${PROJETOS_BASE_URL}${submissorHref(projectId)}`;
+}
+
+function buildDiretoriaProjectUrl(projectId: string): string {
+  return `${PROJETOS_BASE_URL}${diretoriaHref(projectId)}`;
 }
 
 const makeInsert = makeNotificationInserter;
@@ -110,7 +125,8 @@ export async function notifyProjectSubmitted(projectId: string): Promise<void> {
   const admins = await getUsersByRoles(["super_admin"]);
   if (!admins.length) return;
 
-  const url = buildProjectUrl(projectId);
+  const url = buildDiretoriaProjectUrl(projectId);
+  const href = diretoriaHref(projectId);
   const resendApiKey = process.env.RESEND_API_KEY;
   const dbTpl = await getDbTemplate("projetos-submitted");
 
@@ -138,7 +154,7 @@ export async function notifyProjectSubmitted(projectId: string): Promise<void> {
             payload: {
               module: "projetos",
               projectId,
-              href: `/projetos/${projectId}`,
+              href,
             },
           },
         }),
@@ -154,7 +170,7 @@ export async function notifyProjectSubmitted(projectId: string): Promise<void> {
             payload: {
               module: "projetos",
               projectId,
-              href: `/projetos/${projectId}`,
+              href,
             },
           },
           email: emailOpts
@@ -199,7 +215,8 @@ export async function notifyProjectInValidation(
 
   if (!project) return;
 
-  const url = buildProjectUrl(projectId);
+  const url = buildSubmissorProjectUrl(projectId);
+  const href = submissorHref(projectId);
   const resendApiKey = process.env.RESEND_API_KEY;
   const displayName = project.submitterName ?? project.submitterEmail;
   const tpl = await getDbTemplate("projetos-in-validation");
@@ -219,7 +236,7 @@ export async function notifyProjectInValidation(
         payload: {
           module: "projetos",
           projectId,
-          href: `/projetos/${projectId}`,
+          href,
         },
       },
     }),
@@ -235,7 +252,7 @@ export async function notifyProjectInValidation(
         payload: {
           module: "projetos",
           projectId,
-          href: `/projetos/${projectId}`,
+          href,
         },
       },
       email: emailOpts
@@ -270,7 +287,8 @@ export async function notifyVotingOpen(projectId: string): Promise<void> {
   const voters = await getUsersByRoles(["diretor", "conselheiro"]);
   if (!voters.length) return;
 
-  const url = buildProjectUrl(projectId);
+  const url = buildDiretoriaProjectUrl(projectId);
+  const href = diretoriaHref(projectId);
   const resendApiKey = process.env.RESEND_API_KEY;
   const dbTpl = await getDbTemplate("projetos-voting-open");
 
@@ -295,7 +313,7 @@ export async function notifyVotingOpen(projectId: string): Promise<void> {
             payload: {
               module: "projetos",
               projectId,
-              href: `/projetos/${projectId}`,
+              href,
             },
           },
         }),
@@ -311,7 +329,7 @@ export async function notifyVotingOpen(projectId: string): Promise<void> {
             payload: {
               module: "projetos",
               projectId,
-              href: `/projetos/${projectId}`,
+              href,
             },
           },
           email: emailOpts
@@ -333,188 +351,12 @@ export async function notifyVotingOpen(projectId: string): Promise<void> {
 }
 
 // notifyProjectDecision e notifyReportReminder movidas para
-// packages/jobs/src/notify/projetos.ts (P-0.14) — ambas sem nenhum caller
-// nesta app (todo o módulo Projetos ainda não invoca este arquivo, ver
-// SESSIONS.md desta sessão); agora são a lógica de notificação dos crons de
-// homologação automática e lembrete de relatório, respectivamente.
-
-// ---------------------------------------------------------------------------
-// Payment made → submissor (email only)
-// ---------------------------------------------------------------------------
-
-export async function notifyPaymentMade(
-  paymentScheduleId: string,
-  receiptUrl?: string,
-): Promise<void> {
-  const [payment] = await db
-    .select({
-      amount: paymentSchedules.amount,
-      dueDate: paymentSchedules.dueDate,
-      month: paymentSchedules.month,
-      projectId: paymentSchedules.projectId,
-      projectTitle: projects.title,
-      submitterId: projects.submitterId,
-      submitterName: users.fullName,
-      submitterEmail: users.email,
-    })
-    .from(paymentSchedules)
-    .innerJoin(projects, eq(projects.id, paymentSchedules.projectId))
-    .innerJoin(users, eq(users.id, projects.submitterId))
-    .where(eq(paymentSchedules.id, paymentScheduleId))
-    .limit(1);
-
-  if (!payment) return;
-
-  const url = buildProjectUrl(payment.projectId);
-  const resendApiKey = process.env.RESEND_API_KEY;
-  const displayName = payment.submitterName ?? payment.submitterEmail;
-  const paymentDate = payment.dueDate ? new Date(payment.dueDate) : new Date();
-  const subject = `Pagamento realizado: ${payment.projectTitle}`;
-  const tpl = await getDbTemplate("projetos-payment-made");
-  const emailOpts = tpl
-    ? applyVars(tpl, {
-        nome: displayName,
-        titulo: payment.projectTitle,
-        valor: parseFloat(payment.amount).toLocaleString("pt-BR", {
-          style: "currency",
-          currency: "BRL",
-        }),
-        data: paymentDate.toLocaleDateString("pt-BR", {
-          day: "2-digit",
-          month: "long",
-          year: "numeric",
-        }),
-        link: url,
-      })
-    : null;
-
-  await createNotification({
-    insert: makeInsert(),
-    resendApiKey,
-    data: {
-      userId: payment.submitterId,
-      channel: "email",
-      type: "payment.made",
-      title: subject,
-      body: "Um pagamento do seu projeto foi processado.",
-      payload: {
-        module: "projetos",
-        projectId: payment.projectId,
-        paymentScheduleId,
-        href: `/projetos/${payment.projectId}`,
-      },
-    },
-    email: emailOpts
-      ? { to: payment.submitterEmail, ...emailOpts }
-      : {
-          to: payment.submitterEmail,
-          subject,
-          template: React.createElement(PaymentConfirmationEmail, {
-            recipientName: displayName,
-            projectTitle: payment.projectTitle,
-            amount: payment.amount,
-            paymentDate,
-            paymentMonth: payment.month,
-            projectUrl: url,
-            receiptUrl: receiptUrl ?? null,
-          }),
-        },
-  });
-}
-
-// ---------------------------------------------------------------------------
-// Project blocked (missing report) → submissor + super_admins (in_app + email)
-// ---------------------------------------------------------------------------
-
-export async function notifyProjectBlocked(projectId: string): Promise<void> {
-  const [project] = await db
-    .select({
-      title: projects.title,
-      submitterId: projects.submitterId,
-      submitterName: users.fullName,
-      submitterEmail: users.email,
-    })
-    .from(projects)
-    .innerJoin(users, eq(users.id, projects.submitterId))
-    .where(eq(projects.id, projectId))
-    .limit(1);
-
-  if (!project) return;
-
-  const admins = await getUsersByRoles(["super_admin"]);
-  const url = buildProjectUrl(projectId);
-  const resendApiKey = process.env.RESEND_API_KEY;
-  const title = `Projeto bloqueado: ${project.title}`;
-  const body =
-    "O projeto foi bloqueado por falta de relatório. Os pagamentos estão suspensos.";
-  const dbTpl = await getDbTemplate("projetos-blocked");
-
-  const recipients: UserRecord[] = [
-    {
-      id: project.submitterId,
-      fullName: project.submitterName,
-      email: project.submitterEmail,
-    },
-    ...admins.filter((a) => a.id !== project.submitterId),
-  ];
-
-  await Promise.allSettled(
-    recipients.flatMap((recipient) => {
-      const emailOpts = dbTpl
-        ? applyVars(dbTpl, {
-            nome: recipient.fullName ?? recipient.email,
-            titulo: project.title,
-            link: url,
-          })
-        : null;
-      return [
-        createNotification({
-          insert: makeInsert(),
-          data: {
-            userId: recipient.id,
-            channel: "in_app",
-            type: "project.blocked",
-            title,
-            body,
-            payload: {
-              module: "projetos",
-              projectId,
-              href: `/projetos/${projectId}`,
-            },
-          },
-        }),
-        createNotification({
-          insert: makeInsert(),
-          resendApiKey,
-          data: {
-            userId: recipient.id,
-            channel: "email",
-            type: "project.blocked",
-            title,
-            body,
-            payload: {
-              module: "projetos",
-              projectId,
-              href: `/projetos/${projectId}`,
-            },
-          },
-          email: emailOpts
-            ? { to: recipient.email, ...emailOpts }
-            : {
-                to: recipient.email,
-                subject: title,
-                template: React.createElement(ProjectStatusChangeEmail, {
-                  recipientName: recipient.fullName ?? recipient.email,
-                  projectTitle: project.title,
-                  statusEvent: "bloqueado" satisfies ProjectStatusEvent,
-                  projectUrl: url,
-                }),
-              },
-        }),
-      ];
-    }),
-  );
-}
+// packages/jobs/src/notify/projetos.ts (P-0.14); notifyProjectBlocked
+// movida para o mesmo arquivo em P-2.10b (único chamador é o cron de
+// inadimplência, que não tem sessão HTTP — mesma razão das duas primeiras).
+// notifyPaymentMade migrou para packages/integrations/src/financeiro.ts em
+// P-2.10b: quem sabe que um pagamento aconteceu é o Financeiro
+// (markPayableAsPaid), não este app — decisão registrada em SESSIONS.md.
 
 // ---------------------------------------------------------------------------
 // Contestation → all diretores + conselheiros (in_app + email)
@@ -522,7 +364,7 @@ export async function notifyProjectBlocked(projectId: string): Promise<void> {
 
 export async function notifyContestation(
   projectId: string,
-  contestorName: string,
+  contestorId: string,
 ): Promise<void> {
   const [project] = await db
     .select({ title: projects.title })
@@ -532,10 +374,18 @@ export async function notifyContestation(
 
   if (!project) return;
 
+  const [contestor] = await db
+    .select({ fullName: users.fullName, email: users.email })
+    .from(users)
+    .where(eq(users.id, contestorId))
+    .limit(1);
+  const contestorName = contestor?.fullName ?? contestor?.email ?? "Alguém";
+
   const voters = await getUsersByRoles(["diretor", "conselheiro"]);
   if (!voters.length) return;
 
-  const url = buildProjectUrl(projectId);
+  const url = buildDiretoriaProjectUrl(projectId);
+  const href = diretoriaHref(projectId);
   const resendApiKey = process.env.RESEND_API_KEY;
   const title = `Contestação registrada: ${project.title}`;
   const body = `${contestorName} registrou uma contestação. O projeto retorna para votação.`;
@@ -563,7 +413,7 @@ export async function notifyContestation(
             payload: {
               module: "projetos",
               projectId,
-              href: `/projetos/${projectId}`,
+              href,
             },
           },
         }),
@@ -579,7 +429,7 @@ export async function notifyContestation(
             payload: {
               module: "projetos",
               projectId,
-              href: `/projetos/${projectId}`,
+              href,
             },
           },
           email: emailOpts
@@ -628,7 +478,8 @@ export async function notifyEvaluatorDesignated(
   const firstTitle = projectRows[0]?.title ?? "projeto designado";
   const displayName = evaluator.fullName ?? evaluator.email;
   const firstProjectId = projectIds[0] as string;
-  const url = buildProjectUrl(firstProjectId);
+  const url = buildDiretoriaProjectUrl(firstProjectId);
+  const href = diretoriaHref(firstProjectId);
   const resendApiKey = process.env.RESEND_API_KEY;
   const meetingDateStr = meetingDate.toLocaleDateString("pt-BR", {
     day: "2-digit",
@@ -665,7 +516,7 @@ export async function notifyEvaluatorDesignated(
         type: "project.evaluator_designated",
         title: titleLabel,
         body: `Reunião de votação em ${meetingDateStr}.`,
-        payload: { module: "projetos", projectIds, href: "/projetos" },
+        payload: { module: "projetos", projectIds, href },
       },
     }),
     createNotification({
@@ -677,7 +528,7 @@ export async function notifyEvaluatorDesignated(
         type: "project.evaluator_designated",
         title: titleLabel,
         body: `Reunião de votação em ${meetingDateStr}.`,
-        payload: { module: "projetos", projectIds, href: "/projetos" },
+        payload: { module: "projetos", projectIds, href },
       },
       email: emailOpts
         ? { to: evaluator.email, ...emailOpts }

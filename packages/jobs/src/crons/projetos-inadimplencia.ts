@@ -3,6 +3,7 @@ import { db } from "@hebron/db/client";
 import { costCenters, payables, reports } from "@hebron/db/schema";
 import { logAudit } from "@hebron/db/audit";
 import { getSystemActorId } from "@hebron/db/system-actor";
+import { notifyProjectBlocked } from "../notify/projetos";
 import { inngest } from "../client";
 
 /**
@@ -71,6 +72,8 @@ export async function runProjetosInadimplenciaCheck(): Promise<{
         ),
       );
 
+    if (!blockable.length) continue; // nada pendente para bloquear hoje
+
     for (const payable of blockable) {
       const now = new Date();
       await db.transaction(async (tx) => {
@@ -96,6 +99,20 @@ export async function runProjetosInadimplenciaCheck(): Promise<{
         );
       });
       blockedPayableIds.push(payable.id);
+    }
+
+    // Notificação (P-2.10b) — best-effort, fora da transação de bloqueio: a
+    // falha de um email/in_app não deve desfazer o bloqueio já auditado.
+    // `blockable` já filtra status = "pendente", então isto só dispara em
+    // dias com bloqueio novo — idempotente por construção, sem precisar de
+    // uma tabela de "já notificado".
+    try {
+      await notifyProjectBlocked(projectId);
+    } catch (err) {
+      console.error(
+        "[jobs/projetos-inadimplencia] notifyProjectBlocked failed:",
+        err,
+      );
     }
   }
 

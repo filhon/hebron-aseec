@@ -1,3 +1,4 @@
+import * as React from "react";
 import { and, eq, sum } from "drizzle-orm";
 import { db } from "@hebron/db/client";
 import {
@@ -6,9 +7,16 @@ import {
   payables,
   reservations,
   aidRequests,
+  paymentSchedules,
+  projects,
+  users,
+  emailTemplates,
 } from "@hebron/db/schema";
 import { logAudit } from "@hebron/db/audit";
 import { getSystemActorId } from "@hebron/db/system-actor";
+import { makeNotificationInserter } from "@hebron/db/notifications";
+import { createNotification } from "@hebron/email";
+import { PaymentConfirmationEmail } from "@hebron/email/templates/payment-confirmation";
 
 // ---------------------------------------------------------------------------
 // getProjectBudgetExecution — Financeiro → Projetos
@@ -169,4 +177,128 @@ export async function onFlatsAssistanceApproved(
   });
 
   return { payableId: payable.id };
+}
+
+// ---------------------------------------------------------------------------
+// notifyProjectPaymentMade — Financeiro → Projetos (P-2.10b)
+//
+// Movida de `apps/projetos/src/lib/notifications.ts`, onde vivia sem
+// chamador (P-2.10). Quem sabe que um pagamento aconteceu é o Financeiro
+// (`markPayableAsPaid`, apps/financeiro/src/actions/approval.ts) — chama
+// esta função pelo `payment_schedule_id` do payable (FK 1:1 —
+// `financeiro.payables.payment_schedule_id` — só existe quando o payable
+// nasceu de um projeto aprovado, `generatePaymentSchedule`/
+// `onProjectApproved`). Distinta de `notifyPayablePaid`, que já vive no
+// mesmo `approval.ts`: aquela avisa in_app quem CRIOU o payable no
+// Financeiro; esta avisa por email o SUBMISSOR do projeto — públicos e
+// canais diferentes, portanto não duplicam o mesmo aviso para o mesmo
+// evento (decisão registrada em SESSIONS.md).
+// ---------------------------------------------------------------------------
+
+const PROJETOS_BASE_URL =
+  process.env.NEXT_PUBLIC_PROJETOS_URL ?? "https://projetos.hebronaseec.com.br";
+
+async function getEmailTemplateOverride(
+  slug: string,
+): Promise<{ subject: string; bodyHtml: string } | null> {
+  const [row] = await db
+    .select({
+      subject: emailTemplates.subject,
+      bodyHtml: emailTemplates.bodyHtml,
+    })
+    .from(emailTemplates)
+    .where(eq(emailTemplates.slug, slug))
+    .limit(1);
+  return row ?? null;
+}
+
+function applyEmailVars(
+  tpl: { subject: string; bodyHtml: string },
+  vars: Record<string, string>,
+): { subject: string; html: string } {
+  const sub = (t: string) =>
+    t.replace(/\{\{(\w+)\}\}/g, (_, k: string) => vars[k] ?? `{{${k}}}`);
+  return { subject: sub(tpl.subject), html: sub(tpl.bodyHtml) };
+}
+
+export async function notifyProjectPaymentMade(
+  paymentScheduleId: string,
+  receiptUrl?: string,
+): Promise<void> {
+  const [payment] = await db
+    .select({
+      amount: paymentSchedules.amount,
+      dueDate: paymentSchedules.dueDate,
+      month: paymentSchedules.month,
+      projectId: paymentSchedules.projectId,
+      projectTitle: projects.title,
+      submitterId: projects.submitterId,
+      submitterName: users.fullName,
+      submitterEmail: users.email,
+    })
+    .from(paymentSchedules)
+    .innerJoin(projects, eq(projects.id, paymentSchedules.projectId))
+    .innerJoin(users, eq(users.id, projects.submitterId))
+    .where(eq(paymentSchedules.id, paymentScheduleId))
+    .limit(1);
+
+  if (!payment) return;
+
+  // Rota real do submissor — (submissor)/[id], não /projetos/<id> (P-2.10b).
+  const href = `/${payment.projectId}`;
+  const url = `${PROJETOS_BASE_URL}${href}`;
+  const resendApiKey = process.env.RESEND_API_KEY;
+  const displayName = payment.submitterName ?? payment.submitterEmail;
+  const paymentDate = payment.dueDate ? new Date(payment.dueDate) : new Date();
+  const subject = `Pagamento realizado: ${payment.projectTitle}`;
+  const tpl = await getEmailTemplateOverride("projetos-payment-made");
+  const emailOpts = tpl
+    ? applyEmailVars(tpl, {
+        nome: displayName,
+        titulo: payment.projectTitle,
+        valor: parseFloat(payment.amount).toLocaleString("pt-BR", {
+          style: "currency",
+          currency: "BRL",
+        }),
+        data: paymentDate.toLocaleDateString("pt-BR", {
+          day: "2-digit",
+          month: "long",
+          year: "numeric",
+        }),
+        link: url,
+      })
+    : null;
+
+  await createNotification({
+    insert: makeNotificationInserter(),
+    resendApiKey,
+    data: {
+      userId: payment.submitterId,
+      channel: "email",
+      type: "payment.made",
+      title: subject,
+      body: "Um pagamento do seu projeto foi processado.",
+      payload: {
+        module: "projetos",
+        projectId: payment.projectId,
+        paymentScheduleId,
+        href,
+      },
+    },
+    email: emailOpts
+      ? { to: payment.submitterEmail, ...emailOpts }
+      : {
+          to: payment.submitterEmail,
+          subject,
+          template: React.createElement(PaymentConfirmationEmail, {
+            recipientName: displayName,
+            projectTitle: payment.projectTitle,
+            amount: payment.amount,
+            paymentDate,
+            paymentMonth: payment.month,
+            projectUrl: url,
+            receiptUrl: receiptUrl ?? null,
+          }),
+        },
+  });
 }

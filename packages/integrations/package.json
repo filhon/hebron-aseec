@@ -25,14 +25,17 @@
   },
   "dependencies": {
     "@hebron/db": "workspace:*",
+    "@hebron/email": "workspace:*",
     "@hebron/types": "workspace:*",
     "@hebron/validators": "workspace:*",
-    "drizzle-orm": "catalog:"
+    "drizzle-orm": "catalog:",
+    "react": "^19.0.0"
   },
   "devDependencies": {
     "@hebron/eslint-config": "workspace:*",
     "@hebron/typescript-config": "workspace:*",
     "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
     "dotenv": "^16.4.5",
     "eslint": "^9.13.0",
     "typescript": "^5.6.3",

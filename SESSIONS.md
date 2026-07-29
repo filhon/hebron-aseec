@@ -227,6 +227,7 @@
 | S-204  | 2026-07-28 | P-2.6b — O relatório que é rejeitado sem motivo e não pode voltar (CORRETIVO)                                                    | concluido                            |
 | S-205  | 2026-07-28 | P-2.8b — A reprovação que o mapa de estágios não permite e o quórum que conta quem já saiu (CORRETIVO)                           | concluido                            |
 | S-206  | 2026-07-28 | P-2.8c — Quatro actions sem porta de entrada: rascunho, instituição e membros (CORRETIVO)                                        | concluido                            |
+| S-207  | 2026-07-28 | P-2.10b — Sete notificações que nunca disparam e um link que leva a lugar nenhum (CORRETIVO)                                     | concluido                            |
 
 ---
 
@@ -17680,3 +17681,166 @@ bater com o gate e com a RLS `org_members_write_admin` (só diretor/super_admin)
   testes de `organizations.test.ts`)
 - `pnpm --filter projetos build` — verde (`/[id]/editar` e `/instituicoes`
   compilam e aparecem no route map)
+
+---
+
+## S-207 — P-2.10b — Sete notificações que nunca disparam e um link que leva a lugar nenhum (CORRETIVO)
+
+**Branch:** `feat/P-2.10b-projetos-notificacoes`
+
+### Contexto
+
+As sete funções de `apps/projetos/src/lib/notifications.ts`
+(`notifyProjectSubmitted`, `notifyProjectInValidation`, `notifyVotingOpen`,
+`notifyPaymentMade`, `notifyProjectBlocked`, `notifyContestation`,
+`notifyEvaluatorDesignated`) não tinham um único chamador — o próprio
+arquivo registrava o fato em comentário desde P-0.14. Além disso, todo
+`href`/URL de notificação do módulo (nas sete funções, em
+`packages/jobs/src/notify/projetos.ts` e no `notifyHomologacao` inline de
+`actions/projects.ts`) apontava para `/projetos/<id>`, rota que não existe —
+as rotas reais são `(submissor)/[id]` e `(diretoria)/pipeline/[id]`.
+
+### Decisões
+
+1. **Destino por papel, não um caminho único.** Todo `href`/URL agora
+   escolhe entre `` `/${projectId}` `` (submissor) e
+   `` `/pipeline/${projectId}` `` (diretoria) conforme o papel do
+   destinatário. Onde a mesma notificação atinge os dois públicos
+   (`notifyProjectBlocked`: submissor + super_admins), o destino é resolvido
+   por destinatário dentro do mesmo loop, não por um valor fixo.
+2. **`notifyPaymentMade` → Financeiro.** Migrada para
+   `notifyProjectPaymentMade` em `packages/integrations/src/financeiro.ts`
+   (não `packages/jobs` — é chamada a partir de uma Server Action, não de um
+   cron) e ligada a `markPayableAsPaid`
+   (`apps/financeiro/src/actions/approval.ts`) pelo `payment_schedule_id` do
+   payable (FK 1:1, só preenchido quando o payable nasceu de um projeto
+   aprovado). Mantida distinta de `notifyPayablePaid` (mesmo `approval.ts`,
+   já existente): aquela avisa in_app quem **criou** o payable no
+   Financeiro; esta avisa por **email** o **submissor** do projeto —
+   públicos e canais diferentes, não duplicam o mesmo aviso para o mesmo
+   evento. Exigiu adicionar `@hebron/email` (+ `react`, `"jsx": "react-jsx"`
+   no tsconfig) às dependências de `packages/integrations` — não tinha essa
+   dependência antes porque nenhuma função sua enviava email — e
+   `@hebron/integrations` às dependências de `apps/financeiro`, que também
+   não a tinha (só era consumida por outros apps antes, nunca consumia).
+3. **`notifyProjectBlocked` → `packages/jobs`.** Único chamador é o cron de
+   inadimplência (`projetos-inadimplencia.ts`), que roda sem sessão HTTP —
+   mesma razão pela qual `notifyProjectDecision`/`notifyReportReminder` já
+   tinham migrado para lá em P-0.14. Notifica só nos dias em que o cron
+   bloqueia algo de fato (`blockable.length > 0`), o que a torna idempotente
+   por construção sem precisar de tabela de "já notificado".
+4. **`notifyEvaluatorDesignated` chamada por `assignEvaluator`.** A função
+   já existia pronta para receber `projectIds: string[]` + `meetingDate`,
+   mas `assignEvaluator` designa um avaliador por vez para um projeto e não
+   tinha data de reunião à mão. `assignEvaluator` passou a consultar a
+   próxima `meeting_sessions` agendada (mesma query de `getMeetingAgenda`,
+   `lib/queries.ts`) dentro da mesma transação; sem reunião agendada
+   (violaria a invariante de BRAIN §6.1 — auto-criação mensal), a
+   designação segue normalmente e a notificação é pulada.
+5. **`notifyContestation` ganhou `contestorId` no lugar de `contestorName`**
+   — a action `createContestation` só tinha o id de quem contesta; a busca
+   do nome/email agora vive dentro de `notifyContestation`, não duplicada na
+   action.
+6. **`payload.module`/`href` em todo produtor do módulo**, mesmo em canal
+   `email` — incluindo `notifyHomologacao` (inline em `actions/projects.ts`,
+   nunca teve os dois) e `notifyPendingEvaluations`
+   (`packages/jobs/src/notify/projetos.ts:243`, canal email-only, sem
+   `module`/`href` desde que foi escrita em P-0.14). `notifyPendingEvaluations`
+   cobre vários projetos sem um id único por notificação — `href` aponta
+   para `/pipeline` (listagem da diretoria), não para um projeto específico.
+7. **`castVote`/`closeVoting`/`triggerPanicButton` não ligados a
+   `notifyVotingOpen`.** O escopo do prompt cogitava isso para quando essas
+   três funções "devolverem a votacao" — nenhuma das três faz isso hoje: as
+   três só transicionam `votacao → homologacao`. A única função que de fato
+   devolve um projeto a `votacao` é `createContestation`, que já dispara
+   `notifyContestation` (cujo corpo já informa "o projeto retorna para
+   votação"); um `notifyVotingOpen` adicional duplicaria o aviso para o
+   mesmo evento. `voting.ts` ficou sem alteração.
+8. **Achado fora de escopo, não corrigido aqui:** a policy RLS
+   `projects_update_rascunho_owner` (`0007_projetos.sql`) exige, via
+   `WITH CHECK`, que `stage` permaneça `'rascunho'` após o UPDATE — ou seja,
+   um submissor comum nunca passa no RLS ao chamar `submitProject` sobre o
+   próprio projeto (só `projects_update_admin`, i.e. super_admin/diretor,
+   permite a transição). Isso não é um efeito colateral deste prompt: é por
+   isso que `flow.test.ts` (P-2.12) já evitava chamar a action real e fazia
+   o UPDATE de estágio direto no banco. Nenhum arquivo de RLS está na lista
+   de arquivos permitidos de P-2.10b, então não foi tocado; `notifications.test.ts`
+   (novo) chama `submitProject` como super_admin, caminho que hoje passa no
+   RLS real, e registra a lacuna no próprio comentário do teste. Fica para
+   um corretivo futuro de RLS de Projetos.
+9. **Nota de doc não corrigida:** `packages/jobs/src/crons/projetos.ts`
+   (fora da lista de arquivos permitidos) tem um comentário dizendo que o
+   bloqueio de pagamento "após a expiração" ainda cita `notifyProjectBlocked`
+   como "ainda não automatizado" — agora está. Comentário ficou desatualizado;
+   não corrigido por estar fora do escopo de arquivos permitidos.
+
+### Escopo entregue
+
+1. `apps/projetos/src/lib/notifications.ts`: hrefs/URLs por papel em todas
+   as cinco funções que permaneceram (`notifyProjectSubmitted`,
+   `notifyProjectInValidation`, `notifyVotingOpen`, `notifyContestation`,
+   `notifyEvaluatorDesignated`); `notifyPaymentMade` e `notifyProjectBlocked`
+   removidas (migradas).
+2. `packages/jobs/src/notify/projetos.ts`: hrefs corrigidos em
+   `notifyProjectDecision` (ganhou `module`, que faltava) e
+   `notifyReportReminder`; `module`/`href` adicionados a
+   `notifyPendingEvaluations`; `notifyProjectBlocked` adicionada (migrada).
+3. `packages/jobs/src/crons/projetos-inadimplencia.ts`: chama
+   `notifyProjectBlocked` por projeto com bloqueio novo no dia.
+4. `apps/projetos/src/actions/projects.ts`: `submitProject` chama
+   `notifyProjectSubmitted` + `notifyProjectInValidation`;
+   `transitionProjectStage` chama `notifyVotingOpen` ao entrar em
+   `votacao`; `createContestation` chama `notifyContestation`;
+   `notifyHomologacao` ganhou `module`/`href`. Todas as chamadas seguem o
+   padrão já estabelecido em `submitProject`/`onProjectSubmitted`: `await`
+   com `try/catch` que loga e não derruba a operação principal.
+5. `apps/projetos/src/actions/evaluations.ts`: `assignEvaluator` consulta a
+   próxima reunião agendada e chama `notifyEvaluatorDesignated`.
+6. `packages/integrations/src/financeiro.ts`: nova `notifyProjectPaymentMade`
+   (migrada de `notifyPaymentMade`); `packages/integrations/package.json`
+   ganhou `@hebron/email` + `react`; `packages/integrations/tsconfig.json`
+   ganhou `"jsx": "react-jsx"` (infra faltante — G1).
+7. `apps/financeiro/src/actions/approval.ts`: `markPayableAsPaid` retorna
+   `paymentScheduleId` da transação e chama `notifyProjectPaymentMade`
+   quando não nulo; `apps/financeiro/package.json` ganhou
+   `@hebron/integrations` (infra faltante — G1).
+8. `apps/projetos/src/__tests__/notifications.test.ts` (novo): cobre
+   `submitProject` gerando in_app para super_admin (`href` =
+   `/pipeline/<id>`) e para o submissor (`href` = `/<id>`), com asserção de
+   que as duas rotas existem de fato no filesystem do app.
+9. `PROMPTS.md`: os oito critérios `[~]` de P-2.10 marcados **P-2.10b**
+   voltaram a `[x]`, cada um com uma linha curta do que foi corrigido.
+
+### Critérios de aceite
+
+- [x] `grep -rn "notify" apps/projetos/src/actions packages/jobs/src/crons`
+      mostra chamador para toda função exportada de `lib/notifications.ts`
+- [x] Nenhum `href` de notificação de projetos aponta para `/projetos/<id>`;
+      os destinos existem como rota real (verificado por grep e por
+      `existsSync` no teste novo)
+- [x] Todo in_app do módulo (inclusive `notifyHomologacao` e
+      `notifyPendingEvaluations`) tem `payload.module` e `payload.href`
+- [x] Falha de notificação não derruba a operação que a originou, e é
+      logada — `try/catch` em todo ponto de ligação
+- [x] Único caminho para o email de pagamento realizado —
+      `notifyProjectPaymentMade`; decisão registrada acima (item 2)
+- [x] Teste cobre submissão → notificação para super_admin com `href`
+      correspondente a rota existente (`notifications.test.ts`)
+- [x] `pnpm --filter projetos typecheck lint test` verdes (136/136, 13
+      arquivos); `pnpm --filter jobs typecheck` verde
+- [x] Registrado em SESSIONS.md
+
+### Verificações executadas
+
+- `pnpm --filter projetos typecheck` — verde
+- `pnpm --filter projetos lint` — verde
+- `pnpm --filter projetos test` — 136/136 (13 arquivos)
+- `pnpm --filter @hebron/jobs typecheck` — verde
+- `pnpm --filter @hebron/jobs test` — 19/19 (9 arquivos, inclui
+  `projetos-inadimplencia.test.ts` exercitando a nova chamada a
+  `notifyProjectBlocked`)
+- `pnpm --filter @hebron/integrations typecheck lint test` — verde, 20/20
+  (8 arquivos, inclui `financeiro.test.ts`)
+- `pnpm --filter financeiro typecheck lint test` — verde, 49/49 (11
+  arquivos, inclui o fluxo `governance.test.ts` completo de
+  aprova→autoriza→paga passando pelo novo branch de `paymentScheduleId`)

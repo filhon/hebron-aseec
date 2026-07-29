@@ -3777,21 +3777,21 @@ Implementar todas as notificações do módulo Projetos (ver lista no BRAIN.md s
 
 **Critérios de aceite:**
 
-- [~] Submissão → super_admins (in_app + email) — `notifyProjectSubmitted` existe e **nenhuma action a chama**. **P-2.10b**
-- [~] Validação → submissor (in_app + email) — `notifyProjectInValidation` sem chamador. **P-2.10b**
-- [~] Votação aberta → diretores/conselheiros (in_app + email) — `notifyVotingOpen` sem chamador: a votação abre e ninguém é avisado. **P-2.10b**
-- [~] Aprovado/reprovado (após homologação) → submissor (email) — dispara pelo cron de homologação automática (P-0.14), mas o link vai para `/projetos/<id>`, rota inexistente. **P-2.10b**
-- [x] Relatório pendente: 3 lembretes (7d antes, no dia, 7d antes de expirar) — cron `reportRemindersCron` (P-0.14)
-- [~] Pagamento realizado → submissor (email com comprovante) — `notifyPaymentMade` sem chamador; quem sabe do pagamento é o Financeiro. **P-2.10b**
-- [~] Bloqueio por falta de relatório → submissor + super_admins — `notifyProjectBlocked` sem chamador; o cron de inadimplência bloqueia os payables e não notifica ninguém. **P-2.10b**
-- [~] Contestação de diretor → todos diretores/conselheiros — `notifyContestation` sem chamador. **P-2.10b**
-- [~] Lista de projetos designados → avaliador (7d antes da reunião) — `evaluationRemindersCron` (P-0.14) cobre o lembrete; `notifyEvaluatorDesignated` (aviso no ato da designação) segue sem chamador. **P-2.10b**
+- [x] Submissão → super_admins (in_app + email) — `notifyProjectSubmitted` chamada por `submitProject`, destino `(diretoria)/pipeline/[id]`. Corrigido em **P-2.10b**.
+- [x] Validação → submissor (in_app + email) — `notifyProjectInValidation` chamada por `submitProject`, destino `(submissor)/[id]`. Corrigido em **P-2.10b**.
+- [x] Votação aberta → diretores/conselheiros (in_app + email) — `notifyVotingOpen` chamada por `transitionProjectStage` ao entrar em `votacao`, destino `(diretoria)/pipeline/[id]`. Corrigido em **P-2.10b**.
+- [x] Aprovado/reprovado (após homologação) → submissor (email) — cron de homologação automática (P-0.14); link corrigido para `(submissor)/[id]` (era `/projetos/<id>`, inexistente). Corrigido em **P-2.10b**.
+- [x] Relatório pendente: 3 lembretes (7d antes, no dia, 7d antes de expirar) — cron `reportRemindersCron` (P-0.14); link corrigido para `(submissor)/[id]` em **P-2.10b**.
+- [x] Pagamento realizado → submissor (email com comprovante) — `notifyPaymentMade` migrou para `notifyProjectPaymentMade` em `packages/integrations/src/financeiro.ts`, chamada por `markPayableAsPaid` (apps/financeiro) pelo `payment_schedule_id` do payable. Corrigido em **P-2.10b**.
+- [x] Bloqueio por falta de relatório → submissor + super_admins — `notifyProjectBlocked` movida para `packages/jobs/src/notify/projetos.ts`, chamada pelo cron de inadimplência a cada projeto com payable recém-bloqueado. Corrigido em **P-2.10b**.
+- [x] Contestação de diretor → todos diretores/conselheiros — `notifyContestation` chamada por `createContestation`, destino `(diretoria)/pipeline/[id]`. Corrigido em **P-2.10b**.
+- [x] Lista de projetos designados → avaliador (7d antes da reunião) — `evaluationRemindersCron` (P-0.14) cobre o lembrete; `notifyEvaluatorDesignated` (aviso no ato) agora é chamada por `assignEvaluator`, com a data da próxima reunião mensal agendada. Corrigido em **P-2.10b**.
 - [x] Templates editáveis no Admin
 - [x] Lint passa
 - [x] Types passam
 
 **Notas (auditoria do Bloco B, 2026-07-28):**
-As sete funções de `apps/projetos/src/lib/notifications.ts` não têm um único chamador no repositório — o próprio arquivo registra o fato em comentário desde P-0.14 (linhas 335-339). Os critérios acima descreviam a existência dos arquivos, não o envio das mensagens.
+As sete funções de `apps/projetos/src/lib/notifications.ts` não tinham um único chamador no repositório — o próprio arquivo registrava o fato em comentário desde P-0.14 (linhas 335-339). Os critérios acima descreviam a existência dos arquivos, não o envio das mensagens. Todas as sete foram ligadas às actions/crons correspondentes em **P-2.10b** (S-207), que também corrigiu o link `/projetos/<id>` (inexistente) usado em todo `href` de notificação do módulo.
 
 ---
 

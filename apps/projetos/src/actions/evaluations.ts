@@ -1,12 +1,13 @@
 "use server";
 
 import { z } from "zod";
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and, gte, isNull } from "drizzle-orm";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
-import { evaluations, projects } from "@hebron/db/schema";
+import { evaluations, meetingSessions, projects } from "@hebron/db/schema";
 import { createEvaluationSchema } from "@hebron/validators/projetos";
 import { diretorAction, projetosAction } from "../lib/safe-action";
 import { logProjectAudit } from "../lib/audit";
+import { notifyEvaluatorDesignated } from "../lib/notifications";
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -29,7 +30,7 @@ const submitEvaluationSchema = createEvaluationSchema.extend({
 export const assignEvaluator = diretorAction
   .schema(assignEvaluatorSchema)
   .action(async ({ parsedInput, ctx }) => {
-    const evaluation = await withAuthenticatedContext(
+    const { evaluation, nextMeetingDate } = await withAuthenticatedContext(
       { actorId: ctx.actorId },
       async (tx) => {
         // Verify project is in validacao stage
@@ -74,7 +75,22 @@ export const assignEvaluator = diretorAction
 
         const evaluation = inserted[0];
         if (!evaluation) throw new Error("Falha ao designar avaliador");
-        return evaluation;
+
+        // Próxima reunião mensal agendada (BRAIN §6.1: auto-criada na 1ª
+        // quarta-feira) — usada só para compor a notificação abaixo.
+        const [nextMeeting] = await tx
+          .select({ date: meetingSessions.date })
+          .from(meetingSessions)
+          .where(
+            and(
+              eq(meetingSessions.status, "scheduled"),
+              gte(meetingSessions.date, new Date()),
+            ),
+          )
+          .orderBy(meetingSessions.date)
+          .limit(1);
+
+        return { evaluation, nextMeetingDate: nextMeeting?.date ?? null };
       },
     );
 
@@ -89,6 +105,25 @@ export const assignEvaluator = diretorAction
         assignedBy: ctx.actorId,
       },
     });
+
+    // Notificação (P-2.10b) — best-effort: a designação já foi commitada
+    // acima. Sem reunião mensal agendada não há data para compor o aviso
+    // (invariante de BRAIN §6.1: deveria sempre haver uma) — pula e não
+    // bloqueia a designação em si.
+    if (nextMeetingDate) {
+      try {
+        await notifyEvaluatorDesignated(
+          parsedInput.evaluatorId,
+          [parsedInput.projectId],
+          nextMeetingDate,
+        );
+      } catch (err) {
+        console.error(
+          "[projetos/evaluations] notifyEvaluatorDesignated failed:",
+          err,
+        );
+      }
+    }
 
     return { evaluation };
   });

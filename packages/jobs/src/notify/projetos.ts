@@ -1,7 +1,7 @@
 import * as React from "react";
-import { eq } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "@hebron/db/client";
-import { projects, reports, users } from "@hebron/db/schema";
+import { projects, reports, roleAssignments, users } from "@hebron/db/schema";
 import { makeNotificationInserter } from "@hebron/db/notifications";
 import { createNotification } from "@hebron/email";
 import { ProjectStatusChangeEmail } from "@hebron/email/templates/project-status-change";
@@ -14,11 +14,51 @@ import { getDbTemplate, applyVars } from "../lib/templates";
 const PROJETOS_BASE_URL =
   process.env.NEXT_PUBLIC_PROJETOS_URL ?? "https://projetos.hebronaseec.com.br";
 
-function buildProjectUrl(projectId: string) {
-  return `${PROJETOS_BASE_URL}/projetos/${projectId}`;
+// Rotas reais do app (P-2.10b — não existe `/projetos/<id>`): submissor em
+// `(submissor)/[id]`, diretoria em `(diretoria)/pipeline/[id]`.
+function submissorHref(projectId: string): string {
+  return `/${projectId}`;
+}
+
+function diretoriaHref(projectId: string): string {
+  return `/pipeline/${projectId}`;
+}
+
+function buildSubmissorProjectUrl(projectId: string): string {
+  return `${PROJETOS_BASE_URL}${submissorHref(projectId)}`;
+}
+
+function buildDiretoriaProjectUrl(projectId: string): string {
+  return `${PROJETOS_BASE_URL}${diretoriaHref(projectId)}`;
 }
 
 const makeInsert = makeNotificationInserter;
+
+type UserRecord = { id: string; fullName: string | null; email: string };
+
+async function getUsersByRoles(
+  roles: Array<(typeof roleAssignments.role.enumValues)[number]>,
+): Promise<UserRecord[]> {
+  const ids = await db
+    .selectDistinct({ userId: roleAssignments.userId })
+    .from(roleAssignments)
+    .where(inArray(roleAssignments.role, roles));
+
+  if (!ids.length) return [];
+
+  return db
+    .select({ id: users.id, fullName: users.fullName, email: users.email })
+    .from(users)
+    .where(
+      and(
+        inArray(
+          users.id,
+          ids.map((r) => r.userId),
+        ),
+        isNull(users.suspendedAt),
+      ),
+    );
+}
 
 /**
  * Movida de `apps/projetos/src/lib/notifications.ts` (P-0.14) — sem nenhum
@@ -46,7 +86,7 @@ export async function notifyProjectDecision(
 
   if (!project) return;
 
-  const url = buildProjectUrl(projectId);
+  const url = buildSubmissorProjectUrl(projectId);
   const resendApiKey = process.env.RESEND_API_KEY;
   const statusEvent: ProjectStatusEvent = approved ? "aprovado" : "reprovado";
   const displayName = project.submitterName ?? project.submitterEmail;
@@ -71,7 +111,11 @@ export async function notifyProjectDecision(
       body: approved
         ? "Seu projeto foi aprovado pela diretoria."
         : "Seu projeto não foi aprovado neste ciclo.",
-      payload: { projectId, href: `/projetos/${projectId}` },
+      payload: {
+        module: "projetos",
+        projectId,
+        href: submissorHref(projectId),
+      },
     },
     email: emailOpts
       ? { to: project.submitterEmail, ...emailOpts }
@@ -112,7 +156,8 @@ export async function notifyReportReminder(
 
   if (!row) return;
 
-  const url = buildProjectUrl(row.projectId);
+  const url = buildSubmissorProjectUrl(row.projectId);
+  const href = submissorHref(row.projectId);
   const resendApiKey = process.env.RESEND_API_KEY;
   const dueDate = row.dueDate ? new Date(row.dueDate) : new Date();
   const displayName = row.submitterName ?? row.submitterEmail;
@@ -156,7 +201,7 @@ export async function notifyReportReminder(
           module: "projetos",
           projectId: row.projectId,
           reportId,
-          href: `/projetos/${row.projectId}`,
+          href,
         },
       },
     }),
@@ -173,7 +218,7 @@ export async function notifyReportReminder(
           module: "projetos",
           projectId: row.projectId,
           reportId,
-          href: `/projetos/${row.projectId}`,
+          href,
         },
       },
       email: emailOpts
@@ -240,7 +285,16 @@ export async function notifyPendingEvaluations(
       type: "project.evaluation.reminder",
       title,
       body,
-      payload: { meetingDate: meetingDate.toISOString(), projectTitles },
+      // Sem projectIds neste payload (só títulos, para exibição no email) —
+      // não há um único projeto para linkar; aponta para a lista da
+      // diretoria. module/href em todo produtor deste módulo, mesmo em
+      // canal email (P-2.10b, mesma regra de P-0.6c para payload.module).
+      payload: {
+        module: "projetos",
+        meetingDate: meetingDate.toISOString(),
+        projectTitles,
+        href: "/pipeline",
+      },
     },
     email: emailOpts
       ? { to: evaluator.email, ...emailOpts }
@@ -255,4 +309,100 @@ export async function notifyPendingEvaluations(
           }),
         },
   });
+}
+
+// ---------------------------------------------------------------------------
+// Project blocked (missing report) → submissor + super_admins (in_app +
+// email). Movida de `apps/projetos/src/lib/notifications.ts` (P-2.10b) —
+// único chamador é o cron de inadimplência (`../crons/projetos-
+// inadimplencia.ts`), que roda sem sessão HTTP; mesma razão de
+// notifyProjectDecision/notifyReportReminder acima (P-0.14).
+// ---------------------------------------------------------------------------
+
+export async function notifyProjectBlocked(projectId: string): Promise<void> {
+  const [project] = await db
+    .select({
+      title: projects.title,
+      submitterId: projects.submitterId,
+      submitterName: users.fullName,
+      submitterEmail: users.email,
+    })
+    .from(projects)
+    .innerJoin(users, eq(users.id, projects.submitterId))
+    .where(eq(projects.id, projectId))
+    .limit(1);
+
+  if (!project) return;
+
+  const admins = await getUsersByRoles(["super_admin"]);
+  const resendApiKey = process.env.RESEND_API_KEY;
+  const title = `Projeto bloqueado: ${project.title}`;
+  const body =
+    "O projeto foi bloqueado por falta de relatório. Os pagamentos estão suspensos.";
+  const dbTpl = await getDbTemplate("projetos-blocked");
+
+  const recipients: UserRecord[] = [
+    {
+      id: project.submitterId,
+      fullName: project.submitterName,
+      email: project.submitterEmail,
+    },
+    ...admins.filter((a) => a.id !== project.submitterId),
+  ];
+
+  await Promise.allSettled(
+    recipients.flatMap((recipient) => {
+      const isSubmitter = recipient.id === project.submitterId;
+      const url = isSubmitter
+        ? buildSubmissorProjectUrl(projectId)
+        : buildDiretoriaProjectUrl(projectId);
+      const href = isSubmitter
+        ? submissorHref(projectId)
+        : diretoriaHref(projectId);
+      const emailOpts = dbTpl
+        ? applyVars(dbTpl, {
+            nome: recipient.fullName ?? recipient.email,
+            titulo: project.title,
+            link: url,
+          })
+        : null;
+      return [
+        createNotification({
+          insert: makeInsert(),
+          data: {
+            userId: recipient.id,
+            channel: "in_app",
+            type: "project.blocked",
+            title,
+            body,
+            payload: { module: "projetos", projectId, href },
+          },
+        }),
+        createNotification({
+          insert: makeInsert(),
+          resendApiKey,
+          data: {
+            userId: recipient.id,
+            channel: "email",
+            type: "project.blocked",
+            title,
+            body,
+            payload: { module: "projetos", projectId, href },
+          },
+          email: emailOpts
+            ? { to: recipient.email, ...emailOpts }
+            : {
+                to: recipient.email,
+                subject: title,
+                template: React.createElement(ProjectStatusChangeEmail, {
+                  recipientName: recipient.fullName ?? recipient.email,
+                  projectTitle: project.title,
+                  statusEvent: "bloqueado" satisfies ProjectStatusEvent,
+                  projectUrl: url,
+                }),
+              },
+        }),
+      ];
+    }),
+  );
 }

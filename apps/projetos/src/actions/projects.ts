@@ -54,6 +54,12 @@ import {
 } from "@hebron/db/projetos-approval";
 import { onProjectSubmitted } from "@hebron/integrations/projetos-tarefas";
 import { checkOrganizationBudget } from "@hebron/integrations/projetos";
+import {
+  notifyProjectSubmitted,
+  notifyProjectInValidation,
+  notifyVotingOpen,
+  notifyContestation,
+} from "../lib/notifications";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -632,6 +638,20 @@ export const submitProject = submissorAction
       );
     }
 
+    // Notificações (P-2.10b) — best-effort: a submissão já foi commitada
+    // acima, uma falha de email/in_app não deve reverter nem propagar erro
+    // ao submissor.
+    try {
+      await notifyProjectSubmitted(parsedInput.projectId);
+    } catch (err) {
+      console.error("[projetos/submit] notifyProjectSubmitted failed:", err);
+    }
+    try {
+      await notifyProjectInValidation(parsedInput.projectId);
+    } catch (err) {
+      console.error("[projetos/submit] notifyProjectInValidation failed:", err);
+    }
+
     return { project: submittedProject };
   });
 
@@ -735,6 +755,16 @@ export const transitionProjectStage = diretorAction
       );
     }
 
+    // When entering votacao: notify diretores + conselheiros (P-2.10b) —
+    // best-effort, a transição de estágio já foi commitada acima.
+    if (parsedInput.toStage === "votacao") {
+      try {
+        await notifyVotingOpen(parsedInput.projectId);
+      } catch (err) {
+        console.error("[projetos/transition] notifyVotingOpen failed:", err);
+      }
+    }
+
     await logProjectAudit({
       actorId: ctx.actorId,
       action: "project.stage_transition",
@@ -828,6 +858,17 @@ export const createContestation = projetosAction
         stageReverted: { from: "homologacao", to: "votacao" },
       },
     });
+
+    // Notificação (P-2.10b) — best-effort: a contestação já foi commitada
+    // acima. Só notifica "contestação registrada" (não também
+    // notifyVotingOpen) — o corpo do email já informa que o projeto volta
+    // para votação; um segundo email duplicaria o aviso para o mesmo
+    // evento (decisão registrada em SESSIONS.md).
+    try {
+      await notifyContestation(parsedInput.projectId, ctx.actorId);
+    } catch (err) {
+      console.error("[projetos/contestation] notifyContestation failed:", err);
+    }
 
     return { contestation, stageReverted: "votacao" };
   });
@@ -937,6 +978,12 @@ async function notifyHomologacao(
       `Seu projeto "${projectTitle}" entrou em período de homologação. ` +
       `Contestações podem ser feitas até ${sevenDaysFromNow.toLocaleDateString("pt-BR")}. ` +
       `Após 7 dias sem contestação, o projeto será automaticamente aprovado.`,
-    payload: { projectId, homologacaoDeadline: sevenDaysFromNow.toISOString() },
+    payload: {
+      module: "projetos",
+      projectId,
+      homologacaoDeadline: sevenDaysFromNow.toISOString(),
+      // Rota do submissor — (submissor)/[id], não /projetos/<id> (P-2.10b).
+      href: `/${projectId}`,
+    },
   });
 }
