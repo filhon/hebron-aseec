@@ -16,7 +16,7 @@ function EmptyNoImport() {
     >
       <div
         className="flex h-16 w-16 items-center justify-center rounded-(--radius) mb-6"
-        style={{ background: "rgba(32,44,133,0.08)" }}
+        style={{ background: "var(--brand-tint)" }}
       >
         <Upload className="h-8 w-8" style={{ color: "var(--hb-blue)" }} />
       </div>
@@ -60,7 +60,7 @@ function EmptyNoImport() {
         </p>
         <p
           className="text-[11px] font-bold uppercase tracking-[0.12em] mt-2"
-          style={{ color: "rgba(255,255,255,0.5)" }}
+          style={{ color: "var(--fg-invert-muted)" }}
         >
           Lucas 16:10
         </p>
@@ -121,7 +121,7 @@ function EmptyAllConciliated() {
         </p>
         <p
           className="text-[11px] font-bold uppercase tracking-[0.12em] mt-2"
-          style={{ color: "rgba(255,255,255,0.5)" }}
+          style={{ color: "var(--fg-invert-muted)" }}
         >
           Provérbios 14:4
         </p>

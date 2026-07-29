@@ -376,7 +376,7 @@ export function TransactionTable({
               {newMenuOpen && (
                 <div
                   className="absolute right-0 top-full mt-1 w-44 rounded-(--radius) border py-1 z-20 bg-(--bg) border-(--border)"
-                  style={{ boxShadow: "0 4px 20px rgba(0,0,0,0.12)" }}
+                  style={{ boxShadow: "var(--shadow-lg)" }}
                 >
                   {(
                     [
@@ -629,7 +629,7 @@ export function TransactionTable({
                 return (
                   <tr
                     key={t.id}
-                    className="group hover:bg-[rgba(32,44,133,0.025)] transition-colors"
+                    className="group hover:bg-(--brand-tint-subtle) transition-colors"
                   >
                     <td className="px-3 py-3.5 border-b border-(--divider) text-(--fg-muted) text-xs tabular-nums whitespace-nowrap">
                       {fmtDate(t.occurredAt)}
@@ -714,7 +714,7 @@ export function TransactionTable({
                             <div
                               className="absolute right-0 top-full mt-1 w-48 rounded-(--radius) border py-1 z-20 bg-(--bg) border-(--border)"
                               style={{
-                                boxShadow: "0 4px 20px rgba(0,0,0,0.12)",
+                                boxShadow: "var(--shadow-lg)",
                               }}
                             >
                               {attachmentRef && (

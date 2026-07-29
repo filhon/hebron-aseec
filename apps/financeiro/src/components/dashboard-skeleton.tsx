@@ -230,19 +230,19 @@ export function DashboardSkeleton() {
             >
               <div
                 className="h-2.5 w-24 animate-pulse rounded"
-                style={{ background: "rgba(255,255,255,0.15)" }}
+                style={{ background: "var(--fg-invert-tint)" }}
               />
               <div
                 className="h-4 w-full animate-pulse rounded"
-                style={{ background: "rgba(255,255,255,0.12)" }}
+                style={{ background: "var(--fg-invert-tint)" }}
               />
               <div
                 className="h-4 w-4/5 animate-pulse rounded"
-                style={{ background: "rgba(255,255,255,0.12)" }}
+                style={{ background: "var(--fg-invert-tint)" }}
               />
               <div
                 className="h-2.5 w-16 animate-pulse rounded"
-                style={{ background: "rgba(255,255,255,0.08)" }}
+                style={{ background: "var(--fg-invert-tint)" }}
               />
             </div>
           </div>

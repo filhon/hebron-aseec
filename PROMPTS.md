@@ -4409,7 +4409,7 @@ Loading, empty e error states para todas as telas do Financeiro. Skeletons para 
 
 **Critérios de aceite:**
 
-- [x] Skeletons específicos por tela
+- [x] Skeletons específicos por tela — resolvido em P-3.5b: as doze rotas server `async` sem `loading.tsx` (`lancamentos`, `contas-pagar`, `contas-receber`, `plano-contas`, `orcamento`, `orcamento-organizacoes`, `importacao`, `fluxo-caixa`, `relatorios`, `centros-custo`, `notificacoes`, `meus-dados`) ganharam skeleton dedicado; `transaction-table-skeleton` voltou com chamador (`lancamentos/loading.tsx`)
 - [x] Estado vazio conciliação: "Todas as transações estão conciliadas"
 - [x] Estado vazio importação: "Importe seu primeiro extrato bancário"
 - [x] Lint passa
@@ -4921,14 +4921,14 @@ Por fim, `grep -rn "\"#[0-9a-fA-F]\{3,8\}\"\|rgba(" apps/financeiro/src --includ
 
 **Critérios de aceite:**
 
-- [ ] Toda rota do app é coberta por fronteira de erro (raiz + `(dashboard)` + `global-error`)
-- [ ] Nenhuma rota `async` sem `loading.tsx` ou `<Suspense>` — as catorze têm estado de carga
-- [ ] Nenhum skeleton desloca o layout na troca para o conteúdo real
-- [ ] `grep -rn "\"#[0-9a-fA-F]\{3,8\}\"\|rgba(" apps/financeiro/src --include=*.tsx` retorna vazio
-- [ ] Nenhum token novo definido fora de `packages/ui/src/tokens.css`
-- [ ] Microcopy sem exclamação genérica; versículo só nos vazios
-- [ ] `pnpm --filter @hebron/financeiro typecheck lint test` verdes; `pnpm --filter @hebron/financeiro build` verde
-- [ ] Registrar em SESSIONS.md
+- [x] Toda rota do app é coberta por fronteira de erro (raiz + `(dashboard)` + `global-error`)
+- [x] Nenhuma rota `async` sem `loading.tsx` ou `<Suspense>` — as catorze têm estado de carga
+- [x] Nenhum skeleton desloca o layout na troca para o conteúdo real
+- [x] `grep -rn "\"#[0-9a-fA-F]\{3,8\}\"\|rgba(" apps/financeiro/src --include=*.tsx` retorna vazio
+- [x] Nenhum token novo definido fora de `packages/ui/src/tokens.css`
+- [x] Microcopy sem exclamação genérica; versículo só nos vazios
+- [x] `pnpm --filter @hebron/financeiro typecheck lint test` verdes; `pnpm --filter @hebron/financeiro build` verde — 1 falha pré-existente e não relacionada em `designation-governance.test.ts` (colisão de dado de teste no banco de dev compartilhado, `duplicate key value violates unique constraint "payables_pkey"`; reproduz de forma idêntica com o stash das mudanças deste prompt aplicado, ou seja, antes delas)
+- [x] Registrar em SESSIONS.md
 
 **Notas:**
 Ref: BRAIN.md §5 e os precedentes de P-1.17b e P-2.5b — este prompt é a terceira execução do mesmo corretivo, e vale conferir os dois anteriores antes de escrever do zero. O erro que este módulo pode mostrar tem peso próprio: quem vê "Application error" na tela de saldos não conclui "o servidor caiu", conclui que o dinheiro sumiu.

@@ -70,7 +70,7 @@ const ROOT_ICONS: Record<string, React.ReactNode> = {
 
 const ROOT_COLORS: Record<string, { icon: string; bg: string } | undefined> = {
   receita: { icon: "text-(--hb-green-deep)", bg: "bg-(--hb-green-muted)" },
-  despesa: { icon: "text-(--hb-blue)", bg: "bg-[rgba(32,44,133,0.10)]" },
+  despesa: { icon: "text-(--hb-blue)", bg: "bg-(--brand-tint-strong)" },
 };
 
 const ROOT_COLOR_DEFAULT = {
@@ -174,7 +174,7 @@ function TreeNodeRow({
               "text-[10px] font-bold uppercase px-2 py-0.5 rounded-full",
               node.type === "receita"
                 ? "bg-(--hb-green-muted) text-(--hb-green-deep)"
-                : "bg-[rgba(32,44,133,0.10)] text-(--hb-blue)",
+                : "bg-(--brand-tint-strong) text-(--hb-blue)",
             )}
           >
             {node.type}
@@ -452,7 +452,7 @@ export function CategoryTree({ categories }: CategoryTreeProps) {
                 <span className="h-1.5 w-1.5 rounded-full bg-current" />
                 {rootCount} categorias-raiz
               </span>
-              <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase px-2.5 py-1 rounded-full bg-[rgba(32,44,133,0.10)] text-(--hb-blue)">
+              <span className="inline-flex items-center gap-1.5 text-[10px] font-bold uppercase px-2.5 py-1 rounded-full bg-(--brand-tint-strong) text-(--hb-blue)">
                 <span className="h-1.5 w-1.5 rounded-full bg-current" />
                 {groupCount} grupos
               </span>
@@ -486,7 +486,7 @@ export function CategoryTree({ categories }: CategoryTreeProps) {
       {modal && (
         <div
           className="fixed inset-0 z-(--z-overlay) flex justify-end"
-          style={{ background: "rgba(19,23,55,0.42)" }}
+          style={{ background: "var(--overlay)" }}
           onClick={() => setModal(null)}
         >
           <div

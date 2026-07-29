@@ -233,6 +233,7 @@
 | S-210  | 2026-07-29 | P-3.2b — Sete botões que não fazem nada e um CSV com extensão de Excel (CORRETIVO)                                               | concluido                            |
 | S-211  | 2026-07-29 | P-3.3b — O plano de contas que esconde a categoria recém-criada (CORRETIVO)                                                      | concluido                            |
 | S-212  | 2026-07-29 | P-3.4b — O comprovante que a tela pede e o sistema descarta (CORRETIVO)                                                          | concluido                            |
+| S-213  | 2026-07-29 | P-3.5b — Nenhuma fronteira de erro, doze telas sem carregamento e 45 cores fora do sistema (CORRETIVO)                           | concluido                            |
 
 ---
 
@@ -18502,7 +18503,130 @@ saía sem recibo nenhum e o audit gravava `receiptCount: 0` todo mês.
       recibo e audit com `receiptCount` real — coberto por teste
 - [x] `pnpm --filter @hebron/financeiro typecheck lint test build` verdes
       (test: 56/57 — a falha isolada em `designation-governance.test.ts >
-    createWeeklyBatch` é a mesma drift pré-existente do dev DB
+  createWeeklyBatch` é a mesma drift pré-existente do dev DB
       compartilhado documentada em S-211/[[project_projetos_schema_grant_drift]],
       não relacionada a este diff)
+- [x] Registrado em SESSIONS.md
+
+---
+
+## S-213 — P-3.5b — Nenhuma fronteira de erro, doze telas sem carregamento e 45 cores fora do sistema (CORRETIVO)
+
+**Branch:** `feat/P-3.5b-financeiro-estados`
+
+### Contexto
+
+Terceira execução do corretivo que P-1.17b fechou em Documentos e P-2.5b em
+Projetos — desta vez no único módulo onde a tela mostra saldo bancário.
+`find apps/financeiro/src -name "error.tsx" -o -name "global-error.tsx" -o
+-name "loading.tsx"` devolvia vazio: nenhuma fronteira de erro no app, e
+doze das catorze rotas (todas exceto o dashboard e `conciliacao`, que já
+tinham `<Suspense>` desde P-3.5) sem `loading.tsx` — incluindo
+`transaction-table-skeleton.tsx`, removido em P-3.9 (S-69) por estar órfão
+e nunca recriado. `grep -rn "\"#[0-9a-fA-F]\{3,8\}\"\|rgba(" apps/financeiro/src
+--include=*.tsx` devolvia 46 ocorrências em 21 arquivos.
+
+### Decisões
+
+1. **Fronteiras de erro:** `app/error.tsx`, `app/(dashboard)/error.tsx`
+   (preserva o shell de navegação — é o mesmo segmento do `layout.tsx` que
+   renderiza `FinanceiroShell`, então o Next não o desmonta) e
+   `app/global-error.tsx`, seguindo o padrão já estabelecido em
+   `apps/documentos` e `apps/projetos` (`hb-page`/`hb-empty`/`hb-btn` de
+   `packages/ui`, já importados via `globals.css`). Copy deliberadamente
+   calma: nenhuma delas sugere perda de dado ("nenhum lançamento ou saldo
+   foi alterado"), conforme a nota do prompt sobre o que "Application
+   error" pode significar numa tela de saldos.
+2. **Doze skeletons novos**, um componente por rota
+   (`transaction-table-skeleton.tsx` recriado; `contas-pagar-skeleton.tsx`,
+   `receivables-skeleton.tsx`, `category-tree-skeleton.tsx`,
+   `budget-skeleton.tsx`, `org-budgets-skeleton.tsx`,
+   `import-wizard-skeleton.tsx`, `cash-flow-skeleton.tsx`,
+   `relatorios-skeleton.tsx`, `centros-custo-skeleton.tsx`,
+   `notifications-skeleton.tsx`, `meus-dados-skeleton.tsx` novos), cada um
+   lido a partir da página/view real (contagem de KPI cards, colunas de
+   tabela, tabs, grid) para não deslocar o layout na troca — mesmo padrão
+   `Bone` local dos dois skeletons pré-existentes (`dashboard-skeleton.tsx`,
+   `conciliation-skeleton.tsx`), não extraído em componente compartilhado.
+3. **Fechamento dos 46 literais de cor** — mapeamento por semântica, não
+   substituição mecânica:
+   - `rgba(255,255,255,0.5/0.6/0.65)` (texto mudo sobre `--hb-blue`) →
+     `--fg-invert-muted`, já existente e com esse papel exato.
+   - `"#fff"` (texto sobre estado ativo/accent) → `--fg-invert`.
+   - `rgba(32,44,133,0.08)` → `--brand-tint`; `0.04` → `--brand-tint-subtle`
+     (ambos já existiam). `0.03` e `0.025` (hover sutil) normalizados para
+     `--brand-tint-subtle` — não mereciam token próprio para uma diferença
+     de opacidade imperceptível.
+   - `rgba(32,44,133,0.10)`, repetido 4x como badge/pill de categoria
+     (`category-tree.tsx` x3, `centros-custo/page.tsx`), não tinha token —
+     criado `--brand-tint-strong: rgba(32, 44, 133, 0.1)` em
+     `packages/ui/src/tokens.css`, espelhando o `--accent-tint-strong` que
+     já existia para laranja na mesma opacidade.
+   - `rgba(255,255,255,0.2)` (badge de contador sobre pill ativo) também
+     sem token — criado `--fg-invert-tint: rgba(255, 255, 255, 0.2)`
+     (branco translúcido sobre superfície de marca); reaproveitado nos
+     quatro tons da "verse card" do `dashboard-skeleton.tsx`, que antes
+     usava uma rampa de 4 opacidades de branco diferentes sem token nenhum.
+   - `rgba(19,23,55,0.42)`, repetido 9x como véu de overlay de formulário
+     (não 6, como o prompt estimava) → `--overlay` (já existente,
+     "scrim de modais" — a opacidade de referência do token é 0.5, não
+     0.42; normalizado para o token canônico em vez de preservar o valor
+     exato, que nunca teve justificativa própria).
+   - `rgba(7,180,231,0.10)` (badge "Projeto" em centros de custo, ciano) →
+     `--hb-cyan-muted` (sólido) em vez de um tingido translúcido novo — o
+     mesmo papel que `--hb-green-muted` já cumpre para o badge "receita" em
+     `category-tree.tsx`.
+   - `rgba(234,90,6,0.10)` em `boxShadow` → `--accent-tint-strong` (match
+     exato).
+   - `rgba(0,0,0,0.12)` em três `boxShadow` de dropdown (preto puro, o que
+     o comentário do próprio `--overlay` já proibia) → `--shadow-lg`, a
+     sombra de elevação canônica mais próxima.
+   - `#202C85`/`#c0392b` em `stopColor` de `<linearGradient>`
+     (`cash-flow-chart.tsx`) → `var(--hb-blue)`/`var(--color-destructive)`
+     como atributo JSX direto (não `style`) — o mesmo arquivo já fazia isso
+     em `fill="var(--fg)"` na linha do texto central do anel de progresso;
+     `stop-color` resolve `var()` do mesmo jeito em todo browser evergreen.
+4. **As três cores de banco de `page.tsx:380`** (`logos`) removidas —
+   `bands[i % bands.length]` (já usado na faixa lateral, `--hb-blue`/
+   `--hb-cyan`/`--hb-green`) agora também colore o badge de iniciais do
+   banco, eliminando o array paralelo.
+5. **Bookkeeping em PROMPTS.md:** critério "Skeletons específicos por
+   tela" de P-3.5 (linha ~4412) anotado com o que este prompt entregou; os
+   oito critérios de P-3.5b marcados `[x]`.
+
+### Escopo entregue
+
+1. `apps/financeiro/src/app/error.tsx`, `app/(dashboard)/error.tsx`,
+   `app/global-error.tsx` (novos).
+2. `apps/financeiro/src/app/(dashboard)/{lancamentos,contas-pagar,
+contas-receber,plano-contas,orcamento,orcamento-organizacoes,
+importacao,fluxo-caixa,relatorios,centros-custo,notificacoes,
+meus-dados}/loading.tsx` (12 novos) + 11 componentes de skeleton novos
+   - `transaction-table-skeleton.tsx` recriado.
+3. `packages/ui/src/tokens.css`: `--brand-tint-strong`, `--fg-invert-tint`.
+4. 21 arquivos em `apps/financeiro/src/{app,components}` com literais de
+   cor fechados (ver mapeamento acima); `(dashboard)/page.tsx` sem o array
+   `logos`.
+5. `PROMPTS.md`: bookkeeping de P-3.5 e P-3.5b.
+
+### Critérios de aceite
+
+- [x] Toda rota coberta por fronteira de erro (raiz + `(dashboard)` +
+      `global-error`)
+- [x] As catorze rotas têm estado de carga (`loading.tsx` ou `<Suspense>`
+      pré-existente)
+- [x] Skeletons alinhados à estrutura real das telas — sem salto de layout
+- [x] `grep -rn "\"#[0-9a-fA-F]\{3,8\}\"\|rgba(" apps/financeiro/src
+    --include=*.tsx` retorna vazio
+- [x] Nenhum token novo fora de `packages/ui/src/tokens.css`
+- [x] Microcopy sem exclamação genérica; versículo só nos vazios
+      (mantido nos dois vazios pré-existentes de `conciliacao/page.tsx`,
+      ausente nas três fronteiras de erro novas)
+- [x] `pnpm --filter @hebron/financeiro typecheck lint build` verdes;
+      `test`: 56/57 — a mesma falha pré-existente de S-212 em
+      `designation-governance.test.ts > createWeeklyBatch` (colisão de
+      dado no dev DB compartilhado, `duplicate key value violates unique
+    constraint "payables_pkey"`); reproduzida de forma idêntica com
+      `git stash` das mudanças deste prompt (ou seja, no código anterior a
+      ele), confirmando que não é regressão deste diff
 - [x] Registrado em SESSIONS.md

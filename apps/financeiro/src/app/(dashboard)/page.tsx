@@ -378,7 +378,6 @@ async function DashboardContent() {
                     "var(--hb-cyan)",
                     "var(--hb-green)",
                   ];
-                  const logos = ["#EC7000", "#073B4C", "#1A6B3B"];
                   const short = acc.bank.slice(0, 2).toUpperCase();
                   return (
                     <div
@@ -396,7 +395,7 @@ async function DashboardContent() {
                       <div className="flex items-center gap-2 mb-3">
                         <span
                           className="flex h-6 w-6 items-center justify-center rounded-md text-[11px] font-bold text-white shrink-0"
-                          style={{ background: logos[i % logos.length] }}
+                          style={{ background: bands[i % bands.length] }}
                         >
                           {short}
                         </span>
@@ -593,7 +592,7 @@ async function DashboardContent() {
                 style={{
                   borderColor: "var(--hb-orange)",
                   background: "var(--surface)",
-                  boxShadow: "0 4px 16px rgba(234,90,6,0.10)",
+                  boxShadow: "0 4px 16px var(--accent-tint-strong)",
                 }}
               >
                 <div className="flex items-start gap-3 px-5 py-4">
@@ -839,7 +838,7 @@ async function DashboardContent() {
               </p>
               <p
                 className="text-[11px] font-bold uppercase tracking-[0.12em] mt-3"
-                style={{ color: "rgba(255,255,255,0.5)" }}
+                style={{ color: "var(--fg-invert-muted)" }}
               >
                 1 Pedro 4:10
               </p>

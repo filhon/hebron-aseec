@@ -35,7 +35,9 @@ function KpiCard({ label, value, sub, accent, dir }: KpiCardProps) {
     >
       <p
         className="text-[10px] font-bold uppercase tracking-[0.14em] mb-2"
-        style={{ color: accent ? "rgba(255,255,255,0.6)" : "var(--fg-muted)" }}
+        style={{
+          color: accent ? "var(--fg-invert-muted)" : "var(--fg-muted)",
+        }}
       >
         {label}
       </p>

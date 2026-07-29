@@ -162,12 +162,20 @@ export function CashFlowChart({
         >
           <defs>
             <linearGradient id="cfGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#202C85" stopOpacity="0.18" />
-              <stop offset="100%" stopColor="#202C85" stopOpacity="0" />
+              <stop offset="0%" stopColor="var(--hb-blue)" stopOpacity="0.18" />
+              <stop offset="100%" stopColor="var(--hb-blue)" stopOpacity="0" />
             </linearGradient>
             <linearGradient id="cfGradRed" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#c0392b" stopOpacity="0.15" />
-              <stop offset="100%" stopColor="#c0392b" stopOpacity="0" />
+              <stop
+                offset="0%"
+                stopColor="var(--color-destructive)"
+                stopOpacity="0.15"
+              />
+              <stop
+                offset="100%"
+                stopColor="var(--color-destructive)"
+                stopOpacity="0"
+              />
             </linearGradient>
           </defs>
 

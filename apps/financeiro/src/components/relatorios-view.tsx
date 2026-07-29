@@ -52,7 +52,7 @@ function KpiCard({
       : accent
         ? "var(--fg-invert)"
         : "var(--fg)";
-  const labelColor = accent ? "rgba(255,255,255,0.65)" : "var(--fg-muted)";
+  const labelColor = accent ? "var(--fg-invert-muted)" : "var(--fg-muted)";
 
   return (
     <div
@@ -78,7 +78,7 @@ function KpiCard({
         <div
           className="flex items-center gap-1 mt-2 text-xs font-semibold"
           style={{
-            color: accent ? "rgba(255,255,255,0.5)" : "var(--fg-muted)",
+            color: accent ? "var(--fg-invert-muted)" : "var(--fg-muted)",
           }}
         >
           {dir === "up" ? (

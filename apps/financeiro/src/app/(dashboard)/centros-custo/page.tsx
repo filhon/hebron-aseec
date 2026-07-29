@@ -55,7 +55,7 @@ function StatusDot({ hasProject }: { hasProject: boolean }) {
     <span
       className="inline-flex items-center gap-1 text-[10px] font-bold uppercase px-2 py-0.5 rounded-full"
       style={{
-        background: hasProject ? "rgba(7,180,231,0.10)" : "var(--surface-alt)",
+        background: hasProject ? "var(--hb-cyan-muted)" : "var(--surface-alt)",
         color: hasProject ? "var(--hb-cyan)" : "var(--fg-muted)",
       }}
     >
@@ -136,7 +136,7 @@ export default async function CentrosCustoPage() {
           >
             <p
               className="text-[10px] font-bold uppercase tracking-[0.14em] mb-2"
-              style={{ color: "rgba(255,255,255,0.6)" }}
+              style={{ color: "var(--fg-invert-muted)" }}
             >
               Total executado
             </p>
@@ -310,7 +310,7 @@ export default async function CentrosCustoPage() {
                             className="inline-flex items-center justify-center h-5 w-5 rounded-full text-[10px] font-bold"
                             style={{
                               background: "var(--hb-orange)",
-                              color: "#fff",
+                              color: "var(--fg-invert)",
                             }}
                           >
                             {pendingPayables}

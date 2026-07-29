@@ -125,7 +125,7 @@ export default async function FluxoCaixaPage() {
           >
             <p
               className="text-[10px] font-bold uppercase tracking-[0.14em] mb-2"
-              style={{ color: "rgba(255,255,255,0.6)" }}
+              style={{ color: "var(--fg-invert-muted)" }}
             >
               Saldo atual
             </p>

@@ -58,7 +58,7 @@ function StepIndicator({ current }: { current: Step }) {
                 color: done
                   ? "var(--hb-blue)"
                   : active
-                    ? "#fff"
+                    ? "var(--fg-invert)"
                     : "var(--fg-muted)",
               }}
             >
@@ -253,7 +253,9 @@ export function ImportWizard({ accounts }: { accounts: BankAccountOption[] }) {
             className="flex flex-col items-center justify-center rounded-(--radius) border-2 border-dashed cursor-pointer transition-colors py-16 px-8 text-center"
             style={{
               borderColor: dragging ? "var(--hb-blue)" : "var(--border)",
-              background: dragging ? "rgba(32,44,133,0.04)" : "var(--surface)",
+              background: dragging
+                ? "var(--brand-tint-subtle)"
+                : "var(--surface)",
             }}
           >
             <input

@@ -69,6 +69,8 @@
   --fg-subtle: var(--hb-gray-200);
   --fg-invert: var(--hb-white);
   --fg-invert-muted: #c6ccea;
+  /* Branco translúcido sobre superfícies de marca (contadores, badges) */
+  --fg-invert-tint: rgba(255, 255, 255, 0.2);
 
   --brand: var(--hb-blue);
   --brand-fg: var(--hb-white);
@@ -77,6 +79,7 @@
      sejam necessariamente brancas (--brand-muted é sólido, só serve sobre --surface) */
   --brand-tint-subtle: rgba(32, 44, 133, 0.04);
   --brand-tint: rgba(32, 44, 133, 0.08);
+  --brand-tint-strong: rgba(32, 44, 133, 0.1);
   --brand-tint-border: rgba(32, 44, 133, 0.12);
   --accent: var(--hb-orange);
   /* Tingidos translúcidos de --hb-orange — mesmo raciocínio acima */

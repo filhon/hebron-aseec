@@ -124,7 +124,7 @@ export function ReversalForm({
   return (
     <div
       className="fixed inset-0 z-(--z-overlay) flex justify-end"
-      style={{ background: "rgba(19,23,55,0.42)" }}
+      style={{ background: "var(--overlay)" }}
       onClick={onClose}
     >
       <div

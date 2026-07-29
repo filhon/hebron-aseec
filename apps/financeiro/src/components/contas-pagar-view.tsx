@@ -156,9 +156,9 @@ export function ContasPagarView({
                     className="px-1.5 py-0.5 rounded-full text-[10px] font-bold"
                     style={{
                       background: active
-                        ? "rgba(255,255,255,0.2)"
+                        ? "var(--fg-invert-tint)"
                         : "var(--surface-alt)",
-                      color: active ? "#fff" : "var(--fg-muted)",
+                      color: active ? "var(--fg-invert)" : "var(--fg-muted)",
                     }}
                   >
                     {count}
@@ -418,7 +418,7 @@ export function ContasPagarView({
       {payingPayable && (
         <div
           className="fixed inset-0 z-(--z-overlay) flex items-center justify-center"
-          style={{ background: "rgba(19,23,55,0.42)" }}
+          style={{ background: "var(--overlay)" }}
           onClick={() => setPayingPayable(null)}
         >
           <div

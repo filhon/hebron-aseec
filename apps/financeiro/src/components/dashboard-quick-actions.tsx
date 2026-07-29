@@ -42,7 +42,7 @@ export function NewEntryMenu({
             style={{
               background: "var(--bg)",
               borderColor: "var(--border)",
-              boxShadow: "0 4px 20px rgba(0,0,0,0.12)",
+              boxShadow: "var(--shadow-lg)",
             }}
           >
             {(

@@ -178,7 +178,7 @@ export function BudgetForm({
   return (
     <div
       className="fixed inset-0 z-(--z-overlay) flex justify-end"
-      style={{ background: "rgba(19,23,55,0.42)" }}
+      style={{ background: "var(--overlay)" }}
       onClick={onClose}
     >
       <div
@@ -313,7 +313,7 @@ export function BudgetForm({
                   >
                     <p
                       className="text-[10px] font-bold uppercase tracking-[0.12em]"
-                      style={{ color: "rgba(255,255,255,0.6)" }}
+                      style={{ color: "var(--fg-invert-muted)" }}
                     >
                       Total planejado
                     </p>
@@ -578,7 +578,7 @@ export function BudgetForm({
                                     val > 0 ? "var(--fg)" : "var(--fg-muted)",
                                   background:
                                     val > 0
-                                      ? "rgba(32,44,133,0.03)"
+                                      ? "var(--brand-tint-subtle)"
                                       : "transparent",
                                   fontSize: 11,
                                 }}

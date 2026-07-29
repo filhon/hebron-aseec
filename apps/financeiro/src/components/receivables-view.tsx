@@ -111,7 +111,7 @@ export function ReceivablesView({
           >
             <p
               className="text-[10px] font-bold uppercase tracking-[0.14em] mb-2"
-              style={{ color: "rgba(255,255,255,0.6)" }}
+              style={{ color: "var(--fg-invert-muted)" }}
             >
               Aguardando recebimento
             </p>
@@ -126,7 +126,7 @@ export function ReceivablesView({
             </p>
             <p
               className="text-xs mt-1"
-              style={{ color: "rgba(255,255,255,0.6)" }}
+              style={{ color: "var(--fg-invert-muted)" }}
             >
               {pending.length} conta{pending.length !== 1 ? "s" : ""}
             </p>
@@ -323,7 +323,7 @@ export function ReceivablesView({
       {receiving && (
         <div
           className="fixed inset-0 z-(--z-overlay) flex items-center justify-center"
-          style={{ background: "rgba(19,23,55,0.42)" }}
+          style={{ background: "var(--overlay)" }}
           onClick={() => setReceiving(null)}
         >
           <div
