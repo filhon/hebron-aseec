@@ -107,6 +107,9 @@ export const auditActionEnum = adminSchema.enum("audit_action", [
   // Financeiro — cancelamento de recebível (P-3.9c), added via ALTER TYPE in
   // 0073_financeiro_receivable_cancelled_audit_action.sql
   "financeiro.receivable.cancelled",
+  // Financeiro — extração de OCR de nota fiscal (P-3.8c), added via ALTER
+  // TYPE in 0074_financeiro_ocr_audit_action.sql
+  "financeiro.attachment.nf_extracted",
   // Tarefas — pedidos de aprovação de diretor (P-4.6), added via ALTER TYPE
   "task.approval_requested",
   "task.approved",

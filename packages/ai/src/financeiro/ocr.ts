@@ -33,6 +33,28 @@ export interface NfOcrResult {
 }
 
 // ---------------------------------------------------------------------------
+// parseAmount — aceita number (formato instruído no prompt) ou string em
+// formato brasileiro ("1.234,56") sem descartar o valor extraído.
+// ---------------------------------------------------------------------------
+
+function parseAmount(value: unknown): number | null {
+  let num: number | null = null;
+
+  if (typeof value === "number") {
+    num = value;
+  } else if (typeof value === "string") {
+    const trimmed = value.trim();
+    const normalized = trimmed.includes(",")
+      ? trimmed.replace(/\./g, "").replace(",", ".")
+      : trimmed;
+    const parsed = Number.parseFloat(normalized.replace(/[^\d.-]/g, ""));
+    num = Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return num !== null && num > 0 ? Math.round(num * 100) / 100 : null;
+}
+
+// ---------------------------------------------------------------------------
 // extractNfData — GPT-4 Vision OCR for notas fiscais
 //
 // Extracts: valor total, CNPJ do emitente, data de emissão, nome do emitente,
@@ -99,7 +121,7 @@ Formato de saída obrigatório:
   }
 
   const response = await client.chat.completions.create({
-    model: "gpt-4o",
+    model: "gpt-4.1",
     messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userContent },
@@ -152,11 +174,11 @@ Formato de saída obrigatório:
       ? parsed.issuedAt
       : null;
 
-  // Validate amount
-  const amount =
-    typeof parsed.amount === "number" && parsed.amount > 0
-      ? Math.round(parsed.amount * 100) / 100
-      : null;
+  // Validate amount — o modelo é instruído a devolver número com ponto
+  // decimal, mas notas brasileiras às vezes fazem o GPT ecoar o formato de
+  // origem (vírgula decimal, ponto de milhar); aceitar string nesse formato
+  // em vez de descartar o valor extraído.
+  const amount = parseAmount(parsed.amount);
 
   return {
     amount,

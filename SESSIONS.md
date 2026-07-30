@@ -240,6 +240,7 @@
 | S-217  | 2026-07-30 | P-3.11b — O centro de custo que só nasce de um projeto e o selo "Geral" que nunca aparece (CORRETIVO)                            | concluido                            |
 | S-218  | 2026-07-30 | P-3.9c — Cinco actions e quatro estados que nenhuma tela alcança (CORRETIVO)                                                     | concluido                            |
 | S-219  | 2026-07-30 | P-3.10b — Três emails que o Admin não consegue editar e um lote semanal escrito duas vezes (CORRETIVO)                           | concluido                            |
+| S-220  | 2026-07-30 | P-3.8c — O OCR de nota fiscal que existe, funciona e ninguém chama (CORRETIVO)                                                   | concluido                            |
 
 ---
 
@@ -19352,7 +19353,7 @@ próximo corretivo, mesmo padrão de P-2.8c (S-206) e deste próprio prompt.
       botão em `receivables-view.tsx`)
 - [x] `pnpm --filter @hebron/financeiro typecheck lint test` verdes (test:
       70/71 — a falha isolada em `designation-governance.test.ts >
-  createWeeklyBatch` é a drift pré-existente de
+createWeeklyBatch` é a drift pré-existente de
       S-213/[[project_financeiro_payables_pkey_drift]], não relacionada a
       este diff); `pnpm --filter @hebron/financeiro build` verde
 - [x] `pnpm --filter @hebron/db typecheck test` verdes (test: 71/73 —
@@ -19479,7 +19480,7 @@ financeiro.ts` devolve os três pontos de envio (batch-approval aparece em
 - [x] Zero import `packages/jobs → apps/*` — `pnpm check:cross-app-imports`
       verde
 - [x] `pnpm --filter @hebron/{admin,financeiro,db,integrations,jobs}
-    typecheck lint` verdes (typecheck de `@hebron/admin`/
+  typecheck lint` verdes (typecheck de `@hebron/admin`/
       `@hebron/integrations` só passa nos arquivos deste diff — os quatro
       arquivos de teste do achado acima já falhavam antes desta sessão,
       ver [[project_bankaccounts_nickname_test_drift]]); `build` verde em
@@ -19488,4 +19489,105 @@ financeiro.ts` devolve os três pontos de envio (batch-approval aparece em
       [[project_storage_rls_test_flakiness]], feed.test.ts/data-deletion.test.ts
       por [[project_bankaccounts_nickname_test_drift]], e
       security-audit.test.ts pelo mesmo motivo)
+- [x] Registrado em SESSIONS.md
+
+---
+
+## S-220 — P-3.8c — O OCR de nota fiscal que existe, funciona e ninguém chama (CORRETIVO)
+
+**Branch:** `feat/P-3.8c-financeiro-ocr`
+
+### Contexto
+
+`extractNfData` (`packages/ai/src/financeiro/ocr.ts`) extraía valor, CNPJ,
+data de emissão, razão social, número da nota e sugeria categoria contábil
+desde P-3.8 — mas `grep -rn "extractNfData" apps packages` devolvia só a
+própria definição. Nenhuma action, nenhuma tela, nenhum teste. Mesmo padrão
+do achado que gerou P-6.14 na Plataforma. Até P-3.4b (S-212) havia uma razão
+concreta (não existia caminho de upload de comprovante no módulo); desde
+então o comprovante já sobe para `financeiro-recibos` no próprio
+`expense-form.tsx`, e o OCR ficou a uma chamada de distância. Escolhida a
+saída (a) do prompt (ligar), não a (b) (assumir o débito): é o único ponto
+do módulo onde a IA remove digitação manual de seis campos, a infra dos
+dois lados já existia ociosa, e o volume da ONG (dezenas de notas/mês) torna
+o custo por chamada irrelevante.
+
+### Decisões
+
+1. **Nova action `extractNfFromAttachment`** (`apps/financeiro/src/actions/
+ocr.ts`, gate `colaboradorAction`): recebe o `path` já enviado ao bucket,
+   rejeita extensões que a Vision API não lê (só `jpg`/`jpeg`/`png` — PDF
+   segue aceito no upload, mas sem leitura automática), gera signed URL via
+   `createReceiptSignedUrl` (nova função async exportada de `actions/
+attachments.ts` — reuso real, não cópia; `getAttachmentUrl` também passou
+   a chamar essa mesma função em vez de duplicar a geração de signed URL) e
+   chama `extractNfData`. Falha de rede/parse da OpenAI vira erro legível,
+   nunca exceção não tratada. Extração auditada com o novo valor de enum
+   `financeiro.attachment.nf_extracted` (`0074_financeiro_ocr_audit_action.
+sql` + `FinanceiroAuditAction`).
+   - Achado técnico: exportar uma função **síncrona** (`getSupabaseAdmin`)
+     de um arquivo `"use server"` quebra o build do Next ("Server Actions
+     must be async functions") — só apareceu no `next build`, não no
+     `tsc --noEmit`. Corrigido trocando por uma função assíncrona que já
+     encapsula o uso do client (`createReceiptSignedUrl`), em vez de expor o
+     client cru.
+2. **`ExpenseForm` ganha "Preencher a partir da nota"** — botão que só
+   aparece para anexos de imagem, visível apenas depois de um arquivo
+   selecionado. Sobe o comprovante ao bucket na hora (reaproveita o mesmo
+   path no submit final, sem upload duplicado — `uploadedAttachmentPath`),
+   chama a action e usa `setValue` do RHF para pré-preencher valor,
+   vencimento (data de emissão — único campo de data do formulário), nome
+   do fornecedor e CNPJ; todo campo pré-preenchido continua editável e
+   nenhum submit acontece sozinho. Categoria: `matchSuggestedCategory`
+   resolve a sugestão em texto livre da OCR contra o plano de contas real
+   (só uma categoria-folha, level 3 — a mesma exigida pelo select), e só
+   pré-seleciona com match; sem match, a sugestão aparece como texto
+   informativo e a escolha continua manual (nunca grava texto solto como
+   categoria). Estado de processamento visível (`LoaderCircle` girando +
+   rótulo "Lendo nota fiscal…"); falha de OCR mostra erro legível sem
+   bloquear a criação manual da despesa.
+3. **Modelo alinhado a `gpt-4.1`** (`ocr.ts:102` pedia `gpt-4o`) — mesmo
+   modelo do resto de `packages/ai` (`scoring.ts`, `compact-version.ts`) e
+   o que CLAUDE.md/BRAIN.md documentam para o ecossistema.
+4. **`parseAmount` novo em `ocr.ts`** — o parsing de `amount` só aceitava
+   `number`; um valor que a OpenAI ecoa em formato brasileiro (vírgula
+   decimal, ponto de milhar, ex. `"1.234,56"`) era descartado como `null`
+   silenciosamente. Passou a normalizar string com vírgula antes do
+   `parseFloat`, sem mudar o comportamento para o caso `number` já correto.
+5. **`packages/ai` ganhou infraestrutura de teste** — não existia `test`
+   script, `vitest.config.ts` nem `__tests__` no pacote (débito óbvio de
+   infra, G1). Adicionado nos moldes de `packages/integrations` (mesma
+   versão de `vitest`, sem `setupFiles` — este pacote não toca banco).
+   `packages/ai/tsconfig.json` precisou incluir `vitest.config.ts`
+   explicitamente (mesmo padrão de `packages/integrations/tsconfig.json`)
+   para o ESLint não quebrar com "parserOptions.project" não encontrando o
+   arquivo. `src/__tests__/ocr.test.ts` (7 casos): parse de JSON
+   bem-formado, campos ausentes, valor com vírgula decimal, valor
+   zero/negativo descartado, CNPJ fora de 14 dígitos descartado, resposta
+   não-JSON e corpo vazio — tudo com `openai` mockado via `vi.mock`, sem
+   chamar a API de verdade.
+6. **PROMPTS.md:** critério de OCR de P-3.8 reescrito — deixa de apenas
+   afirmar que `extractNfData` extrai os campos e passa a registrar que ele
+   está ligado a um consumidor real (`extractNfFromAttachment`/
+   `ExpenseForm`, P-3.8c).
+
+### Critérios de aceite
+
+- [x] Saída (a): anexar uma NF (JPG/PNG) e preencher a despesa a partir
+      dela; todo campo preenchido continua editável
+- [x] Categoria vem como sugestão explícita, resolvida contra o plano de
+      contas (`matchSuggestedCategory`), nunca gravada sem confirmação —
+      sem match, fica só como texto informativo
+- [x] Falha de OCR (chave ausente, extensão não suportada, resposta fora do
+      formato) não impede criar a despesa manualmente e mostra erro legível
+- [x] Extração auditada — `financeiro.attachment.nf_extracted` no enum
+      (`0074_financeiro_ocr_audit_action.sql`)
+- [x] Modelo alinhado a `packages/ai` (`gpt-4.1`)
+- [x] Teste de parse de `extractNfData` sem chamar a OpenAI de verdade (7
+      casos, `packages/ai/src/__tests__/ocr.test.ts`)
+- [x] Saída (b) não aplicável — saída (a) escolhida; critério de P-3.8
+      reescrito para refletir que o OCR está de fato ligado
+- [x] `pnpm --filter @hebron/financeiro typecheck lint test` verdes;
+      `pnpm --filter @hebron/financeiro build` verde (18 rotas, `.next`
+      limpo); `pnpm --filter @hebron/ai typecheck lint test` verdes (7/7)
 - [x] Registrado em SESSIONS.md

@@ -5,15 +5,58 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useAction } from "next-safe-action/hooks";
 import { useRouter } from "next/navigation";
-import { X, Paperclip, Upload, ChevronDown, AlertCircle } from "lucide-react";
+import {
+  X,
+  Paperclip,
+  Upload,
+  ChevronDown,
+  AlertCircle,
+  ScanText,
+  LoaderCircle,
+} from "lucide-react";
 import { getSupabaseBrowserClient, getSession } from "@hebron/auth/client";
 import {
   createPayableSchema,
   type CreatePayableInput,
 } from "@hebron/validators";
 import { createPayable } from "../actions/transactions";
+import { extractNfFromAttachment } from "../actions/ocr";
 import type { AccountCategory } from "@hebron/types/financeiro";
 import type { CostCenterOption } from "../lib/queries";
+
+const OCR_ELIGIBLE_EXTENSIONS = ["jpg", "jpeg", "png"];
+
+const DIACRITIC_MARKS_PATTERN = /[̀-ͯ]/g;
+
+function normalizeCategoryLabel(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(DIACRITIC_MARKS_PATTERN, "")
+    .toLowerCase()
+    .trim();
+}
+
+// Casa a sugestão em texto livre da OCR (packages/ai/src/financeiro/ocr.ts)
+// contra o plano de contas real — só uma categoria-folha (level 3, a mesma
+// exigida pelo select) pode ser pré-selecionada; sem match, a sugestão fica
+// só como texto informativo e a escolha continua manual.
+function matchSuggestedCategory(
+  suggestion: string,
+  categories: AccountCategory[],
+): AccountCategory | null {
+  const leaves = categories.filter(
+    (c) => c.type === "despesa" && c.level === 3,
+  );
+  const target = normalizeCategoryLabel(suggestion);
+  const exact = leaves.find((c) => normalizeCategoryLabel(c.name) === target);
+  if (exact) return exact;
+  return (
+    leaves.find((c) => {
+      const name = normalizeCategoryLabel(c.name);
+      return name.includes(target) || target.includes(name);
+    }) ?? null
+  );
+}
 
 interface ExpenseFormProps {
   categories: AccountCategory[];
@@ -118,6 +161,16 @@ export function ExpenseForm({
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [uploadedAttachmentPath, setUploadedAttachmentPath] = useState<
+    string | null
+  >(null);
+  const [isPreparingOcr, setIsPreparingOcr] = useState(false);
+  const [ocrError, setOcrError] = useState<string | null>(null);
+  const [ocrNotice, setOcrNotice] = useState<string | null>(null);
+  const [categorySuggestion, setCategorySuggestion] = useState<{
+    label: string;
+    matched: boolean;
+  } | null>(null);
   const router = useRouter();
 
   const categoryOptions = buildCategoryOptions(categories, "despesa");
@@ -125,6 +178,7 @@ export function ExpenseForm({
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm({
     resolver: zodResolver(createPayableSchema),
@@ -144,6 +198,100 @@ export function ExpenseForm({
     },
   });
 
+  const { execute: runOcr, isPending: isReadingNf } = useAction(
+    extractNfFromAttachment,
+    {
+      onSuccess({ data }) {
+        const extracted = data?.result;
+        if (!extracted) return;
+
+        if (extracted.amount != null) {
+          setValue("amount", extracted.amount, { shouldValidate: true });
+        }
+        if (extracted.issuedAt) {
+          // Input nativo de data espera "YYYY-MM-DD" — mesmo formato que
+          // extractNfData já devolve; o schema (z.coerce.date()) converte no
+          // parse do submit, não aqui.
+          setValue("dueAt", extracted.issuedAt as unknown as Date, {
+            shouldValidate: true,
+          });
+        }
+        if (extracted.issuerName) {
+          setValue("supplierName", extracted.issuerName, {
+            shouldValidate: true,
+          });
+        }
+        if (extracted.cnpj) {
+          setValue("supplierCnpj", extracted.cnpj, { shouldValidate: true });
+        }
+        if (extracted.suggestedCategory) {
+          const match = matchSuggestedCategory(
+            extracted.suggestedCategory,
+            categories,
+          );
+          if (match) {
+            setValue("categoryId", match.id, { shouldValidate: true });
+          }
+          setCategorySuggestion({
+            label: extracted.suggestedCategory,
+            matched: match !== null,
+          });
+        }
+
+        setOcrNotice(
+          "Nota lida. Confira os campos preenchidos e ajuste o que for necessário.",
+        );
+      },
+      onError({ error }) {
+        setOcrError(
+          error.serverError ??
+            "Não foi possível ler a nota fiscal automaticamente. Preencha os campos manualmente.",
+        );
+      },
+    },
+  );
+
+  async function uploadAttachmentToBucket(file: File): Promise<string> {
+    const { session } = await getSession();
+    if (!session) {
+      throw new Error("Sessão expirada. Atualize a página e tente novamente.");
+    }
+
+    const supabase = getSupabaseBrowserClient();
+    const ext = file.name.split(".").pop() ?? "bin";
+    const path = `${session.user.id}/${crypto.randomUUID()}.${ext}`;
+
+    const { data: uploadData, error: storageError } = await supabase.storage
+      .from("financeiro-recibos")
+      .upload(path, file, { contentType: file.type });
+    if (storageError) throw new Error(storageError.message);
+
+    return uploadData.path;
+  }
+
+  async function handleFillFromAttachment() {
+    if (!attachmentFile) return;
+
+    setOcrError(null);
+    setOcrNotice(null);
+    setIsPreparingOcr(true);
+    try {
+      const path =
+        uploadedAttachmentPath ??
+        (await uploadAttachmentToBucket(attachmentFile));
+      setUploadedAttachmentPath(path);
+      runOcr({ path });
+    } catch (err) {
+      setOcrError(
+        err instanceof Error
+          ? err.message
+          : "Não foi possível enviar o comprovante para leitura.",
+      );
+    } finally {
+      setIsPreparingOcr(false);
+    }
+  }
+
   async function onSubmit(data: CreatePayableInput) {
     if (!attachmentFile) {
       execute(data);
@@ -153,26 +301,14 @@ export function ExpenseForm({
     setAttachmentError(null);
     setIsUploadingAttachment(true);
     try {
-      const { session } = await getSession();
-      if (!session) {
-        throw new Error(
-          "Sessão expirada. Atualize a página e tente novamente.",
-        );
-      }
-
-      const supabase = getSupabaseBrowserClient();
-      const ext = attachmentFile.name.split(".").pop() ?? "bin";
-      const path = `${session.user.id}/${crypto.randomUUID()}.${ext}`;
-
-      const { data: uploadData, error: storageError } = await supabase.storage
-        .from("financeiro-recibos")
-        .upload(path, attachmentFile, { contentType: attachmentFile.type });
-      if (storageError) throw new Error(storageError.message);
+      const path =
+        uploadedAttachmentPath ??
+        (await uploadAttachmentToBucket(attachmentFile));
 
       execute({
         ...data,
         attachment: {
-          path: uploadData.path,
+          path,
           fileName: attachmentFile.name,
           fileSize: attachmentFile.size,
         },
@@ -302,6 +438,19 @@ export function ExpenseForm({
                 style={{ color: "var(--fg-muted)" }}
               />
               <FieldError message={errors.categoryId?.message} />
+              {categorySuggestion && (
+                <p
+                  className="text-xs mt-1.5"
+                  style={{ color: "var(--fg-muted)" }}
+                >
+                  Sugestão da leitura automática:{" "}
+                  <strong style={{ color: "var(--fg)" }}>
+                    {categorySuggestion.label}
+                  </strong>
+                  {!categorySuggestion.matched &&
+                    " — não encontrada no plano de contas; selecione manualmente."}
+                </p>
+              )}
             </div>
 
             {/* Centro de custo */}
@@ -338,6 +487,10 @@ export function ExpenseForm({
                   onChange={(e) => {
                     setAttachmentFile(e.target.files?.[0] ?? null);
                     setAttachmentError(null);
+                    setUploadedAttachmentPath(null);
+                    setOcrError(null);
+                    setOcrNotice(null);
+                    setCategorySuggestion(null);
                   }}
                 />
                 {attachmentFile ? (
@@ -377,6 +530,39 @@ export function ExpenseForm({
                 )}
               </label>
               <FieldError message={attachmentError ?? undefined} />
+
+              {attachmentFile &&
+                OCR_ELIGIBLE_EXTENSIONS.includes(
+                  attachmentFile.name.split(".").pop()?.toLowerCase() ?? "",
+                ) && (
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      onClick={handleFillFromAttachment}
+                      disabled={isPreparingOcr || isReadingNf}
+                      className="inline-flex items-center gap-1.5 text-xs font-semibold transition-colors disabled:opacity-60"
+                      style={{ color: "var(--hb-blue)" }}
+                    >
+                      {isPreparingOcr || isReadingNf ? (
+                        <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <ScanText className="h-3.5 w-3.5" />
+                      )}
+                      {isPreparingOcr || isReadingNf
+                        ? "Lendo nota fiscal…"
+                        : "Preencher a partir da nota"}
+                    </button>
+                    {ocrNotice && (
+                      <p
+                        className="text-xs mt-1.5"
+                        style={{ color: "var(--fg-muted)" }}
+                      >
+                        {ocrNotice}
+                      </p>
+                    )}
+                    <FieldError message={ocrError ?? undefined} />
+                  </div>
+                )}
             </div>
 
             {/* Observações */}

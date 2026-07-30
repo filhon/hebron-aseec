@@ -10,7 +10,9 @@
   },
   "scripts": {
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@hebron/types": "workspace:*",
@@ -22,6 +24,7 @@
     "@hebron/typescript-config": "workspace:*",
     "@types/node": "^22.0.0",
     "eslint": "^9.13.0",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.0"
   }
 }

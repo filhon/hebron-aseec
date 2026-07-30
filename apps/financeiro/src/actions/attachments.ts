@@ -15,8 +15,26 @@ function getSupabaseAdmin() {
 }
 
 // Expiração curta (BRAIN §5) — o link é gerado sob demanda no clique de
-// "Ver comprovante", não persistido em lugar nenhum.
+// "Ver comprovante" ou no preenchimento por OCR (P-3.8c), não persistido em
+// lugar nenhum.
 const READ_URL_EXPIRES_IN_SECONDS = 300;
+
+// Exportada (função async — único jeito de exportar algo de um arquivo
+// "use server" além de safe-actions) para o OCR (actions/ocr.ts) reusar a
+// mesma geração de signed URL do bucket financeiro-recibos, em vez de
+// duplicar a leitura de SUPABASE_SERVICE_ROLE_KEY.
+export async function createReceiptSignedUrl(path: string): Promise<string> {
+  const supabase = getSupabaseAdmin();
+  const { data, error } = await supabase.storage
+    .from("financeiro-recibos")
+    .createSignedUrl(path, READ_URL_EXPIRES_IN_SECONDS);
+
+  if (error || !data) {
+    throw new Error("Não foi possível gerar o link do comprovante");
+  }
+
+  return data.signedUrl;
+}
 
 const getAttachmentUrlSchema = z.union([
   z.object({ attachmentId: z.string().uuid() }),
@@ -67,14 +85,6 @@ export const getAttachmentUrl = colaboradorAction
       throw new Error("Nenhum comprovante anexado a este registro");
     }
 
-    const supabase = getSupabaseAdmin();
-    const { data, error } = await supabase.storage
-      .from("financeiro-recibos")
-      .createSignedUrl(attachment.fileUrl, READ_URL_EXPIRES_IN_SECONDS);
-
-    if (error || !data) {
-      throw new Error("Não foi possível gerar o link do comprovante");
-    }
-
-    return { url: data.signedUrl, fileName: attachment.fileName };
+    const url = await createReceiptSignedUrl(attachment.fileUrl);
+    return { url, fileName: attachment.fileName };
   });

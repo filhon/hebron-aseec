@@ -4520,7 +4520,7 @@ Server Actions: CRUD de despesas/receitas (criar transação imutável). Estorno
 - [x] Match automático: sugere correspondência por valor+data+descrição
 - [x] Lote semanal: agrupa payables da semana, envia email ao diretor gestor
 - [x] Aprovação de lote: diretor gestor aprova; gera notificação para super_admin incluir no banco
-- [x] OCR: extrai valor, CNPJ, data de imagem de NF e sugere categorização
+- [x] OCR: extrai valor, CNPJ, data de imagem de NF e sugere categorização — liga a `extractNfData` a um consumidor (`extractNfFromAttachment`/`ExpenseForm`, P-3.8c); antes disso o helper existia sem nenhuma tela ou action que o chamasse
 - [x] Audit log em toda mutação
 - [x] Lint passa
 - [x] Types passam
@@ -5274,15 +5274,15 @@ Recomendado: **(a)**. É o único ponto do módulo onde a IA remove digitação 
 
 **Critérios de aceite:**
 
-- [ ] Saída (a): anexar uma NF e preencher a despesa a partir dela; todo campo preenchido continua editável
-- [ ] Categoria vem como sugestão explícita, resolvida contra o plano de contas, nunca gravada sem confirmação do usuário
-- [ ] Falha de OCR (chave ausente, imagem ilegível, resposta fora do formato) não impede criar a despesa manualmente e mostra erro legível
-- [ ] Extração auditada, com o valor de `audit_action` presente no enum do banco
-- [ ] Modelo alinhado a `packages/ai` (`gpt-4.1`) ou divergência justificada em SESSIONS.md
-- [ ] Teste de parse de `extractNfData` sem chamar a OpenAI de verdade
-- [ ] Saída (b): critério de P-3.8 reescrito; nenhum critério do repositório afirma OCR entregue
-- [ ] `pnpm --filter @hebron/financeiro typecheck lint test` verdes; `pnpm --filter @hebron/financeiro build` verde; `pnpm --filter @hebron/ai test` verde
-- [ ] Registrar em SESSIONS.md — incluindo a saída escolhida
+- [x] Saída (a): anexar uma NF e preencher a despesa a partir dela; todo campo preenchido continua editável
+- [x] Categoria vem como sugestão explícita, resolvida contra o plano de contas, nunca gravada sem confirmação do usuário
+- [x] Falha de OCR (chave ausente, imagem ilegível, resposta fora do formato) não impede criar a despesa manualmente e mostra erro legível
+- [x] Extração auditada, com o valor de `audit_action` presente no enum do banco
+- [x] Modelo alinhado a `packages/ai` (`gpt-4.1`) ou divergência justificada em SESSIONS.md
+- [x] Teste de parse de `extractNfData` sem chamar a OpenAI de verdade
+- [x] Saída (b): critério de P-3.8 reescrito; nenhum critério do repositório afirma OCR entregue
+- [x] `pnpm --filter @hebron/financeiro typecheck lint test` verdes; `pnpm --filter @hebron/financeiro build` verde; `pnpm --filter @hebron/ai test` verde
+- [x] Registrar em SESSIONS.md — incluindo a saída escolhida
 
 **Notas:**
 Ref: BRAIN.md §6.5 ("OCR nice-to-have v1"), CLAUDE.md (GPT-4.1 para triagem/scoring) e o precedente de P-6.14. É o de menor prioridade dos seis corretivos deste bloco — o único cujo problema é uma oportunidade não colhida, e não um comportamento que a tela promete e o sistema não cumpre.
