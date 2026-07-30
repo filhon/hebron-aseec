@@ -29,6 +29,12 @@ import {
   batchApprovals,
   batchApprovalItems,
   auditLog,
+  bankAccounts,
+  financialCategories,
+  budgets,
+  budgetItems,
+  bankImports,
+  bankImportRows,
 } from "@hebron/db/schema";
 
 vi.mock("next/headers", () => ({
@@ -65,6 +71,13 @@ const IDS = {
   ghostGestor: "f1000000-0000-0000-0000-000000000001",
   realGestor: "f1000000-0000-0000-0000-000000000002",
   realAutorizador: "f1000000-0000-0000-0000-000000000003",
+  // P-3.7b — mesmo padrão "claim vs. realidade": ghost* tem role reivindicada
+  // só no resolveSession mockado (satisfaz o gate JS), sem nenhuma linha real
+  // em public.role_assignments (só a RLS pode barrar).
+  realColaborador: "f1000000-0000-0000-0000-000000000004",
+  ghostColaborador: "f1000000-0000-0000-0000-000000000005",
+  realDiretorStaff: "f1000000-0000-0000-0000-000000000006",
+  ghostDiretorStaff: "f1000000-0000-0000-0000-000000000007",
 } as const;
 
 let weekCounter = 0;
@@ -110,6 +123,18 @@ beforeAll(async () => {
       { userId: IDS.realGestor, role: "diretor", grantedBy: IDS.realGestor },
       {
         userId: IDS.realAutorizador,
+        role: "diretor",
+        grantedBy: IDS.realGestor,
+      },
+      // ghostColaborador/ghostDiretorStaff DELIBERADAMENTE não recebem
+      // linha real — é o ponto dos testes de recusa pelo banco (P-3.7b).
+      {
+        userId: IDS.realColaborador,
+        role: "colaborador",
+        grantedBy: IDS.realGestor,
+      },
+      {
+        userId: IDS.realDiretorStaff,
         role: "diretor",
         grantedBy: IDS.realGestor,
       },
@@ -254,5 +279,250 @@ describe("authorizeBatch — batch_approvals_update_gestor não cobre autorizado
       .from(auditLog)
       .where(eq(auditLog.entityId, batchId));
     expect(audit?.action).toBe("financeiro.batch.authorized");
+  });
+});
+
+// ===========================================================================
+// P-3.7b — accounts/categories/budgets/budget_items: policies "*_mutate_admin"
+// (FOR ALL super_admin-only) substituídas por policies por operação
+// (0070_financeiro_rls_alinhada.sql). createBankAccount/createCategory/
+// updateCategory/createBudget/updateBudget não usam mais withSystemRole —
+// rodam sob RLS real, com o ator autenticado como authenticated.
+// ===========================================================================
+
+function requireId(value: string | undefined, label: string): string {
+  if (!value) throw new Error(`${label} não foi definido pela action`);
+  return value;
+}
+
+describe("createBankAccount — INSERT em financeiro.accounts roda sob RLS real (colaborador)", () => {
+  let createdAccountId: string | undefined;
+
+  afterAll(async () => {
+    if (createdAccountId) {
+      await db
+        .delete(bankAccounts)
+        .where(eq(bankAccounts.id, createdAccountId));
+    }
+  });
+
+  it("colaborador real cadastra conta bancária sem withSystemRole", async () => {
+    await actingAs(IDS.realColaborador, ["colaborador"], []);
+    const { createBankAccount } = await import("../actions/accounts");
+
+    const result = await createBankAccount({
+      name: "Conta RLS Test",
+      bank: "Banco Teste",
+      agency: "0001",
+      accountNumber: "123456-7",
+      type: "corrente",
+      initialBalance: 100,
+    });
+
+    expect(result?.serverError).toBeUndefined();
+    createdAccountId = result?.data?.account.id;
+    expect(createdAccountId).toBeDefined();
+
+    const [row] = await db
+      .select()
+      .from(bankAccounts)
+      .where(
+        eq(bankAccounts.id, requireId(createdAccountId, "createdAccountId")),
+      );
+    expect(row?.createdBy).toBe(IDS.realColaborador);
+  });
+
+  it("papel sem acesso ao módulo é recusado pelo banco, mesmo com claim de colaborador no gate JS", async () => {
+    await actingAs(IDS.ghostColaborador, ["colaborador"], []);
+    const { createBankAccount } = await import("../actions/accounts");
+
+    const result = await createBankAccount({
+      name: "Conta Ghost",
+      bank: "Banco Ghost",
+      agency: "0002",
+      accountNumber: "999999-9",
+      type: "corrente",
+      initialBalance: 0,
+    });
+
+    expect(result?.serverError).toBeDefined();
+
+    const rows = await db
+      .select()
+      .from(bankAccounts)
+      .where(eq(bankAccounts.createdBy, IDS.ghostColaborador));
+    expect(rows).toHaveLength(0);
+  });
+});
+
+describe("createCategory/createBudget — INSERT/UPDATE em financeiro.categories/budgets roda sob RLS real (diretor)", () => {
+  let createdCategoryId: string | undefined;
+  let createdBudgetId: string | undefined;
+
+  afterAll(async () => {
+    if (createdBudgetId) {
+      await db
+        .delete(budgetItems)
+        .where(eq(budgetItems.budgetId, createdBudgetId));
+      await db.delete(budgets).where(eq(budgets.id, createdBudgetId));
+    }
+    if (createdCategoryId) {
+      await db
+        .delete(financialCategories)
+        .where(eq(financialCategories.id, createdCategoryId));
+    }
+  });
+
+  it("diretor real cria categoria sem withSystemRole", async () => {
+    await actingAs(IDS.realDiretorStaff, ["diretor"], []);
+    const { createCategory } = await import("../actions/categories");
+
+    const result = await createCategory({
+      code: "971",
+      name: "Categoria RLS Test",
+      type: "despesa",
+      parentId: null,
+    });
+
+    expect(result?.serverError).toBeUndefined();
+    createdCategoryId = result?.data?.category.id;
+    expect(createdCategoryId).toBeDefined();
+  });
+
+  it("diretor real atualiza a categoria criada sem withSystemRole", async () => {
+    await actingAs(IDS.realDiretorStaff, ["diretor"], []);
+    const { updateCategory } = await import("../actions/categories");
+
+    const categoryId = requireId(createdCategoryId, "createdCategoryId");
+    const result = await updateCategory({
+      categoryId,
+      name: "Categoria RLS Test (renomeada)",
+    });
+
+    expect(result?.serverError).toBeUndefined();
+
+    const [row] = await db
+      .select()
+      .from(financialCategories)
+      .where(eq(financialCategories.id, categoryId));
+    expect(row?.name).toBe("Categoria RLS Test (renomeada)");
+  });
+
+  it("diretor real cria orçamento (budgets + budget_items) sem withSystemRole", async () => {
+    await actingAs(IDS.realDiretorStaff, ["diretor"], []);
+    const { createBudget } = await import("../actions/categories");
+
+    const result = await createBudget({
+      name: "Orçamento RLS Test",
+      year: 2031,
+      projectId: null,
+      costCenterId: null,
+      items: [
+        {
+          categoryId: requireId(createdCategoryId, "createdCategoryId"),
+          description: "Item RLS Test",
+          plannedAmount: 1000,
+          month: null,
+          notes: null,
+        },
+      ],
+    });
+
+    expect(result?.serverError).toBeUndefined();
+    createdBudgetId = result?.data?.budget.id;
+    expect(createdBudgetId).toBeDefined();
+
+    const items = await db
+      .select()
+      .from(budgetItems)
+      .where(
+        eq(budgetItems.budgetId, requireId(createdBudgetId, "createdBudgetId")),
+      );
+    expect(items).toHaveLength(1);
+  });
+
+  it("papel sem acesso ao módulo é recusado pelo banco, mesmo com claim de diretor no gate JS", async () => {
+    await actingAs(IDS.ghostDiretorStaff, ["diretor"], []);
+    const { createCategory } = await import("../actions/categories");
+
+    const result = await createCategory({
+      code: "972",
+      name: "Categoria Ghost",
+      type: "despesa",
+      parentId: null,
+    });
+
+    expect(result?.serverError).toBeDefined();
+
+    const rows = await db
+      .select()
+      .from(financialCategories)
+      .where(eq(financialCategories.code, "972"));
+    expect(rows).toHaveLength(0);
+  });
+});
+
+describe("reconcileRow — UPDATE em financeiro.bank_imports.matched_count roda sob RLS real (colaborador)", () => {
+  const accountId = "f4000000-0000-0000-0000-000000000001";
+  const bankImportId = "f4000000-0000-0000-0000-000000000002";
+  const rowId = "f4000000-0000-0000-0000-000000000003";
+
+  beforeAll(async () => {
+    await db.insert(bankAccounts).values({
+      id: accountId,
+      bankName: "Banco Teste",
+      nickname: "Conta Import Test",
+      accountType: "corrente",
+      createdBy: IDS.realColaborador,
+    });
+    await db.insert(bankImports).values({
+      id: bankImportId,
+      accountId,
+      fileUrl: "https://example.com/fake.ofx",
+      format: "ofx",
+      importedBy: IDS.realColaborador,
+      rowCount: 1,
+      matchedCount: 0,
+    });
+    await db.insert(bankImportRows).values({
+      id: rowId,
+      bankImportId,
+      date: "2031-01-05",
+      amount: "150.00",
+      description: "Lançamento RLS Test",
+      status: "unmatched",
+    });
+  });
+
+  afterAll(async () => {
+    await db
+      .delete(bankImportRows)
+      .where(eq(bankImportRows.bankImportId, bankImportId));
+    await db.delete(bankImports).where(eq(bankImports.id, bankImportId));
+    await db.delete(bankAccounts).where(eq(bankAccounts.id, accountId));
+  });
+
+  it("colaborador real ignora a linha: matched_count é incrementado via authenticated, sem withSystemRole", async () => {
+    await actingAs(IDS.realColaborador, ["colaborador"], []);
+    const { reconcileRow } = await import("../actions/conciliation");
+
+    const result = await reconcileRow({
+      bankImportItemId: rowId,
+      action: "ignorar",
+    });
+
+    expect(result?.serverError).toBeUndefined();
+
+    const [row] = await db
+      .select({ status: bankImportRows.status })
+      .from(bankImportRows)
+      .where(eq(bankImportRows.id, rowId));
+    expect(row?.status).toBe("ignored");
+
+    const [importRow] = await db
+      .select({ matchedCount: bankImports.matchedCount })
+      .from(bankImports)
+      .where(eq(bankImports.id, bankImportId));
+    expect(importRow?.matchedCount).toBe(1);
   });
 });

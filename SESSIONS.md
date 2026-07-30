@@ -236,6 +236,7 @@
 | S-213  | 2026-07-29 | P-3.5b — Nenhuma fronteira de erro, doze telas sem carregamento e 45 cores fora do sistema (CORRETIVO)                           | concluido                            |
 | S-214  | 2026-07-29 | Auditoria: débitos técnicos P-3.6–P-3.12 (Financeiro, Bloco B) — 6 prompts corretivos gerados                                    | concluido                            |
 | S-215  | 2026-07-30 | P-3.6b — Seis campos que o formulário coleta e o banco não tem onde guardar (CORRETIVO)                                          | concluido                            |
+| S-216  | 2026-07-30 | P-3.7b — A segunda camada de defesa que oito mutações contornam por dentro (CORRETIVO)                                           | concluido                            |
 
 ---
 
@@ -18619,7 +18620,7 @@ meus-dados}/loading.tsx` (12 novos) + 11 componentes de skeleton novos
       pré-existente)
 - [x] Skeletons alinhados à estrutura real das telas — sem salto de layout
 - [x] `grep -rn "\"#[0-9a-fA-F]\{3,8\}\"\|rgba(" apps/financeiro/src
-  --include=*.tsx` retorna vazio
+--include=*.tsx` retorna vazio
 - [x] Nenhum token novo fora de `packages/ui/src/tokens.css`
 - [x] Microcopy sem exclamação genérica; versículo só nos vazios
       (mantido nos dois vazios pré-existentes de `conciliacao/page.tsx`,
@@ -18628,7 +18629,7 @@ meus-dados}/loading.tsx` (12 novos) + 11 componentes de skeleton novos
       `test`: 56/57 — a mesma falha pré-existente de S-212 em
       `designation-governance.test.ts > createWeeklyBatch` (colisão de
       dado no dev DB compartilhado, `duplicate key value violates unique
-  constraint "payables_pkey"`); reproduzida de forma idêntica com
+constraint "payables_pkey"`); reproduzida de forma idêntica com
       `git stash` das mudanças deste prompt (ou seja, no código anterior a
       ele), confirmando que não é regressão deste diff
 - [x] Registrado em SESSIONS.md
@@ -18972,3 +18973,109 @@ financeiro (`meetings.test.ts`, `storage.test.ts` ×2, `system-actor.test.ts`)
 ([[project_system_actor_test_drift]]); as outras duas não tinham registro
 prévio mas são de módulos (intranet, documentos) inteiramente não tocados
 por este diff — mesmo padrão de drift do banco de dev compartilhado.
+
+## S-216 — P-3.7b — A segunda camada de defesa que oito mutações contornam por dentro (CORRETIVO)
+
+**Branch:** `feat/P-3.7b-financeiro-rls-alinhada`
+
+### Contexto
+
+CLAUDE.md lista "Defense in depth: RBAC + RLS sempre, nunca apenas um" entre
+os princípios invioláveis, e G6.2 exige que leituras e escritas rodem como
+`authenticated`, com RLS como camada ativa. No Financeiro, a RLS de escrita
+de `accounts`/`categories`/`budgets`/`budget_items` foi escrita só para
+`super_admin` (`*_mutate_admin`, `FOR ALL`), e as oito escritas cujo gate de
+aplicação admite `colaborador`/`diretor` (`createBankAccount`,
+`createCategory`, `updateCategory`, `createBudget`, `updateBudget`,
+`autoMatchImport`, `reconcileRow`, `confirmImport`) contornavam a própria
+policy por dentro via `withSystemRole` — débito registrado em S-157/S-63 e
+comentado no próprio código, nunca corrigido por nenhum prompt posterior.
+`financeiro.bank_imports` tinha um gap mais grave: nunca recebeu `GRANT
+UPDATE` para `authenticated` (`0014_grants_authenticated.sql` só concedia
+`SELECT, INSERT`) — nem `super_admin` conseguiria o `UPDATE` de
+`matched_count` sem `withSystemRole`, gap a nível de tabela, não de policy.
+
+### Decisões
+
+1. **Policies por operação, não `FOR ALL`:** as quatro policies
+   `*_mutate_admin` (accounts/categories/budgets/budget_items) foram
+   substituídas por policies de INSERT/UPDATE/DELETE separadas. INSERT/UPDATE
+   alinhados ao gate real de cada action (`colaboradorAction` para
+   `accounts`; `diretorAction` para `categories`/`budgets`/`budget_items`).
+   DELETE mantido em `super_admin` em todas as quatro — não porque o prompt
+   pedisse "sempre super_admin", mas porque nenhuma action hoje delega DELETE
+   a um papel mais amplo (`deleteCategory`/`deleteBudget` já são
+   `superAdminAction`; não existe DELETE de conta bancária nem UPDATE
+   próprio de `budget_items`, então esses dois ficaram como estavam — só
+   separados por operação).
+2. **`bank_imports`:** `GRANT UPDATE` + policy `bank_imports_update_staff`
+   (`super_admin`, `colaborador`) — mesmo conjunto de papéis do SELECT/INSERT
+   já existentes.
+3. **`withSystemRole` removido das oito chamadas** em `accounts.ts`,
+   `categories.ts`, `conciliation.ts` e `import.ts` — passam a escrever
+   direto na `tx` de `withAuthenticatedContext`, sem trocar de role. As
+   demais ocorrências de `withSystemRole` no diretório `actions/` (em
+   `approval.ts`, `payables.ts`, `transactions.ts`, `reports.ts`) ficaram de
+   fora por não estarem na lista de arquivos permitidos deste prompt — e já
+   são, todas elas, a exceção legítima de `admin.audit_log` (F3-15/S-57),
+   confirmado por `grep -rn "withSystemRole" apps/financeiro/src/actions`.
+4. **Migration idempotente:** `DROP POLICY IF EXISTS` antes de toda `CREATE
+POLICY`, inclusive as novas (não só as que substituem uma policy antiga
+   de nome diferente) — reaplicada duas vezes direto contra o Postgres para
+   confirmar; a segunda rodada só emitiu `NOTICE ... does not exist,
+skipping` seguido de `CREATE POLICY` sem erro.
+5. **Testes seguem o padrão "claim vs. realidade" já usado em
+   `runtime-rls.test.ts`** (S-63): o cenário de recusa usa um ator cujo
+   `resolveSession` mockado reivindica o papel exigido pelo gate JS
+   (`colaborador`/`diretor`), mas que não tem nenhuma linha real em
+   `public.role_assignments` — só a RLS barra esse ator, o gate de
+   aplicação confiaria nele. Prova que a recusa é do banco, não do
+   `next-safe-action`.
+
+### Escopo entregue
+
+1. `packages/db/src/migrations/0070_financeiro_rls_alinhada.sql` (novo,
+   hand-written): policies por operação para `accounts`/`categories`/
+   `budgets`/`budget_items` + `GRANT UPDATE`/policy para `bank_imports`.
+2. `apps/financeiro/src/actions/accounts.ts`: `createBankAccount` sem
+   `withSystemRole`.
+3. `apps/financeiro/src/actions/categories.ts`: `createCategory`,
+   `updateCategory`, `createBudget`, `updateBudget` sem `withSystemRole`.
+4. `apps/financeiro/src/actions/conciliation.ts`: `autoMatchImport`,
+   `reconcileRow` sem `withSystemRole` para o `UPDATE` de
+   `bank_imports.matched_count`.
+5. `apps/financeiro/src/actions/import.ts`: `confirmImport` sem
+   `withSystemRole` para o mesmo `UPDATE`.
+6. `apps/financeiro/src/__tests__/runtime-rls.test.ts`: três novos
+   `describe` — `createBankAccount` (colaborador real cria + papel sem
+   acesso recusado pelo banco), `createCategory`/`createBudget` (diretor
+   real cria/atualiza categoria e cria orçamento com `budget_items` + papel
+   sem acesso recusado pelo banco) e `reconcileRow` (colaborador real
+   incrementa `matched_count` via `authenticated`).
+7. `PROMPTS.md`: critérios de P-3.7 ("Colaborador financeiro: CRUD...",
+   "Demais papéis: sem acesso...") anotados com a extensão para escrita
+   desde este prompt; checklist de P-3.7b marcado.
+
+### Critérios de aceite
+
+- [x] `grep -rn "withSystemRole" apps/financeiro/src/actions` devolve
+      apenas linhas de audit log (todas dentro de `logFinanceiroAudit(...,
+    sysTx)`), nenhuma nas oito escritas deste prompt
+- [x] Colaborador cadastra conta bancária e diretor cria categoria e
+      orçamento com RLS ativa, sem `withSystemRole` (teste)
+- [x] Papel sem acesso ao módulo recebe recusa do banco nessas mesmas
+      escritas (teste — claim de colaborador/diretor no gate JS, sem
+      `role_assignments` real)
+- [x] `matched_count` de `bank_imports` é atualizado por colaborador via
+      `authenticated` (teste — `reconcileRow` com ação "ignorar")
+- [x] Toda policy nova tem `USING`/`WITH CHECK` explícitos; nenhuma `FOR
+    ALL` nova
+- [x] Migration idempotente — reaplicada direto contra o Postgres, segunda
+      rodada sem erro
+- [x] `pnpm --filter @hebron/financeiro typecheck lint test` verdes (test:
+      65/66 — a falha isolada em `designation-governance.test.ts >
+    createWeeklyBatch` é a mesma drift pré-existente do dev DB
+      compartilhado de S-213/[[project_financeiro_payables_pkey_drift]],
+      reproduzida também no HEAD sem este diff); `pnpm --filter
+    @hebron/financeiro build` verde
+- [x] Registrado em SESSIONS.md

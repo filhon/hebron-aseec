@@ -2,10 +2,7 @@
 
 import { z } from "zod";
 import { eq } from "drizzle-orm";
-import {
-  withAuthenticatedContext,
-  withSystemRole,
-} from "@hebron/db/authenticated";
+import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import {
   financialCategories,
   budgets,
@@ -28,63 +25,58 @@ import { logFinanceiroAudit } from "../lib/audit";
 export const createCategory = diretorAction
   .schema(createAccountCategorySchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    // withSystemRole: "categories_mutate_admin" (0010_financeiro.sql) só
-    // concede INSERT/UPDATE/DELETE a super_admin — não cobre diretor, que é
-    // o gate de aplicação desta action (diretorAction). Mesmo padrão de
-    // exceção documentado para admin.audit_log (F3-15/S-57): débito de RLS
-    // registrado em SESSIONS.md, não corrigido aqui (fora de escopo alterar
-    // policy).
+    // "categories_insert_staff" (0070_financeiro_rls_alinhada.sql) cobre
+    // diretor — o gate de aplicação desta action (diretorAction).
     const category = await withAuthenticatedContext(
       { actorId: ctx.actorId },
-      (tx) =>
-        withSystemRole(tx, async (sysTx) => {
-          // Validate parent exists and is same type
-          if (input.parentId) {
-            const parentRows = await sysTx
-              .select()
-              .from(financialCategories)
-              .where(eq(financialCategories.id, input.parentId))
-              .limit(1);
-
-            const parent = parentRows[0];
-            if (!parent) throw new Error("Categoria pai não encontrada");
-
-            if (parent.type !== input.type) {
-              throw new Error(
-                "A categoria filha deve ter o mesmo tipo (receita/despesa) que a categoria pai",
-              );
-            }
-          }
-
-          // Code uniqueness guard is enforced by DB unique constraint;
-          // surface a friendlier error here
-          const existingCode = await sysTx
-            .select({ id: financialCategories.id })
+      async (tx) => {
+        // Validate parent exists and is same type
+        if (input.parentId) {
+          const parentRows = await tx
+            .select()
             .from(financialCategories)
-            .where(eq(financialCategories.code, input.code))
+            .where(eq(financialCategories.id, input.parentId))
             .limit(1);
 
-          if (existingCode.length > 0) {
+          const parent = parentRows[0];
+          if (!parent) throw new Error("Categoria pai não encontrada");
+
+          if (parent.type !== input.type) {
             throw new Error(
-              `Código "${input.code}" já existe no plano de contas`,
+              "A categoria filha deve ter o mesmo tipo (receita/despesa) que a categoria pai",
             );
           }
+        }
 
-          const inserted = await sysTx
-            .insert(financialCategories)
-            .values({
-              code: input.code,
-              name: input.name,
-              type: input.type,
-              parentId: input.parentId ?? null,
-              isSystem: false,
-            })
-            .returning();
+        // Code uniqueness guard is enforced by DB unique constraint;
+        // surface a friendlier error here
+        const existingCode = await tx
+          .select({ id: financialCategories.id })
+          .from(financialCategories)
+          .where(eq(financialCategories.code, input.code))
+          .limit(1);
 
-          const category = inserted[0];
-          if (!category) throw new Error("Falha ao criar categoria");
-          return category;
-        }),
+        if (existingCode.length > 0) {
+          throw new Error(
+            `Código "${input.code}" já existe no plano de contas`,
+          );
+        }
+
+        const inserted = await tx
+          .insert(financialCategories)
+          .values({
+            code: input.code,
+            name: input.name,
+            type: input.type,
+            parentId: input.parentId ?? null,
+            isSystem: false,
+          })
+          .returning();
+
+        const category = inserted[0];
+        if (!category) throw new Error("Falha ao criar categoria");
+        return category;
+      },
     );
 
     await logFinanceiroAudit({
@@ -116,36 +108,36 @@ const updateCategorySchema = z.object({
 export const updateCategory = diretorAction
   .schema(updateCategorySchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    // withSystemRole: mesmo débito de RLS de createCategory acima.
+    // "categories_update_staff" (0070_financeiro_rls_alinhada.sql) cobre
+    // diretor — mesmo gate de aplicação de createCategory acima.
     const updated = await withAuthenticatedContext(
       { actorId: ctx.actorId },
-      (tx) =>
-        withSystemRole(tx, async (sysTx) => {
-          const rows = await sysTx
-            .select()
-            .from(financialCategories)
-            .where(eq(financialCategories.id, input.categoryId))
-            .limit(1);
+      async (tx) => {
+        const rows = await tx
+          .select()
+          .from(financialCategories)
+          .where(eq(financialCategories.id, input.categoryId))
+          .limit(1);
 
-          const category = rows[0];
-          if (!category) throw new Error("Categoria não encontrada");
+        const category = rows[0];
+        if (!category) throw new Error("Categoria não encontrada");
 
-          if (category.isSystem) {
-            throw new Error("Categorias do sistema não podem ser alteradas");
-          }
+        if (category.isSystem) {
+          throw new Error("Categorias do sistema não podem ser alteradas");
+        }
 
-          const patch: Partial<typeof financialCategories.$inferInsert> = {
-            updatedAt: new Date(),
-          };
-          if (input.name !== undefined) patch.name = input.name;
-          if (input.parentId !== undefined) patch.parentId = input.parentId;
+        const patch: Partial<typeof financialCategories.$inferInsert> = {
+          updatedAt: new Date(),
+        };
+        if (input.name !== undefined) patch.name = input.name;
+        if (input.parentId !== undefined) patch.parentId = input.parentId;
 
-          return sysTx
-            .update(financialCategories)
-            .set(patch)
-            .where(eq(financialCategories.id, input.categoryId))
-            .returning();
-        }),
+        return tx
+          .update(financialCategories)
+          .set(patch)
+          .where(eq(financialCategories.id, input.categoryId))
+          .returning();
+      },
     );
 
     await logFinanceiroAudit({
@@ -243,53 +235,52 @@ export const createBudget = diretorAction
       0,
     );
 
-    // withSystemRole: mesmo débito de RLS de createCategory acima
-    // ("budgets_mutate_admin"/"budget_items_mutate_admin" só concedem
-    // INSERT/UPDATE/DELETE a super_admin — não cobrem diretor).
+    // "budgets_insert_staff"/"budget_items_insert_staff"
+    // (0070_financeiro_rls_alinhada.sql) cobrem diretor — o gate de
+    // aplicação desta action (diretorAction).
     const { budget, costCenterId } = await withAuthenticatedContext(
       { actorId: ctx.actorId },
-      (tx) =>
-        withSystemRole(tx, async (sysTx) => {
-          // Resolve costCenterId from projectId if provided
-          let costCenterId = input.costCenterId ?? null;
+      async (tx) => {
+        // Resolve costCenterId from projectId if provided
+        let costCenterId = input.costCenterId ?? null;
 
-          if (!costCenterId && input.projectId) {
-            const ccRows = await sysTx
-              .select({ id: costCenters.id })
-              .from(costCenters)
-              .where(eq(costCenters.projectId, input.projectId))
-              .limit(1);
-            costCenterId = ccRows[0]?.id ?? null;
-          }
+        if (!costCenterId && input.projectId) {
+          const ccRows = await tx
+            .select({ id: costCenters.id })
+            .from(costCenters)
+            .where(eq(costCenters.projectId, input.projectId))
+            .limit(1);
+          costCenterId = ccRows[0]?.id ?? null;
+        }
 
-          const budgetInserted = await sysTx
-            .insert(budgets)
-            .values({
-              name: input.name,
-              year: input.year,
-              costCenterId,
-              totalAmount: totalAmount.toFixed(2),
-              createdBy: ctx.actorId,
-            })
-            .returning();
+        const budgetInserted = await tx
+          .insert(budgets)
+          .values({
+            name: input.name,
+            year: input.year,
+            costCenterId,
+            totalAmount: totalAmount.toFixed(2),
+            createdBy: ctx.actorId,
+          })
+          .returning();
 
-          const budget = budgetInserted[0];
-          if (!budget) throw new Error("Falha ao criar orçamento");
+        const budget = budgetInserted[0];
+        if (!budget) throw new Error("Falha ao criar orçamento");
 
-          // Insert budget items
-          await sysTx.insert(budgetItems).values(
-            input.items.map((item) => ({
-              budgetId: budget.id,
-              categoryId: item.categoryId,
-              plannedAmount: item.plannedAmount.toFixed(2),
-              description: item.description,
-              month: item.month,
-              notes: item.notes,
-            })),
-          );
+        // Insert budget items
+        await tx.insert(budgetItems).values(
+          input.items.map((item) => ({
+            budgetId: budget.id,
+            categoryId: item.categoryId,
+            plannedAmount: item.plannedAmount.toFixed(2),
+            description: item.description,
+            month: item.month,
+            notes: item.notes,
+          })),
+        );
 
-          return { budget, costCenterId };
-        }),
+        return { budget, costCenterId };
+      },
     );
 
     await logFinanceiroAudit({
@@ -322,32 +313,32 @@ const updateBudgetSchema = z.object({
 export const updateBudget = diretorAction
   .schema(updateBudgetSchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    // withSystemRole: mesmo débito de RLS de createCategory acima.
+    // "budgets_update_staff" (0070_financeiro_rls_alinhada.sql) cobre
+    // diretor — mesmo gate de aplicação de createBudget acima.
     const updated = await withAuthenticatedContext(
       { actorId: ctx.actorId },
-      (tx) =>
-        withSystemRole(tx, async (sysTx) => {
-          const rows = await sysTx
-            .select()
-            .from(budgets)
-            .where(eq(budgets.id, input.budgetId))
-            .limit(1);
+      async (tx) => {
+        const rows = await tx
+          .select()
+          .from(budgets)
+          .where(eq(budgets.id, input.budgetId))
+          .limit(1);
 
-          const budget = rows[0];
-          if (!budget) throw new Error("Orçamento não encontrado");
+        const budget = rows[0];
+        if (!budget) throw new Error("Orçamento não encontrado");
 
-          const patch: Partial<typeof budgets.$inferInsert> = {
-            updatedAt: new Date(),
-          };
-          if (input.name !== undefined) patch.name = input.name;
-          if (input.notes !== undefined) patch.notes = input.notes;
+        const patch: Partial<typeof budgets.$inferInsert> = {
+          updatedAt: new Date(),
+        };
+        if (input.name !== undefined) patch.name = input.name;
+        if (input.notes !== undefined) patch.notes = input.notes;
 
-          return sysTx
-            .update(budgets)
-            .set(patch)
-            .where(eq(budgets.id, input.budgetId))
-            .returning();
-        }),
+        return tx
+          .update(budgets)
+          .set(patch)
+          .where(eq(budgets.id, input.budgetId))
+          .returning();
+      },
     );
 
     await logFinanceiroAudit({

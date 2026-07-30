@@ -2,10 +2,7 @@
 
 import { z } from "zod";
 import { eq, sql } from "drizzle-orm";
-import {
-  withAuthenticatedContext,
-  withSystemRole,
-} from "@hebron/db/authenticated";
+import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { bankImports, bankImportRows, transactions } from "@hebron/db/schema";
 import { colaboradorAction } from "../lib/safe-action";
 import { logFinanceiroAudit } from "../lib/audit";
@@ -136,20 +133,14 @@ export const confirmImport = colaboradorAction
           }
 
           if (matchedCount > 0) {
-            // withSystemRole: "financeiro"."bank_imports" nunca teve GRANT de
-            // UPDATE para authenticated (0014_grants_authenticated.sql só dá
-            // SELECT/INSERT) nem policy de UPDATE (0010_financeiro.sql) —
-            // nenhum papel, nem super_admin, conseguiria este UPDATE via
-            // authenticated. Débito de RLS/GRANT registrado em SESSIONS.md,
-            // não corrigido aqui (fora de escopo alterar migration).
-            await withSystemRole(tx, (sysTx) =>
-              sysTx
-                .update(bankImports)
-                .set({
-                  matchedCount: sql`${bankImports.matchedCount} + ${matchedCount}`,
-                })
-                .where(eq(bankImports.id, bankImport.id)),
-            );
+            // "bank_imports_update_staff" (0070_financeiro_rls_alinhada.sql)
+            // concede o GRANT/policy de UPDATE que faltava para colaborador.
+            await tx
+              .update(bankImports)
+              .set({
+                matchedCount: sql`${bankImports.matchedCount} + ${matchedCount}`,
+              })
+              .where(eq(bankImports.id, bankImport.id));
           }
         }
 

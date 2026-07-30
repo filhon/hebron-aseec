@@ -4481,10 +4481,10 @@ RLS para schema financeiro. Super_admin: full access. Diretor gestor (designatio
 
 - [x] Super_admin: full CRUD em financeiro.\*
 - [x] Diretor gestor: SELECT + UPDATE em batch_approvals (aprovar)
-- [x] Colaborador financeiro: CRUD em transações, payables, receivables
+- [x] Colaborador financeiro: CRUD em transações, payables, receivables — desde P-3.7b, vale também para accounts (INSERT), bank_imports (UPDATE de matched_count)
 - [x] Submissor: SELECT em payment_schedules de projetos da própria instituição
 - [x] transactions: sem UPDATE/DELETE para ninguém (constraint + RLS)
-- [x] Demais papéis: sem acesso ao schema financeiro
+- [x] Demais papéis: sem acesso ao schema financeiro — desde P-3.7b, a recusa em accounts/categories/budgets/budget_items/bank_imports (escrita) é do banco, não só do gate de aplicação
 - [x] Types passam
 
 ---
@@ -5040,14 +5040,14 @@ Duas exceções são legítimas e **não** são alvo deste prompt: a escrita em 
 
 **Critérios de aceite:**
 
-- [ ] `grep -rn "withSystemRole" apps/financeiro/src/actions` devolve apenas linhas de audit log — cada uma comentada como exceção de serviço
-- [ ] Colaborador cadastra conta bancária e diretor cria categoria e orçamento com RLS ativa, sem `withSystemRole` (teste)
-- [ ] Papel sem acesso ao módulo recebe recusa **do banco** nessas mesmas escritas (teste)
-- [ ] `matched_count` de `bank_imports` é atualizado por colaborador via `authenticated` (teste — hoje impossível para qualquer papel)
-- [ ] Toda policy nova tem `USING` e `WITH CHECK` explícitos; nenhuma `FOR ALL` nova
-- [ ] Migration idempotente, com `DROP POLICY IF EXISTS` antes de cada recriação
-- [ ] Suíte completa de `apps/financeiro` verde; `pnpm --filter @hebron/financeiro build` verde
-- [ ] Registrar em SESSIONS.md
+- [x] `grep -rn "withSystemRole" apps/financeiro/src/actions` devolve apenas linhas de audit log — cada uma comentada como exceção de serviço
+- [x] Colaborador cadastra conta bancária e diretor cria categoria e orçamento com RLS ativa, sem `withSystemRole` (teste)
+- [x] Papel sem acesso ao módulo recebe recusa **do banco** nessas mesmas escritas (teste)
+- [x] `matched_count` de `bank_imports` é atualizado por colaborador via `authenticated` (teste — hoje impossível para qualquer papel)
+- [x] Toda policy nova tem `USING` e `WITH CHECK` explícitos; nenhuma `FOR ALL` nova
+- [x] Migration idempotente, com `DROP POLICY IF EXISTS` antes de cada recriação
+- [x] Suíte completa de `apps/financeiro` verde; `pnpm --filter @hebron/financeiro build` verde (1 falha pré-existente e não relacionada: designation-governance.test.ts > createWeeklyBatch, colisão de payables_pkey no dev DB compartilhado — S-213, reproduzida também no HEAD sem este diff)
+- [x] Registrar em SESSIONS.md
 
 **Notas:**
 Ref: CLAUDE.md (princípios invioláveis, "Defense in depth"), G6.2, S-63 e S-157. A RLS de `batch_approvals` foi corrigida em P-3.8b com o argumento de "não deixar uma policy sabidamente incompleta no banco"; as oito escritas deste prompt são o resto da mesma frase.

@@ -1,9 +1,6 @@
 "use server";
 
-import {
-  withAuthenticatedContext,
-  withSystemRole,
-} from "@hebron/db/authenticated";
+import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { bankAccounts } from "@hebron/db/schema";
 import { createBankAccountSchema } from "@hebron/validators/financeiro";
 import { colaboradorAction } from "../lib/safe-action";
@@ -19,33 +16,28 @@ import { logFinanceiroAudit } from "../lib/audit";
 export const createBankAccount = colaboradorAction
   .schema(createBankAccountSchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    // withSystemRole: "accounts_mutate_admin" (0010_financeiro.sql) só
-    // concede INSERT/UPDATE/DELETE a super_admin — não cobre colaborador,
-    // que é o gate de aplicação desta action (colaboradorAction). Mesmo
-    // padrão de exceção documentado para admin.audit_log (F3-15/S-57):
-    // débito de RLS registrado em SESSIONS.md, não corrigido aqui (fora de
-    // escopo alterar policy).
+    // "accounts_insert_staff" (0070_financeiro_rls_alinhada.sql) cobre
+    // colaborador — o gate de aplicação desta action (colaboradorAction).
     const account = await withAuthenticatedContext(
       { actorId: ctx.actorId },
-      (tx) =>
-        withSystemRole(tx, async (sysTx) => {
-          const inserted = await sysTx
-            .insert(bankAccounts)
-            .values({
-              bankName: input.bank,
-              nickname: input.name,
-              agency: input.agency,
-              accountNumber: input.accountNumber,
-              accountType: input.type,
-              initialBalance: input.initialBalance.toFixed(2),
-              createdBy: ctx.actorId,
-            })
-            .returning();
+      async (tx) => {
+        const inserted = await tx
+          .insert(bankAccounts)
+          .values({
+            bankName: input.bank,
+            nickname: input.name,
+            agency: input.agency,
+            accountNumber: input.accountNumber,
+            accountType: input.type,
+            initialBalance: input.initialBalance.toFixed(2),
+            createdBy: ctx.actorId,
+          })
+          .returning();
 
-          const account = inserted[0];
-          if (!account) throw new Error("Falha ao cadastrar conta bancária");
-          return account;
-        }),
+        const account = inserted[0];
+        if (!account) throw new Error("Falha ao cadastrar conta bancária");
+        return account;
+      },
     );
 
     await logFinanceiroAudit({

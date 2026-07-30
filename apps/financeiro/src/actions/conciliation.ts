@@ -2,10 +2,7 @@
 
 import { z } from "zod";
 import { eq, and, sql } from "drizzle-orm";
-import {
-  withAuthenticatedContext,
-  withSystemRole,
-} from "@hebron/db/authenticated";
+import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import {
   bankImportRows,
   bankImports,
@@ -212,20 +209,14 @@ export const autoMatchImport = colaboradorAction
             .where(eq(bankImportRows.id, update.id));
         }
 
-        // withSystemRole: "financeiro"."bank_imports" nunca teve GRANT de
-        // UPDATE para authenticated (0014_grants_authenticated.sql só dá
-        // SELECT/INSERT) nem policy de UPDATE (0010_financeiro.sql) — nenhum
-        // papel, nem super_admin, conseguiria este UPDATE via authenticated.
-        // Débito de RLS/GRANT registrado em SESSIONS.md, não corrigido aqui
-        // (fora de escopo alterar migration).
-        await withSystemRole(tx, (sysTx) =>
-          sysTx
-            .update(bankImports)
-            .set({
-              matchedCount: sql`${bankImports.matchedCount} + ${rowsToUpdate.length}`,
-            })
-            .where(eq(bankImports.id, input.bankImportId)),
-        );
+        // "bank_imports_update_staff" (0070_financeiro_rls_alinhada.sql)
+        // concede o GRANT/policy de UPDATE que faltava para colaborador.
+        await tx
+          .update(bankImports)
+          .set({
+            matchedCount: sql`${bankImports.matchedCount} + ${rowsToUpdate.length}`,
+          })
+          .where(eq(bankImports.id, input.bankImportId));
       });
     }
 
@@ -387,14 +378,12 @@ export const reconcileRow = colaboradorAction
         }
 
         // Update matched count on the import
-        // withSystemRole: mesmo débito de GRANT/RLS ausente de autoMatchImport
-        // acima ("financeiro"."bank_imports" nunca teve UPDATE para authenticated).
-        await withSystemRole(dbTx, (sysTx) =>
-          sysTx
-            .update(bankImports)
-            .set({ matchedCount: sql`${bankImports.matchedCount} + 1` })
-            .where(eq(bankImports.id, row.bankImportId)),
-        );
+        // "bank_imports_update_staff" (0070_financeiro_rls_alinhada.sql) —
+        // mesmo GRANT/policy de UPDATE de autoMatchImport acima.
+        await dbTx
+          .update(bankImports)
+          .set({ matchedCount: sql`${bankImports.matchedCount} + 1` })
+          .where(eq(bankImports.id, row.bankImportId));
 
         return { bankImportId: row.bankImportId, createdTransactionId };
       },
