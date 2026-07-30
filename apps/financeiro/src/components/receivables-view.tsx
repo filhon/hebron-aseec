@@ -10,9 +10,13 @@ import {
   X,
   AlertCircle,
   Landmark,
+  Ban,
 } from "lucide-react";
 import { RevenueForm } from "./revenue-form";
-import { markReceivableReceived } from "../actions/transactions";
+import {
+  markReceivableReceived,
+  cancelReceivable,
+} from "../actions/transactions";
 import type { AccountCategory, BankAccount } from "@hebron/types/financeiro";
 import type { CostCenterOption, ReceivableRow } from "../lib/queries";
 
@@ -56,6 +60,8 @@ export function ReceivablesView({
   const [formOpen, setFormOpen] = useState(false);
   const [receiving, setReceiving] = useState<ReceivableRow | null>(null);
   const [bankAccountId, setBankAccountId] = useState("");
+  const [cancelling, setCancelling] = useState<ReceivableRow | null>(null);
+  const [cancelReason, setCancelReason] = useState("");
 
   const pending = receivables.filter((r) => r.status === "pendente");
   const totalPending = pending.reduce((s, r) => s + r.amount, 0);
@@ -66,6 +72,18 @@ export function ReceivablesView({
     onSuccess() {
       router.refresh();
       setReceiving(null);
+    },
+  });
+
+  const {
+    execute: cancelExecute,
+    isPending: isCancelling,
+    result: cancelResult,
+  } = useAction(cancelReceivable, {
+    onSuccess() {
+      router.refresh();
+      setCancelling(null);
+      setCancelReason("");
     },
   });
 
@@ -268,11 +286,15 @@ export function ReceivablesView({
                             background:
                               r.status === "recebido"
                                 ? "var(--hb-green-muted)"
-                                : "var(--hb-orange-muted)",
+                                : r.status === "cancelado"
+                                  ? "var(--color-destructive-muted)"
+                                  : "var(--hb-orange-muted)",
                             color:
                               r.status === "recebido"
                                 ? "var(--hb-green-deep)"
-                                : "var(--hb-orange-deep)",
+                                : r.status === "cancelado"
+                                  ? "var(--color-destructive)"
+                                  : "var(--hb-orange-deep)",
                           }}
                         >
                           {STATUS_LABEL[r.status]}
@@ -286,20 +308,32 @@ export function ReceivablesView({
                       </td>
                       <td className="px-4 py-3.5 text-right">
                         {r.status === "pendente" && (
-                          <button
-                            onClick={() => {
-                              setBankAccountId(bankAccounts[0]?.id ?? "");
-                              setReceiving(r);
-                            }}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold ml-auto"
-                            style={{
-                              background: "var(--hb-green)",
-                              color: "var(--hb-blue)",
-                            }}
-                          >
-                            <CheckCircle2 className="h-3 w-3" />
-                            Marcar recebido
-                          </button>
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() => {
+                                setCancelReason("");
+                                setCancelling(r);
+                              }}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold border-(--border) text-(--fg-muted) hover:border-(--color-destructive-muted) hover:text-(--color-destructive) transition-colors"
+                            >
+                              <Ban className="h-3 w-3" />
+                              Cancelar
+                            </button>
+                            <button
+                              onClick={() => {
+                                setBankAccountId(bankAccounts[0]?.id ?? "");
+                                setReceiving(r);
+                              }}
+                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
+                              style={{
+                                background: "var(--hb-green)",
+                                color: "var(--hb-blue)",
+                              }}
+                            >
+                              <CheckCircle2 className="h-3 w-3" />
+                              Marcar recebido
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>
@@ -402,6 +436,92 @@ export function ReceivablesView({
                 }}
               >
                 {isPending ? "Registrando…" : "Confirmar recebimento"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {cancelling && (
+        <div
+          className="fixed inset-0 z-(--z-overlay) flex items-center justify-center"
+          style={{ background: "var(--overlay)" }}
+          onClick={() => setCancelling(null)}
+        >
+          <div
+            className="w-100 max-w-full rounded-(--radius) p-6"
+            style={{ background: "var(--bg)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <span
+                className="flex h-9 w-9 items-center justify-center rounded-(--radius)"
+                style={{
+                  background: "var(--color-destructive-muted)",
+                  color: "var(--color-destructive)",
+                }}
+              >
+                <Ban className="h-4 w-4" />
+              </span>
+              <div className="flex-1">
+                <p className="text-sm font-bold" style={{ color: "var(--fg)" }}>
+                  Cancelar recebimento
+                </p>
+                <p className="text-xs" style={{ color: "var(--fg-muted)" }}>
+                  {cancelling.description}
+                </p>
+              </div>
+              <button onClick={() => setCancelling(null)}>
+                <X className="h-4 w-4" style={{ color: "var(--fg-muted)" }} />
+              </button>
+            </div>
+
+            <label
+              className="block text-[10px] font-bold uppercase tracking-[0.14em] mb-1.5"
+              style={{ color: "var(--fg-muted)" }}
+            >
+              Motivo do cancelamento
+            </label>
+            <textarea
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              rows={3}
+              className="w-full px-3 py-2.5 rounded-(--radius) border text-sm mb-1 resize-none border-(--border) bg-(--bg) text-(--fg)"
+              placeholder="Descreva o motivo do cancelamento (mínimo 10 caracteres)…"
+            />
+            <p className="text-xs mb-3" style={{ color: "var(--fg-muted)" }}>
+              Obrigatório · registrado no audit trail.
+            </p>
+
+            {cancelResult.serverError && (
+              <p className="flex items-center gap-1 text-xs font-medium mb-3 text-(--hb-orange-deep)">
+                <AlertCircle className="h-3 w-3 shrink-0" />
+                {cancelResult.serverError}
+              </p>
+            )}
+
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={() => setCancelling(null)}
+                className="px-4 py-2.5 rounded-(--radius) border text-sm font-semibold border-(--border) text-(--fg)"
+              >
+                Voltar
+              </button>
+              <button
+                onClick={() =>
+                  cancelExecute({
+                    receivableId: cancelling.id,
+                    reason: cancelReason,
+                  })
+                }
+                disabled={isCancelling || cancelReason.trim().length < 10}
+                className="px-5 py-2.5 rounded-(--radius) text-sm font-semibold disabled:opacity-60"
+                style={{
+                  background: "var(--color-destructive)",
+                  color: "var(--fg-invert)",
+                }}
+              >
+                {isCancelling ? "Cancelando…" : "Confirmar cancelamento"}
               </button>
             </div>
           </div>

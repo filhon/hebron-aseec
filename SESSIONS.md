@@ -238,6 +238,7 @@
 | S-215  | 2026-07-30 | P-3.6b — Seis campos que o formulário coleta e o banco não tem onde guardar (CORRETIVO)                                          | concluido                            |
 | S-216  | 2026-07-30 | P-3.7b — A segunda camada de defesa que oito mutações contornam por dentro (CORRETIVO)                                           | concluido                            |
 | S-217  | 2026-07-30 | P-3.11b — O centro de custo que só nasce de um projeto e o selo "Geral" que nunca aparece (CORRETIVO)                            | concluido                            |
+| S-218  | 2026-07-30 | P-3.9c — Cinco actions e quatro estados que nenhuma tela alcança (CORRETIVO)                                                     | concluido                            |
 
 ---
 
@@ -19061,7 +19062,7 @@ skipping` seguido de `CREATE POLICY` sem erro.
 
 - [x] `grep -rn "withSystemRole" apps/financeiro/src/actions` devolve
       apenas linhas de audit log (todas dentro de `logFinanceiroAudit(...,
-  sysTx)`), nenhuma nas oito escritas deste prompt
+sysTx)`), nenhuma nas oito escritas deste prompt
 - [x] Colaborador cadastra conta bancária e diretor cria categoria e
       orçamento com RLS ativa, sem `withSystemRole` (teste)
 - [x] Papel sem acesso ao módulo recebe recusa do banco nessas mesmas
@@ -19070,15 +19071,15 @@ skipping` seguido de `CREATE POLICY` sem erro.
 - [x] `matched_count` de `bank_imports` é atualizado por colaborador via
       `authenticated` (teste — `reconcileRow` com ação "ignorar")
 - [x] Toda policy nova tem `USING`/`WITH CHECK` explícitos; nenhuma `FOR
-  ALL` nova
+ALL` nova
 - [x] Migration idempotente — reaplicada direto contra o Postgres, segunda
       rodada sem erro
 - [x] `pnpm --filter @hebron/financeiro typecheck lint test` verdes (test:
       65/66 — a falha isolada em `designation-governance.test.ts >
-  createWeeklyBatch` é a mesma drift pré-existente do dev DB
+createWeeklyBatch` é a mesma drift pré-existente do dev DB
       compartilhado de S-213/[[project_financeiro_payables_pkey_drift]],
       reproduzida também no HEAD sem este diff); `pnpm --filter
-  @hebron/financeiro build` verde
+@hebron/financeiro build` verde
 - [x] Registrado em SESSIONS.md
 
 ---
@@ -19202,7 +19203,7 @@ apps/financeiro/src` revisado: único achado é `StatusDot` em
       (idempotência) segue verde após a migration
 - [x] `pnpm --filter @hebron/financeiro typecheck lint test` verdes (68/69
       — a falha isolada em `designation-governance.test.ts >
-    createWeeklyBatch` é a mesma drift pré-existente de
+  createWeeklyBatch` é a mesma drift pré-existente de
       S-213/[[project_financeiro_payables_pkey_drift]], reproduzida também
       no HEAD sem este diff); `pnpm --filter @hebron/financeiro build`
       verde; suíte de `packages/db` (67/70 — `system-actor.test.ts` é
@@ -19210,3 +19211,153 @@ apps/financeiro/src` revisado: único achado é `StatusDot` em
       falhas de RLS de storage/documentos sem relação com este diff — ambas
       pré-existentes, não tocadas por este prompt)
 - [x] Registrado em SESSIONS.md
+
+## S-218 — P-3.9c — Cinco actions e quatro estados que nenhuma tela alcança (CORRETIVO)
+
+**Branch:** `feat/P-3.9c-financeiro-actions-sem-tela`
+
+### Contexto
+
+Auditoria por grep (registrada no próprio prompt) encontrou cinco actions do
+Bloco B sem consumidor algum em `apps/financeiro/src/components`/`src/app`
+(`overrideBlock`, `cancelPayable`, `createManualTransaction`, `updateBudget`,
+`deleteBudget`) e quatro estados de banco que nenhuma tela mostra
+(`payable_status = "bloqueado"`, `"pago"`, `"cancelado"`,
+`receivable_status = "cancelado"`). O mais grave: um payable bloqueado pelo
+cron `projetos-inadimplencia` desaparecia da tela — não estava em nenhuma
+aba de `contas-pagar-view.tsx` (`Tab` só tinha `pendente|aprovado|
+autorizado`) e `Payable`/`getPayables` não carregavam `blockedAt`/
+`blockReason`/`overriddenBy`/`overrideJustification`, apesar das quatro
+colunas existirem desde a migration `0030` (P-3.11).
+
+### Decisões
+
+1. **`bloqueado`:** `Payable` (`packages/types`) e `getPayables` passaram a
+   carregar `blockedAt`/`blockReason`/`overriddenBy`/`overriddenByName`/
+   `overriddenAt`/`overrideJustification`. `contas-pagar-view.tsx` ganhou
+   aba própria (junto com `pago`/`cancelado` — régua de 6 abas, cabe em uma
+   linha com wrap). `payable-card.tsx` ganhou bloco de estado bloqueado
+   (motivo + data) com botão "Liberar bloqueio" (novo `onOverride` prop, só
+   renderiza quando `status === "bloqueado"`), que abre
+   `payable-block-override-form.tsx` (novo — slide-over com textarea de
+   justificativa ≥20 chars, chama `overrideBlock` já existente). Um bloco
+   adicional mostra "Bloqueio liberado" (quem + quando + justificativa)
+   mesmo depois do status voltar a `pendente` — os campos `overriddenBy`/
+   `overriddenAt`/`overrideJustification` nunca são limpos pela action, só
+   `blockedAt`/`blockReason` idem, então o histórico sobrevive à liberação.
+2. **`pago`:** aba própria em `contas-pagar-view.tsx`; `payable-card.tsx`
+   ganhou bloco com data do pagamento e os 8 primeiros caracteres do
+   `paidByTransactionId` — o rastro completo (aprovador/autorizador) já
+   vinha do bloco de governança existente, só faltava a informação da
+   liquidação em si.
+3. **`cancelado` (payables): não precisou de migration nova.**
+   `cancelPayable` (`actions/transactions.ts`) já não seta `deleted_at` desde
+   a correção de S-215/P-3.8b — `payables_select_staff` filtra só
+   `deleted_at IS NULL`, então um payable cancelado já é visível ao staff sob
+   RLS real, sem qualquer mudança de policy. O trabalho deste prompt foi só
+   de UI: aba "Cancelados" (grade de `PayableCard`) + botão "Cancelar" no
+   card (novo, chama `cancelPayable` via diálogo com motivo obrigatório em
+   `contas-pagar-view.tsx`, mesmo padrão do diálogo de "Marcar como pago" já
+   existente). A migration condicional `NNNN_financeiro_payables_select_
+cancelados.sql` do enunciado do prompt não foi criada — a premissa (RLS
+   esconde cancelado) já não era verdadeira no HEAD desta branch.
+4. **`createManualTransaction`: ganhou entrada.** Terceiro item no menu
+   "Novo lançamento" (`dashboard-quick-actions.tsx`, antes só "Nova
+   despesa"/"Nova receita") abre `manual-transaction-form.tsx` (novo): tipo
+   (débito/crédito via toggle de botões, sem `register` de rádio — `setValue`
+   - comparação de estado, para não depender de variante Tailwind `has-*`
+     sem precedente no design system), conta bancária, categoria (filtrada por
+     receita/despesa conforme o tipo), centro de custo, valor, data,
+     observações. Usa o schema já publicado `createTransactionSchema` de
+     `@hebron/validators` — nenhuma mudança de validators necessária.
+5. **`updateBudget`/`deleteBudget`: ligados.** `budget-comparison.tsx` ganhou
+   coluna de ações (lápis/lixeira) só na visão "Por projeto / CC" (cada linha
+   ali é 1:1 com um `Budget`; a visão "Por categoria" agrega vários
+   orçamentos e não tem 1 registro editável por linha). Editar abre modal
+   simples (nome — `updateBudget` só aceita `name`/`notes`); excluir abre
+   confirmação que exibe o `serverError` do guard "não é possível excluir o
+   orçamento do ano corrente" quando aplicável.
+6. **Recebível cancelado: ganhou action nova, no molde de `cancelPayable`.**
+   `cancelReceivable` (`actions/transactions.ts`, `colaboradorAction`,
+   criador/diretor/super_admin) — status-only, nunca seta `deleted_at` (mesmo
+   raciocínio do item 3: `receivables_select_staff` também filtra por
+   `deleted_at IS NULL`). `financeiro.receivables` não tem coluna própria
+   para motivo de cancelamento — o motivo é concatenado em `notes`, mesmo
+   padrão já usado por `createPayable`/`createReceivable` para CNPJ. Precisou
+   de um valor novo no enum de audit (`financeiro.receivable.cancelled`) —
+   G6.3 exige `ALTER TYPE ... ADD VALUE` para toda action auditável nova; nem
+   a migration condicional nem `schema/admin.ts`/`lib/audit.ts` estavam na
+   lista de arquivos permitidos do prompt, mas a ausência é um gap de
+   infraestrutura óbvio (G1): sem o valor no enum, `logFinanceiroAudit` falha
+   em runtime e — por ser módulo de governança — aborta a mutação inteira.
+   Wired em `receivables-view.tsx` (botão "Cancelar" + diálogo, ao lado de
+   "Marcar recebido", só para `pendente`).
+7. **`lib/queries.ts:387` "P-3.9b":** referência a um prompt que não existe,
+   corrigida (comentário simplesmente removeu a citação).
+
+### Achado novo, fora do escopo deste prompt
+
+`updateCostCenter` (`actions/cost-centers.ts`, P-3.11b) é uma sexta action
+órfã — grep por consumidor em `components`/`app` não encontra nenhum.
+`cost-center-form.tsx`/`centros-custo/page.tsx` só chamam `createCostCenter`.
+Não corrigido aqui: nem o arquivo de action nem o formulário/página estavam
+na lista de arquivos permitidos deste prompt (que listava as cinco actions
+do prompt original, não as descobertas depois dele) — registrado para um
+próximo corretivo, mesmo padrão de P-2.8c (S-206) e deste próprio prompt.
+
+### Escopo entregue
+
+1. `packages/types/src/financeiro/index.ts`: `Payable` ganha os seis campos
+   de bloqueio/override.
+2. `apps/financeiro/src/lib/queries.ts`: `getPayables` mapeia os seis campos;
+   comentário "P-3.9b" corrigido.
+3. `apps/financeiro/src/actions/transactions.ts`: `cancelReceivable` (novo).
+4. `packages/db/src/schema/admin.ts` + `apps/financeiro/src/lib/audit.ts` +
+   `packages/db/src/migrations/0073_financeiro_receivable_cancelled_audit_action.sql`
+   (novo): valor de enum `financeiro.receivable.cancelled`.
+5. `apps/financeiro/src/components/payable-block-override-form.tsx` (novo).
+6. `apps/financeiro/src/components/manual-transaction-form.tsx` (novo).
+7. `apps/financeiro/src/components/payable-card.tsx`: blocos de bloqueado/
+   pago/liberação; botão "Cancelar"; prop `onOverride`.
+8. `apps/financeiro/src/components/contas-pagar-view.tsx`: abas bloqueado/
+   pago/cancelado; diálogo de cancelamento; abertura do form de override.
+9. `apps/financeiro/src/components/receivables-view.tsx`: botão/diálogo de
+   cancelamento; pill de status para `cancelado`.
+10. `apps/financeiro/src/components/dashboard-quick-actions.tsx`: item
+    "Lançamento manual" no menu.
+11. `apps/financeiro/src/components/budget-comparison.tsx`: coluna de ações
+    (editar/excluir) na visão "Por projeto / CC"; modais de edição/exclusão.
+12. `apps/financeiro/src/__tests__/payables-override-block.test.ts`:
+    asserção de `overriddenAt`/`blockReason` pós-override.
+13. `apps/financeiro/src/__tests__/governance.test.ts`: novo describe —
+    `cancelPayable`/`cancelReceivable` permanecem visíveis via RLS
+    autenticada real (não só `db` superuser) após o cancelamento.
+14. `PROMPTS.md`: critérios de P-3.8/P-3.9/P-3.11 anotados com o caminho de
+    UI que cada action ganhou (ou já tinha, no caso do override).
+
+### Critérios de aceite
+
+- [x] `grep -rn "bloqueado" apps/financeiro/src/components apps/financeiro/src/app`
+      devolve resultado — selo, motivo e caminho de override
+- [x] Payable bloqueado pelo cron aparece na tela e um super_admin o libera
+      de lá, com justificativa, gerando audit (teste já existente em
+      `payables-override-block.test.ts`, estendido)
+- [x] Nenhuma action exportada em `apps/financeiro/src/actions/*.ts` sem
+      consumidor, exceto `updateCostCenter` (achado novo, fora da lista de
+      arquivos permitidos — ver seção acima)
+- [x] Payable pago legível com o rastro completo de governança
+- [x] Nenhum componente renderiza branch de estado inalcançável
+- [x] Recebível: `cancelado` é atingível pela tela (`cancelReceivable` +
+      botão em `receivables-view.tsx`)
+- [x] `pnpm --filter @hebron/financeiro typecheck lint test` verdes (test:
+      70/71 — a falha isolada em `designation-governance.test.ts >
+    createWeeklyBatch` é a drift pré-existente de
+      S-213/[[project_financeiro_payables_pkey_drift]], não relacionada a
+      este diff); `pnpm --filter @hebron/financeiro build` verde
+- [x] `pnpm --filter @hebron/db typecheck test` verdes (test: 71/73 —
+      `system-actor.test.ts`/[[project_system_actor_test_drift]] e 2 falhas
+      em `storage.test.ts`/[[project_storage_rls_test_flakiness]], ambas
+      pré-existentes e sem relação com este diff); migration `0073` aplicada
+      e `schema-parity.test.ts` verde após a aplicação
+- [x] Registrado em SESSIONS.md — destino das cinco actions e dos quatro
+      estados, todos documentados na seção de Decisões acima

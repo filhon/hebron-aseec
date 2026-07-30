@@ -126,6 +126,14 @@ export interface Payable {
   cancelledAt: Date | null;
   cancelledBy: string | null;
   cancellationReason: string | null;
+  /** Bloqueio por inadimplência de relatório de projeto (BRAIN §6.2, P-3.11) */
+  blockedAt: Date | null;
+  blockReason: string | null;
+  /** super_admin que liberou o bloqueio — permanece após status voltar a "pendente" */
+  overriddenBy: string | null;
+  overriddenByName: string | null;
+  overriddenAt: Date | null;
+  overrideJustification: string | null;
   notes: string | null;
   createdBy: string; // user ID
   createdAt: Date;

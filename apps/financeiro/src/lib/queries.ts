@@ -383,6 +383,14 @@ export async function getPayables(): Promise<Payable[]> {
     cancelledAt: p.status === "cancelado" ? p.updatedAt : null,
     cancelledBy: p.cancelledBy,
     cancellationReason: p.cancellationReason,
+    blockedAt: p.blockedAt,
+    blockReason: p.blockReason,
+    overriddenBy: p.overriddenBy,
+    overriddenByName: p.overriddenBy
+      ? (usersMap.get(p.overriddenBy) ?? null)
+      : null,
+    overriddenAt: p.overriddenAt,
+    overrideJustification: p.overrideJustification,
     notes: p.notes,
     createdBy: p.createdBy,
     createdAt: p.createdAt,
@@ -391,8 +399,8 @@ export async function getPayables(): Promise<Payable[]> {
 }
 
 // ---------------------------------------------------------------------------
-// Receivables — description já vem "descrição — pagador" (P-3.9b:
-// createReceivable concatena o payerName na descrição; não há coluna própria).
+// Receivables — description já vem "descrição — pagador" (createReceivable
+// concatena o payerName na descrição; não há coluna própria).
 // ---------------------------------------------------------------------------
 
 export interface ReceivableRow {

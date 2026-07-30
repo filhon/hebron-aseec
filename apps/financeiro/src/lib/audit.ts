@@ -14,6 +14,7 @@ export type FinanceiroAuditAction =
   | "financeiro.payable.paid"
   | "financeiro.receivable.created"
   | "financeiro.receivable.received"
+  | "financeiro.receivable.cancelled"
   | "financeiro.transaction.created"
   | "financeiro.transaction.reversed"
   | "financeiro.import.confirmed"

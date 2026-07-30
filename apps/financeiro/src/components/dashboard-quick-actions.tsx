@@ -5,10 +5,11 @@ import { Plus, ChevronDown, Download } from "lucide-react";
 import { ExpenseForm } from "./expense-form";
 import { RevenueForm } from "./revenue-form";
 import { BankAccountForm } from "./bank-account-form";
+import { ManualTransactionForm } from "./manual-transaction-form";
 import type { AccountCategory, BankAccount } from "@hebron/types/financeiro";
 import type { CostCenterOption } from "../lib/queries";
 
-type FormMode = null | "despesa" | "receita";
+type FormMode = null | "despesa" | "receita" | "manual";
 
 interface NewEntryMenuProps {
   categories: AccountCategory[];
@@ -49,6 +50,7 @@ export function NewEntryMenu({
               [
                 { key: "despesa", label: "Nova despesa" },
                 { key: "receita", label: "Nova receita" },
+                { key: "manual", label: "Lançamento manual" },
               ] as const
             ).map((item) => (
               <button
@@ -86,6 +88,14 @@ export function NewEntryMenu({
           categories={categories}
           costCenters={costCenters}
           bankAccounts={bankAccounts}
+          onClose={() => setFormMode(null)}
+        />
+      )}
+      {formMode === "manual" && (
+        <ManualTransactionForm
+          bankAccounts={bankAccounts}
+          categories={categories}
+          costCenters={costCenters}
           onClose={() => setFormMode(null)}
         />
       )}

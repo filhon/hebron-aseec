@@ -8,7 +8,9 @@ import { BatchApprovalCard } from "./batch-approval-card";
 import { BatchApprovalForm } from "./batch-approval-form";
 import { ExpenseForm } from "./expense-form";
 import { PayableCard } from "./payable-card";
+import { PayableBlockOverrideForm } from "./payable-block-override-form";
 import { createWeeklyBatch, markPayableAsPaid } from "../actions/approval";
+import { cancelPayable } from "../actions/transactions";
 import type {
   AccountCategory,
   BankAccount,
@@ -17,12 +19,31 @@ import type {
 } from "@hebron/types/financeiro";
 import type { CostCenterOption } from "../lib/queries";
 
-type Tab = "pendente" | "aprovado" | "autorizado";
+type Tab =
+  | "pendente"
+  | "aprovado"
+  | "autorizado"
+  | "bloqueado"
+  | "pago"
+  | "cancelado";
+
+// Tabs cujo conteúdo é uma grade de PayableCard (estados terminais/individuais,
+// sem fluxo de lote) — as demais (pendente/aprovado) usam o cartão de lote +
+// tabela de referência já existentes.
+const CARD_GRID_TABS: readonly Tab[] = [
+  "autorizado",
+  "bloqueado",
+  "pago",
+  "cancelado",
+];
 
 const TAB_LABEL: Record<Tab, string> = {
   pendente: "Aguardando aprovação",
   aprovado: "Aprovados",
   autorizado: "Autorizados",
+  bloqueado: "Bloqueados",
+  pago: "Pagos",
+  cancelado: "Cancelados",
 };
 
 const TAB_DESC: Record<Tab, string> = {
@@ -32,6 +53,11 @@ const TAB_DESC: Record<Tab, string> = {
     "Aprovados pelo Diretor Gestor. Aguardam autorização do Diretor Autorizador.",
   autorizado:
     "Autorizados por ambas as camadas de governança. Prontos para pagamento.",
+  bloqueado:
+    "Bloqueados por inadimplência de relatório de projeto (BRAIN §6.2). Só super_admin pode liberar, com justificativa.",
+  pago: "Pagamentos concluídos, com o rastro completo de aprovação, autorização e liquidação.",
+  cancelado:
+    "Cancelados antes do pagamento. Mantidos aqui como registro — nunca excluídos.",
 };
 
 function fmtBRL(n: number): string {
@@ -65,23 +91,34 @@ export function ContasPagarView({
   } | null>(null);
   const [payingPayable, setPayingPayable] = useState<Payable | null>(null);
   const [payAccountId, setPayAccountId] = useState("");
+  const [cancelingPayable, setCancelingPayable] = useState<Payable | null>(
+    null,
+  );
+  const [cancelReason, setCancelReason] = useState("");
+  const [overridingPayable, setOverridingPayable] = useState<Payable | null>(
+    null,
+  );
 
   const filtered = payables.filter((p) => p.status === activeTab);
+  const isCardGridTab = CARD_GRID_TABS.includes(activeTab);
 
   const pendingBatch = batchApprovals.find((b) => b.status === "pendente");
   const approvedBatch = batchApprovals.find((b) => b.status === "aprovado");
-
   const pendingCount = payables.filter((p) => p.status === "pendente").length;
-  const approvedCount = payables.filter((p) => p.status === "aprovado").length;
-  const authorizedCount = payables.filter(
-    (p) => p.status === "autorizado",
-  ).length;
 
-  const TABS: { key: Tab; count: number }[] = [
-    { key: "pendente", count: pendingCount },
-    { key: "aprovado", count: approvedCount },
-    { key: "autorizado", count: authorizedCount },
-  ];
+  const TABS: { key: Tab; count: number }[] = (
+    [
+      "pendente",
+      "aprovado",
+      "autorizado",
+      "bloqueado",
+      "pago",
+      "cancelado",
+    ] as const
+  ).map((key) => ({
+    key,
+    count: payables.filter((p) => p.status === key).length,
+  }));
 
   const {
     execute: createBatch,
@@ -101,6 +138,18 @@ export function ContasPagarView({
     onSuccess() {
       router.refresh();
       setPayingPayable(null);
+    },
+  });
+
+  const {
+    execute: cancelAction,
+    isPending: isCancelling,
+    result: cancelResult,
+  } = useAction(cancelPayable, {
+    onSuccess() {
+      router.refresh();
+      setCancelingPayable(null);
+      setCancelReason("");
     },
   });
 
@@ -247,14 +296,15 @@ export function ContasPagarView({
         )}
 
         {/* Payables list */}
-        {activeTab === "autorizado" ? (
+        {isCardGridTab ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {filtered.length === 0 ? (
               <p
                 className="text-sm col-span-2 text-center py-10"
                 style={{ color: "var(--fg-muted)" }}
               >
-                Nenhum pagamento autorizado pendente de registro.
+                Nenhum pagamento {TAB_LABEL[activeTab].toLowerCase()} no
+                momento.
               </p>
             ) : (
               filtered.map((p) => (
@@ -265,8 +315,16 @@ export function ContasPagarView({
                     if (action === "pay") {
                       setPayAccountId(bankAccounts[0]?.id ?? "");
                       setPayingPayable(p);
+                    } else if (action === "cancel") {
+                      setCancelReason("");
+                      setCancelingPayable(p);
                     }
                   }}
+                  onOverride={
+                    p.status === "bloqueado"
+                      ? () => setOverridingPayable(p)
+                      : undefined
+                  }
                 />
               ))
             )}
@@ -500,6 +558,101 @@ export function ContasPagarView({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Cancel dialog */}
+      {cancelingPayable && (
+        <div
+          className="fixed inset-0 z-(--z-overlay) flex items-center justify-center"
+          style={{ background: "var(--overlay)" }}
+          onClick={() => setCancelingPayable(null)}
+        >
+          <div
+            className="w-100 max-w-full rounded-(--radius) p-6"
+            style={{ background: "var(--bg)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <span
+                className="flex h-9 w-9 items-center justify-center rounded-(--radius)"
+                style={{
+                  background: "var(--color-destructive-muted)",
+                  color: "var(--color-destructive)",
+                }}
+              >
+                <X className="h-4 w-4" />
+              </span>
+              <div className="flex-1">
+                <p className="text-sm font-bold" style={{ color: "var(--fg)" }}>
+                  Cancelar pagamento
+                </p>
+                <p className="text-xs" style={{ color: "var(--fg-muted)" }}>
+                  {cancelingPayable.description}
+                </p>
+              </div>
+              <button onClick={() => setCancelingPayable(null)}>
+                <X className="h-4 w-4" style={{ color: "var(--fg-muted)" }} />
+              </button>
+            </div>
+
+            <label
+              className="block text-[10px] font-bold uppercase tracking-[0.14em] mb-1.5"
+              style={{ color: "var(--fg-muted)" }}
+            >
+              Motivo do cancelamento
+            </label>
+            <textarea
+              value={cancelReason}
+              onChange={(e) => setCancelReason(e.target.value)}
+              rows={3}
+              className="w-full px-3 py-2.5 rounded-(--radius) border text-sm mb-1 resize-none border-(--border) bg-(--bg) text-(--fg)"
+              placeholder="Descreva o motivo do cancelamento (mínimo 10 caracteres)…"
+            />
+            <p className="text-xs mb-3" style={{ color: "var(--fg-muted)" }}>
+              Obrigatório · registrado no audit trail.
+            </p>
+
+            {cancelResult.serverError && (
+              <p className="flex items-center gap-1 text-xs font-medium mb-3 text-(--hb-orange-deep)">
+                <AlertCircle className="h-3 w-3 shrink-0" />
+                {cancelResult.serverError}
+              </p>
+            )}
+
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={() => setCancelingPayable(null)}
+                className="px-4 py-2.5 rounded-(--radius) border text-sm font-semibold border-(--border) text-(--fg)"
+              >
+                Voltar
+              </button>
+              <button
+                onClick={() =>
+                  cancelAction({
+                    payableId: cancelingPayable.id,
+                    reason: cancelReason,
+                  })
+                }
+                disabled={isCancelling || cancelReason.trim().length < 10}
+                className="px-5 py-2.5 rounded-(--radius) text-sm font-semibold disabled:opacity-60"
+                style={{
+                  background: "var(--color-destructive)",
+                  color: "var(--fg-invert)",
+                }}
+              >
+                {isCancelling ? "Cancelando…" : "Confirmar cancelamento"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Override de bloqueio */}
+      {overridingPayable && (
+        <PayableBlockOverrideForm
+          payable={overridingPayable}
+          onClose={() => setOverridingPayable(null)}
+        />
       )}
     </div>
   );

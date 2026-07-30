@@ -1,7 +1,15 @@
 ﻿"use client";
 
 import { useState } from "react";
-import { Calendar, Link2, Check, Paperclip } from "lucide-react";
+import {
+  Calendar,
+  Link2,
+  Check,
+  Paperclip,
+  ShieldAlert,
+  ShieldCheck,
+  Landmark,
+} from "lucide-react";
 import { useAction } from "next-safe-action/hooks";
 import type { Payable } from "@hebron/types/financeiro";
 import { getAttachmentUrl } from "../actions/attachments";
@@ -9,6 +17,8 @@ import { getAttachmentUrl } from "../actions/attachments";
 interface PayableCardProps {
   payable: Payable;
   onAction?: (action: "approve" | "authorize" | "pay" | "cancel") => void;
+  /** Abre o formulário de liberação de bloqueio (exclusivo super_admin) */
+  onOverride?: () => void;
 }
 
 function fmtBRL(n: number): string {
@@ -95,7 +105,11 @@ const STATUS_ORDER = [
   "cancelado",
 ];
 
-export function PayableCard({ payable, onAction }: PayableCardProps) {
+export function PayableCard({
+  payable,
+  onAction,
+  onOverride,
+}: PayableCardProps) {
   const [attachmentError, setAttachmentError] = useState<string | null>(null);
   const { execute: openAttachment, isPending: isOpeningAttachment } = useAction(
     getAttachmentUrl,
@@ -176,7 +190,7 @@ export function PayableCard({ payable, onAction }: PayableCardProps) {
         </div>
 
         {/* Governance flow */}
-        {payable.status !== "cancelado" && (
+        {payable.status !== "cancelado" && payable.status !== "bloqueado" && (
           <div className="flex border border-(--border) rounded-lg overflow-hidden mb-3">
             {GOVERNANCE_STEPS.map((step, i) => {
               const isDone = currentStep > i;
@@ -235,6 +249,53 @@ export function PayableCard({ payable, onAction }: PayableCardProps) {
           </div>
         )}
 
+        {/* Bloqueado state — inadimplência de relatório (BRAIN §6.2, P-3.11) */}
+        {payable.status === "bloqueado" && (
+          <div className="rounded-lg border border-(--color-destructive-muted) bg-(--color-destructive-muted) px-3 py-2.5 mb-3">
+            <p className="flex items-center gap-1.5 text-xs font-bold text-(--color-destructive) uppercase tracking-widest">
+              <ShieldAlert className="h-3.5 w-3.5" />
+              Bloqueado — inadimplência de relatório
+            </p>
+            <p className="text-xs text-(--fg-muted) mt-1">
+              {payable.blockReason ?? "Relatório de projeto vencido."}
+            </p>
+            {payable.blockedAt && (
+              <p className="text-[10px] text-(--fg-muted) mt-1">
+                Desde {fmtDate(payable.blockedAt)}
+              </p>
+            )}
+            {onOverride && (
+              <button
+                onClick={onOverride}
+                className="w-full mt-2.5 py-2 rounded-lg bg-(--color-destructive) text-(--fg-invert) text-xs font-semibold hover:opacity-90 transition-opacity"
+              >
+                Liberar bloqueio (super_admin)
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Pago — rastro completo de governança */}
+        {payable.status === "pago" && (
+          <div className="rounded-lg border border-(--hb-green-muted) bg-(--hb-green-muted) px-3 py-2.5 mb-3">
+            <p className="flex items-center gap-1.5 text-xs font-bold text-(--hb-green-deep) uppercase tracking-widest">
+              <Landmark className="h-3.5 w-3.5" />
+              Pago
+            </p>
+            <div className="mt-1.5 space-y-0.5 text-xs text-(--fg-muted)">
+              {payable.paidAt && <p>Em {fmtDate(payable.paidAt)}</p>}
+              {payable.paidByTransactionId && (
+                <p>
+                  Transação{" "}
+                  <span className="font-mono text-(--fg)">
+                    {payable.paidByTransactionId.slice(0, 8)}
+                  </span>
+                </p>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Cancelled state */}
         {payable.status === "cancelado" && (
           <div className="rounded-lg border border-(--color-destructive-muted) bg-(--color-destructive-muted) px-3 py-2.5 mb-3">
@@ -244,6 +305,25 @@ export function PayableCard({ payable, onAction }: PayableCardProps) {
             {payable.cancellationReason && (
               <p className="text-xs text-(--fg-muted) mt-1">
                 {payable.cancellationReason}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Bloqueio liberado — histórico visível mesmo após voltar a "pendente" */}
+        {payable.status !== "bloqueado" && payable.overriddenAt && (
+          <div className="rounded-lg border border-(--border) bg-(--bg-alt) px-3 py-2.5 mb-3">
+            <p className="flex items-center gap-1.5 text-[10px] font-bold text-(--fg-muted) uppercase tracking-widest">
+              <ShieldCheck className="h-3 w-3" />
+              Bloqueio liberado
+            </p>
+            <p className="text-xs text-(--fg) mt-1">
+              {payable.overriddenByName ?? "super_admin"} em{" "}
+              {fmtDate(payable.overriddenAt)}
+            </p>
+            {payable.overrideJustification && (
+              <p className="text-xs text-(--fg-muted) mt-0.5 italic">
+                {payable.overrideJustification}
               </p>
             )}
           </div>
@@ -281,7 +361,7 @@ export function PayableCard({ payable, onAction }: PayableCardProps) {
         {onAction &&
           payable.status !== "pago" &&
           payable.status !== "cancelado" && (
-            <div className="mt-3 pt-3 border-t border-(--divider)">
+            <div className="mt-3 pt-3 border-t border-(--divider) space-y-2">
               {payable.status === "pendente" && (
                 <button
                   onClick={() => onAction("approve")}
@@ -306,6 +386,12 @@ export function PayableCard({ payable, onAction }: PayableCardProps) {
                   Marcar como pago
                 </button>
               )}
+              <button
+                onClick={() => onAction("cancel")}
+                className="w-full py-2 rounded-lg border border-(--border) text-(--fg-muted) text-xs font-semibold hover:border-(--color-destructive-muted) hover:text-(--color-destructive) transition-colors"
+              >
+                Cancelar
+              </button>
             </div>
           )}
       </div>

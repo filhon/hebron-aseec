@@ -1,7 +1,17 @@
 ﻿"use client";
 
 import { useState, useMemo, useCallback } from "react";
-import { Download, Plus, TrendingUp } from "lucide-react";
+import { useAction } from "next-safe-action/hooks";
+import { useRouter } from "next/navigation";
+import {
+  Download,
+  Plus,
+  TrendingUp,
+  Pencil,
+  Trash2,
+  X,
+  AlertCircle,
+} from "lucide-react";
 import type {
   AccountCategory,
   Budget,
@@ -10,6 +20,7 @@ import type {
 import type { CostCenterOption } from "../lib/queries";
 import { csvField, downloadCsv } from "../lib/export-csv";
 import { BudgetForm } from "./budget-form";
+import { updateBudget, deleteBudget } from "../actions/categories";
 
 interface BudgetComparisonProps {
   budgets: Budget[];
@@ -46,8 +57,34 @@ export function BudgetComparison({
   categories,
   costCenters,
 }: BudgetComparisonProps) {
+  const router = useRouter();
   const [viewMode, setViewMode] = useState<ViewMode>("categorias");
   const [formOpen, setFormOpen] = useState(false);
+  const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
+  const [editName, setEditName] = useState("");
+  const [deletingBudget, setDeletingBudget] = useState<Budget | null>(null);
+
+  const {
+    execute: updateExecute,
+    isPending: isUpdating,
+    result: updateResult,
+  } = useAction(updateBudget, {
+    onSuccess() {
+      router.refresh();
+      setEditingBudget(null);
+    },
+  });
+
+  const {
+    execute: deleteExecute,
+    isPending: isDeleting,
+    result: deleteResult,
+  } = useAction(deleteBudget, {
+    onSuccess() {
+      router.refresh();
+      setDeletingBudget(null);
+    },
+  });
 
   // Sum executed amount per categoryId from transactions
   const executedByCategory = useMemo(() => {
@@ -121,6 +158,14 @@ export function BudgetComparison({
   }, [budgets, executedByCostCenter]);
 
   const rows = viewMode === "categorias" ? categoryRows : projectRows;
+  const budgetsById = useMemo(
+    () => new Map(budgets.map((b) => [b.id, b])),
+    [budgets],
+  );
+  const gridCols =
+    viewMode === "projetos"
+      ? "1fr 120px 120px 80px minmax(140px,1fr) 72px"
+      : "1fr 120px 120px 80px minmax(140px,1fr)";
 
   const totalPlanned = rows.reduce((s, r) => s + r.plannedAmount, 0);
   const totalExecuted = rows.reduce((s, r) => s + r.executedAmount, 0);
@@ -258,15 +303,14 @@ export function BudgetComparison({
         {/* Table header */}
         <div
           className="grid gap-3 px-5 py-2.5 bg-(--bg-alt) border-b border-(--border) text-[10px] font-bold uppercase tracking-[0.14em] text-(--fg-muted)"
-          style={{
-            gridTemplateColumns: "1fr 120px 120px 80px minmax(140px,1fr)",
-          }}
+          style={{ gridTemplateColumns: gridCols }}
         >
           <span>{viewMode === "categorias" ? "Categoria" : "Orçamento"}</span>
           <span className="text-right">Planejado</span>
           <span className="text-right">Executado</span>
           <span className="text-right">% exec.</span>
           <span>Andamento</span>
+          {viewMode === "projetos" && <span />}
         </div>
 
         {/* Rows */}
@@ -282,9 +326,7 @@ export function BudgetComparison({
             <div
               key={row.key}
               className="grid items-center gap-3 px-5 py-4 hover:bg-(--bg-alt)/60 transition-colors"
-              style={{
-                gridTemplateColumns: "1fr 120px 120px 80px minmax(140px,1fr)",
-              }}
+              style={{ gridTemplateColumns: gridCols }}
             >
               <div className="min-w-0">
                 <p className="text-sm font-semibold text-(--fg) truncate">
@@ -330,6 +372,33 @@ export function BudgetComparison({
                   </span>
                 )}
               </div>
+
+              {viewMode === "projetos" &&
+                (() => {
+                  const budget = budgetsById.get(row.key);
+                  if (!budget) return <span />;
+                  return (
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        onClick={() => {
+                          setEditName(budget.name);
+                          setEditingBudget(budget);
+                        }}
+                        title="Editar orçamento"
+                        className="flex items-center justify-center w-7 h-7 rounded-lg text-(--fg-muted) hover:text-(--fg) hover:bg-(--surface-alt) transition-colors"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                      <button
+                        onClick={() => setDeletingBudget(budget)}
+                        title="Excluir orçamento"
+                        className="flex items-center justify-center w-7 h-7 rounded-lg text-(--fg-muted) hover:text-(--color-destructive) hover:bg-(--color-destructive-muted) transition-colors"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  );
+                })()}
             </div>
           ))}
         </div>
@@ -338,9 +407,7 @@ export function BudgetComparison({
         {rows.length > 0 && (
           <div
             className="grid items-center gap-3 px-5 py-3.5 border-t border-(--border) bg-(--bg-alt)"
-            style={{
-              gridTemplateColumns: "1fr 120px 120px 80px minmax(140px,1fr)",
-            }}
+            style={{ gridTemplateColumns: gridCols }}
           >
             <p className="text-xs font-bold uppercase tracking-widest text-(--fg-muted)">
               Total
@@ -368,6 +435,7 @@ export function BudgetComparison({
                 style={{ width: `${Math.min(overallPct, 100)}%` }}
               />
             </div>
+            {viewMode === "projetos" && <span />}
           </div>
         )}
       </div>
@@ -378,6 +446,114 @@ export function BudgetComparison({
           costCenters={costCenters}
           onClose={() => setFormOpen(false)}
         />
+      )}
+
+      {/* Editar orçamento — nome/notas (updateBudget) */}
+      {editingBudget && (
+        <div
+          className="fixed inset-0 z-(--z-overlay) flex items-center justify-center"
+          style={{ background: "var(--overlay)" }}
+          onClick={() => setEditingBudget(null)}
+        >
+          <div
+            className="w-100 max-w-full rounded-(--radius) p-6 bg-(--bg)"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-sm font-bold text-(--fg)">Editar orçamento</p>
+              <button onClick={() => setEditingBudget(null)}>
+                <X className="h-4 w-4 text-(--fg-muted)" />
+              </button>
+            </div>
+
+            <label className="block text-[10px] font-bold uppercase tracking-[0.14em] mb-1.5 text-(--fg-muted)">
+              Nome do orçamento
+            </label>
+            <input
+              value={editName}
+              onChange={(e) => setEditName(e.target.value)}
+              className="w-full px-3 py-2.5 rounded-(--radius) border text-sm mb-4 border-(--border) bg-(--bg) text-(--fg)"
+            />
+
+            {updateResult.serverError && (
+              <p className="flex items-center gap-1 text-xs font-medium mb-3 text-(--hb-orange-deep)">
+                <AlertCircle className="h-3 w-3 shrink-0" />
+                {updateResult.serverError}
+              </p>
+            )}
+
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={() => setEditingBudget(null)}
+                className="px-4 py-2.5 rounded-(--radius) border text-sm font-semibold border-(--border) text-(--fg)"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() =>
+                  updateExecute({
+                    budgetId: editingBudget.id,
+                    name: editName,
+                  })
+                }
+                disabled={isUpdating || editName.trim().length < 3}
+                className="px-5 py-2.5 rounded-(--radius) text-sm font-semibold disabled:opacity-60 bg-(--hb-blue) text-(--fg-invert)"
+              >
+                {isUpdating ? "Salvando…" : "Salvar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Excluir orçamento — deleteBudget (bloqueia ano corrente) */}
+      {deletingBudget && (
+        <div
+          className="fixed inset-0 z-(--z-overlay) flex items-center justify-center"
+          style={{ background: "var(--overlay)" }}
+          onClick={() => setDeletingBudget(null)}
+        >
+          <div
+            className="w-100 max-w-full rounded-(--radius) p-6 bg-(--bg)"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-sm font-bold text-(--fg)">Excluir orçamento</p>
+              <button onClick={() => setDeletingBudget(null)}>
+                <X className="h-4 w-4 text-(--fg-muted)" />
+              </button>
+            </div>
+
+            <p className="text-sm text-(--fg-muted) mb-4">
+              Tem certeza que deseja excluir{" "}
+              <strong className="text-(--fg)">{deletingBudget.name}</strong> (
+              {deletingBudget.year})? Os itens do orçamento são removidos junto.
+            </p>
+
+            {deleteResult.serverError && (
+              <p className="flex items-center gap-1 text-xs font-medium mb-3 text-(--hb-orange-deep)">
+                <AlertCircle className="h-3 w-3 shrink-0" />
+                {deleteResult.serverError}
+              </p>
+            )}
+
+            <div className="flex items-center justify-end gap-3">
+              <button
+                onClick={() => setDeletingBudget(null)}
+                className="px-4 py-2.5 rounded-(--radius) border text-sm font-semibold border-(--border) text-(--fg)"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => deleteExecute({ budgetId: deletingBudget.id })}
+                disabled={isDeleting}
+                className="px-5 py-2.5 rounded-(--radius) text-sm font-semibold disabled:opacity-60 bg-(--color-destructive) text-(--fg-invert)"
+              >
+                {isDeleting ? "Excluindo…" : "Confirmar exclusão"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );

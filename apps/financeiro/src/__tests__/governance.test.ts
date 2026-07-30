@@ -6,18 +6,23 @@
  * que falta: o fluxo INTEIRO até "pago" (markPayableAsPaid) e a garantia de
  * que createWeeklyBatch nunca inclui um payable "bloqueado" por
  * inadimplência de relatório (P-3.11, BRAIN §6.2) — o override auditado já
- * tem cobertura própria em payables-override-block.test.ts.
+ * tem cobertura própria em payables-override-block.test.ts. Também cobre
+ * (P-3.9c) a garantia de que cancelPayable/cancelReceivable permanecem
+ * visíveis ao staff via RLS autenticada após o cancelamento — o bug que
+ * S-215 corrigiu para payables (deleted_at nunca é setado no cancelamento).
  */
 
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { eq } from "drizzle-orm";
 import { db } from "@hebron/db/client";
+import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import {
   users,
   roleAssignments,
   designations,
   bankAccounts,
   payables,
+  receivables,
   transactions,
   batchApprovals,
   batchApprovalItems,
@@ -344,5 +349,111 @@ describe("createWeeklyBatch — payable bloqueado não entra no lote (P-3.11)", 
 
     expect(itemPayableIds).toContain(pendingId);
     expect(itemPayableIds).not.toContain(blockedId);
+  });
+});
+
+describe("cancelPayable/cancelReceivable — cancelado permanece visível ao staff (P-3.9c)", () => {
+  const COLABORADOR_ID = "cc150000-0000-0000-0000-000000000001";
+  const payableId = "cc150000-0000-0000-0000-000000000010";
+  const receivableId = "cc150000-0000-0000-0000-000000000011";
+
+  beforeAll(async () => {
+    await db
+      .insert(users)
+      .values({
+        id: COLABORADOR_ID,
+        email: "cancel-colab@test.hebron",
+        fullName: "Cancel Colaborador",
+      })
+      .onConflictDoNothing();
+    await db
+      .insert(roleAssignments)
+      .values({ userId: COLABORADOR_ID, role: "colaborador" })
+      .onConflictDoNothing();
+
+    await db.insert(payables).values({
+      id: payableId,
+      description: "Payable a cancelar — teste de visibilidade RLS",
+      amount: "150.00",
+      dueDate: "2099-01-01",
+      status: "pendente",
+      createdBy: COLABORADOR_ID,
+    });
+    await db.insert(receivables).values({
+      id: receivableId,
+      description: "Recebível a cancelar — teste de visibilidade RLS",
+      amount: "75.00",
+      status: "pendente",
+      createdBy: COLABORADOR_ID,
+    });
+  });
+
+  afterAll(async () => {
+    await db.delete(auditLog).where(eq(auditLog.entityId, payableId));
+    await db.delete(auditLog).where(eq(auditLog.entityId, receivableId));
+    await db.delete(payables).where(eq(payables.id, payableId));
+    await db.delete(receivables).where(eq(receivables.id, receivableId));
+    await db
+      .delete(roleAssignments)
+      .where(eq(roleAssignments.userId, COLABORADOR_ID));
+    await db.delete(users).where(eq(users.id, COLABORADOR_ID));
+  });
+
+  it("cancelPayable: colaborador cancela a própria conta; segue visível via RLS autenticada", async () => {
+    await actingAs(COLABORADOR_ID, ["colaborador"], []);
+    const { cancelPayable } = await import("../actions/transactions");
+    const result = await cancelPayable({
+      payableId,
+      reason: "Fornecedor cancelou o pedido antes do pagamento.",
+    });
+    expect(result?.serverError).toBeUndefined();
+
+    // Select via RLS autenticada (payables_select_staff filtra deleted_at IS
+    // NULL) — se cancelPayable tivesse setado deleted_at, esta linha não
+    // apareceria aqui (o bug que S-215 corrigiu).
+    const rows = await withAuthenticatedContext(
+      { actorId: COLABORADOR_ID },
+      (tx) => tx.select().from(payables).where(eq(payables.id, payableId)),
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.status).toBe("cancelado");
+    expect(rows[0]?.deletedAt).toBeNull();
+    expect(rows[0]?.cancellationReason).toBeTruthy();
+
+    const audits = await db
+      .select()
+      .from(auditLog)
+      .where(eq(auditLog.entityId, payableId));
+    expect(
+      audits.some((a) => a.action === "financeiro.payable.cancelled"),
+    ).toBe(true);
+  });
+
+  it("cancelReceivable: colaborador cancela a própria conta; segue visível via RLS autenticada", async () => {
+    await actingAs(COLABORADOR_ID, ["colaborador"], []);
+    const { cancelReceivable } = await import("../actions/transactions");
+    const result = await cancelReceivable({
+      receivableId,
+      reason: "Pagador desistiu antes do recebimento.",
+    });
+    expect(result?.serverError).toBeUndefined();
+
+    const rows = await withAuthenticatedContext(
+      { actorId: COLABORADOR_ID },
+      (tx) =>
+        tx.select().from(receivables).where(eq(receivables.id, receivableId)),
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.status).toBe("cancelado");
+    expect(rows[0]?.deletedAt).toBeNull();
+    expect(rows[0]?.notes).toContain("Pagador desistiu");
+
+    const audits = await db
+      .select()
+      .from(auditLog)
+      .where(eq(auditLog.entityId, receivableId));
+    expect(
+      audits.some((a) => a.action === "financeiro.receivable.cancelled"),
+    ).toBe(true);
   });
 });

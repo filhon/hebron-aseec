@@ -4501,7 +4501,7 @@ RLS para schema financeiro. Super_admin: full access. Diretor gestor (designatio
 - Env vars: `DATABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`
 
 **Escopo:**
-Server Actions: CRUD de despesas/receitas (criar transação imutável). Estornos (criar reversal + nova transação). Importação OFX/CSV (parse, preview, confirmar). Match automático (valor + data + descrição). Conciliação manual (vincular import_row a transação). CRUD de plano de contas. CRUD de orçamento. Agrupamento semanal de payables em lote. Aprovação de lote (diretor gestor). Marcar como pago (super_admin). OCR de notas fiscais (GPT-4 Vision). Audit log em toda mutação. (P-3.6b: `createBudget`/`updateBudget` gravam `name` em coluna própria — não mais como prefixo de texto em `notes` — e persistem `month`/`notes` dos itens; `cancelPayable` grava `cancellation_reason`/`cancelled_by` na tabela, não só no audit log.)
+Server Actions: CRUD de despesas/receitas (criar transação imutável). Estornos (criar reversal + nova transação). Importação OFX/CSV (parse, preview, confirmar). Match automático (valor + data + descrição). Conciliação manual (vincular import_row a transação). CRUD de plano de contas. CRUD de orçamento. Agrupamento semanal de payables em lote. Aprovação de lote (diretor gestor). Marcar como pago (super_admin). OCR de notas fiscais (GPT-4 Vision). Audit log em toda mutação. (P-3.6b: `createBudget`/`updateBudget` gravam `name` em coluna própria — não mais como prefixo de texto em `notes` — e persistem `month`/`notes` dos itens; `cancelPayable` grava `cancellation_reason`/`cancelled_by` na tabela, não só no audit log. P-3.9c: `createManualTransaction` ganhou entrada pela tela — menu "Novo lançamento" → "Lançamento manual" no dashboard; `updateBudget`/`deleteBudget` ficaram testadas e auditadas desde este prompt, mas só chegaram à tela em P-3.9c.)
 
 **Arquivos permitidos para criação/edição:**
 
@@ -4569,10 +4569,10 @@ Substituir mocks por dados reais e tornar o módulo OPERÁVEL. Converter página
 - [x] Lançamento de despesa e de receita CRIÁVEIS pelas telas (expense-form/revenue-form com submit real)
 - [x] Estorno executável a partir da tela de lançamentos (reversal-form conectado)
 - [x] Conciliação operável de ponta a ponta na tela: upload → preview → confirmar (import re-parseado — P-3.8b)
-- [x] Contas a pagar: criar lote semanal, aprovar (gestor), autorizar (autorizador), marcar pago — cada passo executável pela tela por quem tem a designation (batch-approval-form conectado)
-- [x] Contas a receber: listar e registrar recebimento
+- [x] Contas a pagar: criar lote semanal, aprovar (gestor), autorizar (autorizador), marcar pago — cada passo executável pela tela por quem tem a designation (batch-approval-form conectado). Cancelamento (P-3.6b/P-3.8) e os estados `bloqueado`/`pago`/`cancelado` só ganharam aba, selo e action acionável em P-3.9c — antes disso, um payable bloqueado ou pago desaparecia da tela
+- [x] Contas a receber: listar e registrar recebimento. Cancelamento de recebível (`cancelReceivable`) só passou a existir em P-3.9c
 - [x] Fluxo de caixa projetado com dados reais
-- [x] Orçamento: planejado vs executado real por centro de custo (budget-form conectado)
+- [x] Orçamento: planejado vs executado real por centro de custo (budget-form conectado). Editar/excluir orçamento (`updateBudget`/`deleteBudget`, ambas de P-3.8) só ganharam botão na tela `/orcamento` em P-3.9c
 - [x] Plano de contas: CRUD de categorias operável
 - [x] Nenhum componente/formulário do Bloco A (P-3.2/P-3.4) sem import (grep)
 - [x] Nenhum submit `console.log`/`setTimeout` restante no app (grep)
@@ -4646,7 +4646,7 @@ Conectar integrações reais via packages/integrations (P-0.15 — nada de impor
 - [x] Submissão de projeto bloqueada quando total aprovado excede organization_budgets do ano (teste)
 - [x] Workaround system_settings removido; PATCH registrado
 - [x] Relatório vencido → payables do projeto ficam `bloqueado` e não entram em lote (teste)
-- [x] Override: só super_admin, exige justificativa, gera audit (teste)
+- [x] Override: só super_admin, exige justificativa, gera audit (teste). Reachable pela tela só desde P-3.9c: `Payable`/`getPayables` não carregavam `blockedAt`/`blockReason`/`overriddenBy`/`overrideJustification`, e `contas-pagar-view` não tinha aba/selo para `status = "bloqueado"` — o payable bloqueado pelo cron simplesmente desaparecia da tela, sem caminho humano até `overrideBlock`
 - [x] Zero imports app→app (verificação do CI)
 - [x] Stub Flats → Financeiro documentado no package
 - [x] Lint passa · Types passam
@@ -5163,14 +5163,14 @@ E os estados:
 
 **Critérios de aceite:**
 
-- [ ] `grep -rn "bloqueado" apps/financeiro/src/components apps/financeiro/src/app` devolve resultado — o estado tem selo, motivo visível e caminho de override
-- [ ] Payable bloqueado pelo cron aparece na tela e um super_admin o libera de lá, com justificativa, gerando audit (teste)
-- [ ] Nenhuma action exportada em `apps/financeiro/src/actions/*.ts` sem consumidor — conferir uma a uma; as que sobrarem foram removidas junto com seus schemas Zod
-- [ ] Payable pago legível com o rastro completo de governança (aprovador, autorizador, datas, transação)
-- [ ] Nenhum componente renderiza branch de estado inalcançável
-- [ ] Recebível: `cancelado` é atingível pela tela **ou** saiu do enum
-- [ ] `pnpm --filter @hebron/financeiro typecheck lint test` verdes; `pnpm --filter @hebron/financeiro build` verde
-- [ ] Registrar em SESSIONS.md — incluindo o destino de cada uma das cinco actions e de cada um dos quatro estados
+- [x] `grep -rn "bloqueado" apps/financeiro/src/components apps/financeiro/src/app` devolve resultado — o estado tem selo, motivo visível e caminho de override
+- [x] Payable bloqueado pelo cron aparece na tela e um super_admin o libera de lá, com justificativa, gerando audit (teste)
+- [x] Nenhuma action exportada em `apps/financeiro/src/actions/*.ts` sem consumidor — conferir uma a uma; as que sobrarem foram removidas junto com seus schemas Zod
+- [x] Payable pago legível com o rastro completo de governança (aprovador, autorizador, datas, transação)
+- [x] Nenhum componente renderiza branch de estado inalcançável
+- [x] Recebível: `cancelado` é atingível pela tela **ou** saiu do enum
+- [x] `pnpm --filter @hebron/financeiro typecheck lint test` verdes; `pnpm --filter @hebron/financeiro build` verde
+- [x] Registrar em SESSIONS.md — incluindo o destino de cada uma das cinco actions e de cada um dos quatro estados
 
 **Notas:**
 Ref: BRAIN.md §6.2 (bloqueio por inadimplência de relatório), §6.5 e o precedente de P-2.8c ("Quatro actions sem porta de entrada", S-206). Um pagamento que desaparece da tela é a pior falha possível num módulo financeiro: ninguém vai procurar o que não sabe que existe. Hoje o único registro de que aquele payable existiu está no `admin.audit_log`, que nenhuma tela do Financeiro lê.

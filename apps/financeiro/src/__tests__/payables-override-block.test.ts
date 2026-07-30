@@ -161,7 +161,11 @@ describe("overrideBlock", () => {
       .where(eq(payables.id, IDS.blockedPayable));
     expect(payable?.status).toBe("pendente");
     expect(payable?.overriddenBy).toBe(SUPER_ADMIN_ID);
+    expect(payable?.overriddenAt).toBeTruthy();
     expect(payable?.overrideJustification).toBeTruthy();
+    // blockReason/blockedAt permanecem — histórico visível na tela mesmo após
+    // o status voltar a "pendente" (P-3.9c, getPayables/PayableCard).
+    expect(payable?.blockReason).toBe("relatorio_vencido");
 
     const audits = await db
       .select()

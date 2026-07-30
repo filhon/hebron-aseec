@@ -356,6 +356,90 @@ export const markReceivableReceived = colaboradorAction
   });
 
 // ---------------------------------------------------------------------------
+// cancelReceivable — colaborador or diretor cancels a receivable before it's
+// received. Mesmo padrão de cancelPayable acima: status-only transition,
+// NUNCA seta deletedAt (RLS de "receivables_select_staff" filtra por
+// deleted_at IS NULL, e assim o cancelado continua visível ao staff — o
+// mesmo bug de invisibilidade que S-215 corrigiu para payables). Sem coluna
+// própria para o motivo (financeiro.receivables não tem
+// cancellation_reason), o motivo é concatenado em notes — mesmo padrão já
+// usado por createPayable/createReceivable para CNPJ.
+// ---------------------------------------------------------------------------
+
+const cancelReceivableSchema = z.object({
+  receivableId: z.string().uuid("Conta a receber inválida"),
+  reason: z
+    .string()
+    .min(10, "Informe o motivo do cancelamento (mínimo 10 caracteres)")
+    .max(500),
+});
+
+export const cancelReceivable = colaboradorAction
+  .schema(cancelReceivableSchema)
+  .action(async ({ parsedInput: input, ctx }) => {
+    const now = new Date();
+
+    await withAuthenticatedContext({ actorId: ctx.actorId }, async (tx) => {
+      const rows = await tx
+        .select()
+        .from(receivables)
+        .where(
+          and(
+            eq(receivables.id, input.receivableId),
+            isNull(receivables.deletedAt),
+          ),
+        )
+        .limit(1);
+
+      const receivable = rows[0];
+      if (!receivable) throw new Error("Conta a receber não encontrada");
+
+      if (receivable.status === "recebido") {
+        throw new Error(
+          "Não é possível cancelar uma conta já recebida. Use o estorno de transação.",
+        );
+      }
+
+      const isDiretor = ctx.roles.includes("diretor");
+      const isSuperAdmin = ctx.roles.includes("super_admin");
+      const isCreator = receivable.createdBy === ctx.actorId;
+
+      if (!isSuperAdmin && !isDiretor && !isCreator) {
+        throw new Error(
+          "Apenas o criador da conta ou a diretoria pode cancelar",
+        );
+      }
+
+      const notesLines = receivable.notes ? [receivable.notes] : [];
+      notesLines.push(`Cancelado: ${input.reason}`);
+
+      await tx
+        .update(receivables)
+        .set({
+          status: "cancelado",
+          notes: notesLines.join("\n"),
+          updatedAt: now,
+        })
+        .where(eq(receivables.id, input.receivableId));
+
+      await withSystemRole(tx, (sysTx) =>
+        logFinanceiroAudit(
+          {
+            actorId: ctx.actorId,
+            action: "financeiro.receivable.cancelled",
+            entity: "receivable",
+            entityId: input.receivableId,
+            diff: { reason: input.reason, previousStatus: receivable.status },
+          },
+          sysTx,
+        ),
+      );
+    });
+
+    return { ok: true };
+  });
+
+// ---------------------------------------------------------------------------
 // createManualTransaction — colaborador creates an ad-hoc immutable ledger entry
 // INSERT ONLY — no update or delete path (enforced by DB trigger).
 // ---------------------------------------------------------------------------
