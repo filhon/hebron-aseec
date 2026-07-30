@@ -16,6 +16,7 @@
   "dependencies": {
     "@hebron/db": "workspace:*",
     "@hebron/email": "workspace:*",
+    "@hebron/integrations": "workspace:*",
     "@hebron/types": "workspace:*",
     "@react-pdf/renderer": "^4.0.0",
     "drizzle-orm": "catalog:",

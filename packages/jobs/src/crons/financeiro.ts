@@ -13,7 +13,6 @@ import { db } from "@hebron/db/client";
 import {
   batchApprovals,
   batchApprovalItems,
-  designations,
   financialCategories,
   payables,
   receivables,
@@ -28,7 +27,14 @@ import { createNotification } from "@hebron/email";
 import { BatchApprovalEmail } from "@hebron/email/templates/batch-approval";
 import { MonthlyFinancialReportEmail } from "@hebron/email/templates/monthly-financial-report";
 import type { MonthlyFinancialReportCategoryTotal } from "@hebron/email/templates/monthly-financial-report";
+import {
+  getWeeklyBatchWindow,
+  findExistingWeeklyBatch,
+  selectWeeklyBatchPendingPayables,
+  resolveWeeklyBatchRecipients,
+} from "@hebron/integrations/financeiro";
 import { inngest } from "../client";
+import { getDbTemplate, applyVars } from "../lib/templates";
 
 const FINANCEIRO_BASE_URL =
   process.env.NEXT_PUBLIC_FINANCEIRO_URL ??
@@ -59,26 +65,16 @@ function dateOnlyUTC(daysFromNow: number): string {
   return iso;
 }
 
-function getISOWeekBounds(date: Date): { weekStart: string; weekEnd: string } {
-  const d = new Date(date);
-  const dayOfWeek = d.getUTCDay(); // 0 = Sunday
-  const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-  const monday = new Date(d);
-  monday.setUTCDate(d.getUTCDate() + diffToMonday);
-  const sunday = new Date(monday);
-  sunday.setUTCDate(monday.getUTCDate() + 6);
-
-  const fmt = (dt: Date) => dt.toISOString().split("T")[0] ?? "";
-  return { weekStart: fmt(monday), weekEnd: fmt(sunday) };
-}
-
 // ---------------------------------------------------------------------------
 // runWeeklyBatchCreation — cron equivalente ao "createWeeklyBatch" manual
 // (apps/financeiro/src/actions/approval.ts, P-3.9), rodando com o ator
-// sistema em vez de um super_admin logado (packages/jobs não importa código
-// de apps/* — G6.5 — por isso a resolução de destinatários é replicada aqui,
-// no mesmo espírito de runHomologacaoAutoApprove em crons/projetos.ts).
-// Idempotente: um lote já existente para a semana corrente não é duplicado.
+// sistema em vez de um super_admin logado. A seleção de payables da semana e
+// a resolução de destinatários vêm de @hebron/integrations/financeiro
+// (packages/jobs → packages/integrations é permitido por G6.5 — só
+// packages/jobs → apps/* é proibido) — uma única implementação da regra
+// inviolável de BRAIN §6.5, compartilhada com a action (P-3.10b/S-70).
+// Idempotente e silencioso: um lote já existente ou sem payable pendente não
+// gera erro, diferente da action (que lança para o usuário ver o motivo).
 // ---------------------------------------------------------------------------
 
 export async function runWeeklyBatchCreation(): Promise<{
@@ -86,33 +82,13 @@ export async function runWeeklyBatchCreation(): Promise<{
   payableCount: number;
 }> {
   const actorId = await getSystemActorId();
-  const { weekStart, weekEnd } = getISOWeekBounds(new Date());
+  const window = getWeeklyBatchWindow(new Date());
+  const { weekStart, weekEnd } = window;
 
-  const existing = await db
-    .select({ id: batchApprovals.id })
-    .from(batchApprovals)
-    .where(
-      and(
-        eq(batchApprovals.weekStart, weekStart),
-        eq(batchApprovals.weekEnd, weekEnd),
-      ),
-    )
-    .limit(1);
+  const existing = await findExistingWeeklyBatch(window);
+  if (existing) return { batchId: existing.id, payableCount: 0 };
 
-  if (existing[0]) return { batchId: existing[0].id, payableCount: 0 };
-
-  const pendingPayables = await db
-    .select()
-    .from(payables)
-    .where(
-      and(
-        eq(payables.status, "pendente"),
-        isNull(payables.deletedAt),
-        gte(payables.dueDate, weekStart),
-        lte(payables.dueDate, weekEnd),
-      ),
-    );
-
+  const pendingPayables = await selectWeeklyBatchPendingPayables(window);
   if (pendingPayables.length === 0) return { batchId: null, payableCount: 0 };
 
   const [batch] = await db
@@ -128,45 +104,32 @@ export async function runWeeklyBatchCreation(): Promise<{
     })),
   );
 
-  const gestorRows = await db
-    .select({
-      userId: designations.userId,
-      email: users.email,
-      fullName: users.fullName,
-    })
-    .from(designations)
-    .innerJoin(users, eq(users.id, designations.userId))
-    .where(eq(designations.type, "gestor"));
-
-  const autorizadorEmails = (
-    await db
-      .select({ email: users.email })
-      .from(designations)
-      .innerJoin(users, eq(users.id, designations.userId))
-      .where(eq(designations.type, "autorizador"))
-  ).map((r) => r.email);
-
-  const diretorRows = await db
-    .select({
-      userId: roleAssignments.userId,
-      email: users.email,
-      fullName: users.fullName,
-    })
-    .from(roleAssignments)
-    .innerJoin(users, eq(users.id, roleAssignments.userId))
-    .where(eq(roleAssignments.role, "diretor"));
-
-  const usingGestorRecipients = gestorRows.length > 0;
-  const recipients = usingGestorRecipients ? gestorRows : diretorRows;
+  const { recipients, usingGestorRecipients, autorizadorEmails } =
+    await resolveWeeklyBatchRecipients();
 
   const totalAmount = pendingPayables.reduce(
     (sum, p) => sum + parseFloat(p.amount),
     0,
   );
   const resendApiKey = process.env.RESEND_API_KEY;
+  const dbTpl = await getDbTemplate("financeiro-batch-approval");
 
   for (const d of recipients) {
     const displayName = d.fullName ?? d.email;
+    const emailOpts = dbTpl
+      ? applyVars(dbTpl, {
+          nome: displayName,
+          semanaInicio: weekStart,
+          semanaFim: weekEnd,
+          quantidade: String(pendingPayables.length),
+          valorTotal: totalAmount.toLocaleString("pt-BR", {
+            style: "currency",
+            currency: "BRL",
+          }),
+          link: FINANCEIRO_BASE_URL,
+        })
+      : null;
+
     await createNotification({
       insert: makeInsert(),
       resendApiKey,
@@ -184,14 +147,16 @@ export async function runWeeklyBatchCreation(): Promise<{
       email: {
         to: d.email,
         cc: usingGestorRecipients ? autorizadorEmails : undefined,
-        subject: `[Financeiro] Lote de pagamentos aguarda aprovação — ${weekStart}`,
-        template: React.createElement(BatchApprovalEmail, {
-          recipientName: displayName,
-          weekStart,
-          weekEnd,
-          payableCount: pendingPayables.length,
-          totalAmount,
-          financeiroUrl: FINANCEIRO_BASE_URL,
+        ...(emailOpts ?? {
+          subject: `[Financeiro] Lote de pagamentos aguarda aprovação — ${weekStart}`,
+          template: React.createElement(BatchApprovalEmail, {
+            recipientName: displayName,
+            weekStart,
+            weekEnd,
+            payableCount: pendingPayables.length,
+            totalAmount,
+            financeiroUrl: FINANCEIRO_BASE_URL,
+          }),
         }),
       },
     });
@@ -583,9 +548,23 @@ export async function runMonthlyReport(): Promise<void> {
   const monthName = MONTH_NAMES[month - 1] ?? String(month);
   const title = `Relatório financeiro de ${monthName}/${year}`;
   const fileSuffix = `${monthStr}-${year}`;
+  const reportUrl = `${FINANCEIRO_BASE_URL}/relatorios`;
+  const dbTpl = await getDbTemplate("financeiro-monthly-report");
 
   for (const r of recipients) {
     const displayName = r.fullName ?? r.email;
+    const emailOpts = dbTpl
+      ? applyVars(dbTpl, {
+          nome: displayName,
+          mes: monthName,
+          ano: String(year),
+          receitas: fmtBRL(totalRevenue),
+          despesas: fmtBRL(totalExpense),
+          resultado: fmtBRL(totalRevenue - totalExpense),
+          link: reportUrl,
+        })
+      : null;
+
     await createNotification({
       insert: makeInsert(),
       resendApiKey,
@@ -599,15 +578,17 @@ export async function runMonthlyReport(): Promise<void> {
       },
       email: {
         to: r.email,
-        subject: title,
-        template: React.createElement(MonthlyFinancialReportEmail, {
-          recipientName: displayName,
-          month,
-          year,
-          totalRevenue,
-          totalExpense,
-          categoryTotals,
-          financeiroUrl: `${FINANCEIRO_BASE_URL}/relatorios`,
+        ...(emailOpts ?? {
+          subject: title,
+          template: React.createElement(MonthlyFinancialReportEmail, {
+            recipientName: displayName,
+            month,
+            year,
+            totalRevenue,
+            totalExpense,
+            categoryTotals,
+            financeiroUrl: reportUrl,
+          }),
         }),
         attachments: [
           {

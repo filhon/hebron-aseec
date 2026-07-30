@@ -4,6 +4,7 @@ import { db } from "@hebron/db/client";
 import {
   budgets,
   costCenters,
+  emailTemplates,
   payables,
   roleAssignments,
   transactions,
@@ -18,6 +19,35 @@ const FINANCEIRO_BASE_URL =
   "https://financeiro.hebronaseec.com.br";
 
 const makeInsert = makeNotificationInserter;
+
+// ---------------------------------------------------------------------------
+// Template override helpers — mesmo padrão de
+// apps/projetos/src/lib/notifications.ts / packages/jobs/src/lib/templates.ts
+// (override editável no Admin, fallback para o componente React Email).
+// ---------------------------------------------------------------------------
+
+export async function getDbTemplate(
+  slug: string,
+): Promise<{ subject: string; bodyHtml: string } | null> {
+  const [row] = await db
+    .select({
+      subject: emailTemplates.subject,
+      bodyHtml: emailTemplates.bodyHtml,
+    })
+    .from(emailTemplates)
+    .where(eq(emailTemplates.slug, slug))
+    .limit(1);
+  return row ?? null;
+}
+
+export function applyVars(
+  tpl: { subject: string; bodyHtml: string },
+  vars: Record<string, string>,
+): { subject: string; html: string } {
+  const sub = (t: string) =>
+    t.replace(/\{\{(\w+)\}\}/g, (_, k: string) => vars[k] ?? `{{${k}}}`);
+  return { subject: sub(tpl.subject), html: sub(tpl.bodyHtml) };
+}
 
 // ---------------------------------------------------------------------------
 // notifyPayablePaid — in_app ao criador da conta quando ela é marcada como
@@ -139,8 +169,28 @@ export async function checkBudgetAlert(params: {
   const resendApiKey = process.env.RESEND_API_KEY;
   const pctDisplay = pctAfter * 100;
   const title = `Orçamento de ${costCenter.name} acima de 80% executado`;
+  const url = `${FINANCEIRO_BASE_URL}/orcamento`;
+  const dbTpl = await getDbTemplate("financeiro-budget-alert");
 
   for (const admin of superAdmins) {
+    const emailOpts = dbTpl
+      ? applyVars(dbTpl, {
+          nome: admin.fullName ?? admin.email,
+          centroCusto: costCenter.name,
+          ano: String(year),
+          valorOrcado: planned.toLocaleString("pt-BR", {
+            style: "currency",
+            currency: "BRL",
+          }),
+          valorExecutado: executedAfter.toLocaleString("pt-BR", {
+            style: "currency",
+            currency: "BRL",
+          }),
+          percentual: pctDisplay.toFixed(0),
+          link: url,
+        })
+      : null;
+
     await createNotification({
       insert: makeInsert(),
       resendApiKey,
@@ -157,18 +207,20 @@ export async function checkBudgetAlert(params: {
           pct: pctDisplay,
         },
       },
-      email: {
-        to: admin.email,
-        subject: title,
-        template: React.createElement(BudgetAlertEmail, {
-          costCenterName: costCenter.name,
-          year,
-          plannedAmount: planned,
-          executedAmount: executedAfter,
-          pct: pctDisplay,
-          financeiroUrl: `${FINANCEIRO_BASE_URL}/orcamento`,
-        }),
-      },
+      email: emailOpts
+        ? { to: admin.email, ...emailOpts }
+        : {
+            to: admin.email,
+            subject: title,
+            template: React.createElement(BudgetAlertEmail, {
+              costCenterName: costCenter.name,
+              year,
+              plannedAmount: planned,
+              executedAmount: executedAfter,
+              pct: pctDisplay,
+              financeiroUrl: url,
+            }),
+          },
     });
   }
 }

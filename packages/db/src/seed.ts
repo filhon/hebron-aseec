@@ -433,6 +433,75 @@ const EMAIL_TEMPLATE_DEFAULTS: EmailTemplateSeedEntry[] = [
 </p>`,
     bodyText: `Olá, {{nome}},\n\nO relatório do projeto "{{titulo}}" está em atraso. Prazo de expiração: {{prazo}}.\n\nAcesse: {{link}}`,
   },
+  {
+    slug: "financeiro-batch-approval",
+    variables: [
+      "nome",
+      "semanaInicio",
+      "semanaFim",
+      "quantidade",
+      "valorTotal",
+      "link",
+    ],
+    subject: "Lote de pagamentos aguarda aprovação — {{semanaInicio}}",
+    bodyHtml: `<p>Olá, <strong>{{nome}}</strong>,</p>
+<p>Um lote de pagamentos foi criado para a semana de <strong>{{semanaInicio}}</strong> a <strong>{{semanaFim}}</strong> e aguarda sua aprovação.</p>
+<table style="width:100%;border-collapse:collapse;margin:16px 0;background:#F9FAFB;border-radius:8px;padding:16px;">
+  <tr><td style="font-size:12px;color:#6B7280;width:150px;padding-bottom:6px;">Contas a pagar</td><td style="font-size:13px;font-weight:700;padding-bottom:6px;">{{quantidade}}</td></tr>
+  <tr><td style="font-size:12px;color:#6B7280;">Valor total</td><td style="font-size:13px;font-weight:700;color:#202C85;">{{valorTotal}}</td></tr>
+</table>
+<p style="margin-top:20px;">
+  <a href="{{link}}" style="background:#202C85;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;display:inline-block;">Acessar módulo financeiro</a>
+</p>`,
+    bodyText: `Olá, {{nome}},\n\nUm lote de pagamentos foi criado para a semana de {{semanaInicio}} a {{semanaFim}}.\nContas a pagar: {{quantidade}}\nValor total: {{valorTotal}}\n\nAcesse: {{link}}`,
+  },
+  {
+    slug: "financeiro-budget-alert",
+    variables: [
+      "nome",
+      "centroCusto",
+      "ano",
+      "valorOrcado",
+      "valorExecutado",
+      "percentual",
+      "link",
+    ],
+    subject: "Orçamento de {{centroCusto}} acima de 80% executado",
+    bodyHtml: `<p>Olá, <strong>{{nome}}</strong>,</p>
+<p>O orçamento de <strong>{{centroCusto}}</strong> para {{ano}} atingiu <strong>{{percentual}}%</strong> de execução.</p>
+<table style="width:100%;border-collapse:collapse;margin:16px 0;background:#F9FAFB;border-radius:8px;padding:16px;">
+  <tr><td style="font-size:12px;color:#6B7280;width:150px;padding-bottom:6px;">Orçado ({{ano}})</td><td style="font-size:13px;font-weight:700;padding-bottom:6px;">{{valorOrcado}}</td></tr>
+  <tr><td style="font-size:12px;color:#6B7280;">Executado</td><td style="font-size:13px;font-weight:700;color:#EA5A06;">{{valorExecutado}} ({{percentual}}%)</td></tr>
+</table>
+<p style="margin-top:20px;">
+  <a href="{{link}}" style="background:#EA5A06;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;display:inline-block;">Ver orçamento</a>
+</p>`,
+    bodyText: `Olá, {{nome}},\n\nO orçamento de {{centroCusto}} para {{ano}} atingiu {{percentual}}% de execução.\nOrçado: {{valorOrcado}}\nExecutado: {{valorExecutado}}\n\nAcesse: {{link}}`,
+  },
+  {
+    slug: "financeiro-monthly-report",
+    variables: [
+      "nome",
+      "mes",
+      "ano",
+      "receitas",
+      "despesas",
+      "resultado",
+      "link",
+    ],
+    subject: "Relatório financeiro de {{mes}}/{{ano}}",
+    bodyHtml: `<p>Olá, <strong>{{nome}}</strong>,</p>
+<p>Segue o relatório financeiro consolidado de <strong>{{mes}} de {{ano}}</strong>. O detalhamento completo está anexado em PDF e XLSX.</p>
+<table style="width:100%;border-collapse:collapse;margin:16px 0;background:#F9FAFB;border-radius:8px;padding:16px;">
+  <tr><td style="font-size:12px;color:#6B7280;width:150px;padding-bottom:6px;">Receitas</td><td style="font-size:13px;font-weight:700;color:#16A34A;padding-bottom:6px;">{{receitas}}</td></tr>
+  <tr><td style="font-size:12px;color:#6B7280;padding-bottom:6px;">Despesas</td><td style="font-size:13px;font-weight:700;color:#EA5A06;padding-bottom:6px;">{{despesas}}</td></tr>
+  <tr><td style="font-size:12px;color:#6B7280;">Resultado</td><td style="font-size:13px;font-weight:700;">{{resultado}}</td></tr>
+</table>
+<p style="margin-top:20px;">
+  <a href="{{link}}" style="background:#202C85;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;display:inline-block;">Ver demonstrativos completos</a>
+</p>`,
+    bodyText: `Olá, {{nome}},\n\nRelatório financeiro de {{mes}}/{{ano}}.\nReceitas: {{receitas}}\nDespesas: {{despesas}}\nResultado: {{resultado}}\n\nAcesse: {{link}}`,
+  },
 ];
 
 export interface SeedEmailTemplatesResult {

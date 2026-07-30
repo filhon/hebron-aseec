@@ -27,6 +27,9 @@ import {
   batchApprovals,
   batchApprovalItems,
   auditLog,
+  costCenters,
+  budgets,
+  emailTemplates,
 } from "@hebron/db/schema";
 
 vi.mock("next/headers", () => ({
@@ -455,5 +458,195 @@ describe("cancelPayable/cancelReceivable — cancelado permanece visível ao sta
     expect(
       audits.some((a) => a.action === "financeiro.receivable.cancelled"),
     ).toBe(true);
+  });
+});
+
+describe("Templates de email editáveis no Admin (P-3.10b)", () => {
+  // BRAIN §5: "Templates de email com texto definido no Admin, editáveis" —
+  // os três emails de Financeiro (batch-approval, budget-alert,
+  // monthly-report) consultam admin.email_templates antes de renderizar o
+  // componente React Email, no mesmo padrão de apps/projetos/src/lib/
+  // notifications.ts (getDbTemplate/applyVars). Este describe garante que o
+  // texto salvo pelo super_admin é de fato o que sai no email — não só que a
+  // aba /configuracoes lista o slug.
+  const YEAR = 2098;
+  let createdBatchId: string | null = null;
+  let createdPayableId: string | null = null;
+
+  afterAll(async () => {
+    await db
+      .delete(emailTemplates)
+      .where(eq(emailTemplates.slug, "financeiro-budget-alert"));
+    await db
+      .delete(emailTemplates)
+      .where(eq(emailTemplates.slug, "financeiro-batch-approval"));
+    // O cost center/orçamento/transação de teste não são apagados: a
+    // transação de teste é imutável (trigger forbid_transaction_mutation, o
+    // mesmo padrão do ledgerTx de markPayableAsPaid acima) e referencia o
+    // cost center via FK "restrict" — apagar um sem o outro quebra a
+    // constraint. Cada execução gera um cost center novo (id do banco), sem
+    // acumular estado entre execuções.
+    if (createdBatchId) {
+      await db
+        .delete(batchApprovalItems)
+        .where(eq(batchApprovalItems.batchApprovalId, createdBatchId));
+      await db
+        .delete(batchApprovals)
+        .where(eq(batchApprovals.id, createdBatchId));
+    }
+    if (createdPayableId) {
+      await db.delete(payables).where(eq(payables.id, createdPayableId));
+    }
+  });
+
+  it("checkBudgetAlert usa o texto salvo em admin.email_templates quando existir", async () => {
+    await db
+      .insert(emailTemplates)
+      .values({
+        slug: "financeiro-budget-alert",
+        subject: "TESTE OVERRIDE — {{centroCusto}} em {{percentual}}%",
+        bodyHtml: "<p>override {{centroCusto}} {{ano}} {{percentual}}</p>",
+        bodyText: "override",
+        variables: ["centroCusto", "ano", "percentual"],
+        updatedBy: IDS.superAdmin,
+      })
+      .onConflictDoUpdate({
+        target: emailTemplates.slug,
+        set: {
+          subject: "TESTE OVERRIDE — {{centroCusto}} em {{percentual}}%",
+          bodyHtml: "<p>override {{centroCusto}} {{ano}} {{percentual}}</p>",
+        },
+      });
+
+    const [costCenter] = await db
+      .insert(costCenters)
+      .values({
+        code: `CC-P310B-${Date.now()}`,
+        name: "Centro de Custo Teste Override",
+        budgetTotal: "1000.00",
+      })
+      .returning({ id: costCenters.id });
+    if (!costCenter) throw new Error("Falha ao seedar cost center de teste");
+    const costCenterId = costCenter.id;
+
+    await db.insert(budgets).values({
+      name: "Orçamento teste override",
+      year: YEAR,
+      costCenterId,
+      totalAmount: "1000.00",
+      createdBy: IDS.superAdmin,
+    });
+    await db.insert(transactions).values({
+      type: "debito",
+      amount: "850.00",
+      description: "Débito de teste — cruza 80%",
+      date: `${YEAR}-06-15`,
+      accountId: ACCOUNT_ID,
+      costCenterId,
+      createdBy: IDS.superAdmin,
+    });
+
+    createNotificationMock.mockClear();
+    const { checkBudgetAlert } = await import("../lib/notifications");
+    await checkBudgetAlert({
+      costCenterId,
+      transactionDate: `${YEAR}-06-15`,
+      newTransactionAmount: 850,
+    });
+
+    const emailCall = createNotificationMock.mock.calls.find(
+      (call) =>
+        (call[0] as { data: { userId: string; channel: string } }).data
+          .userId === IDS.superAdmin &&
+        (call[0] as { data: { channel: string } }).data.channel === "email",
+    );
+    expect(emailCall).toBeDefined();
+    const email = (
+      emailCall?.[0] as {
+        email: { subject: string; html: string };
+      }
+    ).email;
+    expect(email.subject).toBe(
+      "TESTE OVERRIDE — Centro de Custo Teste Override em 85%",
+    );
+    expect(email.html).toContain("Centro de Custo Teste Override");
+  });
+
+  it("createWeeklyBatch usa o texto salvo em admin.email_templates para o email de lote", async () => {
+    await db
+      .insert(emailTemplates)
+      .values({
+        slug: "financeiro-batch-approval",
+        subject: "TESTE OVERRIDE LOTE — {{quantidade}} conta(s)",
+        bodyHtml:
+          "<p>override {{semanaInicio}} {{semanaFim}} {{valorTotal}}</p>",
+        bodyText: "override",
+        variables: ["quantidade", "semanaInicio", "semanaFim", "valorTotal"],
+        updatedBy: IDS.superAdmin,
+      })
+      .onConflictDoUpdate({
+        target: emailTemplates.slug,
+        set: {
+          subject: "TESTE OVERRIDE LOTE — {{quantidade}} conta(s)",
+          bodyHtml:
+            "<p>override {{semanaInicio}} {{semanaFim}} {{valorTotal}}</p>",
+        },
+      });
+
+    const WEEK_OFFSET = -4;
+    const referenceDate = new Date();
+    referenceDate.setDate(referenceDate.getDate() + WEEK_OFFSET * 7);
+    const { weekStart } = getISOWeekBounds(referenceDate);
+
+    const existingForWeek = await db
+      .select({ id: batchApprovals.id })
+      .from(batchApprovals)
+      .where(eq(batchApprovals.weekStart, weekStart));
+    for (const b of existingForWeek) {
+      await db
+        .delete(batchApprovalItems)
+        .where(eq(batchApprovalItems.batchApprovalId, b.id));
+      await db.delete(batchApprovals).where(eq(batchApprovals.id, b.id));
+    }
+
+    const [insertedPayable] = await db
+      .insert(payables)
+      .values({
+        description: "Payable — teste override de template de lote",
+        amount: "50.00",
+        dueDate: weekStart,
+        status: "pendente",
+        createdBy: IDS.superAdmin,
+      })
+      .returning({ id: payables.id });
+    if (!insertedPayable) throw new Error("Falha ao seedar payable de teste");
+    createdPayableId = insertedPayable.id;
+
+    createNotificationMock.mockClear();
+    // O destinatário real do email de lote é o diretor gestor (designation
+    // "gestor" = IDS.gestor, seedado no beforeAll externo do arquivo) — não
+    // o super_admin que dispara a action (resolveWeeklyBatchRecipients).
+    await actingAs(IDS.superAdmin, ["super_admin"], []);
+    const { createWeeklyBatch } = await import("../actions/approval");
+    const result = await createWeeklyBatch({ weekOffset: WEEK_OFFSET });
+    expect(result?.serverError).toBeUndefined();
+
+    createdBatchId = result?.data?.batch?.id ?? null;
+    expect(createdBatchId).toBeTruthy();
+
+    const emailCall = createNotificationMock.mock.calls.find(
+      (call) =>
+        (call[0] as { data: { userId: string; channel: string } }).data
+          .userId === IDS.gestor &&
+        (call[0] as { data: { channel: string } }).data.channel === "email",
+    );
+    expect(emailCall).toBeDefined();
+    const email = (
+      emailCall?.[0] as {
+        email: { subject: string; html: string };
+      }
+    ).email;
+    expect(email.subject).toBe("TESTE OVERRIDE LOTE — 1 conta(s)");
+    expect(email.html).toContain(weekStart);
   });
 });

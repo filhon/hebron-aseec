@@ -4606,13 +4606,15 @@ Notificações: lote semanal para aprovação — email ao diretor com designati
 
 **Critérios de aceite:**
 
-- [x] Lote semanal: email SOMENTE ao diretor gestor (designation), CC autorizador — diretor sem designation não recebe (fallback só ativa se nenhuma designation "gestor" existir; herdado de P-3.9, agora também via cron — ver S-70)
-- [x] Alerta de orçamento >80%: email ao super_admin (`checkBudgetAlert`, disparado em tempo real por `markPayableAsPaid`/`createManualTransaction` — não por cron, ver S-70)
-- [x] Relatório mensal automático: PDF+XLSX com totais por categoria, por cron mensal registrado (`financeiro-relatorio-mensal`)
+- [x] Lote semanal: email SOMENTE ao diretor gestor (designation), CC autorizador — diretor sem designation não recebe (fallback só ativa se nenhuma designation "gestor" existir; herdado de P-3.9, agora também via cron — ver S-70). **Onde a regra vive (P-3.10b):** seleção de payables da semana + resolução de destinatários em `packages/integrations/src/financeiro.ts` (`getWeeklyBatchWindow`/`selectWeeklyBatchPendingPayables`/`resolveWeeklyBatchRecipients`) — única implementação, consumida por `apps/financeiro/src/actions/approval.ts` (`createWeeklyBatch`, aceita `weekOffset`, lança erro sem payable) e por `packages/jobs/src/crons/financeiro.ts` (`runWeeklyBatchCreation`, sempre semana corrente, idempotente e silencioso). **Onde o texto é editado (P-3.10b):** `admin.email_templates`, slug `financeiro-batch-approval`, editável em `/configuracoes` do Admin — ambos os chamadores consultam o override antes do componente React Email.
+- [x] Alerta de orçamento >80%: email ao super_admin (`checkBudgetAlert`, disparado em tempo real por `markPayableAsPaid`/`createManualTransaction` — não por cron, ver S-70). **Onde o texto é editado (P-3.10b):** `admin.email_templates`, slug `financeiro-budget-alert`.
+- [x] Relatório mensal automático: PDF+XLSX com totais por categoria, por cron mensal registrado (`financeiro-relatorio-mensal`). **Onde o texto é editado (P-3.10b):** `admin.email_templates`, slug `financeiro-monthly-report` (o PDF/XLSX em anexo não é afetado pelo override, só o corpo do email).
 - [x] Export manual: super_admin baixa ZIP com PDF+XLSX+recibos do mês pela tela de relatórios (`exportMonthlyReport`)
 - [x] Vencimento próximo: in_app 3 dias antes, por cron registrado (`financeiro-vencimento-proximo`, payables e receivables)
 - [x] Falha de auditoria em qualquer action nova aborta a operação (G6.3) — `exportMonthlyReport` usa `logFinanceiroAudit` (criticidade "critical")
 - [x] Lint passa · Types passam
+
+> **Corretivo:** ver P-3.10b — os três slugs acima não estavam registrados no Admin (S-70 registrou a causa: arquivo do Admin fora da lista de arquivos permitidos) e a seleção do lote semanal tinha duas cópias divergentes (action + cron). Ambos corrigidos em P-3.10b.
 
 ---
 
@@ -5213,13 +5215,13 @@ Ref: BRAIN.md §6.2 (bloqueio por inadimplência de relatório), §6.5 e o prece
 
 **Critérios de aceite:**
 
-- [ ] Os três emails do Financeiro aparecem e são editáveis em `/configuracoes` do Admin; o texto salvo é o que o destinatário recebe (teste)
-- [ ] `grep -rn "getDbTemplate" apps/financeiro/src packages/jobs/src/crons/financeiro.ts` devolve os três pontos de envio
-- [ ] Uma única implementação da seleção de payables e dos destinatários do lote semanal; action e cron chamam a mesma função (teste cobre os dois chamadores)
-- [ ] Comportamento observável do lote inalterado: mesma janela ISO, mesmo fallback de designation, `bloqueado` continua fora
-- [ ] Zero import `packages/jobs → apps/*` — `pnpm check:cross-app-imports` verde
-- [ ] Lint, types, test e build verdes nos pacotes tocados (`admin`, `financeiro`, `db`, `integrations`, `jobs`)
-- [ ] Registrar em SESSIONS.md
+- [x] Os três emails do Financeiro aparecem e são editáveis em `/configuracoes` do Admin; o texto salvo é o que o destinatário recebe (teste)
+- [x] `grep -rn "getDbTemplate" apps/financeiro/src packages/jobs/src/crons/financeiro.ts` devolve os três pontos de envio
+- [x] Uma única implementação da seleção de payables e dos destinatários do lote semanal; action e cron chamam a mesma função (teste cobre os dois chamadores)
+- [x] Comportamento observável do lote inalterado: mesma janela ISO, mesmo fallback de designation, `bloqueado` continua fora
+- [x] Zero import `packages/jobs → apps/*` — `pnpm check:cross-app-imports` verde
+- [x] Lint, types, test e build verdes nos pacotes tocados (`admin`, `financeiro`, `db`, `integrations`, `jobs`)
+- [x] Registrar em SESSIONS.md
 
 **Notas:**
 Ref: BRAIN.md §5 (templates editáveis no Admin) e §6.5 (governança de despesas), S-70. Uma regra que o BRAIN chama de inviolável não deveria ter duas cópias que ninguém compara — e o email que ela dispara não deveria ser o único do ecossistema cujo texto está fora do alcance de quem responde por ele.

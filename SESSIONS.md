@@ -239,6 +239,7 @@
 | S-216  | 2026-07-30 | P-3.7b — A segunda camada de defesa que oito mutações contornam por dentro (CORRETIVO)                                           | concluido                            |
 | S-217  | 2026-07-30 | P-3.11b — O centro de custo que só nasce de um projeto e o selo "Geral" que nunca aparece (CORRETIVO)                            | concluido                            |
 | S-218  | 2026-07-30 | P-3.9c — Cinco actions e quatro estados que nenhuma tela alcança (CORRETIVO)                                                     | concluido                            |
+| S-219  | 2026-07-30 | P-3.10b — Três emails que o Admin não consegue editar e um lote semanal escrito duas vezes (CORRETIVO)                           | concluido                            |
 
 ---
 
@@ -19203,7 +19204,7 @@ apps/financeiro/src` revisado: único achado é `StatusDot` em
       (idempotência) segue verde após a migration
 - [x] `pnpm --filter @hebron/financeiro typecheck lint test` verdes (68/69
       — a falha isolada em `designation-governance.test.ts >
-  createWeeklyBatch` é a mesma drift pré-existente de
+createWeeklyBatch` é a mesma drift pré-existente de
       S-213/[[project_financeiro_payables_pkey_drift]], reproduzida também
       no HEAD sem este diff); `pnpm --filter @hebron/financeiro build`
       verde; suíte de `packages/db` (67/70 — `system-actor.test.ts` é
@@ -19351,7 +19352,7 @@ próximo corretivo, mesmo padrão de P-2.8c (S-206) e deste próprio prompt.
       botão em `receivables-view.tsx`)
 - [x] `pnpm --filter @hebron/financeiro typecheck lint test` verdes (test:
       70/71 — a falha isolada em `designation-governance.test.ts >
-    createWeeklyBatch` é a drift pré-existente de
+  createWeeklyBatch` é a drift pré-existente de
       S-213/[[project_financeiro_payables_pkey_drift]], não relacionada a
       este diff); `pnpm --filter @hebron/financeiro build` verde
 - [x] `pnpm --filter @hebron/db typecheck test` verdes (test: 71/73 —
@@ -19361,3 +19362,130 @@ próximo corretivo, mesmo padrão de P-2.8c (S-206) e deste próprio prompt.
       e `schema-parity.test.ts` verde após a aplicação
 - [x] Registrado em SESSIONS.md — destino das cinco actions e dos quatro
       estados, todos documentados na seção de Decisões acima
+
+---
+
+## S-219 — P-3.10b — Três emails que o Admin não consegue editar e um lote semanal escrito duas vezes (CORRETIVO)
+
+**Branch:** `feat/P-3.10b-financeiro-templates-e-lote`
+
+### Contexto
+
+BRAIN.md diz, em dois lugares, que o texto dos emails é definido/editável no
+Admin. Os doze templates de Projetos e os três gerais já seguiam esse
+padrão (`getDbTemplate`/`applyVars`, override do banco antes do componente
+React Email). Os três de P-3.10 (`batch-approval`, `budget-alert`,
+`monthly-financial-report`) não faziam nem uma coisa nem outra — nem
+consultavam o banco, nem estavam registrados em `TEMPLATE_META`/
+`EmailTemplateSlug` do Admin. S-70 registrou a causa (arquivo do Admin fora
+da lista de arquivos permitidos) e nenhum prompt posterior corrigiu.
+Segundo problema: os passos 1-2 de BRAIN §6.5 (agrupamento semanal +
+destinatários gestor/autorizador) tinham DUAS implementações quase
+idênticas — `createWeeklyBatch` (action) e `runWeeklyBatchCreation` (cron) —
+que concordavam por acidente, não por construção.
+
+### Decisões
+
+1. **Templates registrados no Admin.** Três novos slugs
+   (`financeiro-batch-approval`, `financeiro-budget-alert`,
+   `financeiro-monthly-report`) em `TEMPLATE_META`/`EmailTemplateSlug`/
+   `DEFAULT_EMAIL_TEMPLATES` (`apps/admin/.../configuracoes/page.tsx`), novo
+   grupo `"Financeiro"` na sidebar, e os mesmos três textos seedados em
+   `packages/db/src/seed.ts` (`EMAIL_TEMPLATE_DEFAULTS`) — mesmo padrão dos
+   15 slugs já existentes.
+2. **Os três pontos de envio consultam `getDbTemplate` antes de renderizar**,
+   no padrão de `apps/projetos/src/lib/notifications.ts`: override do banco
+   quando existir, componente React Email como fallback.
+   - `financeiro-batch-approval`: `apps/financeiro/src/lib/notifications.ts`
+     ganhou `getDbTemplate`/`applyVars` locais (mesmo padrão de duplicação
+     "por app", já documentado no comentário de
+     `packages/jobs/src/lib/templates.ts`); `actions/approval.ts` importa
+     esses dois helpers do próprio app. `packages/jobs/src/crons/
+financeiro.ts` já tinha `getDbTemplate`/`applyVars` prontos em `../lib/
+templates` — só faltava chamá-los.
+   - `financeiro-budget-alert`: `checkBudgetAlert` (mesmo arquivo de
+     notifications.ts).
+   - `financeiro-monthly-report`: `runMonthlyReport` (jobs/crons/
+     financeiro.ts) — o override troca só o corpo do email; PDF/XLSX em
+     anexo continuam sempre gerados, não fazem parte do template editável.
+3. **Uma única implementação da seleção do lote semanal.** Extraído para
+   `packages/integrations/src/financeiro.ts` (novo, mesmo módulo que já
+   hospedava `notifyProjectPaymentMade`/`onFlatsAssistanceApproved`):
+   `getWeeklyBatchWindow` (janela ISO), `findExistingWeeklyBatch` (retorna a
+   row completa — não só `id`, para não quebrar o tipo de retorno de
+   `createWeeklyBatch` que os callers já esperavam com `weekStart`/
+   `weekEnd`), `selectWeeklyBatchPendingPayables` (payables
+   `pendente`+`deleted_at IS NULL` na janela) e `resolveWeeklyBatchRecipients`
+   (gestor/autorizador/fallback todos-os-diretores). Cada helper aceita um
+   `dbHandle` opcional (`db` por padrão) — aceita tanto `db` quanto o `tx`
+   de `withAuthenticatedContext`, mesmo padrão de `AuditDbHandle`
+   (`packages/db/src/audit.ts`). `apps/financeiro/src/actions/approval.ts`
+   (`createWeeklyBatch`) e `packages/jobs/src/crons/financeiro.ts`
+   (`runWeeklyBatchCreation`) chamam as mesmas quatro funções — a diferença
+   legítima entre os dois (action aceita `weekOffset` e lança erro sem
+   payable; cron sempre semana corrente, idempotente e silencioso) fica só
+   no chamador. `packages/jobs/package.json` ganhou dependência de
+   `@hebron/integrations` (permitido por G6.5 — jobs→packages não é
+   jobs→apps).
+4. **PROMPTS.md:** critérios de P-3.10 anotados com onde a regra do lote
+   vive agora e onde o texto de cada um dos três emails é editado.
+
+### Achados fora do escopo original (não corrigidos aqui)
+
+- `financeiro.payables.nickname`... não, o achado real: **`bankAccounts`
+  exige `nickname` NOT NULL desde c3b32da**, e quatro arquivos de teste
+  fora da lista de arquivos permitidos deste prompt ainda inserem
+  `bankAccounts` sem essa coluna — `apps/admin/src/__tests__/
+security-audit.test.ts`, `apps/projetos/src/__tests__/integrations-
+financeiro-execution.test.ts`, `packages/auth/src/__tests__/
+data-deletion.test.ts`, `packages/integrations/src/__tests__/feed.test.ts`.
+  Isso já quebra `tsc --noEmit` em `@hebron/admin`, `@hebron/auth` e
+  `@hebron/integrations` (não `@hebron/db`/`@hebron/financeiro`/
+  `@hebron/jobs`, que ficaram verdes) e faz `security-audit.test.ts`
+  falhar inteiro (o insert de fixture quebra no `beforeAll`, derrubando
+  4 asserções não relacionadas a RLS de fato). Ver
+  [[project_bankaccounts_nickname_test_drift]].
+- Um payable de teste órfão em `designation-governance.test.ts`
+  ("email vai ao gestor com autorizador em CC") ficou para trás de uma
+  execução anterior (o teste insere com id fixo, sem limpar antes, e só
+  limpa DEPOIS do `expect` — uma falha de asserção pula a limpeza).
+  Removido manualmente nesta sessão; o padrão de risco é o mesmo já
+  registrado em [[project_financeiro_payables_pkey_drift]] (S-213).
+  Descoberto porque **dois arquivos de `packages/jobs/src/__tests__`
+  (`tarefas-recurrence.test.ts`, `documentos-edital-closing.test.ts`)
+  reusam o mesmo UUID fixo `fdaa0000-...-0001`** para seus próprios
+  fixtures, sem relação com Financeiro — o payable órfão bloqueava a
+  exclusão desse usuário no teardown de QUALQUER teste que tentasse
+  apagá-lo primeiro.
+
+### Critérios de aceite
+
+- [x] Os três emails do Financeiro aparecem e são editáveis em
+      `/configuracoes` do Admin; o texto salvo é o que o destinatário
+      recebe (`governance.test.ts` — describe "Templates de email
+      editáveis no Admin"; `packages/jobs/src/__tests__/financeiro.test.ts`
+      — describe "Templates de email do Financeiro")
+- [x] `grep -rn "getDbTemplate" apps/financeiro/src packages/jobs/src/crons/
+financeiro.ts` devolve os três pontos de envio (batch-approval aparece em
+      `approval.ts` e em `crons/financeiro.ts`; budget-alert em
+      `lib/notifications.ts`; monthly-report em `crons/financeiro.ts`)
+- [x] Uma única implementação da seleção de payables e dos destinatários do
+      lote semanal; action e cron chamam a mesma função (teste cobre os
+      dois chamadores — `governance.test.ts` para a action,
+      `packages/jobs/src/__tests__/financeiro.test.ts` para o cron)
+- [x] Comportamento observável do lote inalterado: mesma janela ISO, mesmo
+      fallback de designation, `bloqueado` continua fora (teste de exclusão
+      de bloqueado replicado para o cron)
+- [x] Zero import `packages/jobs → apps/*` — `pnpm check:cross-app-imports`
+      verde
+- [x] `pnpm --filter @hebron/{admin,financeiro,db,integrations,jobs}
+    typecheck lint` verdes (typecheck de `@hebron/admin`/
+      `@hebron/integrations` só passa nos arquivos deste diff — os quatro
+      arquivos de teste do achado acima já falhavam antes desta sessão,
+      ver [[project_bankaccounts_nickname_test_drift]]); `build` verde em
+      `admin`/`financeiro`; `test` verde nos cinco pacotes (falhas restantes
+      são as pré-existentes já documentadas: storage.test.ts/
+      [[project_storage_rls_test_flakiness]], feed.test.ts/data-deletion.test.ts
+      por [[project_bankaccounts_nickname_test_drift]], e
+      security-audit.test.ts pelo mesmo motivo)
+- [x] Registrado em SESSIONS.md

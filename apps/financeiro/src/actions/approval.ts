@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { z } from "zod";
-import { eq, and, isNull, inArray, sql } from "drizzle-orm";
+import { eq, and, isNull, inArray } from "drizzle-orm";
 import { db } from "@hebron/db/client";
 import {
   withAuthenticatedContext,
@@ -15,8 +15,6 @@ import {
   transactions,
   notifications,
   roleAssignments,
-  designations,
-  users,
 } from "@hebron/db/schema";
 import { makeNotificationInserter } from "@hebron/db/notifications";
 import { createNotification } from "@hebron/email";
@@ -26,8 +24,19 @@ import {
   superAdminAction,
 } from "../lib/safe-action";
 import { logFinanceiroAudit } from "../lib/audit";
-import { checkBudgetAlert, notifyPayablePaid } from "../lib/notifications";
-import { notifyProjectPaymentMade } from "@hebron/integrations/financeiro";
+import {
+  checkBudgetAlert,
+  notifyPayablePaid,
+  getDbTemplate,
+  applyVars,
+} from "../lib/notifications";
+import {
+  notifyProjectPaymentMade,
+  getWeeklyBatchWindow,
+  findExistingWeeklyBatch,
+  selectWeeklyBatchPendingPayables,
+  resolveWeeklyBatchRecipients,
+} from "@hebron/integrations/financeiro";
 
 const FINANCEIRO_BASE_URL =
   process.env.NEXT_PUBLIC_FINANCEIRO_URL ??
@@ -42,20 +51,6 @@ const insertNotification = makeNotificationInserter();
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function getISOWeekBounds(date: Date): { weekStart: string; weekEnd: string } {
-  const d = new Date(date);
-  // ISO week: Monday = day 1
-  const dayOfWeek = d.getUTCDay(); // 0 = Sunday
-  const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-  const monday = new Date(d);
-  monday.setUTCDate(d.getUTCDate() + diffToMonday);
-  const sunday = new Date(monday);
-  sunday.setUTCDate(monday.getUTCDate() + 6);
-
-  const fmt = (dt: Date) => dt.toISOString().split("T")[0] ?? "";
-  return { weekStart: fmt(monday), weekEnd: fmt(sunday) };
-}
 
 // ---------------------------------------------------------------------------
 // createWeeklyBatch — grupos payables pendentes da semana atual em lote
@@ -72,43 +67,23 @@ export const createWeeklyBatch = superAdminAction
   .action(async ({ parsedInput: input, ctx }) => {
     const referenceDate = new Date();
     referenceDate.setDate(referenceDate.getDate() + input.weekOffset * 7);
-    const { weekStart, weekEnd } = getISOWeekBounds(referenceDate);
+    const window = getWeeklyBatchWindow(referenceDate);
+    const { weekStart, weekEnd } = window;
 
     // Check if batch already exists for this week
     const existing = await withAuthenticatedContext(
       { actorId: ctx.actorId },
-      (tx) =>
-        tx
-          .select()
-          .from(batchApprovals)
-          .where(
-            and(
-              eq(batchApprovals.weekStart, weekStart),
-              eq(batchApprovals.weekEnd, weekEnd),
-            ),
-          )
-          .limit(1),
+      (tx) => findExistingWeeklyBatch(window, tx),
     );
 
-    if (existing[0]) {
-      return { batch: existing[0], isNew: false };
+    if (existing) {
+      return { batch: existing, isNew: false };
     }
 
     // Find pending payables with dueDate within the week
     const pendingPayables = await withAuthenticatedContext(
       { actorId: ctx.actorId },
-      (tx) =>
-        tx
-          .select()
-          .from(payables)
-          .where(
-            and(
-              eq(payables.status, "pendente"),
-              isNull(payables.deletedAt),
-              sql`${payables.dueDate} >= ${weekStart}`,
-              sql`${payables.dueDate} <= ${weekEnd}`,
-            ),
-          ),
+      (tx) => selectWeeklyBatchPendingPayables(window, tx),
     );
 
     if (pendingPayables.length === 0) {
@@ -142,49 +117,33 @@ export const createWeeklyBatch = superAdminAction
     // gestor (To), com o(s) autorizador(es) em cópia. Se nenhuma designation
     // "gestor" estiver configurada ainda, cai de volta para todos os
     // diretores — rede de segurança para não deixar o lote sem notificados.
-    const { gestorRows, autorizadorEmails, diretorRows } =
-      await withAuthenticatedContext({ actorId: ctx.actorId }, async (tx) => {
-        const gestorRows = await tx
-          .select({
-            userId: designations.userId,
-            email: users.email,
-            fullName: users.fullName,
-          })
-          .from(designations)
-          .innerJoin(users, eq(users.id, designations.userId))
-          .where(eq(designations.type, "gestor"));
-
-        const autorizadorEmails = (
-          await tx
-            .select({ email: users.email })
-            .from(designations)
-            .innerJoin(users, eq(users.id, designations.userId))
-            .where(eq(designations.type, "autorizador"))
-        ).map((r) => r.email);
-
-        const diretorRows = await tx
-          .select({
-            userId: roleAssignments.userId,
-            email: users.email,
-            fullName: users.fullName,
-          })
-          .from(roleAssignments)
-          .innerJoin(users, eq(users.id, roleAssignments.userId))
-          .where(eq(roleAssignments.role, "diretor"));
-
-        return { gestorRows, autorizadorEmails, diretorRows };
-      });
-
-    const usingGestorRecipients = gestorRows.length > 0;
-    const recipients = usingGestorRecipients ? gestorRows : diretorRows;
+    const { recipients, usingGestorRecipients, autorizadorEmails } =
+      await withAuthenticatedContext({ actorId: ctx.actorId }, (tx) =>
+        resolveWeeklyBatchRecipients(tx),
+      );
 
     const totalAmount = pendingPayables.reduce(
       (sum, p) => sum + parseFloat(p.amount),
       0,
     );
+    const dbTpl = await getDbTemplate("financeiro-batch-approval");
 
     for (const d of recipients) {
       const displayName = d.fullName ?? d.email;
+      const emailOpts = dbTpl
+        ? applyVars(dbTpl, {
+            nome: displayName,
+            semanaInicio: weekStart,
+            semanaFim: weekEnd,
+            quantidade: String(pendingPayables.length),
+            valorTotal: totalAmount.toLocaleString("pt-BR", {
+              style: "currency",
+              currency: "BRL",
+            }),
+            link: FINANCEIRO_BASE_URL,
+          })
+        : null;
+
       await createNotification({
         insert: insertNotification,
         data: {
@@ -203,14 +162,16 @@ export const createWeeklyBatch = superAdminAction
           // CC só faz sentido quando o destinatário é de fato o gestor —
           // o fallback (todos os diretores) já inclui o(s) autorizador(es).
           cc: usingGestorRecipients ? autorizadorEmails : undefined,
-          subject: `[Financeiro] Lote de pagamentos aguarda aprovação — ${weekStart}`,
-          template: React.createElement(BatchApprovalEmail, {
-            recipientName: displayName,
-            weekStart,
-            weekEnd,
-            payableCount: pendingPayables.length,
-            totalAmount,
-            financeiroUrl: FINANCEIRO_BASE_URL,
+          ...(emailOpts ?? {
+            subject: `[Financeiro] Lote de pagamentos aguarda aprovação — ${weekStart}`,
+            template: React.createElement(BatchApprovalEmail, {
+              recipientName: displayName,
+              weekStart,
+              weekEnd,
+              payableCount: pendingPayables.length,
+              totalAmount,
+              financeiroUrl: FINANCEIRO_BASE_URL,
+            }),
           }),
         },
         resendApiKey: process.env.RESEND_API_KEY,

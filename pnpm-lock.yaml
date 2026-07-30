@@ -1101,6 +1101,9 @@ importers:
       "@hebron/email":
         specifier: workspace:*
         version: link:../email
+      "@hebron/integrations":
+        specifier: workspace:*
+        version: link:../integrations
       "@hebron/types":
         specifier: workspace:*
         version: link:../types

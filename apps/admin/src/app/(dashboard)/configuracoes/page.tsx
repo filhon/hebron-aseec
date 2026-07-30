@@ -65,7 +65,7 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
 
 // ─── Email template metadata (movido de templates-email/page.tsx, P-1.10b) ────
 
-type TemplateGroup = "Geral" | "Projetos";
+type TemplateGroup = "Geral" | "Projetos" | "Financeiro";
 
 type EmailTemplateSlug =
   | "invitation"
@@ -82,7 +82,10 @@ type EmailTemplateSlug =
   | "projetos-payment-made"
   | "report-reminder-7d-before"
   | "report-reminder-due-today"
-  | "report-reminder-expiry";
+  | "report-reminder-expiry"
+  | "financeiro-batch-approval"
+  | "financeiro-budget-alert"
+  | "financeiro-monthly-report";
 
 interface EmailTemplateMeta {
   slug: EmailTemplateSlug;
@@ -197,6 +200,53 @@ const TEMPLATE_META: EmailTemplateMeta[] = [
     description: "Lembrete de relatório 7 dias antes do prazo de expiração",
     variables: ["nome", "titulo", "prazo", "link"],
     group: "Projetos",
+  },
+  {
+    slug: "financeiro-batch-approval",
+    label: "Lote semanal aguarda aprovação",
+    description:
+      "Enviado ao diretor gestor (cópia ao autorizador) quando o lote semanal de pagamentos é criado",
+    variables: [
+      "nome",
+      "semanaInicio",
+      "semanaFim",
+      "quantidade",
+      "valorTotal",
+      "link",
+    ],
+    group: "Financeiro",
+  },
+  {
+    slug: "financeiro-budget-alert",
+    label: "Orçamento acima de 80%",
+    description:
+      "Enviado a super_admins quando a execução do orçamento de um centro de custo ultrapassa 80%",
+    variables: [
+      "nome",
+      "centroCusto",
+      "ano",
+      "valorOrcado",
+      "valorExecutado",
+      "percentual",
+      "link",
+    ],
+    group: "Financeiro",
+  },
+  {
+    slug: "financeiro-monthly-report",
+    label: "Relatório financeiro mensal",
+    description:
+      "Enviado a diretores e conselheiros com o relatório consolidado do mês anterior (PDF e XLSX em anexo)",
+    variables: [
+      "nome",
+      "mes",
+      "ano",
+      "receitas",
+      "despesas",
+      "resultado",
+      "link",
+    ],
+    group: "Financeiro",
   },
 ];
 
@@ -372,6 +422,46 @@ const DEFAULT_EMAIL_TEMPLATES: Record<
   <a href="{{link}}" style="background:#DC2626;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;display:inline-block;">Enviar relatório urgente</a>
 </p>`,
     bodyText: `Olá, {{nome}},\n\nO relatório do projeto "{{titulo}}" está em atraso. Prazo de expiração: {{prazo}}.\n\nAcesse: {{link}}`,
+  },
+  "financeiro-batch-approval": {
+    subject: "Lote de pagamentos aguarda aprovação — {{semanaInicio}}",
+    bodyHtml: `<p>Olá, <strong>{{nome}}</strong>,</p>
+<p>Um lote de pagamentos foi criado para a semana de <strong>{{semanaInicio}}</strong> a <strong>{{semanaFim}}</strong> e aguarda sua aprovação.</p>
+<table style="width:100%;border-collapse:collapse;margin:16px 0;background:#F9FAFB;border-radius:8px;padding:16px;">
+  <tr><td style="font-size:12px;color:#6B7280;width:150px;padding-bottom:6px;">Contas a pagar</td><td style="font-size:13px;font-weight:700;padding-bottom:6px;">{{quantidade}}</td></tr>
+  <tr><td style="font-size:12px;color:#6B7280;">Valor total</td><td style="font-size:13px;font-weight:700;color:#202C85;">{{valorTotal}}</td></tr>
+</table>
+<p style="margin-top:20px;">
+  <a href="{{link}}" style="background:#202C85;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;display:inline-block;">Acessar módulo financeiro</a>
+</p>`,
+    bodyText: `Olá, {{nome}},\n\nUm lote de pagamentos foi criado para a semana de {{semanaInicio}} a {{semanaFim}}.\nContas a pagar: {{quantidade}}\nValor total: {{valorTotal}}\n\nAcesse: {{link}}`,
+  },
+  "financeiro-budget-alert": {
+    subject: "Orçamento de {{centroCusto}} acima de 80% executado",
+    bodyHtml: `<p>Olá, <strong>{{nome}}</strong>,</p>
+<p>O orçamento de <strong>{{centroCusto}}</strong> para {{ano}} atingiu <strong>{{percentual}}%</strong> de execução.</p>
+<table style="width:100%;border-collapse:collapse;margin:16px 0;background:#F9FAFB;border-radius:8px;padding:16px;">
+  <tr><td style="font-size:12px;color:#6B7280;width:150px;padding-bottom:6px;">Orçado ({{ano}})</td><td style="font-size:13px;font-weight:700;padding-bottom:6px;">{{valorOrcado}}</td></tr>
+  <tr><td style="font-size:12px;color:#6B7280;">Executado</td><td style="font-size:13px;font-weight:700;color:#EA5A06;">{{valorExecutado}} ({{percentual}}%)</td></tr>
+</table>
+<p style="margin-top:20px;">
+  <a href="{{link}}" style="background:#EA5A06;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;display:inline-block;">Ver orçamento</a>
+</p>`,
+    bodyText: `Olá, {{nome}},\n\nO orçamento de {{centroCusto}} para {{ano}} atingiu {{percentual}}% de execução.\nOrçado: {{valorOrcado}}\nExecutado: {{valorExecutado}}\n\nAcesse: {{link}}`,
+  },
+  "financeiro-monthly-report": {
+    subject: "Relatório financeiro de {{mes}}/{{ano}}",
+    bodyHtml: `<p>Olá, <strong>{{nome}}</strong>,</p>
+<p>Segue o relatório financeiro consolidado de <strong>{{mes}} de {{ano}}</strong>. O detalhamento completo está anexado em PDF e XLSX.</p>
+<table style="width:100%;border-collapse:collapse;margin:16px 0;background:#F9FAFB;border-radius:8px;padding:16px;">
+  <tr><td style="font-size:12px;color:#6B7280;width:150px;padding-bottom:6px;">Receitas</td><td style="font-size:13px;font-weight:700;color:#16A34A;padding-bottom:6px;">{{receitas}}</td></tr>
+  <tr><td style="font-size:12px;color:#6B7280;padding-bottom:6px;">Despesas</td><td style="font-size:13px;font-weight:700;color:#EA5A06;padding-bottom:6px;">{{despesas}}</td></tr>
+  <tr><td style="font-size:12px;color:#6B7280;">Resultado</td><td style="font-size:13px;font-weight:700;">{{resultado}}</td></tr>
+</table>
+<p style="margin-top:20px;">
+  <a href="{{link}}" style="background:#202C85;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;display:inline-block;">Ver demonstrativos completos</a>
+</p>`,
+    bodyText: `Olá, {{nome}},\n\nRelatório financeiro de {{mes}}/{{ano}}.\nReceitas: {{receitas}}\nDespesas: {{despesas}}\nResultado: {{resultado}}\n\nAcesse: {{link}}`,
   },
 };
 
@@ -651,7 +741,7 @@ function EmailTemplatesPanel({
     updatedAt: dbTemplate?.updatedAt ?? new Date(),
   };
 
-  const groups: TemplateGroup[] = ["Geral", "Projetos"];
+  const groups: TemplateGroup[] = ["Geral", "Projetos", "Financeiro"];
 
   return (
     <div className="hb-settings-dual-col">

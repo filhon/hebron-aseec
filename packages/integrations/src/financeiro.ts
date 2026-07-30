@@ -1,14 +1,17 @@
 import * as React from "react";
-import { and, eq, sum } from "drizzle-orm";
+import { and, eq, gte, isNull, lte, sum } from "drizzle-orm";
 import { db } from "@hebron/db/client";
 import {
+  batchApprovals,
   costCenters,
+  designations,
   transactions,
   payables,
   reservations,
   aidRequests,
   paymentSchedules,
   projects,
+  roleAssignments,
   users,
   emailTemplates,
 } from "@hebron/db/schema";
@@ -301,4 +304,136 @@ export async function notifyProjectPaymentMade(
           }),
         },
   });
+}
+
+// ---------------------------------------------------------------------------
+// Lote semanal de aprovação — seleção + destinatários (BRAIN §6.5, passos 1-2)
+//
+// Extraído de apps/financeiro/src/actions/approval.ts (createWeeklyBatch) e
+// packages/jobs/src/crons/financeiro.ts (runWeeklyBatchCreation), que
+// implementavam a MESMA regra em ~130 linhas quase idênticas (S-70/P-3.10b) —
+// uma regra que o BRAIN chama de inviolável não deveria ter duas cópias que
+// ninguém compara. O que fica aqui é só a leitura (janela ISO, payables
+// pendentes da semana, resolução de gestor/autorizador/fallback); a decisão
+// de "lançar erro sem payable" (action) vs "silencioso" (cron), a inserção do
+// lote em si e o envio de email ficam no chamador — são as diferenças
+// legítimas entre os dois (registrado em PROMPTS.md P-3.10b).
+// ---------------------------------------------------------------------------
+
+export interface WeeklyBatchWindow {
+  weekStart: string;
+  weekEnd: string;
+}
+
+export function getWeeklyBatchWindow(referenceDate: Date): WeeklyBatchWindow {
+  const d = new Date(referenceDate);
+  const dayOfWeek = d.getUTCDay(); // 0 = domingo
+  const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  const monday = new Date(d);
+  monday.setUTCDate(d.getUTCDate() + diffToMonday);
+  const sunday = new Date(monday);
+  sunday.setUTCDate(monday.getUTCDate() + 6);
+
+  const fmt = (dt: Date) => dt.toISOString().split("T")[0] ?? "";
+  return { weekStart: fmt(monday), weekEnd: fmt(sunday) };
+}
+
+/** Handle mínimo aceito pelas leituras abaixo — `db` ou um `tx` de `withAuthenticatedContext`/`db.transaction`. */
+export interface WeeklyBatchQueryable {
+  select: (typeof db)["select"];
+}
+
+export async function findExistingWeeklyBatch(
+  window: WeeklyBatchWindow,
+  dbHandle: WeeklyBatchQueryable = db,
+): Promise<typeof batchApprovals.$inferSelect | null> {
+  const [row] = await dbHandle
+    .select()
+    .from(batchApprovals)
+    .where(
+      and(
+        eq(batchApprovals.weekStart, window.weekStart),
+        eq(batchApprovals.weekEnd, window.weekEnd),
+      ),
+    )
+    .limit(1);
+  return row ?? null;
+}
+
+export interface WeeklyBatchPendingPayable {
+  id: string;
+  amount: string;
+}
+
+export async function selectWeeklyBatchPendingPayables(
+  window: WeeklyBatchWindow,
+  dbHandle: WeeklyBatchQueryable = db,
+): Promise<WeeklyBatchPendingPayable[]> {
+  return dbHandle
+    .select({ id: payables.id, amount: payables.amount })
+    .from(payables)
+    .where(
+      and(
+        eq(payables.status, "pendente"),
+        isNull(payables.deletedAt),
+        gte(payables.dueDate, window.weekStart),
+        lte(payables.dueDate, window.weekEnd),
+      ),
+    );
+}
+
+export interface WeeklyBatchRecipient {
+  userId: string;
+  email: string;
+  fullName: string | null;
+}
+
+export interface WeeklyBatchRecipients {
+  recipients: WeeklyBatchRecipient[];
+  /** false quando não há nenhuma designation "gestor" e o fallback (todos os diretores) foi usado. */
+  usingGestorRecipients: boolean;
+  autorizadorEmails: string[];
+}
+
+// Destinatário principal (To): diretor(es) com designation "gestor". Cópia
+// (CC): diretor(es) "autorizador". Sem nenhum gestor designado, cai para
+// todos os diretores (rede de segurança) — nesse caso o CC de autorizador
+// não faz sentido, pois o fallback já inclui todo mundo.
+export async function resolveWeeklyBatchRecipients(
+  dbHandle: WeeklyBatchQueryable = db,
+): Promise<WeeklyBatchRecipients> {
+  const gestorRows = await dbHandle
+    .select({
+      userId: designations.userId,
+      email: users.email,
+      fullName: users.fullName,
+    })
+    .from(designations)
+    .innerJoin(users, eq(users.id, designations.userId))
+    .where(eq(designations.type, "gestor"));
+
+  const autorizadorEmails = (
+    await dbHandle
+      .select({ email: users.email })
+      .from(designations)
+      .innerJoin(users, eq(users.id, designations.userId))
+      .where(eq(designations.type, "autorizador"))
+  ).map((r) => r.email);
+
+  const diretorRows = await dbHandle
+    .select({
+      userId: roleAssignments.userId,
+      email: users.email,
+      fullName: users.fullName,
+    })
+    .from(roleAssignments)
+    .innerJoin(users, eq(users.id, roleAssignments.userId))
+    .where(eq(roleAssignments.role, "diretor"));
+
+  const usingGestorRecipients = gestorRows.length > 0;
+  return {
+    recipients: usingGestorRecipients ? gestorRows : diretorRows,
+    usingGestorRecipients,
+    autorizadorEmails,
+  };
 }
