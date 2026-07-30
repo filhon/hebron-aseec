@@ -4449,7 +4449,7 @@ Criar tabelas Drizzle no schema `financeiro`: accounts (contas bancárias), cost
 - [x] transactions: sem UPDATE ou DELETE via constraint (imutável)
 - [x] transaction_reversals: FK para transaction original, justificativa obrigatória
 - [x] payables: status enum (pendente, aprovado, autorizado, pago, cancelado) (P-3.6b: motivo e autor do cancelamento passam a ter coluna própria, fora do enum)
-- [x] cost_centers: FK para projetos.projects (cross-schema)
+- [x] cost_centers: FK para projetos.projects (cross-schema) (P-3.11b: `project_id` passa a ser opcional — unicidade por projeto preservada via índice único parcial — para permitir centro de custo administrativo, sem projeto)
 - [x] categories: parent_id (árvore), com defaults sugeridos
 - [x] bank_imports: file_url, format (ofx/csv), imported_at
 - [x] bank_import_rows: data parseada (data, valor, descrição, match_transaction_id)
@@ -4640,7 +4640,7 @@ Conectar integrações reais via packages/integrations (P-0.15 — nada de impor
 
 **Critérios de aceite:**
 
-- [x] Aprovação de projeto cria centro de custo e payables reais
+- [x] Aprovação de projeto cria centro de custo e payables reais (P-3.11b: esse é UM dos dois caminhos de criação de centro de custo, não o único — `createCostCenter`/`updateCostCenter`, gate diretor+, cobrem o centro de custo administrativo, sem projeto)
 - [x] Payables de projeto nascem NÃO aprovados
 - [x] Executado vs orçado em tempo real (teste cross-schema)
 - [x] Submissão de projeto bloqueada quando total aprovado excede organization_budgets do ano (teste)
@@ -5097,12 +5097,12 @@ Recomendado: **(a)**. `/orcamento` e `checkBudgetAlert` já existem e operam por
 
 **Critérios de aceite:**
 
-- [ ] Nenhum branch de UI depende de estado que o schema proíbe — `grep -rn "projectId === null\|projectId !== null\|hasProject" apps/financeiro/src` revisado um a um
-- [ ] Saída (a): criar centro de custo administrativo pela tela; ele aparece em `/centros-custo`, é selecionável em `/orcamento` e no lançamento de despesa, e `checkBudgetAlert` dispara sobre ele (teste)
-- [ ] Saída (a): centro com projeto continua sendo criado por `onProjectApproved`, e a unicidade por projeto continua valendo (teste de idempotência da aprovação)
-- [ ] Saída (b): estado vazio de `/centros-custo` explica a origem dos centros; decisão registrada em BRAIN.md §6.5
-- [ ] `pnpm --filter @hebron/financeiro typecheck lint test` verdes; `pnpm --filter @hebron/financeiro build` verde; suíte de `packages/db` verde (saída (a) toca `projetos-approval`)
-- [ ] Registrar em SESSIONS.md — incluindo a saída escolhida e por quê
+- [x] Nenhum branch de UI depende de estado que o schema proíbe — `grep -rn "projectId === null\|projectId !== null\|hasProject" apps/financeiro/src` revisado um a um (único achado: `StatusDot` em `centros-custo/page.tsx`, que agora é um estado legítimo — o schema permite `project_id IS NULL`)
+- [x] Saída (a): criar centro de custo administrativo pela tela; ele aparece em `/centros-custo`, é selecionável em `/orcamento` e no lançamento de despesa, e `checkBudgetAlert` dispara sobre ele (teste — `cost-centers.test.ts`)
+- [x] Saída (a): centro com projeto continua sendo criado por `onProjectApproved`, e a unicidade por projeto continua valendo (teste de idempotência da aprovação — `projetos-approval.test.ts`, verde)
+- [x] Saída (b): N/A — saída (a) escolhida com o Filipe
+- [x] `pnpm --filter @hebron/financeiro typecheck lint test` verdes; `pnpm --filter @hebron/financeiro build` verde; suíte de `packages/db` verde (saída (a) toca `projetos-approval`) — 1 falha pré-existente e não relacionada em cada suíte: `designation-governance.test.ts > createWeeklyBatch` (colisão de `payables_pkey` no dev DB compartilhado, S-213) e `system-actor.test.ts`/`storage.test.ts` em `packages/db` (S-164 e flakiness de RLS de storage, ambos reproduzíveis no HEAD sem este diff)
+- [x] Registrar em SESSIONS.md — incluindo a saída escolhida e por quê
 
 **Notas:**
 Ref: BRAIN.md §6.5, a linha "Projetos → Financeiro" da matriz de integrações e S-69. Este é o único dos seis corretivos do bloco que muda regra de negócio: confirmar a saída com o Filipe antes de escrever código.

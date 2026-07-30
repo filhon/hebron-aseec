@@ -5,6 +5,7 @@ import {
   getBudgets,
   getPayables,
 } from "../../../lib/queries";
+import { NewCostCenterButton } from "../../../components/cost-center-form";
 
 function fmtBRL(n: number): string {
   return new Intl.NumberFormat("pt-BR", {
@@ -107,7 +108,7 @@ export default async function CentrosCustoPage() {
         style={{ background: "var(--bg)", borderColor: "var(--border)" }}
       >
         <div className="flex items-center gap-4">
-          <div>
+          <div className="flex-1">
             <p
               className="text-[10px] font-bold uppercase tracking-[0.14em]"
               style={{ color: "var(--fg-muted)" }}
@@ -121,6 +122,7 @@ export default async function CentrosCustoPage() {
               Centros de custo
             </p>
           </div>
+          <NewCostCenterButton />
         </div>
       </div>
 
@@ -228,8 +230,10 @@ export default async function CentrosCustoPage() {
           {rows.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <p className="text-sm" style={{ color: "var(--fg-muted)" }}>
-                Nenhum centro de custo cadastrado ainda. Centros são criados
-                automaticamente quando um projeto é aprovado.
+                Nenhum centro de custo cadastrado ainda. Centros de projeto são
+                criados automaticamente na aprovação; para custeio
+                administrativo (aluguel, folha, energia, manutenção), use "Novo
+                centro de custo" acima.
               </p>
             </div>
           ) : (

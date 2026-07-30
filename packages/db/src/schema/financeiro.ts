@@ -8,9 +8,11 @@ import {
   text,
   timestamp,
   unique,
+  uniqueIndex,
   uuid,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { financeiroSchema, users } from "./public";
 import { projects, organizations, paymentSchedules } from "./projetos";
 
@@ -135,17 +137,20 @@ export const financialCategories = financeiroSchema.table(
 );
 
 // ---------------------------------------------------------------------------
-// financeiro.cost_centers — 1 por projeto aprovado; criado automaticamente
+// financeiro.cost_centers — 1 por projeto aprovado (criado automaticamente
+// por onProjectApproved) OU administrativo (project_id null — aluguel,
+// folha, energia, manutenção; criado via createCostCenter, P-3.11b).
+// project_id é opcional desde P-3.11b; a unicidade por projeto continua
+// valendo via índice único parcial (só linhas COM projeto).
 // Cross-schema FK: projetos.projects
 // ---------------------------------------------------------------------------
 export const costCenters = financeiroSchema.table(
   "cost_centers",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    projectId: uuid("project_id")
-      .notNull()
-      .unique()
-      .references(() => projects.id, { onDelete: "restrict" }),
+    projectId: uuid("project_id").references(() => projects.id, {
+      onDelete: "restrict",
+    }),
     code: text("code").notNull(),
     name: text("name").notNull(),
     budgetTotal: numeric("budget_total", { precision: 12, scale: 2 }).notNull(),
@@ -163,6 +168,9 @@ export const costCenters = financeiroSchema.table(
     index("cost_centers_project_id_idx").on(table.projectId),
     index("cost_centers_status_idx").on(table.status),
     unique("cost_centers_code_uniq").on(table.code),
+    uniqueIndex("cost_centers_project_id_uniq")
+      .on(table.projectId)
+      .where(sql`${table.projectId} IS NOT NULL`),
   ],
 );
 

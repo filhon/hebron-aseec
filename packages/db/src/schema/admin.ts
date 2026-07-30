@@ -100,6 +100,10 @@ export const auditActionEnum = adminSchema.enum("audit_action", [
   // override exclusivo de super_admin (P-3.11), added via ALTER TYPE
   "financeiro.payable.blocked",
   "financeiro.payable.block_overridden",
+  // Financeiro — centro de custo administrativo (P-3.11b), added via
+  // ALTER TYPE in 0072_financeiro_cost_center_audit_actions.sql
+  "financeiro.cost_center.created",
+  "financeiro.cost_center.updated",
   // Tarefas — pedidos de aprovação de diretor (P-4.6), added via ALTER TYPE
   "task.approval_requested",
   "task.approved",

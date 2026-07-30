@@ -285,6 +285,44 @@ export const reconcileItemSchema = z.object({
 
 export type ReconcileItemInput = z.infer<typeof reconcileItemSchema>;
 
+// ─── createCostCenterSchema ───────────────────────────────────────────────────
+// Centro de custo administrativo (P-3.11b) — sem projeto associado (aluguel,
+// folha, energia, manutenção). Centros ligados a projeto continuam nascendo
+// só de onProjectApproved; esta action nunca seta projectId.
+
+export const createCostCenterSchema = z.object({
+  code: z.string().min(1, "Informe o código").max(30),
+  name: z.string().min(3, "Nome do centro de custo é obrigatório").max(200),
+  // financeiro.cost_centers.budget_total é NOT NULL — para um centro ligado
+  // a projeto é o valor aprovado do projeto (onProjectApproved); para um
+  // centro administrativo não há esse valor de origem, então 0 é o default
+  // (o orçamento anual real do centro é lançado depois em /orçamento,
+  // financeiro.budgets, por ano).
+  budgetTotal: z
+    .number({ invalid_type_error: "Orçamento deve ser um número" })
+    .nonnegative("Orçamento não pode ser negativo")
+    .multipleOf(0.01, "Orçamento pode ter no máximo 2 casas decimais")
+    .optional()
+    .default(0),
+});
+
+export type CreateCostCenterInput = z.infer<typeof createCostCenterSchema>;
+
+// ─── updateCostCenterSchema ───────────────────────────────────────────────────
+
+export const updateCostCenterSchema = z.object({
+  costCenterId: z.string().uuid("Centro de custo inválido"),
+  name: z.string().min(3).max(200).optional(),
+  budgetTotal: z
+    .number({ invalid_type_error: "Orçamento deve ser um número" })
+    .nonnegative("Orçamento não pode ser negativo")
+    .multipleOf(0.01, "Orçamento pode ter no máximo 2 casas decimais")
+    .optional(),
+  status: z.enum(["ativo", "suspenso", "encerrado"]).optional(),
+});
+
+export type UpdateCostCenterInput = z.infer<typeof updateCostCenterSchema>;
+
 // ─── Re-export status enums for shared use ───────────────────────────────────
 
 export { payableStatusEnum, receivableStatusEnum, transactionTypeEnum };

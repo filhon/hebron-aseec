@@ -171,16 +171,17 @@ export async function getCategories(): Promise<AccountCategory[]> {
 }
 
 // ---------------------------------------------------------------------------
-// Cost centers — 1:1 com projeto aprovado (financeiro.cost_centers.project_id
-// é NOT NULL); centros administrativos ainda não existem até P-3.11 criar o
-// fluxo cross-app. Formato reduzido: só os campos usados pelos selects.
+// Cost centers — 1 por projeto aprovado (projectId setado por
+// onProjectApproved) OU administrativo (projectId null — aluguel, folha,
+// energia, manutenção; criado via createCostCenter, P-3.11b). Formato
+// reduzido: só os campos usados pelos selects.
 // ---------------------------------------------------------------------------
 
 export interface CostCenterOption {
   id: string;
   code: string;
   name: string;
-  projectId: string;
+  projectId: string | null;
 }
 
 export async function getCostCenterOptions(): Promise<CostCenterOption[]> {

@@ -237,6 +237,7 @@
 | S-214  | 2026-07-29 | Auditoria: débitos técnicos P-3.6–P-3.12 (Financeiro, Bloco B) — 6 prompts corretivos gerados                                    | concluido                            |
 | S-215  | 2026-07-30 | P-3.6b — Seis campos que o formulário coleta e o banco não tem onde guardar (CORRETIVO)                                          | concluido                            |
 | S-216  | 2026-07-30 | P-3.7b — A segunda camada de defesa que oito mutações contornam por dentro (CORRETIVO)                                           | concluido                            |
+| S-217  | 2026-07-30 | P-3.11b — O centro de custo que só nasce de um projeto e o selo "Geral" que nunca aparece (CORRETIVO)                            | concluido                            |
 
 ---
 
@@ -19060,7 +19061,7 @@ skipping` seguido de `CREATE POLICY` sem erro.
 
 - [x] `grep -rn "withSystemRole" apps/financeiro/src/actions` devolve
       apenas linhas de audit log (todas dentro de `logFinanceiroAudit(...,
-    sysTx)`), nenhuma nas oito escritas deste prompt
+  sysTx)`), nenhuma nas oito escritas deste prompt
 - [x] Colaborador cadastra conta bancária e diretor cria categoria e
       orçamento com RLS ativa, sem `withSystemRole` (teste)
 - [x] Papel sem acesso ao módulo recebe recusa do banco nessas mesmas
@@ -19069,13 +19070,143 @@ skipping` seguido de `CREATE POLICY` sem erro.
 - [x] `matched_count` de `bank_imports` é atualizado por colaborador via
       `authenticated` (teste — `reconcileRow` com ação "ignorar")
 - [x] Toda policy nova tem `USING`/`WITH CHECK` explícitos; nenhuma `FOR
-    ALL` nova
+  ALL` nova
 - [x] Migration idempotente — reaplicada direto contra o Postgres, segunda
       rodada sem erro
 - [x] `pnpm --filter @hebron/financeiro typecheck lint test` verdes (test:
       65/66 — a falha isolada em `designation-governance.test.ts >
-    createWeeklyBatch` é a mesma drift pré-existente do dev DB
+  createWeeklyBatch` é a mesma drift pré-existente do dev DB
       compartilhado de S-213/[[project_financeiro_payables_pkey_drift]],
       reproduzida também no HEAD sem este diff); `pnpm --filter
-    @hebron/financeiro build` verde
+  @hebron/financeiro build` verde
+- [x] Registrado em SESSIONS.md
+
+---
+
+## S-217 — P-3.11b — O centro de custo que só nasce de um projeto e o selo "Geral" que nunca aparece (CORRETIVO)
+
+**Branch:** `feat/P-3.11b-financeiro-centro-custo-administrativo`
+
+### Contexto
+
+`financeiro.cost_centers.project_id` era `NOT NULL UNIQUE` — um centro de
+custo só nascia de um projeto aprovado (`onProjectApproved`,
+`packages/db/src/projetos-approval.ts:106`). Não existia `createCostCenter`
+em action nenhuma, nem schema Zod, nem formulário: `/centros-custo` era
+somente leitura, e `StatusDot` (`centros-custo/page.tsx:53-66`) renderizava
+um selo "Geral" para `cc.projectId === null` — estado inalcançável, porque a
+coluna proibia `NULL`. `/orcamento` só conseguia orçar projeto, e aluguel,
+folha, energia e manutenção — o custeio administrativo de uma ONG de 40 anos
+— não tinham centro de custo, logo ficavam fora de `checkBudgetAlert`
+(`lib/notifications.ts`), o único mecanismo automático de controle de teto
+do módulo. BRAIN documentava só o caminho automático; era regra de negócio
+ambígua (CLAUDE.md, "Sem suposições") — decisão pedida ao Filipe antes de
+qualquer código, conforme a nota do próprio prompt.
+
+### Decisão do Filipe
+
+**Saída (a) — centro de custo administrativo passa a existir.**
+`project_id` vira opcional; `createCostCenter`/`updateCostCenter` (gate
+diretor+, audit) passam a existir; formulário na tela `/centros-custo`. O
+selo "Geral" passa a significar algo — não foi removido, porque o estado que
+ele descreve deixou de ser proibido pelo schema.
+
+### Decisões técnicas
+
+1. **`project_id` nullable + índice único parcial**, não apenas remoção da
+   constraint: a migration dropa `cost_centers_project_id_key` (`NOT NULL
+UNIQUE` inline de 0010) e cria `cost_centers_project_id_uniq` como
+   `UNIQUE ... WHERE project_id IS NOT NULL` — a unicidade por projeto
+   continua valendo (necessária para o `onConflictDoNothing` de
+   `onProjectApproved` permanecer idempotente), mas explícita sobre a
+   intenção: só linhas COM projeto entram na unicidade.
+2. **RLS de `cost_centers` também estava desalinhada — achado não previsto
+   no prompt original, mas no mesmo raio do problema.** A tabela ainda tinha
+   a policy `FOR ALL ... super_admin` de 0010, nunca coberta pelo
+   alinhamento de 0070/S-216 (que só tocou accounts/categories/budgets/
+   budget_items). Sem corrigir, `createCostCenter`/`updateCostCenter`
+   (`diretorAction`) passariam no gate de aplicação e falhariam na RLS para
+   um diretor não-super_admin — mesmo padrão de bug que S-216 corrigiu para
+   as outras quatro tabelas. `0071_financeiro_cost_center_administrativo.sql`
+   substitui a policy por `cost_centers_insert_staff`/`update_staff`
+   (`super_admin`, `diretor`) + `cost_centers_delete_admin` (`super_admin`,
+   sem action de DELETE hoje — mantido por defesa em profundidade).
+3. **`ALTER TYPE ... ADD VALUE` em migration separada**
+   (`0072_financeiro_cost_center_audit_actions.sql`) — convenção do
+   monorepo (ver 0067/0029/0030): nunca combinado com outro DDL no mesmo
+   arquivo, porque é não-transacional e o runner (`migrate.ts`) detecta isso
+   por regex no conteúdo do arquivo.
+4. **`budget_total` da tabela é `NOT NULL`** — para um centro de projeto é o
+   valor aprovado (`onProjectApproved`); para um administrativo não há essa
+   origem, então o schema Zod (`createCostCenterSchema`) default para `0`. O
+   orçamento anual real do centro continua sendo lançado depois em
+   `/orçamento` (`financeiro.budgets`, por ano) — a coluna em `cost_centers`
+   nunca foi a fonte de verdade do orçamento corrente, só o valor de
+   criação.
+5. **Nenhum outro ponto do app assumia `projectId` não-nulo.**
+   `getCostCenterOptions`/`expense-form.tsx`/`budget-form.tsx` já
+   renderizavam `cost_centers` genericamente (código + nome, sem checar
+   projeto) — bastou tornar `CostCenterOption.projectId` `string | null` no
+   tipo. `grep -rn "projectId === null\|projectId !== null\|hasProject"
+apps/financeiro/src` revisado: único achado é `StatusDot` em
+   `centros-custo/page.tsx`, e o estado que ele descreve passou a ser
+   legítimo — nada a remover.
+6. **Teste de `checkBudgetAlert` sobre transação imutável.** A linha de
+   `financeiro.transactions` inserida para provar que o alerta dispara sobre
+   um centro sem projeto nunca pode ser apagada (trigger de imutabilidade de 0010) — o teste gera um código de centro de custo por execução (não
+   fixo), para que o teste "cruza 80%" comece sempre de uma base zerada
+   mesmo reexecutando contra o banco de dev compartilhado (mesmo problema e
+   mesma solução documentados em `transactions.test.ts`).
+
+### Escopo entregue
+
+1. `packages/db/src/migrations/0071_financeiro_cost_center_administrativo.sql`
+   (novo): `project_id` nullable + índice único parcial + RLS por operação
+   (insert/update staff, delete admin).
+2. `packages/db/src/migrations/0072_financeiro_cost_center_audit_actions.sql`
+   (novo): `financeiro.cost_center.created`/`.updated` no enum.
+3. `packages/db/src/schema/financeiro.ts`: `costCenters.projectId` sem
+   `.notNull().unique()`, `uniqueIndex` parcial equivalente à migration.
+4. `packages/db/src/schema/admin.ts` + `apps/financeiro/src/lib/audit.ts`:
+   os dois novos valores de `audit_action`/`FinanceiroAuditAction`.
+5. `packages/validators/src/financeiro/index.ts`: `createCostCenterSchema`/
+   `updateCostCenterSchema`.
+6. `apps/financeiro/src/actions/cost-centers.ts` (novo): `createCostCenter`/
+   `updateCostCenter`, `diretorAction`, audit via `logFinanceiroAudit`.
+7. `apps/financeiro/src/components/cost-center-form.tsx` (novo):
+   `CostCenterForm` (slide-over, mesmo padrão visual de `expense-form.tsx`/
+   `budget-form.tsx`) + `NewCostCenterButton` (Client Component isolado, para
+   a página continuar Server Component).
+8. `apps/financeiro/src/app/(dashboard)/centros-custo/page.tsx`: botão no
+   topbar; estado vazio explica os dois caminhos de criação (projeto
+   aprovado vs. botão "Novo centro de custo").
+9. `apps/financeiro/src/lib/queries.ts`: `CostCenterOption.projectId: string
+| null`.
+10. `apps/financeiro/src/__tests__/cost-centers.test.ts` (novo): criação por
+    diretor real (RLS, não só o gate JS), gate negado para colaborador,
+    `checkBudgetAlert` disparando sobre um centro sem projeto.
+11. `PROMPTS.md`: critérios de P-3.6 ("cost_centers: FK...") e P-3.11
+    ("Aprovação de projeto cria centro de custo...") anotados; critérios do
+    próprio P-3.11b marcados `[x]`.
+
+### Critérios de aceite
+
+- [x] Nenhum branch de UI depende de estado que o schema proíbe (grep
+      revisado — único achado passou a ser um estado legítimo)
+- [x] Diretor cria centro de custo administrativo pela tela/action; aparece
+      em `getCostCenterOptions` (logo em `/centros-custo`, `/orcamento` e no
+      formulário de despesa, que já consomem essa query genericamente);
+      `checkBudgetAlert` dispara sobre ele (teste)
+- [x] Centro com projeto continua sendo criado por `onProjectApproved`, e a
+      unicidade por projeto continua valendo — `projetos-approval.test.ts`
+      (idempotência) segue verde após a migration
+- [x] `pnpm --filter @hebron/financeiro typecheck lint test` verdes (68/69
+      — a falha isolada em `designation-governance.test.ts >
+    createWeeklyBatch` é a mesma drift pré-existente de
+      S-213/[[project_financeiro_payables_pkey_drift]], reproduzida também
+      no HEAD sem este diff); `pnpm --filter @hebron/financeiro build`
+      verde; suíte de `packages/db` (67/70 — `system-actor.test.ts` é
+      [[project_system_actor_test_drift]]/S-164, `storage.test.ts` 2
+      falhas de RLS de storage/documentos sem relação com este diff — ambas
+      pré-existentes, não tocadas por este prompt)
 - [x] Registrado em SESSIONS.md
