@@ -75,6 +75,7 @@ export function BankAccountForm({ onClose, onSuccess }: BankAccountFormProps) {
     resolver: zodResolver(createBankAccountSchema),
     defaultValues: {
       type: "corrente",
+      initialBalance: 0,
     },
   });
 
@@ -209,6 +210,19 @@ export function BankAccountForm({ onClose, onSuccess }: BankAccountFormProps) {
               <FieldError message={errors.type?.message} />
             </div>
 
+            {/* Saldo inicial */}
+            <div>
+              <Label>Saldo inicial</Label>
+              <input
+                {...register("initialBalance", { valueAsNumber: true })}
+                type="number"
+                step="0.01"
+                className={inputCls}
+                placeholder="0,00"
+              />
+              <FieldError message={errors.initialBalance?.message} />
+            </div>
+
             {/* Info card */}
             <div
               className="flex items-start gap-3 rounded-(--radius) border px-4 py-3.5"
@@ -225,8 +239,8 @@ export function BankAccountForm({ onClose, onSuccess }: BankAccountFormProps) {
                 className="text-xs leading-relaxed"
                 style={{ color: "var(--fg-muted)" }}
               >
-                O saldo inicial será zerado ao cadastrar. Importe um extrato OFX
-                ou registre transações manualmente para refletir o saldo real.
+                Informe o saldo que a conta já tem hoje. Novas movimentações
+                entram pelo extrato importado ou por lançamento manual.
               </p>
             </div>
 

@@ -122,6 +122,7 @@ beforeAll(async () => {
     .values({
       id: ACCOUNT_ID,
       bankName: "Banco Governança Teste",
+      nickname: "Conta Governança Teste",
       createdBy: IDS.superAdmin,
     })
     .onConflictDoNothing();

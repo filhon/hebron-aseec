@@ -132,7 +132,7 @@ export async function getBankAccounts(): Promise<BankAccount[]> {
 
   return accounts.map((a) => ({
     id: a.id,
-    name: a.bankName,
+    name: a.nickname,
     bank: a.bankName,
     agency: a.agency ?? "",
     accountNumber: a.accountNumber ?? "",
@@ -203,6 +203,8 @@ export async function getCostCenterOptions(): Promise<CostCenterOption[]> {
 // derivados (não há colunas próprias): uma transação é "conciliada" quando
 // uma linha de bank_import_rows aponta para ela; é estornada quando existe um
 // registro em transaction_reversals apontando para ela como original.
+// externalRef/notes: financeiro.transactions não tem essas colunas — fora do
+// escopo de P-3.6b (só cobre accounts/budgets/budget_items/payables).
 // ---------------------------------------------------------------------------
 
 export async function getTransactions(): Promise<Transaction[]> {
@@ -298,8 +300,9 @@ function toAttachment(
 
 // ---------------------------------------------------------------------------
 // Payables — junta nomes de aprovador/autorizador, o lote (se houver) e a
-// transação de pagamento. cancellationReason/cancelledBy não são persistidos
-// pela action cancelPayable (só vão para o audit log) — permanecem null aqui.
+// transação de pagamento. supplierCnpj: financeiro.payables não tem coluna
+// própria — createPayable já concatena o CNPJ em "notes"; separá-lo é fora
+// do escopo de P-3.6b (não está entre os seis campos deste prompt).
 // ---------------------------------------------------------------------------
 
 export async function getPayables(): Promise<Payable[]> {
@@ -373,9 +376,12 @@ export async function getPayables(): Promise<Payable[]> {
     authorizedAt: p.authorizedAt,
     paidAt: p.paidAt,
     paidByTransactionId: paidTxByPayable.get(p.id) ?? null,
-    cancelledAt: p.status === "cancelado" ? p.deletedAt : null,
-    cancelledBy: null,
-    cancellationReason: null,
+    // cancelPayable não seta deletedAt (ver comentário na action — RLS não
+    // permite); updatedAt é o melhor timestamp disponível para o momento do
+    // cancelamento, já que não há coluna cancelled_at dedicada.
+    cancelledAt: p.status === "cancelado" ? p.updatedAt : null,
+    cancelledBy: p.cancelledBy,
+    cancellationReason: p.cancellationReason,
     notes: p.notes,
     createdBy: p.createdBy,
     createdAt: p.createdAt,
@@ -445,9 +451,7 @@ export async function getReceivables(): Promise<ReceivableRow[]> {
 }
 
 // ---------------------------------------------------------------------------
-// Budgets — o nome vem prefixado em notes ("Budget: <nome>", P-3.6); month
-// não é persistido em budget_items (gap do Bloco B, registrado em
-// SESSIONS.md) — vem sempre null aqui.
+// Budgets
 // ---------------------------------------------------------------------------
 
 export async function getBudgets(): Promise<Budget[]> {
@@ -464,6 +468,8 @@ export async function getBudgets(): Promise<Budget[]> {
           categoryName: financialCategories.name,
           plannedAmount: budgetItems.plannedAmount,
           description: budgetItems.description,
+          month: budgetItems.month,
+          notes: budgetItems.notes,
         })
         .from(budgetItems)
         .leftJoin(
@@ -488,44 +494,36 @@ export async function getBudgets(): Promise<Budget[]> {
       categoryName: item.categoryName ?? "—",
       description: item.description ?? "",
       plannedAmount: parseFloat(item.plannedAmount),
-      month: null,
-      notes: null,
+      month: item.month,
+      notes: item.notes,
     });
     itemsByBudget.set(item.budgetId, list);
   }
 
   const projectByCc = new Map(ccRows.map((c) => [c.id, c.projectId]));
 
-  return budgetRows.map((b) => {
-    const firstLine = (b.notes ?? "").split("\n")[0] ?? "";
-    const name = firstLine.startsWith("Budget: ")
-      ? firstLine.slice("Budget: ".length)
-      : firstLine || "Orçamento sem nome";
-
-    return {
-      id: b.id,
-      name,
-      year: b.year,
-      projectId: b.costCenterId
-        ? (projectByCc.get(b.costCenterId) ?? null)
-        : null,
-      costCenterId: b.costCenterId,
-      totalAmount: parseFloat(b.totalAmount),
-      isActive: true,
-      approvedBy: null,
-      approvedAt: null,
-      items: itemsByBudget.get(b.id) ?? [],
-      createdBy: b.createdBy,
-      createdAt: b.createdAt,
-      updatedAt: b.updatedAt,
-    };
-  });
+  return budgetRows.map((b) => ({
+    id: b.id,
+    name: b.name,
+    year: b.year,
+    projectId: b.costCenterId
+      ? (projectByCc.get(b.costCenterId) ?? null)
+      : null,
+    costCenterId: b.costCenterId,
+    totalAmount: parseFloat(b.totalAmount),
+    items: itemsByBudget.get(b.id) ?? [],
+    createdBy: b.createdBy,
+    createdAt: b.createdAt,
+    updatedAt: b.updatedAt,
+  }));
 }
 
 // ---------------------------------------------------------------------------
 // Batch approvals — status reaproveita o enum da UI (parcialmente_aprovado
 // sinaliza "autorizado" aqui, já que o enum original não tem um valor para
 // esse estágio e nenhuma tela lê esse status pós-autorização).
+// approvalRequestSentAt/authorizationRequestSentAt/notes: financeiro.
+// batch_approvals não tem essas colunas — fora do escopo de P-3.6b.
 // ---------------------------------------------------------------------------
 
 export async function getBatchApprovals(): Promise<BatchApproval[]> {
@@ -629,6 +627,9 @@ export async function getLatestBankImport(): Promise<{
   const matchedCount = rows.filter((r) => r.status === "matched").length;
   const pendingCount = rows.length - matchedCount - ignoredCount;
 
+  // externalRef, suggestedPayableId/suggestedReceivableId e processedAt (do
+  // BankImport abaixo): financeiro.bank_import_rows/bank_imports não têm
+  // essas colunas — fora do escopo de P-3.6b.
   const items: BankImportItem[] = rows.map((r) => {
     const amount = parseFloat(r.amount);
     return {

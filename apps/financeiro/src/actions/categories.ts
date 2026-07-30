@@ -232,7 +232,6 @@ export const deleteCategory = superAdminAction
 
 // ---------------------------------------------------------------------------
 // createBudget — create an annual budget with line items
-// The DB stores name in notes (no name column on budgets table).
 // totalAmount is derived from the sum of all items' plannedAmount.
 // ---------------------------------------------------------------------------
 
@@ -243,7 +242,6 @@ export const createBudget = diretorAction
       (acc, item) => acc + item.plannedAmount,
       0,
     );
-    const budgetNotes = `Budget: ${input.name}`;
 
     // withSystemRole: mesmo débito de RLS de createCategory acima
     // ("budgets_mutate_admin"/"budget_items_mutate_admin" só concedem
@@ -267,10 +265,10 @@ export const createBudget = diretorAction
           const budgetInserted = await sysTx
             .insert(budgets)
             .values({
+              name: input.name,
               year: input.year,
               costCenterId,
               totalAmount: totalAmount.toFixed(2),
-              notes: budgetNotes,
               createdBy: ctx.actorId,
             })
             .returning();
@@ -285,6 +283,8 @@ export const createBudget = diretorAction
               categoryId: item.categoryId,
               plannedAmount: item.plannedAmount.toFixed(2),
               description: item.description,
+              month: item.month,
+              notes: item.notes,
             })),
           );
 
@@ -336,24 +336,15 @@ export const updateBudget = diretorAction
           const budget = rows[0];
           if (!budget) throw new Error("Orçamento não encontrado");
 
-          // Build notes: keep "Budget: name" prefix
-          let newNotes = budget.notes ?? "";
-          if (input.name !== undefined) {
-            const existingLines = newNotes.split("\n");
-            existingLines[0] = `Budget: ${input.name}`;
-            if (input.notes !== undefined) {
-              existingLines[1] = input.notes ?? "";
-            }
-            newNotes = existingLines.filter(Boolean).join("\n");
-          } else if (input.notes !== undefined) {
-            const existingLines = newNotes.split("\n");
-            existingLines[1] = input.notes ?? "";
-            newNotes = existingLines.filter(Boolean).join("\n");
-          }
+          const patch: Partial<typeof budgets.$inferInsert> = {
+            updatedAt: new Date(),
+          };
+          if (input.name !== undefined) patch.name = input.name;
+          if (input.notes !== undefined) patch.notes = input.notes;
 
           return sysTx
             .update(budgets)
-            .set({ notes: newNotes, updatedAt: new Date() })
+            .set(patch)
             .where(eq(budgets.id, input.budgetId))
             .returning();
         }),
@@ -413,7 +404,7 @@ export const deleteBudget = superAdminAction
       action: "financeiro.budget.deleted",
       entity: "budget",
       entityId: input.budgetId,
-      diff: { year: budget.year, notes: budget.notes },
+      diff: { name: budget.name, year: budget.year },
     });
 
     return { ok: true };

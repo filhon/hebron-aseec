@@ -4,6 +4,7 @@ import {
   index,
   integer,
   numeric,
+  smallint,
   text,
   timestamp,
   unique,
@@ -78,7 +79,10 @@ export const bankAccounts = financeiroSchema.table(
   "accounts",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    // "bank_name" = instituição (nome do banco); "nickname" = apelido da
+    // conta escolhido pelo usuário — colunas separadas desde P-3.6b.
     bankName: text("bank_name").notNull(),
+    nickname: text("nickname").notNull(),
     agency: text("agency"),
     accountNumber: text("account_number"),
     accountType: accountTypeEnum("account_type").notNull().default("corrente"),
@@ -169,6 +173,7 @@ export const budgets = financeiroSchema.table(
   "budgets",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    name: text("name").notNull(),
     year: integer("year").notNull(),
     costCenterId: uuid("cost_center_id").references(() => costCenters.id, {
       onDelete: "restrict",
@@ -210,6 +215,9 @@ export const budgetItems = financeiroSchema.table(
       scale: 2,
     }).notNull(),
     description: text("description"),
+    // 1–12; null = item cobre o ano todo, sem detalhamento mensal.
+    month: smallint("month"),
+    notes: text("notes"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -262,6 +270,8 @@ export const payables = financeiroSchema.table(
     overriddenBy: uuid("overridden_by").references(() => users.id),
     overriddenAt: timestamp("overridden_at", { withTimezone: true }),
     overrideJustification: text("override_justification"),
+    cancellationReason: text("cancellation_reason"),
+    cancelledBy: uuid("cancelled_by").references(() => users.id),
     createdBy: uuid("created_by")
       .notNull()
       .references(() => users.id),

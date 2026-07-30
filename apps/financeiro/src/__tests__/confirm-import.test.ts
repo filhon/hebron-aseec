@@ -57,6 +57,7 @@ beforeAll(async () => {
     .values({
       id: ACCOUNT_ID,
       bankName: "Banco Teste Confirm Import",
+      nickname: "Conta Teste Confirm Import",
       createdBy: ACTOR_ID,
     })
     .onConflictDoNothing();

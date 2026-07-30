@@ -223,6 +223,10 @@ export interface BudgetItem {
 
 // ─── Budget ───────────────────────────────────────────────────────────────────
 
+// isActive/approvedBy/approvedAt removidos em P-3.6b: nenhuma action, prompt
+// ou critério do repositório define aprovação de orçamento — os três campos
+// só existiam como literal fixo em getBudgets (S-214, achado 1). Reintroduzir
+// exige um fluxo de aprovação real (schema + action + tela), não só o tipo.
 export interface Budget {
   id: string;
   name: string;
@@ -231,9 +235,6 @@ export interface Budget {
   projectId: string | null;
   costCenterId: string | null;
   totalAmount: number;
-  isActive: boolean;
-  approvedBy: string | null; // user ID
-  approvedAt: Date | null;
   items: BudgetItem[];
   createdBy: string; // user ID
   createdAt: Date;

@@ -115,8 +115,20 @@ export const createPayable = colaboradorAction
   });
 
 // ---------------------------------------------------------------------------
-// cancelPayable — colaborador or diretor cancels a payable before payment
-// Soft-delete: sets deletedAt + status = "cancelado". Never hard-delete.
+// cancelPayable — colaborador or diretor cancels a payable before payment.
+// Status-only transition (status = "cancelado"), sem tocar deletedAt: essa
+// coluna é o que "payables_select_staff"/"payables_update_staff" (RLS) usam
+// para decidir se a linha existe para quem lê — e o Postgres aplica a USING
+// da policy de SELECT também sobre a linha NOVA de um UPDATE. Setar
+// deletedAt aqui faz a própria linha que acabou de ser cancelada deixar de
+// bater no WITH CHECK da policy de UPDATE, e o UPDATE inteiro é rejeitado
+// com "new row violates row-level security policy" — reproduzido isolado
+// numa tabela mínima com o mesmo padrão USING/WITH CHECK, fora do escopo
+// deste módulo. Na prática isso significa que cancelPayable NUNCA
+// funcionou sob RLS real (só passava despercebido porque nenhum teste
+// chamava a action pelo pipeline autenticado — mesmo padrão do achado que
+// P-0.3c fechou para submitReport). status já carrega o estado; "cancelado"
+// seguir visível para o staff é também o que P-3.9c (S-214, achado 4) pede.
 // ---------------------------------------------------------------------------
 
 export const cancelPayable = colaboradorAction
@@ -145,7 +157,12 @@ export const cancelPayable = colaboradorAction
 
       await tx
         .update(payables)
-        .set({ status: "cancelado", deletedAt: now, updatedAt: now })
+        .set({
+          status: "cancelado",
+          cancellationReason: input.reason,
+          cancelledBy: ctx.actorId,
+          updatedAt: now,
+        })
         .where(eq(payables.id, input.payableId));
 
       await withSystemRole(tx, (sysTx) =>

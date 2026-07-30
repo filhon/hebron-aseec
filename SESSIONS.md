@@ -234,6 +234,8 @@
 | S-211  | 2026-07-29 | P-3.3b — O plano de contas que esconde a categoria recém-criada (CORRETIVO)                                                      | concluido                            |
 | S-212  | 2026-07-29 | P-3.4b — O comprovante que a tela pede e o sistema descarta (CORRETIVO)                                                          | concluido                            |
 | S-213  | 2026-07-29 | P-3.5b — Nenhuma fronteira de erro, doze telas sem carregamento e 45 cores fora do sistema (CORRETIVO)                           | concluido                            |
+| S-214  | 2026-07-29 | Auditoria: débitos técnicos P-3.6–P-3.12 (Financeiro, Bloco B) — 6 prompts corretivos gerados                                    | concluido                            |
+| S-215  | 2026-07-30 | P-3.6b — Seis campos que o formulário coleta e o banco não tem onde guardar (CORRETIVO)                                          | concluido                            |
 
 ---
 
@@ -18503,7 +18505,7 @@ saía sem recibo nenhum e o audit gravava `receiptCount: 0` todo mês.
       recibo e audit com `receiptCount` real — coberto por teste
 - [x] `pnpm --filter @hebron/financeiro typecheck lint test build` verdes
       (test: 56/57 — a falha isolada em `designation-governance.test.ts >
-  createWeeklyBatch` é a mesma drift pré-existente do dev DB
+createWeeklyBatch` é a mesma drift pré-existente do dev DB
       compartilhado documentada em S-211/[[project_projetos_schema_grant_drift]],
       não relacionada a este diff)
 - [x] Registrado em SESSIONS.md
@@ -18617,7 +18619,7 @@ meus-dados}/loading.tsx` (12 novos) + 11 componentes de skeleton novos
       pré-existente)
 - [x] Skeletons alinhados à estrutura real das telas — sem salto de layout
 - [x] `grep -rn "\"#[0-9a-fA-F]\{3,8\}\"\|rgba(" apps/financeiro/src
-    --include=*.tsx` retorna vazio
+  --include=*.tsx` retorna vazio
 - [x] Nenhum token novo fora de `packages/ui/src/tokens.css`
 - [x] Microcopy sem exclamação genérica; versículo só nos vazios
       (mantido nos dois vazios pré-existentes de `conciliacao/page.tsx`,
@@ -18626,7 +18628,347 @@ meus-dados}/loading.tsx` (12 novos) + 11 componentes de skeleton novos
       `test`: 56/57 — a mesma falha pré-existente de S-212 em
       `designation-governance.test.ts > createWeeklyBatch` (colisão de
       dado no dev DB compartilhado, `duplicate key value violates unique
-    constraint "payables_pkey"`); reproduzida de forma idêntica com
+  constraint "payables_pkey"`); reproduzida de forma idêntica com
       `git stash` das mudanças deste prompt (ou seja, no código anterior a
       ele), confirmando que não é regressão deste diff
 - [x] Registrado em SESSIONS.md
+
+---
+
+## S-214 — Auditoria: débitos técnicos P-3.6–P-3.12 (Financeiro, Bloco B)
+
+**Prompt:** N/A (auditoria solicitada pelo Filipe — reler P-3.6–P-3.12 em
+PROMPTS.md + S-51/S-52/S-53/S-63/S-69/S-70/S-71/S-72 em SESSIONS.md, cruzar
+com a codebase real, gerar prompts corretivos se necessário)
+**Data:** 2026-07-29
+**Modelo:** claude-opus-5
+**Status:** concluido (read-only; gera 6 prompts novos em PROMPTS.md, nenhum
+código de produto alterado)
+
+### Resumo
+
+Reler os 7 prompts do Bloco B do Financeiro e as 8 sessões que os
+implementaram, e confirmar contra a codebase quais débitos documentados
+("registrado como suposição", "fora de escopo", "considerar em sessão
+futura") seguem abertos hoje. Seis achados justificam prompt corretivo; cinco
+foram avaliados e descartados.
+
+### Débitos já fechados por prompts posteriores (verificados, sem ação)
+
+- **RLS inerte no Financeiro** (S-63: "toda action do módulo roda com a
+  conexão `db` superuser") — fechado por **P-9.1b-2/S-157**: `lib/queries.ts`
+  e as 9 actions migraram para `withAuthenticatedContext`. Restam 8 bypasses
+  pontuais via `withSystemRole`, que é o achado 2 abaixo (problema diferente:
+  policy incompleta, não conexão errada).
+- **Template React Email do lote semanal** (S-53) — fechado em P-3.10.
+- **Parser CSV só com vírgula** (S-53) — fechado em P-3.8b (detecção de
+  delimitador + tokenizador que respeita aspas).
+- **Drift do journal do drizzle-kit** (S-63, S-71) — fechado em P-0.3c/S-171.
+- **Escrita em `financeiro.attachments`** (S-63: tabela sem consumidor de
+  escrita) — fechado em P-3.4b/S-212.
+
+### Achados confirmados na codebase (não só em SESSIONS)
+
+1. **Seis campos coletados pela interface sem coluna no schema.**
+   `createBankAccountSchema` pede apelido **e** instituição; `accounts.ts:35`
+   grava só o apelido e descarta `input.bank` (nem no `diff` do audit);
+   `getBankAccounts` devolve `name: a.bankName, bank: a.bankName`. Saldo
+   inicial fixado em `"0"` (`accounts.ts:39`), sem campo no formulário — a
+   conta que a ONG já usa não pode ser cadastrada com o saldo que tem.
+   Nome de orçamento gravado como prefixo de texto em `notes`
+   (`categories.ts:246`), desfeito por `startsWith` (`queries.ts:501`) e
+   editado por índice de linha (`categories.ts:339-352`). `month`/`notes` de
+   item de orçamento aceitos pelo validator e nunca inseridos
+   (`categories.ts:282-289`). `cancelPayableSchema.reason` obrigatório
+   (mín. 10 caracteres) e persistido só no audit — sem
+   `cancellation_reason`/`cancelled_by` na tabela, com `payable-card.tsx:244`
+   renderizando um valor que nunca chega. `isActive`/`approvedBy`/
+   `approvedAt` de `Budget` fabricados como literal em `queries.ts:513-516`.
+   → **P-3.6b**.
+2. **Oito mutações contornam a RLS por dentro.** `accounts_mutate_admin`
+   (`0010_financeiro.sql:431`), `categories_mutate_admin` (`:447`),
+   `budgets_mutate_admin` (`:479`) e `budget_items_mutate_admin` (`:495`) são
+   `FOR ALL USING (has_role('super_admin'))`, mas os gates de aplicação são
+   `colaboradorAction`/`diretorAction` — as 5 actions gravam dentro de
+   `withSystemRole`. `financeiro.bank_imports` nunca recebeu `GRANT UPDATE`
+   (`0014_grants_authenticated.sql:101`) nem policy de UPDATE: nem
+   `super_admin` conseguiria, e os 3 pontos que escrevem `matched_count`
+   contornam. Viola "Defense in depth" (CLAUDE.md) e G6.2 no único módulo que
+   mexe com dinheiro. Registrado em S-157 como fora de escopo; nenhum prompt
+   posterior voltou. → **P-3.7b**.
+3. **Centro de custo só nasce de projeto, e a tela mostra um selo
+   inalcançável.** `cost_centers.project_id` é `NOT NULL UNIQUE`; não existe
+   `createCostCenter` em action, validator ou tela — a única origem é
+   `onProjectApproved` (`projetos-approval.ts:106`). `centros-custo/page.tsx`
+   renderiza "Geral" para `projectId === null` (`:53-66`, `:290`), estado que
+   o schema proíbe. Consequência real: custeio administrativo (aluguel,
+   folha, energia) não tem centro de custo, logo não tem linha de orçamento e
+   fica fora de `checkBudgetAlert`. BRAIN não afirma que o caminho automático
+   seja o único — regra ambígua, exige decisão do Filipe. → **P-3.11b**.
+4. **Cinco actions e quatro estados que nenhuma tela alcança.** Zero
+   consumidores em `components`/`app` para `overrideBlock`, `cancelPayable`,
+   `createManualTransaction` (zero referências no repositório inteiro),
+   `updateBudget` e `deleteBudget`. `grep -rn "bloqueado"` nas telas do
+   Financeiro volta **vazio**: `contas-pagar-view.tsx:20` só tem as abas
+   `pendente|aprovado|autorizado`, o tipo `Payable` não carrega
+   `blockedAt`/`blockReason`/`overriddenBy`/`overrideJustification` (colunas
+   existentes desde a migration `0030`) e `getPayables` não as mapeia — um
+   payable bloqueado pelo cron `projetos-inadimplencia` **desaparece da
+   tela**, sem selo, sem motivo e sem caminho até o `overrideBlock` que
+   P-3.11 marcou `[x]`. `pago` não tem aba (rastro de governança sem lugar
+   onde ser lido); `cancelado` é inalcançável por três motivos independentes
+   (sem aba, sem action chamável, e `payables_select_staff` filtra
+   `deleted_at IS NULL`); `receivable_status = "cancelado"` existe no enum e
+   nenhuma action o define. → **P-3.9c**.
+5. **Os três emails do Financeiro estão fora do Admin, e o lote semanal tem
+   duas implementações.** BRAIN.md afirma duas vezes que o texto dos emails é
+   editável no Admin; os 12 de Projetos e os 3 gerais consultam
+   `getDbTemplate` e estão em `TEMPLATE_META` (`configuracoes/page.tsx:95`) e
+   no seed. `batch-approval`, `budget-alert` e `monthly-financial-report`
+   (P-3.10) não fazem nem uma coisa nem outra — `EmailTemplateSlug` (`:70-86`)
+   não tem um slug de financeiro. Separadamente: os passos 1–2 de BRAIN §6.5
+   (a regra que o próprio BRAIN chama de inviolável) existem em
+   `createWeeklyBatch` (`approval.ts:70-236`) **e** em
+   `runWeeklyBatchCreation` (`crons/financeiro.ts:84-211`) — ~130 linhas
+   quase idênticas. Hoje concordam; `bloqueado` ficou fora do lote nas duas
+   por acidente (ambas filtram `pendente`), não por construção. → **P-3.10b**.
+6. **O OCR de nota fiscal nunca ganhou consumidor.** O critério de P-3.8
+   está `[x]`; `extractNfData` (`packages/ai/src/financeiro/ocr.ts:42`) está
+   completa e correta, e `grep -rn "extractNfData" apps packages` devolve só
+   a própria definição — nenhuma action, tela ou teste. Mesmo padrão do
+   achado que gerou P-6.14 na Plataforma. Até P-3.4b não havia caminho de
+   upload; agora há (`expense-form.tsx:164-175`). Dois detalhes colaterais:
+   `ocr.ts:102` pede `gpt-4o` enquanto o resto de `packages/ai` usa
+   `gpt-4.1` (o modelo que CLAUDE.md/BRAIN documentam), e a função não tem
+   teste. BRAIN §6.5 classifica OCR como "nice-to-have v1", então o prompt
+   aceita também a saída de reescrever o critério. → **P-3.8c**.
+
+### Débitos avaliados e NÃO convertidos em prompt
+
+- **Filtros de lançamentos client-side** — débito aceito explicitamente em
+  P-3.9 (critério `[~]`, S-69). Confirmado que é pior do que o registro
+  sugere: `getTransactions`/`getPayables`/`getBudgets`/`getReceivables` não
+  têm `LIMIT` nem `ORDER BY`, e `centros-custo/page.tsx` chama quatro delas
+  para agregar em memória. Num ledger imutável isso só cresce. Ainda assim
+  não gera prompt: o volume da ONG é de dezenas/centenas de linhas por ano, e
+  reescrever para paginação por query param é reescrever as telas — a decisão
+  registrada em S-69 continua defensável. Anotado aqui para não ser
+  re-descoberto do zero.
+- **Geração duplicada de PDF/XLSX** entre `crons/financeiro.ts` e
+  `actions/reports.ts` (S-70) — duplicação real, mas de formatação de
+  relatório, não de regra de negócio; `packages/jobs` não pode importar de
+  `apps/*` (G6.5) e o export manual precisa também dos recibos. O trade-off
+  de S-70 se sustenta. (A duplicação do **lote semanal** é diferente e virou
+  item de P-3.10b: aquela é a regra de governança.)
+- **Validators órfãos** `approvePayableSchema`, `authorizePayableSchema` e
+  `bankImportSchema` (`packages/validators/src/financeiro/index.ts`) — zero
+  importadores; sobras do desenho por payable individual que o Bloco B trocou
+  por lote. Sem impacto funcional; cabe na limpeza que P-3.9c já faz ao
+  decidir o destino de cada action.
+- **Convenção de nome em `packages/integrations`** (`financeiro.ts`/
+  `projetos.ts` em vez de `<origem>-<destino>.ts`, S-71) — divergência
+  cosmética, e a lista de arquivos permitidos do próprio P-3.11 pediu esses
+  nomes. Renomear é churn sem ganho.
+- **Referência a "P-3.9b" em `lib/queries.ts:387`** — prompt que não existe
+  (nunca houve sessão com esse número). Correção de uma linha, dobrada no
+  bookkeeping de P-3.9c em vez de prompt próprio.
+
+### Prompts corretivos gerados
+
+Inseridos em PROMPTS.md sob "## Financeiro — Corretivos do Bloco B", após
+P-3.5b e antes da Fase 4. Ordem recomendada: P-3.6b → P-3.7b → P-3.11b →
+P-3.9c → P-3.10b → P-3.8c. Única dependência real: P-3.9c precisa das colunas
+de cancelamento que P-3.6b cria.
+
+- **P-3.6b** — Seis campos que o formulário coleta e o banco não tem onde
+  guardar (schema).
+- **P-3.7b** — A segunda camada de defesa que oito mutações contornam por
+  dentro (schema/RLS).
+- **P-3.11b** — O centro de custo que só nasce de um projeto e o selo "Geral"
+  que nunca aparece (schema; **exige decisão do Filipe**).
+- **P-3.9c** — Cinco actions e quatro estados que nenhuma tela alcança
+  (integration/ui).
+- **P-3.10b** — Três emails que o Admin não consegue editar e um lote semanal
+  escrito duas vezes (integration).
+- **P-3.8c** — O OCR de nota fiscal que existe, funciona e ninguém chama
+  (integration; menor prioridade dos seis).
+
+Nenhum código de produto foi alterado nesta sessão — só leitura (PROMPTS.md,
+SESSIONS.md, BRAIN.md, CLAUDE.md, schema, migrations, actions, queries,
+components, validators, types, crons) e a escrita dos 6 prompts novos + esta
+entrada.
+
+### Arquivos modificados
+
+- `PROMPTS.md` (6 prompts novos: P-3.6b, P-3.7b, P-3.8c, P-3.9c, P-3.10b, P-3.11b)
+- `SESSIONS.md` (esta entrada + linha na tabela-índice)
+
+---
+
+## S-215 — P-3.6b — Seis campos que o formulário coleta e o banco não tem onde guardar (CORRETIVO)
+
+**Branch:** `feat/P-3.6b-financeiro-colunas-ausentes`
+
+### Contexto
+
+S-214 (auditoria) confirmou os seis achados: `createBankAccountSchema` pede
+apelido **e** instituição mas só uma coluna (`bank_name`) existia, gravando o
+apelido e descartando o banco; saldo inicial sempre fixado em `"0"`; nome de
+orçamento vivendo como prefixo `"Budget: "` em `notes`, desfeito por
+`startsWith` e reeditado por índice de linha; `month`/`notes` de item de
+orçamento aceitos pelo validator e nunca inseridos; `cancelPayableSchema.reason`
+obrigatório (mín. 10 caracteres) persistindo só no audit log; três campos de
+aprovação de orçamento (`isActive`/`approvedBy`/`approvedAt`) fabricados como
+literal fixo em `getBudgets`.
+
+### Decisões
+
+1. **Contas bancárias:** `financeiro.accounts` ganha `nickname` (apelido).
+   `bank_name` — que o nome da coluna já sugeria ser a instituição, mas
+   guardava o apelido por bug do P-3.6/P-3.8 original — passa a ser
+   preenchida com a instituição de verdade a partir de agora. Backfill:
+   contas existentes recebem `nickname = bank_name` (preserva o valor que
+   elas de fato tinham); a instituição delas fica com o texto antigo até
+   serem editadas — não havia como recuperar um dado que nunca existiu.
+   Saldo inicial: `createBankAccountSchema` e `bank-account-form.tsx` ganham
+   o campo; `createBankAccount` grava `input.initialBalance` em vez de `"0"`
+   fixo. `initialBalance` **sem** `.default(0)` no Zod — um `.default()`
+   torna o tipo de entrada opcional e quebra a inferência de tipos do
+   `zodResolver` do React Hook Form (erro TS2322 em `bank-account-form.tsx`);
+   o `defaultValues: { initialBalance: 0 }` do formulário já cobre o mesmo
+   caso sem esse efeito colateral.
+2. **Nome do orçamento:** `financeiro.budgets` ganha `name`. Backfill extrai
+   a primeira linha de `notes` (removendo o prefixo `Budget: ` quando
+   presente) e remove essa linha de `notes`, devolvendo o campo à função de
+   observações livres. `createBudget`/`updateBudget` param de tocar `notes`
+   por índice de linha — `updateBudget` virou um `patch` direto (mesmo
+   padrão de `updateCategory`).
+3. **Item de orçamento:** `budget_items` ganha `month smallint` (CHECK
+   1–12) e `notes text`; `createBudget` passa a inserir os dois a partir do
+   validator (que já os aceitava desde o Bloco A).
+4. **Cancelamento de payable:** `payables` ganha `cancellation_reason text` e
+   `cancelled_by uuid references public.users(id)`; `cancelPayable` grava os
+   dois na mesma UPDATE. Backfill: para payables já cancelados, recupera
+   motivo e autor da entrada mais recente de `financeiro.payable.cancelled`
+   em `admin.audit_log` (único lugar onde esse dado sobreviveu até agora) —
+   `DISTINCT ON (entity_id) ... ORDER BY created_at DESC`.
+5. **Aprovação de orçamento:** `isActive`/`approvedBy`/`approvedAt` **removidos**
+   de `Budget` (`packages/types`) — a saída recomendada pelo prompt. Nenhuma
+   action, tela ou critério do repositório define aprovação de orçamento;
+   grep confirmou zero consumidores desses três campos fora de `getBudgets`
+   (que os fabricava) e do próprio tipo. Reintroduzir exige um fluxo de
+   aprovação real (schema + action + tela), registrado como trabalho futuro,
+   não um tipo que só pode ter um valor.
+6. **`lib/queries.ts` — nenhum literal fixo sem justificativa:** todo `: null,`/
+   `: true,` remanescente (Transaction.externalRef/notes,
+   Payable.supplierCnpj, BatchApproval.approvalRequestSentAt/
+   authorizationRequestSentAt/notes, BankImportItem.externalRef/
+   suggestedPayableId/suggestedReceivableId, BankImport.processedAt,
+   Category.isActive) ganhou um comentário explicando que a tabela não tem
+   coluna correspondente — nenhum é do escopo dos seis campos deste prompt
+   (contas/orçamento/cancelamento).
+
+### Achado não previsto: `cancelPayable` nunca funcionou sob RLS real
+
+Ao testar `cancelPayable` pelo pipeline autenticado de verdade (não
+`withSystemRole`), a UPDATE falhava com `"new row violates row-level
+security policy for table payables"` — **mesmo com o papel certo e mesmo
+antes deste prompt tocar a action**. Isolado numa tabela mínima fora do
+schema financeiro: `payables_select_staff`/`payables_update_staff` filtram
+`deleted_at IS NULL`; o Postgres aplica a USING da policy de SELECT também
+sobre a linha **nova** de um UPDATE, então qualquer UPDATE que mude
+`deleted_at` de `NULL` para um valor faz a própria linha alterada deixar de
+bater na policy, e o UPDATE inteiro é rejeitado — independente do `WITH
+CHECK` da policy de UPDATE permitir. `cancelPayable` gravava `deletedAt: now`
+desde o P-3.6/P-3.8 original; nenhum teste chamava a action pelo pipeline
+autenticado até `budgets.test.ts` (mesmo padrão do achado que P-0.3c fechou
+para `submitReport`/S-165). Fix: `cancelPayable` para de setar `deletedAt` —
+`status = "cancelado"` já carrega o estado, e `deleted_at` era o único writer
+desse campo em `payables` no repositório inteiro (confirmado por grep;
+`getPayableOrThrow`/outras queries só leem `isNull(deletedAt)`, que
+permanece sempre verdadeiro daqui em diante — sem regressão). Efeito
+colateral positivo: um payable cancelado continua visível para o staff em
+vez de desaparecer da tela, que é exatamente a saída que P-3.9c (S-214,
+achado 4) já ia pedir. `getPayables#cancelledAt` passa a derivar de
+`updatedAt` (não há coluna `cancelled_at` dedicada — fora do escopo deste
+prompt criar uma; `updatedAt` é o melhor proxy disponível, já setado pela
+própria UPDATE de cancelamento).
+
+### Escopo entregue
+
+1. `packages/db/src/migrations/0069_financeiro_colunas_ausentes.sql` (novo,
+   hand-written): as seis colunas + backfill, idempotente (`ADD COLUMN IF
+NOT EXISTS`, `DO $$ ... EXCEPTION WHEN duplicate_object`), reexecutado
+   direto contra o Postgres (fora do runner, que só rastreia por nome de
+   arquivo) para confirmar idempotência real — segunda execução só emitiu
+   `NOTICE ... already exists, skipping`.
+2. `packages/db/src/schema/financeiro.ts`: `bankAccounts.nickname`,
+   `budgets.name`, `budgetItems.month`/`notes`,
+   `payables.cancellationReason`/`cancelledBy`.
+3. `packages/validators/src/financeiro/index.ts`: `initialBalance` em
+   `createBankAccountSchema`.
+4. `packages/types/src/financeiro/index.ts`: `Budget` perde
+   `isActive`/`approvedBy`/`approvedAt`.
+5. `apps/financeiro/src/actions/accounts.ts`: `createBankAccount` grava
+   `bankName`/`nickname`/`initialBalance` de verdade.
+6. `apps/financeiro/src/actions/categories.ts`: `createBudget` grava `name`
+   e `month`/`notes` dos itens; `updateBudget` vira `patch` direto (sem
+   manipular `notes` por índice de linha); `deleteBudget` audita `name` em
+   vez de `notes`.
+7. `apps/financeiro/src/actions/transactions.ts`: `cancelPayable` grava
+   `cancellationReason`/`cancelledBy`; para de setar `deletedAt` (achado
+   acima).
+8. `apps/financeiro/src/lib/queries.ts`: `getBankAccounts` usa
+   `nickname`/`bankName` separados; `getBudgets` lê `name` da coluna e
+   `month`/`notes` dos itens (sem fabricar `isActive`/`approvedBy`/
+   `approvedAt`); `getPayables` lê `cancellationReason`/`cancelledBy` reais
+   e deriva `cancelledAt` de `updatedAt`; comentários adicionados a todo
+   literal fixo remanescente fora do escopo deste prompt.
+9. `apps/financeiro/src/components/bank-account-form.tsx`: campo de saldo
+   inicial + texto do card informativo atualizado.
+10. `apps/financeiro/src/__tests__/budgets.test.ts` (novo): nome do
+    orçamento sobrevive a create → update → read sem passar por `notes`;
+    `month`/`notes` do item chegam à query; cancelamento persiste motivo e
+    autor em `getPayables`.
+11. `apps/financeiro/src/__tests__/{conciliation,confirm-import,governance,
+rls,transactions}.test.ts`: seed de `bankAccounts` ganhou `nickname`
+    (agora `NOT NULL`) — gap de infraestrutura óbvio (G1), fora da lista de
+    arquivos permitidos original mas necessário para o typecheck/test do
+    módulo ficarem verdes.
+12. `PROMPTS.md`: critérios de P-3.6 e P-3.8 anotados com o que o código faz
+    depois deste prompt (padrão da nota inline usada em P-3.3/P-3.3b).
+
+### Critérios de aceite
+
+- [x] Cadastrar conta bancária: apelido, instituição e saldo inicial chegam
+      ao banco em colunas distintas e voltam distintos na tela
+- [~] `grep -rn "Budget: " apps/financeiro/src` não volta vazio — os dois
+  resultados são o próprio `budgets.test.ts` (comentário explicando o
+  bug antigo + asserção `not.toContain("Budget: ")`); zero ocorrências
+  em código de produção
+- [x] Item de orçamento com mês: o mês volta da query (não `null` fixo) —
+      coberto por teste
+- [x] Cancelar conta a pagar: motivo e autor ficam gravados na tabela —
+      coberto por teste (achado do bug de RLS acima incluído)
+- [x] Nenhum literal fixo em `lib/queries.ts` para campo que tem coluna —
+      remanescentes (tabelas fora do escopo dos seis campos) comentados um
+      a um com o motivo
+- [x] Migration idempotente e aplicável a banco com dados — reexecutada
+      direto contra o Postgres fora do runner, sem erro
+- [x] Teste cobre: nome do orçamento sobrevive a create → update → read;
+      cancelamento persiste o motivo
+- [x] `pnpm --filter @hebron/financeiro typecheck lint test` verdes (test:
+      58/59 — a falha isolada em `designation-governance.test.ts >
+createWeeklyBatch` é a drift pré-existente do dev DB compartilhado
+      documentada em S-213/[[project_financeiro_payables_pkey_drift]], não
+      relacionada a este diff); `pnpm --filter @hebron/financeiro build`
+      verde; `pnpm --filter @hebron/db typecheck` verde
+- [x] Registrado em SESSIONS.md — saída escolhida para os três campos de
+      aprovação de orçamento: removidos de `Budget` (item 5 das Decisões)
+
+**Nota:** `pnpm --filter @hebron/db test` roda 4 falhas fora do schema
+financeiro (`meetings.test.ts`, `storage.test.ts` ×2, `system-actor.test.ts`)
+— `system-actor.test.ts` é a mesma drift de S-164
+([[project_system_actor_test_drift]]); as outras duas não tinham registro
+prévio mas são de módulos (intranet, documentos) inteiramente não tocados
+por este diff — mesmo padrão de drift do banco de dev compartilhado.

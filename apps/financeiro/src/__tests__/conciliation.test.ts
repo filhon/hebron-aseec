@@ -107,6 +107,7 @@ describe("autoMatchImport — Match automático (valor + data)", () => {
       .values({
         id: ACCOUNT_ID,
         bankName: "Banco Conciliation Teste",
+        nickname: "Conta Conciliation Teste",
         createdBy: ACTOR_ID,
       })
       .onConflictDoNothing();

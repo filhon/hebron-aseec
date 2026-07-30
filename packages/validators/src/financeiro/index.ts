@@ -190,6 +190,9 @@ export const createBankAccountSchema = z.object({
   agency: z.string().min(1, "Informe a agência").max(20),
   accountNumber: z.string().min(1, "Informe o número da conta").max(30),
   type: z.enum(["corrente", "poupanca", "investimento"]),
+  initialBalance: z
+    .number({ invalid_type_error: "Saldo inicial deve ser um número" })
+    .multipleOf(0.01, "Saldo inicial pode ter no máximo 2 casas decimais"),
 });
 
 export type CreateBankAccountInput = z.infer<typeof createBankAccountSchema>;
