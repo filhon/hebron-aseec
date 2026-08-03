@@ -244,6 +244,7 @@
 | S-221  | 2026-07-30 | Auditoria: débitos técnicos P-4.1–P-4.5 (Tarefas, Bloco A) — 5 prompts corretivos gerados                                        | concluido                            |
 | S-222  | 2026-08-03 | P-4.1b — A recorrência anual que não sabe em que mês cai (CORRETIVO)                                                             | concluido                            |
 | S-223  | 2026-08-03 | P-4.2b — O quadro que só se move com mouse (CORRETIVO)                                                                           | concluido                            |
+| S-224  | 2026-08-03 | P-4.4b — A descrição que o editor formata e a tela mostra com as tags à vista (CORRETIVO)                                        | concluido                            |
 
 ---
 
@@ -19906,3 +19907,80 @@ draggable>` e `handleDrop` originais não foram tocados.
 - `apps/tarefas/src/components/task-card.tsx`
 - `apps/tarefas/src/components/template-form.tsx`
 - `PROMPTS.md` (critérios de P-4.2 e P-4.4)
+
+## S-224 — P-4.4b — A descrição que o editor formata e a tela mostra com as tags à vista (CORRETIVO)
+
+**Prompt:** P-4.4b (PROMPTS.md)
+**Data:** 2026-08-03
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+`RichTextEditor` (decisão D-1) emite HTML via `innerHTML`; `task-detail-client.tsx`
+renderizava `{task.description}` dentro de um `<p>`, então React escapava a
+string e quem formatava o texto via a própria marcação (`<p><strong>...`) na
+tela de detalhe. O dado gravado e o ciclo de edição já estavam corretos — só a
+exibição quebrava, e por ser a única tela que mostra a descrição, em 100% dos
+casos. `dangerouslySetInnerHTML` sem sanitização (o que os outros dois
+consumidores do mesmo editor já faziam) trocaria um defeito visível por um
+invisível: nada no monorepo sanitizava HTML (`grep -rn "sanitize\|DOMPurify"`
+vazio antes desta sessão), e o editor permite `href` livre e colagem de HTML
+arbitrário.
+
+Escolhida a **saída (a)** recomendada pelo prompt — renderizador compartilhado
+e sanitizado, ao lado do editor (mesmo lar da decisão D-1):
+
+1. `packages/ui/src/components/rich-text.tsx` — `sanitizeRichText` (allowlist
+   via `sanitize-html`: `b/strong/i/em/u/ul/ol/li/a/br/p/div`; `href` só em
+   `a`, restrito a `http`/`https`/`mailto`; `script`/`style`/`iframe`
+   descartados com conteúdo; nenhum outro atributo — `on*` e `style` inline
+   caem por não estarem na allowlist) e `RichText` (componente sem hooks —
+   precisa renderizar tanto em Server Components quanto em Client Components,
+   ver `announcement-card.tsx` — que sanitiza e aplica a mesma tipografia de
+   lista/link do editor). `sanitize-html` é puro JS (sem DOM/jsdom), compatível
+   com o `environment: "node"` do `vitest.config.ts` do pacote e com RSC.
+   Sanitiza na renderização, então também limpa o que já estava gravado antes
+   desta sessão.
+2. `task-detail-client.tsx`: bloco "Descrição" troca o `<p>` por `<RichText
+html={task.description} />`. Ciclo de edição (`task-detail-client.tsx:739`)
+   não foi tocado — já relia o HTML de volta ao editor corretamente.
+3. Os outros dois sinks fechados com o mesmo componente: `announcement-card.tsx`
+   (Intranet, Server Component — confirma que `RichText` não pode depender de
+   hooks) e `lesson-view.tsx` (Plataforma).
+4. Teste do sanitizador (`packages/ui/src/components/__tests__/rich-text.test.ts`,
+   10 casos): bloqueia `<script>`, `href="javascript:..."`, `<img onerror>`,
+   atributos `on*`, `style` inline e `<iframe>`; preserva negrito/itálico/
+   sublinhado, listas com/sem numeração, link `http` (descartando `target`/
+   `class` não permitidos) e link `mailto`.
+5. Bookkeeping em `PROMPTS.md`: critério de P-4.4 sobre o editor agora
+   registra o que acontece com o HTML que ele produz (P-4.4b, S-224).
+
+`sanitize-html` não estava no monorepo — adicionado como dependência direta de
+`packages/ui` (`pnpm --filter @hebron/ui add sanitize-html` + `@types/sanitize-html`
+como dev dependency).
+
+### Verificação
+
+- `grep -rn "dangerouslySetInnerHTML" apps` → só os 3 sinks tratados nesta
+  sessão usam `RichText`; os demais (`documentos/markdown-editor.tsx`,
+  `admin/email-template-preview.tsx`, `admin/email-template-editor.tsx`) não
+  consomem saída de `RichTextEditor` — fora de escopo do prompt
+- `pnpm --filter @hebron/ui test` — 2 suítes, 16 testes, todos verdes
+- `pnpm --filter @hebron/ui typecheck lint` — verdes
+- `pnpm --filter @hebron/tarefas typecheck lint` — verdes; `test`: 6 suítes,
+  50 testes, todos verdes; `build` verde (11 rotas)
+- `pnpm --filter @hebron/intranet build` verde (Server Component `RichText`
+  compila e gera páginas estáticas normalmente)
+- `pnpm --filter @hebron/plataforma build` verde
+
+### Arquivos modificados
+
+- `packages/ui/src/components/rich-text.tsx` (criado)
+- `packages/ui/src/components/__tests__/rich-text.test.ts` (criado)
+- `packages/ui/src/index.ts` (export `RichText`, `sanitizeRichText`)
+- `packages/ui/package.json` / `pnpm-lock.yaml` (dependência `sanitize-html`)
+- `apps/tarefas/src/app/(dashboard)/tarefa/[id]/task-detail-client.tsx`
+- `apps/intranet/src/components/announcement-card.tsx`
+- `apps/plataforma/src/components/lesson-view.tsx`
+- `PROMPTS.md` (critério de P-4.4)

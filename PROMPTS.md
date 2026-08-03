@@ -5438,7 +5438,7 @@ Formulários: criar/editar tarefa (título, descrição com o editor rich text C
 
 **Critérios de aceite:**
 
-- [x] Task form com editor rich text para descrição
+- [x] Task form com editor rich text para descrição — saída HTML é sanitizada (allowlist) e renderizada via `RichText` compartilhado (`@hebron/ui`) na tela de detalhe; ciclo de edição preserva a formatação (P-4.4b, S-224)
 - [x] @menções com autocomplete de usuários do workspace
 - [x] Recurrence form com preview visual — nomeia padrão + dia + mês (ex: "Toda segunda-feira", "Anualmente, no dia 10 de janeiro"), sem horário: `RecurrenceRule` não tem esse campo e `tarefasRecurrenceCron` roda em horário fixo (`0 6 * * *`), então um horário por regra seria exibido e ignorado na execução (P-4.1b, ver S-76)
 - [x] Template form com lista de tarefas editável (drag-drop para reordenar) — também por botões mover acima/abaixo, sem exigir arrasto (P-4.2b, S-223)
@@ -5931,13 +5931,13 @@ O conserto óbvio — `dangerouslySetInnerHTML` — é o que os outros dois cons
 
 **Critérios de aceite:**
 
-- [ ] Criar uma tarefa com negrito, lista e link, abrir o detalhe: o texto aparece formatado e nenhuma tag é visível
-- [ ] Editar essa tarefa: o editor reabre com a formatação intacta (o ciclo não regrediu)
-- [ ] Descrição colada com `<script>`, `<img onerror>` ou `href="javascript:..."` é exibida sem executar nada
-- [ ] `grep -rn "dangerouslySetInnerHTML" apps` — nenhum consumidor da saída de `RichTextEditor` renderiza HTML sem sanitizar
-- [ ] Teste do sanitizador cobre o que bloqueia e o que preserva
-- [ ] `pnpm --filter @hebron/tarefas typecheck lint test` verdes; `pnpm --filter @hebron/tarefas build` verde; `pnpm --filter @hebron/ui test` verde; `pnpm --filter @hebron/intranet build` e `pnpm --filter @hebron/plataforma build` verdes
-- [ ] Registrar em SESSIONS.md — incluindo a saída escolhida
+- [x] Criar uma tarefa com negrito, lista e link, abrir o detalhe: o texto aparece formatado e nenhuma tag é visível
+- [x] Editar essa tarefa: o editor reabre com a formatação intacta (o ciclo não regrediu)
+- [x] Descrição colada com `<script>`, `<img onerror>` ou `href="javascript:..."` é exibida sem executar nada
+- [x] `grep -rn "dangerouslySetInnerHTML" apps` — nenhum consumidor da saída de `RichTextEditor` renderiza HTML sem sanitizar
+- [x] Teste do sanitizador cobre o que bloqueia e o que preserva
+- [x] `pnpm --filter @hebron/tarefas typecheck lint test` verdes; `pnpm --filter @hebron/tarefas build` verde; `pnpm --filter @hebron/ui test` verde; `pnpm --filter @hebron/intranet build` e `pnpm --filter @hebron/plataforma build` verdes
+- [x] Registrar em SESSIONS.md — incluindo a saída escolhida
 
 **Notas:**
 Ref: `PATCHES/014-editor-rich-text-compartilhado-d1.md` e o princípio "público-alvo em transição tecnológica". Recomendação: saída **(a)**. Quem vê `<p><strong>` na tela não conclui que o sistema tem um bug de exibição; conclui que digitou algo errado, apaga a formatação e não usa mais o editor.

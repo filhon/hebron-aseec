@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { RichText } from "@hebron/ui";
 import type {
   Announcement,
   AnnouncementPriority,
@@ -68,10 +69,10 @@ export function AnnouncementCard({ announcement }: AnnouncementCardProps) {
         >
           {announcement.title}
         </h3>
-        <div
+        <RichText
+          html={announcement.body}
           className="line-clamp-3 text-sm"
           style={{ lineHeight: 1.55 }}
-          dangerouslySetInnerHTML={{ __html: announcement.body }}
         />
         <p className="text-xs" style={{ marginTop: 10 }}>
           Por {announcement.authorName}

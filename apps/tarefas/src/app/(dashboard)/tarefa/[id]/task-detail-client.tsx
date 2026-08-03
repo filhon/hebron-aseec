@@ -19,6 +19,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  RichText,
   Select,
   SelectContent,
   SelectItem,
@@ -405,9 +406,7 @@ export function TaskDetailClient({
               Descrição
             </h2>
             {task.description ? (
-              <p className="whitespace-pre-line text-sm leading-relaxed text-(--fg)">
-                {task.description}
-              </p>
+              <RichText html={task.description} />
             ) : (
               <p className="text-sm text-(--fg-subtle)">
                 Nenhuma descrição adicionada.

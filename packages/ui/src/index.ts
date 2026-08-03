@@ -87,6 +87,9 @@ export type { FormFieldProps } from "./components/form-field";
 export { RichTextEditor } from "./components/rich-text-editor";
 export type { RichTextEditorProps } from "./components/rich-text-editor";
 
+export { RichText, sanitizeRichText } from "./components/rich-text";
+export type { RichTextProps } from "./components/rich-text";
+
 // Layout
 export { AppShell } from "./components/app-shell";
 export type { AppShellProps } from "./components/app-shell";

@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import { useAction } from "next-safe-action/hooks";
-import { PageHeader, Button } from "@hebron/ui";
+import { PageHeader, Button, RichText } from "@hebron/ui";
 import { CheckCircle2, Download, FileText } from "lucide-react";
 import type {
   Course,
@@ -135,10 +135,7 @@ export function LessonView({
 
           {lesson.type === "text" && lesson.textContent && (
             <div className="space-y-4 rounded-md border border-(--border) bg-(--surface) p-6">
-              <div
-                className="text-sm leading-relaxed text-(--fg)"
-                dangerouslySetInnerHTML={{ __html: lesson.textContent }}
-              />
+              <RichText html={lesson.textContent} />
               {!isComplete && (
                 <Button
                   onClick={markComplete}
