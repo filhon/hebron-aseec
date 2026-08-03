@@ -243,6 +243,7 @@
 | S-220  | 2026-07-30 | P-3.8c — O OCR de nota fiscal que existe, funciona e ninguém chama (CORRETIVO)                                                   | concluido                            |
 | S-221  | 2026-07-30 | Auditoria: débitos técnicos P-4.1–P-4.5 (Tarefas, Bloco A) — 5 prompts corretivos gerados                                        | concluido                            |
 | S-222  | 2026-08-03 | P-4.1b — A recorrência anual que não sabe em que mês cai (CORRETIVO)                                                             | concluido                            |
+| S-223  | 2026-08-03 | P-4.2b — O quadro que só se move com mouse (CORRETIVO)                                                                           | concluido                            |
 
 ---
 
@@ -19844,3 +19845,64 @@ lint`, `@hebron/jobs typecheck lint`, `@hebron/tarefas typecheck lint` —
 - `packages/jobs/src/crons/tarefas.ts`
 - `PROMPTS.md` (critério de P-4.1, `[~]` de P-4.4, critérios de aceite do
   próprio P-4.1b)
+
+## S-223 — P-4.2b — O quadro que só se move com mouse (CORRETIVO)
+
+**Prompt:** P-4.2b (PROMPTS.md)
+**Data:** 2026-08-03
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+`KanbanBoard`/`TaskCard` só mudavam o status de uma tarefa via HTML5 Drag and
+Drop — API que não dispara `dragstart` a partir de toque em nenhum navegador
+móvel, e que não tem equivalente por teclado. Em 390px, sem mouse, o quadro
+era somente leitura; a coluna vazia ainda instruía "Arraste tarefas aqui", o
+único gesto que não funcionava. O mesmo padrão (arrasto sem alternativa)
+também quebrava a reordenação de tarefas pré-definidas em `TemplateForm`. O
+monorepo já tinha a solução para o caso do Kanban em
+`apps/projetos/src/components/project-kanban.tsx` (seletor "Mover para…" por
+cartão) — replicada aqui em vez de inventar um padrão novo.
+
+Escopo executado ao pé da letra do prompt:
+
+1. `TaskCard` ganhou `moveOptions`/`onMoveSelect` opcionais: um `<select>`
+   "Mover para…" com `<label>` `sr-only`, `stopPropagation` em `onClick` e
+   `onKeyDown` do wrapper para não disparar o clique do cartão. Só é
+   renderizado quando o board passa as duas props (nenhum outro consumidor de
+   `TaskCard` existe fora de `kanban-board.tsx`).
+2. `KanbanColumn` (em `kanban-board.tsx`) calcula `moveOptions` como as
+   colunas diferentes da atual e repassa `onMoveSelect` a cada `TaskCard`.
+   `KanbanBoard` ganhou `moveTo(id, status)` — a mesma atualização otimista
+   (`positions`) e a mesma chamada a `onMove` — compartilhada entre
+   `handleDrop` (arrasto) e o novo `handleMoveSelect` (seletor). Nenhuma
+   segunda escrita: `updateTaskStatus` via `board-client.tsx` continua sendo
+   o único caminho, agora disparado por dois gestos.
+3. Copy da coluna vazia: "Arraste tarefas aqui" → "Nenhuma tarefa nesta
+   coluna" (deixa de instruir um gesto que só metade dos usuários consegue
+   fazer).
+4. `TemplateForm`: cada item da lista de tarefas pré-definidas ganhou dois
+   botões (`ChevronUp`/`ChevronDown`) com `aria-label` nomeando a tarefa e a
+   direção ("Mover tarefa X para cima/baixo"), desabilitados nos extremos.
+   `moveTaskBy(index, direction)` é a mesma troca de posição de
+   `handleDrop`, só que disparada por clique em vez de arrasto — o `<li
+draggable>` e `handleDrop` originais não foram tocados.
+5. Bookkeeping em `PROMPTS.md`: os critérios `[x]` de P-4.2 ("drag-drop entre
+   colunas", "Responsivo") e de P-4.4 ("drag-drop para reordenar") passaram a
+   registrar que existe caminho sem arrasto (P-4.2b, S-223).
+
+### Verificação
+
+- `grep -rn "draggable" apps/tarefas/src` → 2 ocorrências (`kanban-board.tsx`
+  e `template-form.tsx`), ambas agora com alternativa sem arrasto ao lado
+- `pnpm --filter @hebron/tarefas typecheck lint` — verdes
+- `pnpm --filter @hebron/tarefas test`: 6 suítes, 50 testes, todos verdes
+- `pnpm --filter @hebron/tarefas build` verde (11 rotas)
+
+### Arquivos modificados
+
+- `apps/tarefas/src/components/kanban-board.tsx`
+- `apps/tarefas/src/components/task-card.tsx`
+- `apps/tarefas/src/components/template-form.tsx`
+- `PROMPTS.md` (critérios de P-4.2 e P-4.4)

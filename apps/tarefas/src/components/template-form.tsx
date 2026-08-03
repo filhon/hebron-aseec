@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@hebron/ui";
-import { GripVertical, Plus, X } from "lucide-react";
+import { ChevronDown, ChevronUp, GripVertical, Plus, X } from "lucide-react";
 
 function cn(...cls: (string | false | null | undefined)[]): string {
   return cls.filter(Boolean).join(" ");
@@ -151,6 +151,19 @@ export function TemplateForm({
     setDragIndex(null);
   }
 
+  // Alternativa ao arrasto (`handleDrop`) para reordenar sem mouse — mesma
+  // lista, mesmo estado, só o gesto de disparo muda.
+  function moveTaskBy(index: number, direction: -1 | 1) {
+    const targetIndex = index + direction;
+    setTasks((prev) => {
+      if (targetIndex < 0 || targetIndex >= prev.length) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(index, 1);
+      if (moved) next.splice(targetIndex, 0, moved);
+      return next;
+    });
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const candidate = {
@@ -261,6 +274,27 @@ export function TemplateForm({
               >
                 <GripVertical className="h-4 w-4" />
               </span>
+
+              <div className="mt-1 flex shrink-0 flex-col gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => moveTaskBy(index, -1)}
+                  disabled={index === 0}
+                  aria-label={`Mover tarefa "${task.title || "sem título"}" para cima`}
+                  className="flex h-6 w-6 items-center justify-center rounded-(--radius) text-(--fg-muted) transition-colors hover:bg-(--surface-alt) hover:text-(--fg) disabled:pointer-events-none disabled:opacity-30"
+                >
+                  <ChevronUp className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveTaskBy(index, 1)}
+                  disabled={index === tasks.length - 1}
+                  aria-label={`Mover tarefa "${task.title || "sem título"}" para baixo`}
+                  className="flex h-6 w-6 items-center justify-center rounded-(--radius) text-(--fg-muted) transition-colors hover:bg-(--surface-alt) hover:text-(--fg) disabled:pointer-events-none disabled:opacity-30"
+                >
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </button>
+              </div>
 
               <div className="flex min-w-0 flex-1 flex-col gap-2.5">
                 <div className="flex items-start gap-2">

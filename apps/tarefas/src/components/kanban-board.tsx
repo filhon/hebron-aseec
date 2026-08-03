@@ -50,6 +50,7 @@ interface KanbanColumnProps {
   draggedId: string | null;
   isDragTarget: boolean;
   onCardClick?: (id: string) => void;
+  onMoveSelect: (id: string, targetStatus: TaskStatus) => void;
   onDragStart: (id: string) => void;
   onDragEnd: () => void;
   onDrop: (status: TaskStatus) => void;
@@ -62,17 +63,25 @@ function KanbanColumn({
   draggedId,
   isDragTarget,
   onCardClick,
+  onMoveSelect,
   onDragStart,
   onDragEnd,
   onDrop,
   onDragOver,
 }: KanbanColumnProps) {
   const cfg = COLUMN_CFG[status];
+  // Mesmos destinos que o arrasto já permite (qualquer outra coluna) — o
+  // servidor (updateTaskStatus) valida a transição de fato, tanto para o
+  // arrasto quanto para este menu.
+  const moveOptions = COLUMNS.filter((s) => s !== status).map((s) => ({
+    status: s,
+    label: COLUMN_CFG[s].label,
+  }));
 
   return (
     <div
       className={cn(
-        "flex min-w-70 max-w-80 flex-1 flex-col rounded-(--radius-md) border-2 transition-all duration-(--dur-fast)",
+        "flex min-w-70 max-w-80 flex-1 flex-col rounded-md border-2 transition-all duration-(--dur-fast)",
         isDragTarget ? "border-dashed" : "border-transparent",
       )}
       style={{
@@ -118,7 +127,7 @@ function KanbanColumn({
         {tasks.length === 0 && (
           <div className="flex flex-1 items-center justify-center py-6">
             <p className="text-center text-xs text-(--fg-muted)">
-              Arraste tarefas aqui
+              Nenhuma tarefa nesta coluna
             </p>
           </div>
         )}
@@ -129,6 +138,8 @@ function KanbanColumn({
             draggable
             isDragging={draggedId === task.id}
             onClick={onCardClick ? () => onCardClick(task.id) : undefined}
+            moveOptions={moveOptions}
+            onMoveSelect={(targetStatus) => onMoveSelect(task.id, targetStatus)}
             onDragStart={(e) => {
               e.dataTransfer.setData("text/plain", task.id);
               e.dataTransfer.effectAllowed = "move";
@@ -195,16 +206,26 @@ export function KanbanBoard({
     dragTimer.current = setTimeout(() => setDragOverStatus(null), 300);
   }
 
-  function handleDrop(targetStatus: TaskStatus) {
-    if (draggedId === null) return;
+  // Compartilhado pelo arrasto (handleDrop) e pelo caminho de teclado/toque
+  // (handleMoveSelect) — mesmo update otimista, mesmo onMove.
+  function moveTo(id: string, targetStatus: TaskStatus) {
     setPositions((prev) => {
       const next = new Map(prev);
-      next.set(draggedId, targetStatus);
+      next.set(id, targetStatus);
       return next;
     });
-    onMove?.(draggedId, targetStatus);
+    onMove?.(id, targetStatus);
+  }
+
+  function handleDrop(targetStatus: TaskStatus) {
+    if (draggedId === null) return;
+    moveTo(draggedId, targetStatus);
     setDraggedId(null);
     setDragOverStatus(null);
+  }
+
+  function handleMoveSelect(id: string, targetStatus: TaskStatus) {
+    moveTo(id, targetStatus);
   }
 
   if (tasks.length === 0) {
@@ -232,6 +253,7 @@ export function KanbanBoard({
           draggedId={draggedId}
           isDragTarget={dragOverStatus === status && draggedId !== null}
           onCardClick={onCardClick}
+          onMoveSelect={handleMoveSelect}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
           onDrop={handleDrop}

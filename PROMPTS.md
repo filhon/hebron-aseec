@@ -5357,14 +5357,14 @@ Componentes: TaskCard (título, assignee, prioridade, due_date, subtask progress
 
 **Critérios de aceite:**
 
-- [x] KanbanBoard com drag-drop entre colunas (a fazer → em progresso → concluído)
+- [x] KanbanBoard com drag-drop entre colunas (a fazer → em progresso → concluído) — também por seletor "Mover para…" por cartão, sem exigir arrasto (P-4.2b, S-223)
 - [x] TreeView estilo Xmind: pessoa → tarefas (para despacho do diretor gestor)
 - [x] TaskCard com badge de prioridade, avatar do assignee, barra de subtarefas
 - [x] FocusMode: lista de tarefas do dia + pomodoro (25min trabalho, 5min pausa)
 - [x] CommandMenu (Cmd+K) com busca e criação rápida
 - [x] TimeTracker com start/stop e total acumulado
 - [x] 3 views coexistentes: Kanban, Lista, Árvore (toggle no header)
-- [x] Responsivo
+- [x] Responsivo — inclui mudança de status a partir do board sem mouse (P-4.2b, S-223)
 - [x] Lint passa
 - [x] Types passam
 
@@ -5441,7 +5441,7 @@ Formulários: criar/editar tarefa (título, descrição com o editor rich text C
 - [x] Task form com editor rich text para descrição
 - [x] @menções com autocomplete de usuários do workspace
 - [x] Recurrence form com preview visual — nomeia padrão + dia + mês (ex: "Toda segunda-feira", "Anualmente, no dia 10 de janeiro"), sem horário: `RecurrenceRule` não tem esse campo e `tarefasRecurrenceCron` roda em horário fixo (`0 6 * * *`), então um horário por regra seria exibido e ignorado na execução (P-4.1b, ver S-76)
-- [x] Template form com lista de tarefas editável (drag-drop para reordenar)
+- [x] Template form com lista de tarefas editável (drag-drop para reordenar) — também por botões mover acima/abaixo, sem exigir arrasto (P-4.2b, S-223)
 - [x] Validação Zod em todos os formulários
 - [x] Lint passa
 - [x] Types passam
@@ -5874,14 +5874,14 @@ O mesmo vale, em escala menor, para a reordenação de tarefas pré-definidas em
 
 **Critérios de aceite:**
 
-- [ ] Em viewport de 390px, sem mouse, uma tarefa muda de coluna no quadro
-- [ ] Percurso completo só por teclado: Tab até o controle do cartão, escolher o status, confirmar — a tarefa muda de coluna e o board reflete
-- [ ] Nenhuma reordenação ou movimentação do módulo Tarefas é exclusivamente por arraste — `grep -rn "draggable" apps/tarefas/src` confere um a um
-- [ ] Nenhum texto de UI instrui um gesto que não funciona em toque
-- [ ] `updateTaskStatus` continua sendo a única escrita de status a partir do board; o arraste com mouse não regrediu
-- [ ] Os controles novos não disparam a navegação do cartão ao serem usados
-- [ ] `pnpm --filter @hebron/tarefas typecheck lint test` verdes; `pnpm --filter @hebron/tarefas build` verde
-- [ ] Registrar em SESSIONS.md
+- [x] Em viewport de 390px, sem mouse, uma tarefa muda de coluna no quadro
+- [x] Percurso completo só por teclado: Tab até o controle do cartão, escolher o status, confirmar — a tarefa muda de coluna e o board reflete
+- [x] Nenhuma reordenação ou movimentação do módulo Tarefas é exclusivamente por arraste — `grep -rn "draggable" apps/tarefas/src` confere um a um
+- [x] Nenhum texto de UI instrui um gesto que não funciona em toque
+- [x] `updateTaskStatus` continua sendo a única escrita de status a partir do board; o arraste com mouse não regrediu
+- [x] Os controles novos não disparam a navegação do cartão ao serem usados
+- [x] `pnpm --filter @hebron/tarefas typecheck lint test` verdes; `pnpm --filter @hebron/tarefas build` verde
+- [x] Registrar em SESSIONS.md
 
 **Notas:**
 Ref: princípio "público-alvo em transição tecnológica" do CLAUDE.md e o precedente de `project-kanban.tsx`. Metade da diretoria despacha do celular; um quadro que só responde a arraste é, para essa metade, um quadro somente leitura.

@@ -1,6 +1,6 @@
 "use client";
 
-import type { Task, TaskPriority } from "@hebron/types/tarefas";
+import type { Task, TaskPriority, TaskStatus } from "@hebron/types/tarefas";
 import { Avatar } from "@hebron/ui";
 import { Clock, Paperclip, MessageSquare, ShieldCheck } from "lucide-react";
 
@@ -50,6 +50,8 @@ export interface TaskCardProps {
   isDragging?: boolean;
   onDragStart?: (e: React.DragEvent) => void;
   onDragEnd?: () => void;
+  moveOptions?: { status: TaskStatus; label: string }[];
+  onMoveSelect?: (targetStatus: TaskStatus) => void;
   className?: string;
 }
 
@@ -60,6 +62,8 @@ export function TaskCard({
   isDragging = false,
   onDragStart,
   onDragEnd,
+  moveOptions,
+  onMoveSelect,
   className,
 }: TaskCardProps) {
   const priorityCfg = PRIORITY_CFG[task.priority];
@@ -203,6 +207,34 @@ export function TaskCard({
           )}
         </div>
       </div>
+
+      {onMoveSelect && moveOptions && moveOptions.length > 0 && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+        >
+          <label htmlFor={`move-${task.id}`} className="sr-only">
+            Mover "{task.title}" para outra coluna
+          </label>
+          <select
+            id={`move-${task.id}`}
+            value=""
+            onChange={(e) => {
+              const value = e.target.value as TaskStatus | "";
+              if (value) onMoveSelect(value);
+              e.currentTarget.value = "";
+            }}
+            className="w-full rounded-sm border border-(--border) bg-(--surface-alt) px-1.5 py-1 text-xs text-(--fg-muted) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--hb-blue)"
+          >
+            <option value="">Mover para…</option>
+            {moveOptions.map((o) => (
+              <option key={o.status} value={o.status}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
     </div>
   );
 }
