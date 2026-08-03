@@ -25,7 +25,9 @@ const recurrenceTypeEnum = z.enum(["diaria", "semanal", "mensal", "anual"]);
 const tagColorEnum = z.enum(["blue", "orange", "green", "cyan", "neutral"]);
 
 // ─── recurrenceRuleSchema ─────────────────────────────────────────────────────
-// dayOfWeek exigido para "semanal"; dayOfMonth exigido para "mensal"/"anual".
+// dayOfWeek exigido para "semanal"; dayOfMonth exigido para "mensal"/"anual";
+// month exigido para "anual" (P-4.1b — sem mês, uma regra anual só sabe o
+// dia, nunca o mês em que deve cair).
 
 export const recurrenceRuleSchema = z
   .object({
@@ -47,6 +49,7 @@ export const recurrenceRuleSchema = z
       .nullable()
       .optional()
       .default(null),
+    month: z.number().int().min(1).max(12).nullable().optional().default(null),
     endDate: z.coerce.date().nullable().optional().default(null),
   })
   .refine((rule) => rule.type !== "semanal" || rule.dayOfWeek !== null, {
@@ -61,7 +64,11 @@ export const recurrenceRuleSchema = z
       message: "Informe o dia do mês para recorrência mensal ou anual",
       path: ["dayOfMonth"],
     },
-  );
+  )
+  .refine((rule) => rule.type !== "anual" || rule.month !== null, {
+    message: "Informe o mês para recorrência anual",
+    path: ["month"],
+  });
 
 export type RecurrenceRuleInput = z.infer<typeof recurrenceRuleSchema>;
 

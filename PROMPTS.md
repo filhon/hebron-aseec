@@ -5321,7 +5321,7 @@ Definir tipos e schemas Zod. Tipos: Workspace (6 fixos: Administrativo, Financei
 
 - [x] 6 workspaces fixos como enum
 - [x] Task com: título, descrição, prioridade (baixa/média/alta/urgente), status (a fazer/em progresso/em revisão/concluído), workspace, due_date, recurrence_rule
-- [x] RecurrenceRule: tipo (diária/semanal/mensal/anual), intervalo, dia_da_semana, dia_do_mes
+- [x] RecurrenceRule: tipo (diária/semanal/mensal/anual), intervalo, dia_da_semana, dia_do_mes, mes (mes só para anual — P-4.1b)
 - [x] TaskTemplate: nome, tasks pré-definidas, trigger (evento de outro módulo)
 - [x] ApprovalRequest: task_id, approver_id (diretor), status
 - [x] Mock data: 30+ tarefas, 5+ recorrentes, 3+ templates
@@ -5440,7 +5440,7 @@ Formulários: criar/editar tarefa (título, descrição com o editor rich text C
 
 - [x] Task form com editor rich text para descrição
 - [x] @menções com autocomplete de usuários do workspace
-- [~] Recurrence form com preview visual (ex: "Toda segunda-feira às 9h") — preview sem horário de dia; `RecurrenceRule` não tem esse campo (ver S-76)
+- [x] Recurrence form com preview visual — nomeia padrão + dia + mês (ex: "Toda segunda-feira", "Anualmente, no dia 10 de janeiro"), sem horário: `RecurrenceRule` não tem esse campo e `tarefasRecurrenceCron` roda em horário fixo (`0 6 * * *`), então um horário por regra seria exibido e ignorado na execução (P-4.1b, ver S-76)
 - [x] Template form com lista de tarefas editável (drag-drop para reordenar)
 - [x] Validação Zod em todos os formulários
 - [x] Lint passa
@@ -5754,6 +5754,298 @@ Testes: RLS (colaborador vê apenas próprias, diretor vê todas). Recorrência 
 - [x] RLS conforme semântica do patch P-4.7: colaborador lê tudo, escreve só creator/assignee
 - [x] Testes passam
 - [x] Lint passa
+
+---
+
+## Tarefas — Corretivos do Bloco A
+
+> Os cinco prompts abaixo fecham o que os critérios de P-4.1 a P-4.5 marcaram `[x]` (ou `[~]`) e o Bloco B (P-4.6 a P-4.12, mais P-4.11b) não converteu em comportamento. Executar na ordem: P-4.4b e P-4.4c tocam `task-detail-client.tsx`, P-4.2b e P-4.5b tocam o board — dentro de cada par, o segundo assume o primeiro aplicado. Fora isso são independentes.
+>
+> Quatro das cinco dívidas estão registradas nominalmente em SESSIONS.md (S-73, S-76, S-77) como "a resolver quando o backend existir" ou "a resolver quando o arquivo for tocado de novo". O backend existe desde S-78, os arquivos foram tocados em S-81, e nenhuma delas foi fechada.
+
+---
+
+### P-4.1b — A recorrência anual que não sabe em que mês cai (CORRETIVO)
+
+**Fase:** 4
+**Módulo:** tarefas
+**Tipo:** schema
+**Pré-condições:**
+
+- Branch: `feat/P-4.1b-tarefas-recorrencia-mes`
+- Dependências: P-4.12 concluído (S-84)
+- Env vars: `DATABASE_URL`
+
+**Problema que este prompt resolve (contexto):**
+O critério de P-4.1 "RecurrenceRule: tipo (diária/semanal/mensal/anual), intervalo, dia_da_semana, dia_do_mes" está `[x]` e foi cumprido ao pé da letra. S-73 registrou o preço na hora: "uma recorrência anual (ex: IPTU) só guarda o dia do mês, não o mês — modelagem imprecisa mas literal ao que foi pedido". O Bloco B construiu o motor de execução em cima dessa modelagem e a imprecisão virou comportamento errado.
+
+`computeNextRun` (`apps/tarefas/src/actions/recurrence.ts:25-48`), no caso `"anual"` (`:43-46`), faz `next.setUTCFullYear(next.getUTCFullYear() + interval)` sobre `from` e depois `setUTCDate(dayOfMonth)`. `from` é `new Date()` na criação da regra (`:63`) e `rule.nextRunAt` na reexecução do cron (`packages/jobs/src/crons/tarefas.ts:149`). Consequência: **uma regra anual criada em julho vence todo julho, para sempre.** O IPTU — o exemplo anual citado em BRAIN §6.9 — nasce no mês em que alguém cadastrou a regra e nunca mais sai de lá. Nem o formulário nem a tela de recorrentes conseguem denunciar isso, porque a pré-visualização de `recurrence-form.tsx:73-80` diz "Anualmente, no dia 10" — uma frase sem mês, que não tem como parecer errada.
+
+O caso `"mensal"` (`:39-42`) tem a metade adjacente do problema: `setUTCMonth(getUTCMonth() + interval)` **antes** de `setUTCDate` estoura em mês curto. Partindo de 31/01, `setUTCMonth(+1)` cai em 03/03 e o `setUTCDate(15)` seguinte produz 15/03 — fevereiro inteiro pulado. Para "conta de energia mensal" (também BRAIN §6.9) isso é uma conta que não é lembrada. O comentário em `:12-16` chama a limitação de "aceitável na escala desta ONG"; ela é aceitável enquanto ninguém ancora uma regra em dia 29-31, o que o formulário permite (`recurrence-form.tsx:221-231`, `max={31}`).
+
+A mesma função está escrita **três vezes**, palavra por palavra: na action, no cron (`packages/jobs/src/crons/tarefas.ts:26-49`, com o comentário "duplicado deliberadamente… jobs nunca importa de um app, G6.5") e no teste (`apps/tarefas/src/__tests__/recurrence.test.ts:57-80`, "reimplementado localmente, já que não é exportado"). Um teste que reimplementa o algoritmo que deveria verificar confirma que as duas cópias concordam, não que alguma delas está certa — é o mesmo achado de P-2.12b. G6.5 está correto: a saída não é o cron importar do app, é a função sair dos dois. Existe precedente pronto: `getWeeklyBatchWindow` vive em `@hebron/integrations/financeiro` e é consumido pelo cron de Financeiro (`packages/jobs/src/crons/financeiro.ts:35`) e pelo seu teste.
+
+Por último: o cabeçalho de `recurrence.test.ts:16-18` afirma que a geração real da tarefa "é coberta por `packages/jobs/src/__tests__/tarefas-recurrence.test.ts`". Esse arquivo não existe — `packages/jobs/src/__tests__/` não tem nenhum teste de Tarefas. `runTarefasRecurrence` não tem cobertura nenhuma.
+
+**Escopo (siga na ordem):**
+
+1. **Campo do mês:** `month` (1-12) em `RecurrenceRule` (`packages/types/src/tarefas/index.ts:34-42`), em `recurrenceRuleSchema` (`packages/validators/src/tarefas/index.ts:30-64`, com `.refine` exigindo-o quando `type === "anual"`, no mesmo desenho dos dois refines já existentes), em `tarefas.recurrence_rules` e em `RecurrenceRuleView` (`apps/tarefas/src/lib/queries.ts:574-585`). Nulo para os outros três tipos.
+2. **Migration hand-written** (próximo número livre — 0075 no momento desta redação, conferir antes; `drizzle-kit generate` está aposentado desde P-0.3c/S-171): `ADD COLUMN IF NOT EXISTS month smallint`, idempotente e aplicável a banco com dados. As regras anuais já gravadas precisam de backfill — `EXTRACT(MONTH FROM next_run_at)` é o mês que elas efetivamente vêm usando, então o backfill preserva o comportamento atual em vez de mudá-lo em silêncio.
+3. **Uma cópia só de `computeNextRun`**, em `packages/integrations/src/tarefas.ts` (o export `./tarefas` já existe no `package.json` do package). Action, cron e teste passam a importar. Nenhuma das três reimplementa nada.
+4. **Corrigir o cálculo** na cópia única:
+   - `"anual"`: a próxima ocorrência é dia/mês da regra; o ano é o corrente se essa data ainda não passou, senão o corrente + `interval`. Nunca o mês de `from`.
+   - `"mensal"`: montar a data alvo pelo par (ano, mês) primeiro e só então aplicar o dia, limitado ao último dia daquele mês (31/01 + 1 mês = 28 ou 29/02, nunca março).
+   - 29/02 em regra anual segue a mesma limitação: cai no último dia de fevereiro do ano não bissexto.
+5. **Formulário e pré-visualização:** `recurrence-form.tsx` ganha seletor de mês quando `type === "anual"`, e o preview passa a nomear o mês ("Todo dia 10 de janeiro"). Sem mês selecionado, o preview diz o que falta, como já faz nos outros tipos.
+6. **Testes:** `packages/integrations/src/__tests__/tarefas-recurrence.test.ts` (puro, sem banco, sem relógio falso — só a função) cobrindo os 4 tipos, intervalo > 1, o IPTU de janeiro calculado a partir de julho, 31/01 mensal, e ano bissexto. Corrigir o comentário de `apps/tarefas/src/__tests__/recurrence.test.ts:16-21` para descrever a cobertura que existe.
+7. **Bookkeeping em PROMPTS.md:** o critério de P-4.1 sobre `RecurrenceRule` passa a listar o mês. Fechar também o único `[~]` do Bloco A — o critério de P-4.4 "Recurrence form com preview visual (ex: 'Toda segunda-feira às 9h')", em aberto desde S-76 por falta de campo de horário. Ele não deve ganhar campo: `tarefasRecurrenceCron` roda `0 6 * * *` (`packages/jobs/src/crons/tarefas.ts:159-161`) e instancia tudo que venceu, então um horário por regra seria exibido na tela e ignorado na execução. Reescrever o critério para o que o preview de fato entrega (padrão + dia + mês, sem hora) e registrar o porquê em SESSIONS.md.
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/types/src/tarefas/index.ts`
+- `packages/validators/src/tarefas/index.ts`
+- `packages/db/src/schema/tarefas.ts`
+- `packages/db/src/migrations/NNNN_tarefas_recurrence_month.sql` (criar — próximo número livre, à mão conforme P-0.3c)
+- `packages/integrations/src/tarefas.ts`
+- `packages/integrations/src/__tests__/tarefas-recurrence.test.ts` (criar)
+- `apps/tarefas/src/actions/recurrence.ts`
+- `apps/tarefas/src/lib/queries.ts` (apenas `RecurrenceRuleView` e a query que a monta)
+- `apps/tarefas/src/components/recurrence-form.tsx`
+- `apps/tarefas/src/app/(dashboard)/recorrentes/recorrentes-client.tsx` (apenas a exibição do mês)
+- `apps/tarefas/src/__tests__/recurrence.test.ts`
+- `packages/jobs/src/crons/tarefas.ts`
+- `PROMPTS.md` (critério de P-4.1 e o `[~]` de P-4.4)
+
+**Critérios de aceite:**
+
+- [x] `grep -rn "function computeNextRun" apps packages` devolve **uma** ocorrência
+- [x] Regra anual com mês 1 e dia 10, criada em qualquer mês do ano, tem `next_run_at` em 10 de janeiro
+- [x] Regra mensal ancorada em dia 31 não pula nenhum mês ao longo de 12 execuções consecutivas
+- [x] `recurrenceRuleSchema` recusa recorrência anual sem mês, com mensagem em português no campo certo
+- [x] A pré-visualização do formulário nomeia o mês em toda regra anual
+- [x] Migration idempotente, aplicada com sucesso (0075 — banco de dev não tinha regras anuais preexistentes, backfill sem linhas para migrar; verificado reaplicando o runner, que reporta "Nothing to apply")
+- [x] Teste do cálculo não reimplementa o cálculo
+- [x] `pnpm --filter @hebron/tarefas typecheck lint test` verdes; `pnpm --filter @hebron/tarefas build` verde; `pnpm --filter @hebron/integrations test` e `pnpm --filter @hebron/db test` verdes (falhas remanescentes em `storage.test.ts`/`system-actor.test.ts`/`feed.test.ts` são drift pré-existente do banco de dev compartilhado, sem relação com este diff — ver SESSIONS.md)
+- [x] Registrar em SESSIONS.md — incluindo o número da migration e o resultado do backfill
+
+**Notas:**
+Ref: BRAIN.md §6.9 (IPTU anual e conta de energia mensal são os dois exemplos citados), G6.5 e o precedente de `getWeeklyBatchWindow`. É o corretivo de maior prioridade dos cinco: os outros quatro são coisas que a tela promete e não cumpre; este é uma tarefa que o sistema agenda para a data errada sem que ninguém tenha como perceber.
+
+---
+
+### P-4.2b — O quadro que só se move com mouse (CORRETIVO)
+
+**Fase:** 4
+**Módulo:** tarefas
+**Tipo:** ui
+**Pré-condições:**
+
+- Branch: `feat/P-4.2b-tarefas-mover-sem-arraste`
+- Dependências: P-4.12 concluído (S-84)
+- Env vars: `DATABASE_URL`
+- Skill: **invocar `/impeccable` antes de começar**
+
+**Problema que este prompt resolve (contexto):**
+Dois critérios de P-4.2 estão `[x]`: "KanbanBoard com drag-drop entre colunas" e "Responsivo". O primeiro é verdade; o segundo, no board, só até onde o layout vai. `kanban-board.tsx:125-139` marca cada `TaskCard` como `draggable` com `onDragStart`/`onDragEnd`, e a coluna recebe `onDrop` (`:87-90`). Não há mais nenhum caminho: nenhum `onKeyDown`, nenhum menu, nenhum seletor. Arrastar é a única forma de mover uma tarefa no quadro.
+
+Arrastar não existe em toque. A HTML5 Drag and Drop API não dispara `dragstart` a partir de `touchstart` em nenhum navegador móvel — num celular ou tablet o cartão simplesmente rola a coluna. O quadro renderiza bem em 390px e não faz nada em 390px. Também não existe por teclado, o que deixa o único caminho de mudança de status do board fora do alcance de quem navega por Tab.
+
+A coluna vazia instrui exatamente o gesto que não funciona: "Arraste tarefas aqui" (`:118-124`).
+
+O caminho alternativo existe (o `Select` de status no detalhe da tarefa, `task-detail-client.tsx:346-356`), mas exige abrir uma tarefa por vez — que é precisamente o trabalho que o quadro deveria poupar ao diretor gestor no despacho.
+
+O monorepo já resolveu isso uma vez, e bem: `apps/projetos/src/components/project-kanban.tsx:201-227` põe em cada cartão um `<select>` "Mover para…" com `<label>` `sr-only`, `stopPropagation` para não disparar o clique do cartão, e chama o mesmo `moveTo` do arraste (`:405-431`). Nenhuma lógica nova, nenhuma dependência nova, nenhum segundo caminho de escrita.
+
+O mesmo vale, em escala menor, para a reordenação de tarefas pré-definidas em `template-form.tsx:245-257`: `draggable` + `GripVertical` `aria-hidden`, sem alternativa. O critério de P-4.4 "Template form com lista de tarefas editável (drag-drop para reordenar)" está `[x]` e, em toque, a lista não reordena.
+
+**Escopo (siga na ordem):**
+
+1. **Alternativa ao arraste no Kanban:** `KanbanBoard`/`TaskCard` ganham a mesma afordância de `project-kanban.tsx` — seletor "Mover para…" por cartão, rótulo acessível, opções limitadas aos status diferentes do atual, chamando o `onMove` que já existe. O arraste continua funcionando para quem usa mouse; a atualização otimista (`positions`, `:160-172`) e a escrita (`updateTaskStatus`, via `board-client.tsx:116-118`) permanecem as únicas.
+2. **Copy da coluna vazia:** "Arraste tarefas aqui" deixa de ser a única instrução, porque deixa de ser o único gesto.
+3. **Reordenação do `TemplateForm`:** botões mover acima / mover abaixo por item, com `aria-label` que diz qual item move e para onde, desabilitados nos extremos. O arraste continua.
+4. **Bookkeeping em PROMPTS.md:** os critérios de P-4.2 ("drag-drop entre colunas", "Responsivo") e o de P-4.4 sobre reordenação passam a dizer que existe caminho sem arraste.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/tarefas/src/components/kanban-board.tsx`
+- `apps/tarefas/src/components/task-card.tsx`
+- `apps/tarefas/src/components/template-form.tsx`
+- `PROMPTS.md` (critérios de P-4.2 e P-4.4)
+
+**Critérios de aceite:**
+
+- [ ] Em viewport de 390px, sem mouse, uma tarefa muda de coluna no quadro
+- [ ] Percurso completo só por teclado: Tab até o controle do cartão, escolher o status, confirmar — a tarefa muda de coluna e o board reflete
+- [ ] Nenhuma reordenação ou movimentação do módulo Tarefas é exclusivamente por arraste — `grep -rn "draggable" apps/tarefas/src` confere um a um
+- [ ] Nenhum texto de UI instrui um gesto que não funciona em toque
+- [ ] `updateTaskStatus` continua sendo a única escrita de status a partir do board; o arraste com mouse não regrediu
+- [ ] Os controles novos não disparam a navegação do cartão ao serem usados
+- [ ] `pnpm --filter @hebron/tarefas typecheck lint test` verdes; `pnpm --filter @hebron/tarefas build` verde
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: princípio "público-alvo em transição tecnológica" do CLAUDE.md e o precedente de `project-kanban.tsx`. Metade da diretoria despacha do celular; um quadro que só responde a arraste é, para essa metade, um quadro somente leitura.
+
+---
+
+### P-4.4b — A descrição que o editor formata e a tela mostra com as tags à vista (CORRETIVO)
+
+**Fase:** 4
+**Módulo:** tarefas
+**Tipo:** ui
+**Pré-condições:**
+
+- Branch: `feat/P-4.4b-tarefas-descricao-rica`
+- Dependências: P-4.12 concluído (S-84)
+- Env vars: `DATABASE_URL`
+- Skill: **invocar `/impeccable` antes de começar**
+
+**Problema que este prompt resolve (contexto):**
+O critério de P-4.4 "Task form com editor rich text para descrição" está `[x]`, e a decisão D-1 (`PATCHES/014-editor-rich-text-compartilhado-d1.md`) foi formalizada em S-76 para cumpri-lo. `RichTextEditor` emite HTML: `emitChange` devolve `el.innerHTML` (`packages/ui/src/components/rich-text-editor.tsx:131-135`). `TaskForm` liga esse valor a `description` (`task-form.tsx:248-254`), a action grava a string como veio, e a edição relê o HTML de volta para o editor (`task-detail-client.tsx:739`) — o dado está correto e o ciclo de edição funciona.
+
+A exibição, não. `task-detail-client.tsx:403-416` renderiza `{task.description}` dentro de `<p className="whitespace-pre-line">`. React escapa a string, e quem escreveu **Comprar** em negrito lê, na tela de detalhe da tarefa, `<p><strong>Comprar</strong></p>`. Toda tarefa criada com qualquer formatação exibe a própria marcação. A tela de detalhe é a única que mostra a descrição, então é 100% dos casos.
+
+O conserto óbvio — `dangerouslySetInnerHTML` — é o que os outros dois consumidores do mesmo editor já fazem: `apps/intranet/src/components/announcement-card.tsx:74` (`announcement.body`) e `apps/plataforma/src/components/lesson-view.tsx:140` (`lesson.textContent`). E **nenhum ponto do monorepo sanitiza nada**: `grep -rn "sanitize\|DOMPurify" apps packages` volta vazio. A barra do editor tem `createLink` com URL livre (`rich-text-editor.tsx:139-145`), e `contentEditable` aceita colagem de HTML arbitrário — `javascript:` num link e `<img onerror>` colado entram no banco hoje e são renderizados sem filtro nos dois apps. Adicionar um terceiro sink sem sanitização para consertar o Tarefas troca um defeito visível por um invisível.
+
+**Escopo (siga na ordem):**
+
+1. **Decidir a saída** (o prompt aceita as duas, mas exige uma delas):
+   - **(a) Renderizador compartilhado e sanitizado** em `packages/ui`, ao lado do editor que produz o HTML (mesmo lar, mesma decisão D-1): um `RichText` que recebe a string e a exibe com a mesma tipografia do editor, passando por uma função de sanitização com allowlist — tags de formatação e lista, `href` só em `http`/`https`/`mailto`, nenhum atributo `on*`, nenhum `style`, nenhum `<script>`/`<iframe>`/`<img>`. Sanitizar na renderização, não na escrita (o dado já gravado também precisa sair limpo).
+   - **(b) Abrir mão de rich text em Tarefas:** `TaskForm` volta a `Textarea` e a descrição vira texto plano, com migração do que já está gravado. Contraria PATCH-014 e exige um PATCH novo revogando D-1 para este módulo.
+2. **Consertar a exibição** em `task-detail-client.tsx`. Na saída (a), pelo `RichText`; na (b), o `<p>` atual passa a estar correto porque o dado mudou.
+3. **Fechar os outros dois sinks** (só na saída (a)): `announcement-card.tsx` e `lesson-view.tsx` passam a usar o mesmo `RichText`. Eles não estão no escopo de P-4.4, mas o componente é compartilhado e o prompt não pode deixar o monorepo com dois `dangerouslySetInnerHTML` crus enquanto declara o problema resolvido.
+4. **Teste do sanitizador** (`packages/ui` já tem `vitest.config.ts` e `src/components/__tests__/`): `javascript:` em `href`, `<script>`, `<img onerror>`, `on*` inline, e a preservação do que deve passar (negrito, itálico, sublinhado, `ul`/`ol`/`li`, link http).
+5. **Bookkeeping em PROMPTS.md:** o critério de P-4.4 sobre o editor passa a dizer o que acontece com o que ele produz.
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/ui/src/components/rich-text.tsx` (criar — apenas na saída (a); renderizador + sanitizador)
+- `packages/ui/src/components/__tests__/rich-text.test.ts` (criar — apenas na saída (a))
+- `packages/ui/src/index.ts` (apenas o export novo)
+- `apps/tarefas/src/app/(dashboard)/tarefa/[id]/task-detail-client.tsx` (apenas o bloco "Descrição")
+- `apps/tarefas/src/components/task-form.tsx` (apenas na saída (b))
+- `apps/intranet/src/components/announcement-card.tsx` (apenas na saída (a))
+- `apps/plataforma/src/components/lesson-view.tsx` (apenas na saída (a))
+- `PATCHES/NNN-*.md` (criar — apenas na saída (b), revogando D-1 para Tarefas)
+- `PROMPTS.md` (critério de P-4.4)
+
+**Critérios de aceite:**
+
+- [ ] Criar uma tarefa com negrito, lista e link, abrir o detalhe: o texto aparece formatado e nenhuma tag é visível
+- [ ] Editar essa tarefa: o editor reabre com a formatação intacta (o ciclo não regrediu)
+- [ ] Descrição colada com `<script>`, `<img onerror>` ou `href="javascript:..."` é exibida sem executar nada
+- [ ] `grep -rn "dangerouslySetInnerHTML" apps` — nenhum consumidor da saída de `RichTextEditor` renderiza HTML sem sanitizar
+- [ ] Teste do sanitizador cobre o que bloqueia e o que preserva
+- [ ] `pnpm --filter @hebron/tarefas typecheck lint test` verdes; `pnpm --filter @hebron/tarefas build` verde; `pnpm --filter @hebron/ui test` verde; `pnpm --filter @hebron/intranet build` e `pnpm --filter @hebron/plataforma build` verdes
+- [ ] Registrar em SESSIONS.md — incluindo a saída escolhida
+
+**Notas:**
+Ref: `PATCHES/014-editor-rich-text-compartilhado-d1.md` e o princípio "público-alvo em transição tecnológica". Recomendação: saída **(a)**. Quem vê `<p><strong>` na tela não conclui que o sistema tem um bug de exibição; conclui que digitou algo errado, apaga a formatação e não usa mais o editor.
+
+---
+
+### P-4.4c — O lançamento manual de horas sem tela e os quatro schemas que ainda fingem que não há UUID (CORRETIVO)
+
+**Fase:** 4
+**Módulo:** tarefas
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-4.4c-tarefas-tempo-manual`
+- Dependências: P-4.12 concluído (S-84), P-4.4b concluído (toca o mesmo arquivo de detalhe)
+- Env vars: `DATABASE_URL`
+
+**Problema que este prompt resolve (contexto):**
+O escopo de P-4.4 lista sete formulários; a lista de "Arquivos permitidos" define seis. O que ficou de fora foi "Time entry manual", e S-76 registrou a lacuna como "débito de escopo do próprio PROMPTS.md, a resolver quando `time-tracker.tsx` for tocado novamente (P-4.5 ou P-4.9)". `time-tracker.tsx` foi tocado em P-4.9 (S-81, ligado a `startTimeEntry`/`stopTimeEntry` em `task-detail-client.tsx:532-540`) e o lançamento manual não entrou.
+
+O Bloco B construiu o outro lado assim mesmo: `createManualTimeEntry` existe desde P-4.8 (`apps/tarefas/src/actions/time-tracking.ts:106-134`), com validação, RLS e cálculo de duração. `grep -rn "createManualTimeEntry" apps packages` devolve **só a própria definição** — nenhuma tela do monorepo chama. `createTimeEntrySchema` (`packages/validators/src/tarefas/index.ts:152-159`) está na mesma situação. É o padrão de P-3.9c e P-3.8c: action pronta, testada, sem porta de entrada. Na prática, quem esqueceu de apertar "iniciar" antes de trabalhar não tem como registrar as horas depois, e o total do `TimeTracker` fica sistematicamente abaixo do real.
+
+Segundo débito, do mesmo prompt e da mesma sessão. S-76 registrou: "quando o backend gerar UUIDs reais, os schemas locais destes 4 formulários devem ser substituídos pelos schemas compartilhados originais (com `.uuid()`)". O backend gera UUIDs reais desde P-4.6 (`defaultRandom()` em toda tabela de `packages/db/src/schema/tarefas.ts`), o mock que motivou o relaxamento não existe mais (`apps/tarefas/src/lib/mock-data.ts` foi removido em P-4.9), e os schemas locais continuam lá: `subtask-form.tsx:18-21`, `comment-form.tsx:14-17`, `approval-request-form.tsx:22-26`. `task-form.tsx:189-219` é o caso mais estranho: valida `createTaskSchema` com `assigneeIds: []` e `tagIds: []` fixos e **depois** injeta os valores reais no payload (`:213-218`) — os ids efetivamente selecionados não passam por validação nenhuma no cliente. O servidor recusa corretamente, mas o usuário recebe um erro genérico de action em vez de um erro no campo.
+
+**Escopo (siga na ordem):**
+
+1. **Decidir o lançamento manual** (o prompt aceita as duas saídas, mas exige uma delas):
+   - **(a) Dar tela à action:** `TimeTracker` ganha "Lançar tempo manualmente" — início, fim e notas — validado por `createTimeEntrySchema` (sem cópia local) e ligado a `createManualTimeEntry` a partir de `task-detail-client.tsx`, com `router.refresh()` no sucesso, como as demais mutações da tela.
+   - **(b) Remover a promessa:** apagar `createManualTimeEntry` e `createTimeEntrySchema`, e registrar em SESSIONS.md que lançamento manual não é v1. BRAIN §"Removido/Deferido" lista time tracking como deferido, então (b) é defensável — mas o cronômetro está ligado e em uso desde P-4.9, o que torna a ausência do lançamento manual uma lacuna dentro de uma feature ativa, não uma feature ausente.
+2. **Na saída (a):** um lançamento não pode terminar antes de começar nem se sobrepor a um cronômetro em andamento do mesmo usuário — a mesma regra que `startTimeEntry` já aplica (`:33-45`). Validar no schema e na action.
+3. **Schemas compartilhados de volta:** os quatro formulários passam a usar `createSubtaskSchema`, `createCommentSchema`, `requestApprovalSchema` e `createTaskSchema` sem relaxamento, e `TaskForm` valida `assigneeIds`/`tagIds` de verdade, dentro do `safeParse`, não depois dele. Nenhum schema Zod local em `apps/tarefas/src/components` pode duplicar um de `@hebron/validators/tarefas`.
+4. **Teste:** cobrir `createManualTimeEntry` em `apps/tarefas/src/__tests__/` (na saída (a)) — lançamento válido soma ao total, fim antes do início é recusado, sobreposição com cronômetro aberto é recusada.
+5. **Bookkeeping em PROMPTS.md:** o escopo de P-4.4 deixa de listar um sétimo formulário que não tem arquivo, e o critério "Validação Zod em todos os formulários" passa a dizer com quais schemas.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/tarefas/src/components/time-tracker.tsx`
+- `apps/tarefas/src/app/(dashboard)/tarefa/[id]/task-detail-client.tsx`
+- `apps/tarefas/src/actions/time-tracking.ts`
+- `apps/tarefas/src/components/task-form.tsx`
+- `apps/tarefas/src/components/subtask-form.tsx`
+- `apps/tarefas/src/components/comment-form.tsx`
+- `apps/tarefas/src/components/approval-request-form.tsx`
+- `packages/validators/src/tarefas/index.ts` (apenas `createTimeEntrySchema`)
+- `apps/tarefas/src/__tests__/time-tracking.test.ts` (criar — apenas na saída (a))
+- `PROMPTS.md` (escopo e critério de P-4.4)
+
+**Critérios de aceite:**
+
+- [ ] `grep -rn "createManualTimeEntry" apps packages` acha um consumidor de UI, **ou** não acha definição nenhuma
+- [ ] Na saída (a): lançar 90 minutos de ontem numa tarefa faz o total do `TimeTracker` subir em 1h 30min sem recarregar a página
+- [ ] Fim antes do início e sobreposição com cronômetro em andamento são recusados com mensagem em português
+- [ ] Nenhum schema Zod declarado em `apps/tarefas/src/components` reproduz um schema de `@hebron/validators/tarefas`
+- [ ] Selecionar um responsável inválido no `TaskForm` produz erro no campo, não erro genérico de action
+- [ ] `pnpm --filter @hebron/tarefas typecheck lint test` verdes; `pnpm --filter @hebron/tarefas build` verde
+- [ ] Registrar em SESSIONS.md — incluindo a saída escolhida no item 1
+
+**Notas:**
+Ref: S-76 (as duas dívidas), BRAIN.md §6.9 e o precedente de P-3.9c. Recomendação: saída **(a)**. Um cronômetro sem lançamento manual não mede o trabalho, mede a memória de quem lembra de apertar o botão.
+
+---
+
+### P-4.5b — O esqueleto de árvore que nenhuma tela mostra e a visão que o recarregamento esquece (CORRETIVO)
+
+**Fase:** 4
+**Módulo:** tarefas
+**Tipo:** ui
+**Pré-condições:**
+
+- Branch: `feat/P-4.5b-tarefas-visao-do-board`
+- Dependências: P-4.12 concluído (S-84), P-4.2b concluído (toca o mesmo board)
+- Env vars: `DATABASE_URL`
+- Skill: **invocar `/impeccable` antes de começar**
+
+**Problema que este prompt resolve (contexto):**
+O critério de P-4.5 "Skeletons por view (kanban, lista, árvore, calendário)" está `[x]`. `TreeViewSkeleton` (`apps/tarefas/src/components/task-list-skeleton.tsx:44`) é o único export do módulo Tarefas sem nenhum consumidor no monorepo: `grep -rn "TreeViewSkeleton" apps packages` devolve só a linha da definição. S-77 registrou o motivo ("ficam como componentes prontos para consumo em P-4.9") e P-4.9 consumiu os outros três, criando os `loading.tsx` de `(dashboard)`, `workspace/[slug]` e `calendario` — a árvore ficou de fora e continua morta.
+
+Ela ficou de fora por uma razão estrutural, que é o segundo problema. `board-client.tsx:64` guarda a visão em `useState<BoardView>("kanban")`, dentro do Client Component. O `loading.tsx` da rota é um Server Component que não tem como saber qual visão o usuário escolheu, então mostra `KanbanSkeleton` sempre (`workspace/[slug]/loading.tsx:8`). Quem trabalha na Lista ou na Árvore vê um esqueleto de kanban piscar a cada navegação — um carregamento que anuncia a tela errada.
+
+E a visão não sobrevive a nada: recarregar volta para Kanban, voltar do detalhe da tarefa volta para Kanban, e não existe link para "a árvore do módulo Financeiro" para mandar a alguém. O critério de P-4.3 "Board com toggle Kanban/Lista/Árvore" está `[x]` e o toggle funciona — ele só não é lembrado.
+
+**Escopo (siga na ordem):**
+
+1. **Visão na URL:** `?view=kanban|lista|arvore`, lida no Server Component (`workspace/[slug]/page.tsx`) e passada como valor inicial ao client. Trocar de visão atualiza a URL sem recarregar nem perder a posição de rolagem. Valor ausente ou inválido cai em `kanban`, como hoje.
+2. **`loading.tsx` escolhe o esqueleto pela visão** — árvore mostra `TreeViewSkeleton`, lista mostra `TaskListSkeleton`, kanban mostra `KanbanSkeleton`.
+3. **Nenhum export órfão ao fim:** se a saída escolhida não montar `TreeViewSkeleton` em tela nenhuma, ele sai do repositório. O critério de P-4.5 passa a descrever o que existe.
+4. **Bookkeeping em PROMPTS.md:** critérios de P-4.5 (skeletons por view) e de P-4.3 (toggle).
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/tarefas/src/app/(dashboard)/workspace/[slug]/page.tsx`
+- `apps/tarefas/src/app/(dashboard)/workspace/[slug]/board-client.tsx`
+- `apps/tarefas/src/app/(dashboard)/workspace/[slug]/loading.tsx`
+- `apps/tarefas/src/components/task-list-skeleton.tsx`
+- `PROMPTS.md` (critérios de P-4.3 e P-4.5)
+
+**Critérios de aceite:**
+
+- [ ] `/workspace/financeiro?view=arvore` abre na árvore, e recarregar mantém a árvore
+- [ ] Abrir uma tarefa a partir da lista e voltar devolve a lista, não o kanban
+- [ ] Durante o carregamento da lista ou da árvore, nenhum esqueleto de kanban aparece
+- [ ] `grep -rn "TreeViewSkeleton" apps packages` tem consumidor **ou** não tem definição
+- [ ] `view` ausente, vazio ou inválido não quebra a rota
+- [ ] `pnpm --filter @hebron/tarefas typecheck lint test` verdes; `pnpm --filter @hebron/tarefas build` verde
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: S-77 (débito registrado) e G5. É o de menor prioridade dos cinco — nada aqui produz dado errado; o custo é um carregamento que mostra a tela errada e um estado de trabalho que o app esquece a cada navegação.
 
 ---
 

@@ -413,6 +413,7 @@ async function assembleTasks(
           interval: recurrenceRow.interval,
           dayOfWeek: recurrenceRow.dayOfWeek,
           dayOfMonth: recurrenceRow.dayOfMonth,
+          month: recurrenceRow.month,
           endDate: recurrenceRow.endDate,
         }
       : null;
@@ -580,6 +581,7 @@ export interface RecurrenceRuleView {
   interval: number;
   dayOfWeek: number | null;
   dayOfMonth: number | null;
+  month: number | null;
   endDate: Date | null;
   nextRunAt: Date | null;
 }
@@ -616,6 +618,7 @@ export async function getRecurrenceRuleViews(): Promise<RecurrenceRuleView[]> {
         interval: r.interval,
         dayOfWeek: r.dayOfWeek,
         dayOfMonth: r.dayOfMonth,
+        month: r.month,
         endDate: r.endDate,
         nextRunAt: r.nextRunAt,
       };

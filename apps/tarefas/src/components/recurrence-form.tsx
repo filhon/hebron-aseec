@@ -35,17 +35,33 @@ const WEEKDAY_LABEL = [
   "sábado",
 ];
 
+const MONTH_LABEL = [
+  "janeiro",
+  "fevereiro",
+  "março",
+  "abril",
+  "maio",
+  "junho",
+  "julho",
+  "agosto",
+  "setembro",
+  "outubro",
+  "novembro",
+  "dezembro",
+];
+
 interface PreviewInput {
   type: RecurrenceType;
   interval: number;
   dayOfWeek: number | null;
   dayOfMonth: number | null;
+  month: number | null;
   endDate: Date | null;
 }
 
 // Sem campo de horário no modelo de dados (RecurrenceRule não tem "hora do
 // dia" — packages/types/src/tarefas). A pré-visualização descreve só o
-// padrão de repetição, sem inventar um horário fixo.
+// padrão de repetição (tipo + dia + mês), sem inventar um horário fixo.
 function buildPreview(rule: PreviewInput): string {
   let base: string;
   switch (rule.type) {
@@ -70,14 +86,17 @@ function buildPreview(rule: PreviewInput): string {
             : `Todo dia ${rule.dayOfMonth} do mês`
           : "Selecione o dia do mês";
       break;
-    case "anual":
-      base =
-        rule.dayOfMonth !== null
-          ? rule.interval > 1
-            ? `A cada ${rule.interval} anos, no dia ${rule.dayOfMonth}`
-            : `Anualmente, no dia ${rule.dayOfMonth}`
-          : "Selecione o dia";
+    case "anual": {
+      const month = rule.month !== null ? MONTH_LABEL[rule.month - 1] : null;
+      if (rule.dayOfMonth === null || month === null) {
+        base = "Selecione o dia e o mês";
+      } else if (rule.interval > 1) {
+        base = `A cada ${rule.interval} anos, no dia ${rule.dayOfMonth} de ${month}`;
+      } else {
+        base = `Anualmente, no dia ${rule.dayOfMonth} de ${month}`;
+      }
       break;
+    }
   }
   if (rule.endDate) {
     base += ` até ${rule.endDate.toLocaleDateString("pt-BR")}`;
@@ -112,6 +131,7 @@ export function RecurrenceForm({
   const [dayOfMonth, setDayOfMonth] = useState<number | null>(
     initialValues?.dayOfMonth ?? 1,
   );
+  const [month, setMonth] = useState<number | null>(initialValues?.month ?? 1);
   const [endDate, setEndDate] = useState(
     initialValues?.endDate
       ? initialValues.endDate.toISOString().slice(0, 10)
@@ -126,6 +146,7 @@ export function RecurrenceForm({
     interval,
     dayOfWeek: type === "semanal" ? dayOfWeek : null,
     dayOfMonth: type === "mensal" || type === "anual" ? dayOfMonth : null,
+    month: type === "anual" ? month : null,
     endDate: endDate ? new Date(`${endDate}T00:00:00`) : null,
   });
 
@@ -136,6 +157,7 @@ export function RecurrenceForm({
       interval,
       dayOfWeek: type === "semanal" ? dayOfWeek : null,
       dayOfMonth: type === "mensal" || type === "anual" ? dayOfMonth : null,
+      month: type === "anual" ? month : null,
       endDate: endDate ? new Date(`${endDate}T00:00:00`) : null,
     };
     const result = recurrenceRuleSchema.safeParse(candidate);
@@ -212,24 +234,52 @@ export function RecurrenceForm({
       )}
 
       {(type === "mensal" || type === "anual") && (
-        <FormField
-          id={dayOfMonthId}
-          label="Dia do mês"
-          required
-          error={errors.dayOfMonth}
+        <div
+          className={
+            type === "anual"
+              ? "grid grid-cols-1 gap-4 sm:grid-cols-2"
+              : undefined
+          }
         >
-          <Input
+          <FormField
             id={dayOfMonthId}
-            type="number"
-            min={1}
-            max={31}
-            value={dayOfMonth ?? ""}
-            onChange={(e) =>
-              setDayOfMonth(e.target.value ? Number(e.target.value) : null)
-            }
-            hasError={!!errors.dayOfMonth}
-          />
-        </FormField>
+            label="Dia do mês"
+            required
+            error={errors.dayOfMonth}
+          >
+            <Input
+              id={dayOfMonthId}
+              type="number"
+              min={1}
+              max={31}
+              value={dayOfMonth ?? ""}
+              onChange={(e) =>
+                setDayOfMonth(e.target.value ? Number(e.target.value) : null)
+              }
+              hasError={!!errors.dayOfMonth}
+            />
+          </FormField>
+
+          {type === "anual" && (
+            <FormField label="Mês" required error={errors.month}>
+              <Select
+                value={month !== null ? String(month) : undefined}
+                onValueChange={(v) => setMonth(Number(v))}
+              >
+                <SelectTrigger hasError={!!errors.month}>
+                  <SelectValue placeholder="Selecione o mês" />
+                </SelectTrigger>
+                <SelectContent>
+                  {MONTH_LABEL.map((label, index) => (
+                    <SelectItem key={label} value={String(index + 1)}>
+                      {label.charAt(0).toUpperCase() + label.slice(1)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </FormField>
+          )}
+        </div>
       )}
 
       <FormField id={endDateId} label="Encerrar em (opcional)">

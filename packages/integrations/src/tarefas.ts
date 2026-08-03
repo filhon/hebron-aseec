@@ -113,6 +113,84 @@ function addDays(base: Date, days: number): Date {
   return d;
 }
 
+// ---------------------------------------------------------------------------
+// computeNextRun — próxima ocorrência de uma regra de recorrência a partir de
+// `from`, respeitando interval/dayOfWeek/dayOfMonth/month. Cópia única
+// (P-4.1b): apps/tarefas/src/actions/recurrence.ts,
+// packages/jobs/src/crons/tarefas.ts e os testes de ambos importam daqui —
+// nenhum dos três reimplementa o cálculo (mesmo precedente de
+// getWeeklyBatchWindow acima, consumido por packages/jobs/src/crons/
+// financeiro.ts).
+//
+// "mensal" e "anual" montam a data alvo por (ano, mês) primeiro e só então
+// aplicam o dia, com o dia limitado ao último dia daquele mês — 31/01 + 1 mês
+// cai em 28 ou 29/02, nunca em março (o bug original avançava o mês sobre a
+// data corrente, que ainda carregava o dia antigo, e estourava para o mês
+// seguinte). "anual" usa o mês da regra, nunca o mês de `from`: o ano é o
+// corrente se dia/mês da regra ainda não passaram em relação a `from`, senão
+// o corrente + interval.
+// ---------------------------------------------------------------------------
+
+export interface RecurrenceRulePattern {
+  type: "diaria" | "semanal" | "mensal" | "anual";
+  interval: number;
+  dayOfWeek: number | null;
+  dayOfMonth: number | null;
+  month: number | null;
+}
+
+function lastDayOfMonth(year: number, month1: number): number {
+  return new Date(Date.UTC(year, month1, 0)).getUTCDate();
+}
+
+export function computeNextRun(rule: RecurrenceRulePattern, from: Date): Date {
+  const next = new Date(from);
+  switch (rule.type) {
+    case "diaria":
+      next.setUTCDate(next.getUTCDate() + rule.interval);
+      break;
+    case "semanal": {
+      const target = rule.dayOfWeek ?? next.getUTCDay();
+      next.setUTCDate(next.getUTCDate() + 1);
+      while (next.getUTCDay() !== target)
+        next.setUTCDate(next.getUTCDate() + 1);
+      next.setUTCDate(next.getUTCDate() + (rule.interval - 1) * 7);
+      break;
+    }
+    case "mensal": {
+      const day = rule.dayOfMonth ?? from.getUTCDate();
+      const totalMonths = from.getUTCMonth() + rule.interval;
+      const year = from.getUTCFullYear() + Math.floor(totalMonths / 12);
+      const month0 = totalMonths % 12;
+      const clampedDay = Math.min(day, lastDayOfMonth(year, month0 + 1));
+      next.setUTCFullYear(year, month0, clampedDay);
+      break;
+    }
+    case "anual": {
+      const day = rule.dayOfMonth ?? from.getUTCDate();
+      const month1 = rule.month ?? from.getUTCMonth() + 1;
+      const thisYear = from.getUTCFullYear();
+      const candidate = new Date(from);
+      candidate.setUTCFullYear(
+        thisYear,
+        month1 - 1,
+        Math.min(day, lastDayOfMonth(thisYear, month1)),
+      );
+      const year =
+        candidate.getTime() > from.getTime()
+          ? thisYear
+          : thisYear + rule.interval;
+      next.setUTCFullYear(
+        year,
+        month1 - 1,
+        Math.min(day, lastDayOfMonth(year, month1)),
+      );
+      break;
+    }
+  }
+  return next;
+}
+
 export async function createAutoTaskChecklist(
   params: CreateAutoTaskChecklistParams,
 ): Promise<CreateAutoTaskChecklistResult> {

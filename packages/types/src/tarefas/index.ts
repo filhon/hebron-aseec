@@ -30,6 +30,8 @@ export type RecurrenceType = "diaria" | "semanal" | "mensal" | "anual";
 // ─── RecurrenceRule ───────────────────────────────────────────────────────────
 // dayOfWeek usado só quando type = "semanal" (0 = domingo .. 6 = sábado).
 // dayOfMonth usado só quando type = "mensal" | "anual" (1-31).
+// month usado só quando type = "anual" (1-12) — P-4.1b: sem este campo, uma
+// regra anual (ex: IPTU) não sabe em que mês cair, só em que dia.
 
 export interface RecurrenceRule {
   type: RecurrenceType;
@@ -37,6 +39,7 @@ export interface RecurrenceRule {
   interval: number;
   dayOfWeek: number | null;
   dayOfMonth: number | null;
+  month: number | null;
   /** Null = recorrência sem prazo final */
   endDate: Date | null;
 }

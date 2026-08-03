@@ -241,6 +241,8 @@
 | S-218  | 2026-07-30 | P-3.9c — Cinco actions e quatro estados que nenhuma tela alcança (CORRETIVO)                                                     | concluido                            |
 | S-219  | 2026-07-30 | P-3.10b — Três emails que o Admin não consegue editar e um lote semanal escrito duas vezes (CORRETIVO)                           | concluido                            |
 | S-220  | 2026-07-30 | P-3.8c — O OCR de nota fiscal que existe, funciona e ninguém chama (CORRETIVO)                                                   | concluido                            |
+| S-221  | 2026-07-30 | Auditoria: débitos técnicos P-4.1–P-4.5 (Tarefas, Bloco A) — 5 prompts corretivos gerados                                        | concluido                            |
+| S-222  | 2026-08-03 | P-4.1b — A recorrência anual que não sabe em que mês cai (CORRETIVO)                                                             | concluido                            |
 
 ---
 
@@ -19480,7 +19482,7 @@ financeiro.ts` devolve os três pontos de envio (batch-approval aparece em
 - [x] Zero import `packages/jobs → apps/*` — `pnpm check:cross-app-imports`
       verde
 - [x] `pnpm --filter @hebron/{admin,financeiro,db,integrations,jobs}
-  typecheck lint` verdes (typecheck de `@hebron/admin`/
+typecheck lint` verdes (typecheck de `@hebron/admin`/
       `@hebron/integrations` só passa nos arquivos deste diff — os quatro
       arquivos de teste do achado acima já falhavam antes desta sessão,
       ver [[project_bankaccounts_nickname_test_drift]]); `build` verde em
@@ -19591,3 +19593,254 @@ sql` + `FinanceiroAuditAction`).
       `pnpm --filter @hebron/financeiro build` verde (18 rotas, `.next`
       limpo); `pnpm --filter @hebron/ai typecheck lint test` verdes (7/7)
 - [x] Registrado em SESSIONS.md
+
+---
+
+## S-221 — Auditoria: débitos técnicos P-4.1–P-4.5 (Tarefas, Bloco A)
+
+**Prompt:** N/A (auditoria solicitada pelo Filipe — reler P-4.1–P-4.5 em
+PROMPTS.md + S-73/S-74/S-75/S-76/S-77 em SESSIONS.md, cruzar com a codebase
+real, gerar prompts corretivos se necessário)
+**Data:** 2026-07-30
+**Modelo:** claude-opus-5
+**Status:** concluido (read-only; gera 5 prompts novos em PROMPTS.md, nenhum
+código de produto alterado)
+
+### Resumo
+
+Reler os 5 prompts do Bloco A de Tarefas e as 5 sessões que os implementaram,
+e verificar contra a codebase quais suposições registradas em S-73/S-76/S-77
+("a resolver quando o backend existir", "a resolver quando o arquivo for
+tocado de novo") seguem abertas depois de todo o Bloco B (P-4.6–P-4.12, S-78
+a S-84) e de P-4.11b (S-98). Cinco achados justificam prompt corretivo;
+quatro foram avaliados e descartados.
+
+O padrão dominante é o mesmo dos corretivos de Financeiro: o Bloco A cumpriu
+os critérios ao pé da letra, registrou o preço da literalidade, e o Bloco B
+construiu por cima do que foi registrado sem voltar para fechar.
+
+### Débitos já fechados por prompts posteriores (verificados, sem ação)
+
+- **`CommandMenu.onCreateTask` que só redirecionava** (S-75) — fechado em
+  P-4.9: `shell.tsx:120-125,167-178` cria de verdade e navega para a tarefa
+  criada.
+- **Templates editáveis só em estado local** (S-75) — fechado em P-4.9:
+  `templates-client.tsx` liga criar/editar/ativar/instanciar às actions.
+- **"Minhas tarefas" sem sessão real** (S-75) — fechado em P-4.9
+  (`(dashboard)/layout.tsx` + sessão real no shell).
+- **Loading simulado com `setTimeout`** (S-77) — fechado em P-4.9: os três
+  `loading.tsx` de rota substituíram a simulação client-side.
+- **`mock-data.ts`** — removido em P-4.9 (391e5a2); nenhum importador
+  remanescente no monorepo.
+- **Skeletons de kanban/lista/calendário órfãos** (S-77) — fechados em P-4.9,
+  **menos o da árvore** (achado 5).
+
+### Achados confirmados na codebase (não só em SESSIONS)
+
+1. **Recorrência anual sem mês — o único achado que produz dado errado.**
+   S-73 registrou que `RecurrenceRule` só guarda o dia, não o mês, porque o
+   critério de P-4.1 lista quatro campos. O Bloco B construiu o motor por
+   cima: `computeNextRun` (`actions/recurrence.ts:43-46`) soma `interval`
+   anos a `from` e aplica o dia — uma regra de IPTU criada em julho vence
+   todo julho. O caso `"mensal"` (`:39-42`) chama `setUTCMonth` antes de
+   `setUTCDate` e pula fevereiro inteiro partindo de 31/01. A função está
+   escrita três vezes idênticas (action, `crons/tarefas.ts:26-49`,
+   `__tests__/recurrence.test.ts:57-80` — o teste reimplementa o algoritmo
+   que deveria verificar, mesmo achado de P-2.12b). O cabeçalho do teste
+   aponta para `packages/jobs/src/__tests__/tarefas-recurrence.test.ts`, que
+   não existe: `runTarefasRecurrence` não tem cobertura nenhuma. → **P-4.1b**
+2. **Kanban só por arraste.** `kanban-board.tsx:125-139` só tem HTML5 DnD —
+   que não dispara em toque em navegador móvel nenhum. Sem teclado, sem menu,
+   sem seletor; a coluna vazia instrui exatamente o gesto que não funciona
+   (`:118-124`). O critério "Responsivo" de P-4.2 está `[x]` e o layout de
+   fato responde, mas em 390px o quadro é somente leitura. Precedente pronto
+   e limpo em `apps/projetos/src/components/project-kanban.tsx:201-227`
+   (select "Mover para…" chamando o mesmo `moveTo`). Mesma falta na
+   reordenação de `template-form.tsx:245-257`. → **P-4.2b**
+3. **Descrição rica gravada como HTML e exibida como texto cru.**
+   `RichTextEditor` emite `innerHTML` (`rich-text-editor.tsx:131-135`),
+   `TaskForm` grava, a edição relê — o dado está certo. Mas
+   `task-detail-client.tsx:403-416` renderiza `{task.description}` num `<p>`,
+   React escapa, e toda tarefa com formatação mostra a própria marcação. É
+   100% dos casos (a tela de detalhe é a única que exibe descrição).
+   Agravante: `grep -rn "sanitize\|DOMPurify" apps packages` volta vazio e os
+   outros dois consumidores do mesmo editor
+   (`intranet/announcement-card.tsx:74`, `plataforma/lesson-view.tsx:140`) já
+   jogam a saída em `dangerouslySetInnerHTML` sem filtro, com `createLink` de
+   URL livre no editor. → **P-4.4b**
+4. **Lançamento manual de horas: action sem porta de entrada, e quatro
+   schemas relaxados que o backend já não precisa.** O escopo de P-4.4 lista
+   sete formulários e a lista de arquivos permitidos define seis; S-76
+   registrou a lacuna para "quando `time-tracker.tsx` for tocado de novo".
+   Foi tocado em P-4.9 e o lançamento manual não entrou.
+   `createManualTimeEntry` (`actions/time-tracking.ts:106-134`) existe desde
+   P-4.8 e `grep -rn` acha só a definição. Segunda metade: S-76 prometeu
+   trocar os schemas locais pelos compartilhados quando houvesse UUID real —
+   há desde P-4.6, e `subtask-form.tsx:18-21`, `comment-form.tsx:14-17`,
+   `approval-request-form.tsx:22-26` continuam locais; `task-form.tsx:189-219`
+   valida com `assigneeIds: []`/`tagIds: []` fixos e injeta os reais depois,
+   então os ids selecionados não passam por validação nenhuma no cliente. →
+   **P-4.4c**
+5. **`TreeViewSkeleton` é o único export do módulo sem consumidor**
+   (`task-list-skeleton.tsx:44`). A causa é estrutural: a visão do board vive
+   em `useState` (`board-client.tsx:64`), então o `loading.tsx` da rota — um
+   Server Component — só sabe mostrar `KanbanSkeleton`, e quem trabalha na
+   Lista ou na Árvore vê um esqueleto de kanban a cada navegação. A visão
+   também não sobrevive a recarregar, a voltar do detalhe, nem a um link
+   compartilhado. → **P-4.5b**
+
+### Avaliados e descartados (sem prompt)
+
+- **`[~]` do preview de recorrência sem horário** (P-4.4, S-76) — não vira
+  prompt próprio nem ganha campo: `tarefasRecurrenceCron` roda `0 6 * * *`
+  (`crons/tarefas.ts:159-161`) e instancia tudo que venceu, então um horário
+  por regra seria exibido e ignorado. Fechado como bookkeeping dentro de
+  P-4.1b, que já mexe no mesmo preview.
+- **Criação rápida do Cmd+K sempre em "Administrativo"/"média"**
+  (`shell.tsx:167-178`) — é um default de captura rápida, não um erro; a
+  navegação para a tarefa criada dá ao usuário a chance imediata de corrigir.
+  Anotado para não ser re-descoberto.
+- **`TimeEntry` v1 × BRAIN "Removido/Deferido"** (S-73) — a contradição
+  registrada continua de pé no papel, mas o cronômetro está ligado e em uso
+  desde P-4.9. Tratar como feature ativa é a leitura honesta; P-4.4c fecha a
+  lacuna operacional em vez de reabrir a decisão.
+- **Nenhuma afordância morta em Tarefas** — verificado um a um: todo
+  `<button>`/`<Button>` do app tem handler, `type="submit"` ou `form=`.
+  Diferente do que P-3.2b encontrou em Financeiro.
+
+### Prompts corretivos gerados
+
+Inseridos em PROMPTS.md sob "## Tarefas — Corretivos do Bloco A", após P-4.12
+e antes da Fase 5. Ordem recomendada: P-4.1b → P-4.2b → P-4.4b → P-4.4c →
+P-4.5b. Dependências reais: P-4.4c depois de P-4.4b (mesmo arquivo de
+detalhe) e P-4.5b depois de P-4.2b (mesmo board).
+
+- **P-4.1b** — A recorrência anual que não sabe em que mês cai (schema;
+  **maior prioridade** — é o único que produz dado errado em silêncio).
+- **P-4.2b** — O quadro que só se move com mouse (ui).
+- **P-4.4b** — A descrição que o editor formata e a tela mostra com as tags à
+  vista (ui; **exige decisão** entre renderizador sanitizado e abandono de
+  D-1 em Tarefas).
+- **P-4.4c** — O lançamento manual de horas sem tela e os quatro schemas que
+  ainda fingem que não há UUID (integration; **exige decisão** entre dar tela
+  à action e removê-la).
+- **P-4.5b** — O esqueleto de árvore que nenhuma tela mostra e a visão que o
+  recarregamento esquece (ui; menor prioridade dos cinco).
+
+### Arquivos modificados
+
+- `PROMPTS.md` (seção "Tarefas — Corretivos do Bloco A" com os 5 prompts)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+## S-222 — P-4.1b — A recorrência anual que não sabe em que mês cai (CORRETIVO)
+
+**Prompt:** P-4.1b (PROMPTS.md)
+**Data:** 2026-08-03
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+`computeNextRun` tratava recorrência anual como "ano de `from` + interval, dia
+fixo", nunca considerando em que mês a regra deveria cair — uma regra de IPTU
+criada em julho vencia todo julho, para sempre (S-73). O caso mensal também
+estava quebrado: `setUTCMonth` antes de `setUTCDate` estourava em mês curto
+(31/01 + 1 mês pulava fevereiro inteiro). A função estava escrita três vezes
+idênticas (action, cron, teste).
+
+Escopo executado ao pé da letra do prompt:
+
+1. Campo `month` (1-12, nulo fora de "anual") em `RecurrenceRule`
+   (`packages/types/src/tarefas/index.ts`), `recurrenceRuleSchema` (novo
+   `.refine` exigindo-o em "anual"), `tarefas.recurrence_rules` e
+   `RecurrenceRuleView`.
+2. Migration **0075_tarefas_recurrence_month.sql**: `ADD COLUMN IF NOT
+EXISTS month smallint` + `CHECK (month BETWEEN 1 AND 12)` (bloco `DO $$`
+   idempotente, padrão de 0069) + backfill `EXTRACT(MONTH FROM next_run_at)`
+   para regras anuais existentes. Aplicada com sucesso contra o banco de dev
+   (`pnpm db:migrate`); reaplicar reporta "Nothing to apply". **Resultado do
+   backfill: 0 linhas afetadas** — o banco de dev não tinha nenhuma linha em
+   `tarefas.recurrence_rules` no momento da migration, então o UPDATE não
+   teve o que preservar. A lógica do backfill (extrair o mês do
+   `next_run_at` já gravado) segue correta para quando houver dados reais.
+3. Cópia única de `computeNextRun` em `packages/integrations/src/tarefas.ts`
+   (exportada como `computeNextRun` + tipo `RecurrenceRulePattern`),
+   consumida por `apps/tarefas/src/actions/recurrence.ts`,
+   `packages/jobs/src/crons/tarefas.ts` e os dois testes — nenhum dos três
+   reimplementa o cálculo (`grep -rn "function computeNextRun" apps
+packages` devolve uma ocorrência).
+4. Cálculo corrigido: "mensal" e "anual" montam a data alvo por (ano, mês)
+   com `setUTCFullYear(year, month, day)` numa única chamada (nunca
+   `setUTCMonth` isolado antes de fixar o dia), com o dia clampado ao último
+   dia do mês alvo. "Anual" usa o mês da própria regra: ano corrente se
+   dia/mês ainda não passaram em relação a `from`, senão ano corrente +
+   `interval`.
+5. `recurrence-form.tsx`: seletor de mês (Select, mesmo padrão de "Dia da
+   semana") visível só para `type === "anual"`, ao lado de "Dia do mês" num
+   grid de 2 colunas; preview passa a nomear o mês ("Anualmente, no dia 10
+   de janeiro") ou pedir o que falta ("Selecione o dia e o mês").
+   `recorrentes-client.tsx` mostra o mês entre parênteses ao lado do tipo,
+   só para regras anuais.
+6. Testes: `packages/integrations/src/__tests__/tarefas-recurrence.test.ts`
+   (novo, puro — 10 testes: os 4 tipos, interval > 1 em semanal/mensal/anual,
+   IPTU de janeiro calculado a partir de julho, data ainda não passada no ano
+   corrente, 31/01 mensal ao longo de 12 execuções consecutivas sem pular
+   nem repetir mês, 29/02 caindo no último dia de fevereiro em ano não
+   bissexto). `apps/tarefas/src/__tests__/recurrence.test.ts` teve a
+   reimplementação local removida (importa de `@hebron/integrations/tarefas`
+   agora), o teste "anual" passou a fixar mês 1 e checar que o mês do
+   resultado é janeiro independente do mês de execução do teste, e o
+   cabeçalho parou de apontar para um arquivo de teste do cron que nunca
+   existiu — agora descreve a real divisão de cobertura (ação/persistência
+   aqui, cálculo puro em `packages/integrations`, cron sem suíte própria).
+
+### Achado consequente (fora da lista original, correção obrigatória)
+
+Adicionar `month` a `RecurrenceRule` (packages/types) quebrou a montagem do
+`Task.recurrenceRule` em `apps/tarefas/src/lib/queries.ts:410-418` (mapeamento
+de `recurrenceRow` para o tipo `RecurrenceRule` completo, usado na tela de
+detalhe da tarefa) — `tsc` acusou `month` ausente. Corrigido no mesmo arquivo
+já listado nos arquivos permitidos, adicionando `month: recurrenceRow.month`.
+
+### Verificação
+
+- `grep -rn "function computeNextRun" apps packages` → 1 ocorrência
+  (`packages/integrations/src/tarefas.ts`)
+- `pnpm --filter @hebron/types typecheck`, `@hebron/validators
+typecheck lint`, `@hebron/db typecheck`, `@hebron/integrations typecheck
+lint`, `@hebron/jobs typecheck lint`, `@hebron/tarefas typecheck lint` —
+  todos verdes
+- `pnpm --filter @hebron/tarefas build` verde (11 rotas)
+- `pnpm --filter @hebron/integrations test`: 8 suítes verdes (30 testes, 2
+  skipped) + **1 falha pré-existente** em `feed.test.ts`
+  (`bankAccounts.nickname` NOT NULL — [[project_bankaccounts_nickname_test_drift]],
+  já documentada, "integrations feed" é um dos 4 arquivos listados)
+- `pnpm --filter @hebron/db test`: 10 suítes verdes (67 testes) + **2 falhas
+  pré-existentes**, confirmadas rodando a suíte isolada (sem contenção com
+  outra suíte concorrente): `storage.test.ts`
+  ([[project_storage_rls_test_flakiness]]) e `system-actor.test.ts`
+  ([[project_system_actor_test_drift]]). Nenhuma falha em migrations,
+  schema ou dados de Tarefas.
+- `pnpm --filter @hebron/tarefas test`: 6 suítes, 50 testes, todos verdes —
+  incluindo `recurrence.test.ts` (6/6) com a nova cobertura de mês
+- Migration 0075 aplicada e idempotente (ver acima)
+
+### Arquivos modificados
+
+- `packages/types/src/tarefas/index.ts`
+- `packages/validators/src/tarefas/index.ts`
+- `packages/db/src/schema/tarefas.ts`
+- `packages/db/src/migrations/0075_tarefas_recurrence_month.sql` (criado)
+- `packages/integrations/src/tarefas.ts`
+- `packages/integrations/src/__tests__/tarefas-recurrence.test.ts` (criado)
+- `apps/tarefas/src/actions/recurrence.ts`
+- `apps/tarefas/src/lib/queries.ts` (`RecurrenceRuleView` + a query que a
+  monta; e o achado consequente em `Task.recurrenceRule`)
+- `apps/tarefas/src/components/recurrence-form.tsx`
+- `apps/tarefas/src/app/(dashboard)/recorrentes/recorrentes-client.tsx`
+- `apps/tarefas/src/__tests__/recurrence.test.ts`
+- `packages/jobs/src/crons/tarefas.ts`
+- `PROMPTS.md` (critério de P-4.1, `[~]` de P-4.4, critérios de aceite do
+  próprio P-4.1b)

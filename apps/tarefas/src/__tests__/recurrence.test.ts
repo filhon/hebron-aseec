@@ -1,22 +1,23 @@
 /**
  * recurrence.test.ts — regras de recorrência (P-4.8: actions/recurrence.ts)
  *
- * Cobre createRecurrenceRule/updateRecurrenceRule e o cálculo de
- * next_run_at para os 4 tipos (diária/semanal/mensal/anual). Usa o relógio
- * real (sem vi.useFakeTimers/vi.setSystemTime): packages/db/src/__tests__/
+ * Cobre createRecurrenceRule/updateRecurrenceRule contra o banco real:
+ * persistência do campo `month`, resolução de template e o encaixe da
+ * regra com o cálculo de next_run_at. Usa o relógio real (sem
+ * vi.useFakeTimers/vi.setSystemTime): packages/db/src/__tests__/
  * settings.test.ts documenta que fake timers travam o setTimeout interno
  * do driver `postgres` quando a suíte roda em singleFork — mesma config
- * usada aqui (vitest.config.ts). Por isso comparamos o resultado de
- * computeNextRun (reimplementado localmente, já que não é exportado de
- * ../actions/recurrence) contra o valor real devolvido pela action, com
- * tolerância de alguns segundos.
+ * usada aqui (vitest.config.ts). Por isso comparamos o valor real devolvido
+ * pela action contra `computeNextRun` importado de
+ * `@hebron/integrations/tarefas` (P-4.1b: cópia única, nenhum teste
+ * reimplementa o cálculo), com tolerância de alguns segundos.
  *
- * A geração real da próxima tarefa a partir de next_run_at é responsabilidade
- * do cron registrado em packages/jobs/src/crons/tarefas.ts (runTarefasRecurrence)
- * — coberta por packages/jobs/src/__tests__/tarefas-recurrence.test.ts
- * (débito de infraestrutura de teste registrado em SESSIONS.md: P-4.12 só
- * lista arquivos em apps/tarefas/src/__tests__ e o cron não expõe uma rota
- * de import a partir de outro pacote via package.json "exports").
+ * O cálculo em si — os 4 tipos, overflow de dia em mês curto, ano bissexto,
+ * ano de referência em regra anual — é coberto sem banco em
+ * packages/integrations/src/__tests__/tarefas-recurrence.test.ts. A geração
+ * real da próxima tarefa a partir de next_run_at é responsabilidade do cron
+ * registrado em packages/jobs/src/crons/tarefas.ts (runTarefasRecurrence),
+ * sem suíte própria neste monorepo.
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { eq } from "drizzle-orm";
@@ -27,6 +28,7 @@ import {
   workspaces,
   taskTemplates,
 } from "@hebron/db/schema";
+import { computeNextRun } from "@hebron/integrations/tarefas";
 
 vi.mock("next/headers", () => ({
   cookies: async () => ({ getAll: () => [], set: () => undefined }),
@@ -41,44 +43,6 @@ vi.mock("@hebron/auth/server", () => ({
     designations: [],
   }),
 }));
-
-// ---------------------------------------------------------------------------
-// Reimplementação local de computeNextRun (apps/tarefas/src/actions/
-// recurrence.ts), só para calcular o valor esperado nos testes — a função
-// real não é exportada do módulo de action.
-// ---------------------------------------------------------------------------
-interface RulePattern {
-  type: "diaria" | "semanal" | "mensal" | "anual";
-  interval: number;
-  dayOfWeek: number | null;
-  dayOfMonth: number | null;
-}
-
-function computeNextRun(rule: RulePattern, from: Date): Date {
-  const next = new Date(from);
-  switch (rule.type) {
-    case "diaria":
-      next.setUTCDate(next.getUTCDate() + rule.interval);
-      break;
-    case "semanal": {
-      const target = rule.dayOfWeek ?? next.getUTCDay();
-      next.setUTCDate(next.getUTCDate() + 1);
-      while (next.getUTCDay() !== target)
-        next.setUTCDate(next.getUTCDate() + 1);
-      next.setUTCDate(next.getUTCDate() + (rule.interval - 1) * 7);
-      break;
-    }
-    case "mensal":
-      next.setUTCMonth(next.getUTCMonth() + rule.interval);
-      if (rule.dayOfMonth) next.setUTCDate(rule.dayOfMonth);
-      break;
-    case "anual":
-      next.setUTCFullYear(next.getUTCFullYear() + rule.interval);
-      if (rule.dayOfMonth) next.setUTCDate(rule.dayOfMonth);
-      break;
-  }
-  return next;
-}
 
 const TOLERANCE_MS = 10_000;
 
@@ -157,7 +121,13 @@ describe("createRecurrenceRule — computeNextRun por tipo", () => {
     expectCloseTo(
       nextRunAt,
       computeNextRun(
-        { type: "diaria", interval: 3, dayOfWeek: null, dayOfMonth: null },
+        {
+          type: "diaria",
+          interval: 3,
+          dayOfWeek: null,
+          dayOfMonth: null,
+          month: null,
+        },
         from,
       ),
     );
@@ -190,6 +160,7 @@ describe("createRecurrenceRule — computeNextRun por tipo", () => {
           interval: 1,
           dayOfWeek: targetDay,
           dayOfMonth: null,
+          month: null,
         },
         from,
       ),
@@ -218,16 +189,24 @@ describe("createRecurrenceRule — computeNextRun por tipo", () => {
     expectCloseTo(
       nextRunAt,
       computeNextRun(
-        { type: "mensal", interval: 2, dayOfWeek: null, dayOfMonth: 15 },
+        {
+          type: "mensal",
+          interval: 2,
+          dayOfWeek: null,
+          dayOfMonth: 15,
+          month: null,
+        },
         from,
       ),
     );
     expect(nextRunAt.getUTCDate()).toBe(15);
   });
 
-  it("anual: soma interval anos e fixa o dia do mês", async () => {
+  it("anual: usa o mês da regra, nunca o mês de criação", async () => {
     const { createRecurrenceRule } = await import("../actions/recurrence");
     const from = new Date();
+    // Mês fixo (janeiro) e diferente do mês de criação real do teste (roda
+    // em qualquer época do ano) — é exatamente o caso do IPTU (S-73/P-4.1b).
     const result = await createRecurrenceRule({
       taskTemplateId: IDS.template,
       rule: {
@@ -235,6 +214,7 @@ describe("createRecurrenceRule — computeNextRun por tipo", () => {
         interval: 1,
         dayOfWeek: null,
         dayOfMonth: 25,
+        month: 1,
         endDate: null,
       },
     });
@@ -246,12 +226,18 @@ describe("createRecurrenceRule — computeNextRun por tipo", () => {
     expectCloseTo(
       nextRunAt,
       computeNextRun(
-        { type: "anual", interval: 1, dayOfWeek: null, dayOfMonth: 25 },
+        {
+          type: "anual",
+          interval: 1,
+          dayOfWeek: null,
+          dayOfMonth: 25,
+          month: 1,
+        },
         from,
       ),
     );
     expect(nextRunAt.getUTCDate()).toBe(25);
-    expect(nextRunAt.getUTCFullYear()).toBe(from.getUTCFullYear() + 1);
+    expect(nextRunAt.getUTCMonth()).toBe(0); // janeiro, não o mês de `from`
   });
 
   it("template inexistente: retorna erro e não cria a regra", async () => {
@@ -307,7 +293,13 @@ describe("updateRecurrenceRule — recalcula next_run_at", () => {
     expectCloseTo(
       nextRunAt,
       computeNextRun(
-        { type: "mensal", interval: 1, dayOfWeek: null, dayOfMonth: 10 },
+        {
+          type: "mensal",
+          interval: 1,
+          dayOfWeek: null,
+          dayOfMonth: 10,
+          month: null,
+        },
         from,
       ),
     );

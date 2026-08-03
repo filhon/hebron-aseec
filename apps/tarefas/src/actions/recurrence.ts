@@ -5,48 +5,8 @@ import { eq } from "drizzle-orm";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { recurrenceRules, taskTemplates } from "@hebron/db/schema";
 import { recurrenceRuleSchema } from "@hebron/validators/tarefas";
+import { computeNextRun } from "@hebron/integrations/tarefas";
 import { colaboradorAction } from "../lib/safe-action";
-
-// ---------------------------------------------------------------------------
-// computeNextRun — próxima ocorrência a partir de `from`, respeitando
-// interval/dayOfWeek/dayOfMonth. Simplificação registrada em SESSIONS.md:
-// não trata overflow de dia em meses curtos (ex.: dayOfMonth 31 em fevereiro
-// cai no último dia válido que o JS Date resolver) — aceitável na escala
-// desta ONG; refinar é trabalho de um prompt futuro se virar problema real.
-// ---------------------------------------------------------------------------
-
-interface RulePattern {
-  type: "diaria" | "semanal" | "mensal" | "anual";
-  interval: number;
-  dayOfWeek: number | null;
-  dayOfMonth: number | null;
-}
-
-function computeNextRun(rule: RulePattern, from: Date): Date {
-  const next = new Date(from);
-  switch (rule.type) {
-    case "diaria":
-      next.setUTCDate(next.getUTCDate() + rule.interval);
-      break;
-    case "semanal": {
-      const target = rule.dayOfWeek ?? next.getUTCDay();
-      next.setUTCDate(next.getUTCDate() + 1);
-      while (next.getUTCDay() !== target)
-        next.setUTCDate(next.getUTCDate() + 1);
-      next.setUTCDate(next.getUTCDate() + (rule.interval - 1) * 7);
-      break;
-    }
-    case "mensal":
-      next.setUTCMonth(next.getUTCMonth() + rule.interval);
-      if (rule.dayOfMonth) next.setUTCDate(rule.dayOfMonth);
-      break;
-    case "anual":
-      next.setUTCFullYear(next.getUTCFullYear() + rule.interval);
-      if (rule.dayOfMonth) next.setUTCDate(rule.dayOfMonth);
-      break;
-  }
-  return next;
-}
 
 // ---------------------------------------------------------------------------
 // createRecurrenceRule — amarra uma regra a um task_template já existente
@@ -82,6 +42,7 @@ export const createRecurrenceRule = colaboradorAction
             interval: input.rule.interval,
             dayOfWeek: input.rule.dayOfWeek,
             dayOfMonth: input.rule.dayOfMonth,
+            month: input.rule.month,
             endDate: input.rule.endDate,
             nextRunAt,
           })
@@ -118,6 +79,7 @@ export const updateRecurrenceRule = colaboradorAction
             interval: input.rule.interval,
             dayOfWeek: input.rule.dayOfWeek,
             dayOfMonth: input.rule.dayOfMonth,
+            month: input.rule.month,
             endDate: input.rule.endDate,
             nextRunAt,
           })

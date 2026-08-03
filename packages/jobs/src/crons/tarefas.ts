@@ -7,47 +7,8 @@ import {
   tasks,
   subtasks,
 } from "@hebron/db/schema";
+import { computeNextRun } from "@hebron/integrations/tarefas";
 import { inngest } from "../client";
-
-// ---------------------------------------------------------------------------
-// computeNextRun — duplicado deliberadamente de
-// apps/tarefas/src/actions/recurrence.ts::computeNextRun (jobs nunca importa
-// de um app, G6.5 do CLAUDE.md) — mesma lógica, mesma limitação documentada
-// lá (overflow de dia em meses curtos não é tratado).
-// ---------------------------------------------------------------------------
-
-interface RulePattern {
-  type: "diaria" | "semanal" | "mensal" | "anual";
-  interval: number;
-  dayOfWeek: number | null;
-  dayOfMonth: number | null;
-}
-
-function computeNextRun(rule: RulePattern, from: Date): Date {
-  const next = new Date(from);
-  switch (rule.type) {
-    case "diaria":
-      next.setUTCDate(next.getUTCDate() + rule.interval);
-      break;
-    case "semanal": {
-      const target = rule.dayOfWeek ?? next.getUTCDay();
-      next.setUTCDate(next.getUTCDate() + 1);
-      while (next.getUTCDay() !== target)
-        next.setUTCDate(next.getUTCDate() + 1);
-      next.setUTCDate(next.getUTCDate() + (rule.interval - 1) * 7);
-      break;
-    }
-    case "mensal":
-      next.setUTCMonth(next.getUTCMonth() + rule.interval);
-      if (rule.dayOfMonth) next.setUTCDate(rule.dayOfMonth);
-      break;
-    case "anual":
-      next.setUTCFullYear(next.getUTCFullYear() + rule.interval);
-      if (rule.dayOfMonth) next.setUTCDate(rule.dayOfMonth);
-      break;
-  }
-  return next;
-}
 
 function addDays(base: Date, days: number): Date {
   const d = new Date(base);

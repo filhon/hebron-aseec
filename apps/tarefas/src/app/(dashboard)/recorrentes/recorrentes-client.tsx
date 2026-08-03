@@ -44,6 +44,21 @@ const RECURRENCE_LABEL: Record<RecurrenceType, string> = {
   anual: "Anual",
 };
 
+const MONTH_LABEL = [
+  "janeiro",
+  "fevereiro",
+  "março",
+  "abril",
+  "maio",
+  "junho",
+  "julho",
+  "agosto",
+  "setembro",
+  "outubro",
+  "novembro",
+  "dezembro",
+];
+
 function fmtDate(d: Date): string {
   return d.toLocaleDateString("pt-BR", {
     day: "2-digit",
@@ -124,6 +139,9 @@ export function RecorrentesClient({
                     {WORKSPACE_LABEL[rule.workspace]} ·{" "}
                     {RECURRENCE_LABEL[rule.type]}
                     {rule.interval > 1 && ` a cada ${rule.interval}`}
+                    {rule.type === "anual" &&
+                      rule.month !== null &&
+                      ` (${MONTH_LABEL[rule.month - 1]})`}
                   </p>
                 </div>
               </div>

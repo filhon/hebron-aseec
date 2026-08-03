@@ -3,6 +3,7 @@ import {
   index,
   integer,
   jsonb,
+  smallint,
   text,
   timestamp,
   unique,
@@ -349,6 +350,7 @@ export const templateItems = tarefasSchema.table(
 // tarefas.recurrence_rules
 // dayOfWeek usado só quando type = "semanal" (0 = domingo .. 6 = sábado).
 // dayOfMonth usado só quando type = "mensal" | "anual" (1-31).
+// month usado só quando type = "anual" (1-12) — P-4.1b.
 // next_run_at: próxima execução planejada — consumido pelo cron (P-4.8).
 // ---------------------------------------------------------------------------
 export const recurrenceRules = tarefasSchema.table(
@@ -362,6 +364,7 @@ export const recurrenceRules = tarefasSchema.table(
     interval: integer("interval").notNull().default(1),
     dayOfWeek: integer("day_of_week"),
     dayOfMonth: integer("day_of_month"),
+    month: smallint("month"),
     endDate: timestamp("end_date", { withTimezone: true }),
     nextRunAt: timestamp("next_run_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
