@@ -186,18 +186,14 @@ export function TaskForm({
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    // assigneeIds/tagIds referenciam ids do mock atual (não UUIDs reais —
-    // isso só passa a existir no backend de P-4.6+). createTaskSchema exige
-    // `.uuid()` nesses campos; aqui validamos a forma do resto do payload
-    // com o schema compartilhado e tratamos os arrays de id à parte.
     const candidate = {
       title: values.title,
       description: values.description.trim() ? values.description : null,
       workspace: values.workspace,
       priority: values.priority,
       dueDate: values.dueDate ? new Date(`${values.dueDate}T00:00:00`) : null,
-      assigneeIds: [],
-      tagIds: [],
+      assigneeIds: values.assigneeIds,
+      tagIds: values.tagIds,
       recurrenceRule: null,
     };
     const result = createTaskSchema.safeParse(candidate);
@@ -210,14 +206,7 @@ export function TaskForm({
       setErrors(nextErrors);
       return;
     }
-    onSubmit(
-      {
-        ...result.data,
-        assigneeIds: values.assigneeIds,
-        tagIds: values.tagIds,
-      },
-      attachments,
-    );
+    onSubmit(result.data, attachments);
   }
 
   const selectedAssignees = assignableUsers.filter((u) =>
@@ -302,7 +291,7 @@ export function TaskForm({
         />
       </FormField>
 
-      <FormField label="Responsáveis">
+      <FormField label="Responsáveis" error={errors.assigneeIds}>
         <div className="relative">
           <button
             type="button"
@@ -364,7 +353,7 @@ export function TaskForm({
         </div>
       </FormField>
 
-      <FormField label="Tags">
+      <FormField label="Tags" error={errors.tagIds}>
         <div className="relative">
           <button
             type="button"

@@ -2,7 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { TimeEntry } from "@hebron/types/tarefas";
-import { Play, Square, Timer } from "lucide-react";
+import {
+  createTimeEntrySchema,
+  type CreateTimeEntryInput,
+} from "@hebron/validators/tarefas";
+import { Button, FormField, Input } from "@hebron/ui";
+import { Play, Plus, Square, Timer } from "lucide-react";
 
 function cn(...cls: (string | false | null | undefined)[]): string {
   return cls.filter(Boolean).join(" ");
@@ -20,20 +25,81 @@ function fmtDate(d: Date): string {
 }
 
 export interface TimeTrackerProps {
+  taskId: string;
   timeEntries: TimeEntry[];
   onStart?: () => void;
   onStop?: (elapsedMinutes: number) => void;
+  onLogManual?: (values: CreateTimeEntryInput) => Promise<boolean>;
+  isLoggingManual?: boolean;
+  manualError?: string | null;
   className?: string;
 }
 
 export function TimeTracker({
+  taskId,
   timeEntries,
   onStart,
   onStop,
+  onLogManual,
+  isLoggingManual = false,
+  manualError = null,
   className,
 }: TimeTrackerProps) {
   const runningEntry = timeEntries.find((e) => e.endedAt === null) ?? null;
   const [now, setNow] = useState(() => Date.now());
+
+  const [showManualForm, setShowManualForm] = useState(false);
+  const [manualStart, setManualStart] = useState("");
+  const [manualEnd, setManualEnd] = useState("");
+  const [manualNotes, setManualNotes] = useState("");
+  const [manualFieldErrors, setManualFieldErrors] = useState<{
+    startedAt?: string;
+    endedAt?: string;
+    notes?: string;
+  }>({});
+
+  async function handleManualSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!manualStart || !manualEnd) {
+      setManualFieldErrors({
+        startedAt: !manualStart ? "Informe o início" : undefined,
+        endedAt: !manualEnd ? "Informe o fim" : undefined,
+      });
+      return;
+    }
+    const result = createTimeEntrySchema.safeParse({
+      taskId,
+      startedAt: manualStart,
+      endedAt: manualEnd,
+      notes: manualNotes.trim() ? manualNotes : null,
+    });
+    if (!result.success) {
+      const nextErrors: typeof manualFieldErrors = {};
+      for (const issue of result.error.issues) {
+        const key = issue.path[0];
+        if (key === "startedAt") nextErrors.startedAt = issue.message;
+        if (key === "endedAt") nextErrors.endedAt = issue.message;
+        if (key === "notes") nextErrors.notes = issue.message;
+      }
+      setManualFieldErrors(nextErrors);
+      return;
+    }
+    if (runningEntry && result.data.endedAt > runningEntry.startedAt) {
+      setManualFieldErrors({
+        endedAt:
+          "Você tem um cronômetro em andamento que se sobrepõe a este intervalo — pare-o antes de lançar esse período manualmente",
+      });
+      return;
+    }
+    setManualFieldErrors({});
+    const ok = await onLogManual?.(result.data);
+    if (ok) {
+      setManualStart("");
+      setManualEnd("");
+      setManualNotes("");
+      setShowManualForm(false);
+    }
+  }
 
   useEffect(() => {
     if (!runningEntry) return;
@@ -60,7 +126,7 @@ export function TimeTracker({
   return (
     <div
       className={cn(
-        "rounded-(--radius-md) border border-(--border) bg-(--surface) px-4 py-4",
+        "rounded-md border border-(--border) bg-(--surface) px-4 py-4",
         className,
       )}
     >
@@ -129,6 +195,87 @@ export function TimeTracker({
           ))}
         </ul>
       )}
+
+      <div className="mt-4 border-t border-(--divider) pt-3">
+        {showManualForm ? (
+          <form
+            onSubmit={handleManualSubmit}
+            noValidate
+            className="flex flex-col gap-3"
+          >
+            {manualError && (
+              <p role="alert" className="text-xs text-(--color-destructive)">
+                {manualError}
+              </p>
+            )}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <FormField label="Início" error={manualFieldErrors.startedAt}>
+                <Input
+                  type="datetime-local"
+                  value={manualStart}
+                  onChange={(e) => {
+                    setManualStart(e.target.value);
+                    setManualFieldErrors((prev) => ({
+                      ...prev,
+                      startedAt: undefined,
+                    }));
+                  }}
+                  hasError={!!manualFieldErrors.startedAt}
+                />
+              </FormField>
+              <FormField label="Fim" error={manualFieldErrors.endedAt}>
+                <Input
+                  type="datetime-local"
+                  value={manualEnd}
+                  onChange={(e) => {
+                    setManualEnd(e.target.value);
+                    setManualFieldErrors((prev) => ({
+                      ...prev,
+                      endedAt: undefined,
+                    }));
+                  }}
+                  hasError={!!manualFieldErrors.endedAt}
+                />
+              </FormField>
+            </div>
+            <FormField label="Notas" error={manualFieldErrors.notes}>
+              <textarea
+                value={manualNotes}
+                onChange={(e) => setManualNotes(e.target.value)}
+                rows={2}
+                maxLength={1000}
+                placeholder="O que foi feito nesse período (opcional)"
+                className="w-full resize-none rounded-(--radius) border border-(--border) bg-(--bg-alt) px-3 py-2 text-sm outline-none placeholder:text-(--fg-muted) focus:border-(--hb-blue)"
+              />
+            </FormField>
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setShowManualForm(false);
+                  setManualFieldErrors({});
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" size="sm" loading={isLoggingManual}>
+                Lançar
+              </Button>
+            </div>
+          </form>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setShowManualForm(true)}
+            className="flex items-center gap-1.5 text-xs font-semibold text-(--hb-blue) hover:underline"
+          >
+            <Plus className="h-3 w-3" aria-hidden="true" />
+            Lançar tempo manualmente
+          </button>
+        )}
+      </div>
     </div>
   );
 }

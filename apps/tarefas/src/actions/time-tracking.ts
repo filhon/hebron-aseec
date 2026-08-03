@@ -109,13 +109,27 @@ export const stopTimeEntry = colaboradorAction
 export const createManualTimeEntry = colaboradorAction
   .schema(createTimeEntrySchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    const durationMinutes = input.endedAt
-      ? diffMinutes(input.startedAt, input.endedAt)
-      : null;
+    const durationMinutes = diffMinutes(input.startedAt, input.endedAt);
 
     const entry = await withAuthenticatedContext(
       { actorId: ctx.actorId },
       async (tx) => {
+        const [open] = await tx
+          .select({ startedAt: timeEntries.startedAt })
+          .from(timeEntries)
+          .where(
+            and(
+              eq(timeEntries.userId, ctx.actorId),
+              isNull(timeEntries.endedAt),
+            ),
+          )
+          .limit(1);
+        if (open && input.endedAt > open.startedAt) {
+          throw new Error(
+            "Você tem um cronômetro em andamento que se sobrepõe a este intervalo — pare-o antes de lançar esse período manualmente",
+          );
+        }
+
         const [row] = await tx
           .insert(timeEntries)
           .values({

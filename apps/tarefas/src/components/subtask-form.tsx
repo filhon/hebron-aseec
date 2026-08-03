@@ -1,8 +1,10 @@
 "use client";
 
 import { useId, useState } from "react";
-import { z } from "zod";
-import type { CreateSubtaskInput } from "@hebron/validators/tarefas";
+import {
+  createSubtaskSchema,
+  type CreateSubtaskInput,
+} from "@hebron/validators/tarefas";
 import {
   Button,
   FormField,
@@ -13,15 +15,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@hebron/ui";
-
-// `assigneeId` referencia um usuário do mock atual (id legível, não UUID) —
-// createSubtaskSchema exige `.uuid()`; aqui só validamos o formato do título.
-const subtaskFormSchema = z.object({
-  title: z
-    .string()
-    .min(2, "Título é obrigatório")
-    .max(300, "Título deve ter no máximo 300 caracteres"),
-});
 
 export interface SubtaskFormPerson {
   id: string;
@@ -50,12 +43,12 @@ export function SubtaskForm({
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const result = subtaskFormSchema.safeParse({ title });
+    const result = createSubtaskSchema.safeParse({ taskId, title, assigneeId });
     if (!result.success) {
       setError(result.error.issues[0]?.message);
       return;
     }
-    onSubmit({ taskId, title: result.data.title, assigneeId });
+    onSubmit(result.data);
     setTitle("");
     setAssigneeId(null);
     setError(undefined);

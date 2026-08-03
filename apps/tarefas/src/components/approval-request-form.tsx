@@ -1,9 +1,8 @@
 "use client";
 
 import { useId, useState } from "react";
-import { z } from "zod";
 import {
-  taskStatusEnum,
+  requestApprovalSchema,
   type RequestApprovalInput,
 } from "@hebron/validators/tarefas";
 import type { TaskStatus } from "@hebron/types/tarefas";
@@ -17,17 +16,6 @@ import {
   SelectValue,
 } from "@hebron/ui";
 import { ShieldCheck } from "lucide-react";
-
-// `approverId` referencia um diretor do mock atual (id legível, não UUID) —
-// requestApprovalSchema exige `.uuid()`; aqui relaxamos para string não-vazia.
-const approvalFormSchema = z.object({
-  requestedStatus: taskStatusEnum,
-  approverId: z.string().min(1, "Selecione um diretor aprovador"),
-  notes: z
-    .string()
-    .max(500, "Notas devem ter no máximo 500 caracteres")
-    .nullable(),
-});
 
 const STATUS_LABEL: Record<TaskStatus, string> = {
   a_fazer: "A Fazer",
@@ -74,7 +62,8 @@ export function ApprovalRequestForm({
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const result = approvalFormSchema.safeParse({
+    const result = requestApprovalSchema.safeParse({
+      taskId,
       requestedStatus,
       approverId,
       notes: notes.trim() ? notes : null,
@@ -89,7 +78,7 @@ export function ApprovalRequestForm({
       setErrors(nextErrors);
       return;
     }
-    onSubmit({ taskId, ...result.data });
+    onSubmit(result.data);
   }
 
   return (

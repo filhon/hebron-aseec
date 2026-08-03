@@ -5425,7 +5425,9 @@ Páginas: "Minhas tarefas" (lista priorizada). Board por workspace (kanban + lis
 - Env vars: nenhuma
 
 **Escopo:**
-Formulários: criar/editar tarefa (título, descrição com o editor rich text COMPARTILHADO de packages/ui — decisão D-1; não criar editor próprio do app, workspace, assignee, prioridade, due_date, tags, anexos). Criar subtarefa. Comentário com @menções (autocomplete de usuários). Configurar recorrência (tipo, intervalo, dia). Criar template (nome, lista de tarefas pré-definidas). Pedido de aprovação (selecionar diretor). Time entry manual.
+Formulários: criar/editar tarefa (título, descrição com o editor rich text COMPARTILHADO de packages/ui — decisão D-1; não criar editor próprio do app, workspace, assignee, prioridade, due_date, tags, anexos). Criar subtarefa. Comentário com @menções (autocomplete de usuários). Configurar recorrência (tipo, intervalo, dia). Criar template (nome, lista de tarefas pré-definidas). Pedido de aprovação (selecionar diretor).
+
+> Nota (P-4.4c/S-76): o escopo original listava um sétimo formulário, "Time entry manual", sem arquivo correspondente na lista abaixo. A lacuna foi registrada em S-76 e resolvida em P-4.4c, que deu tela à action `createManualTimeEntry` dentro de `time-tracker.tsx` (não um arquivo de formulário próprio).
 
 **Arquivos permitidos para criação/edição:**
 
@@ -5442,7 +5444,7 @@ Formulários: criar/editar tarefa (título, descrição com o editor rich text C
 - [x] @menções com autocomplete de usuários do workspace
 - [x] Recurrence form com preview visual — nomeia padrão + dia + mês (ex: "Toda segunda-feira", "Anualmente, no dia 10 de janeiro"), sem horário: `RecurrenceRule` não tem esse campo e `tarefasRecurrenceCron` roda em horário fixo (`0 6 * * *`), então um horário por regra seria exibido e ignorado na execução (P-4.1b, ver S-76)
 - [x] Template form com lista de tarefas editável (drag-drop para reordenar) — também por botões mover acima/abaixo, sem exigir arrasto (P-4.2b, S-223)
-- [x] Validação Zod em todos os formulários
+- [x] Validação Zod em todos os formulários — schemas compartilhados de `@hebron/validators/tarefas` sem cópia local: `createTaskSchema` (task-form, incluindo `assigneeIds`/`tagIds`), `createSubtaskSchema` (subtask-form), `createCommentSchema` (comment-form), `requestApprovalSchema` (approval-request-form), `recurrenceRuleSchema` (recurrence-form), `createTaskTemplateSchema`/`updateTaskTemplateSchema` (template-form) — relaxamento temporário para ids não-UUID do mock removido em P-4.4c, junto do lançamento manual (`createTimeEntrySchema`, ver nota acima)
 - [x] Lint passa
 - [x] Types passam
 
@@ -5987,13 +5989,13 @@ Segundo débito, do mesmo prompt e da mesma sessão. S-76 registrou: "quando o b
 
 **Critérios de aceite:**
 
-- [ ] `grep -rn "createManualTimeEntry" apps packages` acha um consumidor de UI, **ou** não acha definição nenhuma
-- [ ] Na saída (a): lançar 90 minutos de ontem numa tarefa faz o total do `TimeTracker` subir em 1h 30min sem recarregar a página
-- [ ] Fim antes do início e sobreposição com cronômetro em andamento são recusados com mensagem em português
-- [ ] Nenhum schema Zod declarado em `apps/tarefas/src/components` reproduz um schema de `@hebron/validators/tarefas`
-- [ ] Selecionar um responsável inválido no `TaskForm` produz erro no campo, não erro genérico de action
-- [ ] `pnpm --filter @hebron/tarefas typecheck lint test` verdes; `pnpm --filter @hebron/tarefas build` verde
-- [ ] Registrar em SESSIONS.md — incluindo a saída escolhida no item 1
+- [x] `grep -rn "createManualTimeEntry" apps packages` acha um consumidor de UI, **ou** não acha definição nenhuma
+- [x] Na saída (a): lançar 90 minutos de ontem numa tarefa faz o total do `TimeTracker` subir em 1h 30min sem recarregar a página
+- [x] Fim antes do início e sobreposição com cronômetro em andamento são recusados com mensagem em português
+- [x] Nenhum schema Zod declarado em `apps/tarefas/src/components` reproduz um schema de `@hebron/validators/tarefas`
+- [x] Selecionar um responsável inválido no `TaskForm` produz erro no campo, não erro genérico de action
+- [x] `pnpm --filter @hebron/tarefas typecheck lint test` verdes; `pnpm --filter @hebron/tarefas build` verde
+- [x] Registrar em SESSIONS.md — incluindo a saída escolhida no item 1
 
 **Notas:**
 Ref: S-76 (as duas dívidas), BRAIN.md §6.9 e o precedente de P-3.9c. Recomendação: saída **(a)**. Um cronômetro sem lançamento manual não mede o trabalho, mede a memória de quem lembra de apertar o botão.

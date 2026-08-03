@@ -155,13 +155,20 @@ export const createAttachmentSchema = z.object({
 export type CreateAttachmentInput = z.infer<typeof createAttachmentSchema>;
 
 // ─── createTimeEntrySchema ────────────────────────────────────────────────────
+// Lançamento manual: intervalo já conhecido, por isso `endedAt` é obrigatório
+// (diferente do cronômetro em `timeEntries`, onde `endedAt` null = em andamento).
 
-export const createTimeEntrySchema = z.object({
-  taskId: z.string().uuid(),
-  startedAt: z.coerce.date(),
-  endedAt: z.coerce.date().nullable().optional().default(null),
-  notes: z.string().max(1000).nullable().optional().default(null),
-});
+export const createTimeEntrySchema = z
+  .object({
+    taskId: z.string().uuid(),
+    startedAt: z.coerce.date(),
+    endedAt: z.coerce.date(),
+    notes: z.string().max(1000).nullable().optional().default(null),
+  })
+  .refine((entry) => entry.endedAt > entry.startedAt, {
+    message: "O fim deve ser depois do início",
+    path: ["endedAt"],
+  });
 
 export type CreateTimeEntryInput = z.infer<typeof createTimeEntrySchema>;
 

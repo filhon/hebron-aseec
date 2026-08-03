@@ -1,23 +1,16 @@
 "use client";
 
 import { useId, useState } from "react";
-import { z } from "zod";
-import type { CreateCommentInput } from "@hebron/validators/tarefas";
+import {
+  createCommentSchema,
+  type CreateCommentInput,
+} from "@hebron/validators/tarefas";
 import { Avatar, FormField } from "@hebron/ui";
 import { AtSign, Send } from "lucide-react";
 
 function cn(...cls: (string | false | null | undefined)[]): string {
   return cls.filter(Boolean).join(" ");
 }
-
-// `mentions` referencia usuários do mock atual (ids legíveis, não UUID) —
-// createCommentSchema exige `.uuid()`; aqui só validamos o conteúdo.
-const commentFormSchema = z.object({
-  content: z
-    .string()
-    .min(1, "Comentário não pode ser vazio")
-    .max(3000, "Comentário deve ter no máximo 3000 caracteres"),
-});
 
 export interface CommentFormPerson {
   id: string;
@@ -72,12 +65,12 @@ export function CommentForm({
         (p) => pendingMentions.has(p.id) && content.includes(`@${p.name}`),
       )
       .map((p) => p.id);
-    const result = commentFormSchema.safeParse({ content });
+    const result = createCommentSchema.safeParse({ taskId, content, mentions });
     if (!result.success) {
       setError(result.error.issues[0]?.message);
       return;
     }
-    onSubmit({ taskId, content: result.data.content, mentions });
+    onSubmit(result.data);
     setContent("");
     setPendingMentions(new Set());
     setMentionFilter(null);

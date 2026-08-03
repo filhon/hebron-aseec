@@ -11,7 +11,10 @@ import type {
   TaskStatus,
   Workspace,
 } from "@hebron/types/tarefas";
-import type { CreateTaskInput } from "@hebron/validators/tarefas";
+import type {
+  CreateTaskInput,
+  CreateTimeEntryInput,
+} from "@hebron/validators/tarefas";
 import {
   Avatar,
   Button,
@@ -48,6 +51,7 @@ import {
 } from "../../../../actions/tasks";
 import { createComment } from "../../../../actions/comments";
 import {
+  createManualTimeEntry,
   startTimeEntry,
   stopTimeEntry,
 } from "../../../../actions/time-tracking";
@@ -183,6 +187,7 @@ export function TaskDetailClient({
   const [isSavingTask, setIsSavingTask] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const [attachmentNotice, setAttachmentNotice] = useState<string | null>(null);
+  const [manualEntryError, setManualEntryError] = useState<string | null>(null);
 
   function refresh() {
     router.refresh();
@@ -262,6 +267,26 @@ export function TaskDetailClient({
   const { execute: submitStopTimer } = useAction(stopTimeEntry, {
     onSuccess: refresh,
   });
+
+  const {
+    executeAsync: submitManualTimeEntryAsync,
+    isPending: isLoggingManualTime,
+  } = useAction(createManualTimeEntry);
+
+  async function handleLogManualTime(
+    values: CreateTimeEntryInput,
+  ): Promise<boolean> {
+    setManualEntryError(null);
+    const result = await submitManualTimeEntryAsync(values);
+    if (!result?.data?.entry) {
+      setManualEntryError(
+        result?.serverError ?? "Não foi possível registrar o tempo.",
+      );
+      return false;
+    }
+    refresh();
+    return true;
+  }
 
   const { execute: submitRequestApproval, isPending: isRequestingApproval } =
     useAction(requestApproval, {
@@ -529,6 +554,7 @@ export function TaskDetailClient({
           )}
 
           <TimeTracker
+            taskId={task.id}
             timeEntries={task.timeEntries}
             onStart={() => submitStartTimer({ taskId: task.id })}
             onStop={() => {
@@ -536,6 +562,9 @@ export function TaskDetailClient({
                 submitStopTimer({ timeEntryId: runningTimeEntry.id });
               }
             }}
+            onLogManual={handleLogManualTime}
+            isLoggingManual={isLoggingManualTime}
+            manualError={manualEntryError}
           />
 
           <div className="rounded-md border border-(--border) bg-(--surface) px-5 py-5">

@@ -245,6 +245,7 @@
 | S-222  | 2026-08-03 | P-4.1b — A recorrência anual que não sabe em que mês cai (CORRETIVO)                                                             | concluido                            |
 | S-223  | 2026-08-03 | P-4.2b — O quadro que só se move com mouse (CORRETIVO)                                                                           | concluido                            |
 | S-224  | 2026-08-03 | P-4.4b — A descrição que o editor formata e a tela mostra com as tags à vista (CORRETIVO)                                        | concluido                            |
+| S-225  | 2026-08-03 | P-4.4c — O lançamento manual de horas sem tela e os quatro schemas que ainda fingem que não há UUID (CORRETIVO)                  | concluido                            |
 
 ---
 
@@ -19984,3 +19985,91 @@ como dev dependency).
 - `apps/intranet/src/components/announcement-card.tsx`
 - `apps/plataforma/src/components/lesson-view.tsx`
 - `PROMPTS.md` (critério de P-4.4)
+
+---
+
+## S-225 — P-4.4c — O lançamento manual de horas sem tela e os quatro schemas que ainda fingem que não há UUID (CORRETIVO)
+
+**Prompt:** P-4.4c (PROMPTS.md)
+**Data:** 2026-08-03
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+Duas dívidas de S-76, na mesma sessão. Consultado o Filipe sobre qual saída
+seguir no item 1 (o prompt aceita as duas, mas exige uma) — escolhida a
+**saída (a)**, a recomendada: o cronômetro está em uso desde P-4.9, então a
+ausência de lançamento manual era lacuna dentro de feature ativa, não
+feature ausente.
+
+1. **Lançamento manual (saída a):** `TimeTracker` ganhou uma seção
+   "Lançar tempo manualmente" (toggle inline, mesmo padrão de
+   `SubtaskForm` — link que expande formulário, sem modal) com início, fim
+   e notas, ligada a `createManualTimeEntry` a partir de
+   `task-detail-client.tsx` (`executeAsync` + `router.refresh()` em
+   sucesso, mesmo padrão de `handleUpdateTask`).
+2. **Regra de sobreposição (item 2 do escopo):** `createTimeEntrySchema`
+   ganhou `.refine(endedAt > startedAt)` (fim depois do início) e
+   `endedAt` deixou de ser opcional — um lançamento manual é sempre um
+   intervalo já fechado, diferente do cronômetro (`endedAt` null =
+   em andamento). A ação `createManualTimeEntry` passou a consultar um
+   cronômetro aberto (`endedAt IS NULL`) do mesmo usuário e recusar se o
+   novo intervalo terminar depois do início do cronômetro — mesma regra
+   que `startTimeEntry` já aplicava para um segundo cronômetro simultâneo.
+   `apps/tarefas/src/lib/safe-action.ts` não define `handleServerError`
+   (fora do escopo de arquivos permitidos, e já documentado como padrão
+   aceito em S- de flats/reservations), então o `serverError` de teste é
+   sempre a mensagem genérica do next-safe-action — a mensagem em
+   português exigida pelo critério de aceite é a que o `TimeTracker` já
+   mostra client-side (ele tem `runningEntry` no props `timeEntries` e
+   valida a sobreposição antes mesmo de chamar a action); a checagem no
+   servidor é a segunda camada de defesa, sem texto amigável exposto.
+3. **Schemas compartilhados de volta:** `subtask-form.tsx`,
+   `comment-form.tsx`, `approval-request-form.tsx` voltaram a validar com
+   `createSubtaskSchema`/`createCommentSchema`/`requestApprovalSchema` de
+   `@hebron/validators/tarefas` (sem cópia local com `.uuid()`
+   relaxado) — o mock que motivou o relaxamento em P-4.4 não existe mais
+   desde P-4.9. `task-form.tsx` parou de forçar `assigneeIds`/`tagIds`
+   para `[]` antes do `safeParse` e reinjetar os valores reais depois: os
+   arrays agora entram na validação com o resto do payload, e a
+   `FormField` de "Responsáveis"/"Tags" ganhou `error={errors.assigneeIds}`/
+   `error={errors.tagIds}` para exibir a falha, se houver.
+4. **Teste:** `apps/tarefas/src/__tests__/time-tracking.test.ts` (novo, 3
+   casos) — lançar 90 minutos soma ao total (via soma direta das linhas
+   no banco, já que a subida "sem recarregar" é comportamento client-side
+   do `TimeTracker`/`router.refresh()`, fora do escopo de um teste de
+   action), fim antes do início é recusado (`validationErrors`, mensagem
+   "O fim deve ser depois do início"), sobreposição com cronômetro aberto
+   é recusada (`serverError` definido).
+5. Bookkeeping em `PROMPTS.md`: escopo de P-4.4 não lista mais um sétimo
+   formulário sem arquivo ("Time entry manual" virou nota explicando que
+   foi resolvido em P-4.4c dentro de `time-tracker.tsx`); critério
+   "Validação Zod em todos os formulários" agora nomeia os schemas.
+
+### Verificação
+
+- `grep -rn "createManualTimeEntry" apps packages` → só a action e os dois
+  consumidores novos (`task-detail-client.tsx`, o teste)
+- `grep -rn "z\.object\|z\.enum\|FormSchema" apps/tarefas/src/components/*.tsx`
+  → vazio (nenhum schema Zod local reproduzindo um de `@hebron/validators/tarefas`)
+- `pnpm --filter @hebron/tarefas typecheck lint` — verdes
+- `pnpm --filter @hebron/tarefas test` — 7 suítes, 53 testes, todos verdes
+  (as 3 novas de `time-tracking.test.ts` inclusas)
+- `pnpm --filter @hebron/tarefas build` — verde (11 rotas); primeira
+  tentativa falhou com `PageNotFoundError` em `/meus-dados` por cache
+  `.next` obsoleto, resolvido limpando o diretório antes do rebuild — não
+  relacionado às mudanças desta sessão
+
+### Arquivos modificados
+
+- `packages/validators/src/tarefas/index.ts` (`createTimeEntrySchema`)
+- `apps/tarefas/src/actions/time-tracking.ts` (`createManualTimeEntry`)
+- `apps/tarefas/src/components/time-tracker.tsx`
+- `apps/tarefas/src/app/(dashboard)/tarefa/[id]/task-detail-client.tsx`
+- `apps/tarefas/src/components/task-form.tsx`
+- `apps/tarefas/src/components/subtask-form.tsx`
+- `apps/tarefas/src/components/comment-form.tsx`
+- `apps/tarefas/src/components/approval-request-form.tsx`
+- `apps/tarefas/src/__tests__/time-tracking.test.ts` (criado)
+- `PROMPTS.md` (escopo e critério de P-4.4)
