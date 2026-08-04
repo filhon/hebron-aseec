@@ -246,6 +246,7 @@
 | S-223  | 2026-08-03 | P-4.2b — O quadro que só se move com mouse (CORRETIVO)                                                                           | concluido                            |
 | S-224  | 2026-08-03 | P-4.4b — A descrição que o editor formata e a tela mostra com as tags à vista (CORRETIVO)                                        | concluido                            |
 | S-225  | 2026-08-03 | P-4.4c — O lançamento manual de horas sem tela e os quatro schemas que ainda fingem que não há UUID (CORRETIVO)                  | concluido                            |
+| S-226  | 2026-08-03 | P-4.5b — O esqueleto de árvore que nenhuma tela mostra e a visão que o recarregamento esquece (CORRETIVO)                        | concluido                            |
 
 ---
 
@@ -20073,3 +20074,62 @@ feature ausente.
 - `apps/tarefas/src/components/approval-request-form.tsx`
 - `apps/tarefas/src/__tests__/time-tracking.test.ts` (criado)
 - `PROMPTS.md` (escopo e critério de P-4.4)
+
+## S-226 — P-4.5b — O esqueleto de árvore que nenhuma tela mostra e a visão que o recarregamento esquece (CORRETIVO)
+
+**Prompt:** P-4.5b (PROMPTS.md)
+**Data:** 2026-08-03
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+`TreeViewSkeleton` (`task-list-skeleton.tsx:44`) era o único export do módulo
+Tarefas sem consumidor: `loading.tsx` de `workspace/[slug]` sempre renderizava
+`KanbanSkeleton`, porque era um Server Component sem acesso à visão escolhida
+pelo usuário — que vivia só em `useState<BoardView>("kanban")` dentro de
+`board-client.tsx`, sem refletir na URL. Resultado: quem trabalhava em
+Lista/Árvore via um esqueleto de Kanban piscar a cada navegação, e a visão em
+si não sobrevivia a reload, a voltar do detalhe da tarefa, nem podia ser
+compartilhada por link.
+
+Escopo executado ao pé da letra do prompt:
+
+1. `workspace/[slug]/page.tsx` (Server Component) passou a ler `searchParams`
+   (`Promise<{ view?: string }>`), validar com `parseBoardView` (`"lista"` ou
+   `"arvore"` literal; qualquer outra coisa cai em `"kanban"`) e repassar como
+   `initialView` a `WorkspaceBoardClient`.
+2. `board-client.tsx`: `BoardView` virou export nomeado; `useState` agora
+   parte de `initialView` em vez de `"kanban"` fixo. O toggle ganhou
+   `handleViewChange`, que atualiza o estado local (troca instantânea, sem
+   piscar) e sincroniza a URL via `router.replace(`${pathname}?view=${next}`,
+{ scroll: false })` — sem recarregar a página e sem resetar a rolagem.
+3. `loading.tsx` da rota não recebe `searchParams` como prop (limitação do
+   arquivo especial do Next.js) — virou Client Component (`"use client"`) com
+   um subcomponente `ViewSkeleton` lendo `useSearchParams().get("view")`,
+   envolvido em `<Suspense fallback={<KanbanSkeleton />}>` (padrão
+   recomendado pelo Next para hooks de search params fora de uma página).
+   Escolhe `TreeViewSkeleton` para `arvore`, `TaskListSkeleton` para `lista`,
+   `KanbanSkeleton` como default (inclui ausente/inválido).
+4. Nenhum arquivo removido: `TreeViewSkeleton` deixou de ser órfão ao ganhar
+   consumidor em `loading.tsx` — não havia necessidade de excluí-lo do
+   repositório.
+5. Bookkeeping em `PROMPTS.md`: critério de P-4.3 ("Board com toggle
+   Kanban/Lista/Árvore") e de P-4.5 ("Skeletons por view") passaram a
+   registrar a correção (P-4.5b, S-226).
+
+### Verificação
+
+- `grep -rn "TreeViewSkeleton" apps packages` → definição em
+  `task-list-skeleton.tsx` + consumo em `loading.tsx`, nenhuma linha órfã
+- `pnpm --filter @hebron/tarefas typecheck lint` — verdes
+- `pnpm --filter @hebron/tarefas test`: 7 suítes, 53 testes, todos verdes
+- `pnpm --filter @hebron/tarefas build` — verde (11 rotas), sem warning de
+  `useSearchParams`/Suspense
+
+### Arquivos modificados
+
+- `apps/tarefas/src/app/(dashboard)/workspace/[slug]/page.tsx`
+- `apps/tarefas/src/app/(dashboard)/workspace/[slug]/board-client.tsx`
+- `apps/tarefas/src/app/(dashboard)/workspace/[slug]/loading.tsx`
+- `PROMPTS.md` (critérios de P-4.3 e P-4.5)

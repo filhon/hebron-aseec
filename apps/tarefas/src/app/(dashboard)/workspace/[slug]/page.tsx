@@ -5,7 +5,7 @@ import {
   getTags,
   getTasksByWorkspace,
 } from "../../../../lib/queries";
-import { WorkspaceBoardClient } from "./board-client";
+import { WorkspaceBoardClient, type BoardView } from "./board-client";
 
 const WORKSPACES: Workspace[] = [
   "administrativo",
@@ -16,12 +16,19 @@ const WORKSPACES: Workspace[] = [
   "tecnologia_inovacao",
 ];
 
+function parseBoardView(raw: string | undefined): BoardView {
+  return raw === "lista" || raw === "arvore" ? raw : "kanban";
+}
+
 export default async function WorkspaceBoardPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams: Promise<{ view?: string }>;
 }) {
   const { slug } = await params;
+  const { view } = await searchParams;
 
   if (!WORKSPACES.includes(slug as Workspace)) {
     notFound();
@@ -40,6 +47,7 @@ export default async function WorkspaceBoardPage({
       tasks={tasks}
       assignableUsers={assignableUsers}
       tags={tags}
+      initialView={parseBoardView(view)}
     />
   );
 }

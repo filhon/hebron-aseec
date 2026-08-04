@@ -5401,7 +5401,7 @@ Páginas: "Minhas tarefas" (lista priorizada). Board por workspace (kanban + lis
 **Critérios de aceite:**
 
 - [x] "Minhas tarefas" com filtros: workspace, prioridade, status, assignee
-- [x] Board com toggle Kanban/Lista/Árvore
+- [x] Board com toggle Kanban/Lista/Árvore — visão persiste na URL (`?view=`), sobrevive a reload e a voltar do detalhe da tarefa (P-4.5b, S-226)
 - [x] Detalhe: sidebar com metadados, corpo com descrição + comentários
 - [x] Calendário: visualização mensal/semanal com tarefas por data
 - [x] Recorrentes: lista de regras com preview da próxima execução
@@ -5474,7 +5474,7 @@ Loading, empty e error states para todas as telas. Skeletons para kanban, lista,
 
 **Critérios de aceite:**
 
-- [x] Skeletons por view (kanban, lista, árvore, calendário)
+- [x] Skeletons por view (kanban, lista, árvore, calendário) — `loading.tsx` de `workspace/[slug]` escolhia sempre `KanbanSkeleton`, deixando `TreeViewSkeleton` órfão; agora lê a view pela URL (P-4.5b, S-226)
 - [x] Modo foco vazio: "Nenhuma tarefa para hoje. Bom descanso!"
 - [x] Workspace vazio: mensagem contextual + CTA criar tarefa
 - [x] Lint passa
@@ -6038,13 +6038,13 @@ E a visão não sobrevive a nada: recarregar volta para Kanban, voltar do detalh
 
 **Critérios de aceite:**
 
-- [ ] `/workspace/financeiro?view=arvore` abre na árvore, e recarregar mantém a árvore
-- [ ] Abrir uma tarefa a partir da lista e voltar devolve a lista, não o kanban
-- [ ] Durante o carregamento da lista ou da árvore, nenhum esqueleto de kanban aparece
-- [ ] `grep -rn "TreeViewSkeleton" apps packages` tem consumidor **ou** não tem definição
-- [ ] `view` ausente, vazio ou inválido não quebra a rota
-- [ ] `pnpm --filter @hebron/tarefas typecheck lint test` verdes; `pnpm --filter @hebron/tarefas build` verde
-- [ ] Registrar em SESSIONS.md
+- [x] `/workspace/financeiro?view=arvore` abre na árvore, e recarregar mantém a árvore
+- [x] Abrir uma tarefa a partir da lista e voltar devolve a lista, não o kanban
+- [x] Durante o carregamento da lista ou da árvore, nenhum esqueleto de kanban aparece
+- [x] `grep -rn "TreeViewSkeleton" apps packages` tem consumidor **ou** não tem definição
+- [x] `view` ausente, vazio ou inválido não quebra a rota
+- [x] `pnpm --filter @hebron/tarefas typecheck lint test` verdes; `pnpm --filter @hebron/tarefas build` verde
+- [x] Registrar em SESSIONS.md
 
 **Notas:**
 Ref: S-77 (débito registrado) e G5. É o de menor prioridade dos cinco — nada aqui produz dado errado; o custo é um carregamento que mostra a tela errada e um estado de trabalho que o app esquece a cada navegação.

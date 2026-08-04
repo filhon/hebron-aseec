@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAction } from "next-safe-action/hooks";
 import type { Tag, Task, TaskStatus, Workspace } from "@hebron/types/tarefas";
 import {
@@ -38,7 +38,7 @@ const WORKSPACE_LABEL: Record<Workspace, string> = {
   tecnologia_inovacao: "Tecnologia e Inovação",
 };
 
-type BoardView = "kanban" | "lista" | "arvore";
+export type BoardView = "kanban" | "lista" | "arvore";
 
 const VIEW_CFG: Record<BoardView, { label: string; icon: typeof LayoutGrid }> =
   {
@@ -52,6 +52,7 @@ export interface WorkspaceBoardClientProps {
   tasks: Task[];
   assignableUsers: Person[];
   tags: Tag[];
+  initialView: BoardView;
 }
 
 export function WorkspaceBoardClient({
@@ -59,9 +60,11 @@ export function WorkspaceBoardClient({
   tasks,
   assignableUsers,
   tags,
+  initialView,
 }: WorkspaceBoardClientProps) {
   const router = useRouter();
-  const [view, setView] = useState<BoardView>("kanban");
+  const pathname = usePathname();
+  const [view, setView] = useState<BoardView>(initialView);
   const [creating, setCreating] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -121,6 +124,11 @@ export function WorkspaceBoardClient({
     router.push(`/tarefa/${id}`);
   }
 
+  function handleViewChange(next: BoardView) {
+    setView(next);
+    router.replace(`${pathname}?view=${next}`, { scroll: false });
+  }
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
       <PageHeader
@@ -136,7 +144,7 @@ export function WorkspaceBoardClient({
                 return (
                   <button
                     key={key}
-                    onClick={() => setView(key)}
+                    onClick={() => handleViewChange(key)}
                     className={cn(
                       "flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors",
                       active

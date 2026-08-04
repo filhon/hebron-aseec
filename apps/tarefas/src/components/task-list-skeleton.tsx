@@ -61,7 +61,7 @@ export function TreeViewSkeleton() {
               <Bone className="h-9 w-40 rounded-full" />
               <div className="relative ml-3 mt-2 flex flex-col gap-1.5 border-l-2 border-(--border) py-1 pl-6">
                 {Array.from({ length: 2 }).map((__, j) => (
-                  <Bone key={j} className="h-8 w-52 rounded-(--radius-sm)" />
+                  <Bone key={j} className="h-8 w-52 rounded-sm" />
                 ))}
               </div>
             </div>
