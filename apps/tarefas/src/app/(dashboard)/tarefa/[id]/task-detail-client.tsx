@@ -44,6 +44,7 @@ import {
   X,
 } from "lucide-react";
 import {
+  assignTaskManually,
   createSubtask,
   toggleSubtask,
   updateTask,
@@ -188,6 +189,9 @@ export function TaskDetailClient({
   const [editError, setEditError] = useState<string | null>(null);
   const [attachmentNotice, setAttachmentNotice] = useState<string | null>(null);
   const [manualEntryError, setManualEntryError] = useState<string | null>(null);
+  const [assigningManually, setAssigningManually] = useState(false);
+  const [manualAssigneeIds, setManualAssigneeIds] = useState<string[]>([]);
+  const [assignError, setAssignError] = useState<string | null>(null);
 
   function refresh() {
     router.refresh();
@@ -300,6 +304,39 @@ export function TaskDetailClient({
     onSuccess: refresh,
   });
 
+  const {
+    executeAsync: assignTaskManuallyAsync,
+    isPending: isAssigningManually,
+  } = useAction(assignTaskManually);
+
+  function toggleManualAssignee(id: string) {
+    setManualAssigneeIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  }
+
+  function closeManualAssign() {
+    setAssigningManually(false);
+    setManualAssigneeIds([]);
+    setAssignError(null);
+  }
+
+  async function handleAssignManually() {
+    setAssignError(null);
+    const result = await assignTaskManuallyAsync({
+      taskId: task.id,
+      assigneeIds: manualAssigneeIds,
+    });
+    if (!result?.data?.task) {
+      setAssignError(
+        result?.serverError ?? "Não foi possível atribuir responsável.",
+      );
+      return;
+    }
+    closeManualAssign();
+    refresh();
+  }
+
   const directory = [
     { id: task.createdBy, name: task.createdByName },
     ...task.assignees.map((a) => ({ id: a.userId, name: a.userName })),
@@ -402,7 +439,91 @@ export function TaskDetailClient({
                 </span>
               )}
 
-              {task.needsManualAssignment && (
+              {task.needsManualAssignment && isSuperAdmin && (
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={() => setAssigningManually((v) => !v)}
+                    onBlur={() => setTimeout(closeManualAssign, 150)}
+                    aria-expanded={assigningManually}
+                    aria-haspopup="true"
+                    className="inline-flex items-center gap-1.5 rounded-full bg-(--color-destructive-muted) px-2.5 py-1 text-[10px] font-bold uppercase text-(--color-destructive) transition-colors hover:bg-(--color-destructive-muted)/70"
+                  >
+                    <UserX className="h-3 w-3" aria-hidden="true" />
+                    Sem responsável — atribuir
+                  </button>
+                  {assigningManually && (
+                    <div className="absolute z-(--z-dropdown) mt-1 w-64 rounded-(--radius) border border-(--border) bg-(--bg) p-2 shadow-(--shadow-md)">
+                      <p className="mb-1.5 px-1 text-[11px] font-semibold uppercase tracking-wide text-(--fg-muted)">
+                        Atribuir responsável
+                      </p>
+                      <div className="max-h-48 overflow-y-auto">
+                        {assignableUsers.length === 0 ? (
+                          <p className="px-2 py-1.5 text-xs normal-case text-(--fg-subtle)">
+                            Nenhum colaborador disponível.
+                          </p>
+                        ) : (
+                          assignableUsers.map((u) => {
+                            const checked = manualAssigneeIds.includes(u.id);
+                            return (
+                              <button
+                                key={u.id}
+                                type="button"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => toggleManualAssignee(u.id)}
+                                className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm normal-case transition-colors hover:bg-(--surface-alt)"
+                              >
+                                <span
+                                  className={cn(
+                                    "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
+                                    checked
+                                      ? "border-(--brand) bg-(--brand) text-(--brand-fg)"
+                                      : "border-(--border)",
+                                  )}
+                                >
+                                  {checked && <Check className="h-3 w-3" />}
+                                </span>
+                                {u.name}
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                      {assignError && (
+                        <p
+                          role="alert"
+                          className="mt-1.5 px-1 text-xs normal-case text-(--color-destructive)"
+                        >
+                          {assignError}
+                        </p>
+                      )}
+                      <div className="mt-2 flex items-center justify-end gap-2 border-t border-(--divider) pt-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={closeManualAssign}
+                        >
+                          Cancelar
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          loading={isAssigningManually}
+                          disabled={manualAssigneeIds.length === 0}
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={handleAssignManually}
+                        >
+                          Atribuir
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {task.needsManualAssignment && !isSuperAdmin && (
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-(--color-destructive-muted) px-2.5 py-1 text-[10px] font-bold uppercase text-(--color-destructive)">
                   <UserX className="h-3 w-3" aria-hidden="true" />
                   Sem responsável

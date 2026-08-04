@@ -5602,7 +5602,7 @@ Server Actions: CRUD de tarefas. Mover entre colunas (drag-drop). Criar/completa
 - [x] Template: instanciar cria todas as tarefas filhas
 - [x] Approval: enviar notificação ao diretor; aprovar/rejeitar atualiza status
 - [x] Todas as actions usam o action-client de @hebron/auth (grep: zero createClient manual)
-- [x] createAutoTask exportada de packages/integrations com tarefa nascendo SEM assignee
+- [x] createAutoTask exportada de packages/integrations com tarefa nascendo SEM assignee; ciclo completo (atribuição manual pela tela, flag desligando ao ganhar responsável, fila "Sem responsável" visível) fechado em P-4.8b
 - [x] Lint passa
 - [x] Types passam
 
@@ -5716,7 +5716,7 @@ Conectar integrações via packages/integrations (createAutoTask já criada em P
 
 - [x] `createAutoTask(source, sourceRef, templateId)` exportada de packages/integrations; zero imports app→app (verificação do CI)
 - [x] Submissão de projeto cria tarefas de análise (real)
-- [x] Tarefas automáticas nascem SEM assignee (super_admin atribui depois)
+- [x] Tarefas automáticas nascem SEM assignee; "super_admin atribui depois" tinha rota (`assignTaskManually`) sem consumidor de UI — fechado em P-4.8b (porta no detalhe, `needs_manual_assignment` sincronizada em toda atribuição/remoção, fila visível em "Minhas tarefas")
 - [x] Stubs documentados para Flats e Intranet
 - [x] Falha na criação do checklist não é engolida: log estruturado + notificação a super_admin
 - [x] Lint passa
@@ -6048,6 +6048,414 @@ E a visão não sobrevive a nada: recarregar volta para Kanban, voltar do detalh
 
 **Notas:**
 Ref: S-77 (débito registrado) e G5. É o de menor prioridade dos cinco — nada aqui produz dado errado; o custo é um carregamento que mostra a tela errada e um estado de trabalho que o app esquece a cada navegação.
+
+---
+
+## Tarefas — Corretivos do Bloco B
+
+> Os sete prompts abaixo fecham o que os critérios de P-4.6 a P-4.12 marcaram `[x]` e o produto não entrega. O padrão é o mesmo dos corretivos do Bloco A, invertido: lá a tela prometia e o backend não existia; aqui **a Server Action existe, foi testada e não tem porta de entrada** — `assignTaskManually`, `deleteTask` e `updateRecurrenceRule` não têm um único consumidor de UI no monorepo (`grep -rn "<nome>" apps packages` devolve só a definição e o teste), e `tarefas.task_events` é gravado por oito call-sites e lido por nenhum.
+>
+> Ordem de execução: **P-4.8b → P-4.8c → P-4.10b → P-4.9c → P-4.9d → P-4.8d → P-4.6b**. Cinco deles tocam `tarefa/[id]/task-detail-client.tsx` e três tocam `lib/queries.ts` — cada um assume o anterior aplicado. P-4.8c e P-4.9d criam migration à mão (0076 e 0077 no momento desta redação, conferir o próximo número livre antes de cada um; `drizzle-kit generate` está aposentado desde P-0.3c/S-171).
+
+---
+
+### P-4.8b — A tarefa automática que nasce órfã e continua órfã (CORRETIVO)
+
+**Fase:** 4
+**Módulo:** tarefas
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-4.8b-tarefas-atribuicao-manual`
+- Dependências: P-4.12 concluído (S-84), P-4.11b concluído (S-98)
+- Env vars: `DATABASE_URL`
+- Skill: **invocar `/impeccable` antes de começar**
+
+**Problema que este prompt resolve (contexto):**
+BRAIN §6.9 tem uma frase só sobre isto: "Tarefas auto-geradas de outros módulos: super_admin atribui manualmente após criação." O critério de P-4.8 "createAutoTask exportada de packages/integrations com tarefa nascendo SEM assignee" está `[x]`, e o de P-4.11 "Tarefas automáticas nascem SEM assignee (super_admin atribui depois)" também. A primeira metade das duas frases é verdade. A segunda não existe.
+
+`assignTaskManually` (`apps/tarefas/src/actions/tasks.ts:356`) foi escrita em P-4.8 exatamente para isso — S-80 registra o motivo: "sem uma rota para desligar `needs_manual_assignment`, toda tarefa automática ficaria permanentemente sem responsável". `grep -rn "assignTaskManually" apps packages` devolve **uma linha**: a própria definição. Nenhuma tela do monorepo a chama. É o mesmo achado de P-4.4c (`createManualTimeEntry`) e de P-3.9c, com uma diferença: aqui a ausência não é uma lacuna dentro de uma feature, é o fim de três integrações que já estão em produção escrevendo dados.
+
+Os três produtores estão ligados e são reais: `onProjectSubmitted` (`packages/integrations/src/projetos-tarefas.ts:32`, chamado em `apps/projetos/src/actions/projects.ts:628`) cria o checklist de análise a cada submissão de projeto; `onFlatsReservationConfirmed` (`packages/integrations/src/flats.ts:81`, chamado em `apps/flats/src/actions/reservations.ts:377`) cria duas tarefas de limpeza a cada reserva confirmada; `createMeetingDecision` (`apps/intranet/src/actions/decisions.ts:15`) cria uma tarefa por decisão de reunião marcada com "criar tarefa". Todas nascem com `needs_manual_assignment = true` e `created_by` = ator sistema (`packages/integrations/src/tarefas.ts:47-79`).
+
+O que acontece com elas depois: `canManageTask` (`apps/tarefas/src/actions/tasks.ts:41-59`) exige ser criador ou assignee. O criador é o ator sistema e não há assignee — então **nenhum colaborador consegue editar, mover de coluna, adicionar subtarefa ou concluir uma tarefa automática**. Só o super_admin passa, pelo bypass explícito das actions e por `tasks_mutate_admin` na RLS. A tarefa que o sistema criou para alguém fazer é a única que ninguém pode tocar.
+
+E quando o super_admin atribui pelo caminho que existe — o diálogo "Editar" → `updateTask` → grava em `tarefas.assignees` —, `needs_manual_assignment` **continua `true`**: só `assignTaskManually` a desliga. O selo vermelho "Sem responsável" (`task-detail-client.tsx:405-410`) e o "?" no cartão (`task-card.tsx:174-181`) ficam na tela para sempre, sobre uma tarefa que já tem dono. O selo deixa de ser informação e vira ruído — e o primeiro selo que mente ensina a ignorar todos.
+
+Por último, não há como achar essas tarefas. O filtro de responsável de "Minhas tarefas" (`my-tasks-client.tsx:144-158`) é montado a partir de quem **é** assignee de alguma tarefa, então "sem responsável" não é uma das opções. A fila de tarefas órfãs só aparece para quem rolar a lista inteira procurando um "?".
+
+**Escopo (siga na ordem):**
+
+1. **Porta para `assignTaskManually`:** no detalhe da tarefa, quando `needsManualAssignment` for verdadeiro e o usuário for super_admin, o selo "Sem responsável" deixa de ser só um selo e passa a oferecer a atribuição — mesma lista de `assignableUsers` que a página já carrega (`tarefa/[id]/page.tsx`), `router.refresh()` no sucesso, erro em português no lugar do controle.
+2. **A flag deixa de mentir:** qualquer caminho que ponha um responsável numa tarefa desliga `needs_manual_assignment` — regra única, dentro da action (`updateTask` com `assigneeIds` não-vazio faz o mesmo que `assignTaskManually`), nunca duplicada na UI. Remover o responsável de uma tarefa `source = 'auto'` volta a marcá-la como órfã.
+3. **A fila fica visível:** "Sem responsável" vira uma opção fixa do filtro de "Minhas tarefas" (não derivada dos assignees existentes), com a contagem à vista. Se a saída escolhida for outra superfície (aba, KPI), ela precisa responder à mesma pergunta: quantas tarefas automáticas estão paradas esperando alguém.
+4. **Teste** (`apps/tarefas/src/__tests__/auto-assignment.test.ts`): tarefa criada por `createAutoTask` nasce sem assignee e com a flag ligada; `assignTaskManually` liga o assignee e desliga a flag; `updateTask` por super_admin com responsáveis desliga a flag também; colaborador que não é criador nem assignee continua sem conseguir atribuir (gate + RLS).
+5. **Bookkeeping em PROMPTS.md:** os critérios de P-4.8 e P-4.11 sobre tarefa automática passam a descrever o ciclo completo, não só o nascimento.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/tarefas/src/app/(dashboard)/tarefa/[id]/task-detail-client.tsx`
+- `apps/tarefas/src/app/(dashboard)/my-tasks-client.tsx`
+- `apps/tarefas/src/actions/tasks.ts`
+- `apps/tarefas/src/lib/queries.ts` (apenas se a contagem da fila exigir)
+- `apps/tarefas/src/__tests__/auto-assignment.test.ts` (criar)
+- `PROMPTS.md` (critérios de P-4.8 e P-4.11)
+
+**Critérios de aceite:**
+
+- [x] `grep -rn "assignTaskManually" apps packages` acha um consumidor de UI
+- [x] Submeter um projeto (ou confirmar uma reserva) e atribuir a tarefa resultante pela tela, como super_admin, em menos de três cliques a partir do detalhe
+- [x] Depois de atribuída, a tarefa não exibe mais "Sem responsável" em tela nenhuma (detalhe, cartão, lista)
+- [x] Um colaborador consegue trabalhar numa tarefa automática assim que vira responsável dela (editar, mover de coluna, concluir)
+- [x] Existe uma superfície que responde "quais tarefas estão sem responsável" sem rolar a lista inteira
+- [x] `pnpm --filter @hebron/tarefas typecheck lint test` verdes; `pnpm --filter @hebron/tarefas build` verde
+- [x] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: BRAIN.md §6.9, S-80 (o débito registrado na criação da action) e o precedente de P-4.4c. É o corretivo de maior prioridade dos sete: os outros seis são coisas que o produto faz mal; este é trabalho que três módulos despacham para o Tarefas e que fica parado onde ninguém olha.
+
+---
+
+### P-4.8c — O pedido de aprovação que o pedido seguinte esconde (CORRETIVO)
+
+**Fase:** 4
+**Módulo:** tarefas
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-4.8c-tarefas-aprovacao-corrente`
+- Dependências: P-4.12 concluído (S-84), P-4.8b concluído (toca o mesmo arquivo de detalhe)
+- Env vars: `DATABASE_URL`
+
+**Problema que este prompt resolve (contexto):**
+Aprovação é o único fluxo do módulo com audit central (`admin.audit_log`, `criticality: "critical"`, abortando a operação em falha — critério de P-4.8, testado em `apps/tarefas/src/__tests__/integrations.test.ts:260`). O rigor está todo na escrita. A leitura não tem nenhum.
+
+`Task.approvalRequest` é singular (`packages/types/src/tarefas/index.ts:185`), e `assembleTasks` o preenche assim (`apps/tarefas/src/lib/queries.ts:289-292` e `:302`):
+
+```ts
+tx.select().from(approvalRequests).where(inArray(approvalRequests.taskId, ids)),
+// ...
+const approvalByTask = new Map(approvalRows.map((r) => [r.taskId, r]));
+```
+
+O `SELECT` não tem `ORDER BY` e o `Map` sobrescreve por chave: com dois pedidos na mesma tarefa, **o que sobra é o que o Postgres devolver por último**, o que não é uma garantia de nada.
+
+Dois pedidos na mesma tarefa não são hipótese. Nada os impede: `tarefas.approval_requests` não tem restrição de unicidade (`packages/db/src/schema/tarefas.ts:384-412`), `requestApproval` (`apps/tarefas/src/actions/approvals.ts:28`) não verifica se já existe um pendente, e a própria tela reabre o botão assim que o pedido anterior sai de "pendente" (`canRequestApproval`, `task-detail-client.tsx:316-317`) — que é o comportamento correto depois de uma rejeição: pede-se de novo.
+
+O que acontece quando a linha exibida é a antiga: o painel "Aprovação da diretoria" (`:658-711`) mostra "Rejeitado" sobre um pedido que já foi refeito; `canResolveApproval` (`:319-322`) olha para essa mesma linha, então **os botões Aprovar/Rejeitar não aparecem para o diretor endereçado** — o pedido pendente existe no banco, o email já saiu (`notifyApprovalRequested`, P-4.10), e a tela não tem onde respondê-lo. Pior: `canRequestApproval` continua verdadeiro, e cada nova tentativa do solicitante empilha mais uma linha e mais um email ao diretor.
+
+Governança dual é princípio inviolável do CLAUDE.md. O pedido de aprovação é o ponto exato onde ela acontece neste módulo, e hoje qual pedido a diretoria vê é decidido pela ordem física das linhas.
+
+**Escopo (siga na ordem):**
+
+1. **Uma semântica explícita:** o pedido corrente é o mais recente por `requested_at`; os anteriores são histórico. `assembleTasks` ordena e escolhe deliberadamente — nenhum `Map` implícito decidindo por sobrescrita. A mesma escolha vale para `recurrenceByTemplate` (`queries.ts:303-305`), que tem a forma idêntica (tratado em P-4.9d; aqui apenas não introduzir uma terceira cópia do padrão).
+2. **Dois pendentes deixam de ser possíveis:** guard em `requestApproval` (mensagem em português: já existe pedido pendente) **e** índice único parcial na migration (`WHERE status = 'pendente'`) — o guard sozinho é corrida entre duas abas, e este é um fluxo auditado.
+3. **A tela mostra o que existe:** painel com o pedido corrente (com os botões quando couber) e o histórico dos resolvidos — quem pediu, para quem, o que decidiu e quando. Um pedido rejeitado que já foi refeito não pode aparecer como se fosse o estado atual da tarefa.
+4. **Migration hand-written** (próximo número livre — 0076 no momento desta redação, conferir antes), idempotente e aplicável a banco com dados: se já houver mais de um pendente por tarefa em dev, o arquivo resolve o passado antes de criar o índice (mantendo o mais recente, resolvendo os demais como superados) — nunca `DELETE`.
+5. **Teste:** duas requisições na mesma tarefa → `getTaskById` devolve sempre a mais recente, dez execuções seguidas; segundo pedido pendente é recusado pela action e pelo banco; após rejeição, um novo pedido é aceito e passa a ser o corrente; o diretor endereçado vê os botões sobre o pedido certo.
+6. **Bookkeeping em PROMPTS.md:** critérios de P-4.8 e P-4.9 sobre aprovação.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/tarefas/src/lib/queries.ts`
+- `apps/tarefas/src/actions/approvals.ts`
+- `packages/types/src/tarefas/index.ts` (apenas o histórico, se a saída exigir)
+- `packages/db/src/migrations/NNNN_tarefas_approval_unico_pendente.sql` (criar — próximo número livre, à mão conforme P-0.3c)
+- `apps/tarefas/src/app/(dashboard)/tarefa/[id]/task-detail-client.tsx` (apenas o bloco de aprovação)
+- `apps/tarefas/src/__tests__/approvals.test.ts` (criar)
+- `PROMPTS.md` (critérios de P-4.8 e P-4.9)
+
+**Critérios de aceite:**
+
+- [ ] Tarefa com pedido rejeitado + pedido pendente: o diretor endereçado vê Aprovar/Rejeitar, e o painel mostra o pendente como estado atual
+- [ ] Nenhum ponto do módulo escolhe uma linha de `approval_requests` por sobrescrita de `Map` ou por ordem física de `SELECT`
+- [ ] Pedir aprovação duas vezes seguidas é recusado com mensagem em português, pela action e pelo índice do banco
+- [ ] Histórico de aprovações anteriores visível no detalhe da tarefa
+- [ ] Migration idempotente, aplicada com sucesso, reaplicável sem erro
+- [ ] `pnpm --filter @hebron/tarefas typecheck lint test` verdes; `pnpm --filter @hebron/db test` verde; `pnpm --filter @hebron/tarefas build` verde
+- [ ] Registrar em SESSIONS.md — incluindo o número da migration e quantas linhas o saneamento tocou
+
+**Notas:**
+Ref: princípio "governança dual" do CLAUDE.md e G6.3. O audit central garante que nenhuma aprovação acontece sem registro; não garante que a diretoria esteja vendo o pedido certo na hora de decidir.
+
+---
+
+### P-4.10b — A notificação que não leva a lugar nenhum (CORRETIVO)
+
+**Fase:** 4
+**Módulo:** tarefas
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-4.10b-tarefas-payload-notificacao`
+- Dependências: P-4.12 concluído (S-84), P-4.8c concluído
+- Env vars: `DATABASE_URL`
+
+**Problema que este prompt resolve (contexto):**
+Os quatro critérios de P-4.10 estão `[x]` e as notificações realmente chegam. O contrato de payload que decide **para onde elas levam** foi cumprido pela metade, e a metade que faltou é a das notificações de governança.
+
+O contrato está em `packages/ui/src/components/ecosystem-apps.ts:80-107` (P-0.6b): `module` é o id canônico do app de origem, `href` é relativo a esse módulo. Sem `module`, o `href` é tratado como rota do app **onde o usuário está lendo**; sem `href`, o destino vira `"/"`. As duas faltas são silenciosas — o clique não dá erro, só vai para o lugar errado.
+
+O inventário do módulo Tarefas:
+
+- `apps/tarefas/src/actions/approvals.ts:196-202` — aprovado/rejeitado, ao solicitante: **sem `href` e sem `module`**. Clicar leva para a home do app.
+- `apps/tarefas/src/lib/notifications.ts:219-224` e `:235-240` — pedido de aprovação, ao diretor: tem `module`, **não tem `href`**. Clicar leva para a home do app.
+- `apps/tarefas/src/actions/comments.ts:57-62` — @menção: tem `href`, **não tem `module`**. Lida do sino de qualquer outro app (Admin, Intranet, Financeiro), navega para `/tarefa/<id>` daquele app — 404.
+- `packages/integrations/src/projetos-tarefas.ts:93` e `packages/integrations/src/flats.ts:176` — falha de criação do checklist, a todo super_admin: payload `{ projectId, message }` / `{ reservationId, message }`, sem `module` nem `href`. É a notificação que existe precisamente para alguém ir consertar, e é a que não diz onde.
+- `packages/jobs/src/crons/tarefas-prazos.ts:119-123, 151-155, 166-170` — prazo próximo e vencido: corretos, com `module` e `href`. São a prova de que o padrão está estabelecido no próprio módulo e foi seguido em alguns call-sites e não em outros.
+
+O email não sofre disso (`taskUrl` monta URL absoluta em `lib/notifications.ts:49-51`), então o defeito é inteiro do canal in-app — que é o que a diretoria usa dentro do sistema, e o único canal do fluxo de aprovação resolvida.
+
+**Escopo (siga na ordem):**
+
+1. **Um lugar só para montar o payload:** helper no módulo Tarefas que produz `{ module: "tarefas", href, ... }` a partir do `taskId` (e do `approvalRequestId` quando houver). Todo `createNotification` do módulo passa a usá-lo — o objetivo é que o próximo call-site não tenha como esquecer, não corrigir cinco literais.
+2. **Corrigir os cinco call-sites** listados acima. Onde o destino não é uma tarefa (falha de checklist), decidir e registrar para onde vai: a configuração que precisa ser corrigida ou o registro de origem — nunca `"/"` por omissão.
+3. **`packages/integrations` não depende de `@hebron/ui`** — o contrato é um formato de payload, não um import; replicar o formato com um comentário apontando para `ecosystem-apps.ts` como fonte, no mesmo espírito das duplicações já documentadas em G6.5.
+4. **Teste** (`apps/tarefas/src/__tests__/notifications.test.ts`): as notificações gravadas por `createComment`, `requestApproval` e `resolveApprovalRequest` carregam `module` e `href`; `resolveNotificationHref(payload, "intranet")` devolve URL absoluta de `tarefas.hebronaseec.com.br` para todas elas; nenhuma resolve para `"/"`.
+5. **Bookkeeping em PROMPTS.md:** critérios de P-4.10 passam a dizer que a notificação leva à tarefa, de dentro e de fora do app.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/tarefas/src/lib/notifications.ts`
+- `apps/tarefas/src/actions/comments.ts`
+- `apps/tarefas/src/actions/approvals.ts`
+- `packages/integrations/src/projetos-tarefas.ts` (apenas o payload da notificação de falha)
+- `packages/integrations/src/flats.ts` (apenas o payload da notificação de falha)
+- `apps/tarefas/src/__tests__/notifications.test.ts` (criar)
+- `PROMPTS.md` (critérios de P-4.10)
+
+**Critérios de aceite:**
+
+- [ ] Nenhuma notificação criada pelo módulo Tarefas fica sem `module` ou sem `href` (verificação por grep em todos os `createNotification` do módulo, incluindo `packages/jobs` e `packages/integrations`)
+- [ ] Clicar em "Pedido de aprovação aprovado" abre a tarefa aprovada, não a home
+- [ ] Uma @menção lida no sino da Intranet abre a tarefa em `tarefas.hebronaseec.com.br`, não um 404 local
+- [ ] A notificação de falha do checklist leva a quem a recebe para onde a falha se resolve
+- [ ] `pnpm --filter @hebron/tarefas typecheck lint test` verdes; `pnpm --filter @hebron/integrations test` verde; `pnpm turbo lint typecheck` verde
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: P-0.6b (contrato de payload) e BRAIN.md §7. O sino é o único lugar onde as notificações de todos os nove apps convivem; um payload sem `module` só funciona por acaso, enquanto o usuário estiver lendo do app certo.
+
+---
+
+### P-4.9c — O anexo que sobe e não desce (CORRETIVO)
+
+**Fase:** 4
+**Módulo:** tarefas
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-4.9c-tarefas-anexo-download`
+- Dependências: P-4.12 concluído (S-84), P-4.9b concluído (S-99), P-4.8c concluído (toca o mesmo arquivo de detalhe)
+- Env vars: `DATABASE_URL`, `SUPABASE_URL`
+- Skill: **invocar `/impeccable` antes de começar**
+
+**Problema que este prompt resolve (contexto):**
+"Anexos" é um dos itens de features v1 em BRAIN §6.9. P-4.9b (PATCH-020, S-99) fechou a metade da subida: `createAttachment` (`apps/tarefas/src/actions/tasks.ts:509`) gera a URL assinada, `uploadTaskAttachments` (`apps/tarefas/src/components/task-form.tsx`) faz o PUT, a linha entra em `tarefas.attachments` e o arquivo entra no bucket. A metade da descida não existe.
+
+O bucket `tarefas-anexos` é privado (`packages/db/src/migrations/0034_tarefas_storage.sql:20`), então `storage_key` sozinho não abre nada. `grep -rn "createSignedUrl" apps/tarefas` não devolve nada — não há action de leitura no app inteiro. E a lista de anexos do detalhe da tarefa (`task-detail-client.tsx:529-554`) renderiza nome do arquivo e tamanho dentro de um `<li>`, sem link, sem botão, sem `<a>`: o usuário vê que o anexo existe e não tem como abri-lo.
+
+O monorepo já resolveu isto três vezes: `apps/financeiro/src/actions/attachments.ts:26-37` (`createReceiptSignedUrl`, expiração de 300s, link gerado no clique e nunca persistido), `apps/flats/src/lib/queries.ts:375` e `apps/plataforma/src/actions/uploads.ts:62`. A policy de leitura do bucket de Tarefas já existe e já cobre o caso (`tarefas_anexos_select_staff`, `0034:28-34`, staff lê tudo) — nada de novo precisa ser autorizado, só pedido.
+
+Segundo ponto, do mesmo prompt: a tabela é polimórfica (`parent_type` = `task` | `comment`, `packages/db/src/schema/tarefas.ts:228-248`), `createAttachmentSchema` aceita os dois e `createAttachment` sabe resolver o comentário até a tarefa raiz — mas nenhum formulário cria anexo de comentário (`comment-form.tsx` não tem campo de arquivo) e `assembleTasks` só lê `parent_type = 'task'` (`queries.ts:279-287`). Um anexo de comentário, se existisse, seria invisível no produto. É um ramo que o código carrega, o teste não cobre e a tela não alcança.
+
+**Escopo (siga na ordem):**
+
+1. **Action de leitura:** `getAttachmentUrl` gera a URL assinada com expiração curta, a partir do `attachmentId`, validando a visibilidade da tarefa-raiz antes (mesma checagem que `createAttachment` já faz). Usar o client de sessão, como `createAttachment` (G6.2) — a policy `tarefas_anexos_select_staff` já autoriza, não é preciso `service_role` (o precedente de Financeiro usa admin por razões próprias dele, não replicar aqui sem necessidade).
+2. **A lista vira lista de links:** cada anexo abre em nova aba (`rel="noopener noreferrer"`), acessível por teclado, com estado de carregando e mensagem em português se o link falhar. O nome do arquivo é o rótulo — nada de "clique aqui".
+3. **Decidir a ramificação `comment`** (o prompt aceita as duas, mas exige uma delas):
+   - **(a)** Exibir anexos de comentário no `CommentThread`, com o mesmo caminho de download.
+   - **(b)** Restringir `createAttachmentSchema` a `"task"` enquanto não houver composer que anexe, registrando o porquê — a coluna do banco permanece (imutabilidade), o que sai é a promessa da API.
+4. **Teste** (`apps/tarefas/src/__tests__/attachments.test.ts`, estender): URL gerada para anexo de tarefa visível; anexo inexistente recusado; papel externo (submissor) recusado; o `storage_key` continua fora de qualquer resposta que a UI receba.
+5. **Bookkeeping em PROMPTS.md:** o critério de P-4.9/P-4.9b sobre anexos passa a dizer que o anexo é recuperável, não só armazenado.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/tarefas/src/actions/attachments.ts` (criar)
+- `apps/tarefas/src/app/(dashboard)/tarefa/[id]/task-detail-client.tsx` (apenas o bloco "Anexos")
+- `apps/tarefas/src/components/comment-thread.tsx` (apenas na saída (a))
+- `apps/tarefas/src/lib/queries.ts` (apenas se a saída (a) exigir ler anexos de comentário)
+- `packages/validators/src/tarefas/index.ts` (apenas na saída (b))
+- `apps/tarefas/src/__tests__/attachments.test.ts`
+- `PROMPTS.md` (critério de P-4.9)
+
+**Critérios de aceite:**
+
+- [ ] Anexar um PDF a uma tarefa, recarregar a página e abrir o arquivo pelo nome, sem sair do detalhe
+- [ ] Um segundo colaborador (não criador, não responsável) abre o mesmo anexo — transparência interna, BRAIN §6.9
+- [ ] Um papel externo não obtém URL para anexo nenhum
+- [ ] O link expira: uma URL gerada não continua válida indefinidamente, e nada a persiste no banco ou no HTML
+- [ ] `grep -rn "parentType: \"comment\"\|parent_type = 'comment'" apps packages` só encontra código que a UI alcança
+- [ ] `pnpm --filter @hebron/tarefas typecheck lint test` verdes; `pnpm --filter @hebron/tarefas build` verde
+- [ ] Registrar em SESSIONS.md — incluindo a saída escolhida no item 3
+
+**Notas:**
+Ref: BRAIN.md §6.9 ("anexos" em features v1), `0034_tarefas_storage.sql` e o precedente de `apps/financeiro/src/actions/attachments.ts`. Um anexo que sobe e não desce é pior do que não ter anexo: o usuário acredita que guardou o documento no sistema.
+
+---
+
+### P-4.9d — A regra de recorrência que só sabe nascer (CORRETIVO)
+
+**Fase:** 4
+**Módulo:** tarefas
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-4.9d-tarefas-editar-recorrencia`
+- Dependências: P-4.12 concluído (S-84), P-4.1b concluído
+- Env vars: `DATABASE_URL`
+- Skill: **invocar `/impeccable` antes de começar**
+
+**Problema que este prompt resolve (contexto):**
+O escopo de P-4.8 diz "Recorrência: criar/editar regra". `updateRecurrenceRule` existe desde então (`apps/tarefas/src/actions/recurrence.ts:67`), recalcula `next_run_at` e tem teste (`apps/tarefas/src/__tests__/recurrence.test.ts:259`). `grep -rn "updateRecurrenceRule" apps packages` não encontra nenhuma tela. S-81 registrou a decisão na época — "nenhum critério de aceite pede edição; escopo mantido no mínimo pedido" — e a tela de Recorrentes (`recorrentes-client.tsx`) segue listando e criando, só.
+
+O que isso custa depende inteiramente de a regra estar certa. Se estiver errada — dia do mês trocado, intervalo errado, template errado —, ela gera a tarefa errada todo período e **não há como corrigi-la pelo produto**. A única saída disponível é desativar o template inteiro (`toggleTaskTemplate`, `actions/templates.ts:142`), que o cron respeita (`packages/jobs/src/crons/tarefas.ts:101`) — mas isso também derruba a instanciação manual daquele template, e a tela de Templates não diz a ninguém que desativar ali vai parar uma recorrência lá. Não existe `deleteRecurrenceRule` nem nada equivalente: uma regra criada é para sempre.
+
+Somam-se dois detalhes da mesma tela. Primeiro: `RecurrenceForm` coleta "Encerrar em (opcional)" (`recurrence-form.tsx:285`) e a pré-visualização diz "até dd/mm/aaaa" (`:101-102`); `RecurrenceRuleView.endDate` chega na tela (`lib/queries.ts:585`) e **a lista não o exibe** (`recorrentes-client.tsx:124-158`) — a regra que vai parar em dezembro parece eterna. Segundo: nada impede duas regras para o mesmo template (sem restrição em `packages/db/src/schema/tarefas.ts:356-378`), o cron instancia o template uma vez por regra vencida, e `assembleTasks` monta `recurrenceByTemplate` como um `Map` 1:1 (`queries.ts:303-305`) — a mesma sobrescrita implícita tratada em P-4.8c, aqui fazendo o detalhe da tarefa exibir uma regra arbitrária entre as que existem.
+
+BRAIN §6.9 dá quatro exemplos de recorrência (contas de consumo, IPTU, limpeza do flat, convite Capelowski). Nenhum deles é um compromisso que dure para sempre exatamente como foi cadastrado.
+
+**Escopo (siga na ordem):**
+
+1. **Editar pela tela:** cada regra da lista abre o `RecurrenceForm` com os valores atuais e salva por `updateRecurrenceRule`, com `next_run_at` recalculado à vista (a pré-visualização já existe e já nomeia o mês desde P-4.1b).
+2. **Encerrar sem depender do template:** ação "Encerrar recorrência" que grava `end_date` — o cron já pula regras encerradas (`crons/tarefas.ts:88`), nenhuma coluna nova é necessária e nada é apagado (imutabilidade, CLAUDE.md). Regra encerrada continua na tela, marcada como encerrada, não some.
+3. **A lista conta a verdade:** `endDate` visível quando houver, `nextRunAt` só quando a regra ainda estiver ativa, e a distinção entre "próxima em 10/08" e "encerrada em 31/12" legível sem abrir nada.
+4. **Uma regra ativa por template:** guard na action com mensagem em português + índice único parcial na migration hand-written (próximo número livre — 0077 no momento desta redação, conferir antes), e `queries.ts` deixa de assumir 1:1 por sobrescrita de `Map`.
+5. **Teste:** editar uma regra recalcula `next_run_at` e o cron passa a gerar no novo padrão; regra encerrada não gera mais nada em execução seguinte de `runTarefasRecurrence`; segunda regra ativa para o mesmo template é recusada pela action e pelo banco.
+6. **Bookkeeping em PROMPTS.md:** o escopo/critérios de P-4.8 e P-4.9 sobre recorrência passam a dizer o que a tela faz com uma regra depois de criada.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/tarefas/src/app/(dashboard)/recorrentes/recorrentes-client.tsx`
+- `apps/tarefas/src/app/(dashboard)/recorrentes/page.tsx` (apenas se a edição exigir mais dados)
+- `apps/tarefas/src/actions/recurrence.ts`
+- `apps/tarefas/src/lib/queries.ts` (apenas `RecurrenceRuleView` e a montagem de `recurrenceRule` em `assembleTasks`)
+- `packages/db/src/migrations/NNNN_tarefas_recorrencia_unica_ativa.sql` (criar — próximo número livre, à mão conforme P-0.3c)
+- `apps/tarefas/src/__tests__/recurrence.test.ts`
+- `packages/jobs/src/__tests__/tarefas-recurrence.test.ts`
+- `PROMPTS.md` (critérios de P-4.8 e P-4.9)
+
+**Critérios de aceite:**
+
+- [ ] `grep -rn "updateRecurrenceRule" apps packages` acha um consumidor de UI
+- [ ] Uma regra mensal cadastrada no dia errado é corrigida pela tela, e a execução seguinte do cron usa o dia novo
+- [ ] Encerrar uma recorrência para a geração sem desativar o template (o template continua instanciável à mão)
+- [ ] A lista de recorrentes mostra a data de encerramento de toda regra que tem uma
+- [ ] Duas regras ativas para o mesmo template são recusadas pela action e pelo índice do banco
+- [ ] Nenhum ponto do módulo escolhe uma regra de recorrência por sobrescrita de `Map`
+- [ ] Migration idempotente, aplicada com sucesso, reaplicável sem erro
+- [ ] `pnpm --filter @hebron/tarefas typecheck lint test` verdes; `pnpm --filter @hebron/jobs test` verde; `pnpm --filter @hebron/tarefas build` verde
+- [ ] Registrar em SESSIONS.md — incluindo o número da migration
+
+**Notas:**
+Ref: BRAIN.md §6.9, S-81 (a decisão de não implementar a edição) e P-4.1b (que corrigiu o cálculo dessas mesmas regras). Uma regra de recorrência é a única coisa do módulo que age sozinha, todo dia, sem ninguém pedir; é também a única que ninguém consegue ajustar depois.
+
+---
+
+### P-4.8d — O "D" do CRUD e o campo de módulo que a edição joga fora (CORRETIVO)
+
+**Fase:** 4
+**Módulo:** tarefas
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-4.8d-tarefas-excluir-e-mover`
+- Dependências: P-4.12 concluído (S-84), P-4.8b e P-4.8c concluídos (tocam o mesmo arquivo de detalhe)
+- Env vars: `DATABASE_URL`
+- Skill: **invocar `/impeccable` antes de começar**
+
+**Problema que este prompt resolve (contexto):**
+Duas metades faltantes do mesmo "CRUD com prazos/responsáveis/etiquetas/prioridade" que BRAIN §6.9 lista como feature v1.
+
+**O D.** `deleteTask` (`apps/tarefas/src/actions/tasks.ts:310`) faz soft-delete com `task_events`, gate de creator/assignee e RLS. `grep -rn "deleteTask" apps packages` devolve a definição e nada mais. Não é código esquecido: P-4.12 descobriu, ao testá-la, que a RLS impedia o próprio criador de fazer o soft-delete, e isso rendeu um patch inteiro — `PATCHES/015-tarefas-rls-soft-delete-fix.md` e a migration `0035_tarefas_rls_soft_delete_fix.sql` —, além de dois casos de teste vivos (`apps/tarefas/src/__tests__/rls.test.ts:337-355`). Uma migration de RLS foi escrita, revisada e aplicada em produção para destravar uma operação que nenhuma tela oferece. Na prática, uma tarefa criada por engano (título errado, duplicada, módulo errado) fica no quadro para sempre; o único jeito de tirá-la da frente é marcá-la como concluída, o que polui a contagem de "concluídas na semana" (`my-tasks-client.tsx`) e o histórico de quem entrega o quê.
+
+**O U pela metade.** `TaskForm` mostra o campo "Módulo" também em modo edição (`task-form.tsx:247-259`) e o devolve no payload (`:192`). `handleUpdateTask` (`task-detail-client.tsx:198-236`) monta a chamada com título, descrição, prioridade, prazo, responsáveis e etiquetas — **sem `workspace`** —, e `updateTaskSchema` (`actions/tasks.ts:162-170`) nem aceitaria o campo. Ou seja: o usuário abre "Editar", troca o módulo de Administrativo para Financeiro, salva, o diálogo fecha com sucesso e nada acontece. Nenhuma mensagem, nenhum erro. Uma tarefa que nasceu no módulo errado — o caso mais comum de edição depois da criação — não sai de lá, e a tela responde como se tivesse saído.
+
+**Escopo (siga na ordem):**
+
+1. **`updateTask` aceita `workspace`:** resolve o slug para `workspace_id` como `createTask` já faz (`tasks.ts:105-110`), registra a mudança em `task_events` e o board de destino passa a mostrar a tarefa. Se a saída escolhida for a oposta — campo somente-leitura na edição —, ela precisa estar visível como somente-leitura, com o motivo, nunca editável e ignorada.
+2. **Excluir no detalhe:** disponível a quem `canManage`, com confirmação explícita que diz o que acontece em português comum ("a tarefa sai das listas e do quadro"), sem jargão de soft-delete. Sucesso redireciona para o quadro do módulo.
+3. **Nada de hard delete em lugar nenhum** — `deleteTask` já é `UPDATE deleted_at` e o `GRANT` de `tasks` não inclui `DELETE` (`0033_tarefas_rls.sql:395-396`); o prompt não abre essa porta nem para super_admin.
+4. **Teste** (`apps/tarefas/src/__tests__/tasks.test.ts`): mover a tarefa de módulo persiste, aparece nas queries do módulo de destino e some do de origem, com evento registrado; excluir tira a tarefa de `getTasks`/`getTasksByWorkspace`/`getTaskById` e mantém a linha no banco com `deleted_at`; colaborador que não é criador nem responsável não exclui.
+5. **Bookkeeping em PROMPTS.md:** o critério de P-4.8 ("CRUD de tarefas com task_events") e o de P-4.9 ("Editar/concluir tarefa executável do detalhe") passam a dizer o que a edição de fato altera e que a exclusão existe.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/tarefas/src/actions/tasks.ts`
+- `apps/tarefas/src/app/(dashboard)/tarefa/[id]/task-detail-client.tsx`
+- `apps/tarefas/src/components/task-form.tsx` (apenas o campo "Módulo" em modo edição)
+- `apps/tarefas/src/__tests__/tasks.test.ts` (criar)
+- `PROMPTS.md` (critérios de P-4.8 e P-4.9)
+
+**Critérios de aceite:**
+
+- [ ] `grep -rn "deleteTask" apps packages` acha um consumidor de UI
+- [ ] Trocar o módulo de uma tarefa pela edição move a tarefa de quadro — ou o campo não é editável ali
+- [ ] Nenhum controle do formulário de edição aceita alteração que a action descarta em silêncio
+- [ ] Excluir uma tarefa a remove das listas, do quadro e do calendário, e a linha permanece no banco com `deleted_at`
+- [ ] A exclusão pede confirmação e diz, em português comum, o que vai acontecer
+- [ ] Nenhum caminho novo de hard delete (`grep -rn "\.delete(tasks)" apps packages` continua vazio)
+- [ ] `pnpm --filter @hebron/tarefas typecheck lint test` verdes; `pnpm --filter @hebron/tarefas build` verde
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: BRAIN.md §6.9 (features v1), PATCHES/015 e S-84. Um formulário que aceita a mudança e não a aplica é pior do que um formulário que não oferece o campo: o usuário sai da tela acreditando que a tarefa mudou de lugar.
+
+---
+
+### P-4.6b — O histórico que o banco guarda e a tela não mostra (CORRETIVO)
+
+**Fase:** 4
+**Módulo:** tarefas
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-4.6b-tarefas-atividade`
+- Dependências: P-4.12 concluído (S-84), P-4.8b, P-4.8c, P-4.9c e P-4.8d concluídos (todos tocam o mesmo arquivo de detalhe)
+- Env vars: `DATABASE_URL`
+- Skill: **invocar `/impeccable` antes de começar**
+
+**Problema que este prompt resolve (contexto):**
+O escopo de P-4.6 criou `tarefas.task_events` como "log de mudanças do módulo" e a decisão foi registrada no próprio prompt: "Auditoria central: aprovações de diretor são mutação crítica → audit central. O log operacional do dia a dia fica em task_events." A tabela existe, tem índices por tarefa e por data (`packages/db/src/schema/tarefas.ts:418-438`), tem policy de leitura para staff e `GRANT SELECT` (`0033_tarefas_rls.sql:357-362` e `:393`), e é gravada por oito call-sites em `apps/tarefas/src/actions/tasks.ts` (`created`, `updated`, `status_changed`, `deleted`, `assigned_manually`, `subtask_created`, `subtask_toggled`, `attachment_added`), cada um com `actor_id` e `diff` em jsonb.
+
+`grep -rn "taskEvents" apps packages` devolve o schema, as gravações e os testes. Nenhuma query lê. Não existe `TaskEvent` em `packages/types/src/tarefas` e nenhum componente exibe um evento. Todo esse registro — quem mudou o prazo, quem moveu a tarefa para "Em Revisão", quem excluiu — é gravado e não é acessível por nenhum caminho do produto; para saber quem fez o quê é preciso abrir o banco.
+
+E há um painel na tela que promete exatamente isso. `task-detail-client.tsx:737-755` tem um bloco intitulado **"Atividade"**, com ícone de relógio, listando três carimbos derivados da própria linha de `tasks`: criada por fulano em tal data, última atualização em tal data, concluída em tal data. "Última atualização" sem dizer o que mudou nem quem mudou é a única informação da tela que o log ao lado responderia inteira.
+
+Vale a distinção, para o executor não repetir a discussão: isto **não** é o `admin.audit_log` (esse é dos fluxos críticos — as aprovações — e continua onde está, com sua criticidade e seu abort em falha). `task_events` é o histórico operacional que a equipe consulta no dia a dia, e está vazio de propósito nenhum.
+
+**Escopo (siga na ordem):**
+
+1. **Tipo e leitura:** `TaskEvent` em `packages/types/src/tarefas`, com `event_type` como união tipada (não `string` solta — o rótulo não pode depender de um valor que a próxima action invente), e `getTaskEvents(taskId)` em `lib/queries.ts` resolvendo o nome do ator pelo mesmo `getUsersMap` já usado ali.
+2. **O painel "Atividade" passa a mostrar atividade:** eventos em ordem cronológica inversa, com frase legível em português por tipo e um resumo do `diff` quando ele acrescenta algo ("moveu para Em Revisão", "alterou o prazo para 12/08/2026", "adicionou o anexo contrato.pdf"). Nunca despejar o jsonb na tela. Os três carimbos atuais continuam onde fazem sentido (criação/conclusão), sem duplicar o que o log já diz.
+3. **Volume:** a lista tem limite de exibição e um caminho para ver o resto — uma tarefa antiga com trinta eventos não pode empurrar a sidebar para fora da tela nem virar uma parede de texto.
+4. **Cobertura dos tipos:** todo `event_type` gravado hoje tem rótulo; um tipo desconhecido (gravado por uma action futura) aparece de forma neutra, sem quebrar a tela e sem mostrar o identificador cru ao usuário.
+5. **Teste:** uma sequência de mutações (criar → mover → adicionar subtarefa → concluir) produz os eventos esperados na ordem esperada, com o ator certo; um colaborador que não é criador nem responsável **lê** o histórico (transparência interna, BRAIN §6.9); um papel externo não lê nada.
+6. **Bookkeeping em PROMPTS.md:** o critério de P-4.6 sobre `task_events` passa a dizer que o log é lido, e o de P-4.9 sobre a tela de detalhe passa a incluir o histórico.
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/types/src/tarefas/index.ts`
+- `apps/tarefas/src/lib/queries.ts`
+- `apps/tarefas/src/app/(dashboard)/tarefa/[id]/page.tsx`
+- `apps/tarefas/src/app/(dashboard)/tarefa/[id]/task-detail-client.tsx` (apenas o bloco "Atividade")
+- `apps/tarefas/src/components/task-activity.tsx` (criar)
+- `apps/tarefas/src/__tests__/task-events.test.ts` (criar)
+- `PROMPTS.md` (critérios de P-4.6 e P-4.9)
+
+**Critérios de aceite:**
+
+- [ ] `grep -rn "taskEvents\|task_events" apps/tarefas/src/lib apps/tarefas/src/components` encontra leitura, não só gravação
+- [ ] Mover uma tarefa de coluna e recarregar o detalhe: o painel "Atividade" diz quem moveu, para onde e quando
+- [ ] Nenhum `diff` cru (jsonb, chaves em inglês, aspas) aparece na tela
+- [ ] Um `event_type` não previsto não quebra a renderização
+- [ ] Colaborador sem vínculo com a tarefa lê o histórico; papel externo não lê
+- [ ] O painel não cresce sem limite numa tarefa com histórico longo
+- [ ] `pnpm --filter @hebron/tarefas typecheck lint test` verdes; `pnpm --filter @hebron/tarefas build` verde
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: escopo de P-4.6 (`task_events` como "log operacional do dia a dia") e G6.3 (a separação em relação ao `admin.audit_log`). É o de menor prioridade dos sete — nada aqui produz dado errado nem trabalho parado; o custo é uma pergunta corriqueira ("quem mudou isso?") que só o banco responde, e um painel chamado "Atividade" que não mostra nenhuma.
 
 ---
 

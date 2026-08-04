@@ -48,6 +48,11 @@ function startOfWeek(d: Date): Date {
   return start;
 }
 
+/** Sentinela do filtro "Sem responsável" — opção fixa, nunca um userId real
+ * (P-4.8b: a fila de tarefas automáticas órfãs precisa ser encontrável sem
+ * rolar a lista inteira). */
+const UNASSIGNED_FILTER = "__sem_responsavel__";
+
 interface KpiCardProps {
   label: string;
   value: number;
@@ -151,8 +156,16 @@ export function MyTasksClient({
       .sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
   }, [tasks]);
 
+  const unassignedCount = useMemo(
+    () => tasks.filter((t) => t.needsManualAssignment).length,
+    [tasks],
+  );
+
   const scopedTasks = useMemo(() => {
     if (assigneeFilter === "all") return tasks;
+    if (assigneeFilter === UNASSIGNED_FILTER) {
+      return tasks.filter((t) => t.needsManualAssignment);
+    }
     return tasks.filter((t) =>
       t.assignees.some((a) => a.userId === assigneeFilter),
     );
@@ -282,6 +295,9 @@ export function MyTasksClient({
           onChange={(e) => setAssigneeFilter(e.target.value)}
         >
           <option value="all">Toda a equipe</option>
+          <option value={UNASSIGNED_FILTER}>
+            Sem responsável ({unassignedCount})
+          </option>
           {assignedPeople.map((a) => (
             <option key={a.id} value={a.id}>
               {a.name}

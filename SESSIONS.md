@@ -20133,3 +20133,85 @@ Escopo executado ao pé da letra do prompt:
 - `apps/tarefas/src/app/(dashboard)/workspace/[slug]/board-client.tsx`
 - `apps/tarefas/src/app/(dashboard)/workspace/[slug]/loading.tsx`
 - `PROMPTS.md` (critérios de P-4.3 e P-4.5)
+
+---
+
+## S-227 — P-4.8b — A tarefa automática que nasce órfã e continua órfã (CORRETIVO)
+
+**Prompt:** P-4.8b (PROMPTS.md)
+**Data:** 2026-08-04
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+`assignTaskManually` (`actions/tasks.ts:356`, escrita em P-4.8 para fechar o
+ciclo de BRAIN §6.9 — "tarefas auto-geradas: super_admin atribui manualmente
+após criação") não tinha um único consumidor de UI: `grep -rn
+"assignTaskManually" apps packages` só devolvia a própria definição. As três
+integrações reais que despacham tarefas ao módulo (`onProjectSubmitted`,
+`onFlatsReservationConfirmed`, `createMeetingDecision`) escrevem tarefas
+`needs_manual_assignment = true` sem responsável, e nenhum colaborador
+conseguia tocá-las (`canManageTask` exige criador ou assignee; o criador é o
+ator sistema). Quando o super_admin atribuía pelo diálogo "Editar" existente
+(`updateTask`), a flag continuava ligada — só `assignTaskManually` a
+desligava — deixando o selo "Sem responsável" mentindo sobre tarefas já
+atribuídas. E não havia como encontrar as tarefas órfãs sem rolar a lista
+inteira: o filtro de responsável de "Minhas tarefas" era montado a partir de
+quem já é assignee de alguma tarefa.
+
+Escopo executado na ordem do prompt:
+
+1. **Porta para `assignTaskManually`** (`task-detail-client.tsx`): o selo
+   "Sem responsável" agora é interativo para super_admin quando
+   `needsManualAssignment` é verdadeiro — abre um dropdown com a mesma lista
+   de `assignableUsers` já carregada pela página, seleção múltipla, botão
+   "Atribuir" chama `assignTaskManually` e dá `router.refresh()` no sucesso,
+   erro em português substitui o controle. Colaborador (não super_admin)
+   continua vendo o selo estático — só o super_admin tem a rota para
+   desligar a flag, mesmo padrão de `canResolveApproval`.
+2. **A flag deixa de mentir** (`actions/tasks.ts::updateTask`): antes do
+   `UPDATE` em `tasks`, se `assigneeIds` vier não-vazio a action desliga
+   `needsManualAssignment` — regra única, mesmo efeito de
+   `assignTaskManually`, nunca duplicada na UI. Se vier vazio, a action
+   consulta `tasks.source` da linha: só religa a flag se `source = 'auto'`
+   (tarefa manual nunca teve a flag ligada e não deve ganhá-la ao perder
+   responsável).
+3. **A fila fica visível** (`my-tasks-client.tsx`): "Sem responsável" virou
+   opção fixa do `<select>` de responsável (sentinela `__sem_responsavel__`,
+   nunca um userId), com a contagem entre parênteses — filtra por
+   `task.needsManualAssignment`, não pela lista de assignees existentes
+   (`assignedPeople`), então aparece mesmo com contagem zero.
+4. Teste novo `apps/tarefas/src/__tests__/auto-assignment.test.ts` (6 casos):
+   `createAutoTask` nasce sem assignee e com a flag ligada;
+   `assignTaskManually` liga o assignee e desliga a flag; gate de papel
+   (`superAdminAction`) barra colaborador antes de tocar no banco;
+   `updateTask` por super_admin com responsáveis desliga a flag pelo mesmo
+   caminho; remover o único responsável de uma tarefa `source = 'auto'`
+   religa a flag; tarefa `source = 'manual'` nunca liga a flag ao perder
+   responsável.
+5. Bookkeeping em `PROMPTS.md`: critério de P-4.8 ("createAutoTask... tarefa
+   nascendo SEM assignee") e de P-4.11 ("Tarefas automáticas nascem SEM
+   assignee") passaram a registrar que o ciclo completo (não só o
+   nascimento) foi fechado em P-4.8b.
+
+Nenhuma suposição de regra de negócio precisou ser feita — o texto de BRAIN
+§6.9 e o comentário original de P-4.8 (S-80) já descreviam o comportamento
+esperado; faltava só a porta.
+
+### Verificação
+
+- `grep -rn "assignTaskManually" apps packages` (só `.ts`/`.tsx`) → definição
+  em `actions/tasks.ts` + consumo em `task-detail-client.tsx` + teste
+- `pnpm --filter @hebron/tarefas typecheck lint` — verdes
+- `pnpm --filter @hebron/tarefas test`: 8 suítes, 59 testes, todos verdes
+  (auto-assignment.test.ts: 6/6)
+- `pnpm --filter @hebron/tarefas build` — verde (11 rotas)
+
+### Arquivos modificados
+
+- `apps/tarefas/src/app/(dashboard)/tarefa/[id]/task-detail-client.tsx`
+- `apps/tarefas/src/app/(dashboard)/my-tasks-client.tsx`
+- `apps/tarefas/src/actions/tasks.ts`
+- `apps/tarefas/src/__tests__/auto-assignment.test.ts` (criado)
+- `PROMPTS.md` (critérios de P-4.8 e P-4.11)

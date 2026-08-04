@@ -192,6 +192,23 @@ export const updateTask = colaboradorAction
           );
         }
 
+        if (input.assigneeIds !== undefined) {
+          if (input.assigneeIds.length > 0) {
+            // Mesmo fecho de assignTaskManually: qualquer caminho que dê
+            // responsável a uma tarefa desliga a flag de órfã (P-4.8b).
+            patch.needsManualAssignment = false;
+          } else {
+            // Ficou sem responsável de novo — só volta a ser órfã se nasceu
+            // órfã (source = 'auto'); tarefa manual nunca teve a flag ligada.
+            const [current] = await tx
+              .select({ source: tasks.source })
+              .from(tasks)
+              .where(eq(tasks.id, input.taskId))
+              .limit(1);
+            patch.needsManualAssignment = current?.source === "auto";
+          }
+        }
+
         const [row] = await tx
           .update(tasks)
           .set(patch)
