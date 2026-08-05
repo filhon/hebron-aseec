@@ -328,9 +328,30 @@ async function assembleTasks(
     };
   }
 
-  const recurrenceByTemplate = new Map(
-    recurrenceRows.map((r) => [r.taskTemplateId, r]),
+  // Um template pode ter mais de uma linha em recurrence_rules ao longo do
+  // tempo (regras encerradas somam-se — imutabilidade, nunca DELETE), mas no
+  // máximo uma "ativa" (sem end_date, ou end_date no futuro) por vez desde a
+  // guarda de P-4.9d (actions/recurrence.ts::assertNoOtherActiveRule +
+  // migration 0077). Escolhe a ativa explicitamente; nunca "a que o Map
+  // sobrescreveu por último" — essa era a falha (P-4.9d), mesma classe da
+  // corrigida para approval_requests em P-4.8c.
+  const now = new Date();
+  const recurrenceRowsByTemplate = groupBy(
+    recurrenceRows,
+    (r) => r.taskTemplateId,
   );
+  const recurrenceByTemplate = new Map<
+    string,
+    (typeof recurrenceRows)[number]
+  >();
+  for (const [templateId, rows] of recurrenceRowsByTemplate) {
+    const active = rows.find((r) => r.endDate === null || r.endDate >= now);
+    const latest = rows
+      .slice()
+      .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+    const chosen = active ?? latest;
+    if (chosen) recurrenceByTemplate.set(templateId, chosen);
+  }
 
   return taskRows.map((t): Task => {
     const taskAssignees: Assignee[] = (assigneesByTask.get(t.id) ?? []).map(

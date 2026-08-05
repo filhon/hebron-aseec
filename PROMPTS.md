@@ -5580,6 +5580,8 @@ RLS para schema tarefas (semântica fechada — sem membership por workspace, ve
 **Escopo:**
 Server Actions: CRUD de tarefas. Mover entre colunas (drag-drop). Criar/completar subtarefas (progresso agregado). Comentários com @menções. Upload de anexos. Time tracking (start/stop/manual). Recorrência: criar/editar regra; a geração da próxima tarefa é um cron registrado em packages/jobs (P-0.14) que lê next_run_at. Templates (instanciar). Approval requests (enviar/aprovar/rejeitar — mutação crítica: audit central com abort em falha, G6.3). Tarefas automáticas de outros módulos: implementar createAutoTask em packages/integrations/src/tarefas.ts (P-0.15) — NÃO em lib do app (apps não importam apps).
 
+> **Atualização P-4.9d:** `updateRecurrenceRule` (criado aqui) ganhou consumidor de UI, `endRecurrenceRule` (encerra sem depender do template) foi adicionado, e uma regra ativa por template passou a ser garantida por guard na action + índice único parcial (migration 0077) — ver P-4.9.
+
 **Arquivos permitidos para criação/edição:**
 
 - `apps/tarefas/src/actions/tasks.ts`
@@ -5646,7 +5648,7 @@ Substituir mocks por dados reais. Kanban, lista e árvore com dados do banco. Fo
 - [x] Editar/concluir tarefa executável do detalhe; subtarefa criável e completável com progresso
 - [x] Comentário com @menção publicável pela tela e notifica o mencionado
 - [x] Time tracking: start/stop operável no detalhe
-- [x] Recorrência: regra criável pela tela de recorrentes com preview
+- [x] Recorrência: regra criável pela tela de recorrentes com preview — editável (recalcula `next_run_at` à vista) e encerrável sem depender do template, com data de encerramento visível na lista e no máximo uma regra ativa por template (guard na action + índice único parcial), fechados em P-4.9d (CORRETIVO)
 - [x] Template: instanciável pela tela de templates
 - [x] Pedido de aprovação enviável pela tela; diretor aprova/rejeita pela própria UI — painel mostra o pedido corrente certo mesmo com pedido anterior rejeitado, e o histórico de pedidos anteriores, fechados em P-4.8c
 - [x] TreeView com dados reais (pessoa → tarefas)
@@ -6346,15 +6348,15 @@ BRAIN §6.9 dá quatro exemplos de recorrência (contas de consumo, IPTU, limpez
 
 **Critérios de aceite:**
 
-- [ ] `grep -rn "updateRecurrenceRule" apps packages` acha um consumidor de UI
-- [ ] Uma regra mensal cadastrada no dia errado é corrigida pela tela, e a execução seguinte do cron usa o dia novo
-- [ ] Encerrar uma recorrência para a geração sem desativar o template (o template continua instanciável à mão)
-- [ ] A lista de recorrentes mostra a data de encerramento de toda regra que tem uma
-- [ ] Duas regras ativas para o mesmo template são recusadas pela action e pelo índice do banco
-- [ ] Nenhum ponto do módulo escolhe uma regra de recorrência por sobrescrita de `Map`
-- [ ] Migration idempotente, aplicada com sucesso, reaplicável sem erro
-- [ ] `pnpm --filter @hebron/tarefas typecheck lint test` verdes; `pnpm --filter @hebron/jobs test` verde; `pnpm --filter @hebron/tarefas build` verde
-- [ ] Registrar em SESSIONS.md — incluindo o número da migration
+- [x] `grep -rn "updateRecurrenceRule" apps packages` acha um consumidor de UI
+- [x] Uma regra mensal cadastrada no dia errado é corrigida pela tela, e a execução seguinte do cron usa o dia novo
+- [x] Encerrar uma recorrência para a geração sem desativar o template (o template continua instanciável à mão)
+- [x] A lista de recorrentes mostra a data de encerramento de toda regra que tem uma
+- [x] Duas regras ativas para o mesmo template são recusadas pela action e pelo índice do banco
+- [x] Nenhum ponto do módulo escolhe uma regra de recorrência por sobrescrita de `Map`
+- [x] Migration idempotente, aplicada com sucesso, reaplicável sem erro
+- [x] `pnpm --filter @hebron/tarefas typecheck lint test` verdes; `pnpm --filter @hebron/jobs test` verde; `pnpm --filter @hebron/tarefas build` verde
+- [x] Registrar em SESSIONS.md — incluindo o número da migration
 
 **Notas:**
 Ref: BRAIN.md §6.9, S-81 (a decisão de não implementar a edição) e P-4.1b (que corrigiu o cálculo dessas mesmas regras). Uma regra de recorrência é a única coisa do módulo que age sozinha, todo dia, sem ninguém pedir; é também a única que ninguém consegue ajustar depois.

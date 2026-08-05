@@ -251,6 +251,7 @@
 | S-228  | 2026-08-04 | P-4.8c — O pedido de aprovação que o pedido seguinte esconde (CORRETIVO)                                                         | concluido                            |
 | S-229  | 2026-08-05 | P-4.10b — A notificação que não leva a lugar nenhum (CORRETIVO)                                                                  | concluido                            |
 | S-230  | 2026-08-05 | P-4.9c — O anexo que sobe e não desce (CORRETIVO)                                                                                | concluido                            |
+| S-231  | 2026-08-05 | P-4.9d — A regra de recorrência que só sabe nascer (CORRETIVO)                                                                   | concluido                            |
 
 ---
 
@@ -20476,3 +20477,106 @@ sinalizava (packages/types não estava na lista — a saída (a) exigiria mudar
 - `packages/validators/src/tarefas/index.ts`
 - `apps/tarefas/src/__tests__/attachments.test.ts`
 - `PROMPTS.md` (critério de P-4.9)
+
+---
+
+## S-231 — P-4.9d — A regra de recorrência que só sabe nascer (CORRETIVO)
+
+**Prompt:** P-4.9d (PROMPTS.md)
+**Data:** 2026-08-05
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+`updateRecurrenceRule` existia desde P-4.8 mas sem consumidor de UI (S-81:
+"nenhum critério de aceite pede edição; escopo mantido no mínimo pedido"). Uma
+regra errada (dia do mês trocado, intervalo errado) não tinha correção
+possível pelo produto — só `toggleTaskTemplate`, que também derruba a
+instanciação manual do template. Não existia `deleteRecurrenceRule` nem
+equivalente: regra criada era para sempre. Somavam-se dois detalhes: `endDate`
+chegava em `RecurrenceRuleView` mas a lista não exibia, e nada impedia duas
+regras ativas para o mesmo template (o cron instancia uma vez por regra
+vencida; `assembleTasks` escolhia uma entre elas por sobrescrita de `Map`).
+
+Escopo executado na ordem do prompt:
+
+1. **Editar pela tela** (`recorrentes-client.tsx`): botão "Editar" por regra
+   abre `RecurrenceForm` (já suportava `initialValues` desde P-4.1b, nunca
+   usado) pré-preenchido, salva por `updateRecurrenceRule` — `next_run_at`
+   recalculado à vista, mesmo padrão de `templates-client.tsx`
+   (editar/toggle sem confirmação).
+2. **`endRecurrenceRule`** (`actions/recurrence.ts`, novo): grava
+   `end_date = now()`. Nenhuma coluna nova — o cron já pula regras com
+   `end_date` vencido (`crons/tarefas.ts:88`). Não mexe no template: a
+   instanciação manual continua disponível. Reativar uma regra encerrada é
+   possível pela própria tela de edição, limpando "Encerrar em" — não há
+   botão "reativar" separado (não pedido pelo escopo).
+3. **Lista conta a verdade** (`recorrentes-client.tsx`): `endedAt` calculado
+   por regra (`endDate` não-nulo e já vencido) — se encerrada, badge cinza
+   "Encerrada em dd/mm/aaaa" substitui a badge de "Próxima"; se ativa, mostra
+   "Próxima: dd/mm" (quando há `nextRunAt`) e, se houver `endDate` futuro,
+   texto "Até dd/mm" ao lado — nunca as duas coisas juntas para a mesma regra.
+4. **Uma regra ativa por template** (`actions/recurrence.ts`,
+   `assertNoOtherActiveRule`): guard em `createRecurrenceRule` e
+   `updateRecurrenceRule` (excluindo a própria regra) usando o mesmo
+   predicado do cron (`endDate IS NULL OR endDate >= now()`), mensagem em
+   português. Migration `0077_tarefas_recorrencia_unica_ativa.sql` (próximo
+   número livre confirmado) faz saneamento do passado (mesmo padrão de 0076:
+   UPDATE com `row_number() OVER (PARTITION BY task_template_id ORDER BY
+created_at DESC)`, nunca DELETE — nenhuma linha precisou de saneamento no
+   banco de dev) e cria índice único parcial `ON recurrence_rules
+(task_template_id) WHERE end_date IS NULL` — só cobre o caso comum (sem
+   `end_date`) porque `now()` não é IMMUTABLE e não pode entrar num predicado
+   de índice parcial; a guarda completa (que também considera `end_date`
+   futuro como "ainda ativa") roda só na action, defesa em profundidade
+   assimétrica assumida conscientemente. `queries.ts`
+   (`recurrenceByTemplate`): parou de escolher uma linha por sobrescrita de
+   `Map` — agrupa por template e escolhe a regra ativa explicitamente (com
+   fallback para a mais recente por `createdAt` se nenhuma estiver ativa,
+   nunca `undefined` silencioso).
+5. **Teste**: `recurrence.test.ts` — templates dedicados por caso (a nova
+   guarda tornaria os testes antigos, que reusavam um único template, um
+   conflito entre si); 7 novos casos (`updateRecurrenceRule`/
+   `endRecurrenceRule` regra inexistente, guard em create e em update
+   reativando uma regra historicamente encerrada, e — mesmo padrão de
+   `approvals.test.ts::"banco: índice único parcial rejeita..."` (P-4.8c),
+   inicialmente esquecido nesta sessão e fechado depois de checar os
+   critérios de aceite um a um — um `db.insert` direto provando que o índice
+   da migration 0077 rejeita sozinho, por fora da action). `serverError`
+   verificado só com `toBeDefined()` — `safe-action.ts` não define
+   `handleServerError`, a mensagem em português nunca chega ao teste (mesma
+   convenção de `time-tracking.test.ts`). `tarefas-recurrence.test.ts`
+   (packages/jobs) não precisou mudar: a fixture já cobre regra com
+   `end_date` no passado não gerando/reagendando, e nenhuma alteração tocou
+   o cron em si.
+6. Bookkeeping em `PROMPTS.md`: escopo de P-4.8 ganhou nota apontando para
+   este prompt; critério de P-4.9 sobre recorrência passou a descrever
+   editável/encerrável/guarda.
+
+Nenhum `deleteRecurrenceRule` foi criado (fora do escopo pedido — "encerrar"
+resolve o problema sem violar imutabilidade).
+
+### Verificação
+
+- `pnpm --filter @hebron/db db:migrate` — aplicou 0077; reaplicação direta do
+  SQL (fora do bookkeeping `_migrations`) confirmou idempotência (`CREATE
+UNIQUE INDEX IF NOT EXISTS` — NOTICE de "already exists, skipping")
+- `pnpm --filter @hebron/tarefas typecheck lint` — verdes
+- `pnpm --filter @hebron/tarefas test`: 10 suítes, 75 testes, todos verdes
+  (recurrence.test.ts: 12/12, incluindo os 7 casos novos)
+- `pnpm --filter @hebron/jobs test -- tarefas-recurrence`: 3/3 verdes,
+  inalterado
+- `pnpm --filter @hebron/tarefas build` — verde (11 rotas). Primeira tentativa
+  falhou com erro genérico do worker de build do Next (`ERR_INVALID_ARG_TYPE`
+  / crash de worker) tanto com quanto sem as mudanças deste prompt — cache
+  `.next` corrompido, não relacionado ao diff; `rm -rf .next` resolveu
+
+### Arquivos modificados
+
+- `apps/tarefas/src/actions/recurrence.ts`
+- `apps/tarefas/src/app/(dashboard)/recorrentes/recorrentes-client.tsx`
+- `apps/tarefas/src/lib/queries.ts`
+- `packages/db/src/migrations/0077_tarefas_recorrencia_unica_ativa.sql` (criado)
+- `apps/tarefas/src/__tests__/recurrence.test.ts`
+- `PROMPTS.md` (critérios de P-4.8 e P-4.9)
