@@ -124,7 +124,7 @@ export function AuthorsAdminPanel({ authors }: AuthorsAdminPanelProps) {
       <div className="mb-4 flex items-center justify-between gap-4">
         <h2
           id="autores-admin-heading"
-          className="flex items-center gap-2 font-(--font-display) text-base font-(--font-weight-semibold) text-(--fg)"
+          className="flex items-center gap-2 font-(--font-display) text-base text-(--fg)"
         >
           <User2 className="h-4.5 w-4.5 text-(--brand)" aria-hidden="true" />
           Autores ({authors.length})
@@ -148,11 +148,11 @@ export function AuthorsAdminPanel({ authors }: AuthorsAdminPanelProps) {
           description="Cadastre o primeiro autor para organizar o catálogo da rádio."
         />
       ) : (
-        <ul className="flex flex-col divide-y divide-(--divider) rounded-(--radius-md) border border-(--border)">
+        <ul className="flex flex-col divide-y divide-(--divider) rounded-md border border-(--border)">
           {authors.map((author) => (
             <li key={author.id} className="flex items-center gap-4 px-5 py-3">
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-(--font-weight-semibold) text-(--fg)">
+                <p className="truncate text-sm font-semibold text-(--fg)">
                   {author.name}
                 </p>
                 {author.bio && (

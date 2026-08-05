@@ -21,6 +21,8 @@ import {
   Button,
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   RichText,
@@ -41,12 +43,14 @@ import {
   ShieldCheck,
   ThumbsDown,
   ThumbsUp,
+  Trash2,
   UserX,
   X,
 } from "lucide-react";
 import {
   assignTaskManually,
   createSubtask,
+  deleteTask,
   toggleSubtask,
   updateTask,
   updateTaskStatus,
@@ -191,6 +195,8 @@ export function TaskDetailClient({
 }: TaskDetailClientProps) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [addingSubtask, setAddingSubtask] = useState(false);
   const [requestingApproval, setRequestingApproval] = useState(false);
   const [isSavingTask, setIsSavingTask] = useState(false);
@@ -224,6 +230,7 @@ export function TaskDetailClient({
         taskId: task.id,
         title: values.title,
         description: values.description,
+        workspace: values.workspace,
         priority: values.priority,
         dueDate: values.dueDate,
         assigneeIds: values.assigneeIds,
@@ -256,6 +263,26 @@ export function TaskDetailClient({
   function handleEditDialogChange(open: boolean) {
     setEditing(open);
     if (!open) setEditError(null);
+  }
+
+  const { executeAsync: deleteTaskAsync, isPending: isDeleting } =
+    useAction(deleteTask);
+
+  async function handleDeleteTask() {
+    setDeleteError(null);
+    const result = await deleteTaskAsync({ taskId: task.id });
+    if (!result?.data?.task) {
+      setDeleteError(
+        result?.serverError ?? "Não foi possível excluir a tarefa.",
+      );
+      return;
+    }
+    router.push(`/workspace/${task.workspace}`);
+  }
+
+  function handleDeleteDialogChange(open: boolean) {
+    setDeleting(open);
+    if (!open) setDeleteError(null);
   }
 
   const { execute: submitStatusChange } = useAction(updateTaskStatus, {
@@ -565,15 +592,24 @@ export function TaskDetailClient({
               )}
 
               {canManage && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="ml-auto"
-                  onClick={() => setEditing(true)}
-                >
-                  <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
-                  Editar
-                </Button>
+                <div className="ml-auto flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setEditing(true)}
+                  >
+                    <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                    Editar
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setDeleting(true)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                    Excluir
+                  </Button>
+                </div>
               )}
             </div>
             <h1 className="font-(--font-editorial) text-2xl leading-tight">
@@ -966,6 +1002,43 @@ export function TaskDetailClient({
             isLoading={isSavingTask}
             submitError={editError}
           />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleting} onOpenChange={handleDeleteDialogChange}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Excluir tarefa</DialogTitle>
+            <DialogDescription>
+              A tarefa sai das listas, do quadro e do calendário. Ninguém mais
+              vai vê-la a partir daqui.
+            </DialogDescription>
+          </DialogHeader>
+          {deleteError && (
+            <p role="alert" className="text-sm text-(--color-destructive)">
+              {deleteError}
+            </p>
+          )}
+          <p className="text-sm text-(--fg)">
+            Excluir &ldquo;{task.title}&rdquo;?
+          </p>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setDeleting(false)}
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              loading={isDeleting}
+              onClick={handleDeleteTask}
+            >
+              Excluir
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

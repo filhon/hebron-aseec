@@ -244,7 +244,16 @@ export function TaskForm({
       </FormField>
 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-        <FormField label="Módulo" required error={errors.workspace}>
+        <FormField
+          label="Módulo"
+          required
+          error={errors.workspace}
+          hint={
+            mode === "edit"
+              ? "Trocar o módulo move a tarefa para o quadro do módulo novo."
+              : undefined
+          }
+        >
           <Select
             value={values.workspace}
             onValueChange={(v) => set("workspace", v as Workspace)}

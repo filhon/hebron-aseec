@@ -252,6 +252,7 @@
 | S-229  | 2026-08-05 | P-4.10b — A notificação que não leva a lugar nenhum (CORRETIVO)                                                                  | concluido                            |
 | S-230  | 2026-08-05 | P-4.9c — O anexo que sobe e não desce (CORRETIVO)                                                                                | concluido                            |
 | S-231  | 2026-08-05 | P-4.9d — A regra de recorrência que só sabe nascer (CORRETIVO)                                                                   | concluido                            |
+| S-232  | 2026-08-05 | P-4.8d — O "D" do CRUD e o campo de módulo que a edição joga fora (CORRETIVO)                                                    | concluido                            |
 
 ---
 
@@ -20579,4 +20580,82 @@ UNIQUE INDEX IF NOT EXISTS` — NOTICE de "already exists, skipping")
 - `apps/tarefas/src/lib/queries.ts`
 - `packages/db/src/migrations/0077_tarefas_recorrencia_unica_ativa.sql` (criado)
 - `apps/tarefas/src/__tests__/recurrence.test.ts`
+- `PROMPTS.md` (critérios de P-4.8 e P-4.9)
+
+## S-232 — P-4.8d — O "D" do CRUD e o campo de módulo que a edição joga fora (CORRETIVO)
+
+**Prompt:** P-4.8d (PROMPTS.md)
+**Data:** 2026-08-05
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+Duas metades faltantes do CRUD de tarefas. `deleteTask` (soft-delete, RLS
+corrigida em PATCH-015) existia desde P-4.8 sem nenhum consumidor de UI — a
+única forma de tirar uma tarefa da frente era marcá-la como concluída,
+poluindo métricas. `TaskForm` mostrava o campo "Módulo" também em edição e o
+enviava no payload, mas `updateTask`/`updateTaskSchema` não aceitavam
+`workspace` — a troca de módulo era descartada em silêncio, sem erro, com o
+diálogo fechando como se tivesse funcionado.
+
+Escopo executado na ordem do prompt:
+
+1. **`updateTask` aceita `workspace`** (`actions/tasks.ts`): resolve o slug
+   para `workspace_id` dentro da mesma transação (mesmo padrão de
+   `createTask`), gate de `canManageTask` já cobre a mutação. `task-form.tsx`
+   ganhou um `hint` no campo "Módulo" só em modo edição, avisando que a troca
+   move a tarefa de quadro — sem esse aviso a ação continuaria correta, mas
+   silenciosa da mesma forma que o formulário de criação.
+2. **Excluir no detalhe** (`task-detail-client.tsx`): botão "Excluir" ao lado
+   de "Editar" (mesmo gate `canManage`), diálogo de confirmação em português
+   comum ("A tarefa sai das listas, do quadro e do calendário. Ninguém mais
+   vai vê-la a partir daqui.") — nada de "soft-delete" ou "não pode ser
+   desfeita" (tecnicamente pode, só não há tela de restauração ainda).
+   Sucesso redireciona para o quadro do módulo (`router.push`).
+3. **Achado durante o teste, corrigido dentro do escopo de `tasks.ts`**: com
+   `deleteTask` finalmente exercitada por um consumidor real, o soft-delete
+   passou a falhar com "new row violates row-level security policy for table
+   task_events". Causa: `logTaskEvent("deleted")` rodava DEPOIS do `UPDATE
+... SET deleted_at`, e `tarefas.task_visible()` (RLS de INSERT em
+   `task_events`) exige `deleted_at IS NULL` sem a mesma exceção de
+   criador/assignee que PATCH-015 deu a `tasks_select_staff` — a mesma classe
+   de bug que gerou aquele patch, um nível abaixo. Como o escopo de arquivos
+   deste prompt não inclui migrations, a correção ficou inteira em
+   `actions/tasks.ts`: inverter a ordem — logar o evento primeiro, marcar
+   `deleted_at` depois. `tarefas.task_visible()` continua sem a exceção;
+   registrado aqui como débito para uma futura tela de "excluídas
+   recentemente" que precise inserir eventos numa tarefa já deletada.
+4. **Teste** (`tasks.test.ts`, novo): mover de módulo persiste, aparece no
+   workspace de destino, some do de origem, evento `updated` com o
+   `workspace_id` novo no diff; excluir tira a tarefa de
+   `getTasks`/`getTasksByWorkspace`/`getTaskById` e mantém a linha no banco
+   com `deleted_at`; colaborador sem vínculo (nem criador, nem assignee) não
+   exclui.
+5. Bookkeeping em `PROMPTS.md`: critério de P-4.8 ("CRUD de tarefas com
+   task_events") e de P-4.9 ("Editar/concluir tarefa executável do detalhe")
+   passaram a descrever o que a edição de fato altera e que a exclusão
+   existe.
+
+Nenhuma migration criada — `GRANT` de `tasks` continua sem `DELETE`
+(`0033_tarefas_rls.sql:385`), nenhum caminho de hard delete foi aberto.
+
+### Verificação
+
+- `grep -rn "deleteTask" apps packages` — achado o consumidor novo em
+  `task-detail-client.tsx`
+- `grep -rn "\.delete(tasks)" apps packages` — só cleanup de teste
+  (`afterAll`), nenhum caminho novo em código de produto
+- `pnpm --filter @hebron/tarefas typecheck lint` — verdes
+- `pnpm --filter @hebron/tarefas test`: 11 suítes, 78 testes, todos verdes
+  (`tasks.test.ts`: 3/3, incluindo o achado de RLS acima corrigido antes do
+  primeiro run verde)
+- `pnpm --filter @hebron/tarefas build` — verde
+
+### Arquivos modificados
+
+- `apps/tarefas/src/actions/tasks.ts`
+- `apps/tarefas/src/app/(dashboard)/tarefa/[id]/task-detail-client.tsx`
+- `apps/tarefas/src/components/task-form.tsx`
+- `apps/tarefas/src/__tests__/tasks.test.ts` (criado)
 - `PROMPTS.md` (critérios de P-4.8 e P-4.9)

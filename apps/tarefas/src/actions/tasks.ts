@@ -24,6 +24,7 @@ import {
   toggleSubtaskSchema,
   createAttachmentSchema,
   taskPriorityEnum,
+  workspaceEnum,
 } from "@hebron/validators/tarefas";
 import {
   colaboradorAction,
@@ -163,6 +164,7 @@ const updateTaskSchema = z.object({
   taskId: z.string().uuid(),
   title: z.string().min(3).max(200).optional(),
   description: z.string().max(5000).nullable().optional(),
+  workspace: workspaceEnum.optional(),
   priority: taskPriorityEnum.optional(),
   dueDate: z.coerce.date().nullable().optional(),
   assigneeIds: z.array(z.string().uuid()).optional(),
@@ -190,6 +192,16 @@ export const updateTask = colaboradorAction
           throw new Error(
             "Você só pode editar tarefas que criou ou das quais é responsável",
           );
+        }
+
+        if (input.workspace !== undefined) {
+          const [ws] = await tx
+            .select({ id: workspaces.id })
+            .from(workspaces)
+            .where(eq(workspaces.slug, input.workspace))
+            .limit(1);
+          if (!ws) throw new Error("Módulo inválido");
+          patch.workspaceId = ws.id;
         }
 
         if (input.assigneeIds !== undefined) {
@@ -339,17 +351,22 @@ export const deleteTask = colaboradorAction
           );
         }
 
+        // Registra o evento ANTES do soft-delete: tarefas.task_visible()
+        // (RLS de INSERT em task_events) exige deleted_at IS NULL sem a
+        // exceção de criador/assignee que PATCH-015 deu a tasks_select_staff
+        // — logar depois marcaria a própria tarefa como invisível e o
+        // INSERT seria rejeitado pela RLS (achado em P-4.8d).
+        await logTaskEvent(
+          { taskId: input.taskId, actorId: ctx.actorId, eventType: "deleted" },
+          tx,
+        );
+
         const [row] = await tx
           .update(tasks)
           .set({ deletedAt: new Date() })
           .where(eq(tasks.id, input.taskId))
           .returning();
         if (!row) throw new Error("Tarefa não encontrada");
-
-        await logTaskEvent(
-          { taskId: input.taskId, actorId: ctx.actorId, eventType: "deleted" },
-          tx,
-        );
 
         return row;
       },

@@ -5581,6 +5581,8 @@ RLS para schema tarefas (semântica fechada — sem membership por workspace, ve
 Server Actions: CRUD de tarefas. Mover entre colunas (drag-drop). Criar/completar subtarefas (progresso agregado). Comentários com @menções. Upload de anexos. Time tracking (start/stop/manual). Recorrência: criar/editar regra; a geração da próxima tarefa é um cron registrado em packages/jobs (P-0.14) que lê next_run_at. Templates (instanciar). Approval requests (enviar/aprovar/rejeitar — mutação crítica: audit central com abort em falha, G6.3). Tarefas automáticas de outros módulos: implementar createAutoTask em packages/integrations/src/tarefas.ts (P-0.15) — NÃO em lib do app (apps não importam apps).
 
 > **Atualização P-4.9d:** `updateRecurrenceRule` (criado aqui) ganhou consumidor de UI, `endRecurrenceRule` (encerra sem depender do template) foi adicionado, e uma regra ativa por template passou a ser garantida por guard na action + índice único parcial (migration 0077) — ver P-4.9.
+>
+> **Atualização P-4.8d (CORRETIVO):** `updateTask` passou a aceitar `workspace` (resolve o slug para `workspace_id`, move a tarefa para o quadro do módulo novo, evento registrado) — antes o formulário de edição mostrava o campo e o descartava em silêncio. `deleteTask` (soft-delete via `deleted_at`, já existia desde este prompt) ganhou consumidor de UI no detalhe — ver P-4.9.
 
 **Arquivos permitidos para criação/edição:**
 
@@ -5595,7 +5597,7 @@ Server Actions: CRUD de tarefas. Mover entre colunas (drag-drop). Criar/completa
 
 **Critérios de aceite:**
 
-- [x] CRUD de tarefas com task_events; aprovações com audit central (admin.audit_log) que aborta a operação em falha (teste)
+- [x] CRUD de tarefas com task_events; aprovações com audit central (admin.audit_log) que aborta a operação em falha (teste) — edição altera título, descrição, módulo (move a tarefa de quadro), prioridade, prazo, responsáveis e etiquetas; exclusão é soft-delete (`deleted_at`, nunca hard delete), fechados em P-4.8d (CORRETIVO)
 - [x] Mover tarefa entre colunas atualiza status
 - [~] Subtarefas: progresso agregado (3/5 = 60%) — create/toggle implementados; agregação é valor derivado em leitura (`queries.ts`/RSC), fora do escopo de Server Actions deste prompt — ver P-4.9
 - [x] Comentários com @menções geram notificação ao mencionado
@@ -5645,7 +5647,7 @@ Substituir mocks por dados reais. Kanban, lista e árvore com dados do banco. Fo
 - [x] Layout G5: anônimo → redirect; papel externo (submissor/hospede) → bloqueado (teste)
 - [x] Kanban: drag-drop chama moveTask, persiste e sobrevive a reload (não console.log — F2-P2)
 - [x] Criar tarefa executável de: task-form, Cmd+K e CTA de workspace vazio
-- [x] Editar/concluir tarefa executável do detalhe; subtarefa criável e completável com progresso
+- [x] Editar/concluir tarefa executável do detalhe; subtarefa criável e completável com progresso — editar inclui trocar o módulo (move a tarefa de quadro); excluir tarefa executável do detalhe, com confirmação em português comum e sem hard delete, fechados em P-4.8d (CORRETIVO)
 - [x] Comentário com @menção publicável pela tela e notifica o mencionado
 - [x] Time tracking: start/stop operável no detalhe
 - [x] Recorrência: regra criável pela tela de recorrentes com preview — editável (recalcula `next_run_at` à vista) e encerrável sem depender do template, com data de encerramento visível na lista e no máximo uma regra ativa por template (guard na action + índice único parcial), fechados em P-4.9d (CORRETIVO)
@@ -6400,14 +6402,14 @@ Duas metades faltantes do mesmo "CRUD com prazos/responsáveis/etiquetas/priorid
 
 **Critérios de aceite:**
 
-- [ ] `grep -rn "deleteTask" apps packages` acha um consumidor de UI
-- [ ] Trocar o módulo de uma tarefa pela edição move a tarefa de quadro — ou o campo não é editável ali
-- [ ] Nenhum controle do formulário de edição aceita alteração que a action descarta em silêncio
-- [ ] Excluir uma tarefa a remove das listas, do quadro e do calendário, e a linha permanece no banco com `deleted_at`
-- [ ] A exclusão pede confirmação e diz, em português comum, o que vai acontecer
-- [ ] Nenhum caminho novo de hard delete (`grep -rn "\.delete(tasks)" apps packages` continua vazio)
-- [ ] `pnpm --filter @hebron/tarefas typecheck lint test` verdes; `pnpm --filter @hebron/tarefas build` verde
-- [ ] Registrar em SESSIONS.md
+- [x] `grep -rn "deleteTask" apps packages` acha um consumidor de UI
+- [x] Trocar o módulo de uma tarefa pela edição move a tarefa de quadro — ou o campo não é editável ali
+- [x] Nenhum controle do formulário de edição aceita alteração que a action descarta em silêncio
+- [x] Excluir uma tarefa a remove das listas, do quadro e do calendário, e a linha permanece no banco com `deleted_at`
+- [x] A exclusão pede confirmação e diz, em português comum, o que vai acontecer
+- [x] Nenhum caminho novo de hard delete (`grep -rn "\.delete(tasks)" apps packages` continua vazio)
+- [x] `pnpm --filter @hebron/tarefas typecheck lint test` verdes; `pnpm --filter @hebron/tarefas build` verde
+- [x] Registrar em SESSIONS.md
 
 **Notas:**
 Ref: BRAIN.md §6.9 (features v1), PATCHES/015 e S-84. Um formulário que aceita a mudança e não a aplica é pior do que um formulário que não oferece o campo: o usuário sai da tela acreditando que a tarefa mudou de lugar.
