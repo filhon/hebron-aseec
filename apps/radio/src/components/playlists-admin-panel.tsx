@@ -99,7 +99,7 @@ export function PlaylistsAdminPanel({
       <div className="mb-4 flex items-center justify-between gap-4">
         <h2
           id="playlists-admin-heading"
-          className="flex items-center gap-2 font-(family-name:--font-display) text-base font-(--font-weight-semibold) text-(--fg)"
+          className="flex items-center gap-2 font-(family-name:--font-display) text-base font-semibold text-(--fg)"
         >
           <ListMusic
             className="h-4.5 w-4.5 text-(--brand)"
@@ -135,11 +135,11 @@ export function PlaylistsAdminPanel({
           {playlists.map((playlist) => (
             <div
               key={playlist.id}
-              className="rounded-(--radius-md) border border-(--border) p-4"
+              className="rounded-md border border-(--border) p-4"
             >
               <div className="mb-3 flex items-center justify-between gap-4">
                 {playlist.isActive ? (
-                  <span className="inline-flex items-center gap-1 rounded-(--radius-pill) bg-(--brand-muted) px-2 py-0.5 text-xs font-(--font-weight-semibold) text-(--brand)">
+                  <span className="inline-flex items-center gap-1 rounded-(--radius-pill) bg-(--brand-muted) px-2 py-0.5 text-xs font-semibold text-(--brand)">
                     <CheckCircle2 className="h-3 w-3" aria-hidden="true" />
                     Ativa no Auto DJ
                   </span>

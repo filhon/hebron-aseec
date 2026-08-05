@@ -96,7 +96,7 @@ export function CertificateCard({
       </dl>
 
       <div className="flex items-center justify-between gap-2 rounded-sm bg-(--surface-alt) px-3 py-2">
-        <span className="min-w-0 truncate font-(family-name:--font-mono) text-xs text-(--fg-muted)">
+        <span className="min-w-0 truncate font-mono text-xs text-(--fg-muted)">
           {certificate.hash}
         </span>
         <button

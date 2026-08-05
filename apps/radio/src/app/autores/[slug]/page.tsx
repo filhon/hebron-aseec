@@ -42,7 +42,7 @@ export default async function AutorPage({ params }: PageProps) {
             </Link>
           </li>
           <li aria-hidden="true">/</li>
-          <li className="font-(--font-weight-medium) text-(--fg)">
+          <li className="font-medium text-(--fg)">
             {author.name}
           </li>
         </ol>
@@ -61,11 +61,11 @@ export default async function AutorPage({ params }: PageProps) {
           )}
         </div>
         <div className="min-w-0">
-          <h1 className="font-(family-name:--font-display) text-2xl font-(--font-weight-bold) tracking-(--tracking-tight) text-(--fg)">
+          <h1 className="font-(family-name:--font-display) text-2xl font-bold tracking-tight text-(--fg)">
             {author.name}
           </h1>
           {author.bio && (
-            <p className="mt-1.5 text-sm leading-(--leading-relaxed) text-(--fg-muted)">
+            <p className="mt-1.5 text-sm leading-relaxed text-(--fg-muted)">
               {author.bio}
             </p>
           )}
@@ -77,11 +77,11 @@ export default async function AutorPage({ params }: PageProps) {
           <section aria-labelledby="series-heading">
             <h2
               id="series-heading"
-              className="mb-4 font-(family-name:--font-display) text-lg font-(--font-weight-semibold) text-(--fg)"
+              className="mb-4 font-(family-name:--font-display) text-lg font-semibold text-(--fg)"
             >
               Séries
             </h2>
-            <ul className="flex flex-col divide-y divide-(--divider) rounded-(--radius-md) border border-(--border)">
+            <ul className="flex flex-col divide-y divide-(--divider) rounded-md border border-(--border)">
               {authorSeries.map((item) => {
                 const trackCount = tracks.filter(
                   (t) => t.seriesId === item.id,
@@ -93,7 +93,7 @@ export default async function AutorPage({ params }: PageProps) {
                       className="flex items-center justify-between gap-4 px-5 py-4 transition-colors duration-(--transition-fast) hover:bg-(--surface-alt)"
                     >
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-(--font-weight-semibold) text-(--fg)">
+                        <p className="truncate text-sm font-semibold text-(--fg)">
                           {item.name}
                         </p>
                         <p className="truncate text-xs text-(--fg-muted)">

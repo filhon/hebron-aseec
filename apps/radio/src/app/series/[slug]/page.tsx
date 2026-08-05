@@ -47,19 +47,19 @@ export default async function SeriePage({ params }: PageProps) {
             </Link>
           </li>
           <li aria-hidden="true">/</li>
-          <li className="font-(--font-weight-medium) text-(--fg)">
+          <li className="font-medium text-(--fg)">
             {item.name}
           </li>
         </ol>
       </nav>
 
       <header className="border-b border-(--divider) pb-8">
-        <h1 className="font-(family-name:--font-display) text-2xl font-(--font-weight-bold) tracking-(--tracking-tight) text-(--fg)">
+        <h1 className="font-(family-name:--font-display) text-2xl font-bold tracking-tight text-(--fg)">
           {item.name}
         </h1>
         <p className="mt-1 text-sm text-(--fg-muted)">{item.authorName}</p>
         {item.description && (
-          <p className="mt-3 max-w-2xl text-sm leading-(--leading-relaxed) text-(--fg-muted)">
+          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-(--fg-muted)">
             {item.description}
           </p>
         )}

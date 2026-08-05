@@ -49,7 +49,7 @@ export default async function AutoresPage({ searchParams }: PageProps) {
           <Link
             href="/autores"
             className={cn(
-              "rounded-(--radius-sm) px-3 py-1.5 text-sm font-(--font-weight-medium) transition-colors duration-(--transition-fast)",
+              "rounded-sm px-3 py-1.5 text-sm font-medium transition-colors duration-(--transition-fast)",
               !isSeriesView
                 ? "bg-(--brand) text-(--brand-fg)"
                 : "text-(--fg-muted) hover:text-(--fg)",
@@ -60,7 +60,7 @@ export default async function AutoresPage({ searchParams }: PageProps) {
           <Link
             href="/autores?view=serie"
             className={cn(
-              "rounded-(--radius-sm) px-3 py-1.5 text-sm font-(--font-weight-medium) transition-colors duration-(--transition-fast)",
+              "rounded-sm px-3 py-1.5 text-sm font-medium transition-colors duration-(--transition-fast)",
               isSeriesView
                 ? "bg-(--brand) text-(--brand-fg)"
                 : "text-(--fg-muted) hover:text-(--fg)",
@@ -88,7 +88,7 @@ export default async function AutoresPage({ searchParams }: PageProps) {
       <div className="pt-8">
         {isSeriesView ? (
           filteredSeries.length > 0 ? (
-            <ul className="flex flex-col divide-y divide-(--divider) rounded-(--radius-md) border border-(--border)">
+            <ul className="flex flex-col divide-y divide-(--divider) rounded-md border border-(--border)">
               {filteredSeries.map((s) => {
                 const trackCount = tracks.filter(
                   (t) => t.seriesId === s.id,
@@ -106,7 +106,7 @@ export default async function AutoresPage({ searchParams }: PageProps) {
                         />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate font-(family-name:--font-display) text-sm font-(--font-weight-semibold) text-(--fg)">
+                        <p className="truncate font-(family-name:--font-display) text-sm font-semibold text-(--fg)">
                           {s.name}
                         </p>
                         <p className="truncate text-xs text-(--fg-muted)">

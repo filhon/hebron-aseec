@@ -25,12 +25,12 @@ export default async function MateriaisPage() {
           description="Apostilas e roteiros de apoio às séries da rádio."
         />
 
-        <div className="flex flex-col items-center gap-5 rounded-(--radius-md) border border-(--border) bg-(--surface-alt) py-16 text-center">
+        <div className="flex flex-col items-center gap-5 rounded-md border border-(--border) bg-(--surface-alt) py-16 text-center">
           <div className="flex h-14 w-14 items-center justify-center rounded-full border border-(--border) bg-(--surface)">
             <Lock className="h-6 w-6 text-(--brand)" aria-hidden="true" />
           </div>
           <div className="max-w-sm space-y-1.5">
-            <h2 className="font-(family-name:--font-display) text-lg font-(--font-weight-semibold) text-(--fg)">
+            <h2 className="font-(family-name:--font-display) text-lg font-semibold text-(--fg)">
               Entre para acessar os materiais
             </h2>
             <p className="text-sm text-(--fg-muted)">

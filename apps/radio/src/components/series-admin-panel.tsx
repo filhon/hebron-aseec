@@ -73,7 +73,7 @@ export function SeriesAdminPanel({ authors, series }: SeriesAdminPanelProps) {
       <div className="mb-4 flex items-center justify-between gap-4">
         <h2
           id="series-admin-heading"
-          className="flex items-center gap-2 font-(family-name:--font-display) text-base font-(--font-weight-semibold) text-(--fg)"
+          className="flex items-center gap-2 font-(family-name:--font-display) text-base font-semibold text-(--fg)"
         >
           <Users2 className="h-4.5 w-4.5 text-(--brand)" aria-hidden="true" />
           Séries ({series.length})
@@ -102,11 +102,11 @@ export function SeriesAdminPanel({ authors, series }: SeriesAdminPanelProps) {
           }
         />
       ) : (
-        <ul className="flex flex-col divide-y divide-(--divider) rounded-(--radius-md) border border-(--border)">
+        <ul className="flex flex-col divide-y divide-(--divider) rounded-md border border-(--border)">
           {series.map((item) => (
             <li key={item.id} className="flex items-center gap-4 px-5 py-3">
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-(--font-weight-semibold) text-(--fg)">
+                <p className="truncate text-sm font-semibold text-(--fg)">
                   {item.name}
                 </p>
                 <p className="truncate text-xs text-(--fg-muted)">

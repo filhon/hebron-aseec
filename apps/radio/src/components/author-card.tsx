@@ -16,7 +16,7 @@ export function AuthorCard({ author, series, className }: AuthorCardProps) {
   return (
     <article
       className={cn(
-        "flex flex-col gap-4 rounded-(--radius-md) border border-(--border)",
+        "flex flex-col gap-4 rounded-md border border-(--border)",
         "bg-(--surface) p-5",
         className,
       )}

@@ -31,8 +31,8 @@ export function NowPlayingCard() {
 
   if (!nowPlaying) {
     return (
-      <div className="w-full max-w-sm rounded-(--radius-lg) border border-white/10 bg-white/5 p-6">
-        <span className="flex items-center gap-2 text-xs font-(--font-weight-semibold) tracking-(--tracking-eyebrow) text-(--hb-cyan) uppercase">
+      <div className="w-full max-w-sm rounded-lg border border-white/10 bg-white/5 p-6">
+        <span className="flex items-center gap-2 text-xs font-semibold tracking-(--tracking-eyebrow) text-(--hb-cyan) uppercase">
           <Radio className="h-3.5 w-3.5" aria-hidden="true" />
           Tocando agora
         </span>
@@ -59,8 +59,8 @@ export function NowPlayingCard() {
   );
 
   return (
-    <div className="w-full max-w-sm rounded-(--radius-lg) border border-white/10 bg-white/5 p-6">
-      <span className="flex items-center gap-2 text-xs font-(--font-weight-semibold) tracking-(--tracking-eyebrow) text-(--hb-cyan) uppercase">
+    <div className="w-full max-w-sm rounded-lg border border-white/10 bg-white/5 p-6">
+      <span className="flex items-center gap-2 text-xs font-semibold tracking-(--tracking-eyebrow) text-(--hb-cyan) uppercase">
         <Radio className="h-3.5 w-3.5" aria-hidden="true" />
         Tocando agora
       </span>
@@ -70,7 +70,7 @@ export function NowPlayingCard() {
           <Disc3 className="h-6 w-6 text-(--hb-cyan)" aria-hidden="true" />
         </div>
         <div className="min-w-0">
-          <p className="truncate font-(family-name:--font-display) text-base font-(--font-weight-semibold) text-(--fg-invert)">
+          <p className="truncate font-(family-name:--font-display) text-base font-semibold text-(--fg-invert)">
             {track.title}
           </p>
           <p className="truncate text-sm text-(--fg-invert-muted)">

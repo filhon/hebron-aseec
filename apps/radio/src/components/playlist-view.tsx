@@ -65,7 +65,7 @@ export function PlaylistView({
                     className={cn(
                       "block truncate text-sm",
                       isCurrent
-                        ? "font-(--font-weight-semibold) text-(--brand)"
+                        ? "font-semibold text-(--brand)"
                         : "text-(--fg)",
                     )}
                   >
