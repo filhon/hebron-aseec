@@ -51,6 +51,28 @@ function taskUrl(taskId: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// buildTaskNotificationPayload — ponto único de montagem do payload in-app
+// do módulo Tarefas (P-4.10b, CORRETIVO). Contrato em
+// packages/ui/src/components/ecosystem-apps.ts:80-107 (P-0.6b): sem `module`
+// o sino resolve o `href` como rota do app onde o usuário está lendo; sem
+// `href` o destino vira "/" — as duas faltas são silenciosas. Todo
+// `createNotification` deste módulo usa este helper para que o próximo
+// call-site não tenha como esquecer nenhum dos dois campos.
+// ---------------------------------------------------------------------------
+
+export function buildTaskNotificationPayload(
+  taskId: string,
+  extra?: Record<string, unknown>,
+): Record<string, unknown> {
+  return {
+    module: "tarefas",
+    href: `/tarefa/${taskId}`,
+    taskId,
+    ...extra,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // notifyTaskAssigned — in_app + email para cada novo responsável (BRAIN §6.9:
 // diretores não recebem tarefa operacional, então esta notificação é só para
 // quem de fato entra em `assignees`). Quem se autoatribui não é notificado.
@@ -116,11 +138,7 @@ export async function notifyTaskAssigned(
           type: "task.assigned",
           title,
           body,
-          payload: {
-            module: "tarefas",
-            taskId: task.id,
-            href: `/tarefa/${task.id}`,
-          },
+          payload: buildTaskNotificationPayload(task.id),
         },
       }),
       createNotification({
@@ -132,11 +150,7 @@ export async function notifyTaskAssigned(
           type: "task.assigned",
           title,
           body,
-          payload: {
-            module: "tarefas",
-            taskId: task.id,
-            href: `/tarefa/${task.id}`,
-          },
+          payload: buildTaskNotificationPayload(task.id),
         },
         email: {
           to: recipient.email,
@@ -216,11 +230,9 @@ export async function notifyApprovalRequested(
         type: "task.approval_requested",
         title,
         body,
-        payload: {
-          module: "tarefas",
-          taskId: request.taskId,
+        payload: buildTaskNotificationPayload(request.taskId, {
           approvalRequestId: request.id,
-        },
+        }),
       },
     }),
     createNotification({
@@ -232,11 +244,9 @@ export async function notifyApprovalRequested(
         type: "task.approval_requested",
         title,
         body,
-        payload: {
-          module: "tarefas",
-          taskId: request.taskId,
+        payload: buildTaskNotificationPayload(request.taskId, {
           approvalRequestId: request.id,
-        },
+        }),
       },
       email: {
         to: approver.email,

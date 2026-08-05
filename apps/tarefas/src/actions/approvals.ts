@@ -14,7 +14,10 @@ import {
 } from "@hebron/validators/tarefas";
 import { colaboradorAction, diretorAction } from "../lib/safe-action";
 import { logTarefasAudit } from "../lib/audit";
-import { notifyApprovalRequested } from "../lib/notifications";
+import {
+  notifyApprovalRequested,
+  buildTaskNotificationPayload,
+} from "../lib/notifications";
 
 const insertNotification = makeNotificationInserter();
 
@@ -216,10 +219,9 @@ export const resolveApprovalRequest = diretorAction
             ? "Pedido de aprovação aprovado"
             : "Pedido de aprovação rejeitado",
         body: input.notes ?? undefined,
-        payload: {
-          taskId: result.taskId,
+        payload: buildTaskNotificationPayload(result.taskId, {
           approvalRequestId: result.updated.id,
-        },
+        }),
       },
     });
 

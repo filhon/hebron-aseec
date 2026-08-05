@@ -249,6 +249,7 @@
 | S-226  | 2026-08-03 | P-4.5b — O esqueleto de árvore que nenhuma tela mostra e a visão que o recarregamento esquece (CORRETIVO)                        | concluido                            |
 | S-227  | 2026-08-04 | P-4.8b — A tarefa automática que nasce órfã e continua órfã (CORRETIVO)                                                          | concluido                            |
 | S-228  | 2026-08-04 | P-4.8c — O pedido de aprovação que o pedido seguinte esconde (CORRETIVO)                                                         | concluido                            |
+| S-229  | 2026-08-05 | P-4.10b — A notificação que não leva a lugar nenhum (CORRETIVO)                                                                  | concluido                            |
 
 ---
 
@@ -20307,3 +20308,85 @@ implementação do item 3 acima (registrada no momento em que foi tomada).
 - `apps/tarefas/src/app/(dashboard)/tarefa/[id]/task-detail-client.tsx`
 - `apps/tarefas/src/__tests__/approvals.test.ts` (criado)
 - `PROMPTS.md` (critérios de P-4.8 e P-4.9)
+
+## S-229 — P-4.10b — A notificação que não leva a lugar nenhum (CORRETIVO)
+
+**Prompt:** P-4.10b (PROMPTS.md)
+**Data:** 2026-08-05
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+Os quatro critérios de P-4.10 já estavam `[x]`, mas o contrato de payload
+(`packages/ui/src/components/ecosystem-apps.ts:80-107`, P-0.6b) só tinha sido
+seguido pela metade: sem `module` o sino resolve `href` como rota do app onde
+o usuário está lendo (não o de origem); sem `href` o destino vira `"/"`. Cinco
+call-sites do módulo Tarefas caíam em uma das duas faltas, silenciosamente.
+
+Escopo executado na ordem do prompt:
+
+1. **Ponto único de montagem**: `buildTaskNotificationPayload(taskId, extra?)`
+   em `apps/tarefas/src/lib/notifications.ts`, devolve
+   `{ module: "tarefas", href: "/tarefa/<id>", taskId, ...extra }`. Os quatro
+   `createNotification` já existentes em `notifications.ts` (atribuição in_app
+   - email, pedido de aprovação in_app + email) passaram a usá-lo — inclusive
+     os dois de atribuição, que já estavam corretos, para que não sobre nenhum
+     literal duplicado no módulo.
+2. **Cinco call-sites corrigidos**:
+   - `actions/approvals.ts::resolveApprovalRequest` — payload não tinha nem
+     `module` nem `href`; agora usa o helper com `approvalRequestId` extra.
+   - `lib/notifications.ts::notifyApprovalRequested` (in_app + email) — tinha
+     `module`, faltava `href`; agora usa o helper.
+   - `actions/comments.ts::createComment` (@menção) — tinha `href`, faltava
+     `module` (o bug mais visível: sino de qualquer outro app navegava para
+     `/tarefa/<id>` local e caía em 404); agora importa e usa o helper.
+   - `packages/integrations/src/projetos-tarefas.ts::notifyChecklistCreationFailure`
+     e `packages/integrations/src/flats.ts::notifyCleaningTaskCreationFailure`
+     — nenhum dos dois tinha `module`/`href`. Decisão registrada aqui (G6.5,
+     `packages/integrations` não importa de `@hebron/ui`, só replica o
+     formato com comentário apontando para `ecosystem-apps.ts`): destino é a
+     **configuração que resolve a falha**, não o registro de origem —
+     `projeto.checklist_analise_falhou` aponta para `admin`/`/configuracoes`
+     (onde `setProjetosChecklistTemplate` valida template ativo + com itens,
+     cobrindo as três causas possíveis de `onProjectSubmitted` falhar);
+     `flats.tarefas_limpeza_falhou` aponta para `tarefas`/`/templates` (onde
+     os templates de limpeza de nome fixo são geridos) — mesmo quando a causa
+     real é "reserva sem período confirmado", a reserva em si não tem ação de
+     correção própria no app Flats, então o super_admin ainda é levado ao
+     lugar mais próximo de uma correção manual.
+3. **Teste novo** `apps/tarefas/src/__tests__/notifications.test.ts` (3
+   casos): `createComment`, `requestApproval` e `resolveApprovalRequest`
+   gravam `module`/`href`; `resolveNotificationHref(payload, "intranet")`
+   devolve URL absoluta de `tarefas.hebronaseec.com.br` para as três, nunca
+   `"/"`; `resolveNotificationHref(payload, "tarefas")` devolve o `href`
+   relativo cru (mesmo módulo).
+4. Bookkeeping em `PROMPTS.md`: novo critério em P-4.10 registrando a correção
+   e apontando para este prompt.
+
+Nenhuma suposição de regra de negócio precisou ser feita além da decisão do
+item 2 acima (destino das duas notificações de falha de checklist),
+registrada no momento em que foi tomada.
+
+### Verificação
+
+- `pnpm --filter @hebron/tarefas typecheck lint` — verdes
+- `pnpm --filter @hebron/tarefas test`: 10 suítes, 65 testes, todos verdes
+  (notifications.test.ts: 3/3)
+- `pnpm --filter @hebron/integrations test`: 8 suítes verdes, 1 falha
+  pré-existente e não relacionada (`feed.test.ts` — drift de
+  `bankAccounts.nickname` já documentado, S-219; não toca nada deste diff)
+- `pnpm turbo lint typecheck --concurrency=3`: falha pré-existente e não
+  relacionada em `@hebron/auth` (`data-deletion.test.ts`) — mesmo drift de
+  `bankAccounts.nickname` do item acima, nenhum arquivo deste prompt no
+  caminho
+
+### Arquivos modificados
+
+- `apps/tarefas/src/lib/notifications.ts`
+- `apps/tarefas/src/actions/approvals.ts`
+- `apps/tarefas/src/actions/comments.ts`
+- `packages/integrations/src/projetos-tarefas.ts`
+- `packages/integrations/src/flats.ts`
+- `apps/tarefas/src/__tests__/notifications.test.ts` (criado)
+- `PROMPTS.md` (critérios de P-4.10)

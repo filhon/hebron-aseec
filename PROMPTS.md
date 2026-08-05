@@ -5687,6 +5687,10 @@ Notificações: tarefa atribuída (in_app + email). @menção em comentário (in
 - [x] Aprovação: in_app + email ao diretor
 - [x] Lint passa
 - [x] Types passam
+- [x] A notificação leva à tarefa, de dentro e de fora do app: todo payload
+      carrega `module`/`href` (contrato P-0.6b) — corrigido em P-4.10b
+      (CORRETIVO) para @menção, pedido de aprovação e aprovação/rejeição, que
+      tinham ido a produção sem um ou outro campo
 
 ---
 
@@ -6226,12 +6230,12 @@ O email não sofre disso (`taskUrl` monta URL absoluta em `lib/notifications.ts:
 
 **Critérios de aceite:**
 
-- [ ] Nenhuma notificação criada pelo módulo Tarefas fica sem `module` ou sem `href` (verificação por grep em todos os `createNotification` do módulo, incluindo `packages/jobs` e `packages/integrations`)
-- [ ] Clicar em "Pedido de aprovação aprovado" abre a tarefa aprovada, não a home
-- [ ] Uma @menção lida no sino da Intranet abre a tarefa em `tarefas.hebronaseec.com.br`, não um 404 local
-- [ ] A notificação de falha do checklist leva a quem a recebe para onde a falha se resolve
-- [ ] `pnpm --filter @hebron/tarefas typecheck lint test` verdes; `pnpm --filter @hebron/integrations test` verde; `pnpm turbo lint typecheck` verde
-- [ ] Registrar em SESSIONS.md
+- [x] Nenhuma notificação criada pelo módulo Tarefas fica sem `module` ou sem `href` (verificação por grep em todos os `createNotification` do módulo, incluindo `packages/jobs` e `packages/integrations`)
+- [x] Clicar em "Pedido de aprovação aprovado" abre a tarefa aprovada, não a home
+- [x] Uma @menção lida no sino da Intranet abre a tarefa em `tarefas.hebronaseec.com.br`, não um 404 local
+- [x] A notificação de falha do checklist leva a quem a recebe para onde a falha se resolve
+- [~] `pnpm --filter @hebron/tarefas typecheck lint test` verdes; `pnpm --filter @hebron/integrations test` verde; `pnpm turbo lint typecheck` verde
+- [x] Registrar em SESSIONS.md
 
 **Notas:**
 Ref: P-0.6b (contrato de payload) e BRAIN.md §7. O sino é o único lugar onde as notificações de todos os nove apps convivem; um payload sem `module` só funciona por acaso, enquanto o usuário estiver lendo do app certo.

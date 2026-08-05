@@ -90,7 +90,20 @@ async function notifyChecklistCreationFailure(
           type: "projeto.checklist_analise_falhou",
           title: "Falha ao criar checklist de análise do projeto",
           body: `Projeto ${projectId}: ${message}`,
-          payload: { projectId, message },
+          // Payload replica o contrato de packages/ui/src/components/
+          // ecosystem-apps.ts (P-0.6b) sem importar de @hebron/ui (G6.5:
+          // packages/integrations não depende de outro package de UI).
+          // Destino é a configuração, não o projeto: as três causas
+          // possíveis de onProjectSubmitted falhar (setting ausente,
+          // template inativo, template sem itens) são todas resolvidas em
+          // /configuracoes (apps/admin::setProjetosChecklistTemplate valida
+          // as três antes de trocar o template).
+          payload: {
+            module: "admin",
+            href: "/configuracoes",
+            projectId,
+            message,
+          },
         }),
       ),
     );

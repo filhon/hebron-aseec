@@ -173,7 +173,21 @@ async function notifyCleaningTaskCreationFailure(
           type: "flats.tarefas_limpeza_falhou",
           title: "Falha ao criar tarefas de limpeza da reserva",
           body: `Reserva ${reservationId}: ${message}`,
-          payload: { reservationId, message },
+          // Payload replica o contrato de packages/ui/src/components/
+          // ecosystem-apps.ts (P-0.6b) sem importar de @hebron/ui (G6.5:
+          // packages/integrations não depende de outro package de UI).
+          // Destino é a configuração dos templates de limpeza (nomes fixos
+          // em FLATS_CLEANING_*_TEMPLATE_NAME, geridos em
+          // apps/tarefas::/templates), não a reserva: mesmo quando a causa é
+          // "reserva sem período confirmado", é lá que se decide reativar o
+          // template ou reprocessar manualmente — a reserva em si não tem
+          // ação de correção própria no app Flats.
+          payload: {
+            module: "tarefas",
+            href: "/templates",
+            reservationId,
+            message,
+          },
         }),
       ),
     );

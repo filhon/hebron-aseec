@@ -7,6 +7,7 @@ import { makeNotificationInserter } from "@hebron/db/notifications";
 import { createNotification } from "@hebron/email";
 import { createCommentSchema } from "@hebron/validators/tarefas";
 import { staffAction } from "../lib/safe-action";
+import { buildTaskNotificationPayload } from "../lib/notifications";
 
 const insertNotification = makeNotificationInserter();
 
@@ -54,11 +55,9 @@ export const createComment = staffAction
           type: "task.comment.mention",
           title: `Você foi mencionado em "${taskTitle}"`,
           body: input.content,
-          payload: {
-            taskId: comment.taskId,
+          payload: buildTaskNotificationPayload(comment.taskId, {
             commentId: comment.id,
-            href: `/tarefa/${comment.taskId}`,
-          },
+          }),
         },
       });
     }
