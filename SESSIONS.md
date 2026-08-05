@@ -250,6 +250,7 @@
 | S-227  | 2026-08-04 | P-4.8b — A tarefa automática que nasce órfã e continua órfã (CORRETIVO)                                                          | concluido                            |
 | S-228  | 2026-08-04 | P-4.8c — O pedido de aprovação que o pedido seguinte esconde (CORRETIVO)                                                         | concluido                            |
 | S-229  | 2026-08-05 | P-4.10b — A notificação que não leva a lugar nenhum (CORRETIVO)                                                                  | concluido                            |
+| S-230  | 2026-08-05 | P-4.9c — O anexo que sobe e não desce (CORRETIVO)                                                                                | concluido                            |
 
 ---
 
@@ -20390,3 +20391,88 @@ registrada no momento em que foi tomada.
 - `packages/integrations/src/flats.ts`
 - `apps/tarefas/src/__tests__/notifications.test.ts` (criado)
 - `PROMPTS.md` (critérios de P-4.10)
+
+## S-230 — P-4.9c — O anexo que sobe e não desce (CORRETIVO)
+
+**Prompt:** P-4.9c (PROMPTS.md)
+**Data:** 2026-08-05
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+P-4.9b (PATCH-020, S-99) fechou a metade da subida do anexo — `createAttachment`
+gera a signed upload URL, o cliente faz o PUT, a linha entra em
+`tarefas.attachments` e o arquivo entra no bucket privado `tarefas-anexos`.
+A metade da descida não existia: nenhuma action de leitura no app (`grep
+createSignedUrl` não devolvia nada) e a lista de anexos do detalhe
+(`task-detail-client.tsx`) renderizava nome e tamanho num `<li>` sem link, sem
+botão — o usuário via que o anexo existia e não tinha como abri-lo.
+
+Escopo executado na ordem do prompt:
+
+1. **`getAttachmentUrl`** (`apps/tarefas/src/actions/attachments.ts`, criado):
+   `staffAction` + client de sessão (G6.2, sem `service_role` — a policy
+   `tarefas_anexos_select_staff` do bucket já autoriza staff). A visibilidade
+   da tarefa-raiz não precisou de uma segunda consulta manual: a policy
+   `attachments_select_staff` (0033_tarefas_rls.sql) já filtra o `SELECT` em
+   `tarefas.attachments` por `tarefas.task_visible(...)`, então um `SELECT`
+   simples por `attachmentId` já devolve "não encontrado" tanto para id
+   inexistente quanto para tarefa não visível — mesma resposta nos dois casos,
+   sem vazar existência. `createSignedUrl` com expiração de 300s (mesmo padrão
+   de `apps/financeiro/src/actions/attachments.ts`), nunca persistida.
+2. **Lista vira lista de links** (`task-detail-client.tsx`, só o bloco
+   "Anexos"): cada anexo é um `<button>` (nativamente acessível por teclado)
+   que busca a URL no clique e abre em nova aba via
+   `window.open(url, "_blank", "noopener,noreferrer")` — mesmo padrão já
+   usado em `apps/financeiro/src/components/payable-card.tsx` e
+   `transaction-table.tsx`. Estado de carregamento por item (`Abrindo…` troca
+   o rótulo de tamanho só do anexo clicado, com todos os botões desabilitados
+   enquanto uma chamada está em voo) e banner de erro em português abaixo da
+   lista se a geração da URL falhar.
+3. **Ramificação `comment` — saída (b)**: `createAttachmentSchema.parentType`
+   passou de `z.enum(["task", "comment"])` para `z.literal("task")`
+   (`packages/validators/src/tarefas/index.ts`). Nenhum formulário do produto
+   compõe anexo de comentário (`comment-form.tsx` não tem campo de arquivo) e
+   `assembleTasks` só lê `parent_type = 'task'` — a ramificação `comment` em
+   `createAttachment` (`resolveCommentTaskId`, `actions/tasks.ts`) já era
+   inalcançável pela UI antes deste prompt; a mudança apenas fecha essa
+   promessa na fronteira de validação também. `tasks.ts` não está na lista de
+   arquivos permitidos deste prompt e não precisou ser tocado: o Zod agora
+   rejeita `"comment"` antes de a action rodar, e o branch morto continua
+   compilando (o tipo de `input.parentType` virou o literal `"task"`, então a
+   comparação `=== "task"` é sempre verdadeira — não é erro de TypeScript nem
+   de lint). A coluna `tarefas.attachments.parent_type` continua polimórfica
+   no banco (imutabilidade) — o que saiu foi só a promessa da API.
+4. **Teste** (`apps/tarefas/src/__tests__/attachments.test.ts`, estendido):
+   novo describe `getAttachmentUrl` com 4 casos — URL gerada para quem criou
+   o anexo (com asserção de que a resposta só tem `url`/`fileName`, nunca
+   `storageKey`, e que `createSignedUrl` foi chamado com expiração de 300s);
+   um segundo colaborador, não criador nem responsável, abre o mesmo anexo
+   (transparência interna, BRAIN §6.9); um papel externo (submissor) é
+   barrado pelo próprio `staffAction`, sem tocar o banco; `attachmentId`
+   inexistente é recusado.
+5. Bookkeeping em `PROMPTS.md`: critério de P-4.9 sobre anexos agora diz
+   "anexável **e recuperável**", referenciando este prompt.
+
+Nenhuma suposição de regra de negócio precisou ser feita além da escolha da
+saída (b) no item 3, que a lista de arquivos permitidos do próprio prompt já
+sinalizava (packages/types não estava na lista — a saída (a) exigiria mudar
+`Comment`/`Attachment` lá).
+
+### Verificação
+
+- `pnpm --filter @hebron/tarefas typecheck lint` — verdes
+- `pnpm --filter @hebron/tarefas test`: 10 suítes, 69 testes, todos verdes
+  (attachments.test.ts: 7/7, incluindo os 4 casos novos de `getAttachmentUrl`)
+- `pnpm --filter @hebron/tarefas build` — verde (11 rotas)
+- `grep -rn "parentType: \"comment\"\|parent_type = 'comment'" apps packages`
+  — vazio
+
+### Arquivos modificados
+
+- `apps/tarefas/src/actions/attachments.ts` (criado)
+- `apps/tarefas/src/app/(dashboard)/tarefa/[id]/task-detail-client.tsx` (só o bloco "Anexos")
+- `packages/validators/src/tarefas/index.ts`
+- `apps/tarefas/src/__tests__/attachments.test.ts`
+- `PROMPTS.md` (critério de P-4.9)

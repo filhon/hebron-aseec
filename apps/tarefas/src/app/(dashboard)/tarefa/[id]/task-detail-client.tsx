@@ -51,6 +51,7 @@ import {
   updateTask,
   updateTaskStatus,
 } from "../../../../actions/tasks";
+import { getAttachmentUrl } from "../../../../actions/attachments";
 import { createComment } from "../../../../actions/comments";
 import {
   createManualTimeEntry,
@@ -199,6 +200,12 @@ export function TaskDetailClient({
   const [assigningManually, setAssigningManually] = useState(false);
   const [manualAssigneeIds, setManualAssigneeIds] = useState<string[]>([]);
   const [assignError, setAssignError] = useState<string | null>(null);
+  const [openingAttachmentId, setOpeningAttachmentId] = useState<string | null>(
+    null,
+  );
+  const [attachmentOpenError, setAttachmentOpenError] = useState<string | null>(
+    null,
+  );
 
   function refresh() {
     router.refresh();
@@ -342,6 +349,26 @@ export function TaskDetailClient({
     }
     closeManualAssign();
     refresh();
+  }
+
+  const { execute: openAttachment } = useAction(getAttachmentUrl, {
+    onSuccess({ data }) {
+      if (data?.url) window.open(data.url, "_blank", "noopener,noreferrer");
+    },
+    onError({ error }) {
+      setAttachmentOpenError(
+        error.serverError ?? "Não foi possível abrir o anexo.",
+      );
+    },
+    onSettled() {
+      setOpeningAttachmentId(null);
+    },
+  });
+
+  function handleOpenAttachment(attachmentId: string) {
+    setAttachmentOpenError(null);
+    setOpeningAttachmentId(attachmentId);
+    openAttachment({ attachmentId });
   }
 
   const directory = [
@@ -660,24 +687,42 @@ export function TaskDetailClient({
                 Anexos
               </h2>
               <ul className="flex flex-col gap-2">
-                {task.attachments.map((a) => (
-                  <li
-                    key={a.id}
-                    className="flex items-center gap-2.5 rounded-sm border border-(--border) px-3 py-2"
-                  >
-                    <Paperclip
-                      className="h-3.5 w-3.5 shrink-0 text-(--fg-muted)"
-                      aria-hidden="true"
-                    />
-                    <span className="min-w-0 flex-1 truncate text-sm text-(--fg)">
-                      {a.fileName}
-                    </span>
-                    <span className="shrink-0 text-xs text-(--fg-muted)">
-                      {fileSizeLabel(a.fileSizeBytes)}
-                    </span>
-                  </li>
-                ))}
+                {task.attachments.map((a) => {
+                  const isOpening = openingAttachmentId === a.id;
+                  return (
+                    <li key={a.id}>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenAttachment(a.id)}
+                        disabled={openingAttachmentId !== null}
+                        aria-busy={isOpening}
+                        className="flex w-full items-center gap-2.5 rounded-sm border border-(--border) px-3 py-2 text-left transition-colors hover:bg-(--surface-alt) disabled:cursor-not-allowed disabled:opacity-60"
+                      >
+                        <Paperclip
+                          className="h-3.5 w-3.5 shrink-0 text-(--fg-muted)"
+                          aria-hidden="true"
+                        />
+                        <span className="min-w-0 flex-1 truncate text-sm font-medium text-(--hb-blue)">
+                          {a.fileName}
+                        </span>
+                        <span className="shrink-0 text-xs text-(--fg-muted)">
+                          {isOpening
+                            ? "Abrindo…"
+                            : fileSizeLabel(a.fileSizeBytes)}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
+              {attachmentOpenError && (
+                <p
+                  role="alert"
+                  className="mt-2 text-xs text-(--color-destructive)"
+                >
+                  {attachmentOpenError}
+                </p>
+              )}
             </div>
           )}
 

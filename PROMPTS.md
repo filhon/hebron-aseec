@@ -5653,6 +5653,11 @@ Substituir mocks por dados reais. Kanban, lista e árvore com dados do banco. Fo
 - [x] Modo foco com tarefas do dia reais
 - [x] Nenhum componente/formulário do Bloco A (P-4.2/P-4.4) sem import (grep)
 - [x] Mock data removido
+- [x] Anexo: anexável do formulário de tarefa (P-4.9b, PATCH-020) **e recuperável**
+      — aberto pelo nome a partir do detalhe, não só armazenado no bucket — via
+      `getAttachmentUrl`, fechado em P-4.9c (CORRETIVO), que também restringiu
+      `createAttachmentSchema.parentType` a `"task"` até existir um composer
+      que anexe a partir de um comentário
 - [x] Lint passa · Types passam
 
 ---
@@ -6285,13 +6290,13 @@ Segundo ponto, do mesmo prompt: a tabela é polimórfica (`parent_type` = `task`
 
 **Critérios de aceite:**
 
-- [ ] Anexar um PDF a uma tarefa, recarregar a página e abrir o arquivo pelo nome, sem sair do detalhe
-- [ ] Um segundo colaborador (não criador, não responsável) abre o mesmo anexo — transparência interna, BRAIN §6.9
-- [ ] Um papel externo não obtém URL para anexo nenhum
-- [ ] O link expira: uma URL gerada não continua válida indefinidamente, e nada a persiste no banco ou no HTML
-- [ ] `grep -rn "parentType: \"comment\"\|parent_type = 'comment'" apps packages` só encontra código que a UI alcança
-- [ ] `pnpm --filter @hebron/tarefas typecheck lint test` verdes; `pnpm --filter @hebron/tarefas build` verde
-- [ ] Registrar em SESSIONS.md — incluindo a saída escolhida no item 3
+- [x] Anexar um PDF a uma tarefa, recarregar a página e abrir o arquivo pelo nome, sem sair do detalhe
+- [x] Um segundo colaborador (não criador, não responsável) abre o mesmo anexo — transparência interna, BRAIN §6.9
+- [x] Um papel externo não obtém URL para anexo nenhum
+- [x] O link expira: uma URL gerada não continua válida indefinidamente, e nada a persiste no banco ou no HTML
+- [x] `grep -rn "parentType: \"comment\"\|parent_type = 'comment'" apps packages` só encontra código que a UI alcança
+- [x] `pnpm --filter @hebron/tarefas typecheck lint test` verdes; `pnpm --filter @hebron/tarefas build` verde
+- [x] Registrar em SESSIONS.md — incluindo a saída escolhida no item 3
 
 **Notas:**
 Ref: BRAIN.md §6.9 ("anexos" em features v1), `0034_tarefas_storage.sql` e o precedente de `apps/financeiro/src/actions/attachments.ts`. Um anexo que sobe e não desce é pior do que não ter anexo: o usuário acredita que guardou o documento no sistema.

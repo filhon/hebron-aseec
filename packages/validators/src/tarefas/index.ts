@@ -143,9 +143,14 @@ export const createTagSchema = z.object({
 export type CreateTagInput = z.infer<typeof createTagSchema>;
 
 // ─── createAttachmentSchema ───────────────────────────────────────────────────
+// parentType restrito a "task" (P-4.9c, CORRETIVO): nenhum formulário do
+// produto compõe anexo de comentário — `comment-form.tsx` não tem campo de
+// arquivo e `assembleTasks` só lê parent_type = 'task'. A coluna do banco
+// (tarefas.attachments.parent_type) permanece polimórfica por imutabilidade;
+// o que sai aqui é a promessa da API enquanto não existir esse composer.
 
 export const createAttachmentSchema = z.object({
-  parentType: z.enum(["task", "comment"]),
+  parentType: z.literal("task"),
   parentId: z.string().uuid(),
   fileName: z.string().min(1).max(255),
   fileSizeBytes: z.number().int().positive(),
