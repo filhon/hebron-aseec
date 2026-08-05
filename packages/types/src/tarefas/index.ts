@@ -155,6 +155,36 @@ export interface SubtaskProgress {
   total: number;
 }
 
+// ─── TaskEvent ──────────────────────────────────────────────────────────────
+// tarefas.task_events — log operacional do dia a dia (P-4.6). Diferente de
+// admin.audit_log (reservado às mutações críticas — aprovações): este é o
+// histórico que a equipe consulta, gravado em oito call-sites de
+// actions/tasks.ts (P-4.6b). União fechada (não `string`) para que o rótulo
+// em task-activity.tsx não dependa de um valor que uma action futura invente
+// sem passar por revisão deste tipo.
+
+export type TaskEventType =
+  | "created"
+  | "updated"
+  | "status_changed"
+  | "deleted"
+  | "assigned_manually"
+  | "subtask_created"
+  | "subtask_toggled"
+  | "attachment_added";
+
+export interface TaskEvent {
+  id: string;
+  taskId: string;
+  actorId: string;
+  actorName: string;
+  eventType: TaskEventType;
+  /** IDs crus (assigneeIds, workspaceId) já resolvidos para nomes/slugs pela
+   * query — o componente que renderiza é client e não acessa o banco. */
+  diff: Record<string, unknown> | null;
+  createdAt: Date;
+}
+
 // ─── Task ─────────────────────────────────────────────────────────────────────
 
 export interface Task {

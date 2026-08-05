@@ -3,6 +3,7 @@ import {
   getApprovers,
   getAssignableUsers,
   getTaskById,
+  getTaskEvents,
   getTags,
   requireStaffSession,
 } from "../../../../lib/queries";
@@ -15,13 +16,15 @@ export default async function TaskDetailPage({
 }) {
   const { id } = await params;
 
-  const [session, task, assignableUsers, approvers, tags] = await Promise.all([
-    requireStaffSession(),
-    getTaskById(id),
-    getAssignableUsers(),
-    getApprovers(),
-    getTags(),
-  ]);
+  const [session, task, assignableUsers, approvers, tags, events] =
+    await Promise.all([
+      requireStaffSession(),
+      getTaskById(id),
+      getAssignableUsers(),
+      getApprovers(),
+      getTags(),
+      getTaskEvents(id),
+    ]);
 
   if (!task) notFound();
 
@@ -36,6 +39,7 @@ export default async function TaskDetailPage({
       assignableUsers={assignableUsers}
       approvers={approvers}
       tags={tags}
+      events={events}
     />
   );
 }

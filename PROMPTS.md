@@ -5521,7 +5521,7 @@ Auditoria central: aprovações de diretor (approval_requests) são mutação cr
 - [x] recurrence_rules: task_template_id, type, interval, day_of_week, day_of_month, next_run_at
 - [x] approval_requests: task_id, approver_id, status (pendente/aprovado/rejeitado)
 - [x] time_entries: task_id, user_id, started_at, ended_at, duration_minutes
-- [x] task_events: task_id, actor_id, event_type, diff (jsonb)
+- [x] task_events: task_id, actor_id, event_type, diff (jsonb) — gravado desde este prompt mas só lido a partir de P-4.6b (CORRETIVO): painel "Atividade" do detalhe consome via `getTaskEvents`
 - [x] Enum admin.audit_action recebe os valores de aprovação do módulo (ALTER TYPE na migration)
 - [x] drizzle-kit check limpo após a migration
 - [x] Migration aplica sem erros
@@ -5648,6 +5648,7 @@ Substituir mocks por dados reais. Kanban, lista e árvore com dados do banco. Fo
 - [x] Kanban: drag-drop chama moveTask, persiste e sobrevive a reload (não console.log — F2-P2)
 - [x] Criar tarefa executável de: task-form, Cmd+K e CTA de workspace vazio
 - [x] Editar/concluir tarefa executável do detalhe; subtarefa criável e completável com progresso — editar inclui trocar o módulo (move a tarefa de quadro); excluir tarefa executável do detalhe, com confirmação em português comum e sem hard delete, fechados em P-4.8d (CORRETIVO)
+- [x] Painel "Atividade" do detalhe mostra o histórico real de `task_events` (quem mudou o quê, quando), não só os três carimbos derivados de `tasks` — fechado em P-4.6b (CORRETIVO)
 - [x] Comentário com @menção publicável pela tela e notifica o mencionado
 - [x] Time tracking: start/stop operável no detalhe
 - [x] Recorrência: regra criável pela tela de recorrentes com preview — editável (recalcula `next_run_at` à vista) e encerrável sem depender do template, com data de encerramento visível na lista e no máximo uma regra ativa por template (guard na action + índice único parcial), fechados em P-4.9d (CORRETIVO)
@@ -6458,14 +6459,14 @@ Vale a distinção, para o executor não repetir a discussão: isto **não** é 
 
 **Critérios de aceite:**
 
-- [ ] `grep -rn "taskEvents\|task_events" apps/tarefas/src/lib apps/tarefas/src/components` encontra leitura, não só gravação
-- [ ] Mover uma tarefa de coluna e recarregar o detalhe: o painel "Atividade" diz quem moveu, para onde e quando
-- [ ] Nenhum `diff` cru (jsonb, chaves em inglês, aspas) aparece na tela
-- [ ] Um `event_type` não previsto não quebra a renderização
-- [ ] Colaborador sem vínculo com a tarefa lê o histórico; papel externo não lê
-- [ ] O painel não cresce sem limite numa tarefa com histórico longo
-- [ ] `pnpm --filter @hebron/tarefas typecheck lint test` verdes; `pnpm --filter @hebron/tarefas build` verde
-- [ ] Registrar em SESSIONS.md
+- [x] `grep -rn "taskEvents\|task_events" apps/tarefas/src/lib apps/tarefas/src/components` encontra leitura, não só gravação
+- [x] Mover uma tarefa de coluna e recarregar o detalhe: o painel "Atividade" diz quem moveu, para onde e quando
+- [x] Nenhum `diff` cru (jsonb, chaves em inglês, aspas) aparece na tela
+- [x] Um `event_type` não previsto não quebra a renderização
+- [x] Colaborador sem vínculo com a tarefa lê o histórico; papel externo não lê
+- [x] O painel não cresce sem limite numa tarefa com histórico longo
+- [x] `pnpm --filter @hebron/tarefas typecheck lint test` verdes; `pnpm --filter @hebron/tarefas build` verde
+- [x] Registrar em SESSIONS.md
 
 **Notas:**
 Ref: escopo de P-4.6 (`task_events` como "log operacional do dia a dia") e G6.3 (a separação em relação ao `admin.audit_log`). É o de menor prioridade dos sete — nada aqui produz dado errado nem trabalho parado; o custo é uma pergunta corriqueira ("quem mudou isso?") que só o banco responde, e um painel chamado "Atividade" que não mostra nenhuma.

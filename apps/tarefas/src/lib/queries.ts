@@ -29,6 +29,7 @@ import {
   templateItems,
   recurrenceRules,
   approvalRequests,
+  taskEvents,
 } from "@hebron/db/schema";
 import type {
   ApprovalRequest,
@@ -39,6 +40,7 @@ import type {
   Subtask,
   Tag,
   Task,
+  TaskEvent,
   TaskTemplate,
   TimeEntry,
   Workspace,
@@ -559,6 +561,70 @@ export async function getAssignedTasks(userId: string): Promise<Task[]> {
 
   const all = await getTasks();
   return all.filter((t) => taskIds.has(t.id) || t.createdBy === userId);
+}
+
+// ---------------------------------------------------------------------------
+// Task events — log operacional do dia a dia (tarefas.task_events, P-4.6),
+// distinto de admin.audit_log (mutações críticas). RLS
+// (task_events_select_staff, 0033_tarefas_rls.sql:357-362) já resolve a
+// visibilidade por papel + task_visible(): um papel externo recebe lista
+// vazia, não erro — mesmo padrão de getTasks (BRAIN §6.9, transparência
+// interna).
+// ---------------------------------------------------------------------------
+
+/** Substitui IDs crus do diff (assigneeIds, workspaceId) pelos nomes/slugs
+ * que o painel de Atividade mostra — task-activity.tsx é Client Component e
+ * não tem acesso a getUsersMap/getWorkspaceMaps (P-4.6b). */
+function enrichEventDiff(
+  diff: Record<string, unknown>,
+  usersMap: Map<string, string>,
+  idToSlug: Map<string, Workspace>,
+): Record<string, unknown> {
+  const enriched: Record<string, unknown> = { ...diff };
+  if (Array.isArray(diff.assigneeIds)) {
+    enriched.assigneeNames = diff.assigneeIds
+      .filter((id): id is string => typeof id === "string")
+      .map((id) => usersMap.get(id) ?? "—");
+    delete enriched.assigneeIds;
+  }
+  if (typeof diff.workspaceId === "string") {
+    enriched.workspace = idToSlug.get(diff.workspaceId) ?? null;
+    delete enriched.workspaceId;
+  }
+  // updatedAt está em toda mutação de updateTask e não diz nada que a
+  // própria ocorrência do evento (createdAt) já não diga.
+  delete enriched.updatedAt;
+  return enriched;
+}
+
+export async function getTaskEvents(taskId: string): Promise<TaskEvent[]> {
+  const actorId = await getActorId();
+  return withAuthenticatedContext({ actorId }, async (tx) => {
+    const rows = await tx
+      .select()
+      .from(taskEvents)
+      .where(eq(taskEvents.taskId, taskId))
+      .orderBy(desc(taskEvents.createdAt));
+    if (rows.length === 0) return [];
+
+    const [usersMap, { idToSlug }] = await Promise.all([
+      getUsersMap(tx),
+      getWorkspaceMaps(tx),
+    ]);
+
+    return rows.map((r): TaskEvent => {
+      const rawDiff = r.diff as Record<string, unknown> | null;
+      return {
+        id: r.id,
+        taskId: r.taskId,
+        actorId: r.actorId,
+        actorName: usersMap.get(r.actorId) ?? "—",
+        eventType: r.eventType as TaskEvent["eventType"],
+        diff: rawDiff ? enrichEventDiff(rawDiff, usersMap, idToSlug) : null,
+        createdAt: r.createdAt,
+      };
+    });
+  });
 }
 
 // ---------------------------------------------------------------------------

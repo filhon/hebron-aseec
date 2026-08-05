@@ -253,6 +253,7 @@
 | S-230  | 2026-08-05 | P-4.9c — O anexo que sobe e não desce (CORRETIVO)                                                                                | concluido                            |
 | S-231  | 2026-08-05 | P-4.9d — A regra de recorrência que só sabe nascer (CORRETIVO)                                                                   | concluido                            |
 | S-232  | 2026-08-05 | P-4.8d — O "D" do CRUD e o campo de módulo que a edição joga fora (CORRETIVO)                                                    | concluido                            |
+| S-233  | 2026-08-05 | P-4.6b — O histórico que o banco guarda e a tela não mostra (CORRETIVO)                                                          | concluido                            |
 
 ---
 
@@ -20659,3 +20660,83 @@ Nenhuma migration criada — `GRANT` de `tasks` continua sem `DELETE`
 - `apps/tarefas/src/components/task-form.tsx`
 - `apps/tarefas/src/__tests__/tasks.test.ts` (criado)
 - `PROMPTS.md` (critérios de P-4.8 e P-4.9)
+
+## S-233 — P-4.6b — O histórico que o banco guarda e a tela não mostra (CORRETIVO)
+
+**Prompt:** P-4.6b (PROMPTS.md)
+**Data:** 2026-08-05
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+`tarefas.task_events` existe desde P-4.6, é gravado por oito call-sites de
+`actions/tasks.ts` (`created`, `updated`, `status_changed`, `deleted`,
+`assigned_manually`, `subtask_created`, `subtask_toggled`,
+`attachment_added`) e tem RLS/GRANT de leitura para a equipe desde P-4.7 —
+mas nada lia. O painel "Atividade" do detalhe mostrava só três carimbos
+derivados de `tasks` (`createdAt`, `updatedAt`, `completedAt`); "última
+atualização em tal data" sem dizer o quê nem quem era a única informação da
+tela que o log ao lado responderia inteira. Distinto de `admin.audit_log`
+(mutações críticas — aprovações), que não foi tocado.
+
+Escopo executado na ordem do prompt:
+
+1. **Tipo e leitura**: `TaskEvent`/`TaskEventType` (união fechada de 8
+   valores, não `string` solta) em `packages/types/src/tarefas/index.ts`;
+   `getTaskEvents(taskId)` em `lib/queries.ts` resolve `actorName` via o
+   mesmo `getUsersMap` já usado ali, e — como `task-activity.tsx` é Client
+   Component sem acesso ao banco — resolve também os dois campos do `diff`
+   que chegam como IDs crus: `assigneeIds` → `assigneeNames` (evento
+   `assigned_manually`) e `workspaceId` → slug do workspace (evento
+   `updated`, reaproveitando `getWorkspaceMaps`). `updatedAt` (presente em
+   todo evento `updated`, sem valor informativo) é descartado no mesmo
+   passo.
+2. **Painel "Atividade"** (`components/task-activity.tsx`, criado): lista em
+   ordem cronológica inversa, `describeEvent()` traduz cada `eventType` +
+   `diff` em uma frase (`"alterou o prazo para 12/08/2026"`, `"moveu para Em
+Revisão"`, `"adicionou o anexo contrato.pdf"` etc.) — nunca o jsonb cru.
+   `switch` sobre a união cobre os 8 tipos gravados hoje; um `event_type`
+   fora da união (gravado por uma action futura que ainda não passou por
+   este tipo) cai num `default` neutro ("registrou uma atividade") em vez de
+   quebrar a tela ou mostrar o identificador cru. Os carimbos de
+   criação/conclusão continuam no topo do painel (fazem sentido como
+   resumo); o de "última atualização" foi removido — o log abaixo já diz a
+   mesma coisa com detalhe.
+3. **Volume**: lista mostra até 6 eventos com um "Ver mais" que expande para
+   o total — sem paginação no servidor (mesma escala-ONG de todo `queries.ts`
+   do módulo).
+4. **`task-detail-client.tsx`**: prop `events` nova, bloco "Atividade" trocado
+   pelo componente; `Clock3` (ícone) migrou para dentro do componente e saiu
+   dos imports do arquivo (ficaria não usado).
+5. **`page.tsx`**: `getTaskEvents(id)` entra no `Promise.all` já existente e
+   é passado como prop.
+6. **Teste** (`task-events.test.ts`, novo): sequência
+   criar → mover (status) → adicionar subtarefa → concluir (status) produz
+   os 4 eventos esperados, em ordem cronológica inversa, todos com o ator
+   certo; um colaborador sem vínculo com a tarefa lê o histórico inteiro
+   (transparência interna, BRAIN §6.9); um papel externo (submissor) recebe
+   lista vazia — a RLS (`task_events_select_staff`) filtra por papel sem
+   lançar erro, mesmo padrão de `getTasks`.
+7. Bookkeeping em `PROMPTS.md`: critério de P-4.6 sobre `task_events` passou
+   a registrar que o log é lido a partir deste prompt; critério de P-4.9
+   sobre a tela de detalhe ganhou uma linha nova para o histórico real.
+
+### Verificação
+
+- `grep -rn "taskEvents\|task_events" apps/tarefas/src/lib apps/tarefas/src/components`
+  — leitura em `queries.ts`, não só gravação
+- `pnpm --filter @hebron/tarefas typecheck lint` — verdes
+- `pnpm --filter @hebron/tarefas test`: 12 suítes, 81 testes, todos verdes
+  (`task-events.test.ts`: 3/3)
+- `pnpm --filter @hebron/tarefas build` — verde
+
+### Arquivos modificados
+
+- `packages/types/src/tarefas/index.ts`
+- `apps/tarefas/src/lib/queries.ts`
+- `apps/tarefas/src/app/(dashboard)/tarefa/[id]/page.tsx`
+- `apps/tarefas/src/app/(dashboard)/tarefa/[id]/task-detail-client.tsx`
+- `apps/tarefas/src/components/task-activity.tsx` (criado)
+- `apps/tarefas/src/__tests__/task-events.test.ts` (criado)
+- `PROMPTS.md` (critérios de P-4.6 e P-4.9)

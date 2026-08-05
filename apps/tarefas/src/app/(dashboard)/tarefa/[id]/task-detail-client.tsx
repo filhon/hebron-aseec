@@ -8,6 +8,7 @@ import type {
   ApprovalRequestStatus,
   Tag,
   Task,
+  TaskEvent,
   TaskPriority,
   TaskStatus,
   Workspace,
@@ -35,7 +36,6 @@ import {
 import {
   Check,
   ChevronLeft,
-  Clock3,
   Paperclip,
   Pencil,
   Plus,
@@ -76,6 +76,7 @@ import {
 } from "../../../../components/task-form";
 import { SubtaskForm } from "../../../../components/subtask-form";
 import { ApprovalRequestForm } from "../../../../components/approval-request-form";
+import { TaskActivity } from "../../../../components/task-activity";
 
 function cn(...cls: (string | false | null | undefined)[]): string {
   return cls.filter(Boolean).join(" ");
@@ -182,6 +183,7 @@ export interface TaskDetailClientProps {
   assignableUsers: Person[];
   approvers: Person[];
   tags: Tag[];
+  events: TaskEvent[];
 }
 
 export function TaskDetailClient({
@@ -192,6 +194,7 @@ export function TaskDetailClient({
   assignableUsers,
   approvers,
   tags,
+  events,
 }: TaskDetailClientProps) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
@@ -957,25 +960,12 @@ export function TaskDetailClient({
             </div>
           )}
 
-          <div className="rounded-md border border-(--border) bg-(--surface) px-4 py-4">
-            <h2 className="mb-3 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-(--fg-muted)">
-              <Clock3 className="h-3.5 w-3.5" aria-hidden="true" />
-              Atividade
-            </h2>
-            <ul className="flex flex-col gap-2 text-xs text-(--fg-muted)">
-              <li>
-                Criada por{" "}
-                <span className="font-medium text-(--fg)">
-                  {task.createdByName}
-                </span>{" "}
-                em {fmtDateTime(task.createdAt)}
-              </li>
-              <li>Última atualização em {fmtDateTime(task.updatedAt)}</li>
-              {task.completedAt && (
-                <li>Concluída em {fmtDateTime(task.completedAt)}</li>
-              )}
-            </ul>
-          </div>
+          <TaskActivity
+            events={events}
+            createdByName={task.createdByName}
+            createdAt={task.createdAt}
+            completedAt={task.completedAt}
+          />
         </div>
       </div>
 
