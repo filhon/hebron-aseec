@@ -42,7 +42,7 @@ export function StepPeriods() {
 
   return (
     <section className="flex flex-col gap-4">
-      <h2 className="font-(--font-display) text-lg text-(--fg)">
+      <h2 className="font-(family-name:--font-display) text-lg text-(--fg)">
         Períodos de preferência
       </h2>
       <p className="text-sm text-(--fg-muted)">

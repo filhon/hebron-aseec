@@ -86,7 +86,7 @@ export default async function RootLayout({
                   aria-hidden="true"
                 />
               </span>
-              <span className="font-(--font-display) text-sm font-(--font-weight-bold) tracking-(--tracking-tight)">
+              <span className="font-(family-name:--font-display) text-sm font-(--font-weight-bold) tracking-(--tracking-tight)">
                 Rádio Hebron
               </span>
             </Link>

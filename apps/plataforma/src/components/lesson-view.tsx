@@ -204,7 +204,7 @@ export function LessonView({
           )}
 
           <section className="space-y-3 border-t border-(--divider) pt-6">
-            <h2 className="font-(--font-display) text-base text-(--fg)">
+            <h2 className="font-(family-name:--font-display) text-base text-(--fg)">
               Discussão desta aula
             </h2>
             <DiscussionThread

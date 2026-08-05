@@ -30,7 +30,7 @@ export default async function MateriaisPage() {
             <Lock className="h-6 w-6 text-(--brand)" aria-hidden="true" />
           </div>
           <div className="max-w-sm space-y-1.5">
-            <h2 className="font-(--font-display) text-lg font-(--font-weight-semibold) text-(--fg)">
+            <h2 className="font-(family-name:--font-display) text-lg font-(--font-weight-semibold) text-(--fg)">
               Entre para acessar os materiais
             </h2>
             <p className="text-sm text-(--fg-muted)">

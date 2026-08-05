@@ -615,7 +615,7 @@ export function TaskDetailClient({
                 </div>
               )}
             </div>
-            <h1 className="font-(--font-editorial) text-2xl leading-tight">
+            <h1 className="font-(family-name:--font-editorial) text-2xl font-bold leading-tight">
               {task.title}
             </h1>
           </div>

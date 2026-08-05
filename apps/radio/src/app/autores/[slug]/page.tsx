@@ -61,7 +61,7 @@ export default async function AutorPage({ params }: PageProps) {
           )}
         </div>
         <div className="min-w-0">
-          <h1 className="font-(--font-display) text-2xl font-(--font-weight-bold) tracking-(--tracking-tight) text-(--fg)">
+          <h1 className="font-(family-name:--font-display) text-2xl font-(--font-weight-bold) tracking-(--tracking-tight) text-(--fg)">
             {author.name}
           </h1>
           {author.bio && (
@@ -77,7 +77,7 @@ export default async function AutorPage({ params }: PageProps) {
           <section aria-labelledby="series-heading">
             <h2
               id="series-heading"
-              className="mb-4 font-(--font-display) text-lg font-(--font-weight-semibold) text-(--fg)"
+              className="mb-4 font-(family-name:--font-display) text-lg font-(--font-weight-semibold) text-(--fg)"
             >
               Séries
             </h2>

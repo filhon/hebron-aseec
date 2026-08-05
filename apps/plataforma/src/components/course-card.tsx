@@ -71,7 +71,7 @@ export function CourseCard({
       <div className="flex flex-1 flex-col gap-2.5 p-4">
         <div className="space-y-1">
           <span className="hb-eyebrow">{course.category}</span>
-          <h3 className="line-clamp-2 font-(--font-display) text-base leading-snug text-(--fg)">
+          <h3 className="line-clamp-2 font-(family-name:--font-display) text-base leading-snug text-(--fg)">
             {course.title}
           </h3>
           {course.seriesName && (

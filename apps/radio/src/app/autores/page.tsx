@@ -106,7 +106,7 @@ export default async function AutoresPage({ searchParams }: PageProps) {
                         />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate font-(--font-display) text-sm font-(--font-weight-semibold) text-(--fg)">
+                        <p className="truncate font-(family-name:--font-display) text-sm font-(--font-weight-semibold) text-(--fg)">
                           {s.name}
                         </p>
                         <p className="truncate text-xs text-(--fg-muted)">

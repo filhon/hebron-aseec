@@ -70,7 +70,7 @@ export function NowPlayingCard() {
           <Disc3 className="h-6 w-6 text-(--hb-cyan)" aria-hidden="true" />
         </div>
         <div className="min-w-0">
-          <p className="truncate font-(--font-display) text-base font-(--font-weight-semibold) text-(--fg-invert)">
+          <p className="truncate font-(family-name:--font-display) text-base font-(--font-weight-semibold) text-(--fg-invert)">
             {track.title}
           </p>
           <p className="truncate text-sm text-(--fg-invert-muted)">

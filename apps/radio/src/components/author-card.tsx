@@ -35,7 +35,7 @@ export function AuthorCard({ author, series, className }: AuthorCardProps) {
         </div>
 
         <div className="min-w-0">
-          <h3 className="truncate font-(--font-display) text-lg text-(--fg)">
+          <h3 className="truncate font-(family-name:--font-display) text-lg text-(--fg)">
             {author.name}
           </h3>
           {author.bio && (

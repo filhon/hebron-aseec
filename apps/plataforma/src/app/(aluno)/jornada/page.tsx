@@ -50,7 +50,7 @@ export default async function JornadaPage() {
           </div>
 
           <section className="space-y-4">
-            <h2 className="font-(--font-display) text-lg text-(--fg)">
+            <h2 className="font-(family-name:--font-display) text-lg text-(--fg)">
               Em andamento
             </h2>
             {inProgress.length === 0 ? (
@@ -72,7 +72,7 @@ export default async function JornadaPage() {
           </section>
 
           <section className="space-y-4">
-            <h2 className="font-(--font-display) text-lg text-(--fg)">
+            <h2 className="font-(family-name:--font-display) text-lg text-(--fg)">
               Concluídos
             </h2>
             {completed.length === 0 ? (

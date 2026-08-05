@@ -144,7 +144,7 @@ function SectionHeading({
 }) {
   return (
     <div className="max-w-prose space-y-1">
-      <h2 className="font-(--font-display) text-lg font-(--font-weight-semibold) text-(--fg)">
+      <h2 className="font-(family-name:--font-display) text-lg font-(--font-weight-semibold) text-(--fg)">
         {title}
       </h2>
       <p className="text-sm leading-(--leading-relaxed) text-(--fg-muted)">

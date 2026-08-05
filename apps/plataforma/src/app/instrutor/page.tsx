@@ -67,7 +67,7 @@ export default async function InstrutorDashboardPage() {
             className="rounded-md border border-(--border) bg-(--surface) p-5"
           >
             <stat.icon className="h-4 w-4 text-(--brand)" aria-hidden="true" />
-            <p className="mt-3 font-(--font-display) text-2xl text-(--fg)">
+            <p className="mt-3 font-(family-name:--font-display) text-2xl text-(--fg)">
               {stat.value}
             </p>
             <p className="mt-1 text-xs text-(--fg-muted)">{stat.label}</p>
@@ -75,7 +75,9 @@ export default async function InstrutorDashboardPage() {
         ))}
       </div>
 
-      <h2 className="mb-4 font-(--font-display) text-lg text-(--fg)">Cursos</h2>
+      <h2 className="mb-4 font-(family-name:--font-display) text-lg text-(--fg)">
+        Cursos
+      </h2>
 
       {courseStats.length === 0 ? (
         <EmptyState
@@ -106,7 +108,7 @@ export default async function InstrutorDashboardPage() {
                       </span>
                     )}
                   </div>
-                  <h3 className="mt-0.5 truncate font-(--font-display) text-base text-(--fg)">
+                  <h3 className="mt-0.5 truncate font-(family-name:--font-display) text-base text-(--fg)">
                     {course.title}
                   </h3>
                   <p className="mt-0.5 text-xs text-(--fg-muted)">

@@ -99,7 +99,7 @@ export function PlaylistsAdminPanel({
       <div className="mb-4 flex items-center justify-between gap-4">
         <h2
           id="playlists-admin-heading"
-          className="flex items-center gap-2 font-(--font-display) text-base font-(--font-weight-semibold) text-(--fg)"
+          className="flex items-center gap-2 font-(family-name:--font-display) text-base font-(--font-weight-semibold) text-(--fg)"
         >
           <ListMusic
             className="h-4.5 w-4.5 text-(--brand)"

@@ -30,7 +30,9 @@ export function PlaylistView({
 }: PlaylistViewProps) {
   return (
     <div className={cn("flex flex-col gap-3", className)}>
-      <h3 className="font-(--font-display) text-lg text-(--fg)">{name}</h3>
+      <h3 className="font-(family-name:--font-display) text-lg text-(--fg)">
+        {name}
+      </h3>
 
       <ol className="flex flex-col divide-y divide-(--divider) rounded-(--radius) border border-(--border)">
         {tracks.map((track, index) => {

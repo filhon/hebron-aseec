@@ -33,7 +33,7 @@ async function CalendarContent({ actorId }: { actorId: string }) {
       )}
 
       <section className="flex flex-col gap-3">
-        <h2 className="font-(--font-display) text-lg text-(--fg)">
+        <h2 className="font-(family-name:--font-display) text-lg text-(--fg)">
           Próximas estadias confirmadas
         </h2>
         {items.length === 0 ? (

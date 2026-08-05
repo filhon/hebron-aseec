@@ -35,10 +35,10 @@ export default function HomePage() {
       <section className="bg-(--hb-blue) px-4 py-14 text-(--fg-invert) sm:px-6 sm:py-20">
         <div className="mx-auto flex max-w-6xl flex-col gap-10 lg:flex-row lg:items-center lg:justify-between">
           <div className="max-w-xl space-y-5">
-            <span className="font-(--font-body) text-xs font-(--font-weight-bold) tracking-(--tracking-eyebrow) text-(--hb-cyan) uppercase">
+            <span className="font-(family-name:--font-body) text-xs font-(--font-weight-bold) tracking-(--tracking-eyebrow) text-(--hb-cyan) uppercase">
               Rádio Hebron Aseec
             </span>
-            <h1 className="font-(--font-display) text-4xl leading-(--lh-tight) font-(--font-weight-bold) tracking-(--tracking-tight) text-balance sm:text-5xl">
+            <h1 className="font-(family-name:--font-display) text-4xl leading-(--lh-tight) font-(--font-weight-bold) tracking-(--tracking-tight) text-balance sm:text-5xl">
               Pregação e ensino da Palavra, dia e noite.
             </h1>
             <p className="text-(--fg-invert-muted) text-base leading-(--leading-relaxed)">
@@ -64,12 +64,12 @@ export default function HomePage() {
         <section aria-labelledby="autores-heading">
           <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
             <div>
-              <span className="font-(--font-body) text-xs font-(--font-weight-bold) tracking-(--tracking-eyebrow) text-(--brand) uppercase">
+              <span className="font-(family-name:--font-body) text-xs font-(--font-weight-bold) tracking-(--tracking-eyebrow) text-(--brand) uppercase">
                 Quem prega na rádio
               </span>
               <h2
                 id="autores-heading"
-                className="mt-1 font-(--font-display) text-2xl font-(--font-weight-bold) tracking-(--tracking-tight) text-(--fg)"
+                className="mt-1 font-(family-name:--font-display) text-2xl font-(--font-weight-bold) tracking-(--tracking-tight) text-(--fg)"
               >
                 Autores
               </h2>
@@ -100,7 +100,7 @@ export default function HomePage() {
             <div className="max-w-2xl space-y-3">
               <h2
                 id="sobre-heading"
-                className="font-(--font-display) text-xl font-(--font-weight-bold) tracking-(--tracking-tight) text-(--fg)"
+                className="font-(family-name:--font-display) text-xl font-(--font-weight-bold) tracking-(--tracking-tight) text-(--fg)"
               >
                 Sobre a rádio
               </h2>

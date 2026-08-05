@@ -99,7 +99,7 @@ export function CourseDetailView({
           {course.instructorName && (
             <div className="rounded-md border border-(--border) bg-(--surface) p-5">
               <span className="hb-eyebrow">Instrutor</span>
-              <h2 className="mt-1 font-(--font-display) text-base text-(--fg)">
+              <h2 className="mt-1 font-(family-name:--font-display) text-base text-(--fg)">
                 {course.instructorName}
               </h2>
               {instructorBio && (

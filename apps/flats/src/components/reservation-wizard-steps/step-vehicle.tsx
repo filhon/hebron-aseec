@@ -18,7 +18,7 @@ export function StepVehicle() {
 
   return (
     <section className="flex flex-col gap-4">
-      <h2 className="font-(--font-display) text-lg font-semibold text-(--fg)">
+      <h2 className="font-(family-name:--font-display) text-lg font-semibold text-(--fg)">
         Veículo
       </h2>
 

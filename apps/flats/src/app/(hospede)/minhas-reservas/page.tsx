@@ -134,7 +134,7 @@ export default async function MinhasReservasPage() {
       ) : (
         <section className="flex flex-col gap-4 rounded-(--radius) border border-(--border) bg-(--surface) p-5">
           <div className="flex items-center justify-between gap-2">
-            <h2 className="font-(--font-display) text-lg text-(--fg)">
+            <h2 className="font-(family-name:--font-display) text-lg text-(--fg)">
               Reserva atual
             </h2>
             <span className="text-xs text-(--fg-muted)">
@@ -161,7 +161,7 @@ export default async function MinhasReservasPage() {
 
       {history.length > 0 && (
         <section className="flex flex-col gap-4">
-          <h2 className="font-(--font-display) text-lg text-(--fg)">
+          <h2 className="font-(family-name:--font-display) text-lg text-(--fg)">
             Histórico
           </h2>
           <div className="flex flex-col gap-3">

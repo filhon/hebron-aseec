@@ -124,7 +124,7 @@ export function AuthorsAdminPanel({ authors }: AuthorsAdminPanelProps) {
       <div className="mb-4 flex items-center justify-between gap-4">
         <h2
           id="autores-admin-heading"
-          className="flex items-center gap-2 font-(--font-display) text-base text-(--fg)"
+          className="flex items-center gap-2 font-(family-name:--font-display) text-base text-(--fg)"
         >
           <User2 className="h-4.5 w-4.5 text-(--brand)" aria-hidden="true" />
           Autores ({authors.length})

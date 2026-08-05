@@ -47,7 +47,7 @@ export function BrandMark({
         <span className="min-w-0 leading-none">
           <span
             className={cn(
-              "block truncate font-(--font-display) text-base",
+              "block truncate font-(family-name:--font-display) text-base",
               inverted ? "text-(--fg-invert)" : "text-(--fg)",
             )}
           >

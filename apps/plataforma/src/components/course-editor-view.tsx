@@ -228,7 +228,7 @@ export function CourseEditorView({
                   className="h-4 w-4 shrink-0 cursor-grab text-(--fg-subtle)"
                   aria-hidden="true"
                 />
-                <h3 className="min-w-0 flex-1 truncate font-(--font-display) text-sm text-(--fg)">
+                <h3 className="min-w-0 flex-1 truncate font-(family-name:--font-display) text-sm text-(--fg)">
                   {courseModule.title}
                 </h3>
                 <span className="shrink-0 text-xs text-(--fg-muted)">

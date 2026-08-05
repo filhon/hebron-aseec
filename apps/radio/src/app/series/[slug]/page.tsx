@@ -54,7 +54,7 @@ export default async function SeriePage({ params }: PageProps) {
       </nav>
 
       <header className="border-b border-(--divider) pb-8">
-        <h1 className="font-(--font-display) text-2xl font-(--font-weight-bold) tracking-(--tracking-tight) text-(--fg)">
+        <h1 className="font-(family-name:--font-display) text-2xl font-(--font-weight-bold) tracking-(--tracking-tight) text-(--fg)">
           {item.name}
         </h1>
         <p className="mt-1 text-sm text-(--fg-muted)">{item.authorName}</p>

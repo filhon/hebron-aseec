@@ -41,7 +41,7 @@ export default async function VerificarCertificadoPage({
 
         <div className="mt-8 space-y-1.5 text-center">
           <p className="hb-eyebrow justify-center">Verificação pública</p>
-          <h1 className="font-(--font-display) text-2xl text-(--fg)">
+          <h1 className="font-(family-name:--font-display) text-2xl text-(--fg)">
             Autenticidade de certificado
           </h1>
           <p className="mx-auto max-w-sm text-sm text-(--fg-muted)">
@@ -79,7 +79,7 @@ export default async function VerificarCertificadoPage({
                   </div>
                   <div className="min-w-0 space-y-0.5">
                     <p className="hb-eyebrow">Certificado válido</p>
-                    <h2 className="font-(--font-display) text-base leading-snug text-(--fg)">
+                    <h2 className="font-(family-name:--font-display) text-base leading-snug text-(--fg)">
                       {result.courseTitle}
                     </h2>
                   </div>

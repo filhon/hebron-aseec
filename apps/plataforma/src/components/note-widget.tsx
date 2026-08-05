@@ -78,7 +78,7 @@ export function NoteWidget({
                 onClick={() => onNoteClick?.(note)}
                 className="flex w-full items-start gap-2.5 rounded-sm px-2.5 py-2 text-left transition-colors hover:bg-(--surface-alt)"
               >
-                <span className="mt-0.5 shrink-0 rounded-xs bg-(--brand-muted) px-1.5 py-0.5 font-(--font-mono) text-xs text-(--brand)">
+                <span className="mt-0.5 shrink-0 rounded-xs bg-(--brand-muted) px-1.5 py-0.5 font-(family-name:--font-mono) text-xs text-(--brand)">
                   {formatTimestamp(note.timestampSeconds)}
                 </span>
                 <span className="min-w-0 flex-1 text-sm leading-relaxed text-(--fg)">

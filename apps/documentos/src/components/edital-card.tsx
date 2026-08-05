@@ -63,7 +63,7 @@ export function EditalCard({
         {/* Title */}
         <Link
           href={href}
-          className="font-(--font-display) text-[15px] leading-tight tracking-[-0.01em] text-(--fg) hover:text-(--brand) transition-colors duration-(--dur-fast) no-underline line-clamp-2"
+          className="font-(family-name:--font-display) text-[15px] leading-tight tracking-[-0.01em] text-(--fg) hover:text-(--brand) transition-colors duration-(--dur-fast) no-underline line-clamp-2"
         >
           {edital.title}
         </Link>

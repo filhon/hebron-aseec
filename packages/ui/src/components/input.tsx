@@ -17,7 +17,7 @@ const inputBaseClasses = [
   "rounded-(--radius) border border-(--border)",
   "bg-(--bg-alt) text-(--fg)",
   "px-3 py-2",
-  "text-sm font-(--font-body)",
+  "text-sm font-(family-name:--font-body)",
   "leading-(--leading-normal)",
   "placeholder:text-(--fg-muted)",
   "transition-colors duration-(--transition-fast)",

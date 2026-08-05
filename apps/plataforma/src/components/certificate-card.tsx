@@ -78,7 +78,7 @@ export function CertificateCard({
         </div>
         <div className="min-w-0 space-y-0.5">
           <p className="hb-eyebrow">Certificado de conclusão</p>
-          <h3 className="font-(--font-display) text-base leading-snug text-(--fg)">
+          <h3 className="font-(family-name:--font-display) text-base leading-snug text-(--fg)">
             {certificate.courseName}
           </h3>
         </div>
@@ -96,7 +96,7 @@ export function CertificateCard({
       </dl>
 
       <div className="flex items-center justify-between gap-2 rounded-sm bg-(--surface-alt) px-3 py-2">
-        <span className="min-w-0 truncate font-(--font-mono) text-xs text-(--fg-muted)">
+        <span className="min-w-0 truncate font-(family-name:--font-mono) text-xs text-(--fg-muted)">
           {certificate.hash}
         </span>
         <button

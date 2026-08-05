@@ -52,7 +52,7 @@ export function ErrorState({
       </div>
 
       <div className="max-w-sm space-y-1">
-        <Title className="font-(--font-display) text-base font-(--font-weight-semibold)">
+        <Title className="font-(family-name:--font-display) text-base font-(--font-weight-semibold)">
           {title}
         </Title>
         {displayDescription && <p className="text-sm">{displayDescription}</p>}

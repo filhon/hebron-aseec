@@ -56,7 +56,7 @@ export function EmptyState({
       </div>
 
       <div className="max-w-sm space-y-1.5">
-        <Title className="font-(--font-display) text-lg font-(--font-weight-semibold)">
+        <Title className="font-(family-name:--font-display) text-lg font-(--font-weight-semibold)">
           {title}
         </Title>
         {description && <p className="text-sm">{description}</p>}

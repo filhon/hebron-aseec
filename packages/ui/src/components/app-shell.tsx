@@ -75,7 +75,7 @@ function SidebarBrand({
         <div className="flex min-w-0 flex-1 flex-col gap-0 leading-none">
           <span
             className={cn(
-              "truncate text-xs font-(--font-display) font-(--font-weight-semibold)",
+              "truncate text-xs font-(family-name:--font-display) font-(--font-weight-semibold)",
               "uppercase tracking-widest",
               dark ? "text-(--fg-invert-muted)" : "text-(--fg-muted)",
             )}
@@ -85,7 +85,7 @@ function SidebarBrand({
           {appName && (
             <span
               className={cn(
-                "truncate text-sm font-(--font-display) font-(--font-weight-bold)",
+                "truncate text-sm font-(family-name:--font-display) font-(--font-weight-bold)",
                 dark ? "text-(--fg-invert)" : "text-(--fg)",
               )}
               style={{ letterSpacing: "-0.01em" }}

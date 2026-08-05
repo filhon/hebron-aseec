@@ -59,7 +59,7 @@ export default async function ReservaDetalhePage({
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="font-(--font-display) text-2xl text-(--fg)">
+          <h1 className="font-(family-name:--font-display) text-2xl text-(--fg)">
             {guest.responsibleName}
           </h1>
           <p className="text-sm text-(--fg-muted)">
