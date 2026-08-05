@@ -299,7 +299,35 @@ async function assembleTasks(
   const commentsByTask = groupBy(commentRows, (c) => c.taskId);
   const attachmentsByTask = groupBy(attachmentRows, (a) => a.parentId);
   const timeEntriesByTask = groupBy(timeEntryRows, (e) => e.taskId);
-  const approvalByTask = new Map(approvalRows.map((r) => [r.taskId, r]));
+
+  // Duas requisições de aprovação na mesma tarefa não são hipótese (P-4.8c):
+  // nada impede um segundo pedido depois de uma rejeição, e é o comportamento
+  // certo (pede-se de novo). Por tarefa, ordena por requested_at desc — o
+  // pedido corrente é sempre o [0] explícito, nunca "o que o Map de chave
+  // única sobrescreveu por último" (essa era a falha: dependia da ordem
+  // física, não garantida, do SELECT sem ORDER BY).
+  const approvalRowsByTask = groupBy(approvalRows, (r) => r.taskId);
+  for (const rows of approvalRowsByTask.values()) {
+    rows.sort((a, b) => b.requestedAt.getTime() - a.requestedAt.getTime());
+  }
+  function toApprovalRequestView(
+    row: (typeof approvalRows)[number],
+  ): ApprovalRequest {
+    return {
+      id: row.id,
+      taskId: row.taskId,
+      requestedStatus: row.requestedStatus,
+      requestedBy: row.requestedBy,
+      requestedByName: usersMap.get(row.requestedBy) ?? "—",
+      approverId: row.approverId,
+      approverName: usersMap.get(row.approverId) ?? "—",
+      status: row.status,
+      notes: row.notes,
+      requestedAt: row.requestedAt,
+      resolvedAt: row.resolvedAt,
+    };
+  }
+
   const recurrenceByTemplate = new Map(
     recurrenceRows.map((r) => [r.taskTemplateId, r]),
   );
@@ -384,22 +412,18 @@ async function assembleTasks(
       notes: e.notes,
     }));
 
-    const approvalRow = approvalByTask.get(t.id);
-    const approvalRequest: ApprovalRequest | null = approvalRow
-      ? {
-          id: approvalRow.id,
-          taskId: approvalRow.taskId,
-          requestedStatus: approvalRow.requestedStatus,
-          requestedBy: approvalRow.requestedBy,
-          requestedByName: usersMap.get(approvalRow.requestedBy) ?? "—",
-          approverId: approvalRow.approverId,
-          approverName: usersMap.get(approvalRow.approverId) ?? "—",
-          status: approvalRow.status,
-          notes: approvalRow.notes,
-          requestedAt: approvalRow.requestedAt,
-          resolvedAt: approvalRow.resolvedAt,
-        }
+    // [0] é sempre o mais recente por requested_at (ordenado acima) — o
+    // corrente. O resto é histórico: pedidos anteriores, sempre resolvidos
+    // (o índice único de tarefas.approval_requests garante no máximo um
+    // 'pendente' por tarefa — migration 0076).
+    const [currentApprovalRow, ...pastApprovalRows] =
+      approvalRowsByTask.get(t.id) ?? [];
+    const approvalRequest: ApprovalRequest | null = currentApprovalRow
+      ? toApprovalRequestView(currentApprovalRow)
       : null;
+    const approvalHistory: ApprovalRequest[] = pastApprovalRows.map(
+      toApprovalRequestView,
+    );
 
     // recurrence_parent_id, quando presente numa tarefa gerada por
     // recorrência, guarda o task_template_id que a originou (ver
@@ -444,6 +468,7 @@ async function assembleTasks(
       sourceId: sourceRef?.sourceId ?? null,
       needsManualAssignment: t.needsManualAssignment,
       approvalRequest,
+      approvalHistory,
       createdBy: t.createdBy,
       createdByName: usersMap.get(t.createdBy) ?? "—",
       createdAt: t.createdAt,

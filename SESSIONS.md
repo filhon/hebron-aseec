@@ -247,6 +247,8 @@
 | S-224  | 2026-08-03 | P-4.4b — A descrição que o editor formata e a tela mostra com as tags à vista (CORRETIVO)                                        | concluido                            |
 | S-225  | 2026-08-03 | P-4.4c — O lançamento manual de horas sem tela e os quatro schemas que ainda fingem que não há UUID (CORRETIVO)                  | concluido                            |
 | S-226  | 2026-08-03 | P-4.5b — O esqueleto de árvore que nenhuma tela mostra e a visão que o recarregamento esquece (CORRETIVO)                        | concluido                            |
+| S-227  | 2026-08-04 | P-4.8b — A tarefa automática que nasce órfã e continua órfã (CORRETIVO)                                                          | concluido                            |
+| S-228  | 2026-08-04 | P-4.8c — O pedido de aprovação que o pedido seguinte esconde (CORRETIVO)                                                         | concluido                            |
 
 ---
 
@@ -20215,3 +20217,93 @@ esperado; faltava só a porta.
 - `apps/tarefas/src/actions/tasks.ts`
 - `apps/tarefas/src/__tests__/auto-assignment.test.ts` (criado)
 - `PROMPTS.md` (critérios de P-4.8 e P-4.11)
+
+## S-228 — P-4.8c — O pedido de aprovação que o pedido seguinte esconde (CORRETIVO)
+
+**Prompt:** P-4.8c (PROMPTS.md)
+**Data:** 2026-08-04
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+`assembleTasks` (`apps/tarefas/src/lib/queries.ts`) montava `Task.approvalRequest`
+com `new Map(approvalRows.map((r) => [r.taskId, r]))` a partir de um `SELECT`
+sem `ORDER BY` — com duas linhas em `tarefas.approval_requests` para a mesma
+tarefa, qual delas sobrevivia no Map dependia da ordem física que o Postgres
+devolvesse, não de nenhuma regra. E nada impedia duas linhas: `requestApproval`
+(`actions/approvals.ts`) não checava pendente existente, `approval_requests`
+não tinha unicidade nenhuma, e a própria tela reabre o botão "Pedir aprovação"
+assim que o pedido anterior sai de `pendente` — comportamento correto depois
+de uma rejeição (pede-se de novo), mas que, combinado com a escolha por
+sobrescrita, podia deixar o pedido pendente novo invisível atrás do rejeitado
+antigo: `canResolveApproval` olhava para a linha errada e os botões
+Aprovar/Rejeitar sumiam para o diretor endereçado, mesmo com o pedido —
+e o email de P-4.10 — já emitidos.
+
+Escopo executado na ordem do prompt:
+
+1. **Semântica explícita em `assembleTasks`**: `approvalRowsByTask` agrupa por
+   tarefa e cada grupo é ordenado por `requested_at` desc; o pedido corrente é
+   sempre o `[0]` (`toApprovalRequestView`), o resto vira `Task.approvalHistory`
+   (novo campo, `packages/types/src/tarefas/index.ts`). Não toquei
+   `recurrenceByTemplate` (mesma forma de Map por chave única) — fica para
+   P-4.9d, conforme a nota do prompt.
+2. **Guard + índice único**: `requestApproval` agora rejeita
+   ("Já existe um pedido de aprovação pendente para esta tarefa.") se já
+   houver um `pendente` para a tarefa, antes de qualquer outra checagem.
+   Migration `0076_tarefas_approval_unico_pendente.sql` cria
+   `approval_requests_task_pending_uniq`, índice único parcial em `task_id`
+   `WHERE status = 'pendente'` — segunda camada contra corrida entre duas
+   abas (a guarda da action sozinha não fecha essa janela).
+3. **Saneamento do passado na mesma migration**: um `UPDATE` com
+   `row_number() OVER (PARTITION BY task_id ORDER BY requested_at DESC)`
+   resolve qualquer tarefa que já tivesse mais de um `pendente`, mantendo o
+   mais recente e virando os demais `rejeitado` (nunca `DELETE`) com uma nota
+   automática explicando o saneamento. Decisão registrada aqui por não ter
+   arquivo próprio na lista de permitidos: **não criei um status "superado"
+   no enum `approval_request_status`** — isso exigiria `ALTER TYPE ... ADD
+VALUE` seguido, na mesma migration, de um `UPDATE` usando o valor novo, e o
+   Postgres não permite isso dentro de uma única transação (o valor só é
+   visível depois do commit que o adicionou); forçaria uma segunda migration
+   só para o enum. `'rejeitado'` é o terminal state mais próximo do que de
+   fato aconteceu ao pedido superado. Rodei essa contagem no banco de dev
+   antes de escrever esta entrada: **0 linhas** precisaram do saneamento — o
+   bug era possível, mas nenhuma tarefa hoje tinha o estado inconsistente.
+4. **Tela mostra o corrente + histórico** (`task-detail-client.tsx`, só o
+   bloco de aprovação): o painel usa `APPROVAL_STATUS_LABEL` (novo mapa) para
+   o pedido corrente e, abaixo, lista `task.approvalHistory` — quem pediu,
+   para quem, o que decidiu, quando resolvido.
+5. Teste novo `apps/tarefas/src/__tests__/approvals.test.ts` (3 casos): pedido
+   rejeitado seguido de um novo pendente — `getTaskById` devolve o novo como
+   corrente e o rejeitado como histórico, estável em 10 leituras seguidas;
+   segundo pedido pendente recusado pela action (mensagem em português) com o
+   banco confirmando 1 única linha `pendente`; índice único do banco rejeita
+   um segundo `INSERT` pendente feito diretamente, por fora da action.
+6. Bookkeeping em `PROMPTS.md`: critério de P-4.8 (leitura consistente do
+   pedido corrente) e de P-4.9 (painel mostra o pedido certo + histórico).
+
+Nenhuma suposição de regra de negócio precisou ser feita além da decisão de
+implementação do item 3 acima (registrada no momento em que foi tomada).
+
+### Verificação
+
+- `pnpm --filter @hebron/db db:migrate` — aplicou `0076_tarefas_approval_unico_pendente.sql`
+  sem erro; saneamento tocou 0 linhas no banco de dev compartilhado
+- `pnpm --filter @hebron/tarefas typecheck lint` — verdes
+- `pnpm --filter @hebron/tarefas test`: 9 suítes, 62 testes, todos verdes
+  (approvals.test.ts: 3/3)
+- `pnpm --filter @hebron/db test`: 2 falhas pré-existentes e não relacionadas
+  (`system-actor.test.ts`, `storage.test.ts` — drift já documentado em
+  sessões anteriores, nenhuma delas toca `tarefas.*`)
+- `pnpm --filter @hebron/tarefas build` — verde (11 rotas)
+
+### Arquivos modificados
+
+- `packages/db/src/migrations/0076_tarefas_approval_unico_pendente.sql` (criado)
+- `apps/tarefas/src/lib/queries.ts`
+- `packages/types/src/tarefas/index.ts`
+- `apps/tarefas/src/actions/approvals.ts`
+- `apps/tarefas/src/app/(dashboard)/tarefa/[id]/task-detail-client.tsx`
+- `apps/tarefas/src/__tests__/approvals.test.ts` (criado)
+- `PROMPTS.md` (critérios de P-4.8 e P-4.9)

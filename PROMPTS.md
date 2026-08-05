@@ -5600,7 +5600,7 @@ Server Actions: CRUD de tarefas. Mover entre colunas (drag-drop). Criar/completa
 - [x] Time tracking: start/stop com cálculo de duração
 - [x] Recorrência: cron registrado em packages/jobs cria a tarefa na next_run_at (executado em dev com relógio simulado ou trigger manual — evidência no PR)
 - [x] Template: instanciar cria todas as tarefas filhas
-- [x] Approval: enviar notificação ao diretor; aprovar/rejeitar atualiza status
+- [x] Approval: enviar notificação ao diretor; aprovar/rejeitar atualiza status — leitura do pedido corrente (por `requested_at`, nunca por sobrescrita de Map) e no máximo um pendente por tarefa (guard + índice único) fechados em P-4.8c
 - [x] Todas as actions usam o action-client de @hebron/auth (grep: zero createClient manual)
 - [x] createAutoTask exportada de packages/integrations com tarefa nascendo SEM assignee; ciclo completo (atribuição manual pela tela, flag desligando ao ganhar responsável, fila "Sem responsável" visível) fechado em P-4.8b
 - [x] Lint passa
@@ -5648,7 +5648,7 @@ Substituir mocks por dados reais. Kanban, lista e árvore com dados do banco. Fo
 - [x] Time tracking: start/stop operável no detalhe
 - [x] Recorrência: regra criável pela tela de recorrentes com preview
 - [x] Template: instanciável pela tela de templates
-- [x] Pedido de aprovação enviável pela tela; diretor aprova/rejeita pela própria UI
+- [x] Pedido de aprovação enviável pela tela; diretor aprova/rejeita pela própria UI — painel mostra o pedido corrente certo mesmo com pedido anterior rejeitado, e o histórico de pedidos anteriores, fechados em P-4.8c
 - [x] TreeView com dados reais (pessoa → tarefas)
 - [x] Modo foco com tarefas do dia reais
 - [x] Nenhum componente/formulário do Bloco A (P-4.2/P-4.4) sem import (grep)
@@ -6167,13 +6167,13 @@ Governança dual é princípio inviolável do CLAUDE.md. O pedido de aprovação
 
 **Critérios de aceite:**
 
-- [ ] Tarefa com pedido rejeitado + pedido pendente: o diretor endereçado vê Aprovar/Rejeitar, e o painel mostra o pendente como estado atual
-- [ ] Nenhum ponto do módulo escolhe uma linha de `approval_requests` por sobrescrita de `Map` ou por ordem física de `SELECT`
-- [ ] Pedir aprovação duas vezes seguidas é recusado com mensagem em português, pela action e pelo índice do banco
-- [ ] Histórico de aprovações anteriores visível no detalhe da tarefa
-- [ ] Migration idempotente, aplicada com sucesso, reaplicável sem erro
-- [ ] `pnpm --filter @hebron/tarefas typecheck lint test` verdes; `pnpm --filter @hebron/db test` verde; `pnpm --filter @hebron/tarefas build` verde
-- [ ] Registrar em SESSIONS.md — incluindo o número da migration e quantas linhas o saneamento tocou
+- [x] Tarefa com pedido rejeitado + pedido pendente: o diretor endereçado vê Aprovar/Rejeitar, e o painel mostra o pendente como estado atual
+- [x] Nenhum ponto do módulo escolhe uma linha de `approval_requests` por sobrescrita de `Map` ou por ordem física de `SELECT`
+- [x] Pedir aprovação duas vezes seguidas é recusado com mensagem em português, pela action e pelo índice do banco
+- [x] Histórico de aprovações anteriores visível no detalhe da tarefa
+- [x] Migration idempotente, aplicada com sucesso, reaplicável sem erro
+- [x] `pnpm --filter @hebron/tarefas typecheck lint test` verdes; `pnpm --filter @hebron/db test` verde; `pnpm --filter @hebron/tarefas build` verde
+- [x] Registrar em SESSIONS.md — incluindo o número da migration e quantas linhas o saneamento tocou
 
 **Notas:**
 Ref: princípio "governança dual" do CLAUDE.md e G6.3. O audit central garante que nenhuma aprovação acontece sem registro; não garante que a diretoria esteja vendo o pedido certo na hora de decidir.

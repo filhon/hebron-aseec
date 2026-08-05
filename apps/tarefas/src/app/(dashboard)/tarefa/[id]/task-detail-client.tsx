@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAction } from "next-safe-action/hooks";
 import type {
+  ApprovalRequestStatus,
   Tag,
   Task,
   TaskPriority,
@@ -130,6 +131,12 @@ const PRIORITY_CFG: Record<
     fg: "text-(--color-destructive)",
     bg: "bg-(--color-destructive-muted)",
   },
+};
+
+const APPROVAL_STATUS_LABEL: Record<ApprovalRequestStatus, string> = {
+  pendente: "Pendente",
+  aprovado: "Aprovado",
+  rejeitado: "Rejeitado",
 };
 
 const RECURRENCE_LABEL: Record<string, string> = {
@@ -785,11 +792,7 @@ export function TaskDetailClient({
               <p className="text-sm text-(--fg)">
                 Solicitado a {approvalRequest.approverName} —{" "}
                 <span className="font-semibold">
-                  {approvalRequest.status === "pendente"
-                    ? "Pendente"
-                    : approvalRequest.status === "aprovado"
-                      ? "Aprovado"
-                      : "Rejeitado"}
+                  {APPROVAL_STATUS_LABEL[approvalRequest.status]}
                 </span>
               </p>
               {approvalRequest.notes && (
@@ -826,6 +829,24 @@ export function TaskDetailClient({
                     <ThumbsDown className="h-3.5 w-3.5" aria-hidden="true" />
                     Rejeitar
                   </Button>
+                </div>
+              )}
+              {task.approvalHistory.length > 0 && (
+                <div className="mt-3 border-t border-(--hb-blue)/20 pt-3">
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-(--hb-blue)">
+                    Pedidos anteriores
+                  </p>
+                  <ul className="flex flex-col gap-1.5">
+                    {task.approvalHistory.map((h) => (
+                      <li key={h.id} className="text-xs text-(--fg-muted)">
+                        {h.requestedByName} pediu a {h.approverName}:{" "}
+                        <span className="font-medium text-(--fg)">
+                          {APPROVAL_STATUS_LABEL[h.status]}
+                        </span>
+                        {h.resolvedAt && ` em ${fmtDateTime(h.resolvedAt)}`}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
             </div>

@@ -183,6 +183,9 @@ export interface Task {
   /** Tarefas automáticas nascem sem responsável — super_admin atribui manualmente (BRAIN §6.9) */
   needsManualAssignment: boolean;
   approvalRequest: ApprovalRequest | null;
+  /** Pedidos anteriores da mesma tarefa, mais recente primeiro — sempre
+   * resolvidos (aprovado/rejeitado); o corrente nunca aparece aqui (P-4.8c) */
+  approvalHistory: ApprovalRequest[];
   createdBy: string;
   createdByName: string;
   createdAt: Date;

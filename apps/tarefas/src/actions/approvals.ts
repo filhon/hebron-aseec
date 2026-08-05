@@ -38,6 +38,28 @@ export const requestApproval = colaboradorAction
           .limit(1);
         if (!task) throw new Error("Tarefa não encontrada");
 
+        // Guarda de aplicação (P-4.8c): sem ela, nada impede um segundo
+        // pedido 'pendente' na mesma tarefa — depois de resolvido (aprovado/
+        // rejeitado) o pedido seguinte é normal (é assim que se pede de novo
+        // após uma rejeição). Sozinha, é corrida entre duas abas — o índice
+        // único parcial de approval_requests_task_pending_uniq (migration
+        // 0076) é a segunda camada.
+        const [existingPending] = await tx
+          .select({ id: approvalRequests.id })
+          .from(approvalRequests)
+          .where(
+            and(
+              eq(approvalRequests.taskId, input.taskId),
+              eq(approvalRequests.status, "pendente"),
+            ),
+          )
+          .limit(1);
+        if (existingPending) {
+          throw new Error(
+            "Já existe um pedido de aprovação pendente para esta tarefa.",
+          );
+        }
+
         // Exceção service-level (mesmo padrão de getUsersMap em
         // apps/tarefas/src/lib/queries.ts): users_select_own/_admin não
         // cobrem colaborador lendo a linha do aprovador escolhido — só
