@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useAction } from "next-safe-action/hooks";
-import { Megaphone } from "lucide-react";
+import { Activity } from "lucide-react";
 import { EmptyState } from "@hebron/ui";
 import type {
   DashboardWidget,
@@ -35,11 +35,7 @@ function renderWidget(
             <h3>Últimas atualizações</h3>
           </div>
           <div className="hb-card-body">
-            <EmptyState
-              icon={Megaphone}
-              title="Nenhum anúncio recente"
-              hideQuote
-            />
+            <EmptyState icon={Activity} title="Nenhuma atividade recente" />
           </div>
         </div>
       ) : (

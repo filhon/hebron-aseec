@@ -15,6 +15,7 @@ import {
   meetingDecisions,
 } from "@hebron/db/schema";
 import { getConsent } from "@hebron/db/consents";
+import { getFeed, type FeedModule } from "@hebron/integrations/feed";
 import type { Role } from "@hebron/types/roles";
 import type {
   Announcement,
@@ -23,6 +24,7 @@ import type {
   MeetingDecision,
 } from "@hebron/types/intranet";
 import { listAnnouncements } from "../actions/announcements";
+import type { FeedItem, FeedIconKey } from "../components/feed-widget";
 
 // ---------------------------------------------------------------------------
 // getAuthUser — sessão + papéis do usuário autenticado, para o gate de papel
@@ -401,6 +403,39 @@ export async function getAnnouncementsWithAuthors(): Promise<Announcement[]> {
     publishedAt: r.publishedAt,
     createdAt: r.createdAt,
     updatedAt: r.updatedAt,
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// getFeedItems — consome getFeed (@hebron/integrations/feed, P-5.11) e
+// converte FeedEvent → FeedItem (rótulo de módulo + iconKey do lado
+// client). Sem reimplementação de visibilidade: quem filtra por papel
+// continua sendo a RLS dentro de getFeed (withAuthenticatedContext).
+// ---------------------------------------------------------------------------
+
+const FEED_MODULE_LABEL: Record<FeedModule, string> = {
+  projetos: "Projetos",
+  financeiro: "Financeiro",
+  tarefas: "Tarefas",
+};
+
+const FEED_MODULE_ICON: Record<FeedModule, FeedIconKey> = {
+  projetos: "projeto",
+  financeiro: "financeiro",
+  tarefas: "tarefa",
+};
+
+export async function getFeedItems(limit: number): Promise<FeedItem[]> {
+  const actorId = await getActorId();
+  const events = await getFeed({ actorId, limit });
+
+  return events.map((event) => ({
+    id: `${event.module}-${event.id}`,
+    module: FEED_MODULE_LABEL[event.module],
+    title: event.title,
+    description: event.description ?? undefined,
+    occurredAt: event.occurredAt,
+    iconKey: FEED_MODULE_ICON[event.module],
   }));
 }
 

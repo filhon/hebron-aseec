@@ -255,6 +255,7 @@
 | S-232  | 2026-08-05 | P-4.8d — O "D" do CRUD e o campo de módulo que a edição joga fora (CORRETIVO)                                                    | concluido                            |
 | S-233  | 2026-08-05 | P-4.6b — O histórico que o banco guarda e a tela não mostra (CORRETIVO)                                                          | concluido                            |
 | S-234  | 2026-08-06 | P-5.2b — O sparkline que desenha ruído sobre um número real (CORRETIVO)                                                          | concluido                            |
+| S-235  | 2026-08-06 | P-5.2c — O feed cross-app que o backend agrega e o painel não mostra (CORRETIVO)                                                 | concluido                            |
 
 ---
 
@@ -20814,3 +20815,101 @@ para montar a lista de seleção) são os únicos arquivos que importam o tipo.
 - `apps/intranet/src/components/kpi-card.tsx`
 - `apps/intranet/src/__tests__/kpis.test.ts`
 - `PROMPTS.md` (critério de P-5.2)
+
+---
+
+## S-235 — P-5.2c — O feed cross-app que o backend agrega e o painel não mostra (CORRETIVO)
+
+**Prompt:** P-5.2c (PROMPTS.md)
+**Data:** 2026-08-06
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+S-101 fechou "Feed agrega eventos reais dos 3 módulos e respeita RLS" com
+`feed.test.ts`, mas nunca registrou que `getFeed`
+(`packages/integrations/src/feed.ts`) ficou sem chamador de produção — o
+único uso em todo o repositório era o próprio teste. O painel montava
+`feedItems` só com anúncios publicados e decisões de reunião
+((dashboard)/page.tsx), então o widget "Últimas atualizações" repetia o
+conteúdo de /anuncios e /reunioes e nunca mostrava projeto, pagamento ou
+tarefa. Este prompt fecha essa dívida.
+
+Escopo executado na ordem do prompt:
+
+1. **Consumo real** (`lib/queries.ts`): `getFeedItems(limit)` resolve
+   `actorId` via `getActorId()` (mesmo helper dos outros leitores do
+   arquivo) e chama `getFeed` de `@hebron/integrations/feed`, convertendo
+   `FeedEvent` → `FeedItem` com rótulo de módulo (`FEED_MODULE_LABEL`) e
+   `iconKey` (`FEED_MODULE_ICON`). Nenhuma reimplementação de visibilidade —
+   quem filtra continua sendo a RLS dentro de `getFeed`
+   (`withAuthenticatedContext`).
+2. **Ícones dos três módulos** (`feed-widget.tsx`): `FeedIconKey` ganhou
+   `projeto`/`financeiro`/`tarefa` (`FolderOpen`/`DollarSign`/`CheckCircle`
+   — mesmos ícones de `app-launcher.tsx` por módulo). Resolução chave →
+   componente Lucide continua no lado client, pela razão já documentada no
+   arquivo (ícone não cruza a fronteira Server → Client Component).
+3. **Anúncios e decisões seguem no feed**: `(dashboard)/page.tsx` mescla
+   `feedEvents` (cross-app) com os itens de anúncios/reuniões no mesmo
+   array; `FeedWidget` já reordenava tudo por `occurredAt` antes de exibir
+   (`feed-widget.tsx:47-49`), então não há blocos separados por origem —
+   nenhuma mudança necessária nesse componente para o critério de mescla.
+4. **`feedLimit` virou limite de busca**: `loadDashboardData` resolve
+   `getDashboardConfig` primeiro, lê `feedLimit` do widget tipo `feed` nos
+   widgets salvos (ou `DEFAULT_WIDGETS`) e só então chama
+   `getFeedItems(feedLimit)` dentro do `Promise.all` — o servidor não lê
+   mais linhas por módulo do que o configurado.
+5. **Cópia do estado vazio**: o único lugar que ainda dizia "Nenhum anúncio
+   recente" era o `EmptyState` que `dashboard-widgets.tsx` renderiza antes
+   de `FeedWidget` (quando `feedItems.length === 0`) — trocado para
+   "Nenhuma atividade recente" com ícone `Activity`. O fallback interno do
+   próprio `FeedWidget` (`visible.length === 0`) já dizia "Nenhuma
+   atividade recente." desde P-5.2/P-5.5; não precisou de mudança.
+6. **`feed.test.ts:97`**: `bankAccounts` insert ganhou `nickname` (coluna
+   NOT NULL desde `c3b32da`, drift registrado em S-219) — `@hebron/integrations`
+   volta a passar typecheck.
+7. Bookkeeping em `PROMPTS.md`: critérios de P-5.2 (FeedWidget com ações
+   reais) e P-5.5 (cópia do vazio).
+
+### Débito registrado (fora do escopo deste prompt)
+
+`feed.test.ts > "agrega eventos reais... para super_admin"` falha no banco
+de dev compartilhado, sem relação com o nickname ou com este diff: o
+fixture usa um `TRANSACTION_ID` fixo com `onConflictDoNothing()`, então seu
+`createdAt` ficou congelado em 2026-07-13 (a primeira vez que o teste
+rodou). Hoje `financeiro.transactions` tem 99 linhas nesse banco — a
+consulta de `getFeed` (`ORDER BY createdAt DESC LIMIT 50` por módulo)
+não inclui mais essa linha antiga na janela dos 50 mais recentes, então o
+evento financeiro não aparece. `respeita RLS` (segundo teste do arquivo)
+passa normalmente. Mesma família dos débitos já registrados em
+`project_votacao_rls_and_quorum_test_flakiness` /
+`project_storage_rls_test_flakiness`: fixture com timestamp congelado
+envelhece à medida que o banco compartilhado acumula linhas de outras
+suítes; não é regressão deste prompt (reproduzido isoladamente antes e
+depois da correção de `nickname`). Fora dos arquivos permitidos deste
+prompt (só a linha do `nickname` em `feed.test.ts` estava liberada) —
+registrado aqui para quem for revisitar `feed.test.ts`.
+
+### Verificação
+
+- `grep -rn "getFeed" apps/intranet/src` — encontra `lib/queries.ts` (chamador
+  real) e `(dashboard)/page.tsx` (via `getFeedItems`)
+- `pnpm turbo typecheck --filter=@hebron/integrations` — verde
+- `pnpm --filter @hebron/intranet exec tsc --noEmit` — verde (turbo típecheck
+  workspace-wide bloqueado por drift pré-existente de `bankAccounts.nickname`
+  em `packages/auth/src/__tests__/data-deletion.test.ts`, fora do escopo
+  deste prompt — mesmo achado de `project_bankaccounts_nickname_test_drift`)
+- `pnpm --filter @hebron/intranet exec eslint .` — verde
+- `pnpm --filter @hebron/intranet exec vitest run` — 8 suítes, 31 testes,
+  todos verdes
+- `pnpm turbo build --filter=@hebron/intranet` — verde (22 rotas)
+
+### Arquivos modificados
+
+- `apps/intranet/src/lib/queries.ts`
+- `apps/intranet/src/app/(dashboard)/page.tsx`
+- `apps/intranet/src/components/feed-widget.tsx`
+- `apps/intranet/src/components/dashboard-widgets.tsx`
+- `packages/integrations/src/__tests__/feed.test.ts` (correção de `nickname`)
+- `PROMPTS.md` (critérios de P-5.2 e P-5.5)

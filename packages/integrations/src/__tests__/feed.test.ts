@@ -97,6 +97,7 @@ beforeAll(async () => {
     .values({
       id: ACCOUNT_ID,
       bankName: "Banco Feed Test",
+      nickname: "Conta Feed Test",
       createdBy: SUPER_ADMIN_ID,
     })
     .onConflictDoNothing();

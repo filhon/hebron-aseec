@@ -1,15 +1,32 @@
-import { Activity, Megaphone, Handshake, type LucideIcon } from "lucide-react";
+import {
+  Activity,
+  Megaphone,
+  Handshake,
+  FolderOpen,
+  DollarSign,
+  CheckCircle,
+  type LucideIcon,
+} from "lucide-react";
 
-export type FeedIconKey = "megaphone" | "handshake" | "activity";
+export type FeedIconKey =
+  | "megaphone"
+  | "handshake"
+  | "activity"
+  | "projeto"
+  | "financeiro"
+  | "tarefa";
 
 // Ícones nunca cruzam a fronteira Server → Client Component como prop
 // (referência de componente não é serializável) — o server só manda a
 // chave; a resolução para o componente Lucide acontece aqui, no lado
-// client.
+// client. Mesmos ícones por módulo de AppLauncher (app-launcher.tsx).
 const ICONS: Record<FeedIconKey, LucideIcon> = {
   megaphone: Megaphone,
   handshake: Handshake,
   activity: Activity,
+  projeto: FolderOpen,
+  financeiro: DollarSign,
+  tarefa: CheckCircle,
 };
 
 export interface FeedItem {

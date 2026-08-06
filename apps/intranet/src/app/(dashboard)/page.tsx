@@ -7,6 +7,7 @@ import type {
 import {
   getAnnouncementsWithAuthors,
   getMeetingSessionsWithDecisions,
+  getFeedItems,
   meetingSessionsToCalendarEvents,
 } from "../../lib/queries";
 import { getKpis } from "../../actions/kpis";
@@ -63,18 +64,27 @@ const DEFAULT_WIDGETS: RawWidget[] = [
 ];
 
 async function loadDashboardData() {
+  // dashboardConfig resolve primeiro: o limite de busca do feed cross-app
+  // (getFeedItems) depende do feedLimit configurado pelo usuário no widget
+  // — sem isso o servidor leria o histórico inteiro para um widget que
+  // mostra só 3 itens.
+  const dashboardResult = await getDashboardConfig({});
+  const rawWidgets = dashboardResult?.data?.config?.widgets ?? DEFAULT_WIDGETS;
+  const feedWidget = rawWidgets.find((w) => w.type === "feed");
+  const feedLimit = (feedWidget?.config.feedLimit as number | undefined) ?? 6;
+
   const [
     kpisResult,
-    dashboardResult,
     briefingResult,
     announcements,
     meetingSessions,
+    feedEvents,
   ] = await Promise.all([
     getKpis({}),
-    getDashboardConfig({}),
     getBriefingPreference({}),
     getAnnouncementsWithAuthors(),
     getMeetingSessionsWithDecisions(),
+    getFeedItems(feedLimit),
   ]);
 
   return {
@@ -83,6 +93,7 @@ async function loadDashboardData() {
     briefingPreference: briefingResult?.data?.preference ?? null,
     announcements,
     meetingSessions,
+    feedEvents,
   };
 }
 
@@ -106,9 +117,15 @@ async function DashboardContent() {
     briefingPreference,
     announcements,
     meetingSessions,
+    feedEvents,
   } = data;
 
+  // Anúncios e decisões de reunião são atividade da intranet; os eventos
+  // cross-app (projetos/financeiro/tarefas, getFeedItems) se mesclam aqui
+  // — FeedWidget reordena tudo por occurredAt antes de exibir, então não
+  // há blocos separados por origem.
   const feedItems: FeedItem[] = [
+    ...feedEvents,
     ...announcements
       .filter((a) => a.publishedAt !== null)
       .map((a) => ({

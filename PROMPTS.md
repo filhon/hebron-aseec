@@ -6544,7 +6544,7 @@ Componentes: KPICard (valor, trend, sparkline). AnnouncementCard (com badge de p
 - [x] WidgetGrid com drag-drop para reorganizar widgets
 - [x] AppLauncher com ícones e links para os 8 módulos
 - [x] SearchGlobal com resultados agrupados por módulo
-- [x] FeedWidget com últimas ações (novo projeto, pagamento, tarefa concluída)
+- [x] FeedWidget com últimas ações (novo projeto, pagamento, tarefa concluída) — agregação cross-app real consumida em produção via `getFeed` (P-5.2c)
 - [x] Responsivo (widgets empilham no mobile)
 - [x] Lint passa
 - [x] Types passam
@@ -6645,7 +6645,7 @@ Loading, empty e error states. Skeletons para dashboard (grid de widgets), feed,
 **Critérios de aceite:**
 
 - [x] Skeletons para cada widget no dashboard
-- [x] Feed vazio: "Nenhum anúncio recente"
+- [x] Feed vazio: "Nenhuma atividade recente" (era "Nenhum anúncio recente" — mudou em P-5.2c quando o feed passou a agregar projetos/financeiro/tarefas além de anúncios/reuniões)
 - [x] Diretório vazio: "Nenhum membro encontrado"
 - [x] Lint passa
 - [x] Types passam
@@ -7010,14 +7010,14 @@ Efeito colateral a fechar no mesmo diff: `packages/integrations` não passa type
 
 **Critérios de aceite:**
 
-- [ ] `grep -rn "getFeed" apps/intranet/src` encontra um chamador de produção
-- [ ] O painel mostra um evento de projeto, um de transação e um de tarefa, com o módulo e o tempo relativo corretos
-- [ ] Conselheiro (sem SELECT em financeiro pela RLS) não vê evento financeiro no painel — mesmo contrato já coberto por `feed.test.ts`
-- [ ] Widget de feed configurado para 3 itens não faz o servidor ler mais do que precisa
-- [ ] Estado vazio do widget não fala em anúncios
-- [ ] `pnpm turbo typecheck --filter=@hebron/integrations` verde
-- [ ] `apps/intranet` typecheck, lint e testes verdes; `pnpm turbo build --filter=@hebron/intranet` verde
-- [ ] Registrar em SESSIONS.md, fechando o débito não registrado de S-101
+- [x] `grep -rn "getFeed" apps/intranet/src` encontra um chamador de produção
+- [x] O painel mostra um evento de projeto, um de transação e um de tarefa, com o módulo e o tempo relativo corretos
+- [x] Conselheiro (sem SELECT em financeiro pela RLS) não vê evento financeiro no painel — mesmo contrato já coberto por `feed.test.ts`
+- [x] Widget de feed configurado para 3 itens não faz o servidor ler mais do que precisa
+- [x] Estado vazio do widget não fala em anúncios
+- [x] `pnpm turbo typecheck --filter=@hebron/integrations` verde
+- [x] `apps/intranet` typecheck, lint e testes verdes; `pnpm turbo build --filter=@hebron/intranet` verde
+- [x] Registrar em SESSIONS.md, fechando o débito não registrado de S-101
 
 **Notas:**
 Ref: BRAIN §6.10 e o cabeçalho do próprio `feed.ts`. O trabalho de agregação, RLS e teste já está pago; o que falta é uma chamada. Enquanto ela não existe, o painel promete "últimas atualizações" do ecossistema e entrega o recorte de duas telas que o usuário já tem no menu.
