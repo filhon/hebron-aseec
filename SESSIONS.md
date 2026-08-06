@@ -254,6 +254,7 @@
 | S-231  | 2026-08-05 | P-4.9d — A regra de recorrência que só sabe nascer (CORRETIVO)                                                                   | concluido                            |
 | S-232  | 2026-08-05 | P-4.8d — O "D" do CRUD e o campo de módulo que a edição joga fora (CORRETIVO)                                                    | concluido                            |
 | S-233  | 2026-08-05 | P-4.6b — O histórico que o banco guarda e a tela não mostra (CORRETIVO)                                                          | concluido                            |
+| S-234  | 2026-08-06 | P-5.2b — O sparkline que desenha ruído sobre um número real (CORRETIVO)                                                          | concluido                            |
 
 ---
 
@@ -20740,3 +20741,76 @@ Revisão"`, `"adicionou o anexo contrato.pdf"` etc.) — nunca o jsonb cru.
 - `apps/tarefas/src/components/task-activity.tsx` (criado)
 - `apps/tarefas/src/__tests__/task-events.test.ts` (criado)
 - `PROMPTS.md` (critérios de P-4.6 e P-4.9)
+
+## S-234 — P-5.2b — O sparkline que desenha ruído sobre um número real (CORRETIVO)
+
+**Prompt:** P-5.2b (PROMPTS.md)
+**Data:** 2026-08-06
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+S-86 registrou a dívida na hora: sem série histórica no tipo `KPI`, o
+sparkline de `KPICard` era um hash determinístico do `id` do KPI — ruído com
+inclinação dada pelo `trend`. P-5.9/PATCH-018 criaram
+`intranet.kpi_snapshot_history`, alimentada de hora em hora desde então, mas
+`kpi-card.tsx` nunca passou a lê-la: `defaultSparkline` continuava sendo a
+única fonte, e nenhum chamador passava a prop `sparkline`. Todo cartão do
+painel — inclusive "Doações do mês", em reais — desenhava uma curva sem
+relação com o número impresso acima dela. A seta de trend tinha o mesmo
+problema pela outra ponta: `kpiFromLive` e "Alunos na Plataforma" sempre
+devolviam `trend: "stable"`, um default e não uma medição.
+
+Escopo executado na ordem do prompt:
+
+1. **Contrato do tipo** (`packages/types/src/intranet/index.ts`): `KPI` ganhou
+   `history: number[]` (cronológico) e `trend` passou a `KPITrend | null` —
+   `null` é "sem base de comparação", distinto de `"stable"`.
+2. **`getKpis` devolve a série** (`actions/kpis.ts`): `latestHistoryPair`
+   (limit 2) virou `recentHistorySamples` (limit 12, ~meio dia de leituras
+   horárias), mais recente primeiro. `kpiFromSnapshot` inverte para ordem
+   cronológica e usa os dois primeiros pontos para `trendFor`, que agora
+   devolve `null` (não `"stable"`) quando não há ponto anterior.
+   `kpiFromLive` e o KPI "Alunos na Plataforma" (sem contrato de frescor)
+   passaram a devolver `history: []`/`trend: null` explicitamente, em vez de
+   inventar tendência.
+3. **`KPICard` só desenha o que recebe** (`kpi-card.tsx`): `defaultSparkline`
+   e a prop `sparkline` foram removidos. Com `history.length >= 2` desenha a
+   série real (o último ponto é sempre o valor exibido, por construção); com
+   menos que isso, nenhum `<svg>`. Com `trend === null`, nenhuma seta — só o
+   período.
+4. **Alternativa textual**: o `<svg>` do sparkline trocou `aria-hidden="true"`
+   por `role="img"` + `aria-label` dizendo quantas leituras e a variação
+   entre a primeira e a última, no mesmo formato de `formatValue`
+   (`formatNumber` extraído para reuso).
+5. **`dashboard-widgets.tsx`**: já chamava `<KPICard kpi={kpi} />` sem passar
+   `sparkline` — nenhuma mudança necessária, confirmado por grep.
+6. **Teste** (`kpis.test.ts`, atualizado): série devolvida em ordem
+   cronológica com o último ponto igual ao valor exibido; caminho live e
+   "Alunos na Plataforma" com `history: []`/`trend: null`; sem ponto
+   anterior, `trend` nulo e histórico de 1 ponto (não mais `"stable"`).
+7. Bookkeeping em `PROMPTS.md`: critério de P-5.2 ("KPICard... sparkline")
+   passou a descrever a origem real da série e a condição de exibição.
+
+Nenhum outro consumidor do tipo `KPI` foi afetado — grep confirmou que
+`kpi-card.tsx`, `kpis.ts`, `dashboard-widgets.tsx`,
+`widget-config-form.tsx`/`widget-config-dialog.tsx` (que só leem `id`/`name`
+para montar a lista de seleção) são os únicos arquivos que importam o tipo.
+
+### Verificação
+
+- `grep -rn "defaultSparkline" apps packages` — vazio
+- `pnpm --filter @hebron/intranet exec tsc --noEmit` — verde
+- `pnpm --filter @hebron/intranet lint` — verde
+- `pnpm --filter @hebron/intranet exec vitest run`: 8 suítes, 31 testes,
+  todos verdes (`kpis.test.ts`: 4/4)
+- `pnpm turbo build --filter=@hebron/intranet` — verde (22 rotas)
+
+### Arquivos modificados
+
+- `packages/types/src/intranet/index.ts`
+- `apps/intranet/src/actions/kpis.ts`
+- `apps/intranet/src/components/kpi-card.tsx`
+- `apps/intranet/src/__tests__/kpis.test.ts`
+- `PROMPTS.md` (critério de P-5.2)

@@ -1,10 +1,13 @@
 /**
- * kpis.test.ts — PATCH-018 (P-5.9c): getKpis lê intranet.kpi_snapshot_history
- * como fonte primária quando o snapshot de todo KPI persistível ("projetos
- * ativos", "doações do mês", "tarefas abertas") está fresco (< 2h) e calcula
- * tendência real comparando o ponto atual com o anterior. Cai para cálculo
- * ao vivo do conjunto inteiro quando qualquer KPI persistível está sem
- * snapshot fresco, evitando misturar snapshot de um KPI com live de outro.
+ * kpis.test.ts — PATCH-018 (P-5.9c) + P-5.2b (série real): getKpis lê
+ * intranet.kpi_snapshot_history como fonte primária quando o snapshot de
+ * todo KPI persistível ("projetos ativos", "doações do mês", "tarefas
+ * abertas") está fresco (< 2h), calcula tendência real comparando o ponto
+ * atual com o anterior e devolve `history` cronológico (últimos 12 buckets).
+ * Sem ponto anterior, `trend` é `null` — não "stable". Cai para cálculo ao
+ * vivo do conjunto inteiro (history: [], trend: null) quando qualquer KPI
+ * persistível está sem snapshot fresco, evitando misturar snapshot de um
+ * KPI com live de outro.
  *
  * intranet.kpi_snapshot_history é um cache puro (regenerado a cada hora por
  * packages/jobs/src/crons/intranet.ts::runKpiSnapshot) — os testes abaixo
@@ -84,21 +87,36 @@ describe("getKpis — snapshot fresco (< 2h) como fonte primária", () => {
     expect(byId.get("kpi-projetos-ativos")).toMatchObject({
       value: 8,
       trend: "up",
+      history: [5, 8],
     });
     expect(byId.get("kpi-doacoes-mes")).toMatchObject({
       value: 1000,
       trend: "stable",
+      history: [1000, 1000],
     });
     expect(byId.get("kpi-tarefas-abertas")).toMatchObject({
       value: 7,
       trend: "down",
+      history: [10, 7],
     });
+
+    // Último ponto da série cronológica é sempre o valor exibido.
+    for (const metric of [
+      "kpi-projetos-ativos",
+      "kpi-doacoes-mes",
+      "kpi-tarefas-abertas",
+    ]) {
+      const kpi = byId.get(metric);
+      expect(kpi?.history[(kpi?.history.length ?? 1) - 1]).toBe(kpi?.value);
+    }
+
     const alunosKpi = byId.get("kpi-alunos-plataforma");
     expect(typeof alunosKpi?.value).toBe("number");
-    expect(alunosKpi?.trend).toBe("stable");
+    expect(alunosKpi?.trend).toBeNull();
+    expect(alunosKpi?.history).toEqual([]);
   });
 
-  it("sem ponto anterior na série, tendência é 'stable'", async () => {
+  it("sem ponto anterior na série, tendência é nula e o histórico tem 1 ponto", async () => {
     await seedPoint("projetos_ativos", 3, hoursAgo(0.5));
     await seedPoint("doacoes_mes", 500, hoursAgo(0.5));
     await seedPoint("tarefas_abertas", 4, hoursAgo(0.5));
@@ -110,7 +128,14 @@ describe("getKpis — snapshot fresco (< 2h) como fonte primária", () => {
     const kpis = result?.data?.kpis ?? [];
     expect(kpis).toHaveLength(4);
     for (const kpi of kpis) {
-      expect(kpi.trend).toBe("stable");
+      if (
+        kpi.id === "kpi-projetos-ativos" ||
+        kpi.id === "kpi-doacoes-mes" ||
+        kpi.id === "kpi-tarefas-abertas"
+      ) {
+        expect(kpi.trend).toBeNull();
+        expect(kpi.history).toHaveLength(1);
+      }
     }
   });
 });
@@ -130,7 +155,8 @@ describe("getKpis — fallback ao vivo quando algum snapshot está velho/ausente
     for (const kpi of kpis) {
       if (kpi.id === "kpi-alunos-plataforma") continue;
       expect(kpi.value).not.toBe(SENTINEL);
-      expect(kpi.trend).toBe("stable");
+      expect(kpi.trend).toBeNull();
+      expect(kpi.history).toEqual([]);
     }
   });
 
@@ -142,7 +168,8 @@ describe("getKpis — fallback ao vivo quando algum snapshot está velho/ausente
     const kpis = result?.data?.kpis ?? [];
     expect(kpis).toHaveLength(4);
     for (const kpi of kpis) {
-      expect(kpi.trend).toBe("stable");
+      expect(kpi.trend).toBeNull();
+      expect(kpi.history).toEqual([]);
       expect(typeof kpi.value).toBe("number");
     }
   });

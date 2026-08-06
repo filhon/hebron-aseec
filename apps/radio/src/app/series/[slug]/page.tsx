@@ -47,9 +47,7 @@ export default async function SeriePage({ params }: PageProps) {
             </Link>
           </li>
           <li aria-hidden="true">/</li>
-          <li className="font-medium text-(--fg)">
-            {item.name}
-          </li>
+          <li className="font-medium text-(--fg)">{item.name}</li>
         </ol>
       </nav>
 

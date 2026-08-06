@@ -171,16 +171,19 @@ interface PersistableKpiSample {
 
 interface PersistableKpiResult {
   config: PersistableKpiConfig;
-  latest: PersistableKpiSample | undefined;
-  previous: PersistableKpiSample | undefined;
+  // Ordenado do mais recente para o mais antigo (ordem da query).
+  samples: PersistableKpiSample[];
 }
 
-// Últimos 2 pontos da série (bucket atual + anterior) para calcular frescor
-// e tendência sem manter histórico em memória da app.
+// Últimos N pontos da série (12 buckets = meio dia de leituras horárias),
+// mais recente primeiro, para calcular frescor, tendência e desenhar o
+// sparkline real sem manter histórico maior em memória da app.
 // `kpi_snapshot_history_select_staff` (0043) já cobre todo o staff — roda
 // sob a mesma transação/tx passada pelo chamador por uniformidade com os
 // agregados live acima, não por necessidade de bypass.
-async function latestHistoryPair(
+const HISTORY_SAMPLE_LIMIT = 12;
+
+async function recentHistorySamples(
   tx: AuthenticatedTx,
   metricName: string,
 ): Promise<PersistableKpiSample[]> {
@@ -192,28 +195,30 @@ async function latestHistoryPair(
     .from(kpiSnapshotHistory)
     .where(eq(kpiSnapshotHistory.metricName, metricName))
     .orderBy(desc(kpiSnapshotHistory.capturedAt))
-    .limit(2);
+    .limit(HISTORY_SAMPLE_LIMIT);
 }
 
 async function loadPersistableKpiResult(
   tx: AuthenticatedTx,
   config: PersistableKpiConfig,
 ): Promise<PersistableKpiResult> {
-  const [latest, previous] = await latestHistoryPair(tx, config.metricName);
-  return { config, latest, previous };
+  const samples = await recentHistorySamples(tx, config.metricName);
+  return { config, samples };
 }
 
 function isFresh(capturedAt: Date, now: Date): boolean {
   return now.getTime() - capturedAt.getTime() <= SNAPSHOT_FRESHNESS_MS;
 }
 
-function trendFor(current: number, previous: number | null): KPITrend {
-  if (previous === null || current === previous) return "stable";
+function trendFor(current: number, previous: number | null): KPITrend | null {
+  if (previous === null) return null;
+  if (current === previous) return "stable";
   return current > previous ? "up" : "down";
 }
 
 function kpiFromSnapshot(result: PersistableKpiResult, period: string): KPI {
-  const { config, latest, previous } = result;
+  const { config, samples } = result;
+  const [latest, previous] = samples;
   if (!latest) {
     throw new Error(
       `Snapshot ausente para métrica persistível "${config.metricName}"`,
@@ -221,6 +226,11 @@ function kpiFromSnapshot(result: PersistableKpiResult, period: string): KPI {
   }
   const value = Number(latest.value);
   const previousValue = previous ? Number(previous.value) : null;
+  // samples vem do mais recente para o mais antigo; history é cronológico.
+  const history = samples
+    .map((s) => Number(s.value))
+    .slice()
+    .reverse();
   return {
     id: config.id,
     name: config.name,
@@ -230,6 +240,7 @@ function kpiFromSnapshot(result: PersistableKpiResult, period: string): KPI {
     period,
     sourceModule: config.sourceModule,
     updatedAt: latest.capturedAt,
+    history,
   };
 }
 
@@ -244,10 +255,11 @@ async function kpiFromLive(
     name: config.name,
     value: await config.computeLive(tx),
     unit: config.unit,
-    trend: "stable",
+    trend: null,
     period,
     sourceModule: config.sourceModule,
     updatedAt: now,
+    history: [],
   };
 }
 
@@ -294,7 +306,8 @@ export const getKpis = staffAction
     );
 
     const allFresh = results.every(
-      (r) => r.latest !== undefined && isFresh(r.latest.capturedAt, now),
+      (r) =>
+        r.samples[0] !== undefined && isFresh(r.samples[0].capturedAt, now),
     );
 
     const kpiEntries = allFresh
@@ -324,10 +337,11 @@ export const getKpis = staffAction
         name: "Alunos na Plataforma",
         value: studentMetrics.totalEnrolled,
         unit: "alunos",
-        trend: "stable",
+        trend: null,
         period,
         sourceModule: "plataforma",
         updatedAt: now,
+        history: [],
       },
       requireKpi(kpiByMetric, "doacoes_mes"),
       requireKpi(kpiByMetric, "tarefas_abertas"),

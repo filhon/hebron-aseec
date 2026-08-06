@@ -49,11 +49,14 @@ export interface KPI {
   name: string;
   value: number;
   unit: string;
-  trend: KPITrend;
+  /** null = sem base de comparação (nenhum ponto anterior), diferente de "stable" */
+  trend: KPITrend | null;
   /** Período textual a que o valor se refere (ex: "Julho/2026") */
   period: string;
   sourceModule: string | null;
   updatedAt: Date;
+  /** Série cronológica (mais antigo → mais recente) de intranet.kpi_snapshot_history */
+  history: number[];
 }
 
 // ─── DirectoryMember ──────────────────────────────────────────────────────────

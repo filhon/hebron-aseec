@@ -42,9 +42,7 @@ export default async function AutorPage({ params }: PageProps) {
             </Link>
           </li>
           <li aria-hidden="true">/</li>
-          <li className="font-medium text-(--fg)">
-            {author.name}
-          </li>
+          <li className="font-medium text-(--fg)">{author.name}</li>
         </ol>
       </nav>
 

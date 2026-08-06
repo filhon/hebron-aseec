@@ -6540,7 +6540,7 @@ Componentes: KPICard (valor, trend, sparkline). AnnouncementCard (com badge de p
 
 **Critérios de aceite:**
 
-- [x] KPICard com valor formatado, seta de trend e sparkline
+- [x] KPICard com valor formatado, seta de trend e sparkline — sparkline vem de `intranet.kpi_snapshot_history` (série real, P-5.2b) e só aparece com duas leituras ou mais; sem base de comparação, nenhuma seta de trend
 - [x] WidgetGrid com drag-drop para reorganizar widgets
 - [x] AppLauncher com ícones e links para os 8 módulos
 - [x] SearchGlobal com resultados agrupados por módulo
@@ -6898,6 +6898,390 @@ Testes: RLS (diretor cria anúncio, colaborador não). KPIs cross-schema retorna
 - [x] Busca: usuário sem papel para ver documento restricted não o recebe via busca global (contrato P-5.8)
 - [x] Testes passam
 - [x] Lint passa
+
+---
+
+## Intranet — Corretivos do Bloco A
+
+> Os seis prompts abaixo fecham o que os critérios de P-5.1 a P-5.5 marcaram `[x]` e o Bloco B (P-5.6 a P-5.12) não converteu em comportamento. Ordem: **P-5.2b antes de P-5.2d** (o widget "Gráfico" passa a desenhar a série histórica que P-5.2b faz existir). Os demais são independentes entre si; P-5.2c e P-5.2d tocam `(dashboard)/page.tsx`, então dentro desse par o segundo assume o primeiro aplicado.
+>
+> Parte das dívidas está registrada em SESSIONS.md como "resolver quando o backend existir" — S-86 (sparkline derivado do `id`, "a série real chega em P-5.9"), S-87 (widget `chart` sem componente próprio, `KPICard` reaproveitado), S-88 (schema de briefing local, "deve nascer em `packages/validators/intranet`") e S-89 (skeleton sem consumidor). O backend existe desde S-90–S-102 e nenhuma delas foi fechada; a de S-88 piorou, porque P-5.9/P-5.10 escreveram uma segunda cópia local em vez de mover a primeira. O resto nunca foi registrado: o feed cross-app entregue em P-5.11 e nunca consumido, o formulário "Perfil no diretório" que o escopo de P-5.4 pede e S-88 não menciona, o catálogo de apps duplicado em três arquivos, e a action de edição de anúncio sem nenhuma tela que a chame.
+>
+> Baseline verificado antes da redação destes prompts: `apps/intranet` passa `tsc --noEmit` e `eslint .`. `packages/integrations` **não** passa typecheck — `feed.test.ts:97` não recebeu a coluna `nickname` NOT NULL de `c3b32da` (drift pré-existente, S-219); P-5.2c fecha isso porque é o arquivo que ele toca.
+
+---
+
+### P-5.2b — O sparkline que desenha ruído sobre um número real (CORRETIVO)
+
+**Fase:** 5
+**Módulo:** intranet
+**Tipo:** ui
+**Pré-condições:**
+
+- Branch: `feat/P-5.2b-intranet-sparkline-real`
+- Dependências: P-5.12 concluído (S-102)
+- Env vars: `DATABASE_URL`
+- Skill: **invocar `/impeccable` antes de começar**
+
+**Problema que este prompt resolve (contexto):**
+O critério de P-5.2 "KPICard com valor formatado, seta de trend e sparkline" está `[x]`. S-86 registrou o preço na hora: "sparkline é derivado deterministicamente do `id`+`trend` do KPI (não existe série histórica no tipo `KPI` — chega em P-5.9)".
+
+P-5.9 chegou (S-93) e PATCH-018 criou `intranet.kpi_snapshot_history` (`packages/db/src/schema/intranet.ts:188-205`), alimentada de hora em hora por `runKpiSnapshot` (`packages/jobs/src/crons/intranet.ts:126`). A série existe no banco há mais de um mês. `kpi-card.tsx:39-52` continua calculando `defaultSparkline`: um hash do `id` do KPI, oito pontos de ruído pseudoaleatório com inclinação dada pelo `trend`. `:90` usa esse ruído sempre que a prop `sparkline` não vem — e nenhum chamador a passa (`dashboard-widgets.tsx:29` monta `<KPICard kpi={kpi} />`). **Todos os cartões do painel desenham uma curva que não tem relação com o número impresso acima dela.**
+
+Para "Doações do mês" isso é uma afirmação sobre dinheiro: o diretor lê uma curva subindo ao lado de um valor em reais, e a curva é o hash da string `"kpi-doacoes-mes"`. Nada na tela diz que aquilo é decorativo, e o `aria-hidden="true"` do `<svg>` (`:74`) só garante que o leitor de tela não vê o ruído — quem enxerga, vê.
+
+A metade adjacente do problema está na seta. `kpiFromLive` (`actions/kpis.ts:236-252`) devolve `trend: "stable"` fixo, e "Alunos na Plataforma" também (`:322-331`). Quando o snapshot está velho (> 2h, o contrato de frescor de PATCH-018), **os quatro cartões mostram o traço de "estável" mesmo que o valor tenha dobrado** — a seta não é uma medição, é um default. `latestHistoryPair` (`:183-196`) já lê o histórico, mas com `limit(2)`, o suficiente só para decidir up/down.
+
+**Escopo (siga na ordem):**
+
+1. **Contrato do tipo:** `KPI` (`packages/types/src/intranet/index.ts:47-57`) ganha `history: number[]` (cronológico, do mais antigo ao mais recente) e `trend` passa a `KPITrend | null` — `null` significa "sem base de comparação", que é diferente de "estável".
+2. **`getKpis` devolve a série:** `latestHistoryPair` vira uma leitura dos últimos N buckets (12 é o suficiente para meio dia de leituras horárias) por métrica persistível. Caminho live (snapshot velho) e "Alunos na Plataforma" (sem snapshot, fora do contrato de frescor) devolvem `history: []` e `trend: null` — sem inventar série nem tendência.
+3. **`KPICard` só desenha o que recebe:** `defaultSparkline` é removido, junto com a prop `sparkline`. Com `history.length >= 2`, desenha a série real; abaixo disso, nenhum `<svg>`. Com `trend === null`, nenhuma seta — só o período.
+4. **O gráfico passa a ter alternativa textual:** deixou de ser decoração no momento em que carrega dado. `role="img"` + `aria-label` dizendo quantas leituras e a variação entre a primeira e a última, no formato já usado pelo `formatValue` do próprio cartão.
+5. **Teste:** em `apps/intranet/src/__tests__/kpis.test.ts`, série devolvida em ordem cronológica com o último ponto igual ao valor exibido, e caminho live devolvendo `history` vazio com `trend` nulo.
+6. **Bookkeeping em PROMPTS.md:** o critério de P-5.2 passa a dizer que o sparkline vem de `kpi_snapshot_history` e só aparece com duas leituras ou mais.
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/types/src/intranet/index.ts`
+- `apps/intranet/src/actions/kpis.ts`
+- `apps/intranet/src/components/kpi-card.tsx`
+- `apps/intranet/src/components/dashboard-widgets.tsx` (apenas as props passadas ao `KPICard`)
+- `apps/intranet/src/__tests__/kpis.test.ts`
+- `PROMPTS.md` (critério de P-5.2)
+
+**Critérios de aceite:**
+
+- [x] `grep -rn "defaultSparkline" apps packages` não devolve nada
+- [x] KPI sem histórico não desenha curva nem seta — mostra valor e período
+- [x] KPI com duas ou mais leituras desenha a série real, e o último ponto corresponde ao valor exibido
+- [x] "Doações do mês" com uma única leitura no banco não desenha curva nenhuma
+- [x] O sparkline tem alternativa textual (leitor de tela anuncia quantas leituras e a variação)
+- [x] Nenhum cartão exibe "estável" sem ter com o que comparar
+- [x] `pnpm --filter @hebron/intranet exec tsc --noEmit`, `pnpm --filter @hebron/intranet lint` e os testes de `apps/intranet` verdes; `pnpm turbo build --filter=@hebron/intranet` verde
+- [x] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: S-86 (a dívida registrada), PATCH-018 (contrato de frescor) e o princípio "não parecer IA" do CLAUDE.md — um gráfico gerado por hash é exatamente o tipo de enfeite que o design system foi montado para não ter. É o de maior prioridade dos seis: os outros cinco são coisas que a tela promete e não cumpre; este é a tela afirmando um fato que não aconteceu.
+
+---
+
+### P-5.2c — O feed cross-app que o backend agrega e o painel não mostra (CORRETIVO)
+
+**Fase:** 5
+**Módulo:** intranet
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-5.2c-intranet-feed-cross-app`
+- Dependências: P-5.12 concluído (S-102)
+- Env vars: `DATABASE_URL`
+- Skill: **invocar `/impeccable` antes de começar**
+
+**Problema que este prompt resolve (contexto):**
+O critério de P-5.2 "FeedWidget com últimas ações (novo projeto, pagamento, tarefa concluída)" está `[x]`, com a ressalva de S-86: "a agregação cross-app real depende de P-5.9/P-5.11, então o componente recebe os itens já prontos via prop".
+
+P-5.11 entregou a agregação. `packages/integrations/src/feed.ts::getFeed` (`:49`) consulta Projetos, Financeiro e Tarefas sob `withAuthenticatedContext`, com a RLS de cada schema filtrando as linhas pelo papel real do ator, e o cabeçalho do arquivo se descreve como "agregador do feed cross-app do dashboard da Intranet". S-101 fechou o critério "Feed agrega eventos reais dos 3 módulos e respeita RLS" com `feed.test.ts`. **O único chamador de `getFeed` em todo o repositório é o próprio teste** (`packages/integrations/src/__tests__/feed.test.ts:34,142,156`); `grep -rn "getFeed" apps` não devolve nada.
+
+O painel monta `feedItems` (`(dashboard)/page.tsx:111-132`) com anúncios publicados e decisões de reunião. Nenhum projeto, nenhum pagamento, nenhuma tarefa concluída aparece: o widget se chama "Últimas atualizações" e lista o mesmo conteúdo que as telas `/anuncios` e `/reunioes` já mostram inteiro. O estado vazio confirma o desalinhamento — diz "Nenhum anúncio recente" (`dashboard-widgets.tsx:38-42`), que é uma descrição honesta do que o widget virou e não do que ele deveria ser.
+
+`widget.config.feedLimit` (`dashboard-widgets.tsx:48`) também só corta no cliente: a página busca todos os anúncios e todas as decisões e o widget descarta o excedente.
+
+Efeito colateral a fechar no mesmo diff: `packages/integrations` não passa typecheck hoje — `feed.test.ts:97` insere em `bankAccounts` sem `nickname`, coluna que virou NOT NULL em `c3b32da` (drift registrado em S-219). Quem for ligar o feed vai esbarrar nisso na primeira verificação.
+
+**Escopo (siga na ordem):**
+
+1. **Consumo real:** `lib/queries.ts` ganha o wrapper que resolve o `actorId` da sessão (mesmo `getActorId` que os outros leitores usam) e chama `getFeed`, convertendo `FeedEvent` → `FeedItem` com rótulo de módulo e `iconKey`. Nenhuma reimplementação de visibilidade: quem filtra continua sendo a RLS dentro de `getFeed`.
+2. **Ícones dos três módulos:** `FeedIconKey` (`feed-widget.tsx:3-13`) ganha as chaves de projetos/financeiro/tarefas. A resolução chave → componente Lucide continua no cliente, pela razão já documentada em `:5-8`.
+3. **Anúncios e decisões continuam no feed** — são atividade da intranet — mesclados e ordenados por data com os eventos cross-app, não concatenados em blocos.
+4. **`feedLimit` vira limite de busca**, não só de corte: o widget configurado para 3 itens não faz o servidor ler o histórico inteiro.
+5. **Cópia do estado vazio:** "Nenhuma atividade recente" no widget do painel, já que ele deixa de ser um mural de anúncios. O critério de P-5.5 que fixa a frase "Nenhum anúncio recente" muda junto (bookkeeping).
+6. **Corrigir `feed.test.ts:97`** (`nickname` na inserção de `bankAccounts`) para que `@hebron/integrations` volte a passar typecheck.
+7. **Bookkeeping em PROMPTS.md:** critérios de P-5.2 (feed com ações reais) e P-5.5 (cópia do vazio).
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/intranet/src/lib/queries.ts`
+- `apps/intranet/src/app/(dashboard)/page.tsx`
+- `apps/intranet/src/components/feed-widget.tsx`
+- `apps/intranet/src/components/dashboard-widgets.tsx`
+- `packages/integrations/src/__tests__/feed.test.ts` (apenas a correção de `nickname`)
+- `PROMPTS.md` (critérios de P-5.2 e P-5.5)
+
+**Critérios de aceite:**
+
+- [ ] `grep -rn "getFeed" apps/intranet/src` encontra um chamador de produção
+- [ ] O painel mostra um evento de projeto, um de transação e um de tarefa, com o módulo e o tempo relativo corretos
+- [ ] Conselheiro (sem SELECT em financeiro pela RLS) não vê evento financeiro no painel — mesmo contrato já coberto por `feed.test.ts`
+- [ ] Widget de feed configurado para 3 itens não faz o servidor ler mais do que precisa
+- [ ] Estado vazio do widget não fala em anúncios
+- [ ] `pnpm turbo typecheck --filter=@hebron/integrations` verde
+- [ ] `apps/intranet` typecheck, lint e testes verdes; `pnpm turbo build --filter=@hebron/intranet` verde
+- [ ] Registrar em SESSIONS.md, fechando o débito não registrado de S-101
+
+**Notas:**
+Ref: BRAIN §6.10 e o cabeçalho do próprio `feed.ts`. O trabalho de agregação, RLS e teste já está pago; o que falta é uma chamada. Enquanto ela não existe, o painel promete "últimas atualizações" do ecossistema e entrega o recorte de duas telas que o usuário já tem no menu.
+
+---
+
+### P-5.2d — O painel que só se monta com mouse e perde o widget recém-adicionado (CORRETIVO)
+
+**Fase:** 5
+**Módulo:** intranet
+**Tipo:** ui
+**Pré-condições:**
+
+- Branch: `feat/P-5.2d-intranet-painel-configuravel`
+- Dependências: P-5.2b aplicado (o tipo `chart` passa a desenhar a série histórica)
+- Env vars: `DATABASE_URL`
+- Skill: **invocar `/impeccable` antes de começar**
+
+**Problema que este prompt resolve (contexto):**
+Quatro defeitos no mesmo fluxo — "cada usuário monta o seu painel", critério `[x]` em P-5.2, P-5.3 e P-5.4.
+
+**1. O widget adicionado não aparece.** `WidgetGrid` (`widget-grid.tsx:18-26`) copia a ordem dos `items` para estado local na primeira renderização e nunca mais sincroniza. `WidgetConfigDialog` (`widget-config-dialog.tsx:31-36`) salva e chama `router.refresh()`, que rebusca a árvore do servidor **preservando o estado dos Client Components** — é para isso que ele existe. O widget novo chega como prop, não está em `order`, e `:24-26` o descarta no `filter`. O usuário adiciona um indicador, o diálogo fecha sem erro, e o painel continua idêntico até um F5. Remover funciona (o id some do `itemsById`), o que faz o defeito parecer "adicionar está quebrado" em vez de "a grade está velha".
+
+**2. O painel só responde a mouse.** `widget-grid.tsx:46-52` e a lista do `widget-config-form.tsx:202-208` são `draggable` e nada mais: sem `onKeyDown`, sem botões, sem seletor. É o mesmo defeito que P-4.2b fechou em Tarefas — a HTML5 Drag and Drop API não dispara a partir de `touchstart` em navegador móvel. E o cartão de boas-vindas instrui exatamente o gesto que não funciona: "Arraste os cartões abaixo para organizar o seu painel" (`(dashboard)/page.tsx:155`).
+
+**3. O widget sem indicador vira uma célula invisível.** `dashboard-widgets.tsx:26-30` devolve `null` quando `config.kpiId` não bate com nenhum KPI — e o formulário não exige a escolha (`widget-config-form.tsx:235-253`; `dashboardWidgetSchema.config` é um `z.record` livre, `packages/validators/src/intranet/index.ts:51-56`). Quem adiciona um "Indicador (KPI)" e salva sem escolher qual fica com um buraco na grade, com a alça de arraste (`widget-grid.tsx:57-62`) pairando sobre o vazio. O mesmo acontece com um `kpiId` que deixou de existir.
+
+**4. "Gráfico" e "Indicador" são o mesmo cartão.** O seletor oferece os dois (`widget-config-form.tsx:38-42`) e `dashboard-widgets.tsx:25-30` trata `"chart"` no mesmo `case` de `"kpi"`. S-87 registrou a substituição como provisória ("Reaproveitei `KPICard` (já tem sparkline)"); ela sobreviveu ao Bloco B inteiro.
+
+E, de lambuja: a reordenação por arraste dispara `saveDashboardConfig` (`dashboard-widgets.tsx:80-92`) sem tratar retorno. Uma escrita que falha deixa a ordem nova na tela e a antiga no banco, sem nada dito.
+
+**Escopo (siga na ordem):**
+
+1. **A ordem sai do estado da grade:** `WidgetGrid` renderiza os `items` na ordem em que os recebe. O estado otimista, se houver, mora no pai (`DashboardWidgets`), semeado pelas props e ressemeado quando o servidor manda um arranjo novo — nunca uma cópia que só existe no primeiro render.
+2. **Caminho sem arraste**, na grade e na lista do formulário de configuração: precedente pronto em `apps/projetos/src/components/project-kanban.tsx:201-227` (seletor com `<label>` `sr-only`) e em P-4.2b (botões mover acima/abaixo com `aria-label` dizendo o quê e para onde, desabilitados nos extremos). O arraste continua para quem usa mouse; a escrita continua sendo só `saveDashboardConfig`.
+3. **Widget sem indicador deixa de ser invisível:** o formulário exige a escolha (`.refine` em `dashboardWidgetSchema`, mensagem em português no campo certo) e o painel, para dado inconsistente já gravado, renderiza um cartão explícito ("Indicador não configurado") com o caminho para abrir a configuração — nunca `null`.
+4. **"Gráfico" passa a ser um gráfico:** com a série de P-5.2b disponível, o tipo `chart` desenha a evolução do indicador ao longo dos buckets, visualmente distinto do `KPICard`. Se por qualquer motivo este prompt for executado antes de P-5.2b, a alternativa é remover "Gráfico" do seletor — o que não pode continuar é oferecer dois nomes para o mesmo cartão.
+5. **Falha de escrita aparece:** erro de `saveDashboardConfig` (arraste ou diálogo) é comunicado e a ordem volta a ser a do servidor.
+6. **Cópia:** o cartão de boas-vindas e a grade param de instruir só o arraste.
+7. **Bookkeeping em PROMPTS.md:** critérios de P-5.2 ("WidgetGrid com drag-drop"), P-5.3 ("Dashboard com widgets configuráveis") e P-5.4 ("Widget config: drag-drop para adicionar/remover/reordenar") passam a dizer que existe caminho sem arraste.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/intranet/src/components/widget-grid.tsx`
+- `apps/intranet/src/components/dashboard-widgets.tsx`
+- `apps/intranet/src/components/widget-config-form.tsx`
+- `apps/intranet/src/components/widget-config-dialog.tsx`
+- `apps/intranet/src/app/(dashboard)/page.tsx` (cópia do cartão de boas-vindas e props)
+- `packages/validators/src/intranet/index.ts` (`dashboardWidgetSchema`)
+- `PROMPTS.md` (critérios de P-5.2, P-5.3 e P-5.4)
+
+**Critérios de aceite:**
+
+- [ ] Adicionar um widget no diálogo o faz aparecer no painel sem recarregar a página
+- [ ] Reordenar dentro do diálogo se reflete na grade sem recarregar
+- [ ] Em viewport de 390px, sem mouse, um widget muda de posição
+- [ ] Percurso completo só por teclado: Tab até o controle, escolher a posição, confirmar
+- [ ] Nenhum widget renderiza célula vazia; o formulário recusa KPI/gráfico sem indicador escolhido
+- [ ] "Gráfico" desenha algo diferente de "Indicador" (ou deixou de ser oferecido)
+- [ ] Escrita que falha não deixa ordem falsa na tela
+- [ ] `grep -rn "draggable" apps/intranet/src` — toda ocorrência tem alternativa sem arraste
+- [ ] `apps/intranet` typecheck, lint e testes verdes; `pnpm turbo build --filter=@hebron/intranet` verde
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: P-4.2b (mesmo defeito, mesma solução, módulo diferente) e o princípio "público-alvo em transição tecnológica" do CLAUDE.md. O item 1 é o mais barato de todos os seis corretivos e o mais visível: hoje a única forma de ver o próprio widget novo é recarregar a página, e nada na tela sugere isso.
+
+---
+
+### P-5.1b — O diretório com foto e bio que ninguém pode preencher (CORRETIVO)
+
+**Fase:** 5
+**Módulo:** intranet
+**Tipo:** schema
+**Pré-condições:**
+
+- Branch: `feat/P-5.1b-intranet-perfil-diretorio`
+- Dependências: P-5.12 concluído (S-102)
+- Env vars: `DATABASE_URL`
+- Skill: **invocar `/impeccable` antes de escrever JSX**
+
+**Problema que este prompt resolve (contexto):**
+O critério de P-5.1 "DirectoryMember: nome, foto, papel, email, telefone, bio" está `[x]`. O tipo tem os seis campos (`packages/types/src/intranet/index.ts:61-73`) e `DirectoryCard` renderiza os seis (`directory-card.tsx:35-63`). Dois deles não têm fonte:
+
+- **`bio`** — `getDirectoryMembers` devolve `bio: null` sempre (`apps/intranet/src/lib/queries.ts:216`), com o comentário que explica por quê: "Sem coluna de bio em `public.users` — sempre null (não há fonte de verdade para esse campo até um cadastro de perfil ser modelado)" (`:139-140`). A tabela (`packages/db/src/schema/public.ts:63-97`) de fato não tem a coluna. O ramo `{member.bio && …}` do cartão é código morto desde que foi escrito.
+- **`avatarUrl`** — a coluna existe (`:67`) e **nenhum app do monorepo escreve nela**: as únicas escritas em `public.users` estão em `apps/admin/src/actions/users.ts` (campos administrativos) e em `packages/db/src/anonymization.ts`. Todo cartão do diretório mostra as iniciais.
+
+O formulário que preencheria os dois estava no escopo e nunca foi construído: o **Escopo de P-5.4** lista cinco formulários e termina em "Perfil no diretório"; a lista de arquivos permitidos tem quatro, e S-88 não menciona o quinto — nem como desvio, nem como débito. É o único item de escopo do Bloco A da Intranet que sumiu sem registro.
+
+O resultado é que o "quem é quem" da ONG é uma lista de e-mails com o cargo derivado do papel de RBAC (`primaryRoleLabel`, `queries.ts:125-130`). O telefone só aparece com consentimento `comunicacao` (correto, P-0.13) e é o que um administrador digitou na criação da conta.
+
+Ainda no mesmo escopo, dois schemas Zod órfãos em `packages/validators/src/intranet/index.ts`: `createDirectoryMemberSchema` (`:68-79`) descreve exatamente o perfil que nunca foi construído, e `createCalendarEventSchema` (`:83-100`) descreve um calendário que não existe — a agenda é derivada de `admin.meeting_sessions` por `meetingSessionsToCalendarEvents` (`queries.ts:415-432`), e o prompt do feed ICS (decisão D-2) não está em PROMPTS.md. `grep` confirma: nenhum consumidor para nenhum dos dois.
+
+E um terceiro schema que deveria estar lá e está duplicado fora: S-88 registrou que o briefing nasceu com Zod local dentro do componente (`briefing-config-form.tsx:18-21`) porque `packages/validators` não estava nos arquivos permitidos de P-5.4, e deixou a instrução explícita — "se um prompt de backend precisar persistir essa preferência, o schema oficial deve nascer em `packages/validators/intranet` e este componente deve passar a importá-lo". P-5.9/P-5.10 persistiram a preferência e **escreveram uma segunda cópia local** em `actions/briefing.ts:22-25`, em vez de mover a primeira. Hoje o mesmo contrato (`enabled`, `frequency`) existe duas vezes, nas duas pontas da mesma chamada, e nenhuma das duas é a compartilhada.
+
+**Escopo (siga na ordem):**
+
+1. **Coluna:** migration escrita à mão (próximo número livre — 0078 no momento desta redação, conferir antes; `drizzle-kit generate` está aposentado desde P-0.3c/S-171) adicionando `bio text` a `public.users`, idempotente (`ADD COLUMN IF NOT EXISTS`). Nenhuma policy nova: `users_update_own` (`0000_initial.sql:156-159`) já permite o titular atualizar a própria linha, e `users_select_own`/`_admin` já governam a leitura.
+2. **Bucket de avatar:** `perfil-avatares` na mesma migration ou na seguinte, no mesmo desenho de `0020_storage_buckets.sql` (pasta por usuário, escrita só do dono, limite de tamanho, mime types de imagem). Leitura por usuário autenticado — o diretório é interno.
+3. **Schemas:** `createDirectoryMemberSchema` vira `updateMyProfileSchema` (bio, telefone, caminho do avatar), que é o que de fato se escreve; `createCalendarEventSchema` é removido — quando o prompt de D-2 existir, ele define o contrato contra a fonte real, não contra uma tabela imaginada em P-5.1. `briefingPreferenceSchema` nasce no mesmo arquivo e as duas cópias locais (`briefing-config-form.tsx:18-21` e `actions/briefing.ts:22-25`) passam a importá-lo, fechando a instrução deixada em S-88.
+4. **Ação e formulário:** `actions/profile.ts::updateMyProfile` (`staffAction`, escrita restrita à própria linha, RLS como segunda camada) e `components/profile-form.tsx`, alcançável a partir de `/meus-dados` — a superfície de autoatendimento que já existe (P-9.2) — e do próprio cartão no diretório quando o membro é o usuário logado. Sem audit log, pela mesma razão já registrada para a preferência de briefing (`actions/briefing.ts:14-19`): é dado pessoal de exibição, não decisão de governança; registrar isso no comentário para o próximo leitor não reabrir a discussão.
+5. **Leitura:** `getDirectoryMembers` passa a devolver a `bio` real e o comentário de `:139-140` some junto com a limitação que ele descrevia.
+6. **Teste:** em `apps/intranet/src/__tests__/rls.test.ts`, o titular atualiza a própria bio e não atualiza a de outro.
+7. **Bookkeeping em PROMPTS.md:** o critério de P-5.1 sobre `DirectoryMember` e o Escopo de P-5.4 ("Perfil no diretório" passa a ter arquivo e prompt).
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/db/src/migrations/NNNN_intranet_perfil_diretorio.sql` (criar — próximo número livre, à mão conforme P-0.3c)
+- `packages/db/src/schema/public.ts`
+- `packages/types/src/intranet/index.ts`
+- `packages/validators/src/intranet/index.ts`
+- `apps/intranet/src/actions/profile.ts` (criar)
+- `apps/intranet/src/components/profile-form.tsx` (criar)
+- `apps/intranet/src/components/briefing-config-form.tsx` (apenas trocar o Zod local pelo compartilhado)
+- `apps/intranet/src/actions/briefing.ts` (apenas trocar o Zod local pelo compartilhado)
+- `apps/intranet/src/app/(dashboard)/meus-dados/page.tsx`
+- `apps/intranet/src/components/directory-card.tsx` (apenas o acesso ao próprio perfil)
+- `apps/intranet/src/lib/queries.ts` (apenas `getDirectoryMembers`)
+- `apps/intranet/src/__tests__/rls.test.ts`
+- `PROMPTS.md` (critério de P-5.1 e escopo de P-5.4)
+
+**Critérios de aceite:**
+
+- [ ] Um colaborador edita a própria bio e a vê no cartão do diretório
+- [ ] Um colaborador não altera a bio de outro (recusado pela action e pela RLS — teste)
+- [ ] Foto enviada aparece no cartão; o arquivo fica na pasta do próprio usuário no bucket
+- [ ] `grep -rn "bio: null" apps/intranet/src` não devolve nada
+- [ ] `grep -rn "createDirectoryMemberSchema\|createCalendarEventSchema" apps packages` não devolve nada
+- [ ] O contrato do briefing existe uma vez só: `grep -rn "frequency: z.enum" apps packages` devolve apenas `packages/validators/src/intranet`
+- [ ] Migration idempotente, aplicada com sucesso, e reaplicação reporta "Nothing to apply"
+- [ ] Telefone continua invisível para terceiros sem consentimento `comunicacao`
+- [ ] `apps/intranet` typecheck, lint e testes verdes; `pnpm turbo build --filter=@hebron/intranet` verde; `pnpm --filter @hebron/db test` verde (falhas remanescentes conhecidas do banco de dev compartilhado — ver SESSIONS.md — sem relação com este diff)
+- [ ] Registrar em SESSIONS.md, incluindo o número da migration e o item de escopo de P-5.4 que este prompt fecha
+
+**Notas:**
+Ref: escopo de P-5.4 ("Perfil no diretório"), P-0.13 (consentimento) e `0020_storage_buckets.sql` (desenho de bucket por usuário). O diretório é a tela que a diretoria mais mostra para quem chega; hoje ela é uma lista de e-mails com iniciais coloridas.
+
+---
+
+### P-5.3b — As três telas que carregam em branco e o anúncio zero que fala de filtro (CORRETIVO)
+
+**Fase:** 5
+**Módulo:** intranet
+**Tipo:** ui
+**Pré-condições:**
+
+- Branch: `feat/P-5.3b-intranet-estados-telas`
+- Dependências: P-5.12 concluído (S-102)
+- Env vars: `DATABASE_URL`
+- Skill: **invocar `/impeccable` antes de começar**
+
+**Problema que este prompt resolve (contexto):**
+Os critérios de P-5.5 ("Skeletons para cada widget no dashboard", "Feed vazio", "Diretório vazio") estão `[x]`, e o Bloco B fechou o débito que S-89 tinha registrado: `DirectorySkeleton` deixou de ser órfão em P-5.9 (`diretorio/page.tsx:31-33`). O que ficou de fora nunca foi registrado.
+
+**Duas das cinco telas têm estado de carregamento; três não.** `FeedSkeleton` só é usado dentro de `DashboardSkeleton` (`dashboard-skeleton.tsx:2,92`) — a tela que de fato lista o feed, `/anuncios`, não tem nenhum. `AnunciosPage` (`anuncios/page.tsx:20-41`) faz `await loadAnunciosData()` antes do primeiro JSX; como a leitura usa cookies, a rota é dinâmica e o usuário fica na tela anterior até o servidor responder — sem cabeçalho, sem esqueleto, sem indicação de que algo está acontecendo. `/reunioes` (`reunioes/page.tsx:70-84`) e `/calendario` (`calendario/page.tsx:17-36`) repetem o padrão.
+
+**O estado vazio de anúncios fala de um filtro que ninguém aplicou.** Com zero anúncios no banco — o primeiro dia do módulo em produção — `AnnouncementsList` (`announcements-list.tsx:47-52`) mostra "Nenhum anúncio nessa categoria / Tente outro filtro de prioridade" com o filtro em "Todos". Não há citação bíblica, como CLAUDE.md pede para estados vazios e como `/reunioes` já faz (`reunioes/page.tsx:108-111`).
+
+**A leitura não tem teto.** `listAnnouncements` (`actions/announcements.ts:22-38`) seleciona a tabela inteira, e é chamada tanto por `/anuncios` quanto pelo painel (via `getAnnouncementsWithAuthors`, `queries.ts:375-405`). É o mesmo crescimento sem limite que P-4.6b fechou no painel de Atividade de Tarefas.
+
+**Uma reunião marcada para hoje some da agenda.** `calendario/page.tsx:33-35` e `calendar-widget.tsx:46-49` filtram por `date >= new Date()`; `meeting_sessions.date` é meia-noite, então a reunião **de hoje** não aparece em "Próximas reuniões" nem na lista do widget durante todo o dia em que ela acontece.
+
+**No celular, a decisão fica espremida.** O bloco de decisões de `/reunioes` é indentado com `paddingLeft: 82` (`reunioes/page.tsx:144`) dentro de um cartão que já tem padding próprio; em 360px sobram cerca de 200px de largura para o texto da decisão, do responsável e do prazo.
+
+**Escopo (siga na ordem):**
+
+1. **`Suspense` + esqueleto em `/anuncios`, `/reunioes` e `/calendario`**, no mesmo desenho de `/diretorio`: `PageHeader` fora da fronteira (aparece imediatamente), conteúdo dentro.
+2. **Esqueletos:** grade de cartões para anúncios (arquivo novo) e reaproveitamento de `FeedSkeleton` onde a forma é uma timeline (o cartão "Próximas reuniões" do calendário). Nenhum esqueleto novo onde um existente já bate com o layout real.
+3. **Dois vazios distintos em `/anuncios`:** sem nenhum anúncio publicado (cópia de primeira vez, com citação pertinente) e sem resultado para o filtro escolhido (a cópia atual, que aí está correta).
+4. **Teto de leitura:** `listAnnouncements` passa a receber um limite; a tela diz o que está mostrando quando corta.
+5. **Hoje conta como próximo:** comparação por início do dia nos dois lugares (`calendario/page.tsx` e `calendar-widget.tsx`), e o mesmo para o `upcoming` do widget.
+6. **O bloco de decisões deixa de depender de um recuo fixo de 82px** — mesma hierarquia visual, sem largura negociada em pixels contra a tela do celular.
+7. **Correção de anúncio alcançável:** o `AnnouncementForm` de P-5.4, que já aceita `initialValues`, abre em modo de edição para quem tem o papel (super_admin, o mesmo que a RLS de `announcements_mutate_admin` autoriza) e chama `updateAnnouncement`. O selo "Rascunho" sai do cartão — o sistema não produz esse estado, e um rótulo que nunca aparece é ruído a manter. Se a diretoria quiser rascunho de verdade, isso é modelagem nova (coluna, RLS, fluxo de publicação), não um selo.
+8. **Bookkeeping em PROMPTS.md:** critérios de P-5.3 e P-5.5 passam a refletir as cinco telas, não só o painel.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/intranet/src/app/(dashboard)/anuncios/page.tsx`
+- `apps/intranet/src/app/(dashboard)/reunioes/page.tsx`
+- `apps/intranet/src/app/(dashboard)/calendario/page.tsx`
+- `apps/intranet/src/components/announcements-list.tsx`
+- `apps/intranet/src/components/announcement-card.tsx` (apenas o selo "Rascunho" e o acesso à edição)
+- `apps/intranet/src/components/announcement-create-dialog.tsx` (modo de edição)
+- `apps/intranet/src/components/announcements-skeleton.tsx` (criar)
+- `apps/intranet/src/components/feed-skeleton.tsx` (apenas props para reuso)
+- `apps/intranet/src/components/calendar-widget.tsx` (apenas o filtro de "próximos")
+- `apps/intranet/src/actions/announcements.ts` (apenas o limite de `listAnnouncements`)
+- `PROMPTS.md` (critérios de P-5.3 e P-5.5)
+
+**Critérios de aceite:**
+
+- [ ] As três telas mostram esqueleto em navegação fria, com o cabeçalho já visível
+- [ ] Zero anúncios: cópia que não menciona filtro, com citação bíblica; filtro sem resultado: a cópia de filtro
+- [ ] Uma reunião marcada para hoje aparece em "Próximas reuniões" e na lista do widget
+- [ ] `/anuncios` e o painel não leem a tabela inteira de anúncios
+- [ ] Em 360px, a decisão de reunião é legível e a página não rola na horizontal
+- [ ] `updateAnnouncement` tem chamador de UI: super_admin corrige título, corpo e prioridade de um anúncio publicado; diretor/conselheiro não veem o caminho (RLS confirma na segunda camada)
+- [ ] Nenhum selo de estado que o sistema não produz — `grep -rn "Rascunho" apps/intranet/src` não devolve nada
+- [ ] `grep -rn "FeedSkeleton\|AnnouncementsSkeleton" apps/intranet/src` — os dois têm consumidor a partir de `app/`
+- [ ] `apps/intranet` typecheck, lint e testes verdes; `pnpm turbo build --filter=@hebron/intranet` verde
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: P-4.6b (teto de leitura), CLAUDE.md ("estados vazios com citações bíblicas pertinentes", "mobile-first") e o precedente de `/diretorio`, que é a única tela do módulo com a fronteira de carregamento no lugar certo.
+
+---
+
+### P-5.3c — A busca que leva a uma rota inexistente e o lançador que reescreve o catálogo do ecossistema (CORRETIVO)
+
+**Fase:** 5
+**Módulo:** intranet
+**Tipo:** ui
+**Pré-condições:**
+
+- Branch: `feat/P-5.3c-intranet-busca-e-catalogo`
+- Dependências: P-5.12 concluído (S-102)
+- Env vars: nenhuma (o comportamento com `NEXT_PUBLIC_<MÓDULO>_URL` é verificado com `.env.local`)
+- Skill: **invocar `/impeccable` antes de começar**
+
+**Problema que este prompt resolve (contexto):**
+O critério de P-5.3 "Busca cross-app com resultados agrupados" está `[x]`. O agrupamento funciona; um dos quatro módulos não leva a lugar nenhum. `buildHref` (`actions/search.ts:42-48`) devolve `/reunioes/${id}` para resultados do módulo `admin`, e **essa rota não existe**: `apps/intranet/src/app/(dashboard)/reunioes/` tem só `page.tsx`. Clicar no resultado de uma reunião dá 404 — o único destino da busca que fica dentro da própria intranet.
+
+O critério de P-5.2 "AppLauncher com ícones e links para os 8 módulos" também está `[x]`, e é aqui que o catálogo do ecossistema aparece pela terceira vez:
+
+- `ECOSYSTEM_APPS` (`packages/ui/src/components/ecosystem-apps.ts:15-71`), cujo próprio comentário diz "Única fonte de ícone/label/URL de atalho — **não duplicar em shells de app**";
+- `APPS` em `app-launcher.tsx:20-69` (P-5.2, escrito antes do catálogo existir), com ícones divergentes — Projetos é `FolderOpen` no lançador e `Briefcase` no catálogo, Financeiro é `DollarSign` contra `BadgeDollarSign`, Flats é `Building2` contra `BedDouble`;
+- `MODULE_BASE_URL` em `search.ts:26-34`.
+
+O painel renderiza o lançador (`(dashboard)/page.tsx:199`) logo abaixo do trocador de apps que o `AppShell` já monta a partir de `getAppShortcuts("intranet")` (`shell.tsx:92`): os mesmos oito módulos, na mesma tela, com ícones diferentes.
+
+E só uma das três cópias lê a configuração que existe: `.env.example:16-22` define `NEXT_PUBLIC_<MÓDULO>_URL` por app, apontando para localhost em desenvolvimento. `search.ts` respeita; `ECOSYSTEM_APPS` tem a URL de produção fixa. **Em desenvolvimento, o resultado de busca vai para localhost e o lançador (e o trocador de apps de todos os nove apps) manda o dev para produção.**
+
+Por último, `SearchGlobal` (`search-global.tsx:42-51`) faz `void globalSearch(...).then(...)` sem `.catch`. Uma promessa rejeitada — RPC fora do ar, sessão expirada — deixa `isLoading` em `true`: a caixa diz "Buscando…" para sempre, e a rejeição vira unhandled rejection.
+
+**Escopo (siga na ordem):**
+
+1. **Resultado de reunião leva a algo que existe:** `/reunioes` ancorado na reunião (`#reuniao-<id>`, com o `id` no cartão correspondente da lista). Não há rota de detalhe planejada e a lista é onde a ata e as decisões já estão — criar uma rota nova só para receber o link seria construir tela para satisfazer um `href`.
+2. **`AppLauncher` consome `getAppShortcuts("intranet")`**; o array local desaparece. Ícone e rótulo passam a ser os mesmos do trocador da barra lateral.
+3. **`ECOSYSTEM_APPS` passa a resolver a URL de cada módulo a partir de `process.env.NEXT_PUBLIC_<MÓDULO>_URL`, com a constante de produção atual como fallback.** Referência literal por módulo, nunca `process.env[chave]`: o Next.js só substitui no bundle do cliente os nomes escritos estaticamente. `search.ts` perde o `MODULE_BASE_URL` e lê o catálogo.
+4. **`SearchGlobal` trata falha:** `.catch` que encerra o carregamento e mostra mensagem de erro no lugar dos resultados, sem deixar o "Buscando…" permanente.
+5. **Bookkeeping em PROMPTS.md:** critérios de P-5.2 (AppLauncher) e P-5.3 (busca cross-app).
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/intranet/src/components/app-launcher.tsx`
+- `apps/intranet/src/components/search-global.tsx`
+- `apps/intranet/src/actions/search.ts`
+- `apps/intranet/src/app/(dashboard)/reunioes/page.tsx` (apenas a âncora por reunião)
+- `packages/ui/src/components/ecosystem-apps.ts`
+- `PROMPTS.md` (critérios de P-5.2 e P-5.3)
+
+**Critérios de aceite:**
+
+- [ ] Resultado de busca de reunião abre `/reunioes` na reunião certa; nenhum 404
+- [ ] `grep -rn "hebronaseec.com.br" apps/intranet/src` não devolve nada — as URLs vêm do catálogo
+- [ ] Com `NEXT_PUBLIC_TAREFAS_URL=http://localhost:3008`, lançador, barra lateral e busca apontam todos para localhost
+- [ ] Sem as env vars, as URLs de produção continuam idênticas nos nove apps
+- [ ] Falha da action de busca mostra erro e encerra o carregamento
+- [ ] Lançador e barra lateral usam o mesmo ícone e o mesmo rótulo por módulo
+- [ ] `pnpm turbo typecheck lint --filter=@hebron/ui --filter=@hebron/intranet` verde (concorrência limitada, ver S-209) e `pnpm turbo build --filter=@hebron/intranet` verde; build de sanidade de mais um app que consome `ECOSYSTEM_APPS`
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: o comentário do próprio `ecosystem-apps.ts` ("não duplicar em shells de app") e G6.5. O item 3 é o único dos seis corretivos que toca `packages/ui` e alcança os nove apps; é aditivo (o fallback é exatamente a constante de hoje), mas exige o build de sanidade do critério.
 
 ---
 
