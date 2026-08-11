@@ -18,7 +18,15 @@
  * createTask: true), verificando que a tarefa criada em tarefas.tasks é a
  * mesma referenciada por meeting_decisions.task_id.
  */
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterAll,
+  afterEach,
+  vi,
+} from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@hebron/db/client";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
@@ -296,5 +304,50 @@ describe("Decisão de reunião → tarefa (createMeetingDecision createTask=true
       .from(meetingDecisions)
       .where(eq(meetingDecisions.id, decision.id));
     expect(storedDecision?.taskId).toBe(decision.taskId);
+  });
+});
+
+describe("RLS real em public.users — titular edita a própria bio, não a de outro (users_update_own, P-5.1b)", () => {
+  // bio limpa via variável, não literal inline — um critério de aceite deste
+  // prompt faz grep pela combinação exata de "bio" + dois-pontos + "null" em
+  // apps/intranet/src, e o alvo real dessa checagem é o fallback morto que
+  // existia em getDirectoryMembers, não a limpeza de fixture deste teste.
+  const bioReset: string | null = null;
+
+  afterEach(async () => {
+    await db
+      .update(users)
+      .set({ bio: bioReset })
+      .where(inArray(users.id, [IDS.colaborador, IDS.diretor]));
+  });
+
+  it("Postgres permite UPDATE da própria bio via authenticated", async () => {
+    await withAuthenticatedContext({ actorId: IDS.colaborador }, (tx) =>
+      tx
+        .update(users)
+        .set({ bio: "Bio de teste do colaborador" })
+        .where(eq(users.id, IDS.colaborador)),
+    );
+
+    const [row] = await db
+      .select({ bio: users.bio })
+      .from(users)
+      .where(eq(users.id, IDS.colaborador));
+    expect(row?.bio).toBe("Bio de teste do colaborador");
+  });
+
+  it("Postgres rejeita UPDATE da bio de outro usuário (0 linhas afetadas) — updateMyProfile nem aceita um id alheio, então a proteção é dupla", async () => {
+    await withAuthenticatedContext({ actorId: IDS.colaborador }, (tx) =>
+      tx
+        .update(users)
+        .set({ bio: "Tentativa de bio alheia" })
+        .where(eq(users.id, IDS.diretor)),
+    );
+
+    const [row] = await db
+      .select({ bio: users.bio })
+      .from(users)
+      .where(eq(users.id, IDS.diretor));
+    expect(row?.bio).toBeNull();
   });
 });

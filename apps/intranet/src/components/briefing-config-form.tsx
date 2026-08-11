@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { z } from "zod";
 import {
   Button,
   FormField,
@@ -12,15 +11,14 @@ import {
   SelectValue,
 } from "@hebron/ui";
 import { Mail } from "lucide-react";
+import {
+  briefingPreferenceSchema,
+  type BriefingPreferenceInput,
+} from "@hebron/validators/intranet";
 
 export type BriefingFrequency = "diario" | "semanal";
 
-const briefingConfigSchema = z.object({
-  enabled: z.boolean(),
-  frequency: z.enum(["diario", "semanal"]),
-});
-
-export type BriefingConfigValues = z.infer<typeof briefingConfigSchema>;
+export type BriefingConfigValues = BriefingPreferenceInput;
 
 const FREQUENCY_LABEL: Record<BriefingFrequency, string> = {
   diario: "Diário",
@@ -47,7 +45,7 @@ export function BriefingConfigForm({
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const result = briefingConfigSchema.safeParse({ enabled, frequency });
+    const result = briefingPreferenceSchema.safeParse({ enabled, frequency });
     if (!result.success) return;
     onSubmit(result.data);
   }

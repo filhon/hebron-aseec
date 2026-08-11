@@ -257,6 +257,7 @@
 | S-234  | 2026-08-06 | P-5.2b — O sparkline que desenha ruído sobre um número real (CORRETIVO)                                                          | concluido                            |
 | S-235  | 2026-08-06 | P-5.2c — O feed cross-app que o backend agrega e o painel não mostra (CORRETIVO)                                                 | concluido                            |
 | S-236  | 2026-08-11 | P-5.2d — O painel que só se monta com mouse e perde o widget recém-adicionado (CORRETIVO)                                        | concluido                            |
+| S-237  | 2026-08-11 | P-5.1b — O diretório com foto e bio que ninguém pode preencher (CORRETIVO)                                                       | concluido                            |
 
 ---
 
@@ -21019,3 +21020,118 @@ precisou de mudança — a correção do item 3 ficou inline em
 no diálogo existente.
 
 - `PROMPTS.md` (critérios de P-5.2 e P-5.5)
+
+---
+
+## S-237 — P-5.1b — O diretório com foto e bio que ninguém pode preencher (CORRETIVO)
+
+**Prompt:** P-5.1b (PROMPTS.md)
+**Data:** 2026-08-11
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+O quinto formulário do Bloco A da Intranet ("Perfil no diretório") nunca foi
+construído — `bio` sempre `null` e `avatar_url` nunca escrita por nenhum app,
+apesar do critério de P-5.1 estar marcado `[x]`. Fechado na ordem do escopo:
+
+1. **Migration `0078_intranet_perfil_diretorio.sql`**: `ALTER TABLE
+public.users ADD COLUMN IF NOT EXISTS bio text` (sem policy nova —
+   `users_update_own`/`users_select_own`/`_admin` já cobrem) + bucket
+   `perfil-avatares` (privado, 2 MB, jpeg/png/webp) no desenho de
+   `0020_storage_buckets.sql`, com `perfil_avatares_select_authenticated`
+   (leitura aberta a todo autenticado — diretório é interno, mesma lógica de
+   `plataforma-capas`) e `perfil_avatares_insert_own` (pasta própria).
+2. `bio: text("bio")` em `packages/db/src/schema/public.ts`.
+3. **Schemas**: `createDirectoryMemberSchema` (órfão) virou
+   `updateMyProfileSchema` (bio, telefone, `avatarPath`);
+   `createCalendarEventSchema` (órfão, calendário mock que nunca existiu como
+   tabela) removido; `briefingPreferenceSchema` nasceu em
+   `packages/validators/src/intranet/index.ts` e as duas cópias locais
+   (`briefing-config-form.tsx` e `actions/briefing.ts`) passaram a importá-lo
+   — fecha a instrução deixada em S-88.
+4. **`actions/profile.ts`** (novo): `getMyAvatarUploadUrl`/`getMyAvatarReadUrl`
+   (mesmo padrão de `apps/plataforma/src/actions/uploads.ts` — signed URL de
+   upload, storage path persistido, leitura resolvida sob demanda, nunca uma
+   URL assinada de longa duração gravada) e `updateMyProfile` (`staffAction`,
+   `UPDATE ... WHERE id = ctx.actorId`, RLS como segunda camada). **`components/profile-form.tsx`**
+   (novo): foto (upload com prévia), biografia (textarea, 2000 caracteres),
+   telefone — auto-contido (chama as três actions diretamente; não há
+   dialog/wrapper extra nos arquivos permitidos para hospedar a chamada).
+   Passou por `/impeccable` (registro `product`) antes do JSX.
+5. **`getDirectoryMembers`** (`queries.ts`) devolve a `bio` real; o comentário
+   de limitação some. **Suposição registrada**: o escopo só citava `bio` no
+   item 5, mas o critério de aceite #3 ("foto enviada aparece no cartão")
+   exige que `avatarUrl` também pare de ser devolvido cru — `users.avatar_url`
+   passou a guardar o storage path (não uma URL), resolvido a cada leitura via
+   `resolveAvatarReadUrl` (helper novo, exportado de `queries.ts`, reusado em
+   `meus-dados/page.tsx` para a prévia inicial do formulário) — mesmo padrão
+   de resolução sob demanda que P-6.4 já usa para `courses.cover_url`.
+6. **Teste** em `rls.test.ts`: UPDATE real (fora do gate JS) prova que o
+   titular grava a própria bio e que a tentativa de gravar a de outro afeta 0
+   linhas — RLS, não só a action, nega (a action nem aceita um id alheio como
+   parâmetro, então a proteção é estruturalmente dupla).
+7. Bookkeeping em `PROMPTS.md`: critério de P-5.1 (bio/foto tinham fonte) e
+   escopo de P-5.4 (perfil ganhou arquivo e prompt, em P-5.1b).
+
+### Suposição adicional registrada
+
+O cartão do diretório (`directory-card.tsx`) precisava ser um dos dois pontos
+de entrada para editar o próprio perfil (escopo item 4), mas
+`directory-list.tsx` e `diretorio/page.tsx` — que teriam a sessão do servidor
+para passar `currentUserId` como prop — não estão nos arquivos permitidos
+deste prompt. Em vez de expandir a lista de arquivos, `DirectoryCard` virou
+Client Component (já rodava no cliente, importado por `directory-list.tsx`,
+"use client") e compara `member.userId` com a sessão do navegador
+(`getSession()` de `@hebron/auth/client`) para mostrar um link "Editar
+perfil" → `/meus-dados` só no próprio cartão. G1, opção mais simples dentro
+dos arquivos permitidos.
+
+### Débito não coberto por este prompt
+
+`packages/db/src/anonymization.ts` não está nos arquivos permitidos —
+`anonymizeUser` continua sem zerar `bio` quando o titular exerce o direito de
+exclusão (LGPD art. 18, VI). `bio` é texto livre que o próprio usuário
+escreve (baixo risco de PII de terceiros, mas ainda assim dado pessoal do
+titular) — um próximo prompt de LGPD deveria somar `bio: null` ao `UPDATE` de
+`anonymizeUser` (`anonymization.ts:72-83`) e ao fixture de
+`anonymization.test.ts`.
+
+### Verificação
+
+- `pnpm --filter @hebron/db run db:migrate` — aplicou `0078_...sql`;
+  reaplicação reportou "Nothing to apply — database is up to date"
+- `grep -rn "bio: null" apps/intranet/src` — vazio
+- `grep -rn "createDirectoryMemberSchema\|createCalendarEventSchema" apps packages` — vazio
+- `grep -rn "frequency: z.enum" apps packages` — só
+  `packages/validators/src/intranet/index.ts`
+- `pnpm --filter @hebron/intranet exec tsc --noEmit` — verde
+- `pnpm --filter @hebron/intranet exec eslint .` — verde
+- `pnpm --filter @hebron/intranet exec vitest run` — 8 suítes, 33 testes,
+  todos verdes (inclui as duas novas de `users_update_own`/bio)
+- `pnpm --filter @hebron/db exec vitest run` — 3 falhas pré-existentes do
+  banco de dev compartilhado, sem relação com este diff:
+  `system-actor.test.ts` (`project_system_actor_test_drift`) e 2 asserções em
+  `storage.test.ts` (`project_storage_rls_test_flakiness`, ambos já
+  registrados em memória de sessões anteriores)
+- `pnpm turbo build --filter=@hebron/intranet` — verde (22 rotas)
+- Verificação manual em navegador **não realizada** — sem credenciais de
+  usuário de teste disponíveis no ambiente local; cobertura ficou em
+  build + typecheck + lint + teste de integração real (banco) do RLS de
+  `users_update_own`
+
+### Arquivos modificados
+
+- `packages/db/src/migrations/0078_intranet_perfil_diretorio.sql` (novo)
+- `packages/db/src/schema/public.ts`
+- `packages/validators/src/intranet/index.ts`
+- `apps/intranet/src/actions/profile.ts` (novo)
+- `apps/intranet/src/components/profile-form.tsx` (novo)
+- `apps/intranet/src/components/briefing-config-form.tsx`
+- `apps/intranet/src/actions/briefing.ts`
+- `apps/intranet/src/app/(dashboard)/meus-dados/page.tsx`
+- `apps/intranet/src/components/directory-card.tsx`
+- `apps/intranet/src/lib/queries.ts`
+- `apps/intranet/src/__tests__/rls.test.ts`
+- `PROMPTS.md` (critério de P-5.1 e escopo de P-5.4)

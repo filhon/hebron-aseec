@@ -4,6 +4,7 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { briefingPreferences } from "@hebron/db/schema";
+import { briefingPreferenceSchema } from "@hebron/validators/intranet";
 import { staffAction } from "../lib/safe-action";
 
 // ---------------------------------------------------------------------------
@@ -17,16 +18,11 @@ import { staffAction } from "../lib/safe-action";
 // admin.audit_action para isso e não é decisão de governança (BRAIN §
 // "governança dual" cobre financeiro/votação/aprovações, não preferências de
 // notificação).
+//
+// O schema veio a existir duas vezes (aqui e em briefing-config-form.tsx) —
+// P-5.1b move as duas para o schema oficial de packages/validators/intranet,
+// fechando a instrução deixada em S-88.
 // ---------------------------------------------------------------------------
-
-const saveBriefingPreferenceSchema = z.object({
-  enabled: z.boolean(),
-  frequency: z.enum(["diario", "semanal"]),
-});
-
-export type SaveBriefingPreferenceInput = z.infer<
-  typeof saveBriefingPreferenceSchema
->;
 
 export const getBriefingPreference = staffAction
   .schema(z.object({}))
@@ -45,7 +41,7 @@ export const getBriefingPreference = staffAction
   });
 
 export const saveBriefingPreference = staffAction
-  .schema(saveBriefingPreferenceSchema)
+  .schema(briefingPreferenceSchema)
   .action(async ({ parsedInput: input, ctx }) => {
     const preference = await withAuthenticatedContext(
       { actorId: ctx.actorId },

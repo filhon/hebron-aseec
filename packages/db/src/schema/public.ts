@@ -66,6 +66,8 @@ export const users = pgTable("users", {
   fullName: text("full_name"),
   avatarUrl: text("avatar_url"),
   phone: text("phone"),
+  /** Diretório interno (P-5.1b) — texto livre, sem policy própria: users_update_own cobre. */
+  bio: text("bio"),
   documentCpf: text("document_cpf").unique(),
   /**
    * Aprovação de entrada — separada de suspendedModules (que governa acesso

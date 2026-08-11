@@ -6506,7 +6506,7 @@ Tipos e schemas Zod: Announcement (título, corpo, prioridade: normal/importante
 - [x] Announcement com prioridade e corpo rich text
 - [x] DashboardWidget: tipo (kpi/chart/feed/calendar), posição, config (jsonb)
 - [x] KPI: nome, valor, unidade, trend (up/down/stable), período
-- [x] DirectoryMember: nome, foto, papel, email, telefone, bio
+- [x] DirectoryMember: nome, foto, papel, email, telefone, bio (bio e foto ficaram sem fonte de dados até P-5.1b — `bio` sempre `null` e `avatar_url` nunca escrita por nenhum app; corrigido em P-5.1b com coluna `bio`, bucket `perfil-avatares` e formulário de autoatendimento)
 - [x] Mock KPIs: projetos ativos, alunos na Plataforma, doações do mês (= soma de despesas da categoria "Doações" do plano de contas — semântica da decisão F1-Q10), audiência da Rádio
 - [x] Lint passa
 - [x] Types passam
@@ -6601,7 +6601,7 @@ Páginas: Dashboard personalizado (widgets configuráveis por usuário). Feed de
 - Env vars: nenhuma
 
 **Escopo:**
-Formulários: criar anúncio (título, corpo com editor compartilhado de packages/ui — D-1, prioridade). Configurar dashboard (adicionar/remover/reordenar widgets). Registrar decisão de reunião (vinculada a meeting_session, com opção de gerar tarefa). Configurar briefing (opt-in, frequência). Perfil no diretório.
+Formulários: criar anúncio (título, corpo com editor compartilhado de packages/ui — D-1, prioridade). Configurar dashboard (adicionar/remover/reordenar widgets). Registrar decisão de reunião (vinculada a meeting_session, com opção de gerar tarefa). Configurar briefing (opt-in, frequência). Perfil no diretório (não construído nesta sessão — sumiu sem registro; arquivo e prompt próprios só em P-5.1b: `apps/intranet/src/components/profile-form.tsx` + `apps/intranet/src/actions/profile.ts`).
 
 **Arquivos permitidos para criação/edição:**
 
@@ -7141,16 +7141,16 @@ E um terceiro schema que deveria estar lá e está duplicado fora: S-88 registro
 
 **Critérios de aceite:**
 
-- [ ] Um colaborador edita a própria bio e a vê no cartão do diretório
-- [ ] Um colaborador não altera a bio de outro (recusado pela action e pela RLS — teste)
-- [ ] Foto enviada aparece no cartão; o arquivo fica na pasta do próprio usuário no bucket
-- [ ] `grep -rn "bio: null" apps/intranet/src` não devolve nada
-- [ ] `grep -rn "createDirectoryMemberSchema\|createCalendarEventSchema" apps packages` não devolve nada
-- [ ] O contrato do briefing existe uma vez só: `grep -rn "frequency: z.enum" apps packages` devolve apenas `packages/validators/src/intranet`
-- [ ] Migration idempotente, aplicada com sucesso, e reaplicação reporta "Nothing to apply"
-- [ ] Telefone continua invisível para terceiros sem consentimento `comunicacao`
-- [ ] `apps/intranet` typecheck, lint e testes verdes; `pnpm turbo build --filter=@hebron/intranet` verde; `pnpm --filter @hebron/db test` verde (falhas remanescentes conhecidas do banco de dev compartilhado — ver SESSIONS.md — sem relação com este diff)
-- [ ] Registrar em SESSIONS.md, incluindo o número da migration e o item de escopo de P-5.4 que este prompt fecha
+- [x] Um colaborador edita a própria bio e a vê no cartão do diretório
+- [x] Um colaborador não altera a bio de outro (recusado pela action e pela RLS — teste)
+- [x] Foto enviada aparece no cartão; o arquivo fica na pasta do próprio usuário no bucket
+- [x] `grep -rn "bio: null" apps/intranet/src` não devolve nada
+- [x] `grep -rn "createDirectoryMemberSchema\|createCalendarEventSchema" apps packages` não devolve nada
+- [x] O contrato do briefing existe uma vez só: `grep -rn "frequency: z.enum" apps packages` devolve apenas `packages/validators/src/intranet`
+- [x] Migration idempotente, aplicada com sucesso, e reaplicação reporta "Nothing to apply"
+- [x] Telefone continua invisível para terceiros sem consentimento `comunicacao`
+- [x] `apps/intranet` typecheck, lint e testes verdes; `pnpm turbo build --filter=@hebron/intranet` verde; `pnpm --filter @hebron/db test` verde (falhas remanescentes conhecidas do banco de dev compartilhado — ver SESSIONS.md — sem relação com este diff)
+- [x] Registrar em SESSIONS.md, incluindo o número da migration e o item de escopo de P-5.4 que este prompt fecha
 
 **Notas:**
 Ref: escopo de P-5.4 ("Perfil no diretório"), P-0.13 (consentimento) e `0020_storage_buckets.sql` (desenho de bucket por usuário). O diretório é a tela que a diretoria mais mostra para quem chega; hoje ela é uma lista de e-mails com iniciais coloridas.

@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { CANONICAL_LOGIN_URL } from "@hebron/auth";
@@ -14,7 +15,7 @@ import {
 } from "@hebron/auth/data-deletion";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { setConsent } from "@hebron/db/consents";
-import { consentPurposeEnum } from "@hebron/db/schema";
+import { consentPurposeEnum, users } from "@hebron/db/schema";
 import type { ConsentPurpose } from "@hebron/db/schema";
 import {
   MyDataPage,
@@ -23,6 +24,8 @@ import {
   type MyDataExportFile,
   type MyDataProfileView,
 } from "@hebron/ui";
+import { resolveAvatarReadUrl } from "../../../lib/queries";
+import { ProfileForm } from "../../../components/profile-form";
 
 // "Meus Dados" (P-9.2) — superfície de titular montada por app. Reusa o
 // componente compartilhado (@hebron/ui) e as primitivas de @hebron/auth; a
@@ -49,13 +52,21 @@ async function currentActorId(): Promise<string> {
 export default async function MeusDadosPage() {
   const actorId = await currentActorId();
 
-  const { snapshot, deletionRequest } = await withAuthenticatedContext(
-    { actorId },
-    async (tx) => ({
-      snapshot: await getMyDataSnapshot(actorId, tx),
-      deletionRequest: await getLatestDeletionRequest(actorId, tx),
-    }),
-  );
+  const { snapshot, deletionRequest, bio, avatarPath } =
+    await withAuthenticatedContext({ actorId }, async (tx) => {
+      const [profileRow] = await tx
+        .select({ bio: users.bio, avatarUrl: users.avatarUrl })
+        .from(users)
+        .where(eq(users.id, actorId));
+      return {
+        snapshot: await getMyDataSnapshot(actorId, tx),
+        deletionRequest: await getLatestDeletionRequest(actorId, tx),
+        bio: profileRow?.bio ?? null,
+        avatarPath: profileRow?.avatarUrl ?? null,
+      };
+    });
+
+  const avatarPreviewUrl = await resolveAvatarReadUrl(avatarPath);
 
   const profile: MyDataProfileView = {
     fullName: snapshot.profile.fullName,
@@ -114,13 +125,38 @@ export default async function MeusDadosPage() {
   }
 
   return (
-    <MyDataPage
-      profile={profile}
-      consents={consents}
-      deletionStatus={deletionStatus}
-      onToggleConsent={toggleConsentAction}
-      onExport={exportAction}
-      onRequestDeletion={requestDeletionAction}
-    />
+    <div className="space-y-12">
+      {/* Perfil no diretório (P-5.1b) — bio, telefone e foto exibidos para a
+          equipe interna; distinto de "Dados pessoais" abaixo (LGPD/P-9.2). */}
+      <section className="mx-auto w-full max-w-2xl space-y-4">
+        <div>
+          <h2 className="font-(family-name:--font-display) text-lg font-semibold text-(--fg)">
+            Perfil no diretório
+          </h2>
+          <p className="text-sm leading-relaxed text-(--fg-muted)">
+            Foto, biografia e telefone exibidos para a equipe interna no
+            diretório.
+          </p>
+        </div>
+        <ProfileForm
+          initialValues={{
+            name: profile.fullName ?? profile.email,
+            bio,
+            phone: profile.phone,
+            avatarPath,
+            avatarPreviewUrl,
+          }}
+        />
+      </section>
+
+      <MyDataPage
+        profile={profile}
+        consents={consents}
+        deletionStatus={deletionStatus}
+        onToggleConsent={toggleConsentAction}
+        onExport={exportAction}
+        onRequestDeletion={requestDeletionAction}
+      />
+    </div>
   );
 }

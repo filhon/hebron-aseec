@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { desc, eq, inArray } from "drizzle-orm";
+import { createClient } from "@supabase/supabase-js";
 import {
   createSupabaseServerActionClient,
   resolveSession,
@@ -138,8 +139,8 @@ function primaryRoleLabel(roles: Role[]): string {
 // sai daqui. Telefone só aparece com consentimento "comunicacao" registrado
 // (P-0.13) — não há finalidade específica de "telefone pessoal" no enum, e
 // "comunicacao" é a mais próxima do caso de uso (contato direto pela
-// intranet). Sem coluna de bio em public.users — sempre null (não há fonte de
-// verdade para esse campo até um cadastro de perfil ser modelado).
+// intranet). Bio (P-5.1b) é autoatendimento livre — sem gate de consentimento,
+// mesmo padrão do nome/foto.
 // ---------------------------------------------------------------------------
 
 const STAFF_ROLES: Role[] = [
@@ -148,6 +149,33 @@ const STAFF_ROLES: Role[] = [
   "conselheiro",
   "colaborador",
 ];
+
+function getSupabaseAdmin() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error("Variáveis Supabase não configuradas");
+  return createClient(url, key, { auth: { persistSession: false } });
+}
+
+const AVATAR_READ_URL_EXPIRES_IN_SECONDS = 60 * 60;
+
+/**
+ * users.avatar_url (P-5.1b) guarda o storage path em perfil-avatares, não uma
+ * URL exibível — bucket privado, resolvida sob demanda a cada leitura (mesmo
+ * padrão de apps/plataforma/src/actions/uploads.ts para plataforma-capas,
+ * nunca uma URL assinada de longa duração persistida).
+ */
+export async function resolveAvatarReadUrl(
+  storagePath: string | null,
+): Promise<string | null> {
+  if (!storagePath) return null;
+  const supabase = getSupabaseAdmin();
+  const { data, error } = await supabase.storage
+    .from("perfil-avatares")
+    .createSignedUrl(storagePath, AVATAR_READ_URL_EXPIRES_IN_SECONDS);
+  if (error || !data) return null;
+  return data.signedUrl;
+}
 
 export async function getDirectoryMembers(): Promise<DirectoryMember[]> {
   const actorId = await getActorId();
@@ -189,6 +217,7 @@ export async function getDirectoryMembers(): Promise<DirectoryMember[]> {
                   email: users.email,
                   avatarUrl: users.avatarUrl,
                   phone: users.phone,
+                  bio: users.bio,
                   status: users.status,
                   anonymizedAt: users.anonymizedAt,
                   createdAt: users.createdAt,
@@ -205,16 +234,19 @@ export async function getDirectoryMembers(): Promise<DirectoryMember[]> {
     userRows
       .filter((u) => u.status === "active" && u.anonymizedAt === null)
       .map(async (u) => {
-        const consent = await getConsent(u.id, "comunicacao");
+        const [consent, avatarUrl] = await Promise.all([
+          getConsent(u.id, "comunicacao"),
+          resolveAvatarReadUrl(u.avatarUrl),
+        ]);
         const member: DirectoryMember = {
           id: u.id,
           userId: u.id,
           name: u.fullName ?? u.email,
-          avatarUrl: u.avatarUrl,
+          avatarUrl,
           role: primaryRoleLabel(rolesByUser.get(u.id) ?? []),
           email: u.email,
           phone: consent?.granted ? u.phone : null,
-          bio: null,
+          bio: u.bio,
           createdAt: u.createdAt,
           updatedAt: u.updatedAt,
         };

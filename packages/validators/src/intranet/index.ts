@@ -75,41 +75,20 @@ export type UpdateDashboardWidgetsInput = z.infer<
   typeof updateDashboardWidgetsSchema
 >;
 
-// ─── createDirectoryMemberSchema ──────────────────────────────────────────────
+// ─── updateMyProfileSchema ─────────────────────────────────────────────────────
+// P-5.1b — substitui o antigo schema de cadastro de membro do diretório
+// (órfão: descrevia um formulário que nunca foi construído). O titular só
+// edita os próprios bio, telefone e avatar — nome/papel/email não são
+// autoatendimento.
 
-export const createDirectoryMemberSchema = z.object({
-  userId: z.string().uuid().nullable().optional().default(null),
-  name: z.string().min(2, "Nome é obrigatório").max(200),
-  role: z.string().min(2, "Papel é obrigatório").max(150),
-  email: z.string().email("E-mail inválido"),
-  phone: z.string().max(30).nullable().optional().default(null),
+export const updateMyProfileSchema = z.object({
   bio: z.string().max(2000).nullable().optional().default(null),
+  phone: z.string().max(30).nullable().optional().default(null),
+  /** Storage path em perfil-avatares (P-5.1b), não uma URL — resolvida sob demanda. */
+  avatarPath: z.string().max(500).nullable().optional().default(null),
 });
 
-export type CreateDirectoryMemberInput = z.infer<
-  typeof createDirectoryMemberSchema
->;
-
-// ─── createCalendarEventSchema ────────────────────────────────────────────────
-
-export const createCalendarEventSchema = z
-  .object({
-    title: z.string().min(3, "Título é obrigatório").max(200),
-    description: z.string().max(2000).nullable().optional().default(null),
-    type: calendarEventTypeEnum,
-    startAt: z.coerce.date(),
-    endAt: z.coerce.date().nullable().optional().default(null),
-    location: z.string().max(200).nullable().optional().default(null),
-    meetingSessionId: z.string().uuid().nullable().optional().default(null),
-  })
-  .refine((event) => !event.endAt || event.endAt >= event.startAt, {
-    message: "Data de término não pode ser antes da data de início",
-    path: ["endAt"],
-  });
-
-export type CreateCalendarEventInput = z.infer<
-  typeof createCalendarEventSchema
->;
+export type UpdateMyProfileInput = z.infer<typeof updateMyProfileSchema>;
 
 // ─── createMeetingDecisionSchema ──────────────────────────────────────────────
 
@@ -137,6 +116,17 @@ export const updateMeetingDecisionStatusSchema = z.object({
 export type UpdateMeetingDecisionStatusInput = z.infer<
   typeof updateMeetingDecisionStatusSchema
 >;
+
+// ─── briefingPreferenceSchema ──────────────────────────────────────────────────
+// P-5.1b — schema oficial que S-88 pediu e P-5.9/P-5.10 não entregaram: existia
+// como duas cópias locais (briefing-config-form.tsx e actions/briefing.ts).
+
+export const briefingPreferenceSchema = z.object({
+  enabled: z.boolean(),
+  frequency: z.enum(["diario", "semanal"]),
+});
+
+export type BriefingPreferenceInput = z.infer<typeof briefingPreferenceSchema>;
 
 // ─── Re-export enums for shared use ───────────────────────────────────────────
 
