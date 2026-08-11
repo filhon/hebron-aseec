@@ -20,10 +20,32 @@ const FILTERS: { value: PriorityFilter; label: string }[] = [
 
 export interface AnnouncementsListProps {
   announcements: Announcement[];
+  /** super_admin corrige um anúncio já publicado (announcement-card.tsx). */
+  canEdit?: boolean;
+  /** true quando a leitura bateu no teto de ANNOUNCEMENTS_LIST_LIMIT. */
+  capped?: boolean;
 }
 
-export function AnnouncementsList({ announcements }: AnnouncementsListProps) {
+export function AnnouncementsList({
+  announcements,
+  canEdit = false,
+  capped = false,
+}: AnnouncementsListProps) {
   const [priority, setPriority] = useState<PriorityFilter>("all");
+
+  if (announcements.length === 0) {
+    return (
+      <EmptyState
+        icon={Megaphone}
+        title="Nenhum anúncio publicado"
+        description="Os comunicados da diretoria e das equipes aparecem aqui."
+        quote={{
+          text: "Quão formosos são os pés dos que anunciam coisas boas!",
+          reference: "Romanos 10:15",
+        }}
+      />
+    );
+  }
 
   const filtered = announcements.filter(
     (a) => priority === "all" || a.priority === priority,
@@ -56,9 +78,16 @@ export function AnnouncementsList({ announcements }: AnnouncementsListProps) {
             <AnnouncementCard
               key={announcement.id}
               announcement={announcement}
+              canEdit={canEdit}
             />
           ))}
         </div>
+      )}
+
+      {capped && (
+        <p className="text-xs" style={{ marginTop: 12 }}>
+          Mostrando os {announcements.length} anúncios mais recentes.
+        </p>
       )}
     </>
   );

@@ -6584,6 +6584,7 @@ Páginas: Dashboard personalizado (widgets configuráveis por usuário). Feed de
 - [x] Reuniões: lista com atas e decisões vinculadas
 - [x] Busca cross-app com resultados agrupados
 - [x] Responsivo
+- [x] Anúncios, Reuniões e Calendário têm fronteira de carregamento (`Suspense` + esqueleto) com cabeçalho visível de imediato, mesmo desenho do Diretório — as cinco telas do módulo, não só o painel — fechado em P-5.3b (CORRETIVO)
 - [x] Lint passa
 - [x] Types passam
 
@@ -6647,6 +6648,8 @@ Loading, empty e error states. Skeletons para dashboard (grid de widgets), feed,
 - [x] Skeletons para cada widget no dashboard
 - [x] Feed vazio: "Nenhuma atividade recente" (era "Nenhum anúncio recente" — mudou em P-5.2c quando o feed passou a agregar projetos/financeiro/tarefas além de anúncios/reuniões)
 - [x] Diretório vazio: "Nenhum membro encontrado"
+- [x] Esqueletos cobrem as cinco telas do módulo (painel, anúncios, diretório, reuniões, calendário), não só o painel — `AnnouncementsSkeleton` (nova) e `FeedSkeleton` reaproveitado para anúncios/reuniões/calendário — fechado em P-5.3b (CORRETIVO)
+- [x] Anúncios: dois vazios distintos — zero anúncios publicados (com citação bíblica) e filtro sem resultado (sem citação) — fechado em P-5.3b (CORRETIVO)
 - [x] Lint passa
 - [x] Types passam
 
@@ -7209,16 +7212,16 @@ Os critérios de P-5.5 ("Skeletons para cada widget no dashboard", "Feed vazio",
 
 **Critérios de aceite:**
 
-- [ ] As três telas mostram esqueleto em navegação fria, com o cabeçalho já visível
-- [ ] Zero anúncios: cópia que não menciona filtro, com citação bíblica; filtro sem resultado: a cópia de filtro
-- [ ] Uma reunião marcada para hoje aparece em "Próximas reuniões" e na lista do widget
-- [ ] `/anuncios` e o painel não leem a tabela inteira de anúncios
-- [ ] Em 360px, a decisão de reunião é legível e a página não rola na horizontal
-- [ ] `updateAnnouncement` tem chamador de UI: super_admin corrige título, corpo e prioridade de um anúncio publicado; diretor/conselheiro não veem o caminho (RLS confirma na segunda camada)
-- [ ] Nenhum selo de estado que o sistema não produz — `grep -rn "Rascunho" apps/intranet/src` não devolve nada
-- [ ] `grep -rn "FeedSkeleton\|AnnouncementsSkeleton" apps/intranet/src` — os dois têm consumidor a partir de `app/`
-- [ ] `apps/intranet` typecheck, lint e testes verdes; `pnpm turbo build --filter=@hebron/intranet` verde
-- [ ] Registrar em SESSIONS.md
+- [x] As três telas mostram esqueleto em navegação fria, com o cabeçalho já visível
+- [x] Zero anúncios: cópia que não menciona filtro, com citação bíblica; filtro sem resultado: a cópia de filtro
+- [x] Uma reunião marcada para hoje aparece em "Próximas reuniões" e na lista do widget
+- [x] `/anuncios` e o painel não leem a tabela inteira de anúncios
+- [x] Em 360px, a decisão de reunião é legível e a página não rola na horizontal
+- [x] `updateAnnouncement` tem chamador de UI: super_admin corrige título, corpo e prioridade de um anúncio publicado; diretor/conselheiro não veem o caminho (RLS confirma na segunda camada)
+- [x] Nenhum selo de estado que o sistema não produz — `grep -rn "Rascunho" apps/intranet/src` não devolve nada
+- [x] `grep -rn "FeedSkeleton\|AnnouncementsSkeleton" apps/intranet/src` — os dois têm consumidor a partir de `app/`
+- [x] `apps/intranet` typecheck, lint e testes verdes; `pnpm turbo build --filter=@hebron/intranet` verde
+- [x] Registrar em SESSIONS.md
 
 **Notas:**
 Ref: P-4.6b (teto de leitura), CLAUDE.md ("estados vazios com citações bíblicas pertinentes", "mobile-first") e o precedente de `/diretorio`, que é a única tela do módulo com a fronteira de carregamento no lugar certo.

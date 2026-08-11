@@ -16,12 +16,22 @@ import { logIntranetAudit } from "../lib/audit";
 import { notifyUrgentAnnouncement } from "../lib/notifications";
 
 // ---------------------------------------------------------------------------
-// listAnnouncements — feed de anúncios (equipe interna).
+// listAnnouncements — feed de anúncios (equipe interna). Teto de leitura
+// (P-5.3b CORRETIVO): sem `limit`, cai no padrão ANNOUNCEMENTS_LIST_LIMIT —
+// mesmo crescimento sem teto que P-4.6b fechou no painel de Atividade de
+// Tarefas, aqui lido tanto por /anuncios quanto pelo painel (via
+// getAnnouncementsWithAuthors, queries.ts).
 // ---------------------------------------------------------------------------
 
+// Não exportada: um arquivo "use server" só pode exportar funções async
+// (Next.js). anuncios/page.tsx repete o mesmo valor para decidir o aviso de
+// corte — mantenha os dois em sincronia.
+const ANNOUNCEMENTS_LIST_LIMIT = 50;
+
 export const listAnnouncements = staffAction
-  .schema(z.object({}))
-  .action(async ({ ctx }) => {
+  .schema(z.object({ limit: z.number().int().min(1).max(200).optional() }))
+  .action(async ({ parsedInput, ctx }) => {
+    const limit = parsedInput.limit ?? ANNOUNCEMENTS_LIST_LIMIT;
     const rows = await withAuthenticatedContext(
       { actorId: ctx.actorId },
       (tx) =>
@@ -31,7 +41,8 @@ export const listAnnouncements = staffAction
           .orderBy(
             desc(announcements.publishedAt),
             desc(announcements.createdAt),
-          ),
+          )
+          .limit(limit),
     );
 
     return { announcements: rows };

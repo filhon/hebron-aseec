@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { Suspense, type CSSProperties } from "react";
 import { Handshake } from "lucide-react";
 import { EmptyState, ErrorState, PageHeader } from "@hebron/ui";
 import type { MeetingDecisionStatus } from "@hebron/types/intranet";
@@ -36,54 +36,194 @@ function formatDate(date: Date): string {
   return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
 }
 
-async function loadReunioesData() {
-  const [sessions, user, staffOptions] = await Promise.all([
-    getMeetingSessionsWithDecisions(),
-    getAuthUser(),
-    getStaffOptions(),
-  ]);
+function Bone({ className }: { className: string }) {
+  return (
+    <div
+      className={`animate-pulse rounded-xs ${className}`}
+      style={{ background: "var(--surface-alt)" }}
+    />
+  );
+}
 
+function ReunioesSkeleton() {
+  return (
+    <div className="hb-meeting-list" aria-label="Carregando reuniões">
+      {Array.from({ length: 3 }).map((_, i) => (
+        <div
+          key={i}
+          className="hb-card hb-card-padded"
+          style={{ display: "flex", gap: 18 }}
+          aria-hidden="true"
+        >
+          <Bone className="h-16 w-16 shrink-0 rounded-sm" />
+          <div
+            style={{
+              minWidth: 0,
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              gap: 8,
+            }}
+          >
+            <Bone className="h-3.5 w-40" />
+            <Bone className="h-3 w-56" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+async function ReunioesContent({
+  isSuperAdmin,
+  isBoard,
+  userId,
+}: {
+  isSuperAdmin: boolean;
+  isBoard: boolean;
+  userId: string | null;
+}) {
+  let sessions: Awaited<ReturnType<typeof getMeetingSessionsWithDecisions>>;
+
+  try {
+    sessions = await getMeetingSessionsWithDecisions();
+  } catch {
+    return (
+      <ErrorState
+        title="Não foi possível carregar as reuniões"
+        description="Verifique sua conexão e tente novamente."
+      />
+    );
+  }
+
+  if (sessions.length === 0) {
+    return (
+      <EmptyState
+        icon={Handshake}
+        title="Nenhuma reunião registrada"
+        description="As atas das reuniões aparecem aqui depois de registradas."
+        quote={{
+          text: "Onde estiverem dois ou três reunidos em meu nome, ali estou no meio deles.",
+          reference: "Mateus 18:20",
+        }}
+      />
+    );
+  }
+
+  return (
+    <div className="hb-meeting-list">
+      {sessions.map((session) => {
+        const day = session.date.getDate().toString().padStart(2, "0");
+        const month = formatDate(session.date).split(" ")[1] ?? "";
+        // Presidente da sessão ou super_admin altera o status das decisões
+        // desta sessão (0040_intranet_meeting_decisions_chair_rls.sql).
+        const canEditStatus =
+          isSuperAdmin ||
+          (isBoard && !!userId && session.chairUserId === userId);
+
+        return (
+          <div
+            key={session.id}
+            className="hb-card hb-card-padded"
+            style={{ display: "flex", flexDirection: "column", gap: 14 }}
+          >
+            <div style={{ display: "flex", gap: 18 }}>
+              <div className="hb-meeting-date-block" style={{ width: 64 }}>
+                <div className="day">{day}</div>
+                <div className="month">{month}</div>
+              </div>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <h4>Reunião {session.typeLabel}</h4>
+                {session.notes && (
+                  <p className="hb-meeting-sub">{session.notes}</p>
+                )}
+                {session.chairName && (
+                  <div className="hb-meeting-meta-row">
+                    <span>Presidida por {session.chairName}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {session.decisions.length > 0 && (
+              <div style={{ paddingLeft: "var(--sp-4)" }}>
+                <p className="hb-section-label">Decisões</p>
+                <ul
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 8,
+                  }}
+                >
+                  {session.decisions.map((decision) => (
+                    <li
+                      key={decision.id}
+                      style={{
+                        display: "flex",
+                        alignItems: "flex-start",
+                        gap: 10,
+                        fontSize: 13.5,
+                      }}
+                    >
+                      {canEditStatus ? (
+                        <MeetingDecisionStatusSelect
+                          meetingDecisionId={decision.id}
+                          status={decision.status}
+                        />
+                      ) : (
+                        <span
+                          className="hb-badge"
+                          style={{
+                            ...STATUS_STYLE[decision.status],
+                            flexShrink: 0,
+                          }}
+                        >
+                          {STATUS_LABEL[decision.status]}
+                        </span>
+                      )}
+                      <span className="text-(--fg)">
+                        {decision.description}
+                        <span className="text-xs">
+                          {" "}
+                          — {decision.responsibleName}
+                          {decision.dueDate &&
+                            ` · até ${formatDate(decision.dueDate)}`}
+                        </span>
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+export default async function ReunioesPage() {
+  const user = await getAuthUser();
   const isSuperAdmin = user?.roles.includes("super_admin") ?? false;
   const isBoard =
     user?.roles.some((r) => r === "diretor" || r === "conselheiro") ?? false;
 
-  // Presidente de sessão (diretor/conselheiro) só registra decisão nas
-  // reuniões que preside (PATCH-017); super_admin vê/registra em todas.
-  const meetingOptions = await getMeetingSessionOptions(
-    isSuperAdmin || !user ? undefined : user.id,
-  );
+  // Só busca opções de reunião/responsáveis (para o formulário de decisão) se
+  // o papel puder registrar alguma — evita duas leituras a mais para quem
+  // (colaborador) nunca veria o botão de qualquer forma.
+  let meetingOptions: Awaited<ReturnType<typeof getMeetingSessionOptions>> = [];
+  let staffOptions: Awaited<ReturnType<typeof getStaffOptions>> = [];
+  let canRegisterDecision = false;
 
-  return {
-    sessions: sessions.map((session) => ({
-      ...session,
-      // Presidente da sessão ou super_admin altera o status das decisões
-      // desta sessão (0040_intranet_meeting_decisions_chair_rls.sql).
-      canEditStatus:
-        isSuperAdmin || (isBoard && !!user && session.chairUserId === user.id),
-    })),
-    canRegisterDecision: isSuperAdmin || (isBoard && meetingOptions.length > 0),
-    meetingOptions,
-    staffOptions,
-  };
-}
-
-export default async function ReunioesPage() {
-  let data: Awaited<ReturnType<typeof loadReunioesData>>;
-
-  try {
-    data = await loadReunioesData();
-  } catch {
-    return (
-      <div className="hb-page">
-        <ErrorState
-          title="Não foi possível carregar as reuniões"
-          description="Verifique sua conexão e tente novamente."
-        />
-      </div>
-    );
+  if (isSuperAdmin || isBoard) {
+    // Presidente de sessão (diretor/conselheiro) só registra decisão nas
+    // reuniões que preside (PATCH-017); super_admin vê/registra em todas.
+    [meetingOptions, staffOptions] = await Promise.all([
+      getMeetingSessionOptions(isSuperAdmin || !user ? undefined : user.id),
+      getStaffOptions(),
+    ]);
+    canRegisterDecision = isSuperAdmin || meetingOptions.length > 0;
   }
-
-  const { sessions, canRegisterDecision, meetingOptions, staffOptions } = data;
 
   return (
     <div className="hb-page">
@@ -100,101 +240,13 @@ export default async function ReunioesPage() {
         }
       />
 
-      {sessions.length === 0 ? (
-        <EmptyState
-          icon={Handshake}
-          title="Nenhuma reunião registrada"
-          description="As atas das reuniões aparecem aqui depois de registradas."
-          quote={{
-            text: "Onde estiverem dois ou três reunidos em meu nome, ali estou no meio deles.",
-            reference: "Mateus 18:20",
-          }}
+      <Suspense fallback={<ReunioesSkeleton />}>
+        <ReunioesContent
+          isSuperAdmin={isSuperAdmin}
+          isBoard={isBoard}
+          userId={user?.id ?? null}
         />
-      ) : (
-        <div className="hb-meeting-list">
-          {sessions.map((session) => {
-            const day = session.date.getDate().toString().padStart(2, "0");
-            const month = formatDate(session.date).split(" ")[1] ?? "";
-
-            return (
-              <div
-                key={session.id}
-                className="hb-card hb-card-padded"
-                style={{ display: "flex", flexDirection: "column", gap: 14 }}
-              >
-                <div style={{ display: "flex", gap: 18 }}>
-                  <div className="hb-meeting-date-block" style={{ width: 64 }}>
-                    <div className="day">{day}</div>
-                    <div className="month">{month}</div>
-                  </div>
-                  <div style={{ minWidth: 0, flex: 1 }}>
-                    <h4>Reunião {session.typeLabel}</h4>
-                    {session.notes && (
-                      <p className="hb-meeting-sub">{session.notes}</p>
-                    )}
-                    {session.chairName && (
-                      <div className="hb-meeting-meta-row">
-                        <span>Presidida por {session.chairName}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {session.decisions.length > 0 && (
-                  <div style={{ paddingLeft: 82 }}>
-                    <p className="hb-section-label">Decisões</p>
-                    <ul
-                      style={{
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: 8,
-                      }}
-                    >
-                      {session.decisions.map((decision) => (
-                        <li
-                          key={decision.id}
-                          style={{
-                            display: "flex",
-                            alignItems: "flex-start",
-                            gap: 10,
-                            fontSize: 13.5,
-                          }}
-                        >
-                          {session.canEditStatus ? (
-                            <MeetingDecisionStatusSelect
-                              meetingDecisionId={decision.id}
-                              status={decision.status}
-                            />
-                          ) : (
-                            <span
-                              className="hb-badge"
-                              style={{
-                                ...STATUS_STYLE[decision.status],
-                                flexShrink: 0,
-                              }}
-                            >
-                              {STATUS_LABEL[decision.status]}
-                            </span>
-                          )}
-                          <span className="text-(--fg)">
-                            {decision.description}
-                            <span className="text-xs">
-                              {" "}
-                              — {decision.responsibleName}
-                              {decision.dueDate &&
-                                ` · até ${formatDate(decision.dueDate)}`}
-                            </span>
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
+      </Suspense>
     </div>
   );
 }

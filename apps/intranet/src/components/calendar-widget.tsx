@@ -23,6 +23,12 @@ function sameDay(a: Date, b: Date): boolean {
   );
 }
 
+function startOfDay(date: Date): Date {
+  const start = new Date(date);
+  start.setHours(0, 0, 0, 0);
+  return start;
+}
+
 function buildMonthGrid(reference: Date): (Date | null)[] {
   const year = reference.getFullYear();
   const month = reference.getMonth();
@@ -43,8 +49,10 @@ export function CalendarWidget({ events, referenceDate }: CalendarWidgetProps) {
     year: "numeric",
   });
 
+  // Reunião marcada para hoje (meeting_sessions.date à meia-noite) continua
+  // "próxima" durante todo o dia em que ela acontece.
   const upcoming = events
-    .filter((event) => event.startAt >= today)
+    .filter((event) => event.startAt >= startOfDay(today))
     .sort((a, b) => a.startAt.getTime() - b.startAt.getTime())
     .slice(0, 3);
 

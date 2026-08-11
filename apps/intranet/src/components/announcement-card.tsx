@@ -4,9 +4,12 @@ import type {
   Announcement,
   AnnouncementPriority,
 } from "@hebron/types/intranet";
+import { AnnouncementEditDialog } from "./announcement-create-dialog";
 
 export interface AnnouncementCardProps {
   announcement: Announcement;
+  /** super_admin corrige um anúncio já publicado (announcements_mutate_admin). */
+  canEdit?: boolean;
 }
 
 const PRIORITY_LABEL: Record<AnnouncementPriority, string> = {
@@ -38,9 +41,10 @@ function formatDate(date: Date): string {
   });
 }
 
-export function AnnouncementCard({ announcement }: AnnouncementCardProps) {
-  const isDraft = announcement.publishedAt === null;
-
+export function AnnouncementCard({
+  announcement,
+  canEdit = false,
+}: AnnouncementCardProps) {
   return (
     <article className="hb-card hb-card-overflow">
       <div className="hb-card-header">
@@ -50,11 +54,13 @@ export function AnnouncementCard({ announcement }: AnnouncementCardProps) {
         >
           {PRIORITY_LABEL[announcement.priority]}
         </span>
-        {isDraft && <span className="hb-badge">Rascunho</span>}
-        <div className="hb-card-header-actions hb-card-header-hint">
-          {announcement.publishedAt === null
-            ? "não publicado"
-            : formatDate(announcement.publishedAt)}
+        <div className="hb-card-header-actions">
+          <span className="hb-card-header-hint">
+            {announcement.publishedAt === null
+              ? "não publicado"
+              : formatDate(announcement.publishedAt)}
+          </span>
+          {canEdit && <AnnouncementEditDialog announcement={announcement} />}
         </div>
       </div>
       <div className="hb-card-body">

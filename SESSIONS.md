@@ -258,6 +258,7 @@
 | S-235  | 2026-08-06 | P-5.2c — O feed cross-app que o backend agrega e o painel não mostra (CORRETIVO)                                                 | concluido                            |
 | S-236  | 2026-08-11 | P-5.2d — O painel que só se monta com mouse e perde o widget recém-adicionado (CORRETIVO)                                        | concluido                            |
 | S-237  | 2026-08-11 | P-5.1b — O diretório com foto e bio que ninguém pode preencher (CORRETIVO)                                                       | concluido                            |
+| S-238  | 2026-08-11 | P-5.3b — As três telas que carregam em branco e o anúncio zero que fala de filtro (CORRETIVO)                                    | concluido                            |
 
 ---
 
@@ -21134,4 +21135,115 @@ titular) — um próximo prompt de LGPD deveria somar `bio: null` ao `UPDATE` de
 - `apps/intranet/src/components/directory-card.tsx`
 - `apps/intranet/src/lib/queries.ts`
 - `apps/intranet/src/__tests__/rls.test.ts`
+
+---
+
+## S-238 — P-5.3b — As três telas que carregam em branco e o anúncio zero que fala de filtro (CORRETIVO)
+
+**Prompt:** P-5.3b (PROMPTS.md)
+**Data:** 2026-08-11
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+`/anuncios`, `/reunioes` e `/calendario` faziam `await` de toda a leitura
+antes do primeiro JSX — sem cabeçalho, sem esqueleto, tela anterior congelada
+até o servidor responder. Só `/diretorio` tinha a fronteira de carregamento
+no lugar certo (P-5.9). Fechado na ordem do escopo:
+
+1. **`Suspense` + esqueleto nas três telas**, mesmo desenho de `/diretorio`:
+   `PageHeader` (título/descrição) fora da fronteira, conteúdo dentro. Em
+   `/anuncios` e `/reunioes`, o botão de ação do cabeçalho (`canCreate`/
+   `canRegisterDecision`) depende só de papel — resolvido com um `await
+getAuthUser()` rápido antes do retorno (mesmo padrão de
+   `apps/flats/src/app/(hospede)/page.tsx`), não da leitura pesada que agora
+   fica atrás do `Suspense`. Em `/reunioes`, `canRegisterDecision` também
+   depende de `meetingOptions` (quantas reuniões o presidente preside) —
+   manteve-se exatamente a mesma regra de negócio, só descolada da leitura de
+   `sessions` (a que de fato cresce sem teto).
+2. **Esqueletos**: `AnnouncementsSkeleton` novo (grade de cartões, arquivo
+   próprio conforme escopo). `/calendario` reaproveita `FeedSkeleton` (props
+   já existiam) para o cartão "Próximas reuniões", que é uma timeline; o
+   `CalendarWidget` (grade de mês) e o `/reunioes` (cartões com bloco de
+   data) não têm um esqueleto existente reaproveitável sem tocar arquivo fora
+   da lista permitida — esqueleto local, não exportado, direto no `page.tsx`
+   de cada tela (mesmo padrão de `UnitCardSkeleton` em
+   `apps/flats/src/app/(hospede)/page.tsx`).
+3. **Dois vazios em `/anuncios`** (`announcements-list.tsx`): zero anúncios
+   publicados → "Nenhum anúncio publicado" + citação (Romanos 10:15, "Quão
+   formosos são os pés dos que anunciam coisas boas!"); filtro sem resultado
+   → cópia existente, sem citação (opt-in, nunca em filtro sem resultado —
+   `empty-state.tsx`).
+4. **Teto de leitura**: `listAnnouncements` (`actions/announcements.ts`)
+   ganhou `limit` opcional, padrão 50 (`ANNOUNCEMENTS_LIST_LIMIT`, constante
+   local — um arquivo `"use server"` só pode exportar funções async, então
+   não é importável; `anuncios/page.tsx` repete o mesmo valor com comentário
+   apontando a fonte). Sem mudar `queries.ts` (fora dos arquivos permitidos):
+   `getAnnouncementsWithAuthors()` chama `listAnnouncements({})`, que agora
+   cai no padrão automaticamente — fecha a leitura sem teto tanto em
+   `/anuncios` quanto no painel. `/anuncios` mostra "Mostrando os N anúncios
+   mais recentes" quando bate no teto.
+5. **Hoje conta como próximo**: `calendario/page.tsx` e `calendar-widget.tsx`
+   trocaram a comparação `date >= new Date()` por `date >=
+startOfDay(new Date())` — reunião de hoje (meia-noite) não sumia mais só
+   durante o dia em que acontece.
+6. **Bloco de decisões sem 82px fixo**: `reunioes/page.tsx` trocou
+   `paddingLeft: 82` (alinhamento com a coluna de data, 64px + gap 18px) por
+   `var(--sp-4)` (16px, token de espaçamento) — hierarquia visual mantida,
+   sem negociar largura fixa contra 360px de tela.
+7. **Correção de anúncio alcançável**: `AnnouncementEditDialog` novo em
+   `announcement-create-dialog.tsx`, reaproveitando `AnnouncementForm`
+   (`initialValues`) e chamando `updateAnnouncement` (`superAdminAction`, já
+   existia sem chamador de UI). Trigger é um ícone `Pencil` no cabeçalho do
+   cartão (`announcement-card.tsx`), só montado quando `canEdit` (resolvido
+   como `super_admin` em `anuncios/page.tsx`, roteado por
+   `announcements-list.tsx`) — RLS (`announcements_mutate_admin`) confirma na
+   segunda camada. O selo "Rascunho" saiu do cartão (o sistema nunca produz
+   `publishedAt: null`; `createAnnouncement` sempre grava `new Date()`).
+8. Bookkeeping em `PROMPTS.md`: critérios de P-5.3 e P-5.5 passam a citar as
+   cinco telas do módulo, não só o painel.
+
+### Suposição registrada
+
+O rótulo do botão de submit em `AnnouncementForm` ("Publicar anúncio") ficou
+igual no modo de edição — o componente não está nos arquivos permitidos
+deste prompt e não tem prop de rótulo customizável. Um próximo prompt que
+toque `announcement-form.tsx` deveria receber um `submitLabel` opcional.
+
+### Verificação
+
+- `pnpm --filter @hebron/intranet exec tsc --noEmit` — verde
+- `pnpm --filter @hebron/intranet exec eslint .` — verde
+- `pnpm --filter @hebron/intranet exec vitest run` — 8 suítes, 33 testes,
+  todos verdes
+- `pnpm turbo build --filter=@hebron/intranet` — verde (22 rotas). Primeira
+  tentativa falhou com `MODULE_NOT_FOUND` na fase "Collecting page data" —
+  cache `.next` corrompido de um build anterior, não relacionado a este
+  diff; resolvido com `.next` limpo antes de reconstruir.
+- `pnpm turbo lint typecheck --filter=@hebron/intranet` (grafo completo) —
+  falha pré-existente em `@hebron/auth#typecheck`
+  (`data-deletion.test.ts`, `bankAccounts.nickname` ausente do INSERT),
+  já registrada em memória de sessões anteriores
+  (`project_bankaccounts_nickname_test_drift`), sem relação com este diff —
+  `packages/auth` não foi tocado nesta sessão.
+- `grep -rn "Rascunho" apps/intranet/src` — vazio
+- `grep -rn "FeedSkeleton\|AnnouncementsSkeleton" apps/intranet/src` — ambos
+  com consumidor a partir de `app/`
+- Verificação manual em navegador **não realizada** — sem credenciais de
+  usuário de teste disponíveis no ambiente local; cobertura ficou em
+  build + typecheck + lint + teste automatizado
+
+### Arquivos modificados
+
+- `apps/intranet/src/app/(dashboard)/anuncios/page.tsx`
+- `apps/intranet/src/app/(dashboard)/reunioes/page.tsx`
+- `apps/intranet/src/app/(dashboard)/calendario/page.tsx`
+- `apps/intranet/src/components/announcements-list.tsx`
+- `apps/intranet/src/components/announcement-card.tsx`
+- `apps/intranet/src/components/announcement-create-dialog.tsx`
+- `apps/intranet/src/components/announcements-skeleton.tsx` (novo)
+- `apps/intranet/src/components/calendar-widget.tsx`
+- `apps/intranet/src/actions/announcements.ts`
+- `PROMPTS.md` (critérios de P-5.3 e P-5.5)
 - `PROMPTS.md` (critério de P-5.1 e escopo de P-5.4)
