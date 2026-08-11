@@ -23,6 +23,8 @@ import {
 import {
   BarChart3,
   CalendarDays,
+  ChevronDown,
+  ChevronUp,
   GripVertical,
   Plus,
   Rss,
@@ -134,6 +136,17 @@ export function WidgetConfigForm({
     setDragIndex(null);
   }
 
+  function moveWidgetBy(index: number, direction: -1 | 1) {
+    const targetIndex = index + direction;
+    setWidgets((prev) => {
+      if (targetIndex < 0 || targetIndex >= prev.length) return prev;
+      const next = [...prev];
+      const [moved] = next.splice(index, 1);
+      if (moved) next.splice(targetIndex, 0, moved);
+      return next;
+    });
+  }
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const candidate = {
@@ -217,6 +230,27 @@ export function WidgetConfigForm({
                 <GripVertical className="h-4 w-4" />
               </span>
 
+              <div className="mt-1 flex shrink-0 flex-col gap-0.5">
+                <button
+                  type="button"
+                  onClick={() => moveWidgetBy(index, -1)}
+                  disabled={index === 0}
+                  aria-label={`Mover widget "${WIDGET_TYPE_LABEL[widget.type]}" para cima`}
+                  className="flex h-6 w-6 items-center justify-center rounded-(--radius) text-(--fg-muted) transition-colors hover:bg-(--surface-alt) hover:text-(--fg) disabled:pointer-events-none disabled:opacity-30"
+                >
+                  <ChevronUp className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => moveWidgetBy(index, 1)}
+                  disabled={index === widgets.length - 1}
+                  aria-label={`Mover widget "${WIDGET_TYPE_LABEL[widget.type]}" para baixo`}
+                  className="flex h-6 w-6 items-center justify-center rounded-(--radius) text-(--fg-muted) transition-colors hover:bg-(--surface-alt) hover:text-(--fg) disabled:pointer-events-none disabled:opacity-30"
+                >
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </button>
+              </div>
+
               <div className="flex min-w-0 flex-1 flex-col gap-2.5">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-semibold">
@@ -233,23 +267,30 @@ export function WidgetConfigForm({
                 </div>
 
                 {(widget.type === "kpi" || widget.type === "chart") && (
-                  <Select
-                    value={(widget.config.kpiId as string | undefined) ?? ""}
-                    onValueChange={(v) =>
-                      updateWidgetConfig(index, { kpiId: v })
-                    }
+                  <FormField
+                    label="Indicador"
+                    error={errors[`widgets.${index}.config.kpiId`]}
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione o indicador" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {availableKpis.map((kpi) => (
-                        <SelectItem key={kpi.id} value={kpi.id}>
-                          {kpi.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    <Select
+                      value={(widget.config.kpiId as string | undefined) ?? ""}
+                      onValueChange={(v) =>
+                        updateWidgetConfig(index, { kpiId: v })
+                      }
+                    >
+                      <SelectTrigger
+                        hasError={!!errors[`widgets.${index}.config.kpiId`]}
+                      >
+                        <SelectValue placeholder="Selecione o indicador" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {availableKpis.map((kpi) => (
+                          <SelectItem key={kpi.id} value={kpi.id}>
+                            {kpi.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FormField>
                 )}
 
                 {widget.type === "feed" && (

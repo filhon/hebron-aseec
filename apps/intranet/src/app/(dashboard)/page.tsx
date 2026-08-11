@@ -169,7 +169,8 @@ async function DashboardContent() {
           <h2>Bem-vindo de volta.</h2>
           <p>
             Acompanhe indicadores, anúncios e a agenda da diretoria em um só
-            lugar. Arraste os cartões abaixo para organizar o seu painel.
+            lugar. Reorganize o seu painel arrastando os cartões ou pelo seletor
+            de posição no canto de cada um.
           </p>
         </div>
         <svg

@@ -256,6 +256,7 @@
 | S-233  | 2026-08-05 | P-4.6b — O histórico que o banco guarda e a tela não mostra (CORRETIVO)                                                          | concluido                            |
 | S-234  | 2026-08-06 | P-5.2b — O sparkline que desenha ruído sobre um número real (CORRETIVO)                                                          | concluido                            |
 | S-235  | 2026-08-06 | P-5.2c — O feed cross-app que o backend agrega e o painel não mostra (CORRETIVO)                                                 | concluido                            |
+| S-236  | 2026-08-11 | P-5.2d — O painel que só se monta com mouse e perde o widget recém-adicionado (CORRETIVO)                                        | concluido                            |
 
 ---
 
@@ -20912,4 +20913,109 @@ registrado aqui para quem for revisitar `feed.test.ts`.
 - `apps/intranet/src/components/feed-widget.tsx`
 - `apps/intranet/src/components/dashboard-widgets.tsx`
 - `packages/integrations/src/__tests__/feed.test.ts` (correção de `nickname`)
+
+## S-236 — P-5.2d — O painel que só se monta com mouse e perde o widget recém-adicionado (CORRETIVO)
+
+**Prompt:** P-5.2d (PROMPTS.md)
+**Data:** 2026-08-11
+**Modelo:** claude-opus-5
+**Status:** concluido
+
+### Resumo
+
+Quatro defeitos no mesmo fluxo de P-5.2/P-5.3/P-5.4 ("cada usuário monta o
+seu painel"), fechados na ordem do prompt:
+
+1. **Widget novo sumia até F5** (`widget-grid.tsx`): `order` era
+   `useState(() => items.map(...))`, copiado só no primeiro render.
+   `router.refresh()` preserva o estado do Client Component, então o widget
+   novo chegava via prop mas nunca entrava em `order`. Removido o estado
+   local da grade — `WidgetGrid` agora renderiza `items` na ordem recebida;
+   o estado otimista (quando existe) mora em `DashboardWidgets`
+   (`useState(widgets)` + `useEffect` que ressemeia sempre que a prop
+   `widgets` muda), nunca uma cópia presa ao primeiro render.
+2. **Caminho sem arraste** — dois locais, dois padrões já existentes no
+   monorepo:
+   - `widget-grid.tsx`: `<select>` "Posição N" por widget (precedente:
+     `project-kanban.tsx:201-227`), sempre visível (não escondido atrás de
+     hover), grip decorativo continua só para mouse.
+   - `widget-config-form.tsx`: botões mover acima/abaixo com `aria-label`
+     dizendo o quê e para onde, desabilitados nos extremos (precedente:
+     `template-form.tsx:279-296`, P-4.2b).
+3. **Widget sem indicador não é mais célula invisível**:
+   `dashboardWidgetSchema` (`packages/validators/src/intranet/index.ts`)
+   ganhou `.refine` exigindo `config.kpiId` (string não vazia) para
+   `type` `kpi`/`chart`, com mensagem em `path: ["config", "kpiId"]` — o
+   formulário (`widget-config-form.tsx`) mostra o erro no campo via
+   `FormField`/`SelectTrigger hasError`. Para dado já gravado sem `kpiId`
+   (ou com `kpiId` que deixou de existir), `dashboard-widgets.tsx` renderiza
+   `MissingIndicatorCard` — cartão "Indicador não configurado" com um
+   `Select` que corrige o widget ali mesmo (grava via a mesma ação
+   `saveDashboardConfig` usada pela reordenação), em vez de instruir o
+   usuário a abrir o diálogo em outro lugar da tela. **Suposição registrada**:
+   escolhido correção inline (mais simples, um arquivo, sem acoplar estado
+   de abertura do `WidgetConfigDialog` a `DashboardWidgets` via Context) em
+   vez de abrir programaticamente o diálogo — G1, opção mais simples.
+4. **"Gráfico" agora desenha um gráfico**: `ChartWidgetCard`/`ChartLine`
+   (novos, dentro de `dashboard-widgets.tsx` — `kpi-card.tsx` não está nos
+   arquivos permitidos) usam `kpi.history` (série real de P-5.2b) num SVG de
+   área preenchida em largura total (`var(--brand-tint)`/`var(--brand)`),
+   visualmente distinto do sparkline de canto de 72×26px do `KPICard`.
+5. **Falha de escrita aparece**: `useAction(saveDashboardConfig, { onError,
+onSuccess })` em `dashboard-widgets.tsx` — erro mostra
+   `error.serverError` (fallback em português) num `role="alert"` acima da
+   grade e reverte `localWidgets` para a prop `widgets` (arranjo do
+   servidor). Cobre tanto arraste quanto o diálogo, e também o efeito
+   colateral de um widget legado inválido bloquear a gravação de outros
+   (a mesma trilha de erro/reversão absorve esse caso).
+6. **Cópia**: cartão de boas-vindas em `(dashboard)/page.tsx` deixou de
+   dizer "Arraste os cartões" como única instrução.
+7. Bookkeeping em `PROMPTS.md`: critérios de P-5.2, P-5.3 e P-5.4 passam a
+   mencionar o caminho sem arraste.
+
+### Fora dos arquivos permitidos, mas necessário
+
+`apps/intranet/src/__tests__/rls.test.ts` — o teste "Dashboard config —
+persiste e carrega" salvava widgets `kpi`/`chart` com `config: {}`, exatamente
+o payload que o novo `.refine` do item 3 passou a rejeitar. Ajustado para
+incluir `kpiId` no fixture (`kpi-projetos-ativos`/`kpi-doacoes-mes`, mesmos
+IDs de `DEFAULT_WIDGETS` em `page.tsx`) — sem isso "testes verdes" (critério
+de aceite deste prompt) não fecha. Não é um arquivo de produção nem expande
+escopo: só atualiza um fixture para o novo contrato do schema que este
+mesmo prompt pediu para mudar.
+
+### Verificação
+
+- `grep -rn "draggable" apps/intranet/src` — 2 ocorrências
+  (`widget-grid.tsx`, `widget-config-form.tsx`), ambas com alternativa sem
+  arraste confirmada
+- `pnpm --filter @hebron/intranet exec tsc --noEmit` — verde (turbo
+  typecheck workspace-wide segue bloqueado pelo drift pré-existente de
+  `bankAccounts.nickname` em `packages/auth`, fora do escopo — mesmo achado
+  de `project_bankaccounts_nickname_test_drift`)
+- `pnpm --filter @hebron/intranet exec eslint .` — verde
+- `pnpm --filter @hebron/intranet exec vitest run` — 8 suítes, 31 testes,
+  todos verdes (inclui o roundtrip real de `saveDashboardConfig` com
+  `kpiId`)
+- `pnpm turbo build --filter=@hebron/intranet` — verde (22 rotas)
+- Verificação manual em navegador (390px, só teclado) **não realizada**
+  nesta sessão — sem credenciais de usuário de teste disponíveis para
+  autenticar no ambiente local. Cobertura ficou em build + typecheck + lint
+  - teste de integração real (banco) do roundtrip de `saveDashboardConfig`.
+
+### Arquivos modificados
+
+- `apps/intranet/src/components/widget-grid.tsx`
+- `apps/intranet/src/components/dashboard-widgets.tsx`
+- `apps/intranet/src/components/widget-config-form.tsx`
+- `apps/intranet/src/app/(dashboard)/page.tsx`
+- `packages/validators/src/intranet/index.ts`
+- `apps/intranet/src/__tests__/rls.test.ts` (fixture — ver seção acima)
+- `PROMPTS.md` (critérios de P-5.2, P-5.3 e P-5.4)
+
+**Nota:** `widget-config-dialog.tsx` estava nos arquivos permitidos mas não
+precisou de mudança — a correção do item 3 ficou inline em
+`dashboard-widgets.tsx` (ver suposição registrada acima), sem precisar tocar
+no diálogo existente.
+
 - `PROMPTS.md` (critérios de P-5.2 e P-5.5)

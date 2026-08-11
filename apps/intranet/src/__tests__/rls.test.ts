@@ -199,13 +199,27 @@ describe("Dashboard config — persiste e carrega (dashboard_configs_write_own)"
     const { saveDashboardConfig, getDashboardConfig } =
       await import("../actions/dashboard");
 
+    // dashboardWidgetSchema exige kpiId em config para widgets "kpi"/"chart"
+    // desde P-5.2d (célula invisível quando o indicador não é escolhido).
     const widgetId = "b1000000-0000-0000-0000-000000000001";
     const saved = await saveDashboardConfig({
-      widgets: [{ id: widgetId, type: "kpi", position: 0, config: {} }],
+      widgets: [
+        {
+          id: widgetId,
+          type: "kpi",
+          position: 0,
+          config: { kpiId: "kpi-projetos-ativos" },
+        },
+      ],
     });
     expect(saved?.serverError).toBeUndefined();
     expect(saved?.data?.config.widgets).toEqual([
-      { id: widgetId, type: "kpi", position: 0, config: {} },
+      {
+        id: widgetId,
+        type: "kpi",
+        position: 0,
+        config: { kpiId: "kpi-projetos-ativos" },
+      },
     ]);
 
     await actingAs(IDS.colaborador, ["colaborador"]);
@@ -213,20 +227,37 @@ describe("Dashboard config — persiste e carrega (dashboard_configs_write_own)"
     expect(loaded?.serverError).toBeUndefined();
     expect(loaded?.data?.config?.userId).toBe(IDS.colaborador);
     expect(loaded?.data?.config?.widgets).toEqual([
-      { id: widgetId, type: "kpi", position: 0, config: {} },
+      {
+        id: widgetId,
+        type: "kpi",
+        position: 0,
+        config: { kpiId: "kpi-projetos-ativos" },
+      },
     ]);
 
     // Upsert: uma segunda gravação substitui o arranjo (1 linha por usuário).
     const widgetId2 = "b1000000-0000-0000-0000-000000000002";
     await actingAs(IDS.colaborador, ["colaborador"]);
     await saveDashboardConfig({
-      widgets: [{ id: widgetId2, type: "chart", position: 0, config: {} }],
+      widgets: [
+        {
+          id: widgetId2,
+          type: "chart",
+          position: 0,
+          config: { kpiId: "kpi-doacoes-mes" },
+        },
+      ],
     });
 
     await actingAs(IDS.colaborador, ["colaborador"]);
     const reloaded = await getDashboardConfig({});
     expect(reloaded?.data?.config?.widgets).toEqual([
-      { id: widgetId2, type: "chart", position: 0, config: {} },
+      {
+        id: widgetId2,
+        type: "chart",
+        position: 0,
+        config: { kpiId: "kpi-doacoes-mes" },
+      },
     ]);
   });
 });

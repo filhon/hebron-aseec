@@ -48,12 +48,24 @@ export type UpdateAnnouncementInput = z.infer<typeof updateAnnouncementSchema>;
 // ─── updateDashboardWidgetsSchema ─────────────────────────────────────────────
 // Salva o arranjo completo de widgets do usuário (reordenar/adicionar/remover).
 
-const dashboardWidgetSchema = z.object({
-  id: z.string().uuid(),
-  type: dashboardWidgetTypeEnum,
-  position: z.number().int().min(0),
-  config: z.record(z.string(), z.unknown()).optional().default({}),
-});
+const dashboardWidgetSchema = z
+  .object({
+    id: z.string().uuid(),
+    type: dashboardWidgetTypeEnum,
+    position: z.number().int().min(0),
+    config: z.record(z.string(), z.unknown()).optional().default({}),
+  })
+  .refine(
+    (widget) => {
+      if (widget.type !== "kpi" && widget.type !== "chart") return true;
+      const kpiId = widget.config.kpiId;
+      return typeof kpiId === "string" && kpiId.length > 0;
+    },
+    {
+      message: "Selecione um indicador para este widget",
+      path: ["config", "kpiId"],
+    },
+  );
 
 export const updateDashboardWidgetsSchema = z.object({
   widgets: z.array(dashboardWidgetSchema),

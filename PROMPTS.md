@@ -6541,7 +6541,7 @@ Componentes: KPICard (valor, trend, sparkline). AnnouncementCard (com badge de p
 **Critérios de aceite:**
 
 - [x] KPICard com valor formatado, seta de trend e sparkline — sparkline vem de `intranet.kpi_snapshot_history` (série real, P-5.2b) e só aparece com duas leituras ou mais; sem base de comparação, nenhuma seta de trend
-- [x] WidgetGrid com drag-drop para reorganizar widgets
+- [x] WidgetGrid com drag-drop para reorganizar widgets — com caminho sem arraste (seletor "Posição N" por widget, P-5.2d)
 - [x] AppLauncher com ícones e links para os 8 módulos
 - [x] SearchGlobal com resultados agrupados por módulo
 - [x] FeedWidget com últimas ações (novo projeto, pagamento, tarefa concluída) — agregação cross-app real consumida em produção via `getFeed` (P-5.2c)
@@ -6577,7 +6577,7 @@ Páginas: Dashboard personalizado (widgets configuráveis por usuário). Feed de
 
 **Critérios de aceite:**
 
-- [x] Dashboard com widgets configuráveis (cada usuário monta o seu)
+- [x] Dashboard com widgets configuráveis (cada usuário monta o seu) — adicionar e reordenar funcionam sem mouse, o painel reflete a mudança sem F5 (P-5.2d)
 - [x] Feed de anúncios com filtro de prioridade
 - [x] Diretório completo com busca e filtro por papel
 - [x] Calendário com eventos de reuniões e prazos
@@ -6613,7 +6613,7 @@ Formulários: criar anúncio (título, corpo com editor compartilhado de package
 **Critérios de aceite:**
 
 - [x] Anúncio: título, corpo rich text, prioridade (normal/importante/urgente)
-- [x] Widget config: drag-drop para adicionar/remover/reordenar
+- [x] Widget config: drag-drop para adicionar/remover/reordenar — reordenar tem caminho sem arraste (botões mover acima/abaixo, P-5.2d)
 - [x] Decisão: texto, reunião vinculada, checkbox "criar tarefa"
 - [x] Briefing: toggle opt-in + frequência (diário/semanal)
 - [x] Lint passa
@@ -7071,16 +7071,16 @@ E, de lambuja: a reordenação por arraste dispara `saveDashboardConfig` (`dashb
 
 **Critérios de aceite:**
 
-- [ ] Adicionar um widget no diálogo o faz aparecer no painel sem recarregar a página
-- [ ] Reordenar dentro do diálogo se reflete na grade sem recarregar
-- [ ] Em viewport de 390px, sem mouse, um widget muda de posição
-- [ ] Percurso completo só por teclado: Tab até o controle, escolher a posição, confirmar
-- [ ] Nenhum widget renderiza célula vazia; o formulário recusa KPI/gráfico sem indicador escolhido
-- [ ] "Gráfico" desenha algo diferente de "Indicador" (ou deixou de ser oferecido)
-- [ ] Escrita que falha não deixa ordem falsa na tela
-- [ ] `grep -rn "draggable" apps/intranet/src` — toda ocorrência tem alternativa sem arraste
-- [ ] `apps/intranet` typecheck, lint e testes verdes; `pnpm turbo build --filter=@hebron/intranet` verde
-- [ ] Registrar em SESSIONS.md
+- [x] Adicionar um widget no diálogo o faz aparecer no painel sem recarregar a página
+- [x] Reordenar dentro do diálogo se reflete na grade sem recarregar
+- [x] Em viewport de 390px, sem mouse, um widget muda de posição
+- [x] Percurso completo só por teclado: Tab até o controle, escolher a posição, confirmar
+- [x] Nenhum widget renderiza célula vazia; o formulário recusa KPI/gráfico sem indicador escolhido
+- [x] "Gráfico" desenha algo diferente de "Indicador" (ou deixou de ser oferecido)
+- [x] Escrita que falha não deixa ordem falsa na tela
+- [x] `grep -rn "draggable" apps/intranet/src` — toda ocorrência tem alternativa sem arraste
+- [x] `apps/intranet` typecheck, lint e testes verdes; `pnpm turbo build --filter=@hebron/intranet` verde
+- [x] Registrar em SESSIONS.md
 
 **Notas:**
 Ref: P-4.2b (mesmo defeito, mesma solução, módulo diferente) e o princípio "público-alvo em transição tecnológica" do CLAUDE.md. O item 1 é o mais barato de todos os seis corretivos e o mais visível: hoje a única forma de ver o próprio widget novo é recarregar a página, e nada na tela sugere isso.
