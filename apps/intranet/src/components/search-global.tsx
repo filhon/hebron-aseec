@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Search } from "lucide-react";
-import { EmptyState, Input } from "@hebron/ui";
+import { EmptyState, ErrorState, Input } from "@hebron/ui";
 import { globalSearch } from "../actions/search";
 
 export interface SearchResultItem {
@@ -26,6 +26,7 @@ export function SearchGlobal({
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResultItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [hasError, setHasError] = useState(false);
   const requestId = useRef(0);
 
   useEffect(() => {
@@ -33,18 +34,27 @@ export function SearchGlobal({
     if (term.length < 2) {
       setResults([]);
       setIsLoading(false);
+      setHasError(false);
       return;
     }
 
     setIsLoading(true);
+    setHasError(false);
     const currentRequest = ++requestId.current;
 
     const timeout = setTimeout(() => {
-      void globalSearch({ query: term }).then((response) => {
-        if (currentRequest !== requestId.current) return;
-        setResults(response?.data?.results ?? []);
-        setIsLoading(false);
-      });
+      void globalSearch({ query: term })
+        .then((response) => {
+          if (currentRequest !== requestId.current) return;
+          setResults(response?.data?.results ?? []);
+          setIsLoading(false);
+        })
+        .catch(() => {
+          if (currentRequest !== requestId.current) return;
+          setResults([]);
+          setIsLoading(false);
+          setHasError(true);
+        });
     }, DEBOUNCE_MS);
 
     return () => clearTimeout(timeout);
@@ -75,7 +85,12 @@ export function SearchGlobal({
       </div>
       {hasQuery && (
         <div className="hb-card-body" style={{ paddingTop: 0 }}>
-          {isLoading ? (
+          {hasError ? (
+            <ErrorState
+              title="Não foi possível buscar"
+              description="Tente novamente em instantes."
+            />
+          ) : isLoading ? (
             <p className="text-sm" style={{ padding: "16px 0" }}>
               Buscando…
             </p>

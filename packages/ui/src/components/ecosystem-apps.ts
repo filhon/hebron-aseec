@@ -14,6 +14,14 @@ import type { AppShortcut } from "./navigation-sidebar";
 /**
  * Catálogo canônico dos 9 apps do ecossistema Hebron Aseec, em ordem fixa.
  * Única fonte de ícone/label/URL de atalho — não duplicar em shells de app.
+ *
+ * URL resolvida de `NEXT_PUBLIC_<MÓDULO>_URL` quando definida (dev local,
+ * ver .env.example), com a URL de produção como fallback — mesmo padrão de
+ * `apps/intranet/src/actions/search.ts`. Referência literal por módulo
+ * (nunca `process.env[chave]`): o Next.js só substitui no bundle do cliente
+ * os nomes escritos estaticamente. `admin` e `intranet` não têm variável
+ * própria — nenhum `.env` do monorepo a declara hoje — então ficam com a URL
+ * de produção fixa.
  */
 export const ECOSYSTEM_APPS: AppShortcut[] = [
   {
@@ -25,25 +33,32 @@ export const ECOSYSTEM_APPS: AppShortcut[] = [
   {
     id: "projetos",
     label: "Projetos",
-    href: "https://projetos.hebronaseec.com.br",
+    href:
+      process.env.NEXT_PUBLIC_PROJETOS_URL ??
+      "https://projetos.hebronaseec.com.br",
     icon: Briefcase,
   },
   {
     id: "plataforma",
     label: "Plataforma",
-    href: "https://plataforma.hebronaseec.com.br",
+    href:
+      process.env.NEXT_PUBLIC_PLATAFORMA_URL ??
+      "https://plataforma.hebronaseec.com.br",
     icon: BookOpen,
   },
   {
     id: "radio",
     label: "Rádio",
-    href: "https://radio.hebronaseec.com.br",
+    href:
+      process.env.NEXT_PUBLIC_RADIO_URL ?? "https://radio.hebronaseec.com.br",
     icon: Radio,
   },
   {
     id: "financeiro",
     label: "Financeiro",
-    href: "https://financeiro.hebronaseec.com.br",
+    href:
+      process.env.NEXT_PUBLIC_FINANCEIRO_URL ??
+      "https://financeiro.hebronaseec.com.br",
     icon: BadgeDollarSign,
   },
   {
@@ -55,19 +70,24 @@ export const ECOSYSTEM_APPS: AppShortcut[] = [
   {
     id: "documentos",
     label: "Documentos",
-    href: "https://docs.hebronaseec.com.br",
+    href:
+      process.env.NEXT_PUBLIC_DOCUMENTOS_URL ??
+      "https://docs.hebronaseec.com.br",
     icon: Folder,
   },
   {
     id: "flats",
     label: "Flats",
-    href: "https://flats.hebronaseec.com.br",
+    href:
+      process.env.NEXT_PUBLIC_FLATS_URL ?? "https://flats.hebronaseec.com.br",
     icon: BedDouble,
   },
   {
     id: "tarefas",
     label: "Tarefas",
-    href: "https://tarefas.hebronaseec.com.br",
+    href:
+      process.env.NEXT_PUBLIC_TAREFAS_URL ??
+      "https://tarefas.hebronaseec.com.br",
     icon: CheckCircle,
   },
 ];

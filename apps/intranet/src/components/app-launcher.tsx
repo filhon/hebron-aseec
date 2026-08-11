@@ -1,78 +1,12 @@
-import {
-  DollarSign,
-  FolderOpen,
-  BookOpen,
-  Radio,
-  Folder,
-  CheckCircle,
-  Settings,
-  Building2,
-  type LucideIcon,
-} from "lucide-react";
-
-export interface AppLauncherApp {
-  id: string;
-  label: string;
-  href: string;
-  icon: LucideIcon;
-}
-
-const APPS: AppLauncherApp[] = [
-  {
-    id: "admin",
-    label: "Admin",
-    href: "https://admin.hebronaseec.com.br",
-    icon: Settings,
-  },
-  {
-    id: "projetos",
-    label: "Projetos",
-    href: "https://projetos.hebronaseec.com.br",
-    icon: FolderOpen,
-  },
-  {
-    id: "plataforma",
-    label: "Plataforma",
-    href: "https://plataforma.hebronaseec.com.br",
-    icon: BookOpen,
-  },
-  {
-    id: "radio",
-    label: "Rádio",
-    href: "https://radio.hebronaseec.com.br",
-    icon: Radio,
-  },
-  {
-    id: "financeiro",
-    label: "Financeiro",
-    href: "https://financeiro.hebronaseec.com.br",
-    icon: DollarSign,
-  },
-  {
-    id: "documentos",
-    label: "Documentos",
-    href: "https://docs.hebronaseec.com.br",
-    icon: Folder,
-  },
-  {
-    id: "flats",
-    label: "Flats",
-    href: "https://flats.hebronaseec.com.br",
-    icon: Building2,
-  },
-  {
-    id: "tarefas",
-    label: "Tarefas",
-    href: "https://tarefas.hebronaseec.com.br",
-    icon: CheckCircle,
-  },
-];
+import { getAppShortcuts } from "@hebron/ui";
 
 export interface AppLauncherProps {
   title?: string;
 }
 
 export function AppLauncher({ title = "Outros módulos" }: AppLauncherProps) {
+  const apps = getAppShortcuts("intranet");
+
   return (
     <div className="hb-card">
       <div className="hb-card-header">
@@ -80,7 +14,7 @@ export function AppLauncher({ title = "Outros módulos" }: AppLauncherProps) {
       </div>
       <div className="hb-card-body">
         <div className="grid grid-cols-2 gap-(--sp-3) sm:grid-cols-4">
-          {APPS.map((app) => {
+          {apps.map((app) => {
             const Icon = app.icon;
             return (
               <a

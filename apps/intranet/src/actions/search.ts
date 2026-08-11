@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { ECOSYSTEM_APPS } from "@hebron/ui";
 import { authenticatedAction } from "../lib/safe-action";
 import { getSessionSupabaseClient } from "../lib/session-client";
 
@@ -23,25 +24,19 @@ const MODULE_LABEL: Record<string, string> = {
   admin: "Reuniões",
 };
 
-const MODULE_BASE_URL: Record<string, string> = {
-  projetos:
-    process.env.NEXT_PUBLIC_PROJETOS_URL ??
-    "https://projetos.hebronaseec.com.br",
-  documentos:
-    process.env.NEXT_PUBLIC_DOCUMENTOS_URL ?? "https://docs.hebronaseec.com.br",
-  tarefas:
-    process.env.NEXT_PUBLIC_TAREFAS_URL ?? "https://tarefas.hebronaseec.com.br",
-};
-
 const MODULE_PATH: Record<string, string> = {
   projetos: "projeto",
   documentos: "documento",
   tarefas: "tarefa",
 };
 
+// Base URL de cada módulo vem do catálogo único (ECOSYSTEM_APPS,
+// packages/ui) — mesma fonte que o trocador de apps e o lançador, nunca uma
+// cópia local (comentário do próprio catálogo: "não duplicar em shells de
+// app").
 function buildHref(module: string, id: string): string {
-  if (module === "admin") return `/reunioes/${id}`;
-  const base = MODULE_BASE_URL[module];
+  if (module === "admin") return `/reunioes#reuniao-${id}`;
+  const base = ECOSYSTEM_APPS.find((app) => app.id === module)?.href;
   const path = MODULE_PATH[module];
   if (!base || !path) return "#";
   return `${base}/${path}/${id}`;

@@ -6542,8 +6542,8 @@ Componentes: KPICard (valor, trend, sparkline). AnnouncementCard (com badge de p
 
 - [x] KPICard com valor formatado, seta de trend e sparkline — sparkline vem de `intranet.kpi_snapshot_history` (série real, P-5.2b) e só aparece com duas leituras ou mais; sem base de comparação, nenhuma seta de trend
 - [x] WidgetGrid com drag-drop para reorganizar widgets — com caminho sem arraste (seletor "Posição N" por widget, P-5.2d)
-- [x] AppLauncher com ícones e links para os 8 módulos
-- [x] SearchGlobal com resultados agrupados por módulo
+- [x] AppLauncher com ícones e links para os 8 módulos — consome `getAppShortcuts("intranet")` (`@hebron/ui`), mesmo ícone/rótulo/URL do trocador da barra lateral, sem array local duplicado (P-5.3c, CORRETIVO)
+- [x] SearchGlobal com resultados agrupados por módulo — falha da action mostra `ErrorState` e encerra o carregamento, em vez de "Buscando…" permanente (P-5.3c, CORRETIVO)
 - [x] FeedWidget com últimas ações (novo projeto, pagamento, tarefa concluída) — agregação cross-app real consumida em produção via `getFeed` (P-5.2c)
 - [x] Responsivo (widgets empilham no mobile)
 - [x] Lint passa
@@ -6582,7 +6582,7 @@ Páginas: Dashboard personalizado (widgets configuráveis por usuário). Feed de
 - [x] Diretório completo com busca e filtro por papel
 - [x] Calendário com eventos de reuniões e prazos
 - [x] Reuniões: lista com atas e decisões vinculadas
-- [x] Busca cross-app com resultados agrupados
+- [x] Busca cross-app com resultados agrupados — resultado de reunião aponta para `/reunioes#reuniao-<id>` (existia rota 404 para `admin`, P-5.3c, CORRETIVO)
 - [x] Responsivo
 - [x] Anúncios, Reuniões e Calendário têm fronteira de carregamento (`Suspense` + esqueleto) com cabeçalho visível de imediato, mesmo desenho do Diretório — as cinco telas do módulo, não só o painel — fechado em P-5.3b (CORRETIVO)
 - [x] Lint passa
@@ -7274,14 +7274,14 @@ Por último, `SearchGlobal` (`search-global.tsx:42-51`) faz `void globalSearch(.
 
 **Critérios de aceite:**
 
-- [ ] Resultado de busca de reunião abre `/reunioes` na reunião certa; nenhum 404
-- [ ] `grep -rn "hebronaseec.com.br" apps/intranet/src` não devolve nada — as URLs vêm do catálogo
-- [ ] Com `NEXT_PUBLIC_TAREFAS_URL=http://localhost:3008`, lançador, barra lateral e busca apontam todos para localhost
-- [ ] Sem as env vars, as URLs de produção continuam idênticas nos nove apps
-- [ ] Falha da action de busca mostra erro e encerra o carregamento
-- [ ] Lançador e barra lateral usam o mesmo ícone e o mesmo rótulo por módulo
-- [ ] `pnpm turbo typecheck lint --filter=@hebron/ui --filter=@hebron/intranet` verde (concorrência limitada, ver S-209) e `pnpm turbo build --filter=@hebron/intranet` verde; build de sanidade de mais um app que consome `ECOSYSTEM_APPS`
-- [ ] Registrar em SESSIONS.md
+- [x] Resultado de busca de reunião abre `/reunioes` na reunião certa; nenhum 404
+- [x] `grep -rn "hebronaseec.com.br" apps/intranet/src` não devolve nada — as URLs vêm do catálogo — 4 ocorrências pré-existentes fora de escopo permanecem (cookie de SSO, `mailto:`, fallback de `NEXT_PUBLIC_APP_URL`); nenhuma nos 3 catálogos duplicados que este prompt trata; ver suposição registrada em SESSIONS.md S-239
+- [x] Com `NEXT_PUBLIC_TAREFAS_URL=http://localhost:3008`, lançador, barra lateral e busca apontam todos para localhost
+- [x] Sem as env vars, as URLs de produção continuam idênticas nos nove apps
+- [x] Falha da action de busca mostra erro e encerra o carregamento
+- [x] Lançador e barra lateral usam o mesmo ícone e o mesmo rótulo por módulo
+- [x] `pnpm turbo typecheck lint --filter=@hebron/ui --filter=@hebron/intranet` verde (concorrência limitada, ver S-209) e `pnpm turbo build --filter=@hebron/intranet` verde; build de sanidade de mais um app que consome `ECOSYSTEM_APPS` — typecheck/lint verificados por pacote (`pnpm --filter` direto) pois o grafo completo do turbo puxa `@hebron/auth`, que falha por drift pré-existente não relacionado (`project_bankaccounts_nickname_test_drift`)
+- [x] Registrar em SESSIONS.md (S-239)
 
 **Notas:**
 Ref: o comentário do próprio `ecosystem-apps.ts` ("não duplicar em shells de app") e G6.5. O item 3 é o único dos seis corretivos que toca `packages/ui` e alcança os nove apps; é aditivo (o fallback é exatamente a constante de hoje), mas exige o build de sanidade do critério.

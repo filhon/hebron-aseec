@@ -259,6 +259,7 @@
 | S-236  | 2026-08-11 | P-5.2d — O painel que só se monta com mouse e perde o widget recém-adicionado (CORRETIVO)                                        | concluido                            |
 | S-237  | 2026-08-11 | P-5.1b — O diretório com foto e bio que ninguém pode preencher (CORRETIVO)                                                       | concluido                            |
 | S-238  | 2026-08-11 | P-5.3b — As três telas que carregam em branco e o anúncio zero que fala de filtro (CORRETIVO)                                    | concluido                            |
+| S-239  | 2026-08-11 | P-5.3c — A busca que leva a uma rota inexistente e o lançador que reescreve o catálogo do ecossistema (CORRETIVO)                | concluido                            |
 
 ---
 
@@ -21247,3 +21248,99 @@ toque `announcement-form.tsx` deveria receber um `submitLabel` opcional.
 - `apps/intranet/src/actions/announcements.ts`
 - `PROMPTS.md` (critérios de P-5.3 e P-5.5)
 - `PROMPTS.md` (critério de P-5.1 e escopo de P-5.4)
+
+## S-239 — P-5.3c — A busca que leva a uma rota inexistente e o lançador que reescreve o catálogo do ecossistema (CORRETIVO)
+
+**Prompt:** P-5.3c (PROMPTS.md)
+**Data:** 2026-08-11
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+O catálogo dos 9 apps do ecossistema existia em três lugares divergentes
+(`ECOSYSTEM_APPS` em `packages/ui`, `APPS` local em `app-launcher.tsx`,
+`MODULE_BASE_URL` em `search.ts`), e um dos quatro módulos da busca global
+levava a uma rota inexistente. Fechado na ordem do escopo:
+
+1. **`buildHref("admin", id)`** (`actions/search.ts`) passou a devolver
+   `/reunioes#reuniao-<id>` em vez de `/reunioes/<id>` (rota que nunca
+   existiu — `(dashboard)/reunioes/` só tem `page.tsx`). `reunioes/page.tsx`
+   ganhou `id={`reuniao-${session.id}`}` no cartão de cada sessão; não há
+   rota de detalhe planejada e a lista já mostra ata e decisões, então criar
+   uma tela nova só para receber o link seria construir para satisfazer um
+   `href`.
+2. **`AppLauncher` (`app-launcher.tsx`)** trocou o array `APPS` local (ícones
+   divergentes do trocador da barra lateral — `FolderOpen` vs `Briefcase`
+   para Projetos, `DollarSign` vs `BadgeDollarSign` para Financeiro,
+   `Building2` vs `BedDouble` para Flats) por `getAppShortcuts("intranet")`
+   de `@hebron/ui` — mesma fonte que `shell.tsx` já usa para o trocador.
+   Lançador e barra lateral agora renderizam o mesmo ícone/rótulo/URL por
+   módulo.
+3. **`ECOSYSTEM_APPS` (`packages/ui/src/components/ecosystem-apps.ts`)**
+   passou a resolver a URL de `projetos`, `plataforma`, `radio`,
+   `financeiro`, `documentos`, `flats` e `tarefas` a partir de
+   `process.env.NEXT_PUBLIC_<MÓDULO>_URL` (referência literal por módulo,
+   nunca `process.env[chave]` — exigência do Next.js para inlining no bundle
+   do cliente), com a URL de produção atual como fallback — mesmo padrão que
+   `search.ts` já usava só para si. `search.ts` perdeu o `MODULE_BASE_URL`
+   duplicado e passou a ler `ECOSYSTEM_APPS` (import de `@hebron/ui` em
+   arquivo `"use server"` — precedente já existe em todo `actions/
+notifications.ts` dos 8 apps). `admin` e `intranet` ficaram com URL de
+   produção fixa: nenhum `.env` do monorepo declara
+   `NEXT_PUBLIC_ADMIN_URL`/`NEXT_PUBLIC_INTRANET_URL` hoje, e inventar essas
+   duas variáveis não fazia parte do problema descrito (G1 — não preencher
+   lacuna de infraestrutura por conta própria).
+4. **`SearchGlobal` (`search-global.tsx`)** ganhou `.catch` na promise de
+   `globalSearch` — estado `hasError` novo, renderiza `ErrorState` (`@hebron/
+ui`) no lugar dos resultados e encerra `isLoading`, em vez de deixar
+   "Buscando…" preso para sempre numa rejeição não tratada.
+5. Bookkeeping em `PROMPTS.md`: critérios de P-5.2 (AppLauncher) e P-5.3
+   (busca cross-app) passam a citar este corretivo.
+
+### Suposição registrada
+
+`grep -rn "hebronaseec.com.br" apps/intranet/src` não fica vazio: sobram 4
+ocorrências pré-existentes fora do escopo dos arquivos permitidos deste
+prompt — `middleware.ts` (domínio do cookie de SSO, não é URL), `lib/
+notifications.ts` e `actions/invitations.ts` (fallback de `NEXT_PUBLIC_APP_URL`
+para o próprio link da intranet, mesmo padrão já correto) e `auth-card.tsx`
+(`mailto:suporte@hebronaseec.com.br`). Nenhuma é um dos três catálogos
+duplicados que este prompt descreve, e nenhum desses quatro arquivos está na
+lista de arquivos permitidos — tocá-los seria extrapolar o escopo (G1). Há
+ainda um quarto catálogo com `hebronaseec.com.br`, `module-brands.tsx`
+(`packages/ui`) — usado para o subtítulo de marca no login, não é um `href`
+clicável e não foi citado no problema deste prompt; fica fora também.
+
+### Verificação
+
+- `pnpm --filter @hebron/ui exec tsc --noEmit` e `pnpm --filter @hebron/ui
+exec eslint .` — verdes
+- `pnpm --filter @hebron/intranet exec tsc --noEmit` e `pnpm --filter
+@hebron/intranet exec eslint .` — verdes (rodados por pacote: `pnpm turbo
+  typecheck lint --filter=@hebron/ui --filter=@hebron/intranet` puxa
+  `@hebron/auth` como dependência de grafo e falha nele — drift
+  pré-existente já registrado em memória de sessões anteriores
+  (`project_bankaccounts_nickname_test_drift`), sem relação com este diff)
+- `pnpm turbo build --filter=@hebron/intranet` — verde (22 rotas)
+- `pnpm turbo build --filter=@hebron/admin` — verde (build de sanidade, mais
+  um consumidor de `ECOSYSTEM_APPS`)
+- `NEXT_PUBLIC_TAREFAS_URL=http://localhost:3008 pnpm --filter
+@hebron/intranet run build`, depois grep nos chunks gerados: `localhost:3008`
+  aparece inlinado no chunk `main-app-*.js` (runtime client
+  compartilhado — trocador de apps/lançador/busca), confirmando que a env
+  var chega ao bundle do cliente pela nova fonte única
+- `grep -rn "hebronaseec.com.br" apps/intranet/src` — 4 ocorrências
+  pré-existentes fora de escopo (ver "Suposição registrada")
+- Verificação manual em navegador **não realizada** — sem credenciais de
+  usuário de teste disponíveis no ambiente local; cobertura ficou em build +
+  typecheck + lint + inspeção do bundle gerado
+
+### Arquivos modificados
+
+- `apps/intranet/src/components/app-launcher.tsx`
+- `apps/intranet/src/components/search-global.tsx`
+- `apps/intranet/src/actions/search.ts`
+- `apps/intranet/src/app/(dashboard)/reunioes/page.tsx`
+- `packages/ui/src/components/ecosystem-apps.ts`
+- `PROMPTS.md` (critérios de P-5.2 e P-5.3, checklist de P-5.3c)
