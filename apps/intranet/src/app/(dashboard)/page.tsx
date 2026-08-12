@@ -61,6 +61,12 @@ const DEFAULT_WIDGETS: RawWidget[] = [
     position: 4,
     config: { kpiId: "kpi-tarefas-abertas" },
   },
+  {
+    id: "00000000-0000-4000-8000-000000000006",
+    type: "kpi",
+    position: 5,
+    config: { kpiId: "kpi-audiencia-radio" },
+  },
 ];
 
 async function loadDashboardData() {

@@ -263,6 +263,7 @@
 | S-240  | 2026-08-11 | Auditoria: débitos técnicos P-5.6–P-5.12 (Intranet, Bloco B)                                                                     | concluido                            |
 | S-241  | 2026-08-12 | P-5.10b — O anúncio urgente que falha depois de publicado e os dois emails que ninguém pode editar (CORRETIVO)                   | concluido                            |
 | S-242  | 2026-08-12 | P-5.11b — A decisão que vira tarefa e some (CORRETIVO)                                                                           | concluido                            |
+| S-243  | 2026-08-12 | P-5.8b — O KPI de audiência que a Rádio calcula todo dia e o painel nunca pediu (CORRETIVO)                                      | concluido                            |
 
 ---
 
@@ -21749,4 +21750,111 @@ mudança: nenhum teste ali usa `createTask: true`.
 - `apps/intranet/src/app/(dashboard)/reunioes/page.tsx`
 - `apps/intranet/src/__tests__/rls.test.ts`
 - `PROMPTS.md` (critérios de P-5.9 e P-5.11)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+## S-243 — P-5.8b — O KPI de audiência que a Rádio calcula todo dia e o painel nunca pediu (CORRETIVO)
+
+**Prompt:** P-5.8b
+**Data:** 2026-08-12
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+BRAIN §6.6 sempre listou "audiência da Rádio" como um dos KPIs do painel;
+`getKpis` (`apps/intranet/src/actions/kpis.ts`) nunca a incluiu — o quarto
+indicador acabou sendo "tarefas abertas". Não faltava dado: P-8.11/S-150
+já tinha o pipeline inteiro pronto (heartbeat anônimo, agregação diária em
+`radio.listener_stats`, LGPD respeitada) e `getRadioDashboardStatus`
+(`packages/integrations/src/radio.ts`) já lia essa tabela — só que
+`grep -rn "getRadioDashboardStatus" apps packages` devolvia só a própria
+definição. Mesmo defeito de `getFeed` em P-5.2c, três fases depois.
+
+1. **Quinto KPI, sem remover nenhum.** `getKpis` ganhou "Audiência da Rádio"
+   ao lado dos quatro existentes, alimentado por
+   `getRadioDashboardStatus()` — chamado dentro do mesmo `Promise.all` que já
+   buscava `getStudentKpiMetrics()`.
+2. **Série diária, fora do contrato de frescor de 2h.** A métrica nasce
+   agregada por dia (1 linha/dia em `radio.listener_stats`), não por hora —
+   por isso não entra em `kpi_snapshot_history`/PATCH-018 (que existe para
+   métricas recomputáveis a qualquer hora); é sempre calculada ao vivo, como
+   "Alunos na Plataforma". `getRadioDashboardStatus` ganhou `audienceHistory`
+   (últimos 14 dias, cronológico) sem mudar o formato de `audience`/
+   `nowPlaying`; `RadioAudienceKpi` ganhou `capturedAt` para o `updatedAt` do
+   KPI vir da linha real, não de `now`.
+3. **Sem dado, sem curva inventada.** Com `radio.listener_stats` vazia, o
+   cartão mostra valor 0, `trend: null`, `history: []` e o período
+   "Agregação ainda não rodou" — nunca uma seta ou sparkline fabricada
+   (regra que P-5.2b fixou para os outros KPIs).
+4. **Log de stub removido.** `getRadioDashboardStatus` emitia
+   `console.info` de "tocando agora" a cada leitura — um log por render do
+   painel. Removido; "tocando agora" continua fora de escopo (exige estado
+   de reprodução ao vivo, pendência já registrada em P-8.11), documentado no
+   cabeçalho do arquivo.
+5. **Painel.** `DEFAULT_WIDGETS` (`(dashboard)/page.tsx`) ganhou o cartão de
+   audiência (`kpiId: "kpi-audiencia-radio"`, posição 5); o seletor de
+   indicador do widget configurável não precisou de mudança — a lista já
+   vem de `getKpis` (`widget-config-form.tsx`). `KPICard`
+   (`components/kpi-card.tsx`) já tinha cor de módulo para `"radio"`
+   (`--hb-purple`) desde antes — nenhuma mudança visual nova.
+
+### Testes
+
+`apps/intranet/src/__tests__/kpis.test.ts`: describe novo "Audiência da
+Rádio" com duas leituras diárias (série cronológica, tendência real,
+período com data + horas ouvidas) e sem nenhuma leitura (zero/nulo/vazio);
+os dois testes de fallback ao vivo e o de ausência total de snapshot
+passaram a excluir também `kpi-audiencia-radio` do laço genérico (junto de
+`kpi-alunos-plataforma`), já que nenhum dos dois participa do contrato de
+frescor de `kpi_snapshot_history`; contagem de KPIs em todos os testes
+subiu de 4 para 5. `radio.listener_stats` é 1 linha/dia sem `metric_name`
+para escopar — os testes limpam a tabela inteira (documentado no
+cabeçalho, junto do aviso de não rodar em paralelo com
+`radio-stats.test.ts`/`radio.test.ts`, mesma tabela).
+`packages/integrations/src/__tests__/radio.test.ts` (novo): leitura da
+série diária de `getRadioDashboardStatus` (audience = dia mais recente,
+audienceHistory cronológico, vazio sem linhas) e ausência do log por
+leitura.
+
+### Baseline verificado
+
+- `tsc --noEmit`, `eslint .` verdes (execução direta por pacote):
+  `@hebron/intranet`, `@hebron/integrations` — `pnpm turbo typecheck`
+  encadeado segue bloqueado por `@hebron/auth`
+  ([[project_bankaccounts_nickname_test_drift]], fora do escopo deste
+  prompt)
+- `pnpm turbo build --filter=@hebron/intranet` (via `next build` direto)
+  verde
+- `apps/intranet`: suite completa 9 arquivos / 43 testes verde
+- `packages/integrations`: suite completa — `radio.test.ts` novo (3/3)
+  verde; 1 falha pré-existente e não relacionada em `feed.test.ts`, arquivo
+  não tocado por este diff
+- `grep -rn "getRadioDashboardStatus" apps/intranet/src` encontra o
+  chamador de produção em `actions/kpis.ts`
+
+### Suposições registradas
+
+- Janela de `audienceHistory`: o prompt pede "últimos N dias" sem fixar N;
+  usei 14 (duas semanas), análogo a `HISTORY_SAMPLE_LIMIT` dos KPIs
+  horários, só que em buckets diários.
+- Unidade do cartão: "ouvintes" para `uniqueSessions` (sessão com ≥ 2
+  heartbeats, semântica D-3 de P-8.11); horas ouvidas entram só no texto do
+  período (`"12 ago · 3,5h ouvidas"`), nunca como segundo valor — conforme
+  o escopo do prompt ("não como um segundo cartão").
+- `updatedAt` do KPI usa `capturedAt` da linha de `listener_stats` (o
+  prompt pede isso explicitamente); por isso `RadioAudienceKpi` ganhou esse
+  campo, que antes não existia na interface pública de
+  `packages/integrations/src/radio.ts` — não há outro consumidor no
+  monorepo além de `getKpis` (confirmado por grep antes da mudança).
+
+### Arquivos modificados
+
+- `apps/intranet/src/actions/kpis.ts`
+- `packages/integrations/src/radio.ts`
+- `apps/intranet/src/app/(dashboard)/page.tsx`
+- `apps/intranet/src/__tests__/kpis.test.ts`
+- `packages/integrations/src/__tests__/radio.test.ts` (criado)
+- `PROMPTS.md` (critérios de P-5.1, P-5.3, P-5.8 e P-8.11)
 - `SESSIONS.md` (esta entrada + linha no índice)

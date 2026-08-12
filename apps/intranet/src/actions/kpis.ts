@@ -15,6 +15,11 @@ import {
   transactions,
 } from "@hebron/db/schema";
 import { getStudentKpiMetrics } from "@hebron/integrations/plataforma";
+import {
+  getRadioDashboardStatus,
+  type RadioAudienceKpi,
+  type RadioDashboardStatus,
+} from "@hebron/integrations/radio";
 import type { KPI, KPITrend } from "@hebron/types/intranet";
 import { staffAction } from "../lib/safe-action";
 
@@ -216,6 +221,49 @@ function trendFor(current: number, previous: number | null): KPITrend | null {
   return current > previous ? "up" : "down";
 }
 
+// ---------------------------------------------------------------------------
+// "Audiência da Rádio" — sessões-ouvinte do dia agregado mais recente de
+// radio.listener_stats (BRAIN §6.6, P-8.11). A métrica já nasce agregada por
+// dia (1 linha/dia, packages/jobs/src/crons/radio-stats.ts) — por isso fica
+// fora do contrato de frescor de 2h de PATCH-018 (que existe para métricas
+// recomputáveis a qualquer hora) e do snapshot horário em
+// intranet.kpi_snapshot_history: history/trend vêm direto das últimas linhas
+// diárias de packages/integrations/src/radio.ts, sempre ao vivo — mesmo
+// tratamento de "Alunos na Plataforma" acima. Sem nenhuma linha ainda, o
+// cartão mostra zero/nulo/vazio e um período dizendo que a agregação não
+// rodou, nunca uma curva ou seta inventada (regra que P-5.2b fixou).
+// ---------------------------------------------------------------------------
+
+function audienciaPeriodLabel(latest: RadioAudienceKpi | null): string {
+  if (!latest) return "Agregação ainda não rodou";
+  const dateLabel = new Date(`${latest.date}T00:00:00`).toLocaleDateString(
+    "pt-BR",
+    { day: "2-digit", month: "short" },
+  );
+  const hoursLabel = new Intl.NumberFormat("pt-BR", {
+    maximumFractionDigits: 1,
+  }).format(latest.hoursListened);
+  return `${dateLabel} · ${hoursLabel}h ouvidas`;
+}
+
+function kpiFromRadioAudience(status: RadioDashboardStatus, now: Date): KPI {
+  const { audience, audienceHistory } = status;
+  const previous = audienceHistory[audienceHistory.length - 2] ?? null;
+  return {
+    id: "kpi-audiencia-radio",
+    name: "Audiência da Rádio",
+    value: audience?.uniqueSessions ?? 0,
+    unit: "ouvintes",
+    trend: audience
+      ? trendFor(audience.uniqueSessions, previous?.uniqueSessions ?? null)
+      : null,
+    period: audienciaPeriodLabel(audience),
+    sourceModule: "radio",
+    updatedAt: audience?.capturedAt ?? now,
+    history: audienceHistory.map((day) => day.uniqueSessions),
+  };
+}
+
 function kpiFromSnapshot(result: PersistableKpiResult, period: string): KPI {
   const { config, samples } = result;
   const [latest, previous] = samples;
@@ -272,13 +320,14 @@ function requireKpi(kpiByMetric: Map<string, KPI>, metricName: string): KPI {
 }
 
 // ---------------------------------------------------------------------------
-// getKpis — 4 indicadores do dashboard. Lê intranet.kpi_snapshot_history
-// (fonte primária) quando o snapshot de todo KPI persistível está fresco
-// (< 2h); caso contrário recalcula ao vivo para o conjunto inteiro, evitando
-// misturar snapshot de um KPI com live de outro (contrato de frescor,
-// PATCH-018). "Alunos na Plataforma" fica fora desse contrato de frescor —
-// não há snapshot persistido para ele ainda (fora do escopo de P-6.11) — e é
-// sempre calculado ao vivo via packages/integrations (P-6.11).
+// getKpis — 5 indicadores do dashboard (BRAIN §6.6). Lê
+// intranet.kpi_snapshot_history (fonte primária) quando o snapshot de todo
+// KPI persistível está fresco (< 2h); caso contrário recalcula ao vivo para
+// o conjunto inteiro, evitando misturar snapshot de um KPI com live de outro
+// (contrato de frescor, PATCH-018). "Alunos na Plataforma" e "Audiência da
+// Rádio" ficam fora desse contrato — não há snapshot horário persistido para
+// eles (o segundo nasce agregado por dia, não por hora) — e são sempre
+// calculados ao vivo via packages/integrations (P-6.11/P-5.8b).
 // ---------------------------------------------------------------------------
 
 export const getKpis = staffAction
@@ -290,9 +339,8 @@ export const getKpis = staffAction
     // Todo o cálculo dos 3 KPIs persistíveis roda dentro de um único
     // withSystemRole (ver comentários de countProjetosAtivos/sumDoacoesDoMes
     // acima) — decisão P-9.1b-5 sobre S-02, registrada em SESSIONS.md.
-    const [results, studentMetrics] = await withAuthenticatedContext(
-      { actorId: ctx.actorId },
-      (tx) =>
+    const [results, studentMetrics, radioStatus] =
+      await withAuthenticatedContext({ actorId: ctx.actorId }, (tx) =>
         withSystemRole(tx, (sysTx) =>
           Promise.all([
             Promise.all(
@@ -301,9 +349,10 @@ export const getKpis = staffAction
               ),
             ),
             getStudentKpiMetrics(),
+            getRadioDashboardStatus(),
           ]),
         ),
-    );
+      );
 
     const allFresh = results.every(
       (r) =>
@@ -345,6 +394,7 @@ export const getKpis = staffAction
       },
       requireKpi(kpiByMetric, "doacoes_mes"),
       requireKpi(kpiByMetric, "tarefas_abertas"),
+      kpiFromRadioAudience(radioStatus, now),
     ];
 
     return { kpis };

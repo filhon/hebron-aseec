@@ -6507,7 +6507,7 @@ Tipos e schemas Zod: Announcement (título, corpo, prioridade: normal/importante
 - [x] DashboardWidget: tipo (kpi/chart/feed/calendar), posição, config (jsonb)
 - [x] KPI: nome, valor, unidade, trend (up/down/stable), período
 - [x] DirectoryMember: nome, foto, papel, email, telefone, bio (bio e foto ficaram sem fonte de dados até P-5.1b — `bio` sempre `null` e `avatar_url` nunca escrita por nenhum app; corrigido em P-5.1b com coluna `bio`, bucket `perfil-avatares` e formulário de autoatendimento)
-- [x] Mock KPIs: projetos ativos, alunos na Plataforma, doações do mês (= soma de despesas da categoria "Doações" do plano de contas — semântica da decisão F1-Q10), audiência da Rádio
+- [x] Mock KPIs: projetos ativos, alunos na Plataforma, doações do mês (= soma de despesas da categoria "Doações" do plano de contas — semântica da decisão F1-Q10), audiência da Rádio (a implementação real em P-5.8 trocou este mock por "tarefas abertas" e só ganhou o 5º indicador — audiência real via `packages/integrations/src/radio.ts` — em P-5.8b, CORRETIVO)
 - [x] Lint passa
 - [x] Types passam
 
@@ -6563,7 +6563,7 @@ Componentes: KPICard (valor, trend, sparkline). AnnouncementCard (com badge de p
 - Env vars: nenhuma
 
 **Escopo:**
-Páginas: Dashboard personalizado (widgets configuráveis por usuário). Feed de anúncios. KPIs (projetos ativos, alunos, doações, audiência). Diretório de membros (todos: diretores, conselheiros, colaboradores, submissores, parceiros). Agenda/calendário. Reuniões (atas e decisões). Busca global cross-app. Notificações centralizadas.
+Páginas: Dashboard personalizado (widgets configuráveis por usuário). Feed de anúncios. KPIs (projetos ativos, alunos, doações, audiência — o painel real ganhou "tarefas abertas" em P-5.8 no lugar de audiência, e as duas coexistem como o 5º indicador desde P-5.8b, CORRETIVO). Diretório de membros (todos: diretores, conselheiros, colaboradores, submissores, parceiros). Agenda/calendário. Reuniões (atas e decisões). Busca global cross-app. Notificações centralizadas.
 
 **Arquivos permitidos para criação/edição:**
 
@@ -6737,7 +6737,7 @@ RLS para schema intranet. Super_admin: full access. Diretores/conselheiros: SELE
 - Env vars: `DATABASE_URL` (migrations), `SUPABASE_URL`, `SUPABASE_ANON_KEY` (G6.1/G6.2)
 
 **Escopo:**
-Server Actions: CRUD de anúncios (audit central). Salvar/carregar config de dashboard. Registrar decisão de reunião (criar tarefa via createAutoTask de packages/integrations). KPIs agregados via packages/integrations: projetos ativos (count de projects em stages ativos), alunos (count de enrollments — stub até fase 6), doações do mês (SUM de transactions tipo despesa da categoria "Doações" do plano de contas no mês corrente — decisão F1-Q10; a categoria é criada no seed/plano de contas), tarefas abertas (count). Snapshot de KPIs: cron horário em packages/jobs grava kpi_snapshots (P-5.6).
+Server Actions: CRUD de anúncios (audit central). Salvar/carregar config de dashboard. Registrar decisão de reunião (criar tarefa via createAutoTask de packages/integrations). KPIs agregados via packages/integrations: projetos ativos (count de projects em stages ativos), alunos (count de enrollments — stub até fase 6), doações do mês (SUM de transactions tipo despesa da categoria "Doações" do plano de contas no mês corrente — decisão F1-Q10; a categoria é criada no seed/plano de contas), tarefas abertas (count). Snapshot de KPIs: cron horário em packages/jobs grava kpi_snapshots (P-5.6). 5º indicador, audiência da Rádio (count de sessões-ouvinte do dia agregado mais recente de `radio.listener_stats`, via `packages/integrations/src/radio.ts`), adicionado em P-5.8b (CORRETIVO) — BRAIN §6.6 sempre o listou, mas `getKpis` não o consumia até então.
 
 Busca global cross-app — CONTRATO (fechado nesta auditoria): a busca executa com o client da SESSÃO do usuário (authenticated); a RLS de cada schema filtra o que ele pode ver — nenhuma reimplementação de visibilidade na aplicação. Conjunto indexável v1: projetos.projects (título), documentos.documents (título — respeitando visibility), tarefas.tasks (título), admin meeting_sessions (título/data). Financeiro NÃO entra na busca global v1 (dados sensíveis; acessível só pelo app próprio). Resultados agrupados por módulo.
 
@@ -7469,15 +7469,15 @@ O contraste com "Alunos na Plataforma" fecha o argumento: aquele KPI era stub fi
 
 **Critérios de aceite:**
 
-- [ ] O painel mostra "Audiência da Rádio" com o número do dia agregado mais recente
-- [ ] `grep -rn "getRadioDashboardStatus" apps/intranet/src` encontra um chamador de produção
-- [ ] Com duas ou mais leituras diárias, o cartão desenha a série real e a seta compara com o dia anterior
-- [ ] Com `radio.listener_stats` vazia, o cartão não desenha curva nem seta e diz que a agregação ainda não rodou
-- [ ] Os outros quatro KPIs continuam presentes e inalterados
-- [ ] O KPI novo aparece no seletor de indicador do widget de painel, sem mudança no formulário
-- [ ] Nenhum log de stub é emitido a cada carga do painel
-- [ ] `apps/intranet` e `packages/integrations` com typecheck, lint e testes verdes; `pnpm turbo build --filter=@hebron/intranet` verde
-- [ ] Registrar em SESSIONS.md
+- [x] O painel mostra "Audiência da Rádio" com o número do dia agregado mais recente
+- [x] `grep -rn "getRadioDashboardStatus" apps/intranet/src` encontra um chamador de produção
+- [x] Com duas ou mais leituras diárias, o cartão desenha a série real e a seta compara com o dia anterior
+- [x] Com `radio.listener_stats` vazia, o cartão não desenha curva nem seta e diz que a agregação ainda não rodou
+- [x] Os outros quatro KPIs continuam presentes e inalterados
+- [x] O KPI novo aparece no seletor de indicador do widget de painel, sem mudança no formulário
+- [x] Nenhum log de stub é emitido a cada carga do painel
+- [x] `apps/intranet` e `packages/integrations` com typecheck, lint e testes verdes; `pnpm turbo build --filter=@hebron/intranet` verde
+- [x] Registrar em SESSIONS.md
 
 **Notas:**
 Ref: BRAIN §6.6 (a lista de KPIs iniciais), P-8.11/S-150 (o produtor) e P-5.2c (o mesmo defeito, com `getFeed`). O painel da Intranet é a tela que a diretoria abre primeiro; a Rádio é o módulo mais visível para fora da ONG e é o único cujo número ninguém consegue ver sem entrar no app dele.
@@ -9345,7 +9345,7 @@ Rádio → Intranet: KPI de audiência via packages/integrations. SEMÂNTICA (D-
 - [x] Heartbeat sem PII (payload: session_id efêmero + track_id) — verificado
 - [x] KPI: sessões únicas/dia e horas ouvidas/dia calculadas corretamente (teste com fixtures)
 - [x] Cron de agregação registrado em packages/jobs; brutos removidos após agregar (teste)
-- [x] Stub da Intranet substituído via packages/integrations
+- [x] Stub da Intranet substituído via packages/integrations — o `getRadioDashboardStatus` real ficou implementado mas sem nenhum chamador de produção até P-5.8b (CORRETIVO): `grep -rn "getRadioDashboardStatus" apps packages` só devolvia a própria definição; `apps/intranet/src/actions/kpis.ts::getKpis` passou a consumi-lo em P-5.8b
 - [x] Lint passa · Types passam
 
 ---
