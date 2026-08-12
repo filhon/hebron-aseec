@@ -30,6 +30,8 @@ import {
 import { eq, inArray } from "drizzle-orm";
 import { db } from "@hebron/db/client";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
+import { onMeetingActionItemDecided } from "@hebron/integrations/intranet";
+import type * as IntranetIntegrationsModule from "@hebron/integrations/intranet";
 import {
   users,
   roleAssignments,
@@ -53,6 +55,17 @@ vi.mock("../lib/notifications", () => ({
   notifyUrgentAnnouncement: vi.fn(),
   notifyMeetingDecisionCreated: vi.fn(),
 }));
+
+// Envelopa a implementação real (mockImplementationOnce a exercita para o
+// teste do caminho feliz; um teste isolado troca por mockRejectedValueOnce
+// para provar que a falha aqui não derruba a decisão já commitada — P-5.11b).
+vi.mock("@hebron/integrations/intranet", async (importOriginal) => {
+  const actual = await importOriginal<typeof IntranetIntegrationsModule>();
+  return {
+    ...actual,
+    onMeetingActionItemDecided: vi.fn(actual.onMeetingActionItemDecided),
+  };
+});
 
 async function actingAs(userId: string, roles: string[]): Promise<void> {
   const { resolveSession } = await import("@hebron/auth/server");
@@ -271,7 +284,7 @@ describe("Dashboard config — persiste e carrega (dashboard_configs_write_own)"
 });
 
 describe("Decisão de reunião → tarefa (createMeetingDecision createTask=true)", () => {
-  it("cria a tarefa via createAutoTask e vincula meeting_decisions.task_id à tarefa real", async () => {
+  it("cria a tarefa via onMeetingActionItemDecided, vincula meeting_decisions.task_id e carrega responsável + reunião na descrição", async () => {
     await actingAs(IDS.diretor, ["diretor"]);
     const { createMeetingDecision } = await import("../actions/decisions");
 
@@ -298,12 +311,50 @@ describe("Decisão de reunião → tarefa (createMeetingDecision createTask=true
       sourceModule: "intranet",
       sourceId: decision.id,
     });
+    // A ata não some: responsável indicado e reunião de origem no corpo da
+    // tarefa, com link de volta à âncora de /reunioes (P-5.3c).
+    expect(task?.description).toContain("RLS Test diretor");
+    expect(task?.description).toContain("Ordinária");
+    expect(task?.description).toContain(`/reunioes#reuniao-${SESSION_ID}`);
 
     const [storedDecision] = await db
       .select({ taskId: meetingDecisions.taskId })
       .from(meetingDecisions)
       .where(eq(meetingDecisions.id, decision.id));
     expect(storedDecision?.taskId).toBe(decision.taskId);
+  });
+
+  it("falha na criação da tarefa não desfaz a decisão já registrada: decisão persiste com taskId nulo", async () => {
+    await actingAs(IDS.diretor, ["diretor"]);
+    vi.mocked(onMeetingActionItemDecided).mockRejectedValueOnce(
+      new Error("Falha simulada de criação de tarefa"),
+    );
+    const { createMeetingDecision } = await import("../actions/decisions");
+
+    const result = await createMeetingDecision({
+      meetingSessionId: SESSION_ID,
+      description: "Decisão cuja tarefa falha ao ser criada.",
+      responsibleId: IDS.diretor,
+      createTask: true,
+    });
+
+    expect(result?.serverError).toBeUndefined();
+    const decision = result?.data?.decision;
+    expect(decision).toBeDefined();
+    expect(decision?.taskId).toBeNull();
+    if (!decision) throw new Error("decisão não retornada");
+
+    const [storedDecision] = await db
+      .select({
+        taskId: meetingDecisions.taskId,
+        description: meetingDecisions.description,
+      })
+      .from(meetingDecisions)
+      .where(eq(meetingDecisions.id, decision.id));
+    expect(storedDecision?.description).toBe(
+      "Decisão cuja tarefa falha ao ser criada.",
+    );
+    expect(storedDecision?.taskId).toBeNull();
   });
 });
 

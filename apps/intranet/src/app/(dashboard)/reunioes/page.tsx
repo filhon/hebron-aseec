@@ -1,6 +1,6 @@
 import { Suspense, type CSSProperties } from "react";
-import { Handshake } from "lucide-react";
-import { EmptyState, ErrorState, PageHeader } from "@hebron/ui";
+import { ArrowUpRight, Handshake } from "lucide-react";
+import { ECOSYSTEM_APPS, EmptyState, ErrorState, PageHeader } from "@hebron/ui";
 import type { MeetingDecisionStatus } from "@hebron/types/intranet";
 import {
   getAuthUser,
@@ -34,6 +34,14 @@ const STATUS_STYLE: Record<MeetingDecisionStatus, CSSProperties> = {
 
 function formatDate(date: Date): string {
   return date.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
+}
+
+// Base do app Tarefas vem do catálogo único (ECOSYSTEM_APPS, packages/ui) —
+// mesma fonte do trocador de apps e do lançador (P-5.3c), nunca uma
+// constante nova. Resolve NEXT_PUBLIC_TAREFAS_URL quando definida.
+function taskHref(taskId: string): string {
+  const base = ECOSYSTEM_APPS.find((app) => app.id === "tarefas")?.href;
+  return base ? `${base}/tarefa/${taskId}` : "#";
 }
 
 function Bone({ className }: { className: string }) {
@@ -182,15 +190,31 @@ async function ReunioesContent({
                           {STATUS_LABEL[decision.status]}
                         </span>
                       )}
-                      <span className="text-(--fg)">
-                        {decision.description}
-                        <span className="text-xs">
-                          {" "}
-                          — {decision.responsibleName}
-                          {decision.dueDate &&
-                            ` · até ${formatDate(decision.dueDate)}`}
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <span className="text-(--fg)">
+                          {decision.description}
+                          <span className="text-xs">
+                            {" "}
+                            — {decision.responsibleName}
+                            {decision.dueDate &&
+                              ` · até ${formatDate(decision.dueDate)}`}
+                          </span>
                         </span>
-                      </span>
+                        {decision.taskId && (
+                          <a
+                            href={taskHref(decision.taskId)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-1 flex items-center gap-1.5 text-xs font-medium text-(--brand) transition-colors duration-(--transition-fast) hover:text-(--hb-blue-deep)"
+                          >
+                            <ArrowUpRight
+                              className="h-3.5 w-3.5"
+                              aria-hidden="true"
+                            />
+                            Ver tarefa
+                          </a>
+                        )}
+                      </div>
                     </li>
                   ))}
                 </ul>

@@ -12,7 +12,7 @@ import {
   createMeetingDecisionSchema,
   updateMeetingDecisionStatusSchema,
 } from "@hebron/validators/intranet";
-import { createAutoTask } from "@hebron/integrations/tarefas";
+import { onMeetingActionItemDecided } from "@hebron/integrations/intranet";
 import { boardAction } from "../lib/safe-action";
 import { logIntranetAudit } from "../lib/audit";
 import { notifyMeetingDecisionCreated } from "../lib/notifications";
@@ -28,10 +28,16 @@ import { notifyMeetingDecisionCreated } from "../lib/notifications";
 // quem de fato barra a escrita — não é a única camada de segurança.
 //
 // "Criar tarefa" é opcional (checkbox do formulário, P-5.4): quando marcado,
-// cria uma tarefa automática via packages/integrations::createAutoTask
-// (BRAIN §7 — Intranet → Tarefas). Workspace fixo "administrativo": o
-// formulário de decisão (meeting-decision-form.tsx) não coleta workspace, e
-// decisões de reunião de diretoria são administrativas por padrão.
+// delega a packages/integrations::onMeetingActionItemDecided (BRAIN §7 —
+// Intranet → Tarefas), que cria a tarefa automática (createAutoTask,
+// workspace fixo "administrativo" — o formulário de decisão,
+// meeting-decision-form.tsx, não coleta workspace, e decisões de reunião de
+// diretoria são administrativas por padrão) e já grava o vínculo de volta em
+// meeting_decisions.task_id. Falha nessa chamada NÃO desfaz a decisão já
+// commitada acima nem é escondida: fica logada e a decisão retorna sem
+// taskId, e a tela (/reunioes) mostra que a tarefa não foi criada (P-5.11b,
+// fecha o débito de S-101 — antes, a mesma falha derrubava a decisão já
+// registrada).
 // ---------------------------------------------------------------------------
 
 async function assertCanMutateSessionDecisions(
@@ -85,32 +91,28 @@ export const createMeetingDecision = boardAction
       },
     );
 
-    // createAutoTask (packages/integrations) grava como o ator sistema
-    // (getSystemActorId), fora do papel do usuário corrente — não entra na
-    // mesma transação autenticada acima (mesmo padrão de packages/jobs:
-    // ator sistema tem seu próprio caminho de escrita, fora de escopo do
-    // P-0.17).
+    // onMeetingActionItemDecided (packages/integrations) grava como o ator
+    // sistema, fora do papel do usuário corrente — não entra na mesma
+    // transação autenticada acima (mesmo padrão de packages/jobs: ator
+    // sistema tem seu próprio caminho de escrita, fora de escopo do P-0.17).
+    // Awaited (nunca fire-and-forget), mas o catch abaixo decide não
+    // propagar a falha: a decisão de ata já foi commitada, não é dela que a
+    // falha de tarefa deveria depender.
     let taskId: string | null = null;
     if (input.createTask) {
-      const taskTitle = `Decisão de reunião: ${input.description}`.slice(
-        0,
-        200,
-      );
-      const { taskId: createdTaskId } = await createAutoTask({
-        title: taskTitle,
-        workspace: "administrativo",
-        dueDate: input.dueDate,
-        sourceModule: "intranet",
-        sourceId: decision.id,
-      });
-      taskId = createdTaskId;
-
-      await withAuthenticatedContext({ actorId: ctx.actorId }, (tx) =>
-        tx
-          .update(meetingDecisions)
-          .set({ taskId, updatedAt: new Date() })
-          .where(eq(meetingDecisions.id, decision.id)),
-      );
+      try {
+        taskId = await onMeetingActionItemDecided(decision.id);
+      } catch (err) {
+        console.error(
+          JSON.stringify({
+            event: "cross_app_integration_failure",
+            integration: "intranet.onMeetingActionItemDecided",
+            caller: "intranet/actions/decisions.ts::createMeetingDecision",
+            meetingDecisionId: decision.id,
+            message: err instanceof Error ? err.message : String(err),
+          }),
+        );
+      }
     }
 
     await withAuthenticatedContext({ actorId: ctx.actorId }, (tx) =>

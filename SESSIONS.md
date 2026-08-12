@@ -262,6 +262,7 @@
 | S-239  | 2026-08-11 | P-5.3c — A busca que leva a uma rota inexistente e o lançador que reescreve o catálogo do ecossistema (CORRETIVO)                | concluido                            |
 | S-240  | 2026-08-11 | Auditoria: débitos técnicos P-5.6–P-5.12 (Intranet, Bloco B)                                                                     | concluido                            |
 | S-241  | 2026-08-12 | P-5.10b — O anúncio urgente que falha depois de publicado e os dois emails que ninguém pode editar (CORRETIVO)                   | concluido                            |
+| S-242  | 2026-08-12 | P-5.11b — A decisão que vira tarefa e some (CORRETIVO)                                                                           | concluido                            |
 
 ---
 
@@ -21659,4 +21660,93 @@ no conjunto de falha simulada) em vez de `recipients` (total do banco, só
 - `packages/jobs/src/__tests__/briefing.test.ts`
 - `apps/admin/src/__tests__/security-audit.test.ts`
 - `PROMPTS.md` (critérios de P-5.10 e P-5.10b)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+## S-242 — P-5.11b — A decisão que vira tarefa e some (CORRETIVO)
+
+**Prompt:** P-5.11b
+**Data:** 2026-08-12
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+Fechou o débito que S-101 registrou e nenhum prompt executou: `decisions.ts`
+chamava `createAutoTask` direto, deixando `onMeetingActionItemDecided`
+(`packages/integrations/src/intranet.ts`) como stub morto, e três outras
+falhas do mesmo fluxo nunca tinham sido notadas.
+
+1. **Um fluxo só.** `onMeetingActionItemDecided` deixou de ser stub: agora
+   carrega a decisão, a sessão de reunião e o responsável, monta a
+   descrição da tarefa e grava o vínculo de volta (`meeting_decisions.task_id`)
+   ela mesma. `createMeetingDecision` (`apps/intranet/src/actions/decisions.ts`)
+   delega inteiramente a ela em vez de chamar `createAutoTask` e fazer o
+   UPDATE de vínculo por conta própria — `grep -rn
+"onMeetingActionItemDecided" apps packages` agora devolve um chamador de
+   produção real.
+2. **A tarefa carrega a ata.** `description` da tarefa automática passa a
+   trazer o responsável indicado na decisão, o tipo/data da reunião e o
+   link de volta para `/reunioes#reuniao-<sessionId>` (âncora de P-5.3c) —
+   antes só o título existia, e quem fosse atribuir a tarefa manualmente
+   (`needsManualAssignment: true`, regra preservada) não tinha de onde ela
+   vinha.
+3. **A decisão mostra a tarefa.** `/reunioes` (`reunioes/page.tsx`) passou a
+   exibir um link "Ver tarefa" quando `decision.taskId` existe, apontando
+   para `<base do app Tarefas>/tarefa/<id>` — a base vem de `ECOSYSTEM_APPS`
+   (`@hebron/ui`), nunca uma constante nova, mesmo padrão de P-5.3c/`search.ts`.
+   `getMeetingSessionsWithDecisions` (`lib/queries.ts`) já devolvia `taskId`
+   desde P-5.9; não precisou de mudança — só a tela nunca o usava (mesmo
+   achado de P-4.6b/S-233, dado que o banco guarda e a tela não mostra).
+4. **Falha na tarefa não derruba a decisão.** A decisão é commitada antes da
+   chamada a `onMeetingActionItemDecided`; agora `createMeetingDecision`
+   envolve a chamada em `try/catch` e nunca propaga o erro — a decisão
+   retorna com sucesso e `taskId: null`, estado já representável na tela
+   (decisão sem link). Antes, uma falha de `createAutoTask` (workspace
+   ausente, ator de sistema indisponível) rejeitava a action inteira depois
+   da decisão já ter sido gravada, mesma inversão que P-5.10b corrigiu para
+   o anúncio urgente.
+
+### Testes
+
+`apps/intranet/src/__tests__/rls.test.ts`: o teste existente de "Decisão de
+reunião → tarefa" ganhou asserções sobre o conteúdo da `description` da
+tarefa (nome do responsável, tipo da reunião, âncora de volta); um teste novo
+mocka `onMeetingActionItemDecided` (`vi.mock` com `importOriginal`, só
+sobrescrito via `mockRejectedValueOnce` neste teste — os demais continuam
+exercitando a implementação real) para provar que a decisão persiste com
+`taskId` nulo quando a criação da tarefa falha.
+`apps/intranet/src/__tests__/meeting-decisions.test.ts` não precisou de
+mudança: nenhum teste ali usa `createTask: true`.
+
+### Baseline verificado
+
+- `tsc --noEmit`, `eslint .` verdes (execução direta por pacote):
+  `@hebron/intranet`, `@hebron/integrations` — `pnpm turbo typecheck`
+  encadeado segue bloqueado por `@hebron/auth` (drift pré-existente de
+  `bankAccounts.nickname`, [[project_bankaccounts_nickname_test_drift]],
+  fora do escopo deste prompt)
+- `pnpm turbo build --filter=@hebron/intranet` verde
+- `apps/intranet`: suite completa 9 arquivos / 41 testes verde
+- `packages/integrations`: suite completa 9/9 arquivos — 1 falha
+  pré-existente e não relacionada em `feed.test.ts` (mesmo drift já
+  registrado em S-219/S-241, arquivo não tocado por este diff, confirmado
+  reproduzindo isolado antes e depois)
+
+### Suposições registradas
+
+- Nenhuma decisão de regra de negócio nova: o prompt já especificava o
+  workspace fixo "administrativo" (herdado de P-5.4/decisions.ts),
+  `needsManualAssignment: true` preservado, e o texto exato de "o que a tela
+  diz" quando a tarefa falha (`taskId = null`, sem banner adicional) —
+  seguido literalmente.
+
+### Arquivos modificados
+
+- `packages/integrations/src/intranet.ts`
+- `apps/intranet/src/actions/decisions.ts`
+- `apps/intranet/src/app/(dashboard)/reunioes/page.tsx`
+- `apps/intranet/src/__tests__/rls.test.ts`
+- `PROMPTS.md` (critérios de P-5.9 e P-5.11)
 - `SESSIONS.md` (esta entrada + linha no índice)

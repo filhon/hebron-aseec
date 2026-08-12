@@ -6797,7 +6797,7 @@ Substituir mocks. Dashboard com KPIs reais. Feed de anúncios do banco. Diretór
 - [x] Layout G5: papel externo não entra na intranet (teste)
 - [x] KPIs com dados reais (snapshot + fallback)
 - [x] Anúncio criável pela tela por diretor/conselheiro (announcement-form conectado); colaborador não vê o botão
-- [x] Decisão de reunião registrável pela tela, com checkbox "criar tarefa" funcionando de ponta a ponta
+- [x] Decisão de reunião registrável pela tela, com checkbox "criar tarefa" funcionando de ponta a ponta. **A decisão mostra a tarefa que criou (P-5.11b):** com `taskId` presente, `/reunioes` exibe o link "Ver tarefa" para `<tarefas>/tarefa/<id>` — antes o dado ficava só no banco (`meeting_decisions.task_id`), sem tela que o mostrasse (mesmo achado de P-4.6b/S-233).
 - [x] Dashboard configurável: adicionar/remover/reordenar widget persiste (widget-config-form conectado)
 - [x] Briefing: opt-in/frequência configurável pela tela (briefing-config-form conectado)
 - [x] Diretório: nome, foto, papel e contato INSTITUCIONAL; telefone pessoal só com consentimento (P-0.13) — não despejar public.users inteiro
@@ -6866,12 +6866,14 @@ Conectar integrações reais via packages/integrations. Intranet → Tarefas: de
 
 **Critérios de aceite:**
 
-- [x] Decisão de reunião cria tarefa via packages/integrations (teste end-to-end)
+- [x] Decisão de reunião cria tarefa via packages/integrations (teste end-to-end). **A integração tem chamador (P-5.11b):** `onMeetingActionItemDecided` (`packages/integrations/src/intranet.ts`) deixou de ser stub — `decisions.ts::createMeetingDecision` delega a ela, que cria a tarefa e grava o vínculo de volta em `meeting_decisions.task_id`; antes o critério passava só porque `decisions.ts` chamava `createAutoTask` direto, deixando `onMeetingActionItemDecided` morta (débito de S-101).
 - [x] Feed agrega eventos reais dos 3 módulos e respeita RLS: colaborador sem acesso a financeiro não vê eventos financeiros no feed (teste)
 - [x] Stubs para Plataforma e Rádio documentados
 - [x] Zero imports app→app (verificação do CI)
 - [x] Lint passa
 - [x] Types passam
+
+> **Corretivo:** ver P-5.11b — o stub `onMeetingActionItemDecided` nunca foi implementado nem chamado (S-101), a tarefa nascia sem o contexto da ata (responsável indicado e reunião de origem), `/reunioes` não mostrava a tarefa que a decisão criou, e uma falha na criação da tarefa derrubava a decisão de ata já registrada. Todos corrigidos em P-5.11b.
 
 ---
 
@@ -7413,14 +7415,14 @@ O critério de P-5.11 "Decisão de reunião cria tarefa via packages/integration
 
 **Critérios de aceite:**
 
-- [ ] `grep -rn "onMeetingActionItemDecided" apps packages` devolve um chamador de produção, ou nada
-- [ ] Nenhum `console.info` de stub sobrevive no caminho decisão → tarefa
-- [ ] A tarefa criada mostra, no próprio corpo, quem a ata indicou e de que reunião veio
-- [ ] Decisão com tarefa exibe link que abre a tarefa no app de Tarefas; com `NEXT_PUBLIC_TAREFAS_URL` definida, o link vai para lá
-- [ ] Falha na criação da tarefa não desfaz nem esconde a decisão, e a tela diz o que aconteceu
-- [ ] Zero import app→app (verificação do CI)
-- [ ] `apps/intranet` e `packages/integrations` com typecheck, lint e testes verdes; `pnpm turbo build --filter=@hebron/intranet` verde
-- [ ] Registrar em SESSIONS.md, fechando o débito de S-101
+- [x] `grep -rn "onMeetingActionItemDecided" apps packages` devolve um chamador de produção, ou nada
+- [x] Nenhum `console.info` de stub sobrevive no caminho decisão → tarefa
+- [x] A tarefa criada mostra, no próprio corpo, quem a ata indicou e de que reunião veio
+- [x] Decisão com tarefa exibe link que abre a tarefa no app de Tarefas; com `NEXT_PUBLIC_TAREFAS_URL` definida, o link vai para lá
+- [x] Falha na criação da tarefa não desfaz nem esconde a decisão, e a tela diz o que aconteceu
+- [x] Zero import app→app (verificação do CI)
+- [x] `apps/intranet` e `packages/integrations` com typecheck, lint e testes verdes; `pnpm turbo build --filter=@hebron/intranet` verde
+- [x] Registrar em SESSIONS.md, fechando o débito de S-101
 
 **Notas:**
 Ref: S-101 (o débito, com a instrução já escrita), BRAIN §7 e §6.9 (a tarefa automática nasce sem responsável — regra que este prompt preserva) e P-4.6b/S-233, o precedente do dado que o banco guarda e a tela não mostra.
