@@ -6832,12 +6832,14 @@ Notificações: anúncio urgente (in_app + email para todos os papéis internos 
 
 **Critérios de aceite:**
 
-- [x] Anúncio urgente: in_app + email imediato a todos os internos
+- [x] Anúncio urgente: in_app + email imediato a todos os internos. **Onde o texto é editado (P-5.10b):** `admin.email_templates`, slug `intranet-urgent-announcement`, editável em `/configuracoes` do Admin. **O que acontece quando o envio falha (P-5.10b):** a notificação in_app nunca depende do email ter saído — cada destinatário é tratado isoladamente (falha de um não afeta os outros) e, se o Resend falhar (ou `RESEND_API_KEY` estiver ausente), a notificação é gravada como `channel: "in_app"` sem `sentAt` em vez de sumir; o fan-out roda com teto de concorrência declarado no código (`apps/intranet/src/lib/notifications.ts::URGENT_ANNOUNCEMENT_EMAIL_CONCURRENCY`), não uma conexão por destinatário; e o anúncio já está commitado antes do fan-out — uma falha nunca vira erro genérico para quem publicou (`emailFailures` no retorno da action, exibido como aviso, não como falha).
 - [x] Anúncio normal/importante: apenas in_app/feed (sem email em massa)
-- [x] Briefing: cron registrado em packages/jobs respeitando enabled + frequency por usuário (teste)
+- [x] Briefing: cron registrado em packages/jobs respeitando enabled + frequency por usuário (teste). **Onde o texto é editado (P-5.10b):** `admin.email_templates`, slug `intranet-briefing`. Link para `INTRANET_BASE_URL` (painel, `/`) — não mais `/dashboard` (route group, não segmento de URL).
 - [x] Briefing: resumo com KPIs + últimos eventos
 - [x] Nenhum envio de relatório financeiro neste módulo (grep monthly-financial)
 - [x] Lint passa · Types passam
+
+> **Corretivo:** ver P-5.10b — a metade in_app do anúncio urgente dependia do email ter saído, o fan-out (~150 destinatários) rodava sem teto de concorrência e podia derrubar a publicação já commitada, os dois emails do módulo não estavam registrados no Admin, e o link do briefing apontava para uma rota inexistente (`/dashboard`). Todos corrigidos em P-5.10b.
 
 ---
 
@@ -7285,6 +7287,356 @@ Por último, `SearchGlobal` (`search-global.tsx:42-51`) faz `void globalSearch(.
 
 **Notas:**
 Ref: o comentário do próprio `ecosystem-apps.ts` ("não duplicar em shells de app") e G6.5. O item 3 é o único dos seis corretivos que toca `packages/ui` e alcança os nove apps; é aditivo (o fallback é exatamente a constante de hoje), mas exige o build de sanidade do critério.
+
+---
+
+## Intranet — Corretivos do Bloco B
+
+> Os seis prompts abaixo fecham o que os critérios de P-5.6 a P-5.12 marcaram `[x]` e o código não sustenta, mais dois débitos que as próprias sessões registraram e nenhum prompt posterior fechou: o stub morto de `packages/integrations/src/intranet.ts` (S-101 pediu explicitamente "ou apagar ou delegar") e o link do briefing (S-94).
+>
+> O padrão do Bloco A da Intranet era "a tela promete e o backend não existe". Aqui é o inverso: o backend existe, foi testado, e ninguém o chamou. `getRadioDashboardStatus` (real desde P-8.11/S-150) e `onMeetingActionItemDecided` (P-5.11) não têm um único chamador de produção — exatamente o que `getFeed` era antes de P-5.2c. O segundo padrão é de entrega: o anúncio urgente perde a notificação in_app quando o email falha, e o erro chega ao autor depois do anúncio já estar publicado.
+>
+> Ordem recomendada: **P-5.10b → P-5.11b → P-5.8b → P-5.9d → P-5.9e → P-5.8c**. Dependências reais: P-5.8b e P-5.9d tocam `(dashboard)/page.tsx`, P-5.9d e P-5.9e tocam `lib/queries.ts` — dentro de cada par, o segundo assume o primeiro aplicado. Os demais são independentes.
+>
+> Baseline verificado antes da redação destes prompts: `@hebron/intranet`, `@hebron/integrations`, `@hebron/jobs`, `@hebron/db` e `@hebron/ui` passam `tsc --noEmit`. `@hebron/admin`, `@hebron/auth` e `@hebron/projetos` **não** passam — um erro cada, sempre o mesmo: fixture de `bankAccounts` sem a coluna `nickname` NOT NULL de `c3b32da` (resto do drift de S-219; o quarto arquivo, `feed.test.ts`, foi fechado em P-5.2c). P-5.10b fecha o de `apps/admin` porque é o prompt que toca esse pacote; os de `packages/auth` e `apps/projetos` seguem fora do escopo destes seis.
+
+---
+
+### P-5.10b — O anúncio urgente que falha depois de publicado e os dois emails que ninguém pode editar (CORRETIVO)
+
+**Fase:** 5
+**Módulo:** intranet
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-5.10b-intranet-entrega-de-emails`
+- Dependências: P-5.12 concluído (S-102)
+- Env vars: `DATABASE_URL`, `RESEND_API_KEY`
+
+**Problema que este prompt resolve (contexto):**
+Quatro defeitos no mesmo caminho de entrega, todos sob critérios `[x]` de P-5.10.
+
+**1. A notificação in_app depende do email ter saído.** O critério diz "Anúncio urgente: in_app + email imediato a todos os internos". `notifyUrgentAnnouncement` (`lib/notifications.ts:117-148`) chama `createNotification` uma vez por destinatário com `channel: "email"`, e `createNotification` (`packages/email/src/lib/send.ts:116-157`) **envia pelo Resend antes de inserir a linha** em `notifications`: se o envio falha — ou se `RESEND_API_KEY` não está configurada (`:123-125`) — a função lança e nenhuma linha é gravada. O sino e a central (`/notificacoes`) ficam sem o anúncio urgente. As duas metades do critério não são independentes: a in_app é consequência da de email.
+
+**2. O erro chega ao autor depois do anúncio publicado.** `createAnnouncement` (`actions/announcements.ts:60-114`) fecha a transação (anúncio + audit) e só então dispara o fan-out. O `Promise.all` de `:117-148` rejeita inteiro na primeira falha, a action propaga e `next-safe-action` devolve a mensagem genérica. O anúncio está no banco, parte dos destinatários recebeu, e a leitura natural de quem publicou é tentar de novo.
+
+**3. Cerca de 150 emails em paralelo, de dentro de um request.** `INTERNAL_ROLES` cobre toda a equipe interna (~150 usuários ativos, CLAUDE.md); o `Promise.all` abre uma chamada ao Resend por destinatário ao mesmo tempo, dentro do request da Server Action. O que passa do teto de requisições por segundo volta 429 e cai no defeito 2 — publicar um anúncio urgente é justamente quando isso não pode acontecer.
+
+**4. Os dois emails do módulo não passam pelo Admin.** BRAIN.md diz, em dois lugares, que o texto dos emails é editável no Admin, e P-3.10b (S-219) fechou exatamente essa lacuna para os três do Financeiro: slug em `TEMPLATE_META`/`EmailTemplateSlug`/`DEFAULT_EMAIL_TEMPLATES` (`apps/admin/src/app/(dashboard)/configuracoes/page.tsx:70-252`), texto seedado (`packages/db/src/seed.ts:244`) e `getDbTemplate`/`applyVars` antes de renderizar o componente React. `urgent-announcement` e `briefing` (P-5.10) não fazem nem uma coisa nem outra: nenhum dos 18 slugs registrados é da Intranet, e nem `notifyUrgentAnnouncement` nem `runBriefing` consultam `admin.email_templates`. É a dívida de S-219 um módulo depois.
+
+**5. O briefing convida para uma rota que não existe.** `packages/jobs/src/crons/briefing.ts:154` monta `${INTRANET_BASE_URL}/dashboard`. O painel da Intranet é `/` — `(dashboard)` é route group, não segmento de URL. Todo briefing diário/semanal enviado até hoje leva a um 404.
+
+**Escopo (siga na ordem):**
+
+1. **A in_app nunca depende do email:** cada destinatário é tratado isoladamente (`allSettled` ou laço com try/catch por pessoa) e uma falha de envio grava a notificação mesmo assim (`channel: "in_app"`, sem `sentAt`) em vez de sumir. `packages/email/src/lib/send.ts` **não** muda — a ordem "envia, depois insere" é contrato compartilhado pelos nove apps; a correção mora em quem chama.
+2. **O fan-out nunca derruba a publicação:** `createAnnouncement` devolve sucesso com a contagem de falhas de envio (o anúncio já está commitado); a tela informa "publicado, N emails não saíram" em vez de um erro genérico que sugere republicar.
+3. **Teto de concorrência explícito** no envio (constante nomeada, com o porquê no comentário), em vez de abrir uma conexão por destinatário. Mover o fan-out para um job Inngest fica **fora de escopo** e registrado: não existe função disparada por evento em `packages/jobs` (só crons, `packages/jobs/src/index.ts:30-47`), e criar esse mecanismo é prompt próprio.
+4. **Os dois emails ficam editáveis no Admin:** slugs `intranet-urgent-announcement` e `intranet-briefing` em `TEMPLATE_META`/`EmailTemplateSlug`/`DEFAULT_EMAIL_TEMPLATES` (grupo "Intranet" na barra lateral), mesmos textos seedados em `packages/db/src/seed.ts::EMAIL_TEMPLATE_DEFAULTS`, e `getDbTemplate`/`applyVars` antes de renderizar nos dois pontos de envio — no app pelos helpers locais (padrão de `apps/financeiro/src/lib/notifications.ts`), no job por `packages/jobs/src/lib/templates.ts`, que já existe pronto e só não é chamado.
+5. **O link do briefing aponta para o painel** (`/`, a URL base sem sufixo), não para `/dashboard`.
+6. **Testes:** falha de email não apaga a notificação nem derruba `createAnnouncement`; o texto salvo no Admin é o que o destinatário recebe (mesmo desenho de `apps/financeiro/src/__tests__/governance.test.ts` e `packages/jobs/src/__tests__/financeiro.test.ts`).
+7. **Drift de baseline:** `apps/admin/src/__tests__/security-audit.test.ts:350` recebe `nickname` na inserção de `bankAccounts`, para `@hebron/admin` voltar a passar typecheck (S-219).
+8. **Bookkeeping em PROMPTS.md:** critérios de P-5.10 (onde o texto de cada email é editado, e o que acontece quando o envio falha).
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/intranet/src/lib/notifications.ts`
+- `apps/intranet/src/actions/announcements.ts` (apenas o tratamento do retorno do fan-out)
+- `apps/intranet/src/components/announcement-create-dialog.tsx` (apenas a mensagem de envio parcial)
+- `packages/jobs/src/crons/briefing.ts`
+- `apps/admin/src/app/(dashboard)/configuracoes/page.tsx`
+- `packages/db/src/seed.ts`
+- `apps/intranet/src/__tests__/notifications.test.ts` (criar)
+- `packages/jobs/src/__tests__/briefing.test.ts`
+- `apps/admin/src/__tests__/security-audit.test.ts` (apenas a coluna `nickname`)
+- `PROMPTS.md` (critérios de P-5.10)
+
+**Critérios de aceite:**
+
+- [x] Com `RESEND_API_KEY` ausente ou inválida, publicar anúncio urgente continua criando o anúncio, grava a notificação in_app de todos os internos e não devolve erro à tela
+- [x] Falha de envio para um destinatário não impede os outros
+- [x] O envio respeita um teto de concorrência declarado no código, não uma chamada por destinatário
+- [x] `/configuracoes` do Admin lista e edita "Anúncio urgente" e "Briefing"; o texto salvo é o que o destinatário recebe (teste)
+- [x] `pnpm db:seed` cria os dois slugs novos e é idempotente
+- [x] O botão do briefing abre o painel; `grep -rn "/dashboard" packages/jobs/src` não devolve nada
+- [x] Anúncio normal/importante continua sem email em massa
+- [x] `pnpm --filter @hebron/admin exec tsc --noEmit` verde
+- [x] `apps/intranet`, `packages/jobs`, `packages/db` e `apps/admin` com typecheck, lint e testes verdes; `pnpm turbo build --filter=@hebron/intranet` verde
+- [x] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: S-219 (mesma dívida de template no Financeiro), S-94 (que registrou o briefing lendo `kpi_snapshots` e não registrou o link) e o princípio "defense in depth" aplicado à entrega: uma comunicação marcada como urgente é a que menos pode depender de um único canal ter funcionado. É o de maior prioridade dos seis — os outros escondem informação, este a perde.
+
+---
+
+### P-5.11b — A decisão que vira tarefa e some (CORRETIVO)
+
+**Fase:** 5
+**Módulo:** intranet
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-5.11b-intranet-decisao-tarefa`
+- Dependências: P-5.12 concluído (S-102)
+- Env vars: `DATABASE_URL`
+- Skill: **invocar `/impeccable` antes de escrever JSX**
+
+**Problema que este prompt resolve (contexto):**
+O critério de P-5.11 "Decisão de reunião cria tarefa via packages/integrations (teste end-to-end)" está `[x]` e a tarefa é mesmo criada. O que acontece depois é que se perde.
+
+**1. O stub morto que S-101 mandou resolver.** `onMeetingActionItemDecided` (`packages/integrations/src/intranet.ts:19-27`) é a função que BRAIN §7 designa para "Intranet → Tarefas". Ela nunca foi implementada nem chamada: o corpo é um `console.info` avisando que é stub. S-101 registrou o desvio e a instrução — "ou apagar `onMeetingActionItemDecided` (código morto) ou fazer `decisions.ts` delegar a ela, para não manter duas cópias do mesmo fluxo". Nada foi feito; `grep -rn "onMeetingActionItemDecided" apps packages` devolve só a definição.
+
+**2. A tarefa nasce sem o contexto da ata.** `createMeetingDecision` (`actions/decisions.ts:94-106`) chama `createAutoTask` com título, workspace, prazo e `sourceRef` — e nada mais. O `responsibleId` que o formulário coletou (`meeting-decision-form.tsx`, P-5.4) fica só na decisão. Toda tarefa automática nasce `needsManualAssignment: true` por regra de negócio (BRAIN §6.9, `packages/integrations/src/tarefas.ts:24-28`), então alguém vai atribuir manualmente — e essa pessoa, na tela de Tarefas, não tem quem a ata indicou nem de que reunião aquilo veio: só um `sourceRef` jsonb que nenhuma tela renderiza.
+
+**3. A decisão não mostra a tarefa que ela criou.** `meeting_decisions.task_id` é gravado (`decisions.ts:108-113`), `getMeetingSessionsWithDecisions` o devolve (`queries.ts:381`) e `/reunioes` não usa: `reunioes/page.tsx:159-195` renderiza status, descrição, responsável e prazo. Quem marcou "criar tarefa" não tem como saber se ela existe, nem chegar até ela. Mesmo achado de P-4.6b (S-233): o banco guarda, a tela não mostra.
+
+**4. Falha na tarefa derruba a decisão já gravada.** A decisão é commitada em `:64-86`; se `createAutoTask` falhar depois (workspace ausente, ator de sistema indisponível), a action rejeita. A decisão de ata está registrada e o presidente da sessão vê um erro — mesma inversão do P-5.10b, aqui sobre uma ata.
+
+**Escopo (siga na ordem):**
+
+1. **Um fluxo só.** `decisions.ts` passa a chamar `onMeetingActionItemDecided`, que deixa de ser stub e encapsula "action item de ata → `createAutoTask` + vínculo de volta"; ou a função é removida como código morto. Recomendado o primeiro: é onde BRAIN §7 diz que a integração vive, e `decisions.ts` fica só com a Server Action. O que não pode continuar é `grep` devolver apenas a definição.
+2. **A tarefa carrega a ata:** `description` com o responsável indicado na decisão, o tipo/data da reunião e o link de volta para `/reunioes#reuniao-<sessionId>` (âncora criada em P-5.3c). Título permanece como está. `needsManualAssignment` continua `true` — este prompt não atribui tarefa automaticamente, só deixa de esconder de quem vai atribuir a informação que a ata já tinha.
+3. **A decisão mostra a tarefa:** com `taskId` presente, `/reunioes` exibe o link para `<tarefas>/tarefa/<id>`, com a base vinda de `ECOSYSTEM_APPS` (`@hebron/ui`) — mesma fonte única de P-5.3c, nunca uma constante nova.
+4. **Falha de tarefa não derruba decisão:** a decisão permanece registrada, a action devolve sucesso sinalizando que a tarefa não foi criada, e a tela diz isso na decisão correspondente (que fica sem link, estado já representável por `taskId = null`).
+5. **Teste:** `rls.test.ts:273-309` já cobre o caminho feliz; estender para o caminho de falha (decisão sobrevive) e para o `description` da tarefa carregando responsável e reunião.
+6. **Bookkeeping em PROMPTS.md:** critérios de P-5.11 (a integração tem chamador) e de P-5.9 (a decisão registrada pela tela mostra a tarefa criada).
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/integrations/src/intranet.ts`
+- `packages/integrations/src/index.ts` e `packages/integrations/package.json` (apenas o export, se mudar)
+- `apps/intranet/src/actions/decisions.ts`
+- `apps/intranet/src/app/(dashboard)/reunioes/page.tsx`
+- `apps/intranet/src/lib/queries.ts` (apenas o que a tela precisa da decisão)
+- `apps/intranet/src/__tests__/rls.test.ts`
+- `apps/intranet/src/__tests__/meeting-decisions.test.ts`
+- `PROMPTS.md` (critérios de P-5.9 e P-5.11)
+
+**Critérios de aceite:**
+
+- [ ] `grep -rn "onMeetingActionItemDecided" apps packages` devolve um chamador de produção, ou nada
+- [ ] Nenhum `console.info` de stub sobrevive no caminho decisão → tarefa
+- [ ] A tarefa criada mostra, no próprio corpo, quem a ata indicou e de que reunião veio
+- [ ] Decisão com tarefa exibe link que abre a tarefa no app de Tarefas; com `NEXT_PUBLIC_TAREFAS_URL` definida, o link vai para lá
+- [ ] Falha na criação da tarefa não desfaz nem esconde a decisão, e a tela diz o que aconteceu
+- [ ] Zero import app→app (verificação do CI)
+- [ ] `apps/intranet` e `packages/integrations` com typecheck, lint e testes verdes; `pnpm turbo build --filter=@hebron/intranet` verde
+- [ ] Registrar em SESSIONS.md, fechando o débito de S-101
+
+**Notas:**
+Ref: S-101 (o débito, com a instrução já escrita), BRAIN §7 e §6.9 (a tarefa automática nasce sem responsável — regra que este prompt preserva) e P-4.6b/S-233, o precedente do dado que o banco guarda e a tela não mostra.
+
+---
+
+### P-5.8b — O KPI de audiência que a Rádio calcula todo dia e o painel nunca pediu (CORRETIVO)
+
+**Fase:** 5
+**Módulo:** intranet
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-5.8b-intranet-kpi-audiencia`
+- Dependências: P-5.2b aplicado (o contrato `history`/`trend` do `KPI`) e P-5.12 concluído
+- Env vars: `DATABASE_URL`
+- Skill: **invocar `/impeccable` antes de escrever JSX**
+
+**Problema que este prompt resolve (contexto):**
+BRAIN §6.6 lista quatro KPIs iniciais do painel: "projetos ativos, alunos na Plataforma, doações do mês …, audiência da Rádio". O critério de P-5.1 repete os quatro. `getKpis` (`actions/kpis.ts:333-348`) devolve quatro indicadores e o quarto é "Tarefas abertas" — audiência não está lá. Os dois conjuntos não se contradizem (o escopo de P-5.8 nomeia tarefas; BRAIN nomeia audiência): a união é de cinco, e falta um.
+
+Não é falta de dado. P-8.11 (S-150) construiu o pipeline inteiro — heartbeat anônimo do player, agregação diária em `packages/jobs/src/crons/radio-stats.ts`, brutos descartados por LGPD, `radio.listener_stats` com uma linha por dia (`unique_sessions`, `hours_listened`) — e `packages/integrations/src/radio.ts:40` expõe `getRadioDashboardStatus`, com o critério "Stub da Intranet substituído via packages/integrations" marcado `[x]`. `grep -rn "getRadioDashboardStatus" apps packages` devolve **só a definição e o cabeçalho do próprio arquivo**. É o achado de P-5.2c com `getFeed`, três fases depois: agregação, LGPD, cron e teste pagos, e nenhuma tela pedindo o número.
+
+O contraste com "Alunos na Plataforma" fecha o argumento: aquele KPI era stub fixo até a Fase 6 e hoje consome `getStudentKpiMetrics` (`kpis.ts:17,303`) pelo mesmo caminho, no mesmo arquivo. A audiência tem tudo o que ele tem, menos a chamada.
+
+**Escopo (siga na ordem):**
+
+1. **Quinto KPI, sem remover nenhum:** "Audiência da Rádio" entra em `getKpis` ao lado dos quatro atuais, alimentado por `packages/integrations/src/radio.ts`. Unidade e semântica saem de `listener_stats` (sessões únicas do dia agregado; horas ouvidas podem ir na descrição/período, não como um segundo cartão).
+2. **Série diária, não horária:** a audiência já nasce agregada por dia, com unique por `date` — ela **não** entra em `kpi_snapshots`/`kpi_snapshot_history` nem no contrato de frescor de 2h de PATCH-018, que existe para métricas recomputáveis a qualquer hora. `history` (contrato de P-5.2b) vem das últimas N linhas diárias, `trend` compara com o dia anterior, `period` é o dia agregado e `updatedAt` é o `captured_at` da linha.
+3. **Sem leitura ainda:** com `radio.listener_stats` vazia, o cartão mostra valor zero, `trend: null`, `history: []` e um período que diz que a agregação ainda não rodou — nunca uma curva ou uma seta inventada (a regra que P-5.2b fixou).
+4. **`getRadioDashboardStatus` ganha a série** (últimos N dias) sem mudar o contrato de `audience`/`nowPlaying`, e para de emitir o `console.info` de "tocando agora" a cada leitura do painel — um log por render é ruído. "Tocando agora" continua fora de escopo (exige estado de reprodução ao vivo, que P-8.11 deixou explicitamente pendente); registrar isso no comentário do arquivo.
+5. **Painel:** `DEFAULT_WIDGETS` (`(dashboard)/page.tsx:33-64`) ganha o cartão de audiência sem remover nenhum dos existentes. O seletor de indicador do widget configurável não precisa de mudança — a lista vem de `getKpis` (`widget-config-form.tsx:286`).
+6. **Testes:** em `kpis.test.ts`, audiência com duas leituras diárias devolve série cronológica e tendência correta; sem nenhuma leitura devolve zero/nulo/vazia. Em `packages/integrations`, a leitura da série diária.
+7. **Bookkeeping em PROMPTS.md:** critérios de P-5.1, P-5.3 e P-5.8 (a lista de KPIs passa a ser cinco) e de P-8.11 (o consumidor existe).
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/intranet/src/actions/kpis.ts`
+- `packages/integrations/src/radio.ts`
+- `apps/intranet/src/app/(dashboard)/page.tsx` (apenas `DEFAULT_WIDGETS`)
+- `apps/intranet/src/__tests__/kpis.test.ts`
+- `packages/integrations/src/__tests__/radio.test.ts` (criar)
+- `PROMPTS.md` (critérios de P-5.1, P-5.3, P-5.8 e P-8.11)
+
+**Critérios de aceite:**
+
+- [ ] O painel mostra "Audiência da Rádio" com o número do dia agregado mais recente
+- [ ] `grep -rn "getRadioDashboardStatus" apps/intranet/src` encontra um chamador de produção
+- [ ] Com duas ou mais leituras diárias, o cartão desenha a série real e a seta compara com o dia anterior
+- [ ] Com `radio.listener_stats` vazia, o cartão não desenha curva nem seta e diz que a agregação ainda não rodou
+- [ ] Os outros quatro KPIs continuam presentes e inalterados
+- [ ] O KPI novo aparece no seletor de indicador do widget de painel, sem mudança no formulário
+- [ ] Nenhum log de stub é emitido a cada carga do painel
+- [ ] `apps/intranet` e `packages/integrations` com typecheck, lint e testes verdes; `pnpm turbo build --filter=@hebron/intranet` verde
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: BRAIN §6.6 (a lista de KPIs iniciais), P-8.11/S-150 (o produtor) e P-5.2c (o mesmo defeito, com `getFeed`). O painel da Intranet é a tela que a diretoria abre primeiro; a Rádio é o módulo mais visível para fora da ONG e é o único cujo número ninguém consegue ver sem entrar no app dele.
+
+---
+
+### P-5.9d — A agenda que promete prazos e a leitura que traz a diretoria inteira (CORRETIVO)
+
+**Fase:** 5
+**Módulo:** intranet
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-5.9d-intranet-agenda-e-teto`
+- Dependências: P-5.8b aplicado (mesmo `(dashboard)/page.tsx`)
+- Env vars: `DATABASE_URL`
+- Skill: **invocar `/impeccable` antes de começar**
+
+**Problema que este prompt resolve (contexto):**
+**1. Metade do critério do calendário não existe.** P-5.3: "[x] Calendário com eventos de reuniões e prazos". `meetingSessionsToCalendarEvents` (`queries.ts:482-499`) é a única fonte de `CalendarEvent` do módulo e devolve `type: "reuniao"` para tudo. `CalendarEventType` tem `"prazo"` (`packages/types/src/intranet/index.ts:78`) e `CalendarWidget` já reserva a cor laranja para ele (`calendar-widget.tsx:11-13`): ramo morto desde que foi escrito. O dado está carregado na mesma página que o descarta — cada `MeetingDecision` tem `dueDate` (`queries.ts:379`) e `/calendario` recebe todas as decisões junto com as sessões. Uma decisão de ata com prazo para sexta não aparece em lugar nenhum da agenda.
+
+**2. Duas leituras sem teto, em três telas.** `getMeetingSessionsWithDecisions` (`queries.ts:341-347`) faz `select()` da tabela `meeting_sessions` inteira e `select()` da `meeting_decisions` inteira, sem `limit` e sem janela, a cada carga de `/`, `/calendario` e `/reunioes`. É o mesmo crescimento que P-5.3b fechou em `listAnnouncements` e P-4.6b em Tarefas, agravado no painel: ele lê **todas** as decisões já registradas (`(dashboard)/page.tsx:139-148`) para montar um feed de seis itens, e o `feedLimit` que P-5.2c transformou em limite de busca só vale para os eventos cross-app.
+
+**Escopo (siga na ordem):**
+
+1. **Prazo vira evento de agenda:** decisão com `dueDate` e status diferente de `concluida` gera `CalendarEvent` de tipo `prazo`, com título que diz o que vence e caminho de volta para a reunião de origem (`/reunioes#reuniao-<sessionId>`). Decisão concluída não é pendência e não entra.
+2. **Distinguir por texto, não só por cor:** o widget e a lista marcam reunião e prazo com rótulo, não apenas com a cor reservada em `calendar-widget.tsx:11-13` — cor sozinha não é informação acessível.
+3. **Janela de leitura:** `getMeetingSessionsWithDecisions` passa a receber janela e teto (ex.: sessões dos últimos doze meses mais todas as futuras), e as decisões são lidas só das sessões carregadas (`inArray`), nunca a tabela inteira.
+4. **Cada chamador pede o que precisa:** painel (o suficiente para o feed e o calendário do dia), `/calendario` (a janela da agenda), `/reunioes` (histórico com teto e aviso de corte, mesmo desenho que P-5.3b deu a `/anuncios`).
+5. **Bookkeeping em PROMPTS.md:** critérios de P-5.3 (calendário com prazos) e de P-5.9 (calendário com `meeting_sessions` reais passa a dizer o que mais entra).
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/intranet/src/lib/queries.ts`
+- `apps/intranet/src/app/(dashboard)/calendario/page.tsx`
+- `apps/intranet/src/app/(dashboard)/page.tsx`
+- `apps/intranet/src/app/(dashboard)/reunioes/page.tsx`
+- `apps/intranet/src/components/calendar-widget.tsx`
+- `PROMPTS.md` (critérios de P-5.3 e P-5.9)
+
+**Critérios de aceite:**
+
+- [ ] Uma decisão com prazo aparece na agenda na data do prazo, identificada como prazo por rótulo (não só por cor)
+- [ ] Decisão concluída não aparece como prazo
+- [ ] Clicar no prazo leva à reunião que o originou
+- [ ] Nenhuma leitura de `meeting_sessions`/`meeting_decisions` sem janela ou teto em `lib/queries.ts`
+- [ ] `/reunioes` avisa quando está cortando o histórico
+- [ ] O painel não lê mais decisões do que o feed mostra
+- [ ] Em 360px, a agenda continua legível e sem rolagem horizontal
+- [ ] `apps/intranet` com typecheck, lint e testes verdes; `pnpm turbo build --filter=@hebron/intranet` verde
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: P-5.3b (o mesmo teto, em `/anuncios`), P-4.6b (o precedente em Tarefas) e o comentário de `packages/types/src/intranet/index.ts:80-81`, que aponta para um "P-5.13" (feed ICS, decisão D-2) que não existe em PROMPTS.md — este prompt não abre esse assunto, só para de fingir que a agenda já mostra prazos.
+
+---
+
+### P-5.9e — O diretório que abre uma conexão de rede por pessoa (CORRETIVO)
+
+**Fase:** 5
+**Módulo:** intranet
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-5.9e-intranet-diretorio-em-lote`
+- Dependências: P-5.9d aplicado (mesmo `lib/queries.ts`)
+- Env vars: `DATABASE_URL`, `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
+
+**Problema que este prompt resolve (contexto):**
+`getDirectoryMembers` (`queries.ts:233-255`) monta a lista com um `Promise.all` sobre os membros e, **por membro**, faz duas idas separadas:
+
+- `getConsent(u.id, "comunicacao")` — um `SELECT` em `public.consents` por pessoa (`packages/db/src/consents.ts:26-35`; não existe versão em lote);
+- `resolveAvatarReadUrl(u.avatarUrl)` — uma requisição HTTP ao Storage do Supabase para assinar a URL do avatar (`queries.ts:168-178`), já que o bucket `perfil-avatares` é privado (P-5.1b).
+
+Com os ~150 usuários ativos do ecossistema (CLAUDE.md), abrir `/diretorio` dispara cerca de 150 queries e até 150 assinaturas, todas em paralelo, a cada carga e para cada pessoa que abre a tela. O teto de frescor não ajuda: nada disso é cacheado.
+
+O agravante é `getStaffOptions` (`:266-269`), que chama `getDirectoryMembers` inteiro só para preencher o `<select>` de responsável do formulário de decisão em `/reunioes` — paga as duas contas completas para usar `id` e `name`.
+
+O caminho em lote existe dos dois lados: uma query com `user_id = ANY(...)` resolve o consentimento de todos, e `createSignedUrls(paths, expiresIn)` assina o conjunto em uma chamada.
+
+**Escopo (siga na ordem):**
+
+1. **Consentimento em lote:** helper novo em `packages/db/src/consents.ts` (uma consulta para muitos usuários numa finalidade), consumido por `getDirectoryMembers`. `getConsent` (singular) continua para quem lê um usuário só.
+2. **Avatares em lote:** `createSignedUrls` para os caminhos existentes; membro sem avatar continua sem chamada nenhuma. `resolveAvatarReadUrl` (singular) permanece para o consumidor de um perfil só (P-5.1b) — sem uma segunda cópia da regra de expiração.
+3. **`getStaffOptions` para de reaproveitar o diretório inteiro:** ela precisa de `id` e nome, não de foto, telefone nem consentimento. A restrição de papel (equipe interna) e a exceção service-level já documentada continuam valendo, com o mesmo comentário explicando o porquê.
+4. **Teste:** o helper em lote devolve uma linha por usuário com consentimento registrado e nada para quem não tem, em uma única consulta (`packages/db/src/__tests__/consents.test.ts`).
+5. **Bookkeeping em PROMPTS.md:** critério de P-5.9 sobre o diretório (o telefone continua gated por consentimento; o que muda é como isso é lido).
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/intranet/src/lib/queries.ts`
+- `packages/db/src/consents.ts`
+- `packages/db/src/__tests__/consents.test.ts`
+- `PROMPTS.md` (critério de P-5.9)
+
+**Critérios de aceite:**
+
+- [ ] O número de consultas de consentimento em `/diretorio` não cresce com o número de membros
+- [ ] O número de chamadas de assinatura ao Storage em `/diretorio` não cresce com o número de membros
+- [ ] Telefone continua invisível para quem não tem consentimento `comunicacao` registrado (comportamento idêntico ao de hoje)
+- [ ] Membro sem avatar não gera nenhuma chamada ao Storage
+- [ ] `/reunioes` monta o seletor de responsável sem ler avatar nem consentimento
+- [ ] Foto e bio continuam aparecendo no cartão do diretório (P-5.1b sem regressão)
+- [ ] `apps/intranet` e `packages/db` com typecheck, lint e testes verdes (falhas remanescentes conhecidas do banco de dev compartilhado — ver SESSIONS.md — sem relação com este diff)
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: P-5.1b (que introduziu a assinatura por avatar), P-0.13 (consentimento) e P-9.3, que é o prompt de performance do projeto — este não o antecipa por gosto: o diretório é a tela com o maior fan-out de rede do ecossistema e cresce linearmente com a equipe.
+
+---
+
+### P-5.8c — A busca que trata "%" como coringa e chama a reunião de "ordinaria" (CORRETIVO)
+
+**Fase:** 5
+**Módulo:** intranet
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-5.8c-intranet-busca-precisa`
+- Dependências: P-5.12 concluído (S-102); P-5.3c aplicado (a busca já leva a destinos que existem)
+- Env vars: `DATABASE_URL`
+
+**Problema que este prompt resolve (contexto):**
+Três defeitos na função que sustenta "Busca cross-app com resultados agrupados" (`[x]` em P-5.3 e P-5.8).
+
+**1. O termo do usuário vira padrão de `LIKE`.** `intranet_global_search` (`0039_intranet_global_search.sql:25,33,42,54-55`) monta `ILIKE '%' || _query || '%'` sem escapar nada. Não é injeção de SQL — o parâmetro é ligado —, é resultado errado: buscar `100%` devolve tudo que contenha "100", buscar `ata_2026` casa "ata 2026" e "ataX2026". Numa ONG que nomeia edital e documento com esses caracteres, o usuário conclui que a busca está mentindo, e está.
+
+**2. A reunião aparece com o enum cru.** `:51` monta `'Reunião ' || m.type::text`, então o resultado é "Reunião ordinaria" — sem acento, em minúscula — enquanto todas as telas do módulo mostram "Ordinária" (`queries.ts:277-281`). O rótulo bonito existe; a busca é o único lugar que não o usa.
+
+**3. Cada módulo corta em 20 e ninguém avisa.** `:27,35,44,57` limitam cada bloco a 20 linhas e nada na tela diz que houve corte. Quem procura o documento que ficou em 21º recebe uma lista aparentemente completa sem ele.
+
+**Escopo (siga na ordem):**
+
+1. **Migration nova** (próximo número livre — 0079 no momento desta redação, conferir antes; escrita à mão, `drizzle-kit generate` aposentado desde P-0.3c/S-171) que substitui `public.intranet_global_search`: escapa `\`, `%` e `_` do termo e usa `ESCAPE` explícito; devolve o tipo e a data da reunião em vez do rótulo montado em SQL; e permite ao chamador saber que um módulo foi truncado (pedir `LIMIT n+1` e cortar na aplicação é o caminho mais simples). Continua `SECURITY INVOKER` e mantém o `GRANT EXECUTE … TO authenticated` no mesmo arquivo — o contrato de RLS de P-5.8 não muda. Atenção: mudar as colunas do `RETURNS TABLE` exige `DROP FUNCTION` antes do `CREATE`; o Postgres recusa `CREATE OR REPLACE` que altere o tipo de retorno.
+2. **`globalSearch`** (`actions/search.ts`) monta o rótulo da reunião a partir de uma fonte única do dicionário de tipos (hoje só em `queries.ts:277-281`) e propaga o sinal de truncamento por módulo.
+3. **`SearchGlobal`** informa que um módulo tem mais resultados do que cabe, sem prometer paginação que não existe — a saída honesta é pedir um termo mais específico.
+4. **Teste** em `search.test.ts`: termo com `%` não devolve o universo; termo com `_` não casa qualquer caractere; reunião aparece com o rótulo acentuado. O teste de documento `restricted` (contrato P-5.8) continua verde sem alteração.
+5. **Bookkeeping em PROMPTS.md:** critérios de P-5.3 e P-5.8 sobre a busca.
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/db/src/migrations/NNNN_intranet_global_search_precisao.sql` (criar — próximo número livre, à mão conforme P-0.3c)
+- `apps/intranet/src/actions/search.ts`
+- `apps/intranet/src/components/search-global.tsx`
+- `apps/intranet/src/lib/queries.ts` (apenas exportar o dicionário de tipos de reunião, se for esse o caminho escolhido)
+- `apps/intranet/src/__tests__/search.test.ts`
+- `PROMPTS.md` (critérios de P-5.3 e P-5.8)
+
+**Critérios de aceite:**
+
+- [ ] Buscar `100%` devolve só o que contém literalmente "100%"
+- [ ] Buscar `ata_2026` não casa "ata 2026"
+- [ ] Resultado de reunião aparece como "Reunião Ordinária — DD/MM/AAAA"
+- [ ] Módulo com mais correspondências do que o teto informa o corte
+- [ ] A busca continua rodando com o client da sessão e a RLS continua filtrando: o teste de documento `restricted` segue verde
+- [ ] Migration idempotente, aplicada com sucesso; reaplicação reporta "Nothing to apply"
+- [ ] `apps/intranet` com typecheck, lint e testes verdes; `pnpm turbo build --filter=@hebron/intranet` verde
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: contrato de busca de P-5.8 (que este prompt preserva inteiro — RLS filtra, zero reimplementação de visibilidade) e P-5.3c, que consertou o destino dos resultados. É o de menor prioridade dos seis: nenhum dado se perde, mas é a tela que promete "encontre em todos os módulos" e devolve menos ou mais do que foi pedido.
 
 ---
 

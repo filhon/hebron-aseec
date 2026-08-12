@@ -90,30 +90,42 @@ export const createAnnouncement = boardAction
     );
 
     // Anúncio urgente: in_app + email imediato a todos os internos
-    // (critério de aceite P-5.10). Normal/importante ficam só no feed.
+    // (critério de aceite P-5.10). Normal/importante ficam só no feed. O
+    // anúncio já está commitado nesta altura — uma falha no fan-out (Resend
+    // fora do ar, RESEND_API_KEY ausente, erro inesperado na resolução dos
+    // destinatários) NUNCA vira erro genérico para quem acabou de publicar
+    // (achado #2, P-5.10b). `emailFailures: null` sinaliza que nem a
+    // contagem pôde ser confirmada — caso raro, já que falha de envio por
+    // destinatário é tratada dentro de notifyUrgentAnnouncement.
+    let emailFailures: number | null = null;
     if (announcement.priority === "urgente") {
-      // Autor é sempre o próprio ator autenticado (authorId = ctx.actorId
-      // acima) — leitura própria, coberta por users_select_own, sem exceção.
-      const [author] = await withAuthenticatedContext(
-        { actorId: ctx.actorId },
-        (tx) =>
-          tx
-            .select({ fullName: users.fullName, email: users.email })
-            .from(users)
-            .where(eq(users.id, announcement.authorId))
-            .limit(1),
-      );
+      try {
+        // Autor é sempre o próprio ator autenticado (authorId = ctx.actorId
+        // acima) — leitura própria, coberta por users_select_own, sem exceção.
+        const [author] = await withAuthenticatedContext(
+          { actorId: ctx.actorId },
+          (tx) =>
+            tx
+              .select({ fullName: users.fullName, email: users.email })
+              .from(users)
+              .where(eq(users.id, announcement.authorId))
+              .limit(1),
+        );
 
-      await notifyUrgentAnnouncement({
-        id: announcement.id,
-        title: announcement.title,
-        body: announcement.body,
-        authorName: author?.fullName ?? author?.email ?? "Diretoria",
-        publishedAt: announcement.publishedAt ?? new Date(),
-      });
+        const result = await notifyUrgentAnnouncement({
+          id: announcement.id,
+          title: announcement.title,
+          body: announcement.body,
+          authorName: author?.fullName ?? author?.email ?? "Diretoria",
+          publishedAt: announcement.publishedAt ?? new Date(),
+        });
+        emailFailures = result.emailFailures;
+      } catch {
+        emailFailures = null;
+      }
     }
 
-    return { announcement };
+    return { announcement, emailFailures };
   });
 
 // ---------------------------------------------------------------------------

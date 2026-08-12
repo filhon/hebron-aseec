@@ -350,6 +350,7 @@ describe("RLS financeiro na leitura — colaborador lê, ouvinte não lê (S-02)
     await db.insert(bankAccounts).values({
       id: FIN_ACCOUNT_ID,
       bankName: "Banco Sec Audit",
+      nickname: "Conta Sec Audit",
       createdBy: TARGET_ID,
     });
     await db.insert(payables).values({

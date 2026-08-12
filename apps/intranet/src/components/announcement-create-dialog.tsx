@@ -22,16 +22,36 @@ import { AnnouncementForm } from "./announcement-form";
 export function AnnouncementCreateDialog() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  // Contagem de emails que não saíram no anúncio urgente recém-publicado —
+  // o anúncio já está no banco (defeito #2, P-5.10b), então isto é um aviso
+  // pós-sucesso, nunca um erro que bloqueia o fechamento do diálogo.
+  const [partialSendWarning, setPartialSendWarning] = useState<string | null>(
+    null,
+  );
 
   const { execute, isPending } = useAction(createAnnouncement, {
-    onSuccess: () => {
+    onSuccess: ({ data }) => {
       router.refresh();
+      const emailFailures = data?.emailFailures;
+      if (emailFailures) {
+        setPartialSendWarning(
+          `Anúncio publicado. ${emailFailures} ${emailFailures === 1 ? "email não saiu" : "emails não saíram"} — os destinatários já veem o anúncio na intranet.`,
+        );
+        return;
+      }
+      setPartialSendWarning(null);
       setOpen(false);
     },
   });
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setPartialSendWarning(null);
+      }}
+    >
       <DialogTrigger asChild>
         <Button leftIcon={<Plus className="h-3.5 w-3.5" aria-hidden="true" />}>
           Criar anúncio
@@ -41,11 +61,20 @@ export function AnnouncementCreateDialog() {
         <DialogHeader>
           <DialogTitle>Novo anúncio</DialogTitle>
         </DialogHeader>
-        <AnnouncementForm
-          onSubmit={(values) => execute(values)}
-          onCancel={() => setOpen(false)}
-          isLoading={isPending}
-        />
+        {partialSendWarning ? (
+          <div className="flex flex-col gap-4">
+            <p role="status" className="text-xs text-(--color-warning)">
+              {partialSendWarning}
+            </p>
+            <Button onClick={() => setOpen(false)}>Fechar</Button>
+          </div>
+        ) : (
+          <AnnouncementForm
+            onSubmit={(values) => execute(values)}
+            onCancel={() => setOpen(false)}
+            isLoading={isPending}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );

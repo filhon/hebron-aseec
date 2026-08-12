@@ -16,6 +16,7 @@ import type {
   BriefingKpi,
 } from "@hebron/email/templates/briefing";
 import { inngest } from "../client";
+import { getDbTemplate, applyVars } from "../lib/templates";
 
 // Briefing diário/semanal (intranet.briefing_preferences) — P-5.10. KPIs lidos
 // de intranet.kpi_snapshots (cache horário escrito por
@@ -29,6 +30,35 @@ const INTRANET_BASE_URL =
   process.env.NEXT_PUBLIC_APP_URL ?? "https://app.hebronaseec.com.br";
 
 const makeInsert = makeNotificationInserter;
+
+// ---------------------------------------------------------------------------
+// KPIs e eventos recentes são listas de tamanho variável — não dá para
+// representá-los com um {{var}} escalar como o resto do template. Renderiza
+// cada lista como um fragmento HTML e injeta via applyVars nos placeholders
+// {{kpis}}/{{eventos}} do texto salvo no Admin (mesma técnica de string
+// replace de applyVars, sem escapar — consistente com o resto do módulo:
+// valores já formatados, nunca HTML de terceiros).
+// ---------------------------------------------------------------------------
+
+function renderKpisHtml(kpis: BriefingKpi[]): string {
+  return kpis
+    .map((kpi, i) => {
+      const paddingBottom = i === kpis.length - 1 ? 0 : 6;
+      return `<tr><td style="font-size:12px;font-weight:600;color:#6B7280;width:180px;padding-bottom:${paddingBottom}px;">${kpi.label}</td><td style="font-size:13px;font-weight:700;color:#202C85;padding-bottom:${paddingBottom}px;">${kpi.value}</td></tr>`;
+    })
+    .join("");
+}
+
+function renderEventsHtml(events: BriefingEvent[]): string {
+  if (!events.length) return "";
+  const rows = events
+    .map(
+      (e) =>
+        `<tr><td style="font-size:13px;color:#131737;padding:6px 0;border-bottom:1px solid #DCDFEA;"><strong>${e.label}</strong><br/><span style="color:#6B7280;">${e.detail}</span></td></tr>`,
+    )
+    .join("");
+  return `<p style="font-size:13px;font-weight:700;color:#131737;margin:20px 0 8px;">Últimos eventos</p><table width="100%" cellpadding="0" cellspacing="0">${rows}</table>`;
+}
 
 function currentPeriodKey(): string {
   const now = new Date();
@@ -151,15 +181,50 @@ export async function runBriefing(
 
   const [kpis, events] = await Promise.all([getKpis(), getRecentEvents()]);
   const resendApiKey = process.env.RESEND_API_KEY;
-  const intranetUrl = `${INTRANET_BASE_URL}/dashboard`;
+  // O painel da intranet é "/" — "(dashboard)" é route group do Next.js, não
+  // segmento de URL. Todo briefing enviado com o sufixo "/dashboard" levava
+  // a um 404 (achado #5, P-5.10b).
+  const intranetUrl = INTRANET_BASE_URL;
+  const dbTpl = await getDbTemplate("intranet-briefing");
+  const allEvents = [
+    ...events.recentAnnouncements,
+    ...events.recentMeetingDecisions,
+  ];
 
   for (const recipient of recipientRows) {
     const label = periodLabel(recipient.frequency, today);
     const displayName = recipient.fullName ?? recipient.email;
+    const cadencia = recipient.frequency === "diario" ? "diário" : "semanal";
     const title =
       recipient.frequency === "diario"
         ? `Seu briefing diário — ${label}`
         : `Seu briefing semanal — ${label}`;
+
+    const emailOpts = dbTpl
+      ? {
+          to: recipient.email,
+          ...applyVars(dbTpl, {
+            nome: displayName,
+            cadencia,
+            periodo: label,
+            kpis: renderKpisHtml(kpis),
+            eventos: renderEventsHtml(allEvents),
+            link: intranetUrl,
+          }),
+        }
+      : {
+          to: recipient.email,
+          subject: title,
+          template: React.createElement(BriefingEmail, {
+            recipientName: displayName,
+            frequency: recipient.frequency,
+            periodLabel: label,
+            kpis,
+            recentAnnouncements: events.recentAnnouncements,
+            recentMeetingDecisions: events.recentMeetingDecisions,
+            intranetUrl,
+          }),
+        };
 
     await createNotification({
       insert: makeInsert(),
@@ -172,19 +237,7 @@ export async function runBriefing(
         body: `Resumo de ${label}: projetos, tarefas e financeiro.`,
         payload: { frequency: recipient.frequency },
       },
-      email: {
-        to: recipient.email,
-        subject: title,
-        template: React.createElement(BriefingEmail, {
-          recipientName: displayName,
-          frequency: recipient.frequency,
-          periodLabel: label,
-          kpis,
-          recentAnnouncements: events.recentAnnouncements,
-          recentMeetingDecisions: events.recentMeetingDecisions,
-          intranetUrl,
-        }),
-      },
+      email: emailOpts,
     });
   }
 

@@ -65,7 +65,7 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
 
 // ─── Email template metadata (movido de templates-email/page.tsx, P-1.10b) ────
 
-type TemplateGroup = "Geral" | "Projetos" | "Financeiro";
+type TemplateGroup = "Geral" | "Projetos" | "Financeiro" | "Intranet";
 
 type EmailTemplateSlug =
   | "invitation"
@@ -85,7 +85,9 @@ type EmailTemplateSlug =
   | "report-reminder-expiry"
   | "financeiro-batch-approval"
   | "financeiro-budget-alert"
-  | "financeiro-monthly-report";
+  | "financeiro-monthly-report"
+  | "intranet-urgent-announcement"
+  | "intranet-briefing";
 
 interface EmailTemplateMeta {
   slug: EmailTemplateSlug;
@@ -247,6 +249,22 @@ const TEMPLATE_META: EmailTemplateMeta[] = [
       "link",
     ],
     group: "Financeiro",
+  },
+  {
+    slug: "intranet-urgent-announcement",
+    label: "Anúncio urgente",
+    description:
+      "Enviado a todos os papéis internos quando um anúncio urgente é publicado",
+    variables: ["nome", "titulo", "corpo", "autor", "dataPublicacao", "link"],
+    group: "Intranet",
+  },
+  {
+    slug: "intranet-briefing",
+    label: "Briefing diário/semanal",
+    description:
+      "Enviado por opt-in (Configurações → Briefing) com o resumo de KPIs e últimos eventos",
+    variables: ["nome", "cadencia", "periodo", "kpis", "eventos", "link"],
+    group: "Intranet",
   },
 ];
 
@@ -462,6 +480,36 @@ const DEFAULT_EMAIL_TEMPLATES: Record<
   <a href="{{link}}" style="background:#202C85;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;display:inline-block;">Ver demonstrativos completos</a>
 </p>`,
     bodyText: `Olá, {{nome}},\n\nRelatório financeiro de {{mes}}/{{ano}}.\nReceitas: {{receitas}}\nDespesas: {{despesas}}\nResultado: {{resultado}}\n\nAcesse: {{link}}`,
+  },
+  "intranet-urgent-announcement": {
+    subject: "[Urgente] {{titulo}}",
+    bodyHtml: `<p>Olá, {{nome}}.</p>
+<div style="background:#F9FAFB;border-left:3px solid #EA5A06;border-radius:8px;padding:18px 22px;margin-bottom:20px;">
+  <p style="margin:0;white-space:pre-wrap;">{{corpo}}</p>
+</div>
+<p style="font-size:13px;color:#6B7280;">Publicado por {{autor}} em {{dataPublicacao}}.</p>
+<p style="margin-top:20px;">
+  <a href="{{link}}" style="background:#202C85;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;display:inline-block;">Ver anúncio na intranet</a>
+</p>
+<p style="margin-top:20px;font-size:13px;color:#6B7280;">
+  Este é um anúncio urgente enviado a toda a equipe interna. Por ser comunicação operacional, este email não está sujeito a preferências de notificação.
+</p>`,
+    bodyText: `Olá, {{nome}}.\n\n{{titulo}}\n\n{{corpo}}\n\nPublicado por {{autor}} em {{dataPublicacao}}.\n\nAcesse: {{link}}\n\nEste é um anúncio urgente enviado a toda a equipe interna. Por ser comunicação operacional, este email não está sujeito a preferências de notificação.`,
+  },
+  "intranet-briefing": {
+    subject: "Seu briefing {{cadencia}} — {{periodo}}",
+    bodyHtml: `<p>Olá, {{nome}}. Aqui está o resumo de <strong>{{periodo}}</strong> para projetos, tarefas e financeiro.</p>
+<table style="width:100%;border-collapse:collapse;margin:16px 0;background:#F9FAFB;border-radius:8px;padding:16px;">
+{{kpis}}
+</table>
+{{eventos}}
+<p style="margin-top:20px;">
+  <a href="{{link}}" style="background:#202C85;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;display:inline-block;">Ver painel da intranet</a>
+</p>
+<p style="margin-top:20px;font-size:13px;color:#6B7280;">
+  Este é o seu briefing {{cadencia}} automático, enviado porque você optou por recebê-lo em Configurações → Briefing. Para alterar a frequência ou desativar, acesse a intranet.
+</p>`,
+    bodyText: `Olá, {{nome}}. Resumo de {{periodo}} para projetos, tarefas e financeiro.\n\nAcesse: {{link}}\n\nEste é o seu briefing {{cadencia}} automático, enviado porque você optou por recebê-lo em Configurações → Briefing.`,
   },
 };
 
@@ -741,7 +789,12 @@ function EmailTemplatesPanel({
     updatedAt: dbTemplate?.updatedAt ?? new Date(),
   };
 
-  const groups: TemplateGroup[] = ["Geral", "Projetos", "Financeiro"];
+  const groups: TemplateGroup[] = [
+    "Geral",
+    "Projetos",
+    "Financeiro",
+    "Intranet",
+  ];
 
   return (
     <div className="hb-settings-dual-col">

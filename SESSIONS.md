@@ -260,6 +260,8 @@
 | S-237  | 2026-08-11 | P-5.1b — O diretório com foto e bio que ninguém pode preencher (CORRETIVO)                                                       | concluido                            |
 | S-238  | 2026-08-11 | P-5.3b — As três telas que carregam em branco e o anúncio zero que fala de filtro (CORRETIVO)                                    | concluido                            |
 | S-239  | 2026-08-11 | P-5.3c — A busca que leva a uma rota inexistente e o lançador que reescreve o catálogo do ecossistema (CORRETIVO)                | concluido                            |
+| S-240  | 2026-08-11 | Auditoria: débitos técnicos P-5.6–P-5.12 (Intranet, Bloco B)                                                                     | concluido                            |
+| S-241  | 2026-08-12 | P-5.10b — O anúncio urgente que falha depois de publicado e os dois emails que ninguém pode editar (CORRETIVO)                   | concluido                            |
 
 ---
 
@@ -21344,3 +21346,317 @@ exec eslint .` — verdes
 - `apps/intranet/src/app/(dashboard)/reunioes/page.tsx`
 - `packages/ui/src/components/ecosystem-apps.ts`
 - `PROMPTS.md` (critérios de P-5.2 e P-5.3, checklist de P-5.3c)
+
+---
+
+## S-240 — Auditoria: débitos técnicos P-5.6–P-5.12 (Intranet, Bloco B)
+
+**Prompt:** N/A (auditoria solicitada pelo Filipe — reler P-5.6–P-5.12 em
+PROMPTS.md + S-90/S-91/S-92/S-93/S-94/S-96/S-97/S-101/S-102 em SESSIONS.md,
+cruzar com a codebase real, gerar prompts corretivos se necessário)
+**Data:** 2026-08-11
+**Modelo:** claude-opus-5
+**Status:** concluido (read-only; gera 6 prompts novos em PROMPTS.md, nenhum
+código de produto alterado)
+
+### Resumo
+
+Relidos os 7 prompts do Bloco B da Intranet e as 9 sessões que os
+implementaram (incluindo os dois PATCH — P-5.9b/PATCH-017 e P-5.9c/PATCH-018)
+e verificado contra a codebase o que segue aberto depois dos seis corretivos
+do Bloco A (S-234 a S-239). Seis achados justificam prompt corretivo; cinco
+foram avaliados e descartados ou registrados como pergunta de negócio.
+
+O padrão dominante do Bloco A da Intranet era "a tela promete e o backend não
+existe". Aqui é o inverso: **o backend existe, foi testado, e ninguém o
+chamou.** Dois integradores cross-app reais não têm um único chamador de
+produção — o mesmo achado de P-5.2c com `getFeed`, agora com
+`getRadioDashboardStatus` (P-8.11) e `onMeetingActionItemDecided` (P-5.11). O
+segundo padrão é de entrega: o fan-out do anúncio urgente perde a notificação
+in_app quando o email falha, e devolve erro ao autor depois do anúncio já
+commitado.
+
+### Débitos das sessões do Bloco B já fechados (verificados, sem ação)
+
+- **`meeting_decisions` só mutável por super_admin** (S-91 → S-92 → S-93,
+  registrado três vezes) — fechado em P-5.9b/PATCH-017 (S-96): policies de
+  INSERT/UPDATE por `chair_user_id` + `boardAction` +
+  `assertCanMutateSessionDecisions`.
+- **`updateMeetingDecisionStatus` sem action** (S-92) — fechada em S-96, com
+  seletor de status na tela.
+- **`getKpis` sem leitura de snapshot e `trend` fixo em "stable"** (S-92,
+  S-93) — fechado em P-5.9c/PATCH-018 (S-97) e refinado em P-5.2b (S-234):
+  `kpi_snapshot_history`, contrato de frescor de 2h e `trend: null` quando não
+  há base de comparação.
+- **`public.users` sem SELECT para colaborador ver o diretório** (S-91) —
+  resolvido por exceção service-level documentada em `getDirectoryMembers`
+  (`queries.ts:183-189`), no mesmo padrão de `getUsersMap` do Financeiro.
+- **`/perfil` inexistente** (S-93) — fechado por P-5.1b (S-237): `/meus-dados`
+  com `profile-form.tsx` e `actions/profile.ts`.
+- **Schema de briefing duplicado** (S-88, piorado em P-5.9/P-5.10) — fechado
+  em P-5.1b: `briefingPreferenceSchema` em `packages/validators`.
+- **`@hebron/integrations` sem typecheck** (S-219) — fechado em P-5.2c; restam
+  `apps/admin`, `packages/auth` e `apps/projetos` com o mesmo drift de
+  `bankAccounts.nickname`.
+
+### Achados confirmados na codebase (não só em SESSIONS)
+
+1. **O anúncio urgente perde a metade in_app e falha depois de publicado.**
+   `createNotification` (`packages/email/src/lib/send.ts:116-157`) envia pelo
+   Resend **antes** de inserir a notificação: falha de envio, ou
+   `RESEND_API_KEY` ausente (`:123-125`), lança e não grava linha nenhuma —
+   então "in_app + email" (critério de P-5.10) é uma metade dependente da
+   outra. `notifyUrgentAnnouncement` (`lib/notifications.ts:117-148`) roda um
+   `Promise.all` sobre ~150 internos, depois do commit do anúncio
+   (`actions/announcements.ts:60-114`): a primeira rejeição derruba tudo e o
+   autor vê erro genérico sobre um anúncio que está publicado. Junto: os dois
+   emails do módulo (`urgent-announcement`, `briefing`) não estão em
+   `TEMPLATE_META` do Admin nem consultam `admin.email_templates` — a mesma
+   dívida que P-3.10b/S-219 fechou no Financeiro; e o briefing convida para
+   `${INTRANET_BASE_URL}/dashboard` (`crons/briefing.ts:154`), rota que não
+   existe (o painel é `/`, `(dashboard)` é route group). → **P-5.10b**
+2. **A decisão vira tarefa e some.** `onMeetingActionItemDecided`
+   (`packages/integrations/src/intranet.ts:19-27`) segue stub sem chamador —
+   S-101 deixou a instrução ("apagar ou delegar") e nenhum prompt a executou.
+   `createAutoTask` é chamada sem o `responsibleId` que a ata coletou e sem
+   descrição (`actions/decisions.ts:94-106`), então quem for atribuir
+   manualmente (regra de BRAIN §6.9) não sabe quem a ata indicou nem de que
+   reunião veio. E `meeting_decisions.task_id`, gravado em `:108-113` e
+   devolvido por `queries.ts:381`, não é renderizado em lugar nenhum de
+   `/reunioes` — mesmo achado de P-4.6b/S-233. → **P-5.11b**
+3. **O KPI de audiência da Rádio nunca foi ligado.** BRAIN §6.6 lista os
+   quatro KPIs iniciais incluindo "audiência da Rádio"; `getKpis`
+   (`actions/kpis.ts:333-348`) devolve quatro e o quarto é "Tarefas abertas".
+   `getRadioDashboardStatus` (`packages/integrations/src/radio.ts:40`) é real
+   desde P-8.11/S-150 — pipeline de heartbeat, agregação diária e descarte
+   LGPD dos brutos — e `grep -rn` devolve só a definição. Contraste que fecha
+   o argumento: "Alunos na Plataforma" já consome `getStudentKpiMetrics` no
+   mesmo arquivo desde P-6.11. → **P-5.8b**
+4. **A agenda não conhece prazos e as leituras não têm teto.**
+   `meetingSessionsToCalendarEvents` (`queries.ts:482-499`) emite só
+   `type: "reuniao"`, embora `CalendarEventType` tenha `"prazo"` e
+   `calendar-widget.tsx:11-13` já reserve a cor — ramo morto, com o dado
+   (`decision.dueDate`) carregado na mesma página que o descarta. Junto:
+   `getMeetingSessionsWithDecisions` (`queries.ts:341-347`) lê as duas tabelas
+   inteiras, sem janela nem limite, em `/`, `/calendario` e `/reunioes`; o
+   painel usa todas as decisões já registradas para montar um feed de seis
+   itens. → **P-5.9d**
+5. **O diretório faz duas idas de rede por pessoa.** `getDirectoryMembers`
+   (`queries.ts:233-255`) chama `getConsent` (uma query por membro,
+   `packages/db/src/consents.ts:26-35`) e `resolveAvatarReadUrl` (uma
+   assinatura HTTP no Storage por membro, `queries.ts:168-178`) dentro de um
+   `Promise.all` sobre a equipe inteira — ~150 queries e até ~150 assinaturas
+   por carga de `/diretorio`, por usuário que abre a tela. `getStaffOptions`
+   (`:266-269`) paga as duas contas só para montar um `<select>` de
+   responsável. Existe caminho em lote dos dois lados (`user_id = ANY(...)`,
+   `createSignedUrls`). → **P-5.9e**
+6. **A busca trata `%`/`_` como coringa e mostra o enum cru.**
+   `0039_intranet_global_search.sql:25,33,42,54-55` concatena o termo no
+   padrão `ILIKE` sem escapar (não é injeção — o parâmetro é ligado — mas o
+   resultado fica errado para termos com `%` ou `_`); `:51` imprime "Reunião
+   ordinaria" enquanto o resto do módulo usa "Ordinária"
+   (`queries.ts:277-281`); e o corte de 20 por módulo (`:27,35,44,57`) não é
+   sinalizado em lugar nenhum. → **P-5.8c**
+
+### Avaliados e descartados (sem prompt)
+
+- **Diretório sem submissores e parceiros** — o Escopo de P-5.3 e BRAIN §6.6
+  dizem "todos: diretores, conselheiros, colaboradores, submissores,
+  parceiros"; `getDirectoryMembers` restringe a `STAFF_ROLES`
+  (`queries.ts:146-151`) e o critério de P-5.9 pede contato **institucional**
+  sem despejar `public.users`. As duas leituras são defensáveis e a escolha é
+  regra de negócio, não defeito de implementação — **pergunta para o Filipe**,
+  não prompt (princípio "sem suposições" do CLAUDE.md). Anotado aqui para não
+  ser re-descoberto como bug.
+- **Busca não cobre anúncios nem o texto das atas** — o contrato fechado em
+  P-5.8 define o conjunto indexável v1 (projetos, documentos, tarefas,
+  reuniões por título/data) e `meeting_sessions.notes` está fora dele de
+  propósito. Ampliar é decisão de produto; P-5.8c não a toca.
+- **`audit_action` `dashboard_config.updated` a cada reordenação** — cada
+  arraste grava uma linha em `admin.audit_log` com criticidade padrão
+  (`logAudit` aborta a mutação se o audit falhar). É ruído de auditoria para
+  uma preferência pessoal, mas mexer nisso é rever o contrato de
+  `logIntranetAudit`, que P-0.17 acabou de padronizar. Registrado, não
+  corrigido.
+- **`notifyMeetingDecisionCreated` não filtra suspensos/anonimizados**
+  (`lib/notifications.ts:160-163`) — só in_app, sem email; e
+  `notifyUrgentAnnouncement` já filtra `suspendedAt`. Plataforma e Rádio checam
+  `status = 'active'`. Diferença pequena e sem consequência de LGPD (o email
+  de conta anonimizada é pseudônimo, não chega a ninguém). Anotado.
+- **`packages/types/src/intranet/index.ts:80-81` aponta para "P-5.13"**, o
+  prompt do feed ICS (decisão D-2) que não existe em PROMPTS.md nem em
+  BRAIN.md — mesma lacuna que P-5.1b já havia registrado. Continua sendo
+  assunto de um prompt de produto, não de correção.
+
+### Prompts corretivos gerados
+
+Inseridos em PROMPTS.md sob "## Intranet — Corretivos do Bloco B", depois de
+P-5.3c e antes da Fase 6. Ordem recomendada: P-5.10b → P-5.11b → P-5.8b →
+P-5.9d → P-5.9e → P-5.8c. Dependências reais: P-5.8b antes de P-5.9d (mesmo
+`(dashboard)/page.tsx`) e P-5.9d antes de P-5.9e (mesmo `lib/queries.ts`).
+
+- **P-5.10b** — O anúncio urgente que falha depois de publicado e os dois
+  emails que ninguém pode editar (integration; **maior prioridade** — é o
+  único que perde informação, não só esconde).
+- **P-5.11b** — A decisão que vira tarefa e some (integration; fecha o débito
+  de S-101).
+- **P-5.8b** — O KPI de audiência que a Rádio calcula todo dia e o painel
+  nunca pediu (integration).
+- **P-5.9d** — A agenda que promete prazos e a leitura que traz a diretoria
+  inteira (integration).
+- **P-5.9e** — O diretório que abre uma conexão de rede por pessoa
+  (integration).
+- **P-5.8c** — A busca que trata "%" como coringa e chama a reunião de
+  "ordinaria" (integration; menor prioridade).
+
+### Baseline verificado durante a auditoria
+
+- `tsc --noEmit` verde: `@hebron/intranet`, `@hebron/integrations`,
+  `@hebron/jobs`, `@hebron/db`, `@hebron/ui`
+- `tsc --noEmit` com 1 erro cada, sempre o mesmo fixture de `bankAccounts` sem
+  `nickname` (drift de S-219, [[project_bankaccounts_nickname_test_drift]]):
+  `@hebron/admin` (`security-audit.test.ts:350`), `@hebron/auth`,
+  `@hebron/projetos`. P-5.10b fecha o de `@hebron/admin`; os outros dois
+  seguem abertos e fora do escopo destes seis prompts.
+- Nenhum teste executado nesta sessão (auditoria read-only)
+
+### Arquivos modificados
+
+- `PROMPTS.md` (seção "Intranet — Corretivos do Bloco B" com os 6 prompts)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+## S-241 — P-5.10b — O anúncio urgente que falha depois de publicado e os dois emails que ninguém pode editar (CORRETIVO)
+
+**Prompt:** P-5.10b
+**Data:** 2026-08-12
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+Fechou os cinco achados de S-240 no caminho de entrega do anúncio urgente e do
+briefing, maior prioridade dos seis corretivos por ser o único que perde
+informação (os outros só escondem).
+
+1. **A in_app nunca depende mais do email.** `notifyUrgentAnnouncement`
+   (`apps/intranet/src/lib/notifications.ts`) trata cada destinatário
+   isoladamente: tenta o envio por email e, se `createNotification` lançar
+   (Resend fora do ar, 429, `RESEND_API_KEY` ausente — `send.ts` não muda,
+   continua "envia, depois insere"), insere a notificação diretamente como
+   `channel: "in_app"`, sem `sentAt`, em vez de perder a linha inteira.
+2. **O fan-out nunca derruba a publicação.** `createAnnouncement`
+   (`actions/announcements.ts`) já tinha o anúncio commitado antes do
+   fan-out; agora o disparo roda em `try/catch` e a action sempre retorna
+   `{ announcement, emailFailures }` — nunca lança para quem acabou de
+   publicar. `emailFailures: null` sinaliza o caso raro de falha na própria
+   resolução dos destinatários (fora do laço já protegido por recipiente).
+   `announcement-create-dialog.tsx` mostra "publicado, N emails não saíram"
+   em vez de fechar silenciosamente quando `emailFailures > 0`.
+3. **Teto de concorrência explícito.** `URGENT_ANNOUNCEMENT_EMAIL_CONCURRENCY`
+   (10, com o porquê comentado) + um `mapWithConcurrency` local (worker pool)
+   substituem o `Promise.all` que abria uma conexão por destinatário (~150
+   internos). Mover o fan-out para um job Inngest fica fora de escopo,
+   registrado — não existe função disparada por evento em `packages/jobs`
+   (só crons).
+4. **Os dois emails do módulo entram no Admin.** Slugs
+   `intranet-urgent-announcement` e `intranet-briefing` em `TEMPLATE_META` /
+   `EmailTemplateSlug` / `DEFAULT_EMAIL_TEMPLATES` (grupo "Intranet",
+   `apps/admin/.../configuracoes/page.tsx`) e em
+   `packages/db/src/seed.ts::EMAIL_TEMPLATE_DEFAULTS` (idempotente via
+   `onConflictDoNothing`, mesmo padrão de S-219). `getDbTemplate`/`applyVars`
+   locais em `apps/intranet/src/lib/notifications.ts` (padrão de
+   `apps/financeiro/src/lib/notifications.ts` — duplicado deliberadamente,
+   não o helper compartilhado `@hebron/db/email-templates` que
+   `actions/invitations.ts` já usa neste mesmo app; o prompt pediu
+   explicitamente o padrão do Financeiro) e via `packages/jobs/src/lib/templates.ts`
+   (já existia, só não era chamado) em `crons/briefing.ts`. Como KPIs e
+   eventos recentes do briefing são listas de tamanho variável — não cabem
+   num `{{var}}` escalar — `renderKpisHtml`/`renderEventsHtml` pré-renderizam
+   os fragmentos HTML e entram nos placeholders `{{kpis}}`/`{{eventos}}` via
+   `applyVars` (mesma técnica de string-replace sem escape do resto do
+   módulo).
+5. **O link do briefing aponta para `/`,** não mais `/dashboard` (route
+   group do Next.js, não segmento de URL — todo briefing enviado até esta
+   sessão levava a 404).
+6. **Drift de baseline fechado:** `bankAccounts` sem `nickname` NOT NULL
+   (S-219) em `security-audit.test.ts:350` — `@hebron/admin` volta a passar
+   typecheck. `@hebron/auth` e `@hebron/projetos` seguem com o mesmo drift,
+   fora do escopo deste prompt (confirmado em S-240).
+
+### Testes
+
+`apps/intranet/src/__tests__/notifications.test.ts` (criado): in_app grava
+mesmo com todo o envio falhando; falha de um destinatário não afeta os
+outros; teto de concorrência nunca ultrapassado (25 destinatários de teste,
+`maxInFlight` medido via mock instrumentado, sempre ≤ 10); texto do Admin é o
+que o destinatário recebe (com e sem override); `createAnnouncement` publica
+mesmo com falha total de envio e não dispara email em massa para
+prioridade normal. `packages/jobs/src/__tests__/briefing.test.ts`: link não
+termina em `/dashboard`; `runBriefing` usa o texto salvo em
+`admin.email_templates` quando existir.
+
+Nota sobre os testes de concorrência/contagem: `notifyUrgentAnnouncement`
+consulta todos os internos ativos do banco (compartilhado, ~150 usuários
+reais) — os testes comparam `emailFailures` (exato, só os IDs de teste estão
+no conjunto de falha simulada) em vez de `recipients` (total do banco, só
+`>=` o conjunto de teste é garantido).
+
+### Baseline verificado
+
+- `tsc --noEmit`, `eslint .` verdes (execução direta por pacote, não via
+  `pnpm turbo typecheck` — o pipeline do turbo encadeia `^typecheck` e
+  `@hebron/auth` segue com o drift de `bankAccounts.nickname` fora do escopo
+  deste prompt, o que bloquearia a cadeia): `@hebron/intranet`,
+  `@hebron/jobs`, `@hebron/db`, `@hebron/admin`
+- `pnpm turbo build --filter=@hebron/intranet` verde
+- `apps/intranet`: suite completa 40/40 verde
+- `packages/jobs`: suite completa 24/25 verde — `intranet-kpis.test.ts`
+  falhou por drift de dado num contador vivo no banco compartilhado
+  (`27.00` esperado vs `26.00` recebido), arquivo não tocado por este diff,
+  registrado como achado novo, não corrigido
+- `packages/db`: suite completa 66/70 verde — as 4 falhas são drift
+  pré-existente de banco compartilhado, nenhuma em arquivo tocado por este
+  diff: `storage.test.ts` (2, já registrado em
+  [[project_storage_rls_test_flakiness]]), `system-actor.test.ts` (1, já
+  registrado em [[project_system_actor_test_drift]]), `meetings.test.ts` (1,
+  achado novo — `ensureMonthlyMeetings` não criou reunião nova porque os
+  meses futuros já estavam cobertos por execução anterior no banco
+  compartilhado)
+- `apps/admin`: `security-audit.test.ts` 38/39 verde — a 1 falha
+  (`public.data_deletion_requests` com `TRUNCATE`/`REFERENCES`/`TRIGGER`
+  concedidos a `anon`/`authenticated`) é drift de GRANT pré-existente,
+  achado novo, sem relação com este diff nem com o módulo Intranet;
+  registrado, não corrigido. A primeira execução completa do arquivo bateu
+  num corte de rede real a meio da suíte (`ENOTFOUND`/`CONNECTION_CLOSED`) e
+  deixou um `role_assignments` de teste (`OUVINTE_ID` → `colaborador`,
+  concedido por um teste da describe "RLS tarefas" que não terminou de
+  limpar) poluindo as describes seguintes na re-execução seguinte; limpo
+  manualmente antes da execução final que ficou 38/39.
+
+### Suposições registradas
+
+- Concorrência do fan-out fixada em 10 (constante nomeada, sem valor
+  configurável) — não há histórico de rate limit real do Resend para calibrar
+  contra; 10 é conservador o bastante para não estourar o teto de qualquer
+  plano pago comum, ajustável depois com dado real.
+- Variáveis do template `intranet-briefing` para listas (`kpis`, `eventos`)
+  recebem HTML pré-formatado, não uma lista de itens editável — o Admin edita
+  o texto ao redor, não o layout de cada linha da tabela/lista. Mesma
+  limitação estrutural que templates escalares como `financeiro-monthly-report`
+  já tinham (não há precedente de lista no ecossistema).
+
+### Arquivos modificados
+
+- `apps/intranet/src/lib/notifications.ts`
+- `apps/intranet/src/actions/announcements.ts`
+- `apps/intranet/src/components/announcement-create-dialog.tsx`
+- `packages/jobs/src/crons/briefing.ts`
+- `apps/admin/src/app/(dashboard)/configuracoes/page.tsx`
+- `packages/db/src/seed.ts`
+- `apps/intranet/src/__tests__/notifications.test.ts` (criado)
+- `packages/jobs/src/__tests__/briefing.test.ts`
+- `apps/admin/src/__tests__/security-audit.test.ts`
+- `PROMPTS.md` (critérios de P-5.10 e P-5.10b)
+- `SESSIONS.md` (esta entrada + linha no índice)
