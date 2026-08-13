@@ -89,7 +89,10 @@ async function loadDashboardData() {
     getKpis({}),
     getBriefingPreference({}),
     getAnnouncementsWithAuthors(),
-    getMeetingSessionsWithDecisions(),
+    // Teto = feedLimit (P-5.9d CORRETIVO): o painel só precisa do bastante
+    // para o feed (decisões viram itens de feed) e o calendário do dia —
+    // não o histórico inteiro de reuniões.
+    getMeetingSessionsWithDecisions({ limit: feedLimit }),
     getFeedItems(feedLimit),
   ]);
 

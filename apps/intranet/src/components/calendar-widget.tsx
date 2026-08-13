@@ -15,6 +15,15 @@ const EVENT_TYPE_COLOR: Record<CalendarEventType, string> = {
   outro: "var(--hb-cyan)",
 };
 
+// Rótulo textual do tipo — a cor sozinha não é informação acessível
+// (P-5.9d CORRETIVO).
+const EVENT_TYPE_LABEL: Record<CalendarEventType, string> = {
+  reuniao: "Reunião",
+  prazo: "Prazo",
+  evento: "Evento",
+  outro: "Outro",
+};
+
 function sameDay(a: Date, b: Date): boolean {
   return (
     a.getFullYear() === b.getFullYear() &&
@@ -84,6 +93,16 @@ export function CalendarWidget({ events, referenceDate }: CalendarWidgetProps) {
             return (
               <div
                 key={i}
+                title={
+                  firstEvent
+                    ? `${EVENT_TYPE_LABEL[firstEvent.type]}: ${firstEvent.title}`
+                    : undefined
+                }
+                aria-label={
+                  firstEvent
+                    ? `Dia ${date.getDate()}, ${EVENT_TYPE_LABEL[firstEvent.type]}: ${firstEvent.title}`
+                    : undefined
+                }
                 style={{
                   position: "relative",
                   padding: "6px 0",
@@ -116,17 +135,65 @@ export function CalendarWidget({ events, referenceDate }: CalendarWidgetProps) {
 
         {upcoming.length > 0 && (
           <ul className="hb-timeline" style={{ marginTop: 16 }}>
-            {upcoming.map((event) => (
-              <li key={event.id} className="hb-timeline-item">
-                <div className="hb-timeline-time">
-                  {event.startAt.toLocaleDateString("pt-BR", {
-                    day: "2-digit",
-                    month: "short",
-                  })}
-                </div>
-                <div className="hb-timeline-text">{event.title}</div>
-              </li>
-            ))}
+            {upcoming.map((event) => {
+              // Cor do marcador reaproveita os modificadores já existentes
+              // do padrão hb-timeline-item — o rótulo de texto abaixo é o
+              // que carrega a informação, a cor só reforça.
+              const dotModifier =
+                event.type === "prazo"
+                  ? "warm"
+                  : event.type === "evento"
+                    ? "life"
+                    : event.type === "outro"
+                      ? "cool"
+                      : undefined;
+
+              const label = (
+                <>
+                  <span
+                    className="hb-badge"
+                    style={{
+                      background: `color-mix(in srgb, ${EVENT_TYPE_COLOR[event.type]} 16%, transparent)`,
+                      color: EVENT_TYPE_COLOR[event.type],
+                    }}
+                  >
+                    {EVENT_TYPE_LABEL[event.type]}
+                  </span>{" "}
+                  {event.title}
+                </>
+              );
+
+              return (
+                <li
+                  key={event.id}
+                  className={
+                    dotModifier
+                      ? `hb-timeline-item ${dotModifier}`
+                      : "hb-timeline-item"
+                  }
+                >
+                  <div className="hb-timeline-time">
+                    {event.startAt.toLocaleDateString("pt-BR", {
+                      day: "2-digit",
+                      month: "short",
+                    })}
+                  </div>
+                  <div className="hb-timeline-text">
+                    {event.meetingSessionId ? (
+                      <a
+                        href={`/reunioes#reuniao-${event.meetingSessionId}`}
+                        className="transition-colors duration-(--transition-fast) hover:text-(--brand)"
+                        style={{ color: "inherit", textDecoration: "none" }}
+                      >
+                        {label}
+                      </a>
+                    ) : (
+                      label
+                    )}
+                  </div>
+                </li>
+              );
+            })}
           </ul>
         )}
       </div>

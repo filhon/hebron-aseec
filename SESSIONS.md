@@ -264,6 +264,7 @@
 | S-241  | 2026-08-12 | P-5.10b — O anúncio urgente que falha depois de publicado e os dois emails que ninguém pode editar (CORRETIVO)                   | concluido                            |
 | S-242  | 2026-08-12 | P-5.11b — A decisão que vira tarefa e some (CORRETIVO)                                                                           | concluido                            |
 | S-243  | 2026-08-12 | P-5.8b — O KPI de audiência que a Rádio calcula todo dia e o painel nunca pediu (CORRETIVO)                                      | concluido                            |
+| S-244  | 2026-08-12 | P-5.9d — A agenda que promete prazos e a leitura que traz a diretoria inteira (CORRETIVO)                                        | concluido                            |
 
 ---
 
@@ -21857,4 +21858,135 @@ leitura.
 - `apps/intranet/src/__tests__/kpis.test.ts`
 - `packages/integrations/src/__tests__/radio.test.ts` (criado)
 - `PROMPTS.md` (critérios de P-5.1, P-5.3, P-5.8 e P-8.11)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+## S-244 — P-5.9d — A agenda que promete prazos e a leitura que traz a diretoria inteira (CORRETIVO)
+
+**Prompt:** P-5.9d
+**Data:** 2026-08-12
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+Dois achados no mesmo par de funções. P-5.3 prometia "calendário com
+eventos de reuniões e prazos"; `CalendarEventType` sempre teve `"prazo"` e
+`CalendarWidget` já reservava a cor laranja para ele, mas
+`meetingSessionsToCalendarEvents` (`queries.ts`) só gerava `"reuniao"` —
+ramo morto desde que foi escrito. E `getMeetingSessionsWithDecisions`
+lia `meeting_sessions`/`meeting_decisions` inteiras, sem `limit` nem
+janela, a cada carga de `/`, `/calendario` e `/reunioes` — o mesmo
+crescimento sem teto que P-5.3b fechou em `listAnnouncements` e P-4.6b
+fechou no painel de Atividade de Tarefas.
+
+1. **Prazo vira evento de agenda.** `meetingSessionsToCalendarEvents`
+   agora itera `session.decisions` e, para cada decisão com `dueDate` e
+   status diferente de `concluida`, empilha um `CalendarEvent` extra de
+   tipo `prazo` (`id: decision-<id>`, `startAt: dueDate`,
+   `meetingSessionId: session.id`). Decisão concluída não é mais
+   pendência — não entra.
+2. **Rótulo, não só cor.** `CalendarWidget` ganhou `EVENT_TYPE_LABEL`
+   (`Reunião`/`Prazo`/`Evento`/`Outro`). A lista "próximos eventos" (o
+   `hb-timeline` dentro do próprio widget) mostra um `hb-badge` com esse
+   rótulo antes do título; a cor do marcador da timeline reaproveita os
+   modificadores já existentes (`warm`/`cool`/`life`) em vez de CSS novo.
+   No grid do mês, o dia com evento ganhou `title`/`aria-label` textual —
+   o ponto colorido continua existindo, mas não é mais a única pista.
+3. **Prazo leva à reunião de origem.** Item da timeline com
+   `meetingSessionId` vira `<a href="/reunioes#reuniao-<id>">` (mesma
+   âncora que a busca cross-app já usa desde P-5.3c) — decisão nasce sem
+   tela que aponte de volta para a ata, agora aponta.
+4. **Janela + teto em `getMeetingSessionsWithDecisions`.** Passa a
+   receber `{ since?, limit? }`; sessões são lidas com
+   `.where(gte(date, since)).limit(limit)` (padrão: 12 meses atrás — cobre
+   passado e futuro, já que toda data futura é >= `since` — teto 50) e as
+   decisões são lidas só das sessões carregadas (`inArray`), nunca a
+   tabela inteira. Cada chamador pede o que precisa: painel usa
+   `{ limit: feedLimit }` (o widget de feed já limita a exibição a
+   `feedLimit`, então a leitura de decisões fica proporcional a ele, não
+   ao histórico inteiro); `/calendario` usa o padrão (a janela da
+   agenda); `/reunioes` é o histórico completo — `since: new Date(0)`,
+   `limit: MEETING_SESSIONS_LIST_LIMIT` (50) — com aviso de corte
+   ("Mostrando as N reuniões mais recentes"), mesmo desenho que P-5.3b deu
+   a `/anuncios`.
+5. **`getMeetingSessionOptions` também ganhou teto** (200 sessões,
+   dropdown de seleção no formulário de decisão) — não estava no "Problema
+   que este prompt resolve", mas o critério de aceite "nenhuma leitura de
+   meeting_sessions/meeting_decisions sem janela ou teto em lib/queries.ts"
+   é literal e cobre o arquivo inteiro, não só a função citada no
+   diagnóstico. Sem janela de tempo (é um dropdown de criação, não uma
+   listagem histórica) — só teto, generoso o bastante para não afetar uso
+   real.
+6. **Bug pego só na verificação em browser real:** o título do evento
+   `prazo` vinha prefixado `Prazo: ${decision.description}` e o badge do
+   `CalendarWidget` também renderiza o rótulo do tipo — resultado visual
+   era "Prazo Prazo: Aprovar orçamento…", duplicado. `tsc`/`eslint`/testes
+   não pegam isso (é puro texto, sem asserção sobre ele). Corrigido:
+   `meetingSessionsToCalendarEvents` usa `decision.description` puro como
+   título, o rótulo "Prazo" fica só no badge.
+
+### Suposições registradas
+
+- Clique no evento de agenda: o prompt só exige isso para `prazo`
+  ("Clicar no prazo leva à reunião que o originou"). Implementei o link
+  de forma genérica (qualquer evento com `meetingSessionId`, o que hoje
+  inclui também `reuniao`) por ser reaproveitamento direto de um campo já
+  modelado, não invenção de tela/campo novo — mais simples que
+  condicionar por `type`.
+- "Painel não lê mais decisões do que o feed mostra": o painel não
+  filtra decisões 1:1 com `feedLimit` (uma sessão pode ter várias
+  decisões), mas passa a limitar as SESSÕES lidas a `feedLimit`, o que
+  torna a leitura proporcional ao tamanho do feed configurado em vez de
+  ilimitada — escolhi a interpretação mais simples do critério, sem
+  inventar um segundo parâmetro (`decisionLimit`) que o prompt não pediu.
+
+### Baseline verificado
+
+- `tsc --noEmit` direto em `apps/intranet`: verde (`pnpm turbo typecheck`
+  encadeado segue bloqueado por `@hebron/auth`,
+  [[project_bankaccounts_nickname_test_drift]], fora do escopo deste
+  prompt)
+- `pnpm turbo lint --filter=@hebron/intranet`: verde
+- `apps/intranet`: suite completa 9 arquivos / 43 testes verde
+- `pnpm turbo build --filter=@hebron/intranet`: verde (uma primeira
+  tentativa falhou por cache stale de `.next` apontando para uma rota que
+  existe no disco — `rm -rf .next` + rebuild limpo resolveu, não é
+  regressão do diff)
+- **Verificação em browser real** (Playwright headless contra o dev
+  server em `:3005`, sessão real via `createTestAuthUser`/
+  `createTestSessionCookies` de `@hebron/auth/testing`, conselheiro
+  seedado com uma `meeting_session` + `meeting_decision` com `dueDate`):
+  badge "Prazo" visível no widget (não só o ponto laranja); clique no
+  item navega para `/reunioes#reuniao-<id>` e chega na ata certa;
+  marcar a decisão `concluida` faz o badge sumir na releitura; 360px
+  (`scrollWidth === clientWidth === 360`, sem overflow) tanto no grid do
+  mês quanto na lista — screenshots conferidos visualmente. Achado real
+  (item 6 acima) só apareceu nessa etapa — typecheck/lint/testes não
+  cobrem texto renderizado. Todo o setup (usuário/sessão/dados de teste,
+  `tsx`/`playwright` como devDependencies temporárias na raiz) foi
+  desfeito depois: `pnpm remove -w tsx playwright`, lockfile restaurado
+  via `git checkout` (o ciclo add/remove reescreveu o arquivo inteiro) +
+  `pnpm install`, dados de teste apagados do banco.
+- **Achado colateral, fora do escopo deste prompt:** `deleteTestAuthUser`
+  (`packages/auth/src/testing.ts`) NÃO cobre `public.users` —
+  confirmado por SQL direto (`pg_constraint` não lista nenhuma FK de
+  `public.users` para `auth.users`) depois que o cleanup manual deixou
+  a linha órfã em `public.users` mesmo com `auth.users` já apagado.
+  Pelo menos 6 arquivos de teste (`session-real.test.ts` em financeiro/
+  documentos/projetos/admin, `onboarding.test.ts`/`invitations.test.ts`/
+  `email-templates-wiring.test.ts` na intranet) têm comentário afirmando
+  o cascade ("Deletar o auth user faz cascade em public.users →
+  role_assignments") e não apagam `public.users` explicitamente — cada
+  execução real desses testes deixa uma linha órfã no banco compartilhado
+  de dev. Não corrigido aqui (fora do escopo de P-5.9d); registrado em
+  memória para retomar.
+
+### Arquivos modificados
+
+- `apps/intranet/src/lib/queries.ts`
+- `apps/intranet/src/app/(dashboard)/page.tsx`
+- `apps/intranet/src/app/(dashboard)/calendario/page.tsx`
+- `apps/intranet/src/app/(dashboard)/reunioes/page.tsx`
+- `apps/intranet/src/components/calendar-widget.tsx`
+- `PROMPTS.md` (critérios de P-5.3 e P-5.9)
 - `SESSIONS.md` (esta entrada + linha no índice)

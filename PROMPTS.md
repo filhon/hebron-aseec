@@ -6580,7 +6580,7 @@ Páginas: Dashboard personalizado (widgets configuráveis por usuário). Feed de
 - [x] Dashboard com widgets configuráveis (cada usuário monta o seu) — adicionar e reordenar funcionam sem mouse, o painel reflete a mudança sem F5 (P-5.2d)
 - [x] Feed de anúncios com filtro de prioridade
 - [x] Diretório completo com busca e filtro por papel
-- [x] Calendário com eventos de reuniões e prazos
+- [x] Calendário com eventos de reuniões e prazos — prazo era ramo morto (`CalendarEventType` tinha "prazo", nenhum código o gerava); decisão de ata com `dueDate` passa a virar evento de agenda, com rótulo textual (não só cor) e link de volta para a reunião — fechado em P-5.9d (CORRETIVO)
 - [x] Reuniões: lista com atas e decisões vinculadas
 - [x] Busca cross-app com resultados agrupados — resultado de reunião aponta para `/reunioes#reuniao-<id>` (existia rota 404 para `admin`, P-5.3c, CORRETIVO)
 - [x] Responsivo
@@ -6801,7 +6801,7 @@ Substituir mocks. Dashboard com KPIs reais. Feed de anúncios do banco. Diretór
 - [x] Dashboard configurável: adicionar/remover/reordenar widget persiste (widget-config-form conectado)
 - [x] Briefing: opt-in/frequência configurável pela tela (briefing-config-form conectado)
 - [x] Diretório: nome, foto, papel e contato INSTITUCIONAL; telefone pessoal só com consentimento (P-0.13) — não despejar public.users inteiro
-- [x] Calendário com meeting_sessions reais
+- [x] Calendário com meeting_sessions reais — leitura sem janela/teto (`getMeetingSessionsWithDecisions` lia as tabelas inteiras a cada carga de `/`, `/calendario` e `/reunioes`); passa a receber janela (12 meses + futuras) e teto por chamador, decisões lidas só das sessões carregadas — fechado em P-5.9d (CORRETIVO)
 - [x] Busca funcional respeitando RLS (contrato de P-5.8)
 - [x] Nenhum componente/formulário do Bloco A (P-5.2/P-5.4) sem import (grep)
 - [x] Mock data removido
@@ -7520,15 +7520,15 @@ Ref: BRAIN §6.6 (a lista de KPIs iniciais), P-8.11/S-150 (o produtor) e P-5.2c 
 
 **Critérios de aceite:**
 
-- [ ] Uma decisão com prazo aparece na agenda na data do prazo, identificada como prazo por rótulo (não só por cor)
-- [ ] Decisão concluída não aparece como prazo
-- [ ] Clicar no prazo leva à reunião que o originou
-- [ ] Nenhuma leitura de `meeting_sessions`/`meeting_decisions` sem janela ou teto em `lib/queries.ts`
-- [ ] `/reunioes` avisa quando está cortando o histórico
-- [ ] O painel não lê mais decisões do que o feed mostra
-- [ ] Em 360px, a agenda continua legível e sem rolagem horizontal
-- [ ] `apps/intranet` com typecheck, lint e testes verdes; `pnpm turbo build --filter=@hebron/intranet` verde
-- [ ] Registrar em SESSIONS.md
+- [x] Uma decisão com prazo aparece na agenda na data do prazo, identificada como prazo por rótulo (não só por cor) — verificado em browser real (Playwright + sessão de teste), badge "Prazo" visível
+- [x] Decisão concluída não aparece como prazo — verificado em browser real: badge some após marcar `concluida`
+- [x] Clicar no prazo leva à reunião que o originou — verificado em browser real: navega para `/reunioes#reuniao-<id>` e chega na ata certa
+- [x] Nenhuma leitura de `meeting_sessions`/`meeting_decisions` sem janela ou teto em `lib/queries.ts`
+- [x] `/reunioes` avisa quando está cortando o histórico
+- [x] O painel não lê mais decisões do que o feed mostra — teto de sessões = `feedLimit` (ver suposição registrada em SESSIONS.md S-244)
+- [x] Em 360px, a agenda continua legível e sem rolagem horizontal — verificado em browser real (`scrollWidth === clientWidth === 360`)
+- [x] `apps/intranet` com typecheck, lint e testes verdes; `pnpm turbo build --filter=@hebron/intranet` verde
+- [x] Registrar em SESSIONS.md — S-244
 
 **Notas:**
 Ref: P-5.3b (o mesmo teto, em `/anuncios`), P-4.6b (o precedente em Tarefas) e o comentário de `packages/types/src/intranet/index.ts:80-81`, que aponta para um "P-5.13" (feed ICS, decisão D-2) que não existe em PROMPTS.md — este prompt não abre esse assunto, só para de fingir que a agenda já mostra prazos.

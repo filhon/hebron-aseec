@@ -58,6 +58,9 @@ async function CalendarioContent() {
   let sessions: Awaited<ReturnType<typeof getMeetingSessionsWithDecisions>>;
 
   try {
+    // Janela padrão (últimos 12 meses + futuras, teto de
+    // MEETING_SESSIONS_LIST_LIMIT) — a agenda do calendário não precisa de
+    // override (P-5.9d CORRETIVO).
     sessions = await getMeetingSessionsWithDecisions();
   } catch {
     return (

@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { desc, eq, inArray } from "drizzle-orm";
+import { desc, eq, gte, inArray } from "drizzle-orm";
 import { createClient } from "@supabase/supabase-js";
 import {
   createSupabaseServerActionClient,
@@ -286,6 +286,13 @@ export interface MeetingSessionOption {
   date: Date;
 }
 
+// Teto de leitura (P-5.9d CORRETIVO, critério "nenhuma leitura de
+// meeting_sessions/meeting_decisions sem janela ou teto em lib/queries.ts").
+// Dropdown de seleção de sessão no formulário de decisão — 200 sessões
+// (mais de 15 anos de reuniões mensais) cobre qualquer uso real sem exigir
+// aviso de corte na tela, que aqui não existe.
+const MEETING_SESSION_OPTIONS_LIMIT = 200;
+
 // `chairUserId` restringe às sessões presididas por esse usuário (PATCH-017:
 // diretor/conselheiro só podem registrar/atualizar decisões da própria
 // sessão — a mesma regra de 0040_intranet_meeting_decisions_chair_rls.sql).
@@ -305,7 +312,8 @@ export async function getMeetingSessionOptions(
       .where(
         chairUserId ? eq(meetingSessions.chairUserId, chairUserId) : undefined,
       )
-      .orderBy(desc(meetingSessions.date)),
+      .orderBy(desc(meetingSessions.date))
+      .limit(MEETING_SESSION_OPTIONS_LIMIT),
   );
 
   return rows.map((m) => ({
@@ -327,10 +335,39 @@ export interface MeetingSessionWithDecisions {
   decisions: MeetingDecision[];
 }
 
-export async function getMeetingSessionsWithDecisions(): Promise<
-  MeetingSessionWithDecisions[]
-> {
+// Janela + teto (P-5.9d CORRETIVO): sem eles, a leitura crescia com a
+// tabela inteira a cada carga de `/`, `/calendario` e `/reunioes` — mesmo
+// crescimento sem limite que P-5.3b fechou em `listAnnouncements` e P-4.6b
+// fechou no painel de Atividade de Tarefas. Padrão: sessões dos últimos
+// MEETING_SESSIONS_WINDOW_MONTHS meses + todas as futuras (`since` cobre os
+// dois — toda data futura já é >= `since`), ordenadas da mais futura/recente
+// para a mais antiga e tetadas em `limit`. Cada chamador ajusta o que
+// precisa: painel (feedLimit, o bastante para o feed e o dia atual),
+// /calendario (padrão, a janela da agenda), /reunioes (histórico completo —
+// `since` no epoch — tetado em MEETING_SESSIONS_LIST_LIMIT, com aviso de
+// corte, mesmo desenho de P-5.3b em /anuncios).
+const MEETING_SESSIONS_WINDOW_MONTHS = 12;
+export const MEETING_SESSIONS_LIST_LIMIT = 50;
+
+function monthsAgo(months: number): Date {
+  const date = new Date();
+  date.setMonth(date.getMonth() - months);
+  return date;
+}
+
+export interface MeetingSessionsQuery {
+  /** Sessões com data >= este limite. Padrão: hoje menos 12 meses. */
+  since?: Date;
+  /** Teto de sessões retornadas. Padrão: MEETING_SESSIONS_LIST_LIMIT. */
+  limit?: number;
+}
+
+export async function getMeetingSessionsWithDecisions(
+  query: MeetingSessionsQuery = {},
+): Promise<MeetingSessionWithDecisions[]> {
   const actorId = await getActorId();
+  const since = query.since ?? monthsAgo(MEETING_SESSIONS_WINDOW_MONTHS);
+  const limit = query.limit ?? MEETING_SESSIONS_LIST_LIMIT;
 
   // meeting_sessions/meeting_decisions: sem exceção (mesma razão de
   // getMeetingSessionOptions acima — `meeting_sessions_select_board`/
@@ -341,10 +378,22 @@ export async function getMeetingSessionsWithDecisions(): Promise<
   const { sessions, decisionRows, nameRows } = await withAuthenticatedContext(
     { actorId },
     async (tx) => {
-      const [sessions, decisionRows] = await Promise.all([
-        tx.select().from(meetingSessions).orderBy(desc(meetingSessions.date)),
-        tx.select().from(meetingDecisions),
-      ]);
+      const sessions = await tx
+        .select()
+        .from(meetingSessions)
+        .where(gte(meetingSessions.date, since))
+        .orderBy(desc(meetingSessions.date))
+        .limit(limit);
+
+      // Decisões só das sessões carregadas acima — nunca a tabela inteira.
+      const sessionIds = sessions.map((s) => s.id);
+      const decisionRows =
+        sessionIds.length > 0
+          ? await tx
+              .select()
+              .from(meetingDecisions)
+              .where(inArray(meetingDecisions.meetingSessionId, sessionIds))
+          : [];
 
       const userIds = new Set<string>();
       for (const session of sessions) {
@@ -472,28 +521,58 @@ export async function getFeedItems(limit: number): Promise<FeedItem[]> {
 }
 
 // ---------------------------------------------------------------------------
-// meetingSessionsToCalendarEvents — adapta admin.meeting_sessions para o
-// formato CalendarEvent que CalendarWidget (P-5.2) já sabe renderizar. Usado
-// pelo Dashboard e pela página de Calendário — os únicos dois lugares que
-// precisam do CalendarWidget, por isso vive aqui em vez de um componente à
-// parte.
+// meetingSessionsToCalendarEvents — adapta admin.meeting_sessions e as
+// decisões de ata para o formato CalendarEvent que CalendarWidget (P-5.2) já
+// sabe renderizar. Usado pelo Dashboard e pela página de Calendário — os
+// únicos dois lugares que precisam do CalendarWidget, por isso vive aqui em
+// vez de um componente à parte.
+//
+// P-5.9d CORRETIVO: cada decisão com `dueDate` e status diferente de
+// "concluida" também vira um CalendarEvent de tipo "prazo" — decisão
+// concluída não é mais pendência, não entra na agenda.
 // ---------------------------------------------------------------------------
 
 export function meetingSessionsToCalendarEvents(
   sessions: MeetingSessionWithDecisions[],
 ): CalendarEvent[] {
-  return sessions.map((session) => ({
-    id: session.id,
-    title: `Reunião ${session.typeLabel}`,
-    description: session.notes,
-    type: "reuniao",
-    startAt: session.date,
-    endAt: null,
-    location: null,
-    meetingSessionId: session.id,
-    createdBy: "",
-    createdByName: session.chairName ?? "—",
-    createdAt: session.date,
-    updatedAt: session.date,
-  }));
+  const events: CalendarEvent[] = [];
+
+  for (const session of sessions) {
+    events.push({
+      id: session.id,
+      title: `Reunião ${session.typeLabel}`,
+      description: session.notes,
+      type: "reuniao",
+      startAt: session.date,
+      endAt: null,
+      location: null,
+      meetingSessionId: session.id,
+      createdBy: "",
+      createdByName: session.chairName ?? "—",
+      createdAt: session.date,
+      updatedAt: session.date,
+    });
+
+    for (const decision of session.decisions) {
+      if (!decision.dueDate || decision.status === "concluida") continue;
+      events.push({
+        id: `decision-${decision.id}`,
+        // Sem prefixo "Prazo:" aqui — o rótulo já vem do tipo do evento
+        // (badge em CalendarWidget); repetir no título duplicava a palavra.
+        title: decision.description,
+        description: `Reunião ${session.typeLabel} — responsável ${decision.responsibleName}`,
+        type: "prazo",
+        startAt: decision.dueDate,
+        endAt: null,
+        location: null,
+        meetingSessionId: session.id,
+        createdBy: decision.responsibleId,
+        createdByName: decision.responsibleName,
+        createdAt: decision.createdAt,
+        updatedAt: decision.updatedAt,
+      });
+    }
+  }
+
+  return events;
 }

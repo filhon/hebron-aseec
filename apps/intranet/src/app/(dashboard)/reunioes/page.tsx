@@ -7,6 +7,7 @@ import {
   getMeetingSessionOptions,
   getMeetingSessionsWithDecisions,
   getStaffOptions,
+  MEETING_SESSIONS_LIST_LIMIT,
 } from "../../../lib/queries";
 import { MeetingDecisionDialog } from "../../../components/meeting-decision-dialog";
 import { MeetingDecisionStatusSelect } from "../../../components/meeting-decision-status-select";
@@ -94,7 +95,13 @@ async function ReunioesContent({
   let sessions: Awaited<ReturnType<typeof getMeetingSessionsWithDecisions>>;
 
   try {
-    sessions = await getMeetingSessionsWithDecisions();
+    // /reunioes é o histórico completo (P-5.9d CORRETIVO) — sem janela de
+    // tempo (since no epoch), só o teto de MEETING_SESSIONS_LIST_LIMIT,
+    // mesmo desenho que P-5.3b deu a /anuncios.
+    sessions = await getMeetingSessionsWithDecisions({
+      since: new Date(0),
+      limit: MEETING_SESSIONS_LIST_LIMIT,
+    });
   } catch {
     return (
       <ErrorState
@@ -118,112 +125,121 @@ async function ReunioesContent({
     );
   }
 
+  const capped = sessions.length >= MEETING_SESSIONS_LIST_LIMIT;
+
   return (
-    <div className="hb-meeting-list">
-      {sessions.map((session) => {
-        const day = session.date.getDate().toString().padStart(2, "0");
-        const month = formatDate(session.date).split(" ")[1] ?? "";
-        // Presidente da sessão ou super_admin altera o status das decisões
-        // desta sessão (0040_intranet_meeting_decisions_chair_rls.sql).
-        const canEditStatus =
-          isSuperAdmin ||
-          (isBoard && !!userId && session.chairUserId === userId);
+    <>
+      <div className="hb-meeting-list">
+        {sessions.map((session) => {
+          const day = session.date.getDate().toString().padStart(2, "0");
+          const month = formatDate(session.date).split(" ")[1] ?? "";
+          // Presidente da sessão ou super_admin altera o status das decisões
+          // desta sessão (0040_intranet_meeting_decisions_chair_rls.sql).
+          const canEditStatus =
+            isSuperAdmin ||
+            (isBoard && !!userId && session.chairUserId === userId);
 
-        return (
-          <div
-            key={session.id}
-            id={`reuniao-${session.id}`}
-            className="hb-card hb-card-padded"
-            style={{ display: "flex", flexDirection: "column", gap: 14 }}
-          >
-            <div style={{ display: "flex", gap: 18 }}>
-              <div className="hb-meeting-date-block" style={{ width: 64 }}>
-                <div className="day">{day}</div>
-                <div className="month">{month}</div>
+          return (
+            <div
+              key={session.id}
+              id={`reuniao-${session.id}`}
+              className="hb-card hb-card-padded"
+              style={{ display: "flex", flexDirection: "column", gap: 14 }}
+            >
+              <div style={{ display: "flex", gap: 18 }}>
+                <div className="hb-meeting-date-block" style={{ width: 64 }}>
+                  <div className="day">{day}</div>
+                  <div className="month">{month}</div>
+                </div>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <h4>Reunião {session.typeLabel}</h4>
+                  {session.notes && (
+                    <p className="hb-meeting-sub">{session.notes}</p>
+                  )}
+                  {session.chairName && (
+                    <div className="hb-meeting-meta-row">
+                      <span>Presidida por {session.chairName}</span>
+                    </div>
+                  )}
+                </div>
               </div>
-              <div style={{ minWidth: 0, flex: 1 }}>
-                <h4>Reunião {session.typeLabel}</h4>
-                {session.notes && (
-                  <p className="hb-meeting-sub">{session.notes}</p>
-                )}
-                {session.chairName && (
-                  <div className="hb-meeting-meta-row">
-                    <span>Presidida por {session.chairName}</span>
-                  </div>
-                )}
-              </div>
-            </div>
 
-            {session.decisions.length > 0 && (
-              <div style={{ paddingLeft: "var(--sp-4)" }}>
-                <p className="hb-section-label">Decisões</p>
-                <ul
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 8,
-                  }}
-                >
-                  {session.decisions.map((decision) => (
-                    <li
-                      key={decision.id}
-                      style={{
-                        display: "flex",
-                        alignItems: "flex-start",
-                        gap: 10,
-                        fontSize: 13.5,
-                      }}
-                    >
-                      {canEditStatus ? (
-                        <MeetingDecisionStatusSelect
-                          meetingDecisionId={decision.id}
-                          status={decision.status}
-                        />
-                      ) : (
-                        <span
-                          className="hb-badge"
-                          style={{
-                            ...STATUS_STYLE[decision.status],
-                            flexShrink: 0,
-                          }}
-                        >
-                          {STATUS_LABEL[decision.status]}
-                        </span>
-                      )}
-                      <div style={{ minWidth: 0, flex: 1 }}>
-                        <span className="text-(--fg)">
-                          {decision.description}
-                          <span className="text-xs">
-                            {" "}
-                            — {decision.responsibleName}
-                            {decision.dueDate &&
-                              ` · até ${formatDate(decision.dueDate)}`}
-                          </span>
-                        </span>
-                        {decision.taskId && (
-                          <a
-                            href={taskHref(decision.taskId)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="mt-1 flex items-center gap-1.5 text-xs font-medium text-(--brand) transition-colors duration-(--transition-fast) hover:text-(--hb-blue-deep)"
+              {session.decisions.length > 0 && (
+                <div style={{ paddingLeft: "var(--sp-4)" }}>
+                  <p className="hb-section-label">Decisões</p>
+                  <ul
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 8,
+                    }}
+                  >
+                    {session.decisions.map((decision) => (
+                      <li
+                        key={decision.id}
+                        style={{
+                          display: "flex",
+                          alignItems: "flex-start",
+                          gap: 10,
+                          fontSize: 13.5,
+                        }}
+                      >
+                        {canEditStatus ? (
+                          <MeetingDecisionStatusSelect
+                            meetingDecisionId={decision.id}
+                            status={decision.status}
+                          />
+                        ) : (
+                          <span
+                            className="hb-badge"
+                            style={{
+                              ...STATUS_STYLE[decision.status],
+                              flexShrink: 0,
+                            }}
                           >
-                            <ArrowUpRight
-                              className="h-3.5 w-3.5"
-                              aria-hidden="true"
-                            />
-                            Ver tarefa
-                          </a>
+                            {STATUS_LABEL[decision.status]}
+                          </span>
                         )}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        );
-      })}
-    </div>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <span className="text-(--fg)">
+                            {decision.description}
+                            <span className="text-xs">
+                              {" "}
+                              — {decision.responsibleName}
+                              {decision.dueDate &&
+                                ` · até ${formatDate(decision.dueDate)}`}
+                            </span>
+                          </span>
+                          {decision.taskId && (
+                            <a
+                              href={taskHref(decision.taskId)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="mt-1 flex items-center gap-1.5 text-xs font-medium text-(--brand) transition-colors duration-(--transition-fast) hover:text-(--hb-blue-deep)"
+                            >
+                              <ArrowUpRight
+                                className="h-3.5 w-3.5"
+                                aria-hidden="true"
+                              />
+                              Ver tarefa
+                            </a>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {capped && (
+        <p className="text-xs" style={{ marginTop: 12 }}>
+          Mostrando as {sessions.length} reuniões mais recentes.
+        </p>
+      )}
+    </>
   );
 }
 
