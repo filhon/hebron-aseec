@@ -4,6 +4,7 @@ import { z } from "zod";
 import { ECOSYSTEM_APPS } from "@hebron/ui";
 import { authenticatedAction } from "../lib/safe-action";
 import { getSessionSupabaseClient } from "../lib/session-client";
+import { MEETING_TYPE_LABEL } from "../lib/queries";
 
 // ---------------------------------------------------------------------------
 // globalSearch — busca cross-app (projetos.projects, documentos.documents,
@@ -45,8 +46,33 @@ function buildHref(module: string, id: string): string {
 interface SearchRow {
   module: string;
   id: string;
-  title: string;
+  title: string | null;
   description: string | null;
+  meeting_type: string | null;
+  meeting_date: string | null;
+}
+
+// Teto por módulo (0079_intranet_global_search_precisao.sql pede LIMIT 21 —
+// 20 + 1 sentinela — por bloco). Quando um módulo devolve 21 linhas, a 21ª
+// nunca é exibida; ela só avisa que houve corte.
+const MODULE_RESULT_CAP = 20;
+
+// admin.meeting_sessions.date é timestamptz; o RPC devolve ISO
+// ("2026-08-14T00:00:00+00:00" ou similar) — só a parte de data importa.
+function formatMeetingDate(isoDate: string): string {
+  const [year, month, day] = isoDate.slice(0, 10).split("-");
+  return `${day}/${month}/${year}`;
+}
+
+// Rótulo de reunião montado aqui, na aplicação, a partir da fonte única de
+// tipos (MEETING_TYPE_LABEL, lib/queries.ts) — a RPC (0079) só devolve
+// type/date crus, nunca mais o enum concatenado cru ("Reunião ordinaria").
+function resolveTitle(row: SearchRow): string {
+  if (row.module === "admin" && row.meeting_type && row.meeting_date) {
+    const label = MEETING_TYPE_LABEL[row.meeting_type] ?? row.meeting_type;
+    return `Reunião ${label} — ${formatMeetingDate(row.meeting_date)}`;
+  }
+  return row.title ?? "";
 }
 
 export const globalSearch = authenticatedAction
@@ -61,13 +87,36 @@ export const globalSearch = authenticatedAction
 
     const rows = (data ?? []) as SearchRow[];
 
-    return {
-      results: rows.map((row) => ({
-        id: row.id,
-        module: MODULE_LABEL[row.module] ?? row.module,
-        title: row.title,
-        description: row.description ?? undefined,
-        href: buildHref(row.module, row.id),
-      })),
-    };
+    const rowsByModule = new Map<string, SearchRow[]>();
+    for (const row of rows) {
+      const bucket = rowsByModule.get(row.module) ?? [];
+      bucket.push(row);
+      rowsByModule.set(row.module, bucket);
+    }
+
+    const results: {
+      id: string;
+      module: string;
+      title: string;
+      description?: string;
+      href: string;
+    }[] = [];
+    const truncatedModules: string[] = [];
+
+    for (const [module, moduleRows] of rowsByModule) {
+      if (moduleRows.length > MODULE_RESULT_CAP) {
+        truncatedModules.push(MODULE_LABEL[module] ?? module);
+      }
+      for (const row of moduleRows.slice(0, MODULE_RESULT_CAP)) {
+        results.push({
+          id: row.id,
+          module: MODULE_LABEL[row.module] ?? row.module,
+          title: resolveTitle(row),
+          description: row.description ?? undefined,
+          href: buildHref(row.module, row.id),
+        });
+      }
+    }
+
+    return { results, truncatedModules };
   });

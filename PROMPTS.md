@@ -6582,7 +6582,7 @@ Páginas: Dashboard personalizado (widgets configuráveis por usuário). Feed de
 - [x] Diretório completo com busca e filtro por papel
 - [x] Calendário com eventos de reuniões e prazos — prazo era ramo morto (`CalendarEventType` tinha "prazo", nenhum código o gerava); decisão de ata com `dueDate` passa a virar evento de agenda, com rótulo textual (não só cor) e link de volta para a reunião — fechado em P-5.9d (CORRETIVO)
 - [x] Reuniões: lista com atas e decisões vinculadas
-- [x] Busca cross-app com resultados agrupados — resultado de reunião aponta para `/reunioes#reuniao-<id>` (existia rota 404 para `admin`, P-5.3c, CORRETIVO)
+- [x] Busca cross-app com resultados agrupados — resultado de reunião aponta para `/reunioes#reuniao-<id>` (existia rota 404 para `admin`, P-5.3c, CORRETIVO); termo com `%`/`_` deixou de virar coringa de LIKE, reunião ganhou o rótulo acentuado ("Reunião Ordinária") e módulo truncado em 20 avisa o usuário — P-5.8c (CORRETIVO)
 - [x] Responsivo
 - [x] Anúncios, Reuniões e Calendário têm fronteira de carregamento (`Suspense` + esqueleto) com cabeçalho visível de imediato, mesmo desenho do Diretório — as cinco telas do módulo, não só o painel — fechado em P-5.3b (CORRETIVO)
 - [x] Lint passa
@@ -6758,6 +6758,7 @@ Busca global cross-app — CONTRATO (fechado nesta auditoria): a busca executa c
 - [x] KPIs live + snapshot por cron registrado
 - [x] Busca roda com o client da sessão; colaborador NÃO recebe resultado restricted de documentos que seu papel não vê (teste de RLS via busca)
 - [x] Busca retorna resultados de Projetos, Documentos e Tarefas agrupados; Financeiro ausente
+- [x] Termo com `%`/`_` é tratado como texto literal (`ESCAPE '\'`), reunião aparece com rótulo acentuado da aplicação e módulo com mais de 20 correspondências avisa o corte — P-5.8c (CORRETIVO)
 - [x] Zero createClient manual / zero SERVICE_ROLE em actions (grep)
 - [x] Lint passa · Types passam
 
@@ -7628,14 +7629,14 @@ Três defeitos na função que sustenta "Busca cross-app com resultados agrupado
 
 **Critérios de aceite:**
 
-- [ ] Buscar `100%` devolve só o que contém literalmente "100%"
-- [ ] Buscar `ata_2026` não casa "ata 2026"
-- [ ] Resultado de reunião aparece como "Reunião Ordinária — DD/MM/AAAA"
-- [ ] Módulo com mais correspondências do que o teto informa o corte
-- [ ] A busca continua rodando com o client da sessão e a RLS continua filtrando: o teste de documento `restricted` segue verde
-- [ ] Migration idempotente, aplicada com sucesso; reaplicação reporta "Nothing to apply"
-- [ ] `apps/intranet` com typecheck, lint e testes verdes; `pnpm turbo build --filter=@hebron/intranet` verde
-- [ ] Registrar em SESSIONS.md
+- [x] Buscar `100%` devolve só o que contém literalmente "100%"
+- [x] Buscar `ata_2026` não casa "ata 2026"
+- [x] Resultado de reunião aparece como "Reunião Ordinária — DD/MM/AAAA"
+- [x] Módulo com mais correspondências do que o teto informa o corte
+- [x] A busca continua rodando com o client da sessão e a RLS continua filtrando: o teste de documento `restricted` segue verde
+- [x] Migration idempotente, aplicada com sucesso; reaplicação reporta "Nothing to apply"
+- [x] `apps/intranet` com typecheck, lint e testes verdes; `pnpm turbo build --filter=@hebron/intranet` verde
+- [x] Registrar em SESSIONS.md
 
 **Notas:**
 Ref: contrato de busca de P-5.8 (que este prompt preserva inteiro — RLS filtra, zero reimplementação de visibilidade) e P-5.3c, que consertou o destino dos resultados. É o de menor prioridade dos seis: nenhum dado se perde, mas é a tela que promete "encontre em todos os módulos" e devolve menos ou mais do que foi pedido.

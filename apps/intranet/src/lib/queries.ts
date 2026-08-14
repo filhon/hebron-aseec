@@ -347,7 +347,9 @@ export async function getStaffOptions(): Promise<StaffOption[]> {
 // o que o critério de aceite pede: "Calendário com meeting_sessions reais".
 // ---------------------------------------------------------------------------
 
-const MEETING_TYPE_LABEL: Record<string, string> = {
+// Exportado para actions/search.ts (P-5.8c CORRETIVO): fonte única do rótulo
+// de reunião — a busca global não pode recriar este dicionário.
+export const MEETING_TYPE_LABEL: Record<string, string> = {
   mensal: "Mensal",
   ordinaria: "Ordinária",
   extraordinaria: "Extraordinária",

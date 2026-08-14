@@ -266,6 +266,7 @@
 | S-243  | 2026-08-12 | P-5.8b — O KPI de audiência que a Rádio calcula todo dia e o painel nunca pediu (CORRETIVO)                                      | concluido                            |
 | S-244  | 2026-08-12 | P-5.9d — A agenda que promete prazos e a leitura que traz a diretoria inteira (CORRETIVO)                                        | concluido                            |
 | S-245  | 2026-08-14 | P-5.9e — O diretório que abre uma conexão de rede por pessoa (CORRETIVO)                                                         | concluido                            |
+| S-246  | 2026-08-14 | P-5.8c — A busca que trata "%" como coringa e chama a reunião de "ordinaria" (CORRETIVO)                                         | concluido                            |
 
 ---
 
@@ -22080,4 +22081,101 @@ lote (`user_id = ANY(...)` e `createSignedUrls`) e o corte de colunas de
 - `packages/db/src/__tests__/consents.test.ts`
 - `apps/intranet/src/lib/queries.ts`
 - `PROMPTS.md` (critério de P-5.9)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+## S-246 — P-5.8c — A busca que trata "%" como coringa e chama a reunião de "ordinaria" (CORRETIVO)
+
+**Prompt:** P-5.8c
+**Data:** 2026-08-14
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+Três defeitos em `public.intranet_global_search`
+(`0039_intranet_global_search.sql`), sustentando "Busca cross-app com
+resultados agrupados" (P-5.3/P-5.8): o termo do usuário ia direto para
+`ILIKE '%' || _query || '%'` sem escapar nada (buscar "100%" devolvia tudo
+que contivesse "100"; "ata*2026" casava "ata 2026" e "ataX2026", já que `*`
+de LIKE casa um caractere qualquer); a reunião aparecia com o enum cru
+("Reunião ordinaria") em vez do rótulo acentuado que o resto do módulo usa;
+e cada bloco cortava em 20 sem avisar quem buscou.
+
+1. **Migration `0079_intranet_global_search_precisao.sql`** substitui a
+   função (`DROP FUNCTION` + `CREATE`, obrigatório porque o `RETURNS TABLE`
+   muda de forma — Postgres recusa `CREATE OR REPLACE` nesse caso). O termo
+   é escapado à mão (`\` primeiro, depois `%` e `_`) e a comparação usa
+   `ESCAPE '\'` explícito. A linha de reunião devolve `meeting_type`/
+   `meeting_date` crus em vez do rótulo montado em SQL. Cada bloco busca
+   `LIMIT 21` (teto de 20 + 1 sentinela) — a 21ª linha nunca é exibida, só
+   sinaliza corte para a aplicação. Contrato de P-5.8 preservado:
+   `SECURITY INVOKER` e `GRANT EXECUTE … TO authenticated` no mesmo
+   arquivo.
+2. **`MEETING_TYPE_LABEL` exportado** de `apps/intranet/src/lib/
+queries.ts` — fonte única do rótulo de reunião, agora também consumida
+   por `actions/search.ts` (antes só existia dentro de
+   `getMeetingSessionOptions`).
+3. **`globalSearch` (`actions/search.ts`)** agrupa as linhas por módulo;
+   monta o título da reunião como `Reunião ${label} — DD/MM/AAAA` a partir
+   de `meeting_type`/`meeting_date` (formatados a partir do ISO devolvido
+   pelo RPC); quando um módulo devolve as 21 linhas, marca esse módulo como
+   truncado (rótulo do módulo, ex. "Documentos") e devolve só as 20
+   primeiras. Retorno ganhou `truncatedModules: string[]` ao lado de
+   `results`.
+4. **`SearchGlobal`** (`components/search-global.tsx`) mostra, sob o
+   cabeçalho de cada módulo truncado, um aviso honesto — "Mostrando os
+   primeiros 20 resultados. Use um termo mais específico…" — sem prometer
+   paginação inexistente. Passou por `/impeccable` antes da edição (regra
+   G2/CLAUDE.md); mudança pontual, reaproveita os tokens e o padrão de
+   texto secundário (`text-xs text-(--fg-muted)`) já usados no resto do
+   componente.
+5. **Testes novos em `search.test.ts`** (4, um por critério de aceite):
+   termo com `%` não devolve o que só contém o prefixo sem o `%`; termo com
+   `_` não casa "ata 2026" com espaço no lugar do `_` (exemplo literal do
+   critério de aceite); 21 projetos correspondentes ao mesmo termo —
+   `results` traz só 20 e `truncatedModules` contém "Projetos"; reunião de
+   tipo `ordinaria` aparece como "Reunião Ordinária — DD/MM/AAAA". Os
+   testes de P-5.12/P-5.8 (agregação multi-módulo e RLS de documento
+   `restricted`) continuam verdes sem alteração.
+6. **Bookkeeping em PROMPTS.md**: critérios de busca de P-5.3 e P-5.8
+   anotados com a correção.
+
+### Suposições registradas
+
+- A RPC manteve a assinatura `intranet_global_search(text)` (sem parâmetro
+  de limite) — o teto de 20 por bloco já existia hardcoded no 0039; só
+  virou 21 para carregar o sinal de corte. Não havia pedido para
+  parametrizar o teto, então não parametrizei.
+- Aviso de corte fica junto ao cabeçalho de cada módulo truncado (não um
+  banner único no topo da busca) — mais preciso para o usuário saber qual
+  módulo cortou, e o prompt não especificou a posição exata.
+
+### Baseline verificado
+
+- Migration `0079` aplicada com sucesso (`pnpm --filter @hebron/db
+db:migrate`); reaplicação reporta "Nothing to apply — database is up to
+  date."
+- `pnpm --filter @hebron/intranet exec tsc --noEmit`: verde (rodado direto,
+  não via `turbo typecheck`, porque `@hebron/auth#typecheck` falha por
+  drift pré-existente e não relacionado —
+  [[project_bankaccounts_nickname_test_drift]])
+- `pnpm --filter @hebron/intranet exec eslint` nos arquivos do diff: verde
+- `pnpm --filter @hebron/intranet exec vitest run`: 47/47 verde (9 arquivos,
+  incluindo os 4 testes novos de `search.test.ts`, 7/7 nesse arquivo)
+- `pnpm --filter @hebron/intranet exec next build` (após limpar `.next`,
+  que tinha um artefato de cache de uma build turbo anterior apontando
+  "Cannot find module for page: /cadastro/status", não relacionado a este
+  diff): verde, 22 rotas geradas
+
+### Arquivos modificados
+
+- `packages/db/src/migrations/0079_intranet_global_search_precisao.sql`
+  (novo)
+- `apps/intranet/src/actions/search.ts`
+- `apps/intranet/src/components/search-global.tsx`
+- `apps/intranet/src/lib/queries.ts` (exportar `MEETING_TYPE_LABEL`)
+- `apps/intranet/src/__tests__/search.test.ts`
+- `PROMPTS.md` (critérios de P-5.3 e P-5.8)
 - `SESSIONS.md` (esta entrada + linha no índice)

@@ -25,6 +25,7 @@ export function SearchGlobal({
 }: SearchGlobalProps) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResultItem[]>([]);
+  const [truncatedModules, setTruncatedModules] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
   const requestId = useRef(0);
@@ -33,6 +34,7 @@ export function SearchGlobal({
     const term = query.trim();
     if (term.length < 2) {
       setResults([]);
+      setTruncatedModules([]);
       setIsLoading(false);
       setHasError(false);
       return;
@@ -47,11 +49,13 @@ export function SearchGlobal({
         .then((response) => {
           if (currentRequest !== requestId.current) return;
           setResults(response?.data?.results ?? []);
+          setTruncatedModules(response?.data?.truncatedModules ?? []);
           setIsLoading(false);
         })
         .catch(() => {
           if (currentRequest !== requestId.current) return;
           setResults([]);
+          setTruncatedModules([]);
           setIsLoading(false);
           setHasError(true);
         });
@@ -105,6 +109,15 @@ export function SearchGlobal({
             grouped.map(([module, items]) => (
               <div key={module} style={{ marginBottom: 14 }}>
                 <p className="hb-section-label">{module}</p>
+                {truncatedModules.includes(module) && (
+                  <p
+                    className="text-xs text-(--fg-muted)"
+                    style={{ marginBottom: 6 }}
+                  >
+                    Mostrando os primeiros {items.length} resultados. Use um
+                    termo mais específico para encontrar o que procura.
+                  </p>
+                )}
                 <ul
                   style={{ display: "flex", flexDirection: "column", gap: 2 }}
                 >
