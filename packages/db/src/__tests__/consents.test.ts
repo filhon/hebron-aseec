@@ -11,7 +11,12 @@ import postgres from "postgres";
 import { eq } from "drizzle-orm";
 import { db } from "@hebron/db/client";
 import { users, roleAssignments, consents, auditLog } from "@hebron/db/schema";
-import { getConsent, getConsents, setConsent } from "@hebron/db/consents";
+import {
+  getConsent,
+  getConsents,
+  getConsentsForUsers,
+  setConsent,
+} from "@hebron/db/consents";
 
 const IDS = {
   titular: "d2000000-0000-0000-0000-000000000001",
@@ -152,6 +157,30 @@ describe("setConsent / getConsent / getConsents", () => {
 
     expect(entries).toHaveLength(1);
     expect(entries[0]?.action).toBe("consent.granted");
+  });
+});
+
+describe("getConsentsForUsers", () => {
+  it("devolve uma linha por usuário com consentimento registrado e nada para quem não tem", async () => {
+    await setConsent({
+      userId: IDS.titular,
+      purpose: "comunicacao",
+      granted: true,
+    });
+
+    const map = await getConsentsForUsers(
+      [IDS.titular, IDS.outroTitular],
+      "comunicacao",
+    );
+
+    expect(map.get(IDS.titular)?.granted).toBe(true);
+    expect(map.has(IDS.outroTitular)).toBe(false);
+    expect(map.size).toBe(1);
+  });
+
+  it("devolve Map vazio para lista de usuários vazia", async () => {
+    const map = await getConsentsForUsers([], "comunicacao");
+    expect(map.size).toBe(0);
   });
 });
 

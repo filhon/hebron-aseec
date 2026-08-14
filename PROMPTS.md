@@ -6800,7 +6800,7 @@ Substituir mocks. Dashboard com KPIs reais. Feed de anúncios do banco. Diretór
 - [x] Decisão de reunião registrável pela tela, com checkbox "criar tarefa" funcionando de ponta a ponta. **A decisão mostra a tarefa que criou (P-5.11b):** com `taskId` presente, `/reunioes` exibe o link "Ver tarefa" para `<tarefas>/tarefa/<id>` — antes o dado ficava só no banco (`meeting_decisions.task_id`), sem tela que o mostrasse (mesmo achado de P-4.6b/S-233).
 - [x] Dashboard configurável: adicionar/remover/reordenar widget persiste (widget-config-form conectado)
 - [x] Briefing: opt-in/frequência configurável pela tela (briefing-config-form conectado)
-- [x] Diretório: nome, foto, papel e contato INSTITUCIONAL; telefone pessoal só com consentimento (P-0.13) — não despejar public.users inteiro
+- [x] Diretório: nome, foto, papel e contato INSTITUCIONAL; telefone pessoal só com consentimento (P-0.13) — não despejar public.users inteiro. Leitura de consentimento e assinatura de avatar eram uma chamada por pessoa (~150 idas de rede por carga de `/diretorio`, e de novo em `getStaffOptions`); passam a ser uma chamada em lote cada uma, e `getStaffOptions` para de reaproveitar o diretório inteiro — fechado em P-5.9e (CORRETIVO)
 - [x] Calendário com meeting_sessions reais — leitura sem janela/teto (`getMeetingSessionsWithDecisions` lia as tabelas inteiras a cada carga de `/`, `/calendario` e `/reunioes`); passa a receber janela (12 meses + futuras) e teto por chamador, decisões lidas só das sessões carregadas — fechado em P-5.9d (CORRETIVO)
 - [x] Busca funcional respeitando RLS (contrato de P-5.8)
 - [x] Nenhum componente/formulário do Bloco A (P-5.2/P-5.4) sem import (grep)
@@ -7575,14 +7575,14 @@ O caminho em lote existe dos dois lados: uma query com `user_id = ANY(...)` reso
 
 **Critérios de aceite:**
 
-- [ ] O número de consultas de consentimento em `/diretorio` não cresce com o número de membros
-- [ ] O número de chamadas de assinatura ao Storage em `/diretorio` não cresce com o número de membros
-- [ ] Telefone continua invisível para quem não tem consentimento `comunicacao` registrado (comportamento idêntico ao de hoje)
-- [ ] Membro sem avatar não gera nenhuma chamada ao Storage
-- [ ] `/reunioes` monta o seletor de responsável sem ler avatar nem consentimento
-- [ ] Foto e bio continuam aparecendo no cartão do diretório (P-5.1b sem regressão)
-- [ ] `apps/intranet` e `packages/db` com typecheck, lint e testes verdes (falhas remanescentes conhecidas do banco de dev compartilhado — ver SESSIONS.md — sem relação com este diff)
-- [ ] Registrar em SESSIONS.md
+- [x] O número de consultas de consentimento em `/diretorio` não cresce com o número de membros
+- [x] O número de chamadas de assinatura ao Storage em `/diretorio` não cresce com o número de membros
+- [x] Telefone continua invisível para quem não tem consentimento `comunicacao` registrado (comportamento idêntico ao de hoje)
+- [x] Membro sem avatar não gera nenhuma chamada ao Storage
+- [x] `/reunioes` monta o seletor de responsável sem ler avatar nem consentimento
+- [x] Foto e bio continuam aparecendo no cartão do diretório (P-5.1b sem regressão)
+- [x] `apps/intranet` e `packages/db` com typecheck, lint e testes verdes (falhas remanescentes conhecidas do banco de dev compartilhado — ver SESSIONS.md — sem relação com este diff)
+- [x] Registrar em SESSIONS.md — S-245
 
 **Notas:**
 Ref: P-5.1b (que introduziu a assinatura por avatar), P-0.13 (consentimento) e P-9.3, que é o prompt de performance do projeto — este não o antecipa por gosto: o diretório é a tela com o maior fan-out de rede do ecossistema e cresce linearmente com a equipe.

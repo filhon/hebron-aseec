@@ -8,6 +8,7 @@ import {
 import {
   withAuthenticatedContext,
   withSystemRole,
+  type AuthenticatedTx,
 } from "@hebron/db/authenticated";
 import {
   users,
@@ -15,7 +16,7 @@ import {
   meetingSessions,
   meetingDecisions,
 } from "@hebron/db/schema";
-import { getConsent } from "@hebron/db/consents";
+import { getConsentsForUsers } from "@hebron/db/consents";
 import { getFeed, type FeedModule } from "@hebron/integrations/feed";
 import type { Role } from "@hebron/types/roles";
 import type {
@@ -177,36 +178,72 @@ export async function resolveAvatarReadUrl(
   return data.signedUrl;
 }
 
+/**
+ * Versão em lote de `resolveAvatarReadUrl` (P-5.9e CORRETIVO) — uma única
+ * chamada `createSignedUrls` para todos os caminhos, em vez de uma
+ * `createSignedUrl` por pessoa. Caminhos duplicados são deduplicados antes
+ * da chamada; a chave do Map é o storage path, não o usuário, para servir
+ * qualquer chamador que tenha 1:N usuário→path.
+ */
+export async function resolveAvatarReadUrls(
+  storagePaths: string[],
+): Promise<Map<string, string>> {
+  const uniquePaths = [...new Set(storagePaths)];
+  const result = new Map<string, string>();
+  if (uniquePaths.length === 0) return result;
+
+  const supabase = getSupabaseAdmin();
+  const { data, error } = await supabase.storage
+    .from("perfil-avatares")
+    .createSignedUrls(uniquePaths, AVATAR_READ_URL_EXPIRES_IN_SECONDS);
+  if (error || !data) return result;
+
+  for (const item of data) {
+    if (item.path && item.signedUrl) result.set(item.path, item.signedUrl);
+  }
+  return result;
+}
+
+/**
+ * Exceção service-level (mesmo padrão de getUsersMap em
+ * apps/financeiro/src/lib/queries.ts, F3-15/S-57): o diretório é uma tela
+ * de toda a equipe interna, mas `role_assignments_select_admin`/
+ * `users_select_admin` (0000_initial.sql) só cobrem super_admin/diretor —
+ * sob RLS normal um colaborador veria o próprio diretório vazio. Isolado
+ * de `getDirectoryMembers`/`getStaffOptions` (P-5.9e CORRETIVO) para que o
+ * segundo não precise pagar as colunas de foto/telefone/bio que só o
+ * primeiro usa.
+ */
+async function getStaffRoleAssignments(
+  sysTx: AuthenticatedTx,
+): Promise<{ rolesByUser: Map<string, Role[]>; userIds: string[] }> {
+  const roleRows = await sysTx
+    .select({
+      userId: roleAssignments.userId,
+      role: roleAssignments.role,
+    })
+    .from(roleAssignments)
+    .where(inArray(roleAssignments.role, STAFF_ROLES));
+
+  const rolesByUser = new Map<string, Role[]>();
+  for (const row of roleRows) {
+    const list = rolesByUser.get(row.userId) ?? [];
+    list.push(row.role);
+    rolesByUser.set(row.userId, list);
+  }
+
+  return { rolesByUser, userIds: [...rolesByUser.keys()] };
+}
+
 export async function getDirectoryMembers(): Promise<DirectoryMember[]> {
   const actorId = await getActorId();
 
-  // Exceção service-level (mesmo padrão de getUsersMap em
-  // apps/financeiro/src/lib/queries.ts, F3-15/S-57): o diretório é uma tela
-  // de toda a equipe interna, mas `role_assignments_select_admin`/
-  // `users_select_admin` (0000_initial.sql) só cobrem super_admin/diretor —
-  // sob RLS normal um colaborador veria o próprio diretório vazio. Só
-  // fullName/avatar/papel/email/telefone(consent-gated) saem daqui — os
-  // mesmos campos que esta tela sempre expôs a todo o staff.
   const { rolesByUser, userRows } = await withAuthenticatedContext(
     { actorId },
     (tx) =>
       withSystemRole(tx, async (sysTx) => {
-        const roleRows = await sysTx
-          .select({
-            userId: roleAssignments.userId,
-            role: roleAssignments.role,
-          })
-          .from(roleAssignments)
-          .where(inArray(roleAssignments.role, STAFF_ROLES));
+        const { rolesByUser, userIds } = await getStaffRoleAssignments(sysTx);
 
-        const rolesByUser = new Map<string, Role[]>();
-        for (const row of roleRows) {
-          const list = rolesByUser.get(row.userId) ?? [];
-          list.push(row.role);
-          rolesByUser.set(row.userId, list);
-        }
-
-        const userIds = [...rolesByUser.keys()];
         const userRows =
           userIds.length === 0
             ? []
@@ -230,29 +267,37 @@ export async function getDirectoryMembers(): Promise<DirectoryMember[]> {
       }),
   );
 
-  const members = await Promise.all(
-    userRows
-      .filter((u) => u.status === "active" && u.anonymizedAt === null)
-      .map(async (u) => {
-        const [consent, avatarUrl] = await Promise.all([
-          getConsent(u.id, "comunicacao"),
-          resolveAvatarReadUrl(u.avatarUrl),
-        ]);
-        const member: DirectoryMember = {
-          id: u.id,
-          userId: u.id,
-          name: u.fullName ?? u.email,
-          avatarUrl,
-          role: primaryRoleLabel(rolesByUser.get(u.id) ?? []),
-          email: u.email,
-          phone: consent?.granted ? u.phone : null,
-          bio: u.bio,
-          createdAt: u.createdAt,
-          updatedAt: u.updatedAt,
-        };
-        return member;
-      }),
+  const activeUserRows = userRows.filter(
+    (u) => u.status === "active" && u.anonymizedAt === null,
   );
+
+  // Duas idas totais para o lote inteiro (uma por finalidade de
+  // consentimento, uma por assinatura de avatares) em vez de duas por
+  // pessoa — o que motivou este CORRETIVO (P-5.9e).
+  const [consentByUser, avatarUrlByPath] = await Promise.all([
+    getConsentsForUsers(
+      activeUserRows.map((u) => u.id),
+      "comunicacao",
+    ),
+    resolveAvatarReadUrls(
+      activeUserRows
+        .map((u) => u.avatarUrl)
+        .filter((path): path is string => path !== null),
+    ),
+  ]);
+
+  const members: DirectoryMember[] = activeUserRows.map((u) => ({
+    id: u.id,
+    userId: u.id,
+    name: u.fullName ?? u.email,
+    avatarUrl: u.avatarUrl ? (avatarUrlByPath.get(u.avatarUrl) ?? null) : null,
+    role: primaryRoleLabel(rolesByUser.get(u.id) ?? []),
+    email: u.email,
+    phone: consentByUser.get(u.id)?.granted ? u.phone : null,
+    bio: u.bio,
+    createdAt: u.createdAt,
+    updatedAt: u.updatedAt,
+  }));
 
   return members.sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
 }
@@ -262,10 +307,38 @@ export interface StaffOption {
   name: string;
 }
 
-/** Opções de responsável para o formulário de decisão de reunião. */
+/**
+ * Opções de responsável para o formulário de decisão de reunião — id e
+ * nome, nada mais (P-5.9e CORRETIVO: antes reaproveitava
+ * `getDirectoryMembers` inteiro e pagava foto + consentimento de todo mundo
+ * só para preencher um `<select>`). Mesma restrição de papel e mesma
+ * exceção service-level de `getDirectoryMembers` acima — só o conjunto de
+ * colunas lidas muda.
+ */
 export async function getStaffOptions(): Promise<StaffOption[]> {
-  const members = await getDirectoryMembers();
-  return members.map((m) => ({ id: m.id, name: m.name }));
+  const actorId = await getActorId();
+
+  const userRows = await withAuthenticatedContext({ actorId }, (tx) =>
+    withSystemRole(tx, async (sysTx) => {
+      const { userIds } = await getStaffRoleAssignments(sysTx);
+      if (userIds.length === 0) return [];
+
+      return sysTx
+        .select({
+          id: users.id,
+          fullName: users.fullName,
+          email: users.email,
+          status: users.status,
+          anonymizedAt: users.anonymizedAt,
+        })
+        .from(users)
+        .where(inArray(users.id, userIds));
+    }),
+  );
+
+  return userRows
+    .filter((u) => u.status === "active" && u.anonymizedAt === null)
+    .map((u) => ({ id: u.id, name: u.fullName ?? u.email }));
 }
 
 // ---------------------------------------------------------------------------

@@ -265,6 +265,7 @@
 | S-242  | 2026-08-12 | P-5.11b — A decisão que vira tarefa e some (CORRETIVO)                                                                           | concluido                            |
 | S-243  | 2026-08-12 | P-5.8b — O KPI de audiência que a Rádio calcula todo dia e o painel nunca pediu (CORRETIVO)                                      | concluido                            |
 | S-244  | 2026-08-12 | P-5.9d — A agenda que promete prazos e a leitura que traz a diretoria inteira (CORRETIVO)                                        | concluido                            |
+| S-245  | 2026-08-14 | P-5.9e — O diretório que abre uma conexão de rede por pessoa (CORRETIVO)                                                         | concluido                            |
 
 ---
 
@@ -21989,4 +21990,94 @@ fechou no painel de Atividade de Tarefas.
 - `apps/intranet/src/app/(dashboard)/reunioes/page.tsx`
 - `apps/intranet/src/components/calendar-widget.tsx`
 - `PROMPTS.md` (critérios de P-5.3 e P-5.9)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+## S-245 — P-5.9e — O diretório que abre uma conexão de rede por pessoa (CORRETIVO)
+
+**Prompt:** P-5.9e
+**Data:** 2026-08-14
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+`getDirectoryMembers` montava a lista de `/diretorio` com um `Promise.all`
+por membro, fazendo duas idas de rede separadas para cada pessoa:
+`getConsent` (um `SELECT` em `public.consents` por usuário) e
+`resolveAvatarReadUrl` (uma assinatura de URL no Storage por avatar). Com
+os ~150 usuários ativos do ecossistema, uma carga da tela disparava até
+~300 chamadas de rede. `getStaffOptions` agravava o problema chamando
+`getDirectoryMembers` inteiro (as duas idas por pessoa incluídas) só para
+extrair `id`/`name` para o `<select>` de responsável em `/reunioes`.
+
+1. **Consentimento em lote.** `getConsentsForUsers(userIds, purpose,
+dbHandle?)` em `packages/db/src/consents.ts` — um único `SELECT` com
+   `user_id = ANY(...)` (`inArray`), devolvendo `Map<userId, Consent>`
+   com uma entrada só para quem tem o consentimento da finalidade
+   registrado (ausência = nunca registrado, mesma semântica de `null` em
+   `getConsent`). `getConsent` (singular) não mudou — continua sendo o
+   caminho de quem lê um usuário só (ex.: `apps/intranet/src/actions/
+profile.ts`).
+2. **Avatares em lote.** `resolveAvatarReadUrls(storagePaths)` em
+   `apps/intranet/src/lib/queries.ts` — uma única chamada
+   `supabase.storage.from("perfil-avatares").createSignedUrls(paths,
+expiresIn)` (a versão em lote do SDK, plural), com os caminhos
+   deduplicados antes da chamada e devolvendo `Map<path, signedUrl>`.
+   Membro sem `avatarUrl` nunca entra na lista de caminhos, logo não gera
+   nenhuma chamada. `resolveAvatarReadUrl` (singular) não mudou — segue
+   sendo o caminho de `/meus-dados` (um perfil só), sem duplicar a regra
+   de expiração (`AVATAR_READ_URL_EXPIRES_IN_SECONDS`, compartilhada pelas
+   duas funções).
+3. **`getDirectoryMembers` refeita em duas fases.** Primeiro busca papel +
+   colunas de `public.users` (mesma exceção service-level de sempre —
+   `withSystemRole`, já que `role_assignments_select_admin`/
+   `users_select_admin` só cobrem super_admin/diretor); filtra
+   `status === "active" && anonymizedAt === null`; só então dispara as
+   duas chamadas em lote em paralelo (`Promise.all` de duas idas para o
+   lote inteiro, não duas por pessoa) e monta os membros com um `.map`
+   síncrono. Filtro de telefone por consentimento e resolução de avatar
+   continuam com o mesmo comportamento visível — só a forma de buscar o
+   dado mudou.
+4. **`getStaffOptions` parou de reaproveitar o diretório inteiro.**
+   Extraí a busca de papel (`roleAssignments` restrito a `STAFF_ROLES`) em
+   `getStaffRoleAssignments`, um helper privado compartilhado pelas duas
+   funções — só o `SELECT` de `public.users` diverge: `getDirectoryMembers`
+   pede foto/telefone/bio, `getStaffOptions` pede só
+   `id`/`fullName`/`email`/`status`/`anonymizedAt` (o necessário para
+   montar `{ id, name }` e aplicar o mesmo filtro de ativo/não
+   anonimizado). Mesma restrição de papel e mesma exceção service-level de
+   antes, comentário explicando o porquê preservado.
+5. **Teste do helper em lote.** `packages/db/src/__tests__/
+consents.test.ts` ganhou `describe("getConsentsForUsers", ...)`: uma
+   chamada com dois usuários (um com consentimento concedido, outro sem
+   nenhum registro) devolve `Map` com uma entrada só para quem tem, e uma
+   segunda asserção cobre lista vazia de usuários (`Map` vazio, sem
+   consulta).
+
+### Suposições registradas
+
+Nenhuma — o escopo já especificava a forma exata dos dois helpers em
+lote (`user_id = ANY(...)` e `createSignedUrls`) e o corte de colunas de
+`getStaffOptions`.
+
+### Baseline verificado
+
+- `pnpm turbo lint typecheck --filter=@hebron/db --filter=@hebron/intranet
+--continue`: os dois pacotes do diff verdes; único erro no grafo é
+  `@hebron/auth#typecheck` ([[project_bankaccounts_nickname_test_drift]]),
+  pré-existente e sem relação com este diff
+- `pnpm turbo test --filter=@hebron/db --continue`: 69/72 verdes; as 3
+  falhas são drift conhecido de banco de dev compartilhado —
+  `storage.test.ts` ([[project_storage_rls_test_flakiness]]) e
+  `system-actor.test.ts` ([[project_system_actor_test_drift]]) — sem
+  relação com este diff; `consents.test.ts` (10/10, incluindo os dois
+  testes novos) verde
+- `pnpm turbo test --filter=@hebron/intranet`: 43/43 verde (9 arquivos)
+
+### Arquivos modificados
+
+- `packages/db/src/consents.ts`
+- `packages/db/src/__tests__/consents.test.ts`
+- `apps/intranet/src/lib/queries.ts`
+- `PROMPTS.md` (critério de P-5.9)
 - `SESSIONS.md` (esta entrada + linha no índice)

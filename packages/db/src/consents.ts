@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db as defaultDb } from "./client";
 import { logAudit } from "./audit";
 import { consents } from "./schema/public";
@@ -33,6 +33,32 @@ export async function getConsent(
     .from(consents)
     .where(and(eq(consents.userId, userId), eq(consents.purpose, purpose)));
   return rows[0] ?? null;
+}
+
+/**
+ * O consentimento de uma finalidade específica para vários usuários de uma
+ * vez — uma única consulta com `user_id = ANY(...)`, para telas que listam
+ * muitas pessoas (ex.: diretório) e não podem pagar um `SELECT` por pessoa.
+ * `getConsent` (singular) continua para quem lê um usuário só. Usuários sem
+ * consentimento registrado para a finalidade simplesmente não aparecem no
+ * Map — chamador trata ausência como "nunca registrado", igual a `null` em
+ * `getConsent`.
+ */
+export async function getConsentsForUsers(
+  userIds: string[],
+  purpose: ConsentPurpose,
+  dbHandle: ConsentDbHandle = defaultDb,
+): Promise<Map<string, Consent>> {
+  if (userIds.length === 0) return new Map();
+
+  const rows = await dbHandle
+    .select()
+    .from(consents)
+    .where(
+      and(inArray(consents.userId, userIds), eq(consents.purpose, purpose)),
+    );
+
+  return new Map(rows.map((row) => [row.userId, row]));
 }
 
 export interface SetConsentParams {
