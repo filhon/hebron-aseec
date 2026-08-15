@@ -23,6 +23,8 @@ import { DashboardSkeleton } from "../../components/dashboard-skeleton";
 // Mesmo shape de intranet.dashboard_configs.widgets (jsonb) — sem
 // userId/createdAt/updatedAt, que a tabela não guarda por widget. IDs fixos
 // em formato uuid válido (dashboardWidgetSchema exige .uuid() ao resalvar).
+// config.w/config.h são o tamanho em células do grid; ausentes, o painel cai
+// no padrão por tipo de DEFAULT_WIDGET_SIZE (dashboard-widgets.tsx).
 interface RawWidget {
   id: string;
   type: DashboardWidgetType;
@@ -35,37 +37,37 @@ const DEFAULT_WIDGETS: RawWidget[] = [
     id: "00000000-0000-4000-8000-000000000001",
     type: "kpi",
     position: 0,
-    config: { kpiId: "kpi-projetos-ativos" },
+    config: { kpiId: "kpi-projetos-ativos", w: 1, h: 2 },
   },
   {
     id: "00000000-0000-4000-8000-000000000002",
     type: "kpi",
     position: 1,
-    config: { kpiId: "kpi-doacoes-mes" },
+    config: { kpiId: "kpi-doacoes-mes", w: 1, h: 2 },
   },
   {
     id: "00000000-0000-4000-8000-000000000003",
     type: "feed",
     position: 2,
-    config: { feedLimit: 6 },
+    config: { feedLimit: 6, w: 1, h: 6 },
   },
   {
     id: "00000000-0000-4000-8000-000000000004",
     type: "calendar",
     position: 3,
-    config: {},
+    config: { w: 1, h: 5 },
   },
   {
     id: "00000000-0000-4000-8000-000000000005",
     type: "kpi",
     position: 4,
-    config: { kpiId: "kpi-tarefas-abertas" },
+    config: { kpiId: "kpi-tarefas-abertas", w: 1, h: 2 },
   },
   {
     id: "00000000-0000-4000-8000-000000000006",
     type: "kpi",
     position: 5,
-    config: { kpiId: "kpi-audiencia-radio" },
+    config: { kpiId: "kpi-audiencia-radio", w: 1, h: 2 },
   },
 ];
 
@@ -178,8 +180,9 @@ async function DashboardContent() {
           <h2>Bem-vindo de volta.</h2>
           <p>
             Acompanhe indicadores, anúncios e a agenda da diretoria em um só
-            lugar. Reorganize o seu painel arrastando os cartões ou pelo seletor
-            de posição no canto de cada um.
+            lugar. Reorganize arrastando os cartões ou pelo seletor de posição,
+            e ajuste a largura e a altura de cada um pelo canto inferior
+            direito.
           </p>
         </div>
         <svg

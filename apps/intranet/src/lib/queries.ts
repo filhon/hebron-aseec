@@ -38,6 +38,8 @@ export interface AuthUser {
   id: string;
   fullName: string | null;
   email: string | null;
+  /** Storage path em perfil-avatares (P-5.1b), não uma URL exibível. */
+  avatarPath: string | null;
   roles: Role[];
 }
 
@@ -69,7 +71,7 @@ export async function getAuthUser(): Promise<AuthUser | null> {
     (tx) =>
       Promise.all([
         tx
-          .select({ fullName: users.fullName })
+          .select({ fullName: users.fullName, avatarUrl: users.avatarUrl })
           .from(users)
           .where(eq(users.id, user.id))
           .limit(1),
@@ -84,6 +86,7 @@ export async function getAuthUser(): Promise<AuthUser | null> {
     id: user.id,
     fullName: userRow[0]?.fullName ?? null,
     email: user.email ?? null,
+    avatarPath: userRow[0]?.avatarUrl ?? null,
     roles: roleRows.map((r) => r.role),
   };
 }

@@ -46,7 +46,26 @@ export const updateAnnouncementSchema = z.object({
 export type UpdateAnnouncementInput = z.infer<typeof updateAnnouncementSchema>;
 
 // ─── updateDashboardWidgetsSchema ─────────────────────────────────────────────
-// Salva o arranjo completo de widgets do usuário (reordenar/adicionar/remover).
+// Salva o arranjo completo de widgets do usuário (reordenar/adicionar/remover
+// /redimensionar).
+
+// Tamanho do widget em células do grid do painel (packages/ui patterns.css,
+// .hb-widget-grid): largura em colunas, altura em linhas. Ausente = padrão por
+// tipo, resolvido na UI.
+const WIDGET_MIN_WIDTH = 1;
+const WIDGET_MAX_WIDTH = 3;
+const WIDGET_MIN_HEIGHT = 2;
+const WIDGET_MAX_HEIGHT = 12;
+
+function isCellSpan(value: unknown, min: number, max: number): boolean {
+  if (value === undefined) return true;
+  return (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= min &&
+    value <= max
+  );
+}
 
 const dashboardWidgetSchema = z
   .object({
@@ -64,6 +83,21 @@ const dashboardWidgetSchema = z
     {
       message: "Selecione um indicador para este widget",
       path: ["config", "kpiId"],
+    },
+  )
+  .refine(
+    (widget) => isCellSpan(widget.config.w, WIDGET_MIN_WIDTH, WIDGET_MAX_WIDTH),
+    {
+      message: `Largura do widget deve ser de ${WIDGET_MIN_WIDTH} a ${WIDGET_MAX_WIDTH} colunas`,
+      path: ["config", "w"],
+    },
+  )
+  .refine(
+    (widget) =>
+      isCellSpan(widget.config.h, WIDGET_MIN_HEIGHT, WIDGET_MAX_HEIGHT),
+    {
+      message: `Altura do widget deve ser de ${WIDGET_MIN_HEIGHT} a ${WIDGET_MAX_HEIGHT} linhas`,
+      path: ["config", "h"],
     },
   );
 

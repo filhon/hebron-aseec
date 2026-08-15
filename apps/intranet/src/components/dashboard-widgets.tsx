@@ -13,6 +13,7 @@ import {
 } from "@hebron/ui";
 import type {
   DashboardWidget,
+  DashboardWidgetType,
   CalendarEvent,
   KPI,
 } from "@hebron/types/intranet";
@@ -20,7 +21,45 @@ import { saveDashboardConfig } from "../actions/dashboard";
 import { KPICard } from "./kpi-card";
 import { FeedWidget, type FeedItem } from "./feed-widget";
 import { CalendarWidget } from "./calendar-widget";
-import { WidgetGrid, type WidgetGridItem } from "./widget-grid";
+import {
+  WidgetGrid,
+  WIDGET_MAX_HEIGHT,
+  WIDGET_MAX_WIDTH,
+  WIDGET_MIN_HEIGHT,
+  WIDGET_MIN_WIDTH,
+  type WidgetGridItem,
+  type WidgetSize,
+} from "./widget-grid";
+
+// Tamanho inicial por tipo, em células do grid (patterns.css: coluna de 1/3
+// da largura, linha de 60px). Vale para quem nunca redimensionou o widget —
+// depois disso, config.w/config.h mandam.
+const DEFAULT_WIDGET_SIZE: Record<DashboardWidgetType, WidgetSize> = {
+  kpi: { w: 1, h: 2 },
+  // 4 linhas: o gráfico soma valor (36px) + área (72px) + período dentro do
+  // cartão; em 3 o conteúdo já pediria rolagem no tamanho padrão.
+  chart: { w: 1, h: 4 },
+  feed: { w: 1, h: 6 },
+  calendar: { w: 1, h: 5 },
+};
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+function widgetSize(widget: DashboardWidget): WidgetSize {
+  const fallback = DEFAULT_WIDGET_SIZE[widget.type] ?? { w: 1, h: 2 };
+  const width = Number(widget.config.w);
+  const height = Number(widget.config.h);
+  return {
+    w: Number.isInteger(width)
+      ? clamp(width, WIDGET_MIN_WIDTH, WIDGET_MAX_WIDTH)
+      : fallback.w,
+    h: Number.isInteger(height)
+      ? clamp(height, WIDGET_MIN_HEIGHT, WIDGET_MAX_HEIGHT)
+      : fallback.h,
+  };
+}
 
 function formatNumber(value: number, unit: string): string {
   if (unit === "R$") {
@@ -274,12 +313,24 @@ export function DashboardWidgets({
     persist(next);
   }
 
+  function handleResize(widgetId: string, size: WidgetSize) {
+    const next = [...localWidgets]
+      .sort((a, b) => a.position - b.position)
+      .map((w) =>
+        w.id === widgetId
+          ? { ...w, config: { ...w.config, w: size.w, h: size.h } }
+          : w,
+      );
+    persist(next);
+  }
+
   const sortedWidgets = [...localWidgets].sort(
     (a, b) => a.position - b.position,
   );
   const items: WidgetGridItem[] = sortedWidgets.map((widget) => ({
     id: widget.id,
     label: widgetLabel(widget, kpis),
+    ...widgetSize(widget),
     content: renderWidget(
       widget,
       kpis,
@@ -296,7 +347,11 @@ export function DashboardWidgets({
           {writeError}
         </p>
       )}
-      <WidgetGrid items={items} onReorder={handleReorder} />
+      <WidgetGrid
+        items={items}
+        onReorder={handleReorder}
+        onResize={handleResize}
+      />
     </div>
   );
 }

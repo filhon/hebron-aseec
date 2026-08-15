@@ -134,6 +134,111 @@
   padding: 4px 22px;
 }
 
+/* ── DASHBOARD WIDGET GRID ──────────────────────────────────── */
+/*
+  Grid de 3 colunas com linhas de altura fixa. O widget ocupa um número
+  inteiro de células — largura em `data-w` (1–3, degradada nos breakpoints)
+  e altura em `--hb-widget-h` (linhas de --hb-widget-row). Não há medida
+  livre: redimensionar sempre encaixa no grid.
+*/
+
+.hb-widget-grid {
+  --hb-widget-row: 60px;
+  --hb-widget-gap: var(--sp-5);
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-rows: var(--hb-widget-row);
+  gap: var(--hb-widget-gap);
+}
+.hb-widget-grid[data-resizing="true"] {
+  cursor: nwse-resize;
+  user-select: none;
+}
+
+.hb-widget-cell {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  min-height: 0;
+  grid-column: span 1;
+  grid-row: span var(--hb-widget-h, 2);
+}
+.hb-widget-cell[data-w="2"] {
+  grid-column: span 2;
+}
+.hb-widget-cell[data-w="3"] {
+  grid-column: span 3;
+}
+
+/* O cartão preenche a célula; o corpo rola quando o conteúdo passa da
+   altura escolhida, em vez de vazar por cima do widget seguinte. */
+.hb-widget-cell > .hb-card,
+.hb-widget-cell > .hb-stat {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+.hb-widget-cell > .hb-card > .hb-card-header {
+  flex-shrink: 0;
+}
+.hb-widget-cell > .hb-card > .hb-card-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Guias do grid — só aparecem enquanto o usuário arrasta ou redimensiona,
+   atrás dos cartões, para mostrar onde as peças encaixam. */
+.hb-widget-guides {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: grid;
+  pointer-events: none;
+  animation: hb-widget-guides-in 150ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.hb-widget-guide-cell {
+  border: 1px dashed color-mix(in srgb, var(--brand) 24%, transparent);
+  border-radius: var(--radius-xs);
+  background: color-mix(in srgb, var(--brand) 4%, transparent);
+}
+
+@keyframes hb-widget-guides-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hb-widget-guides {
+    animation: none;
+  }
+}
+
+@media (max-width: 1100px) {
+  .hb-widget-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .hb-widget-cell[data-w="3"] {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 600px) {
+  .hb-widget-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .hb-widget-cell[data-w="2"],
+  .hb-widget-cell[data-w="3"] {
+    grid-column: span 1;
+  }
+}
+
 /* ── STAT CARDS ─────────────────────────────────────────────── */
 
 .hb-stat {

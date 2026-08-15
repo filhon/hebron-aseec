@@ -267,6 +267,7 @@
 | S-244  | 2026-08-12 | P-5.9d — A agenda que promete prazos e a leitura que traz a diretoria inteira (CORRETIVO)                                        | concluido                            |
 | S-245  | 2026-08-14 | P-5.9e — O diretório que abre uma conexão de rede por pessoa (CORRETIVO)                                                         | concluido                            |
 | S-246  | 2026-08-14 | P-5.8c — A busca que trata "%" como coringa e chama a reunião de "ordinaria" (CORRETIVO)                                         | concluido                            |
+| S-247  | 2026-08-15 | Ajustes de UI da Intranet: grid redimensionável do painel, avatar e link no user-bar, enquadramento de /meus-dados (CORRETIVO)   | concluido                            |
 
 ---
 
@@ -22178,4 +22179,137 @@ db:migrate`); reaplicação reporta "Nothing to apply — database is up to
 - `apps/intranet/src/lib/queries.ts` (exportar `MEETING_TYPE_LABEL`)
 - `apps/intranet/src/__tests__/search.test.ts`
 - `PROMPTS.md` (critérios de P-5.3 e P-5.8)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+## S-247 — Ajustes de UI da Intranet: grid redimensionável do painel, avatar e link no user-bar, enquadramento de /meus-dados (CORRETIVO)
+
+**Prompt:** nenhum (observações do Filipe sobre código já entregue, fora da sequência de PROMPTS.md)
+**Data:** 2026-08-15
+**Modelo:** claude-opus-5
+**Status:** concluido
+
+### Resumo
+
+Quatro observações sobre telas já entregues da Intranet, todas de
+apresentação. Passou por `/impeccable` antes de editar (regra
+G2/CLAUDE.md; registro `product`, PRODUCT.md carregado, DESIGN.md ainda
+não existe).
+
+1. **Grid de widgets com largura e altura ajustáveis** (item 1). O painel
+   usava `grid-cols-1 sm:2 xl:3` com linhas de altura automática: todo
+   widget da mesma faixa ficava com a altura do mais alto, o feed cortava
+   em 6 itens e sobravam faixas vazias ao lado dos KPIs. Novo padrão
+   `.hb-widget-grid` em `packages/ui/src/styles/patterns.css`: 3 colunas
+   (2 abaixo de 1100px, 1 abaixo de 600px) e linhas fixas de 60px com gap
+   de `--sp-5`. Cada widget ocupa um número inteiro de células — largura
+   em `data-w` (1–3) e altura em `--hb-widget-h` (2–12) — e a colocação
+   automática do CSS Grid empilha os cartões baixos em coluna, que era
+   exatamente o vazio reclamado. O cartão preenche a célula
+   (`height: 100%`) e o corpo rola quando o conteúdo passa da altura
+   escolhida, em vez de vazar por cima do widget seguinte.
+
+   O ajuste é por alça no canto inferior direito do cartão (aparece no
+   hover, `cursor: nwse-resize`), com encaixe discreto: o delta do
+   ponteiro é dividido pela célula medida e arredondado, então o cartão só
+   muda de tamanho em passos inteiros. Enquanto arrasta (para mover ou
+   redimensionar), o grid desenha a malha por trás dos cartões
+   (`.hb-widget-guides`, tracejado em `--brand` a 24%), que é o pedido de
+   "mostrar o grid para o usuário saber que não é livre"; um selo `2 × 8`
+   acompanha a alça. A alça é um `<button>` com `aria-label` que descreve
+   o tamanho atual e responde às setas do teclado (nunca `display: none`,
+   senão o foco não chega nela); há região `aria-live` para o leitor de
+   tela.
+
+   O tamanho vive em `config.w`/`config.h` do widget, então persiste pelo
+   `saveDashboardConfig` que já existia (nenhuma migration: a coluna é
+   `jsonb`). `dashboardWidgetSchema` (packages/validators) ganhou os
+   limites como segunda camada, para quem chamar a action direto. Quem
+   nunca redimensionou cai no padrão por tipo (`DEFAULT_WIDGET_SIZE`):
+   KPI 1×2, gráfico 1×4, feed 1×6, calendário 1×5 — as medidas em que o
+   conteúdo de cada cartão cabe sem rolagem. `DashboardSkeleton` usa as
+   mesmas células para o conteúdo não pular ao carregar, e o texto do
+   cartão de boas-vindas passou a citar o canto inferior direito.
+
+2. **Foto no user-bar** (item 2). `AppShell`/`UserMenu` já aceitavam
+   `avatarUrl`; a intranet nunca passava. `getAuthUser` agora lê também
+   `users.avatar_url` (o storage path) e o layout resolve a signed URL com
+   `resolveAvatarReadUrl` antes de montar o shell. A foto é decorativa (as
+   iniciais cobrem a ausência), então a resolução fica em `try/catch`: uma
+   falha de storage não pode derrubar o layout, que envolve todas as
+   páginas.
+
+3. **Link para /meus-dados** (item 3). A intranet passou a informar
+   `profileHref="/meus-dados"` ao `AppShell`. Como o rótulo fixo do item
+   era "Meu perfil" e a página se chama "Meus dados", `UserMenu`/
+   `AppShell` ganharam `profileLabel` opcional (padrão "Meu perfil", sem
+   efeito nos outros 8 apps).
+
+4. **Enquadramento de /meus-dados** (item 4). A página era o único lugar
+   da intranet sem `hb-page`: começava colada no cabeçalho, terminava
+   colada no rodapé, e o `<h1>` aparecia no meio da tela porque a seção
+   "Perfil no diretório" era montada antes do `MyDataPage`. `MyDataPage`
+   (compartilhado) passou a se enquadrar sozinho com `hb-page` e uma
+   coluna de leitura alinhada à esquerda como as demais telas (era
+   `mx-auto max-w-2xl`, centralizada fora do eixo do resto do app), e
+   ganhou `beforeSections` para o app injetar suas próprias seções logo
+   abaixo do cabeçalho. A intranet passou o perfil do diretório por ali —
+   título da página primeiro, perfil, depois dados pessoais,
+   consentimentos, exportação e exclusão. Os outros 8 apps que montam
+   `MyDataPage` herdam o mesmo respiro sem edição própria (nenhum deles
+   embrulha o componente em container com padding).
+
+### Suposições registradas
+
+- Fluxo automático (`grid-auto-flow: row`, sem `dense`): o empacotamento
+  denso mataria mais buracos, mas embaralharia a ordem visual em relação
+  ao seletor "Posição N" que já existe no cartão. Previsibilidade primeiro.
+- Altura mínima de 2 linhas (144px): em 1 linha (60px) o valor de 36px do
+  KPI já seria cortado. Largura máxima limitada às colunas visíveis no
+  breakpoint atual, não às 3 do desktop.
+- A alça só aparece a partir de `sm` (hover): redimensionar widget no
+  celular disputaria com a rolagem, e lá o grid é de 1 coluna.
+- `config.feedLimit` continua sendo quem decide quantos itens o servidor
+  busca para o feed — a altura não mexe nisso. Widget mais alto mostra
+  mais do que já foi carregado (o corpo rola); para mais itens, o teto
+  ainda é o campo do diálogo "Configurar painel".
+
+### Baseline verificado
+
+- `pnpm --filter @hebron/intranet exec tsc --noEmit`: verde (direto, não
+  via `turbo typecheck`, que ainda para em `@hebron/auth` por drift
+  pré-existente — [[project_bankaccounts_nickname_test_drift]])
+- `tsc --noEmit` em `packages/ui` e `packages/validators`: verde
+- `turbo lint` (intranet + ui + validators): 10/10 verde
+- `pnpm --filter @hebron/intranet exec vitest run`: 48/48 verde (9
+  arquivos), incluindo o teste novo de tamanho em `rls.test.ts`. Uma
+  execução anterior acusou 3 falhas em `notifications.test.ts` por
+  fixtures `search-%` órfãs no banco de dev compartilhado, de execução
+  anterior à sessão; a árvore limpa (com `git stash`) e a árvore com o
+  diff passam as duas — [[feedback_interrupted_test_run_pollution]]
+- `pnpm --filter @hebron/intranet exec next build`: verde, 22 rotas
+- Geometria do grid conferida em navegador (Playwright + Chromium) contra
+  o `patterns.css` real: colunas 3/2/1 nos breakpoints, linha de 60px,
+  gap de 24px; arraste da alça levou o feed de 1×6 para 2×8 com um único
+  commit no `pointerup`, guias montadas (3 × 12 células) e removidas ao
+  soltar; setas do teclado ajustaram 1 célula por toque e pararam em 3
+  colunas e 12 linhas
+
+### Arquivos modificados
+
+- `packages/ui/src/styles/patterns.css` (padrão `.hb-widget-grid`)
+- `packages/ui/src/components/my-data-page.tsx`
+- `packages/ui/src/components/user-menu.tsx`
+- `packages/ui/src/components/app-shell.tsx`
+- `packages/validators/src/intranet/index.ts`
+- `apps/intranet/src/components/widget-grid.tsx`
+- `apps/intranet/src/components/dashboard-widgets.tsx`
+- `apps/intranet/src/components/dashboard-skeleton.tsx`
+- `apps/intranet/src/app/(dashboard)/page.tsx`
+- `apps/intranet/src/app/(dashboard)/layout.tsx`
+- `apps/intranet/src/app/(dashboard)/shell.tsx`
+- `apps/intranet/src/app/(dashboard)/meus-dados/page.tsx`
+- `apps/intranet/src/lib/queries.ts`
+- `apps/intranet/src/__tests__/rls.test.ts`
 - `SESSIONS.md` (esta entrada + linha no índice)

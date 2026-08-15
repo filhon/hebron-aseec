@@ -23,6 +23,8 @@ export interface AppShellProps {
   apps?: AppShortcut[];
   user: UserMenuUser;
   profileHref?: string;
+  /** Rótulo do item de perfil no menu do usuário. Padrão: "Meu perfil". */
+  profileLabel?: string;
   onLogout: () => void;
   currentPath?: string;
   logo?: React.ReactNode;
@@ -174,6 +176,7 @@ export function AppShell({
   apps,
   user,
   profileHref,
+  profileLabel,
   onLogout,
   currentPath,
   logo,
@@ -298,6 +301,7 @@ export function AppShell({
         <UserMenu
           user={user}
           profileHref={profileHref}
+          profileLabel={profileLabel}
           onLogout={onLogout}
           LinkComponent={LinkComponent}
         />

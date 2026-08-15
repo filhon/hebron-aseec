@@ -78,7 +78,10 @@ const SECTIONS: NavSection[] = [
 ];
 
 export interface IntranetShellProps {
-  user: Pick<AuthUser, "fullName" | "email">;
+  user: Pick<AuthUser, "fullName" | "email"> & {
+    /** URL assinada já resolvida no layout; null cai nas iniciais. */
+    avatarUrl: string | null;
+  };
   children: React.ReactNode;
 }
 
@@ -93,7 +96,10 @@ export default function IntranetShell({ user, children }: IntranetShellProps) {
       user={{
         name: user.fullName ?? user.email ?? "",
         email: user.email ?? "",
+        avatarUrl: user.avatarUrl ?? undefined,
       }}
+      profileHref="/meus-dados"
+      profileLabel="Meus dados"
       onLogout={() => void logoutAction()}
       currentPath={pathname}
       appName="Intranet"

@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { Parkinsans, Titillium_Web } from "next/font/google";
 import { CANONICAL_LOGIN_URL } from "@hebron/auth";
 import type { Role } from "@hebron/types/roles";
-import { getAuthUser } from "../../lib/queries";
+import { getAuthUser, resolveAvatarReadUrl } from "../../lib/queries";
 import IntranetShell from "./shell";
 import "../globals.css";
 
@@ -41,13 +41,31 @@ export default async function DashboardLayout({
     redirect(CANONICAL_LOGIN_URL);
   }
 
+  // A foto do usuário na barra superior é decorativa (as iniciais cobrem a
+  // ausência): uma falha ao assinar a URL do bucket privado não pode derrubar
+  // o layout, que envolve todas as páginas da intranet.
+  let avatarUrl: string | null = null;
+  try {
+    avatarUrl = await resolveAvatarReadUrl(user.avatarPath);
+  } catch {
+    avatarUrl = null;
+  }
+
   return (
     <html
       lang="pt-BR"
       className={`${parkinsans.variable} ${titillium.variable}`}
     >
       <body>
-        <IntranetShell user={user}>{children}</IntranetShell>
+        <IntranetShell
+          user={{
+            fullName: user.fullName,
+            email: user.email,
+            avatarUrl,
+          }}
+        >
+          {children}
+        </IntranetShell>
       </body>
     </html>
   );

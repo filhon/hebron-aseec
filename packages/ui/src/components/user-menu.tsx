@@ -89,6 +89,8 @@ export interface UserMenuUser {
 export interface UserMenuProps {
   user: UserMenuUser;
   profileHref?: string;
+  /** Rótulo do item que leva a `profileHref`. Padrão: "Meu perfil". */
+  profileLabel?: string;
   onLogout: () => void;
   LinkComponent?: LinkComponent;
   className?: string;
@@ -97,6 +99,7 @@ export interface UserMenuProps {
 export function UserMenu({
   user,
   profileHref,
+  profileLabel = "Meu perfil",
   onLogout,
   LinkComponent: Link = DefaultLink,
   className,
@@ -186,7 +189,7 @@ export function UserMenu({
                     )}
                     aria-hidden="true"
                   />
-                  Meu perfil
+                  {profileLabel}
                 </Link>
               </DropdownMenuPrimitive.Item>
             </div>

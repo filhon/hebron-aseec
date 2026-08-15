@@ -281,6 +281,45 @@ describe("Dashboard config — persiste e carrega (dashboard_configs_write_own)"
       },
     ]);
   });
+
+  it("guarda o tamanho em células do widget e recusa medida fora do grid", async () => {
+    const widgetId = "b1000000-0000-0000-0000-000000000003";
+    const { saveDashboardConfig } = await import("../actions/dashboard");
+
+    await actingAs(IDS.colaborador, ["colaborador"]);
+    const saved = await saveDashboardConfig({
+      widgets: [
+        {
+          id: widgetId,
+          type: "feed",
+          position: 0,
+          config: { feedLimit: 6, w: 2, h: 6 },
+        },
+      ],
+    });
+    expect(saved?.serverError).toBeUndefined();
+    expect(saved?.data?.config.widgets[0]?.config).toEqual({
+      feedLimit: 6,
+      w: 2,
+      h: 6,
+    });
+
+    // O grid tem 3 colunas (patterns.css): largura 4 não existe, e a UI já
+    // limita — o schema é a segunda camada, para quem chama a action direto.
+    await actingAs(IDS.colaborador, ["colaborador"]);
+    const rejected = await saveDashboardConfig({
+      widgets: [
+        {
+          id: widgetId,
+          type: "feed",
+          position: 0,
+          config: { feedLimit: 6, w: 4, h: 6 },
+        },
+      ],
+    });
+    expect(rejected?.data).toBeUndefined();
+    expect(rejected?.validationErrors).toBeDefined();
+  });
 });
 
 describe("Decisão de reunião → tarefa (createMeetingDecision createTask=true)", () => {

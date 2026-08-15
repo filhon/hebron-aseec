@@ -125,38 +125,38 @@ export default async function MeusDadosPage() {
   }
 
   return (
-    <div className="space-y-12">
-      {/* Perfil no diretório (P-5.1b) — bio, telefone e foto exibidos para a
-          equipe interna; distinto de "Dados pessoais" abaixo (LGPD/P-9.2). */}
-      <section className="mx-auto w-full max-w-2xl space-y-4">
-        <div>
-          <h2 className="font-(family-name:--font-display) text-lg font-semibold text-(--fg)">
-            Perfil no diretório
-          </h2>
-          <p className="text-sm leading-relaxed text-(--fg-muted)">
-            Foto, biografia e telefone exibidos para a equipe interna no
-            diretório.
-          </p>
-        </div>
-        <ProfileForm
-          initialValues={{
-            name: profile.fullName ?? profile.email,
-            bio,
-            phone: profile.phone,
-            avatarPath,
-            avatarPreviewUrl,
-          }}
-        />
-      </section>
-
-      <MyDataPage
-        profile={profile}
-        consents={consents}
-        deletionStatus={deletionStatus}
-        onToggleConsent={toggleConsentAction}
-        onExport={exportAction}
-        onRequestDeletion={requestDeletionAction}
-      />
-    </div>
+    <MyDataPage
+      profile={profile}
+      consents={consents}
+      deletionStatus={deletionStatus}
+      onToggleConsent={toggleConsentAction}
+      onExport={exportAction}
+      onRequestDeletion={requestDeletionAction}
+      beforeSections={
+        // Perfil no diretório (P-5.1b) — bio, telefone e foto exibidos para a
+        // equipe interna; distinto de "Dados pessoais" (LGPD/P-9.2), que vem
+        // logo abaixo na mesma página do titular.
+        <section className="space-y-4" aria-labelledby="secao-perfil-diretorio">
+          <div className="max-w-prose space-y-1" id="secao-perfil-diretorio">
+            <h2 className="font-(family-name:--font-display) text-lg font-semibold text-(--fg)">
+              Perfil no diretório
+            </h2>
+            <p className="text-sm leading-relaxed text-(--fg-muted)">
+              Foto, biografia e telefone exibidos para a equipe interna no
+              diretório.
+            </p>
+          </div>
+          <ProfileForm
+            initialValues={{
+              name: profile.fullName ?? profile.email,
+              bio,
+              phone: profile.phone,
+              avatarPath,
+              avatarPreviewUrl,
+            }}
+          />
+        </section>
+      }
+    />
   );
 }

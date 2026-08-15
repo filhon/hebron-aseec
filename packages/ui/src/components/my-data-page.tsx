@@ -65,6 +65,11 @@ export interface MyDataPageProps {
   onExport: (format: "json" | "csv") => Promise<MyDataExportFile>;
   /** Abre um pedido de exclusão (ticket para super_admin). */
   onRequestDeletion: (reason: string) => Promise<void>;
+  /**
+   * Seções próprias do app, entre o cabeçalho e "Dados pessoais" — usado pela
+   * intranet para o perfil do diretório, que é do mesmo titular.
+   */
+  beforeSections?: React.ReactNode;
   className?: string;
 }
 
@@ -242,6 +247,7 @@ export function MyDataPage({
   onToggleConsent,
   onExport,
   onRequestDeletion,
+  beforeSections,
   className,
 }: MyDataPageProps) {
   const [consentError, setConsentError] = React.useState("");
@@ -288,211 +294,220 @@ export function MyDataPage({
     }
   }
 
+  // `hb-page` é o mesmo enquadramento (respiro no topo, laterais e rodapé) das
+  // outras páginas de cada app; a coluna estreita mantém a medida de leitura
+  // dos formulários sem centralizar o conteúdo fora do eixo das demais telas.
   return (
-    <div className={cn("mx-auto w-full max-w-2xl", className)}>
-      <PageHeader
-        title="Meus dados"
-        description="Veja o que a Hebron ASEEC armazena sobre você, gerencie seus consentimentos, exporte uma cópia e solicite a exclusão, conforme a LGPD."
-      />
+    <div className={cn("hb-page", className)}>
+      <div className="w-full max-w-3xl">
+        <PageHeader
+          title="Meus dados"
+          description="Veja o que a Hebron ASEEC armazena sobre você, gerencie seus consentimentos, exporte uma cópia e solicite a exclusão, conforme a LGPD."
+        />
 
-      <div className="space-y-12">
-        {/* Dados pessoais ------------------------------------------------ */}
-        <section className="space-y-4" aria-labelledby="secao-perfil">
-          <div id="secao-perfil">
-            <SectionHeading
-              title="Dados pessoais"
-              description="As informações de identificação vinculadas à sua conta."
-            />
-          </div>
-          <dl className="divide-y divide-(--divider) border-y border-(--border)">
-            <Field label="Nome" value={profile.fullName} />
-            <Field label="E-mail" value={profile.email} />
-            <Field label="Telefone" value={profile.phone} />
-            <Field label="CPF" value={profile.documentCpf} />
-            <Field
-              label="Conta criada em"
-              value={formatDate(profile.createdAt)}
-            />
-          </dl>
-        </section>
+        <div className="space-y-12">
+          {beforeSections}
 
-        {/* Consentimentos ------------------------------------------------ */}
-        <section className="space-y-2" aria-labelledby="secao-consentimentos">
-          <div id="secao-consentimentos">
-            <SectionHeading
-              title="Consentimentos"
-              description="Você pode revogar qualquer finalidade a qualquer momento. A revogação não afeta o tratamento já realizado."
-            />
-          </div>
-          {consents.length > 0 ? (
-            <div className="divide-y divide-(--divider) border-y border-(--border)">
-              {consents.map((consent) => (
-                <ConsentRow
-                  key={consent.purpose}
-                  consent={consent}
-                  onToggle={onToggleConsent}
-                  onError={setConsentError}
-                />
-              ))}
-            </div>
-          ) : (
-            <p className="border-y border-(--border) py-6 text-sm text-(--fg-muted)">
-              Nenhum consentimento registrado nesta conta.
-            </p>
-          )}
-          {consentError && (
-            <p
-              className="text-sm text-(--color-destructive)"
-              role="status"
-              aria-live="polite"
-            >
-              {consentError}
-            </p>
-          )}
-        </section>
-
-        {/* Portabilidade ------------------------------------------------- */}
-        <section className="space-y-4" aria-labelledby="secao-exportar">
-          <div id="secao-exportar">
-            <SectionHeading
-              title="Exportar uma cópia"
-              description="Baixe todos os dados desta conta em formato aberto, para consultar ou levar a outro serviço."
-            />
-          </div>
-          <div className="flex flex-wrap gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              leftIcon={<Download className="h-4 w-4" aria-hidden="true" />}
-              loading={exportPending === "json"}
-              disabled={exportPending !== null}
-              onClick={() => handleExport("json")}
-            >
-              Baixar JSON
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              leftIcon={<Download className="h-4 w-4" aria-hidden="true" />}
-              loading={exportPending === "csv"}
-              disabled={exportPending !== null}
-              onClick={() => handleExport("csv")}
-            >
-              Baixar CSV
-            </Button>
-          </div>
-          {exportMessage && (
-            <p
-              className="text-sm text-(--fg-muted)"
-              role="status"
-              aria-live="polite"
-            >
-              {exportMessage}
-            </p>
-          )}
-        </section>
-
-        {/* Exclusão ------------------------------------------------------ */}
-        <section className="space-y-4" aria-labelledby="secao-exclusao">
-          <div id="secao-exclusao">
-            <SectionHeading
-              title="Excluir meus dados"
-              description="A exclusão anonimiza de forma irreversível seus dados pessoais. Registros contábeis e deliberativos exigidos por lei são preservados de forma pseudonimizada, sem identificar você."
-            />
-          </div>
-
-          {deletionStatus === "pending" ? (
-            <div className="flex items-start gap-3 rounded-(--radius) border border-(--border) bg-(--surface-alt) p-4">
-              <ShieldCheck
-                className="mt-0.5 h-5 w-5 shrink-0 text-(--brand)"
-                aria-hidden="true"
+          {/* Dados pessoais ---------------------------------------------- */}
+          <section className="space-y-4" aria-labelledby="secao-perfil">
+            <div id="secao-perfil">
+              <SectionHeading
+                title="Dados pessoais"
+                description="As informações de identificação vinculadas à sua conta."
               />
-              <div className="space-y-0.5">
-                <p className="text-sm font-(--font-weight-semibold) text-(--fg)">
-                  Pedido de exclusão em análise
-                </p>
+            </div>
+            <dl className="divide-y divide-(--divider) border-y border-(--border)">
+              <Field label="Nome" value={profile.fullName} />
+              <Field label="E-mail" value={profile.email} />
+              <Field label="Telefone" value={profile.phone} />
+              <Field label="CPF" value={profile.documentCpf} />
+              <Field
+                label="Conta criada em"
+                value={formatDate(profile.createdAt)}
+              />
+            </dl>
+          </section>
+
+          {/* Consentimentos ------------------------------------------------ */}
+          <section className="space-y-2" aria-labelledby="secao-consentimentos">
+            <div id="secao-consentimentos">
+              <SectionHeading
+                title="Consentimentos"
+                description="Você pode revogar qualquer finalidade a qualquer momento. A revogação não afeta o tratamento já realizado."
+              />
+            </div>
+            {consents.length > 0 ? (
+              <div className="divide-y divide-(--divider) border-y border-(--border)">
+                {consents.map((consent) => (
+                  <ConsentRow
+                    key={consent.purpose}
+                    consent={consent}
+                    onToggle={onToggleConsent}
+                    onError={setConsentError}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p className="border-y border-(--border) py-6 text-sm text-(--fg-muted)">
+                Nenhum consentimento registrado nesta conta.
+              </p>
+            )}
+            {consentError && (
+              <p
+                className="text-sm text-(--color-destructive)"
+                role="status"
+                aria-live="polite"
+              >
+                {consentError}
+              </p>
+            )}
+          </section>
+
+          {/* Portabilidade ------------------------------------------------- */}
+          <section className="space-y-4" aria-labelledby="secao-exportar">
+            <div id="secao-exportar">
+              <SectionHeading
+                title="Exportar uma cópia"
+                description="Baixe todos os dados desta conta em formato aberto, para consultar ou levar a outro serviço."
+              />
+            </div>
+            <div className="flex flex-wrap gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                leftIcon={<Download className="h-4 w-4" aria-hidden="true" />}
+                loading={exportPending === "json"}
+                disabled={exportPending !== null}
+                onClick={() => handleExport("json")}
+              >
+                Baixar JSON
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                leftIcon={<Download className="h-4 w-4" aria-hidden="true" />}
+                loading={exportPending === "csv"}
+                disabled={exportPending !== null}
+                onClick={() => handleExport("csv")}
+              >
+                Baixar CSV
+              </Button>
+            </div>
+            {exportMessage && (
+              <p
+                className="text-sm text-(--fg-muted)"
+                role="status"
+                aria-live="polite"
+              >
+                {exportMessage}
+              </p>
+            )}
+          </section>
+
+          {/* Exclusão ------------------------------------------------------ */}
+          <section className="space-y-4" aria-labelledby="secao-exclusao">
+            <div id="secao-exclusao">
+              <SectionHeading
+                title="Excluir meus dados"
+                description="A exclusão anonimiza de forma irreversível seus dados pessoais. Registros contábeis e deliberativos exigidos por lei são preservados de forma pseudonimizada, sem identificar você."
+              />
+            </div>
+
+            {deletionStatus === "pending" ? (
+              <div className="flex items-start gap-3 rounded-(--radius) border border-(--border) bg-(--surface-alt) p-4">
+                <ShieldCheck
+                  className="mt-0.5 h-5 w-5 shrink-0 text-(--brand)"
+                  aria-hidden="true"
+                />
+                <div className="space-y-0.5">
+                  <p className="text-sm font-(--font-weight-semibold) text-(--fg)">
+                    Pedido de exclusão em análise
+                  </p>
+                  <p className="text-sm text-(--fg-muted)">
+                    Sua solicitação foi registrada e será processada pela
+                    administração. Você será avisado quando for concluída.
+                  </p>
+                </div>
+              </div>
+            ) : deletionStatus === "completed" || alreadyAnonymized ? (
+              <div className="flex items-start gap-3 rounded-(--radius) border border-(--border) bg-(--surface-alt) p-4">
+                <ShieldCheck
+                  className="mt-0.5 h-5 w-5 shrink-0 text-(--brand)"
+                  aria-hidden="true"
+                />
                 <p className="text-sm text-(--fg-muted)">
-                  Sua solicitação foi registrada e será processada pela
-                  administração. Você será avisado quando for concluída.
+                  Os dados pessoais desta conta já foram anonimizados.
                 </p>
               </div>
-            </div>
-          ) : deletionStatus === "completed" || alreadyAnonymized ? (
-            <div className="flex items-start gap-3 rounded-(--radius) border border-(--border) bg-(--surface-alt) p-4">
-              <ShieldCheck
-                className="mt-0.5 h-5 w-5 shrink-0 text-(--brand)"
-                aria-hidden="true"
-              />
-              <p className="text-sm text-(--fg-muted)">
-                Os dados pessoais desta conta já foram anonimizados.
-              </p>
-            </div>
-          ) : (
-            <Dialog open={deletionOpen} onOpenChange={setDeletionOpen}>
-              <DialogTrigger asChild>
-                <Button
-                  type="button"
-                  variant="destructive"
-                  leftIcon={<Trash2 className="h-4 w-4" aria-hidden="true" />}
-                >
-                  Solicitar exclusão
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Solicitar exclusão dos meus dados</DialogTitle>
-                  <DialogDescription>
-                    Ao confirmar, um pedido é enviado à administração. A
-                    exclusão anonimiza seus dados pessoais de forma irreversível
-                    e desativa seu acesso.
-                  </DialogDescription>
-                </DialogHeader>
-
-                <div className="space-y-2">
-                  <label
-                    htmlFor="deletion-reason"
-                    className="text-sm font-(--font-weight-medium) text-(--fg)"
-                  >
-                    Motivo (opcional)
-                  </label>
-                  <textarea
-                    id="deletion-reason"
-                    value={deletionReason}
-                    onChange={(event) => setDeletionReason(event.target.value)}
-                    rows={3}
-                    className="w-full resize-y rounded-(--radius) border border-(--border) bg-(--surface) px-3 py-2 text-sm text-(--fg) placeholder:text-(--fg-muted) focus-visible:border-(--brand) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--brand) focus-visible:ring-offset-2"
-                    placeholder="Se quiser, conte por que está solicitando a exclusão."
-                  />
-                  {deletionError && (
-                    <p
-                      className="text-sm text-(--color-destructive)"
-                      role="status"
-                      aria-live="polite"
-                    >
-                      {deletionError}
-                    </p>
-                  )}
-                </div>
-
-                <DialogFooter>
-                  <DialogClose asChild>
-                    <Button type="button" variant="ghost">
-                      Cancelar
-                    </Button>
-                  </DialogClose>
+            ) : (
+              <Dialog open={deletionOpen} onOpenChange={setDeletionOpen}>
+                <DialogTrigger asChild>
                   <Button
                     type="button"
                     variant="destructive"
-                    loading={deletionPending}
-                    onClick={handleRequestDeletion}
+                    leftIcon={<Trash2 className="h-4 w-4" aria-hidden="true" />}
                   >
-                    Confirmar pedido de exclusão
+                    Solicitar exclusão
                   </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          )}
-        </section>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Solicitar exclusão dos meus dados</DialogTitle>
+                    <DialogDescription>
+                      Ao confirmar, um pedido é enviado à administração. A
+                      exclusão anonimiza seus dados pessoais de forma
+                      irreversível e desativa seu acesso.
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className="space-y-2">
+                    <label
+                      htmlFor="deletion-reason"
+                      className="text-sm font-(--font-weight-medium) text-(--fg)"
+                    >
+                      Motivo (opcional)
+                    </label>
+                    <textarea
+                      id="deletion-reason"
+                      value={deletionReason}
+                      onChange={(event) =>
+                        setDeletionReason(event.target.value)
+                      }
+                      rows={3}
+                      className="w-full resize-y rounded-(--radius) border border-(--border) bg-(--surface) px-3 py-2 text-sm text-(--fg) placeholder:text-(--fg-muted) focus-visible:border-(--brand) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--brand) focus-visible:ring-offset-2"
+                      placeholder="Se quiser, conte por que está solicitando a exclusão."
+                    />
+                    {deletionError && (
+                      <p
+                        className="text-sm text-(--color-destructive)"
+                        role="status"
+                        aria-live="polite"
+                      >
+                        {deletionError}
+                      </p>
+                    )}
+                  </div>
+
+                  <DialogFooter>
+                    <DialogClose asChild>
+                      <Button type="button" variant="ghost">
+                        Cancelar
+                      </Button>
+                    </DialogClose>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      loading={deletionPending}
+                      onClick={handleRequestDeletion}
+                    >
+                      Confirmar pedido de exclusão
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            )}
+          </section>
+        </div>
       </div>
     </div>
   );

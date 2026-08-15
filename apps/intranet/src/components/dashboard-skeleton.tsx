@@ -65,6 +65,16 @@ function CalendarWidgetSkeleton() {
   );
 }
 
+const DEFAULT_LAYOUT: Array<{ kind: "kpi" | "feed" | "calendar"; h: number }> =
+  [
+    { kind: "kpi", h: 2 },
+    { kind: "kpi", h: 2 },
+    { kind: "feed", h: 6 },
+    { kind: "calendar", h: 5 },
+    { kind: "kpi", h: 2 },
+    { kind: "kpi", h: 2 },
+  ];
+
 export function DashboardSkeleton() {
   return (
     <div className="hb-page" aria-busy="true" aria-label="Carregando painel">
@@ -85,13 +95,25 @@ export function DashboardSkeleton() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-(--sp-5) sm:grid-cols-2 xl:grid-cols-3 mb-(--sp-5)">
-        <KpiWidgetSkeleton />
-        <KpiWidgetSkeleton />
-        <KpiWidgetSkeleton />
-        <FeedSkeleton />
-        <CalendarWidgetSkeleton />
-        <KpiWidgetSkeleton />
+      {/* Mesmas células do grid real (DEFAULT_WIDGETS em (dashboard)/page.tsx)
+          para o conteúdo não pular quando os dados chegam. */}
+      <div className="hb-widget-grid mb-(--sp-5)">
+        {DEFAULT_LAYOUT.map((widget, i) => (
+          <div
+            key={i}
+            className="hb-widget-cell"
+            data-w={1}
+            style={{ "--hb-widget-h": widget.h } as CSSProperties}
+          >
+            {widget.kind === "feed" ? (
+              <FeedSkeleton />
+            ) : widget.kind === "calendar" ? (
+              <CalendarWidgetSkeleton />
+            ) : (
+              <KpiWidgetSkeleton />
+            )}
+          </div>
+        ))}
       </div>
 
       <div className="hb-card" aria-hidden="true">
