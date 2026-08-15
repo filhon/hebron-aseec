@@ -182,7 +182,11 @@ function mapCourse(
   };
 }
 
-function mapLesson(row: LessonRow, quizId: string | null = null): Lesson {
+function mapLesson(
+  row: LessonRow,
+  quizId: string | null = null,
+  trail?: { nextLessonId: string | null; unlocked: boolean },
+): Lesson {
   return {
     id: row.id,
     moduleId: row.moduleId,
@@ -197,10 +201,103 @@ function mapLesson(row: LessonRow, quizId: string | null = null): Lesson {
     downloadFileName: row.downloadFileName,
     downloadFileSizeBytes: row.downloadFileSizeBytes,
     quizId,
-    nextLessonId: row.nextLessonId,
+    nextLessonId: trail?.nextLessonId ?? null,
     requiresCompletion: row.requiresCompletion,
+    // Editor de instrutor não passa `trail` — a trilha do aluno não se
+    // aplica lá, então o padrão é "sempre desbloqueada" (P-6.2b).
+    unlocked: trail?.unlocked ?? true,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Esqueleto da trilha — plataforma.course_outline() (SECURITY DEFINER,
+// 0080_plataforma_course_outline.sql, P-6.2b) devolve toda aula de um curso
+// publicado (matriculado ou não), com `unlocked` calculado por
+// plataforma.can_access_lesson. Nunca carrega conteúdo (video_url/content/
+// download_url): esses campos continuam atrás de lessons_select_enrolled,
+// mesclados abaixo só quando o SELECT direto em `lessons` (sob RLS) de fato
+// devolve a linha. "Próxima aula" é derivada da mesma ordem que a função usa
+// — uma fonte só, nunca mais a coluna `next_lesson_id` (removida nesta
+// migration).
+// ---------------------------------------------------------------------------
+
+interface CourseOutlineRow {
+  lesson_id: string;
+  module_id: string;
+  module_order: number;
+  lesson_order: number;
+  title: string;
+  type: LessonRow["type"];
+  video_duration_seconds: number | null;
+  requires_completion: boolean;
+  unlocked: boolean;
+  [key: string]: unknown;
+}
+
+async function getCourseOutline(
+  tx: Parameters<Parameters<typeof withAuthenticatedContext>[1]>[0],
+  courseId: string,
+): Promise<CourseOutlineRow[]> {
+  return tx.execute<CourseOutlineRow>(
+    sql`SELECT * FROM plataforma.course_outline(${courseId}::uuid)`,
+  );
+}
+
+function computeNextLessonIds(
+  outlineRows: CourseOutlineRow[],
+): Map<string, string> {
+  const sorted = [...outlineRows].sort(
+    (a, b) =>
+      a.module_order - b.module_order || a.lesson_order - b.lesson_order,
+  );
+  const nextByLessonId = new Map<string, string>();
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const current = sorted[i];
+    const next = sorted[i + 1];
+    if (current && next) nextByLessonId.set(current.lesson_id, next.lesson_id);
+  }
+  return nextByLessonId;
+}
+
+/** Monta a `Lesson` de um item da ementa: conteúdo real quando `contentRow`
+ * veio do SELECT gated por RLS (aula liberada e matriculado), campos de
+ * conteúdo nulos caso contrário — nunca expõe video_url/content/download_url
+ * de uma aula que a RLS não devolveu (P-6.2b, item 1 do prompt). */
+function mapOutlineLesson(
+  outlineRow: CourseOutlineRow,
+  courseId: string,
+  contentRow: LessonRow | undefined,
+  nextLessonId: string | null,
+  quizId: string | null = null,
+): Lesson {
+  if (contentRow) {
+    return mapLesson(contentRow, quizId, {
+      nextLessonId,
+      unlocked: outlineRow.unlocked,
+    });
+  }
+
+  return {
+    id: outlineRow.lesson_id,
+    moduleId: outlineRow.module_id,
+    courseId,
+    title: outlineRow.title,
+    type: outlineRow.type,
+    order: outlineRow.lesson_order,
+    videoUrl: null,
+    videoDurationSeconds: outlineRow.video_duration_seconds,
+    textContent: null,
+    downloadUrl: null,
+    downloadFileName: null,
+    downloadFileSizeBytes: null,
+    quizId: null,
+    nextLessonId,
+    requiresCompletion: outlineRow.requires_completion,
+    unlocked: outlineRow.unlocked,
+    createdAt: new Date(0),
+    updatedAt: new Date(0),
   };
 }
 
@@ -378,15 +475,27 @@ export async function getCourseModulesWithLessons(
       .from(modules)
       .where(eq(modules.courseId, courseId))
       .orderBy(asc(modules.order));
-    const lessonRows = await tx
+
+    // Esqueleto da trilha inteira (matriculado ou não, P-6.2b item 2/6) +
+    // conteúdo só das aulas que a RLS de fato libera para este usuário.
+    const outlineRows = await getCourseOutline(tx, courseId);
+    const nextLessonIdByLessonId = computeNextLessonIds(outlineRows);
+    const contentRows = await tx
       .select()
       .from(lessons)
-      .where(eq(lessons.courseId, courseId))
-      .orderBy(asc(lessons.order));
+      .where(eq(lessons.courseId, courseId));
+    const contentByLessonId = new Map(contentRows.map((row) => [row.id, row]));
 
     return {
       modules: moduleRows,
-      lessons: lessonRows.map((row) => mapLesson(row)),
+      lessons: outlineRows.map((row) =>
+        mapOutlineLesson(
+          row,
+          courseId,
+          contentByLessonId.get(row.lesson_id),
+          nextLessonIdByLessonId.get(row.lesson_id) ?? null,
+        ),
+      ),
     };
   });
 }
@@ -493,11 +602,20 @@ export async function getLessonPageData(
       .from(modules)
       .where(eq(modules.courseId, course.id))
       .orderBy(asc(modules.order));
+
+    // Esqueleto da trilha inteira, para a sidebar mostrar módulos/aulas
+    // travadas (P-6.2b) — a aula corrente já veio pelo SELECT direto acima,
+    // barrado pela RLS como antes.
+    const outlineRows = await getCourseOutline(tx, course.id);
+    const nextLessonIdByLessonId = computeNextLessonIds(outlineRows);
     const allLessonRows = await tx
       .select()
       .from(lessons)
       .where(eq(lessons.courseId, course.id))
       .orderBy(asc(lessons.order));
+    const contentByLessonId = new Map(
+      allLessonRows.map((row) => [row.id, row]),
+    );
 
     const progressRows = await tx
       .select()
@@ -600,7 +718,13 @@ export async function getLessonPageData(
       .where(and(eq(notes.userId, actorId), eq(notes.lessonId, lessonRow.id)))
       .orderBy(asc(notes.timestampSeconds));
 
-    const currentLesson = mapLesson(lessonRow, lessonQuizId);
+    // A aula corrente só chegou até aqui porque a RLS já a liberou —
+    // sempre desbloqueada e com a próxima aula da trilha derivada da mesma
+    // ordem que alimenta o esqueleto abaixo.
+    const currentLesson = mapLesson(lessonRow, lessonQuizId, {
+      nextLessonId: nextLessonIdByLessonId.get(lessonRow.id) ?? null,
+      unlocked: true,
+    });
     if (currentLesson.type === "download") {
       currentLesson.downloadUrl = await resolveAssetUrl(
         "plataforma-anexos",
@@ -611,8 +735,14 @@ export async function getLessonPageData(
     return {
       course,
       modules: moduleRows,
-      lessons: allLessonRows.map((row) =>
-        mapLesson(row, row.id === lessonRow.id ? lessonQuizId : null),
+      lessons: outlineRows.map((row) =>
+        mapOutlineLesson(
+          row,
+          course.id,
+          contentByLessonId.get(row.lesson_id),
+          nextLessonIdByLessonId.get(row.lesson_id) ?? null,
+          row.lesson_id === lessonRow.id ? lessonQuizId : null,
+        ),
       ),
       lesson: currentLesson,
       progress: progressRows,
@@ -660,14 +790,15 @@ export async function getUserEnrollmentsWithProgress(
     if (rows.length === 0) return [];
     const courseIds = rows.map((r) => r.course.id);
 
-    const totalsRows = await tx
-      .select({ courseId: lessons.courseId, total: sql<number>`count(*)::int` })
-      .from(lessons)
-      .where(inArray(lessons.courseId, courseIds))
-      .groupBy(lessons.courseId);
-    const totalsByCourse = new Map(
-      totalsRows.map((r) => [r.courseId, r.total]),
-    );
+    // Total real da trilha via plataforma.course_outline() (P-6.2b) — um
+    // SELECT direto em `lessons` aqui contaria só as aulas que a RLS libera
+    // para este aluno, inflando o percentual (mesmo defeito de
+    // checkAndIssueCertificate, actions/certificates.ts).
+    const totalsByCourse = new Map<string, number>();
+    for (const courseId of courseIds) {
+      const outlineRows = await getCourseOutline(tx, courseId);
+      totalsByCourse.set(courseId, outlineRows.length);
+    }
 
     const completedRows = await tx
       .select({

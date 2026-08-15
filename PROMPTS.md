@@ -7675,7 +7675,7 @@ Tipos e schemas Zod: Course, Module, Lesson (tipo: video/text/quiz/download), En
 
 - [x] Lesson com tipo enum: video, text, quiz, download
 - [x] Progress granular por aula (lesson_id, user_id, completed_at)
-- [x] Trilha sequencial: next_lesson_id, requires_completion
+- [x] Trilha sequencial: next_lesson_id, requires_completion (`next_lesson_id` virou coluna morta — nada nunca a escreveu; substituída por `Lesson.nextLessonId` derivado de `plataforma.course_outline()` na leitura — corrigido em P-6.2b)
 - [x] Quiz: questions (jsonb), passing_score
 - [x] Certificate: course_id, user_id, issued_at, hash (verificação)
 - [x] Mock data: 3+ cursos, 10+ aulas, 2+ quizzes
@@ -7712,13 +7712,78 @@ Componentes: CourseCard (capa, título, instrutor, progresso). LessonPlayer (vid
 **Critérios de aceite:**
 
 - [x] LessonPlayer com video HLS (hls.js), controle de velocidade, marcadores
-- [x] CourseSidebar com módulos/aulas e ícones de progresso (completo/em andamento/locked)
+- [x] CourseSidebar com módulos/aulas e ícones de progresso (completo/em andamento/locked) (o ramo de cadeado era código morto — `nextLessonId` sempre `null` — desde a escrita; agora lê `unlocked` calculado no banco, com cadeado + rótulo de texto — corrigido em P-6.2b)
 - [x] QuizForm com tipos: múltipla escolha (dissertativa fora da v1 — ver PATCH-023)
 - [x] NoteWidget: criar nota em timestamp do vídeo, clicável para ir ao ponto
 - [x] ProgressBar por curso e global (% de conclusão)
 - [x] Responsivo
 - [x] Lint passa
 - [x] Types passam
+
+---
+
+### P-6.2b — A trilha que a barra lateral promete e o banco esconde (CORRETIVO)
+
+**Fase:** 6
+**Módulo:** plataforma
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `fix/P-6.2b-plataforma-trilha-visivel`
+- Dependências: P-6.15 concluído (S-120)
+- Env vars: `DATABASE_URL`
+- Skill: **invocar `/impeccable` antes de começar**
+
+**Problema que este prompt resolve (contexto):**
+Quatro defeitos com a mesma raiz: a trilha sequencial é modelada duas vezes — uma no banco, outra na tela — e só a do banco recebe dados.
+
+**1. `lessons.next_lesson_id` nunca é escrito por ninguém.** É critério `[x]` de P-6.1 ("Trilha sequencial: next_lesson_id, requires_completion") e existe em `packages/types/src/plataforma/index.ts:87` e `packages/db/src/schema/plataforma.ts:152`. Nenhum caminho de escrita o preenche: `createLesson` (`actions/courses.ts:264-280`), `updateLesson` (`:305-321`) e `reorderLessons` (`:351-366`) não o mencionam, `createLessonSchema` (`packages/validators/src/plataforma/index.ts:85-133`) não tem o campo e `lesson-form.tsx` não tem controle para ele. A coluna é permanentemente `NULL`. Consequência direta: `CourseSidebar` monta o mapa de aula anterior a partir de `nextLessonId` (`course-sidebar.tsx:83-88`), o mapa nasce vazio, `computeStatus` (`:32-45`) devolve "disponivel" para tudo e o ramo de cadeado (`:54`) é código morto desde que foi escrito — o critério `[x]` de P-6.2 ("ícones de progresso: completo/em andamento/locked") nunca se realiza. Pelo mesmo motivo, o botão "Próxima aula" (`lesson-view.tsx:200-204`) nunca aparece: o aluno conclui uma aula e não tem para onde ir. Enquanto isso, a regra de verdade vive em `plataforma.can_access_lesson` (`0020_plataforma_rls.sql:63-86`), que ordena a trilha por `(module."order", lesson."order")` — outro modelo, o único alimentado.
+
+**2. A ementa está vazia justamente para quem ainda não se matriculou.** `lessons_select_enrolled` (`0020_plataforma_rls.sql:167-176`) exige uma linha de matrícula para devolver qualquer aula. `/curso/[slug]` renderiza o cartão "Ementa" com `CourseSidebar` (`course-detail-view.tsx:114-127`) alimentado por `getCourseModulesWithLessons` (`queries.ts:371-392`). Os módulos aparecem (`modules_select_published` só exige curso publicado); as aulas, nenhuma. A tela que existe para convencer alguém a se matricular mostra títulos de módulo sobre o vazio, e o CTA pede confiança em um conteúdo que não é exibido.
+
+**3. O progresso do aluno é sistematicamente inflado.** Com as aulas bloqueadas fora do `SELECT`, `lessons.length` é a contagem de aulas **liberadas**, não a do curso. Um aluno que concluiu 1 de 10 aulas enxerga 2 (a concluída e a recém-liberada) e lê "50%" em `course-detail-view.tsx:44-47`. O mesmo cálculo em `getUserEnrollmentsWithProgress` (`queries.ts:663-676`) alimenta `/jornada` e todo `CourseCard`, então a barra sobe como n/(n+1) — 50%, 67%, 75% — e só bate com a realidade na última aula. O painel do instrutor conta sobre o total real (`queries.ts:826-833`; staff não passa pelo gate da trilha): o mesmo curso, no mesmo dia, tem dois números diferentes.
+
+**4. "100% da trilha" está apoiado na visibilidade, não no total.** `checkAndIssueCertificate` (`actions/certificates.ts:53-70`) conta `lessons` dentro da transação do próprio aluno. Hoje o resultado casa por acidente — cada conclusão libera a aula seguinte antes da contagem —, mas a regra de emissão de certificado (BRAIN §6.3) fica dependendo de um efeito colateral da RLS em vez do tamanho do curso.
+
+**Escopo (siga na ordem):**
+
+1. **Migration nova** (próximo número livre — 0080 no momento desta redação, conferir antes; escrita à mão, `drizzle-kit generate` aposentado desde P-0.3c/S-171) com uma função `plataforma.course_outline(p_course_id uuid)` `SECURITY DEFINER STABLE`, que devolve o esqueleto de um curso **publicado**: `lesson_id`, `module_id`, `module_order`, `lesson_order`, `title`, `type`, `video_duration_seconds`, `requires_completion` e `unlocked` (o resultado de `can_access_lesson` para `auth.uid()`). Sem nenhuma coluna de conteúdo — `video_url`, `content`, `download_url` continuam atrás da policy que já existe, e nada nas policies atuais é alterado. `GRANT EXECUTE … TO authenticated`, mesmo padrão de `plataforma.verify_certificate`.
+2. **A ementa passa a ser lida por essa função.** `getCourseModulesWithLessons` e `getLessonPageData` montam a lista de aulas a partir de `course_outline`; a aula bloqueada entra na lista com os campos de conteúdo nulos e `unlocked: false`. A tela de aula continua barrada pela RLS como hoje (`getLessonPageData` devolvendo `null` quando o conteúdo não vem).
+3. **`nextLessonId` deixa de ser coluna e passa a ser derivado** de `(module_order, lesson_order)` na montagem da leitura — uma fonte só, a mesma que a RLS usa. Como nada nunca escreveu a coluna, a mesma migration a remove (`ALTER TABLE plataforma.lessons DROP COLUMN next_lesson_id`) junto com a FK; confirme antes que ela está 100% `NULL`. `Lesson.nextLessonId` (P-6.1) continua no tipo compartilhado, agora sempre correto.
+4. **`CourseSidebar` recebe o bloqueio pronto** em vez de reconstruir a trilha: `computeStatus` passa a ler `unlocked` da própria aula e o componente deixa de carregar uma segunda cópia da regra de desbloqueio. Aula bloqueada aparece com cadeado, não navega e diz em texto por que está travada — cadeado sozinho não é informação acessível (mesmo raciocínio de P-5.9d, item 2).
+5. **O denominador do progresso passa a ser o total da trilha**, não o que o `SELECT` devolveu: `course-detail-view.tsx`, `getUserEnrollmentsWithProgress` e `checkAndIssueCertificate`, que passa a contar pela função — "100% da trilha" deixa de depender de visibilidade.
+6. **Ementa antes da matrícula:** `/curso/[slug]` mostra a trilha inteira, com cadeado nas aulas ainda travadas. O CTA de matrícula continua sendo a única porta para o conteúdo.
+7. **Testes** (`apps/plataforma/src/__tests__/`): visitante não matriculado enxerga a ementa completa e nenhuma URL de vídeo ou anexo; aluno com 1 de 10 aulas concluídas tem progresso 10%, não 50%; aula bloqueada continua barrada no `INSERT` de `progress` (contrato de P-6.7 sem regressão — os testes de `progress.test.ts:275-341` seguem verdes sem alteração); `nextLessonId` derivado aponta a aula seguinte pela ordem de módulo/aula, inclusive atravessando a fronteira de módulo.
+8. **Bookkeeping em PROMPTS.md:** critérios de P-6.1 (trilha sequencial), P-6.2 (ícones de progresso incluindo bloqueado) e P-6.3 (ementa e progresso da jornada).
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/db/src/migrations/NNNN_plataforma_course_outline.sql` (criar — próximo número livre, à mão conforme P-0.3c)
+- `packages/db/src/schema/plataforma.ts` (apenas a remoção de `next_lesson_id`)
+- `apps/plataforma/src/lib/queries.ts`
+- `apps/plataforma/src/actions/certificates.ts`
+- `apps/plataforma/src/components/course-sidebar.tsx`
+- `apps/plataforma/src/components/course-detail-view.tsx`
+- `apps/plataforma/src/components/lesson-view.tsx`
+- `packages/types/src/plataforma/index.ts`
+- `apps/plataforma/src/__tests__/trilha.test.ts` (criar)
+- `PROMPTS.md` (critérios de P-6.1, P-6.2 e P-6.3)
+
+**Critérios de aceite:**
+
+- [x] A ementa de `/curso/[slug]` lista todas as aulas do curso publicado para quem ainda não se matriculou, sem expor URL de vídeo, texto da aula ou anexo
+- [x] Aula bloqueada aparece com cadeado **e** rótulo de texto, e não navega
+- [x] Aluno com 1 de 10 aulas concluídas lê 10% na página do curso, em `/jornada` e no `CourseCard` — o mesmo número que o painel do instrutor mostra para ele
+- [x] "Próxima aula" aparece ao concluir uma aula que tem sucessora, inclusive quando a sucessora está no módulo seguinte
+- [x] Nenhuma leitura de trilha depende de `lessons.next_lesson_id`; a coluna não existe mais no banco nem no schema Drizzle
+- [x] O certificado continua sendo emitido só com 100% das aulas do curso concluídas, contadas sobre o total real
+- [x] Aula fora da trilha liberada continua barrada no `INSERT` de `progress` (P-6.7 sem regressão)
+- [x] Migration idempotente, aplicada com sucesso; reaplicação reporta "Nothing to apply"
+- [x] `apps/plataforma` e `packages/db` com typecheck, lint e testes verdes; `pnpm turbo build --filter=@hebron/plataforma` verde
+- [x] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: P-6.7 (que escreveu `can_access_lesson` e é a fonte da regra que este prompt passa a respeitar em uma camada só), P-6.14 (precedente de função `SECURITY DEFINER` que expõe o mínimo sem abrir `SELECT` na tabela) e P-5.9d (o precedente de "distinguir por texto, não só por cor"). Este prompt não afrouxa nenhuma policy: o que passa a ser visível é a estrutura da trilha, nunca o conteúdo da aula.
 
 ---
 
@@ -7754,9 +7819,9 @@ Páginas do aluno: Catálogo de cursos (filtros: categoria, instrutor — "dific
 **Critérios de aceite:**
 
 - [x] Catálogo com filtros e busca simples (título, categoria, instrutor); série entra como terceiro eixo em P-6.3b (ver PATCH-024)
-- [x] Página de curso: descrição, ementa, instrutor, CTA matrícula
+- [x] Página de curso: descrição, ementa, instrutor, CTA matrícula (a ementa vinha vazia para quem ainda não tinha matrícula — RLS de `lessons` exige matrícula; agora lê a trilha inteira via `plataforma.course_outline()`, com cadeado nas aulas travadas — corrigido em P-6.2b)
 - [x] Player: vídeo + sidebar navegação + notas + discussão
-- [x] "Minha jornada": cursos em andamento com progresso visual
+- [x] "Minha jornada": cursos em andamento com progresso visual (progresso vinha inflado — denominador era só as aulas liberadas pela RLS, não o total da trilha — corrigido em P-6.2b)
 - [x] Certificados: lista com download PDF
 - [x] Editor de curso: drag-drop para ordenar módulos e aulas
 - [x] Editor de aula e editor de quiz têm página própria e são navegáveis a partir do editor de curso
@@ -7809,6 +7874,53 @@ Introduzir "série" (coleção temática de cursos, mesmo precedente do módulo 
 
 ---
 
+### P-6.3c — O painel do instrutor que sempre lê zero (CORRETIVO)
+
+**Fase:** 6
+**Módulo:** plataforma
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `fix/P-6.3c-plataforma-painel-instrutor`
+- Dependências: P-6.2b aplicado (mesmo `lib/queries.ts`, mesma família de função `SECURITY DEFINER`)
+- Env vars: `DATABASE_URL`
+
+**Problema que este prompt resolve (contexto):**
+O Escopo de P-6.3 pede "Páginas do instrutor/pedagógico: Dashboard com estatísticas", e a tela existe: quatro indicadores no topo e progresso médio por curso (`app/instrutor/page.tsx:26-44,113-119`). Para o instrutor, os quatro são zero.
+
+`getInstructorDashboardCourses` (`queries.ts:797-890`) conta matrículas, progresso e certificados dentro de `withAuthenticatedContext` com o `actorId` de quem abriu a tela. As três tabelas são restritas ao próprio dono, com override apenas para `super_admin`: `enrollments_select_own` (`0020_plataforma_rls.sql:188-190`), `progress_select_own` (`:219-221`) e a policy de `certificates`, que só devolve o certificado do próprio usuário. Um instrutor é uma linha em `plataforma.instructors` — não é um papel em `public.role` e não tem `super_admin` (`queries.ts:104-133`, `lib/safe-action.ts`). Ou seja: exatamente o público da tela lê "0 alunos matriculados", "0 certificados emitidos" e "0% de progresso médio" em cursos com turma cheia. Quem vê os números certos é o `super_admin`, que não é quem dá aula.
+
+Não é caso de afrouxar a RLS: a tela mostra **agregado** (quantos, média), nunca quem fez o quê. Abrir `SELECT` linha a linha em `progress` para o instrutor entregaria o histórico individual de cada aluno para resolver um contador.
+
+**Escopo (siga na ordem):**
+
+1. **Migration nova** (próximo número livre, à mão conforme P-0.3c) com `plataforma.course_stats(p_course_ids uuid[])` `SECURITY DEFINER STABLE`, devolvendo por curso: `enrollment_count`, `certificate_count` e `avg_percent` (média de aulas concluídas sobre o total de aulas do curso, entre os matriculados). Guarda dentro da função: só executa para `public.has_role('super_admin') OR plataforma.is_instructor()`; para qualquer outro chamador, devolve conjunto vazio. `GRANT EXECUTE … TO authenticated`, mesmo padrão de `plataforma.verify_certificate` e da função de P-6.2b. Nenhuma policy existente é alterada.
+2. **`getInstructorDashboardCourses` passa a ler os três números da função** e deixa de agregar `enrollments`/`progress`/`certificates` no cliente. A lista de cursos continua vindo de `courses` (a policy de staff já devolve rascunho e publicado).
+3. **Teste** (`apps/plataforma/src/__tests__/`): instrutor sem `super_admin` lê `enrollment_count`/`certificate_count`/`avg_percent` reais de um curso com dois alunos; aluno comum que executa a função recebe conjunto vazio; nenhum dos dois consegue `SELECT` direto em `plataforma.progress` de outro usuário (contrato de P-6.7 sem regressão — `rls.test.ts:288-314` segue verde).
+4. **Bookkeeping em PROMPTS.md:** critério de P-6.3 sobre o painel do instrutor.
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/db/src/migrations/NNNN_plataforma_course_stats.sql` (criar — próximo número livre, à mão conforme P-0.3c)
+- `apps/plataforma/src/lib/queries.ts`
+- `apps/plataforma/src/__tests__/instrutor-stats.test.ts` (criar)
+- `PROMPTS.md` (critério de P-6.3)
+
+**Critérios de aceite:**
+
+- [ ] Instrutor sem papel `super_admin` vê matrículas, certificados e progresso médio reais no painel
+- [ ] O instrutor continua sem enxergar o progresso individual de qualquer aluno (nenhuma linha de `progress`, `enrollments` ou `certificates` de terceiros)
+- [ ] Aluno comum não obtém estatística de curso nenhum pela função
+- [ ] Curso sem matrícula continua exibindo 0, e não erro
+- [ ] Migration idempotente, aplicada com sucesso; reaplicação reporta "Nothing to apply"
+- [ ] `apps/plataforma` e `packages/db` com typecheck, lint e testes verdes
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: P-6.7 (as policies "só o próprio", que continuam intactas) e P-3.11b/P-5.8b, os precedentes de "o dado existe, a tela pergunta pela pessoa errada". A suposição de escopo de P-6.7/P-6.8 — qualquer instrutor administra qualquer curso — não muda aqui; se a diretoria pedir escopo por curso, isso é modelagem nova, não este prompt.
+
+---
+
 ### P-6.4 — Formulários Plataforma
 
 **Fase:** 6
@@ -7842,6 +7954,74 @@ Formulários: criar/editar curso (título, descrição, categoria, instrutor, ca
 
 ---
 
+### P-6.4b — O curso que se cria e não se edita (CORRETIVO)
+
+**Fase:** 6
+**Módulo:** plataforma
+**Tipo:** ui
+**Pré-condições:**
+
+- Branch: `fix/P-6.4b-plataforma-portas-de-entrada`
+- Dependências: P-6.2b aplicado (mesmo `course-sidebar.tsx`/`lesson-view.tsx` na cadeia de telas)
+- Env vars: `DATABASE_URL`
+- Skill: **invocar `/impeccable` antes de começar**
+
+**Problema que este prompt resolve (contexto):**
+P-6.4 tem `[x]` em "Curso form: título, descrição, capa, categoria, instrutor" e o Escopo de P-6.4/P-6.3 fala em "criar/**editar** curso" e "criar/**editar** módulo". Os formulários sabem editar; nenhuma tela os abre nesse modo, e seis Server Actions de P-6.8 não têm chamador de UI nenhum.
+
+**1. Depois de criado, o curso é imutável na prática.** `CourseForm` tem `mode: "create" | "edit"` e aceita um `course` para pré-preencher (`course-form.tsx:105-123`), mas o único lugar que o monta é `new-course-view.tsx:7`. `updateCourse` só é chamada pelo botão Publicar/Despublicar (`course-editor-view.tsx:143-155`), que reenvia os valores atuais com o booleano invertido. Título com erro de digitação, descrição, capa, categoria, instrutor e série ficam congelados desde a criação — o único caminho é criar outro curso.
+
+**2. Módulo idem.** `CourseModuleForm` aceita `courseModule` para editar (`course-form.tsx:473-496`) e só é montado para criar (`course-editor-view.tsx:320-325`). `updateCourseModule` tem zero chamadores em `.tsx`.
+
+**3. Nada se remove — e o que existe para remover é perigoso.** `deleteCourse`, `deleteCourseModule` e `deleteLesson` (`actions/courses.ts:143-155,214-226,332-344`) têm zero chamadores de UI, é o mesmo "D" ausente do CRUD que P-4.8d fechou em Tarefas. Só que aqui as três fazem `DELETE` físico e as FKs cascateiam (`packages/db/src/schema/plataforma.ts:182,208,310`): apagar um curso apaga matrículas, progresso e **certificados já emitidos**. Isso contorna por dentro a decisão registrada no cabeçalho da própria RLS ("sem DELETE — trilha de auditoria acadêmica, nunca hard delete", `0020_plataforma_rls.sql:25-31,178-179`), porque cascade de FK não passa por policy, e contraria o princípio de imutabilidade do CLAUDE.md. A porta de entrada que falta, portanto, não é um botão de excluir: é arquivar.
+
+**4. A nota que não se corrige.** `updateNote` e `deleteNote` (`actions/discussions.ts:146-180`) não têm chamador: `NoteWidget` (`note-widget.tsx:43-94`) só cria. Uma anotação com erro de digitação fica no minuto do vídeo para sempre.
+
+**5. O post que diz "editado" e não se edita.** `updateDiscussionPost` e `deleteDiscussionPost` (`actions/discussions.ts:68-108`) também não têm chamador, e `PostBubble` já renderiza "· editado" (`discussion-thread.tsx:40`) para um estado que nada no sistema produz — mesmo raciocínio do selo "Rascunho" que P-5.3b removeu da Intranet. A RLS já autoriza exatamente o que falta na tela: só o autor edita, super_admin modera (`rls.test.ts:316-350`).
+
+**Escopo (siga na ordem):**
+
+1. **Editar curso:** o editor de curso ganha acesso ao `CourseForm` em `mode="edit"`, pré-preenchido, gravando por `updateCourse` (capa inclusive, pelo caminho de upload de P-6.15 que o formulário já usa). Publicar/Despublicar continua como está.
+2. **Editar módulo:** título e descrição editáveis no próprio editor, via `CourseModuleForm` com `courseModule` — sem tela nova, no mesmo lugar onde hoje só se adiciona.
+3. **Arquivar no lugar de excluir:** coluna `archived_at` (nullable) em `courses`, `modules` e `lessons` por migration nova (próximo número livre, à mão conforme P-0.3c); `deleteCourse`/`deleteCourseModule`/`deleteLesson` passam a marcar `archived_at` em vez de `DELETE`, e todas as leituras de catálogo, ementa, trilha e editor filtram o arquivado. Curso arquivado sai do catálogo e do painel; quem já concluiu mantém matrícula, progresso e certificado verificável. Nenhum `DELETE` físico é exposto na UI.
+4. **Nota editável e removível** pelo próprio autor, dentro do `NoteWidget`.
+5. **Post editável e removível** pelo autor, com moderação de `super_admin`, dentro do `DiscussionThread` — o "· editado" passa a ser um estado alcançável.
+6. **Bookkeeping em PROMPTS.md:** critérios de P-6.3 (editor de curso) e P-6.4 (criar/editar curso e módulo).
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/db/src/migrations/NNNN_plataforma_arquivamento.sql` (criar — próximo número livre, à mão conforme P-0.3c)
+- `packages/db/src/schema/plataforma.ts`
+- `packages/types/src/plataforma/index.ts`
+- `apps/plataforma/src/actions/courses.ts`
+- `apps/plataforma/src/actions/discussions.ts`
+- `apps/plataforma/src/lib/queries.ts`
+- `apps/plataforma/src/components/course-editor-view.tsx`
+- `apps/plataforma/src/components/note-widget.tsx`
+- `apps/plataforma/src/components/discussion-thread.tsx`
+- `apps/plataforma/src/components/lesson-view.tsx` (apenas para ligar as novas ações de nota/post)
+- `apps/plataforma/src/__tests__/arquivamento.test.ts` (criar)
+- `PROMPTS.md` (critérios de P-6.3 e P-6.4)
+
+**Critérios de aceite:**
+
+- [ ] Instrutor edita título, descrição, capa, categoria, instrutor e série de um curso já criado, e a mudança aparece no catálogo
+- [ ] Instrutor edita título e descrição de um módulo existente
+- [ ] Arquivar curso, módulo ou aula tira do catálogo/ementa sem apagar linha nenhuma; matrícula, progresso e certificado emitido continuam existindo e o certificado segue verificável em `/certificado/verificar`
+- [ ] Nenhuma ação exposta na UI executa `DELETE` físico em `courses`, `modules` ou `lessons`
+- [ ] Aluno edita e remove a própria nota; não alcança a de outro aluno
+- [ ] Autor edita e remove o próprio post; outro aluno não; `super_admin` modera (P-6.7 sem regressão — `rls.test.ts:316-350` verde)
+- [ ] "· editado" só aparece em post de fato editado
+- [ ] Migration idempotente, aplicada com sucesso; reaplicação reporta "Nothing to apply"
+- [ ] Responsivo em 360px, sem rolagem horizontal, nas telas tocadas
+- [ ] `apps/plataforma` e `packages/db` com typecheck, lint e testes verdes; `pnpm turbo build --filter=@hebron/plataforma` verde
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: P-4.8d ("O 'D' do CRUD"), P-2.8c e P-3.9c — o mesmo achado de actions sem porta de entrada — e P-5.3b, que estabeleceu o precedente de remover um selo que o sistema nunca produz em vez de mantê-lo como ruído. O arquivamento aqui é a leitura mais conservadora do princípio de imutabilidade do CLAUDE.md: o instrutor precisa poder tirar do ar uma aula errada sem que isso apague o histórico acadêmico de quem já a cursou.
+
+---
+
 ### P-6.5 — Estados Plataforma
 
 **Fase:** 6
@@ -7869,6 +8049,68 @@ Loading, empty e error states. Skeletons para catálogo, player, jornada. Estado
 - [x] Estados vazios contextuais
 - [x] Lint passa
 - [x] Types passam
+
+---
+
+### P-6.5b — Os esqueletos que ninguém mostra e o erro que se disfarça de catálogo vazio (CORRETIVO)
+
+**Fase:** 6
+**Módulo:** plataforma
+**Tipo:** ui
+**Pré-condições:**
+
+- Branch: `fix/P-6.5b-plataforma-estados-telas`
+- Dependências: P-6.4b aplicado (as telas tocadas aqui já estão no formato final)
+- Env vars: `DATABASE_URL`
+- Skill: **invocar `/impeccable` antes de começar**
+
+**Problema que este prompt resolve (contexto):**
+P-6.5 tem `[x]` em "Skeletons por tela" e "Estados vazios contextuais". Os estados vazios estão de fato lá, nas nove telas. Carregamento e erro não estão em nenhuma.
+
+**1. O módulo inteiro não tem fronteira de carregamento nem de erro.** `apps/plataforma/src` não tem um único `loading.tsx`, `error.tsx`, `not-found.tsx` ou `Suspense` — comparativo no mesmo monorepo: `financeiro` 14 arquivos, `projetos` 13, `documentos` 9, e a Intranet resolveu o mesmo problema em P-5.3b com `Suspense` dentro da página (`PageHeader` fora da fronteira, conteúdo dentro). Toda página do aluno e do instrutor é RSC assíncrona que lê cookies e banco antes do primeiro JSX (`jornada/page.tsx:11-13`, `certificados/page.tsx`, `instrutor/page.tsx:11-13`, `curso/[slug]/page.tsx`): como a leitura usa cookies, a rota é dinâmica e o usuário fica parado na tela anterior até o servidor responder, sem cabeçalho e sem sinal de que algo está acontecendo. A tela de aula é o pior caso — `getLessonPageData` (`queries.ts:458+`) faz curso, módulos, aulas, progresso, quiz, última tentativa, posts, notas e uma assinatura de Storage antes de pintar qualquer coisa.
+
+**2. Os dois esqueletos mais caros do módulo continuam órfãos.** `PlayerSkeleton` e `CourseSidebarSkeleton` (`components/player-skeleton.tsx`) não têm nenhum import desde que foram escritos — é o débito que S-107 registrou explicitamente ("ficam prontos para consumo em P-6.9") e que P-6.9 não fechou. Foram desenhados sobre a moldura escura do `LessonPlayer` e sobre `CourseSidebar`: servem exatamente para a tela do item 1.
+
+**3. O erro se disfarça de catálogo vazio.** No catálogo (`(aluno)/page.tsx:31-37`), `loading` é `status === "executing" && result.data === undefined`. Se `searchCourses` falhar, `result.data` continua `undefined`, `status` sai de "executing", `loading` vira `false` e a tela cai no ramo de `publishedCourses.length === 0` (`:116-125`): "Nenhum curso disponível ainda", com citação bíblica, para um aluno cuja consulta quebrou. Nenhuma tela do app usa `ErrorState`, que `@hebron/ui` exporta e que a Intranet usa em seis telas.
+
+**4. O catálogo só existe depois da hidratação.** A busca roda em `useEffect` sobre `useAction` (`:33-35`), então o HTML do servidor não traz curso nenhum: primeira pintura vazia, uma ida a mais ao servidor e nenhum benefício de RSC na tela de entrada do módulo.
+
+**Escopo (siga na ordem):**
+
+1. **`Suspense` + esqueleto nas telas do aluno** — catálogo, `/jornada`, `/certificados`, página do curso e página de aula —, no desenho de P-5.3b: `PageHeader` fora da fronteira, conteúdo dentro. Mesma coisa no painel do instrutor e no editor de curso.
+2. **`PlayerSkeleton` e `CourseSidebarSkeleton` deixam de ser órfãos**, na tela de aula. Nenhum esqueleto novo onde um existente já bate com o layout real (`CourseCardSkeleton` já cobre catálogo e jornada).
+3. **`ErrorState` onde a leitura pode falhar:** falha de consulta passa a dizer que falhou, com caminho de recuperação, e nunca é apresentada como ausência de conteúdo. Vale para o catálogo e para as telas que passam a ter fronteira.
+4. **O catálogo passa a ser RSC**, com os filtros (busca, categoria, instrutor, série) em um componente client sobre os dados já renderizados no servidor — mantendo o comportamento de filtro que P-6.3b entregou, sem regressão. Se a leitura no servidor falhar, cai no item 3.
+5. **Bookkeeping em PROMPTS.md:** critérios de P-6.5 (esqueletos por tela e estados de erro).
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/plataforma/src/app/(aluno)/page.tsx`
+- `apps/plataforma/src/app/(aluno)/jornada/page.tsx`
+- `apps/plataforma/src/app/(aluno)/certificados/page.tsx`
+- `apps/plataforma/src/app/(aluno)/curso/[slug]/page.tsx`
+- `apps/plataforma/src/app/(aluno)/curso/[slug]/aula/[id]/page.tsx`
+- `apps/plataforma/src/app/instrutor/page.tsx`
+- `apps/plataforma/src/app/instrutor/curso/[id]/page.tsx`
+- `apps/plataforma/src/components/course-catalog.tsx` (criar — filtros client sobre dados do servidor)
+- `apps/plataforma/src/components/course-card-skeleton.tsx` (apenas props para reuso)
+- `apps/plataforma/src/components/player-skeleton.tsx` (apenas ajuste de props, se necessário)
+- `apps/plataforma/src/components/certificate-list-skeleton.tsx` (criar, se `CourseCardSkeleton` não servir)
+- `PROMPTS.md` (critérios de P-6.5)
+
+**Critérios de aceite:**
+
+- [ ] Cada uma das telas listadas pinta cabeçalho e esqueleto antes de o servidor responder — verificado em browser real, com rede lenta simulada
+- [ ] A tela de aula usa `PlayerSkeleton` e `CourseSidebarSkeleton`; nenhum dos dois continua órfão
+- [ ] Falha de leitura mostra `ErrorState`, nunca "Nenhum curso disponível ainda"
+- [ ] Catálogo vazio de verdade continua mostrando o vazio contextual de P-6.5, com a citação
+- [ ] O HTML do servidor do catálogo já vem com os cursos; filtros de título, categoria, instrutor e série continuam funcionando (P-6.3b sem regressão)
+- [ ] Responsivo em 360px, sem rolagem horizontal, nas telas tocadas
+- [ ] `apps/plataforma` com typecheck, lint e testes verdes; `pnpm turbo build --filter=@hebron/plataforma` verde
+- [ ] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: P-5.3b (o mesmo achado na Intranet, com o desenho de `Suspense` que este prompt repete), P-3.5b ("nenhuma fronteira de erro, doze telas sem carregamento") e S-107, que registrou os dois esqueletos órfãos esperando P-6.9. Este prompt fecha o débito com o dono original: o módulo que promete "estados" no nome do prompt.
 
 ---
 

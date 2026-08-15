@@ -125,9 +125,12 @@ export const modules = plataformaSchema.table(
 );
 
 // ---------------------------------------------------------------------------
-// plataforma.lessons — trilha sequencial: nextLessonId aponta a próxima aula
-// do curso; requiresCompletion indica se esta aula só desbloqueia após a
-// conclusão da aula anterior (BRAIN §6.3). Campos de conteúdo variam por
+// plataforma.lessons — trilha sequencial: requiresCompletion indica se esta
+// aula só desbloqueia após a conclusão da aula anterior (BRAIN §6.3); "aula
+// anterior"/"próxima aula" são derivadas de (module."order", lesson."order")
+// em `plataforma.course_outline()` (0080_plataforma_course_outline.sql,
+// P-6.2b) — nunca uma coluna, para não duplicar a trilha que
+// `plataforma.can_access_lesson` já ordena. Campos de conteúdo variam por
 // type; os não aplicáveis ao tipo ficam null.
 // ---------------------------------------------------------------------------
 export const lessons = plataformaSchema.table(
@@ -149,10 +152,6 @@ export const lessons = plataformaSchema.table(
     downloadUrl: text("download_url"),
     downloadFileName: text("download_file_name"),
     downloadFileSizeBytes: integer("download_file_size_bytes"),
-    nextLessonId: uuid("next_lesson_id").references(
-      (): AnyPgColumn => lessons.id,
-      { onDelete: "set null" },
-    ),
     requiresCompletion: boolean("requires_completion").notNull().default(true),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

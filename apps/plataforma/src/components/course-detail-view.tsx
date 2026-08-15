@@ -120,8 +120,14 @@ export function CourseDetailView({
             modules={modules}
             lessons={lessons}
             progress={progress}
-            onSelectLesson={(lesson) =>
-              router.push(`/curso/${course.slug}/aula/${lesson.id}`)
+            // Aula "desbloqueada" na trilha só é navegável depois da
+            // matrícula — o CTA de matrícula é a única porta para o
+            // conteúdo (P-6.2b, item 6); antes disso a ementa é só leitura.
+            onSelectLesson={
+              enrolled
+                ? (lesson) =>
+                    router.push(`/curso/${course.slug}/aula/${lesson.id}`)
+                : undefined
             }
           />
         </aside>

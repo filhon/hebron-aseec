@@ -32,16 +32,12 @@ function formatDuration(seconds: number | null): string | null {
 function computeStatus(
   lesson: Lesson,
   completedLessonIds: Set<string>,
-  previousLessonId: string | undefined,
   currentLessonId: string | undefined,
 ): LessonStatus {
   if (completedLessonIds.has(lesson.id)) return "completo";
   if (lesson.id === currentLessonId) return "em-andamento";
-  if (!lesson.requiresCompletion) return "disponivel";
-  if (!previousLessonId || completedLessonIds.has(previousLessonId)) {
-    return "disponivel";
-  }
-  return "bloqueado";
+  if (!lesson.unlocked) return "bloqueado";
+  return "disponivel";
 }
 
 const STATUS_ICON: Record<
@@ -65,9 +61,9 @@ export interface CourseSidebarProps {
 }
 
 /** Navegação lateral de um curso: módulos e aulas com status de progresso
- * (completo / em andamento / disponível / bloqueado). Uma aula com
- * `requiresCompletion` só desbloqueia depois que a aula anterior da trilha
- * (via `nextLessonId`) é concluída (BRAIN §6.3). */
+ * (completo / em andamento / disponível / bloqueado). `lesson.unlocked` já
+ * vem calculado pela trilha sequencial no banco (plataforma.can_access_lesson
+ * via course_outline, P-6.2b) — o componente não reconstrói a regra. */
 export function CourseSidebar({
   modules,
   lessons,
@@ -79,13 +75,6 @@ export function CourseSidebar({
   const completedLessonIds = new Set(
     progress.filter((p) => p.completedAt).map((p) => p.lessonId),
   );
-
-  const previousLessonIdByLessonId = new Map<string, string>();
-  for (const lesson of lessons) {
-    if (lesson.nextLessonId) {
-      previousLessonIdByLessonId.set(lesson.nextLessonId, lesson.id);
-    }
-  }
 
   const sortedModules = [...modules].sort((a, b) => a.order - b.order);
 
@@ -113,7 +102,6 @@ export function CourseSidebar({
                 const status = computeStatus(
                   lesson,
                   completedLessonIds,
-                  previousLessonIdByLessonId.get(lesson.id),
                   currentLessonId,
                 );
                 const locked = status === "bloqueado";
@@ -121,6 +109,12 @@ export function CourseSidebar({
                 const statusCfg = STATUS_ICON[status];
                 const StatusIcon = statusCfg.icon;
                 const duration = formatDuration(lesson.videoDurationSeconds);
+                const lockReason = "Conclua a aula anterior para desbloquear";
+                // Sem onSelectLesson (ementa antes da matrícula, P-6.2b item
+                // 6), a aula "desbloqueada" da trilha continua só leitura —
+                // sem afordance de clique, mas sem cadeado (esse é reservado
+                // para o bloqueio de trilha de verdade).
+                const interactive = !locked && !!onSelectLesson;
 
                 return (
                   <li key={lesson.id}>
@@ -130,13 +124,18 @@ export function CourseSidebar({
                       aria-current={
                         lesson.id === currentLessonId ? "true" : undefined
                       }
-                      onClick={() => !locked && onSelectLesson?.(lesson)}
+                      aria-label={
+                        locked ? `${lesson.title} — ${lockReason}` : undefined
+                      }
+                      title={locked ? lockReason : undefined}
+                      onClick={() => interactive && onSelectLesson?.(lesson)}
                       className={cn(
                         "flex w-full items-center gap-2.5 rounded-sm px-2.5 py-2 text-left text-sm",
                         "transition-colors duration-(--transition-fast)",
-                        locked
-                          ? "cursor-not-allowed opacity-60"
-                          : "cursor-pointer hover:bg-(--surface-alt)",
+                        locked && "cursor-not-allowed opacity-60",
+                        interactive &&
+                          "cursor-pointer hover:bg-(--surface-alt)",
+                        !locked && !interactive && "cursor-default",
                         lesson.id === currentLessonId &&
                           "bg-(--brand-muted) font-medium",
                       )}
@@ -152,10 +151,16 @@ export function CourseSidebar({
                       <span className="min-w-0 flex-1 truncate text-(--fg)">
                         {lesson.title}
                       </span>
-                      {duration && (
-                        <span className="shrink-0 text-xs text-(--fg-muted)">
-                          {duration}
+                      {locked ? (
+                        <span className="shrink-0 text-xs font-medium text-(--fg-subtle)">
+                          Bloqueada
                         </span>
+                      ) : (
+                        duration && (
+                          <span className="shrink-0 text-xs text-(--fg-muted)">
+                            {duration}
+                          </span>
+                        )
                       )}
                     </button>
                   </li>

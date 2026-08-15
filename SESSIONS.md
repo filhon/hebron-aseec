@@ -268,6 +268,7 @@
 | S-245  | 2026-08-14 | P-5.9e — O diretório que abre uma conexão de rede por pessoa (CORRETIVO)                                                         | concluido                            |
 | S-246  | 2026-08-14 | P-5.8c — A busca que trata "%" como coringa e chama a reunião de "ordinaria" (CORRETIVO)                                         | concluido                            |
 | S-247  | 2026-08-15 | Ajustes de UI da Intranet: grid redimensionável do painel, avatar e link no user-bar, enquadramento de /meus-dados (CORRETIVO)   | concluido                            |
+| S-248  | 2026-08-15 | P-6.2b — A trilha que a barra lateral promete e o banco esconde (CORRETIVO)                                                      | concluido                            |
 
 ---
 
@@ -22312,4 +22313,132 @@ não existe).
 - `apps/intranet/src/app/(dashboard)/meus-dados/page.tsx`
 - `apps/intranet/src/lib/queries.ts`
 - `apps/intranet/src/__tests__/rls.test.ts`
+
+---
+
+## S-248 — P-6.2b — A trilha que a barra lateral promete e o banco esconde (CORRETIVO)
+
+**Prompt:** P-6.2b
+**Data:** 2026-08-15
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+Quatro defeitos com a mesma raiz: a trilha sequencial do módulo era
+modelada duas vezes — `plataforma.can_access_lesson` (0020_plataforma_rls.sql,
+ordena por `module."order"`/`lesson."order"`, a única alimentada) e a coluna
+`lessons.next_lesson_id`, permanentemente `NULL` porque nenhum caminho de
+escrita (`createLesson`/`updateLesson`/`reorderLessons`) jamais a
+preencheu. Passou por `/impeccable` antes de editar (regra G2/CLAUDE.md;
+registro `product`, PRODUCT.md carregado) — mudança pontual sobre
+componentes existentes reaproveitando o padrão de estado bloqueado já
+validado em P-5.9d (cadeado + rótulo de texto, não só cor/ícone).
+
+1. **Migration `0080_plataforma_course_outline.sql`**: função
+   `plataforma.course_outline(p_course_id uuid)` `SECURITY DEFINER STABLE`
+   (mesmo padrão de `plataforma.verify_certificate`) devolve o esqueleto de
+   um curso publicado — `lesson_id`, `module_id`, `module_order`,
+   `lesson_order`, `title`, `type`, `video_duration_seconds`,
+   `requires_completion`, `unlocked` (resultado de `can_access_lesson` para
+   `auth.uid()`) — sem nenhuma coluna de conteúdo; `video_url`/`content`/
+   `download_url` continuam atrás de `lessons_select_enrolled`, sem
+   nenhuma policy alterada. `GRANT EXECUTE … TO authenticated`. A mesma
+   migration confirma `lessons.next_lesson_id` 100% `NULL` (consulta direta
+   antes de escrever a migration) e a remove via `DROP COLUMN IF EXISTS`
+   (a FK inline cai junto).
+2. **`getCourseModulesWithLessons`/`getLessonPageData`** (`lib/queries.ts`)
+   passam a montar a lista de aulas a partir de `course_outline` — a aula
+   bloqueada (ou de um visitante não matriculado) entra na lista com os
+   campos de conteúdo nulos e `unlocked: false`; conteúdo real só é
+   mesclado quando o `SELECT` direto em `lessons` (sob RLS) de fato
+   devolve a linha. A tela de aula (`getLessonPageData`) continua barrada
+   pela RLS como antes — devolve `null` quando o conteúdo não vem.
+   `nextLessonId` deixou de vir de coluna: `computeNextLessonIds` deriva a
+   próxima aula por `(module_order, lesson_order)`, a mesma ordem que
+   `can_access_lesson` usa.
+3. **`checkAndIssueCertificate`** (`actions/certificates.ts`) e
+   **`getUserEnrollmentsWithProgress`** (`lib/queries.ts`) trocaram a
+   contagem de `lessons` filtrada por RLS (que só via as aulas já
+   liberadas) pela contagem via `course_outline` — "100%" e "X%" deixam de
+   depender de visibilidade e passam a refletir o total real da trilha.
+4. **`CourseSidebar`** (`components/course-sidebar.tsx`) deixou de
+   reconstruir a trilha a partir de `nextLessonId`: `computeStatus` lê
+   `lesson.unlocked` diretamente. Aula bloqueada mostra cadeado **e**
+   rótulo de texto "Bloqueada" (não só o ícone — mesmo raciocínio de
+   P-5.9d) e não navega (`title`/`aria-label` explicam o motivo). Para a
+   ementa antes da matrícula (aula "desbloqueada" pela trilha mas ainda
+   sem matrícula), `course-detail-view.tsx` não passa `onSelectLesson` —
+   sem cadeado (a trilha em si não está bloqueada), mas sem afordance de
+   clique: o CTA de matrícula continua a única porta para o conteúdo.
+5. **`Lesson`** (`packages/types/src/plataforma/index.ts`) ganhou o campo
+   `unlocked: boolean` (default `true` nas leituras de editor de
+   instrutor, onde a trilha do aluno não se aplica); `nextLessonId`
+   permanece no tipo, documentado como derivado.
+6. **Testes novos em `trilha.test.ts`** (5): visitante não matriculado vê
+   as 10 aulas do curso sem nenhum `video_url`/`content`/`download_url`;
+   primeira aula aparece desbloqueada e as demais bloqueadas para quem não
+   tem progresso; aluno matriculado só recebe conteúdo nas aulas que a
+   trilha de fato libera; progresso de 1/10 aulas lê 10%, não 50%;
+   `nextLessonId` aponta a aula seguinte por `(module.order, lesson.order)`
+   inclusive atravessando a fronteira de módulo. Os testes de trilha em
+   `progress.test.ts:275-341` (contrato de P-6.7 no `INSERT` de `progress`)
+   continuam verdes sem nenhuma alteração no arquivo.
+7. **Bookkeeping em PROMPTS.md**: critérios `[x]` de P-6.1 (trilha
+   sequencial), P-6.2 (ícones de progresso incluindo bloqueado) e P-6.3
+   (ementa e progresso da jornada) anotados com a correção — estavam
+   marcados como concluídos apesar de o ramo de bloqueio ser código morto.
+
+### Suposições registradas
+
+- Rótulo de texto do estado bloqueado é "Bloqueada" ao lado do ícone
+  (substitui a duração, que não se aplica) + `title`/`aria-label` com o
+  motivo ("Conclua a aula anterior para desbloquear"); o prompt pedia
+  "cadeado e rótulo de texto" sem especificar a redação exata.
+- Denominador de `getUserEnrollmentsWithProgress` passou a chamar
+  `course_outline` uma vez por curso matriculado (loop sequencial na
+  mesma transação) em vez de um único `SELECT` agrupado — troca N
+  round-trips (bounded pelo número de cursos do aluno, tipicamente
+  pequeno) por contar pela função, que é o que o prompt pede
+  explicitamente para esse ponto.
+- `mapOutlineLesson`, para uma aula sem conteúdo mesclado (bloqueada ou
+  visitante), preenche `createdAt`/`updatedAt` com época zero — nenhum
+  componente do módulo renderiza essas datas para `Lesson`, só existem no
+  tipo por completude de interface.
+
+### Baseline verificado
+
+- `lessons.next_lesson_id` confirmado 100% `NULL` antes de escrever a
+  migration (consulta direta ao banco: `count(*) FILTER (WHERE
+next_lesson_id IS NOT NULL) = 0` de 1 linha existente)
+- Migration `0080` aplicada com sucesso (`pnpm --filter @hebron/db
+db:migrate`); reaplicação reporta "Nothing to apply — database is up to
+  date."; coluna confirmada ausente e função confirmada `SECURITY
+DEFINER` via `information_schema`/`pg_proc`
+- `pnpm --filter @hebron/db exec tsc --noEmit`: verde
+- `pnpm --filter @hebron/types exec tsc --noEmit`: verde
+- `pnpm --filter @hebron/plataforma exec tsc --noEmit`: verde
+- `pnpm --filter @hebron/db exec eslint .` / `@hebron/types` / `@hebron/plataforma`: verdes
+- `pnpm --filter @hebron/plataforma exec vitest run`: 26/26 verde (4
+  arquivos, incluindo os 5 testes novos de `trilha.test.ts` e
+  `progress.test.ts`/`certificates.test.ts`/`rls.test.ts` inalterados)
+- `pnpm turbo build --filter=@hebron/plataforma`: verde, 17 rotas geradas
+  (após limpar `.next`, que tinha um artefato de cache de uma build
+  anterior apontando "Cannot find module for page: /curso/[slug]", não
+  relacionado a este diff — confirmado revertendo o diff via `git stash`
+  e reproduzindo o build limpo com sucesso antes de investigar; mesmo
+  padrão já visto em S-246)
+
+### Arquivos modificados
+
+- `packages/db/src/migrations/0080_plataforma_course_outline.sql` (novo)
+- `packages/db/src/schema/plataforma.ts` (remoção de `next_lesson_id`)
+- `apps/plataforma/src/lib/queries.ts`
+- `apps/plataforma/src/actions/certificates.ts`
+- `apps/plataforma/src/components/course-sidebar.tsx`
+- `apps/plataforma/src/components/course-detail-view.tsx`
+- `packages/types/src/plataforma/index.ts`
+- `apps/plataforma/src/__tests__/trilha.test.ts` (novo)
+- `PROMPTS.md` (critérios de P-6.1, P-6.2, P-6.3 e P-6.2b)
+- `SESSIONS.md` (esta entrada + linha no índice)
 - `SESSIONS.md` (esta entrada + linha no índice)

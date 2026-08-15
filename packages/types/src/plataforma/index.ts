@@ -65,9 +65,9 @@ export interface CourseModule {
 }
 
 // ─── Lesson ───────────────────────────────────────────────────────────────────
-// Trilha sequencial: nextLessonId aponta a próxima aula do curso; requiresCompletion
-// indica se esta aula só desbloqueia após a conclusão da aula anterior (BRAIN §6.3).
-// Campos de conteúdo variam por type; os não aplicáveis ao tipo ficam null.
+// Trilha sequencial: requiresCompletion indica se esta aula só desbloqueia após
+// a conclusão da aula anterior (BRAIN §6.3). Campos de conteúdo variam por type;
+// os não aplicáveis ao tipo ficam null.
 
 export interface Lesson {
   id: string;
@@ -84,8 +84,16 @@ export interface Lesson {
   downloadFileSizeBytes: number | null;
   /** Preenchido quando type = "quiz" */
   quizId: string | null;
+  /** Próxima aula na trilha, derivada de (module.order, lesson.order) na
+   * leitura — nunca persistida (P-6.2b); null quando esta é a última aula
+   * do curso, inclusive atravessando a fronteira de módulo. */
   nextLessonId: string | null;
   requiresCompletion: boolean;
+  /** Verdadeiro se a trilha sequencial libera esta aula para o usuário
+   * atual (plataforma.can_access_lesson via course_outline, P-6.2b).
+   * Sempre true nas leituras do editor de instrutor, onde a trilha do
+   * aluno não se aplica. */
+  unlocked: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

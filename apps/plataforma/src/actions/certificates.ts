@@ -19,7 +19,6 @@ import {
   certificates,
   courses,
   enrollments,
-  lessons,
   progress,
   users,
 } from "@hebron/db/schema";
@@ -50,10 +49,13 @@ export async function checkAndIssueCertificate(
   tx: AuthenticatedTx,
   params: { actorId: string; courseId: string },
 ): Promise<Certificate | null> {
-  const [totalRow] = await tx
-    .select({ total: sql<number>`count(*)::int` })
-    .from(lessons)
-    .where(eq(lessons.courseId, params.courseId));
+  // Total real da trilha via plataforma.course_outline() (SECURITY DEFINER,
+  // 0080_plataforma_course_outline.sql, P-6.2b) — um SELECT direto em
+  // `lessons` aqui rodaria sob RLS (lessons_select_enrolled), contando só as
+  // aulas já liberadas para o aluno em vez do curso inteiro.
+  const outlineRows = await tx.execute<{ lesson_id: string }>(
+    sql`SELECT lesson_id FROM plataforma.course_outline(${params.courseId}::uuid)`,
+  );
   const [completedRow] = await tx
     .select({ completed: sql<number>`count(*)::int` })
     .from(progress)
@@ -65,7 +67,7 @@ export async function checkAndIssueCertificate(
       ),
     );
 
-  const total = totalRow?.total ?? 0;
+  const total = outlineRows.length;
   const completed = completedRow?.completed ?? 0;
   if (total === 0 || completed < total) return null;
 
