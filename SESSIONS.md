@@ -269,6 +269,7 @@
 | S-246  | 2026-08-14 | P-5.8c — A busca que trata "%" como coringa e chama a reunião de "ordinaria" (CORRETIVO)                                         | concluido                            |
 | S-247  | 2026-08-15 | Ajustes de UI da Intranet: grid redimensionável do painel, avatar e link no user-bar, enquadramento de /meus-dados (CORRETIVO)   | concluido                            |
 | S-248  | 2026-08-15 | P-6.2b — A trilha que a barra lateral promete e o banco esconde (CORRETIVO)                                                      | concluido                            |
+| S-249  | 2026-08-17 | P-6.3c — O painel do instrutor que sempre lê zero (CORRETIVO)                                                                    | concluido                            |
 
 ---
 
@@ -22441,4 +22442,101 @@ DEFINER` via `information_schema`/`pg_proc`
 - `apps/plataforma/src/__tests__/trilha.test.ts` (novo)
 - `PROMPTS.md` (critérios de P-6.1, P-6.2, P-6.3 e P-6.2b)
 - `SESSIONS.md` (esta entrada + linha no índice)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+## S-249 — P-6.3c — O painel do instrutor que sempre lê zero (CORRETIVO)
+
+**Prompt:** P-6.3c
+**Data:** 2026-08-17
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+`getInstructorDashboardCourses` (`queries.ts:928-1022`) agregava
+`enrollments`/`progress`/`certificates` no cliente, dentro de
+`withAuthenticatedContext` com o `actorId` do instrutor que abriu a
+tela. As três tabelas são "só o próprio" — `enrollments_select_own`
+(`0020_plataforma_rls.sql:187-189`), `progress_select_own` (`:218-220`)
+e `certificates_select_own` (`:305-307`) —, com exceção apenas para
+`super_admin`. Um instrutor é uma linha em `plataforma.instructors`, não
+um papel em `public.role` (`plataforma.is_instructor()`, mesmo
+arquivo), então não passa em nenhuma das três policies: os quatro
+indicadores do painel (`app/instrutor/page.tsx:26-44,113-119`) liam zero
+para exatamente o público da tela, mesmo com turma cheia. Prompt
+`integration`, sem tela nova — `/impeccable` não se aplica (G2 cobre
+`ui` e criação/edição de tela; aqui só migration + query).
+
+1. **Migration `0081_plataforma_course_stats.sql`**: função
+   `plataforma.course_stats(p_course_ids uuid[])`
+   `SECURITY DEFINER STABLE` (mesmo padrão de `verify_certificate`/
+   `course_outline`) devolve, por curso, `enrollment_count`,
+   `certificate_count` e `avg_percent` (média, entre os matriculados, de
+   aulas concluídas sobre o total de aulas do curso). Guarda interna: só
+   executa para `public.has_role('super_admin') OR
+plataforma.is_instructor()`; qualquer outro chamador recebe conjunto
+   vazio — a função nunca devolve linha de aluno, só agregado, para não
+   abrir o histórico individual de progresso para o instrutor. `GRANT
+EXECUTE … TO authenticated`. Nenhuma policy existente muda.
+2. **`getInstructorDashboardCourses`** passou a ler os três números via
+   `plataforma.course_stats()` (um `SELECT * FROM
+plataforma.course_stats(ARRAY[...])` por chamada, array de UUIDs
+   montado com `sql.join`/`::uuid` — o tag `sql` do Drizzle, diferente do
+   client `postgres.js` cru usado em `security-audit.test.ts`, não
+   serializa um array JS interpolado como parâmetro `uuid[]` nativo;
+   interpolar direto produzia `cannot cast type record to uuid[]` /
+   `malformed array literal`) em vez de três `SELECT`s agregados
+   (`enrollments`/`lessons`/`progress`/`certificates`) rodando sob o
+   `actorId` do instrutor. A lista de cursos continua vindo de `courses`
+   (a policy `courses_mutate_staff`, aplicável a todos os comandos
+   incluindo `SELECT`, já devolve rascunho e publicado para
+   `is_instructor()`).
+3. **Testes novos** (`instrutor-stats.test.ts`, 6): instrutor lê, via
+   `getInstructorDashboardCourses`, matrículas/certificados/progresso
+   médio reais de um curso com dois alunos (2 matrículas, 1 certificado,
+   25% — um aluno com 2 de 4 aulas concluídas, outro com 0); curso sem
+   matrícula exibe 0 em tudo, não erro; chamada direta a
+   `plataforma.course_stats()` confirma o mesmo contrato para o
+   instrutor e conjunto vazio para aluno comum; instrutor e aluno
+   continuam sem `SELECT` direto na linha de `progress` de terceiro
+   (contrato de P-6.7 sem regressão — `rls.test.ts:288-314` segue verde,
+   sem alteração).
+4. **Bookkeeping em PROMPTS.md**: critério de P-6.3 ganhou a linha do
+   dashboard do instrutor, anotada com a correção (não existia como item
+   próprio do checklist antes — só citado no escopo).
+
+### Suposições registradas
+
+- Nenhuma suposição de regra de negócio nova; escopo de P-6.7/P-6.8
+  (qualquer instrutor administra qualquer curso, sem escopo por curso)
+  não muda aqui, conforme nota do prompt.
+
+### Baseline verificado
+
+- Migration `0081` aplicada com sucesso (`pnpm --filter @hebron/db
+db:migrate`); reaplicação reporta "Nothing to apply — database is up to
+  date."
+- `pnpm --filter @hebron/db exec tsc --noEmit` / `exec eslint .`: verdes
+- `pnpm --filter @hebron/plataforma exec tsc --noEmit` / `exec eslint
+.`: verdes (`@hebron/auth#typecheck` falha à parte, drift pré-existente
+  não relacionado — `bankAccounts.nickname` nos testes de
+  `data-deletion.test.ts`, já registrado em memória de sessões
+  anteriores)
+- `pnpm --filter @hebron/plataforma exec vitest run`: 32/32 verde (5
+  arquivos, incluindo os 6 testes novos de `instrutor-stats.test.ts` e
+  `rls.test.ts`/`trilha.test.ts`/`certificates.test.ts`/`progress.test.ts`
+  inalterados)
+- `pnpm --filter @hebron/db exec vitest run`: 69/72 verde; as 3 falhas
+  (`system-actor.test.ts`, 2 casos de `storage.test.ts`) são drift
+  pré-existente do banco de dev compartilhado, não relacionado a este
+  diff (mesmos arquivos já documentados em sessões anteriores)
+
+### Arquivos modificados
+
+- `packages/db/src/migrations/0081_plataforma_course_stats.sql` (novo)
+- `apps/plataforma/src/lib/queries.ts`
+- `apps/plataforma/src/__tests__/instrutor-stats.test.ts` (novo)
+- `PROMPTS.md` (critério de P-6.3)
 - `SESSIONS.md` (esta entrada + linha no índice)

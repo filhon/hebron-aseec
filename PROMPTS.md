@@ -7823,6 +7823,7 @@ Páginas do aluno: Catálogo de cursos (filtros: categoria, instrutor — "dific
 - [x] Player: vídeo + sidebar navegação + notas + discussão
 - [x] "Minha jornada": cursos em andamento com progresso visual (progresso vinha inflado — denominador era só as aulas liberadas pela RLS, não o total da trilha — corrigido em P-6.2b)
 - [x] Certificados: lista com download PDF
+- [x] Dashboard do instrutor com estatísticas (matrículas, certificados, progresso médio por curso) — os quatro indicadores liam zero para o próprio instrutor, porque `enrollments`/`progress`/`certificates` são RLS "só o próprio" e um instrutor não é `super_admin`; corrigido em P-6.3c via `plataforma.course_stats()` (SECURITY DEFINER, guarda `super_admin` OU `is_instructor()`)
 - [x] Editor de curso: drag-drop para ordenar módulos e aulas
 - [x] Editor de aula e editor de quiz têm página própria e são navegáveis a partir do editor de curso
 - [x] Responsivo
@@ -7908,13 +7909,13 @@ Não é caso de afrouxar a RLS: a tela mostra **agregado** (quantos, média), nu
 
 **Critérios de aceite:**
 
-- [ ] Instrutor sem papel `super_admin` vê matrículas, certificados e progresso médio reais no painel
-- [ ] O instrutor continua sem enxergar o progresso individual de qualquer aluno (nenhuma linha de `progress`, `enrollments` ou `certificates` de terceiros)
-- [ ] Aluno comum não obtém estatística de curso nenhum pela função
-- [ ] Curso sem matrícula continua exibindo 0, e não erro
-- [ ] Migration idempotente, aplicada com sucesso; reaplicação reporta "Nothing to apply"
-- [ ] `apps/plataforma` e `packages/db` com typecheck, lint e testes verdes
-- [ ] Registrar em SESSIONS.md
+- [x] Instrutor sem papel `super_admin` vê matrículas, certificados e progresso médio reais no painel
+- [x] O instrutor continua sem enxergar o progresso individual de qualquer aluno (nenhuma linha de `progress`, `enrollments` ou `certificates` de terceiros)
+- [x] Aluno comum não obtém estatística de curso nenhum pela função
+- [x] Curso sem matrícula continua exibindo 0, e não erro
+- [x] Migration idempotente, aplicada com sucesso; reaplicação reporta "Nothing to apply"
+- [x] `apps/plataforma` e `packages/db` com typecheck, lint e testes verdes
+- [x] Registrar em SESSIONS.md
 
 **Notas:**
 Ref: P-6.7 (as policies "só o próprio", que continuam intactas) e P-3.11b/P-5.8b, os precedentes de "o dado existe, a tela pergunta pela pessoa errada". A suposição de escopo de P-6.7/P-6.8 — qualquer instrutor administra qualquer curso — não muda aqui; se a diretoria pedir escopo por curso, isso é modelagem nova, não este prompt.

@@ -925,6 +925,14 @@ export interface InstructorCourseStats {
   certificateCount: number;
 }
 
+interface CourseStatsRow {
+  course_id: string;
+  enrollment_count: number;
+  certificate_count: number;
+  avg_percent: number;
+  [key: string]: unknown;
+}
+
 export async function getInstructorDashboardCourses(
   actorId: string,
 ): Promise<InstructorCourseStats[]> {
@@ -943,79 +951,29 @@ export async function getInstructorDashboardCourses(
     if (courseRows.length === 0) return [];
     const courseIds = courseRows.map((r) => r.course.id);
 
-    const enrollmentRows = await tx
-      .select({ courseId: enrollments.courseId, userId: enrollments.userId })
-      .from(enrollments)
-      .where(inArray(enrollments.courseId, courseIds));
-    const enrollmentsByCourse = new Map<string, string[]>();
-    for (const r of enrollmentRows) {
-      const list = enrollmentsByCourse.get(r.courseId) ?? [];
-      list.push(r.userId);
-      enrollmentsByCourse.set(r.courseId, list);
-    }
-
-    const totalsRows = await tx
-      .select({ courseId: lessons.courseId, total: sql<number>`count(*)::int` })
-      .from(lessons)
-      .where(inArray(lessons.courseId, courseIds))
-      .groupBy(lessons.courseId);
-    const totalsByCourse = new Map(
-      totalsRows.map((r) => [r.courseId, r.total]),
+    // Agregado (matrículas/certificados/progresso médio) via
+    // plataforma.course_stats() (P-6.3c) — um SELECT direto em enrollments/
+    // progress/certificates aqui só devolveria as linhas do próprio
+    // instrutor (enrollments_select_own/progress_select_own/
+    // certificates_select_own, 0020_plataforma_rls.sql), zerando o painel
+    // para exatamente o público da tela.
+    const courseIdsArray = sql.join(
+      courseIds.map((id) => sql`${id}::uuid`),
+      sql`, `,
     );
-
-    const progressRows = await tx
-      .select({
-        courseId: progress.courseId,
-        userId: progress.userId,
-        completed: sql<number>`count(*)::int`,
-      })
-      .from(progress)
-      .where(
-        and(
-          inArray(progress.courseId, courseIds),
-          isNotNull(progress.completedAt),
-        ),
-      )
-      .groupBy(progress.courseId, progress.userId);
-    const completedByCourseUser = new Map<string, number>();
-    for (const r of progressRows) {
-      completedByCourseUser.set(`${r.courseId}:${r.userId}`, r.completed);
-    }
-
-    const certificateRows = await tx
-      .select({
-        courseId: certificates.courseId,
-        count: sql<number>`count(*)::int`,
-      })
-      .from(certificates)
-      .where(inArray(certificates.courseId, courseIds))
-      .groupBy(certificates.courseId);
-    const certificatesByCourse = new Map(
-      certificateRows.map((r) => [r.courseId, r.count]),
+    const statsRows = await tx.execute<CourseStatsRow>(
+      sql`SELECT * FROM plataforma.course_stats(ARRAY[${courseIdsArray}])`,
     );
+    const statsByCourse = new Map(statsRows.map((r) => [r.course_id, r]));
 
     return courseRows.map((r) => {
-      const courseId = r.course.id;
-      const enrolledUserIds = enrollmentsByCourse.get(courseId) ?? [];
-      const total = totalsByCourse.get(courseId) ?? 0;
-      const avgPercent =
-        enrolledUserIds.length === 0 || total === 0
-          ? 0
-          : Math.round(
-              (enrolledUserIds.reduce((sum, userId) => {
-                const completed =
-                  completedByCourseUser.get(`${courseId}:${userId}`) ?? 0;
-                return sum + completed / total;
-              }, 0) /
-                enrolledUserIds.length) *
-                100,
-            );
+      const stats = statsByCourse.get(r.course.id);
 
       return {
         course: mapCourse(r.course, r.instructorName, r.seriesName),
-        enrollmentCount: enrolledUserIds.length,
-        avgPercent,
-        certificateCount: certificatesByCourse.get(courseId) ?? 0,
+        enrollmentCount: stats?.enrollment_count ?? 0,
+        avgPercent: stats?.avg_percent ?? 0,
+        certificateCount: stats?.certificate_count ?? 0,
       };
     });
   });
