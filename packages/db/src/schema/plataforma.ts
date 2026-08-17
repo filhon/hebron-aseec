@@ -85,6 +85,10 @@ export const courses = plataformaSchema.table(
       onDelete: "set null",
     }),
     published: boolean("published").notNull().default(false),
+    // Arquivamento em vez de exclusão física (P-6.4b) — some do catálogo/
+    // editor (filtros em queries.ts + RLS courses_select_published), mas
+    // matrícula/progresso/certificado de quem já cursou permanecem intactos.
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -98,6 +102,7 @@ export const courses = plataformaSchema.table(
     index("courses_series_id_idx").on(table.seriesId),
     index("courses_category_idx").on(table.category),
     index("courses_published_idx").on(table.published),
+    index("courses_archived_at_idx").on(table.archivedAt),
   ],
 );
 
@@ -114,6 +119,9 @@ export const modules = plataformaSchema.table(
     title: text("title").notNull(),
     description: text("description"),
     order: integer("order").notNull(),
+    // Arquivamento em vez de exclusão física (P-6.4b) — mesma semântica de
+    // courses.archivedAt.
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -121,7 +129,10 @@ export const modules = plataformaSchema.table(
       .notNull()
       .defaultNow(),
   },
-  (table) => [index("modules_course_id_idx").on(table.courseId)],
+  (table) => [
+    index("modules_course_id_idx").on(table.courseId),
+    index("modules_archived_at_idx").on(table.archivedAt),
+  ],
 );
 
 // ---------------------------------------------------------------------------
@@ -153,6 +164,9 @@ export const lessons = plataformaSchema.table(
     downloadFileName: text("download_file_name"),
     downloadFileSizeBytes: integer("download_file_size_bytes"),
     requiresCompletion: boolean("requires_completion").notNull().default(true),
+    // Arquivamento em vez de exclusão física (P-6.4b) — mesma semântica de
+    // courses.archivedAt.
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -163,6 +177,7 @@ export const lessons = plataformaSchema.table(
   (table) => [
     index("lessons_module_id_idx").on(table.moduleId),
     index("lessons_course_id_idx").on(table.courseId),
+    index("lessons_archived_at_idx").on(table.archivedAt),
   ],
 );
 

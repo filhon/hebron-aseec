@@ -4,24 +4,52 @@ import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAction } from "next-safe-action/hooks";
-import { PageHeader, Button } from "@hebron/ui";
 import {
+  PageHeader,
+  Button,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  LoadingState,
+} from "@hebron/ui";
+import {
+  Archive,
   Download,
   FileText,
   GripVertical,
+  Pencil,
   PlayCircle,
   Plus,
   CheckCircle2,
 } from "lucide-react";
-import type { Course, CourseModule, Lesson } from "@hebron/types/plataforma";
-import { CourseModuleForm, type CourseModuleFormValues } from "./course-form";
+import type {
+  Course,
+  CourseModule,
+  Instructor,
+  Lesson,
+  Series,
+} from "@hebron/types/plataforma";
+import {
+  CourseForm,
+  CourseModuleForm,
+  type CourseFormValues,
+  type CourseModuleFormValues,
+} from "./course-form";
 import { LessonForm, type LessonFormValues } from "./lesson-form";
 import {
   updateCourse,
   createCourseModule,
+  updateCourseModule,
   reorderCourseModules,
   createLesson,
   reorderLessons,
+  deleteCourse,
+  deleteCourseModule,
+  deleteLesson,
+  getCourseEditOptions,
 } from "../actions/courses";
 
 const TYPE_ICON = {
@@ -50,6 +78,21 @@ export function CourseEditorView({
   const [addingLessonToModuleId, setAddingLessonToModuleId] = React.useState<
     string | null
   >(null);
+  const [editingModuleId, setEditingModuleId] = React.useState<string | null>(
+    null,
+  );
+  const [editingCourse, setEditingCourse] = React.useState(false);
+  const [editOptions, setEditOptions] = React.useState<{
+    instructors: Instructor[];
+    series: Series[];
+    categories: string[];
+  } | null>(null);
+  const [archiving, setArchiving] = React.useState<{
+    kind: "course" | "module" | "lesson";
+    id: string;
+    label: string;
+  } | null>(null);
+  const [archiveError, setArchiveError] = React.useState<string | null>(null);
 
   React.useEffect(() => setModules(initialModules), [initialModules]);
   React.useEffect(() => setLessons(initialLessons), [initialLessons]);
@@ -84,6 +127,69 @@ export function CourseEditorView({
       },
     },
   );
+  const { execute: loadEditOptions, status: loadEditOptionsStatus } = useAction(
+    getCourseEditOptions,
+    {
+      onSuccess: ({ data }) => {
+        if (data) setEditOptions(data);
+      },
+    },
+  );
+  const { execute: editCourse, status: editCourseStatus } = useAction(
+    updateCourse,
+    {
+      onSuccess: () => {
+        setEditingCourse(false);
+        router.refresh();
+      },
+    },
+  );
+  const { execute: editModule, status: editModuleStatus } = useAction(
+    updateCourseModule,
+    {
+      onSuccess: () => {
+        setEditingModuleId(null);
+        router.refresh();
+      },
+    },
+  );
+  const { execute: archiveCourse, status: archiveCourseStatus } = useAction(
+    deleteCourse,
+    {
+      onSuccess: () => router.push("/instrutor"),
+      onError: ({ error }) =>
+        setArchiveError(error.serverError ?? "Erro ao arquivar curso"),
+    },
+  );
+  const { execute: archiveModule, status: archiveModuleStatus } = useAction(
+    deleteCourseModule,
+    {
+      onSuccess: () => {
+        setArchiving(null);
+        setArchiveError(null);
+        router.refresh();
+      },
+      onError: ({ error }) =>
+        setArchiveError(error.serverError ?? "Erro ao arquivar módulo"),
+    },
+  );
+  const { execute: archiveLesson, status: archiveLessonStatus } = useAction(
+    deleteLesson,
+    {
+      onSuccess: () => {
+        setArchiving(null);
+        setArchiveError(null);
+        router.refresh();
+      },
+      onError: ({ error }) =>
+        setArchiveError(error.serverError ?? "Erro ao arquivar aula"),
+    },
+  );
+
+  const isArchiving =
+    archiveCourseStatus === "executing" ||
+    archiveModuleStatus === "executing" ||
+    archiveLessonStatus === "executing";
 
   function reorder<T extends { order: number }>(list: T[]): T[] {
     return list.map((item, index) => ({ ...item, order: index }));
@@ -163,6 +269,71 @@ export function CourseEditorView({
     });
   }
 
+  function handleEditModule(moduleId: string, values: CourseModuleFormValues) {
+    editModule({
+      moduleId,
+      courseId: course.id,
+      title: values.title,
+      description: values.description,
+      order: values.order,
+    });
+  }
+
+  function openEditCourse() {
+    setEditingCourse(true);
+    if (!editOptions) loadEditOptions({});
+  }
+
+  function handleEditCourse(values: CourseFormValues) {
+    editCourse({
+      courseId: course.id,
+      title: values.title,
+      slug: values.slug,
+      description: values.description,
+      category: values.category,
+      instructorId: values.instructorId,
+      seriesId: values.seriesId,
+      coverImageUrl: values.coverImageUrl,
+      isPublished: course.isPublished,
+    });
+  }
+
+  function openArchive(
+    kind: "course" | "module" | "lesson",
+    id: string,
+    label: string,
+  ) {
+    setArchiveError(null);
+    setArchiving({ kind, id, label });
+  }
+
+  function confirmArchive() {
+    if (!archiving) return;
+    setArchiveError(null);
+    if (archiving.kind === "course") archiveCourse({ courseId: archiving.id });
+    else if (archiving.kind === "module")
+      archiveModule({ moduleId: archiving.id });
+    else archiveLesson({ lessonId: archiving.id });
+  }
+
+  const ARCHIVE_COPY = {
+    course: {
+      title: "Arquivar curso",
+      detail:
+        "O curso sai do catálogo e do painel. Matrículas, progresso e certificados já emitidos continuam existindo e verificáveis.",
+    },
+    module: {
+      title: "Arquivar módulo",
+      detail:
+        "O módulo e suas aulas saem da ementa do curso. Progresso de quem já cursou é preservado.",
+    },
+    lesson: {
+      title: "Arquivar aula",
+      detail:
+        "A aula sai da ementa do curso. Progresso de quem já a concluiu é preservado.",
+    },
+  } as const;
+
   function handleAddLesson(moduleId: string, values: LessonFormValues) {
     const moduleLessonsCount = lessons.filter(
       (l) => l.moduleId === moduleId,
@@ -195,14 +366,32 @@ export function CourseEditorView({
         title={course.title}
         description="Arraste módulos e aulas para reordenar a trilha do curso."
         actions={
-          <Button
-            variant={course.isPublished ? "outline" : "accent"}
-            onClick={handleTogglePublish}
-            loading={publishStatus === "executing"}
-            disabled={publishStatus === "executing"}
-          >
-            {course.isPublished ? "Despublicar" : "Publicar curso"}
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              leftIcon={<Pencil className="h-3.5 w-3.5" aria-hidden="true" />}
+              onClick={openEditCourse}
+            >
+              Editar curso
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              leftIcon={<Archive className="h-3.5 w-3.5" aria-hidden="true" />}
+              onClick={() => openArchive("course", course.id, course.title)}
+            >
+              Arquivar curso
+            </Button>
+            <Button
+              variant={course.isPublished ? "outline" : "accent"}
+              onClick={handleTogglePublish}
+              loading={publishStatus === "executing"}
+              disabled={publishStatus === "executing"}
+            >
+              {course.isPublished ? "Despublicar" : "Publicar curso"}
+            </Button>
+          </div>
         }
       />
 
@@ -228,13 +417,61 @@ export function CourseEditorView({
                   className="h-4 w-4 shrink-0 cursor-grab text-(--fg-subtle)"
                   aria-hidden="true"
                 />
-                <h3 className="min-w-0 flex-1 truncate font-(family-name:--font-display) text-sm text-(--fg)">
-                  {courseModule.title}
-                </h3>
-                <span className="shrink-0 text-xs text-(--fg-muted)">
-                  {moduleLessons.length} aula
-                  {moduleLessons.length === 1 ? "" : "s"}
-                </span>
+                {editingModuleId === courseModule.id ? (
+                  <div className="min-w-0 flex-1">
+                    <CourseModuleForm
+                      courseId={course.id}
+                      courseModule={courseModule}
+                      onSubmit={(values) =>
+                        handleEditModule(courseModule.id, values)
+                      }
+                      isLoading={editModuleStatus === "executing"}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setEditingModuleId(null)}
+                      className="mt-2 text-xs text-(--fg-muted) hover:text-(--brand)"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <h3 className="min-w-0 flex-1 truncate font-(family-name:--font-display) text-sm text-(--fg)">
+                      {courseModule.title}
+                    </h3>
+                    <span className="shrink-0 text-xs text-(--fg-muted)">
+                      {moduleLessons.length} aula
+                      {moduleLessons.length === 1 ? "" : "s"}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="shrink-0"
+                      aria-label={`Editar módulo ${courseModule.title}`}
+                      onClick={() => setEditingModuleId(courseModule.id)}
+                    >
+                      <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="shrink-0"
+                      aria-label={`Arquivar módulo ${courseModule.title}`}
+                      onClick={() =>
+                        openArchive(
+                          "module",
+                          courseModule.id,
+                          courseModule.title,
+                        )
+                      }
+                    >
+                      <Archive className="h-3.5 w-3.5" aria-hidden="true" />
+                    </Button>
+                  </>
+                )}
               </div>
 
               <ul className="flex flex-col">
@@ -282,6 +519,18 @@ export function CourseEditorView({
                           ? "Criar quiz"
                           : "Editar"}
                       </Link>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        className="shrink-0"
+                        aria-label={`Arquivar aula ${lesson.title}`}
+                        onClick={() =>
+                          openArchive("lesson", lesson.id, lesson.title)
+                        }
+                      >
+                        <Archive className="h-3.5 w-3.5" aria-hidden="true" />
+                      </Button>
                     </li>
                   );
                 })}
@@ -336,6 +585,70 @@ export function CourseEditorView({
           )}
         </div>
       </div>
+
+      <Dialog open={editingCourse} onOpenChange={setEditingCourse}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar curso</DialogTitle>
+            <DialogDescription>
+              As alterações aparecem no catálogo assim que salvas.
+            </DialogDescription>
+          </DialogHeader>
+          {editOptions ? (
+            <CourseForm
+              mode="edit"
+              course={course}
+              instructors={editOptions.instructors}
+              series={editOptions.series}
+              categories={editOptions.categories}
+              onSubmit={handleEditCourse}
+              isLoading={editCourseStatus === "executing"}
+            />
+          ) : (
+            <LoadingState
+              message={
+                loadEditOptionsStatus === "hasErrored"
+                  ? "Não foi possível carregar o formulário."
+                  : "Carregando formulário…"
+              }
+              size="sm"
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={archiving !== null}
+        onOpenChange={(open) => !open && setArchiving(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {archiving && ARCHIVE_COPY[archiving.kind].title}
+            </DialogTitle>
+            <DialogDescription>
+              {archiving &&
+                `Tem certeza que deseja arquivar "${archiving.label}"? ${ARCHIVE_COPY[archiving.kind].detail}`}
+            </DialogDescription>
+          </DialogHeader>
+          {archiveError && (
+            <p className="text-sm text-(--color-destructive)">{archiveError}</p>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setArchiving(null)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={isArchiving}
+              loading={isArchiving}
+              onClick={confirmArchive}
+            >
+              Arquivar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

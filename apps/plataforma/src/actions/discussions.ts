@@ -5,7 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { discussionPosts, discussions, notes } from "@hebron/db/schema";
 import { createDiscussionPostSchema } from "@hebron/validators";
-import { plataformaAction, superAdminAction } from "../lib/safe-action";
+import { plataformaAction } from "../lib/safe-action";
 import { notifyDiscussionReply } from "../lib/notifications";
 
 // ---------------------------------------------------------------------------
@@ -92,15 +92,31 @@ export const updateDiscussionPost = plataformaAction
 
 const deleteDiscussionPostSchema = z.object({ postId: z.string().uuid() });
 
-export const deleteDiscussionPost = superAdminAction
+// Autor remove o próprio post; super_admin modera (remove qualquer post) —
+// mesmo par autor/moderação de updateDiscussionPost, agora também para
+// DELETE (RLS ganhou discussion_posts_delete_own em
+// 0082_plataforma_arquivamento.sql; só existia UPDATE do próprio autor até
+// aqui). Filtro por authorId roda em app + RLS, defesa em profundidade.
+export const deleteDiscussionPost = plataformaAction
   .schema(deleteDiscussionPostSchema)
   .action(async ({ parsedInput: input, ctx }) => {
+    const isSuperAdmin = ctx.roles.includes("super_admin");
+
     await withAuthenticatedContext({ actorId: ctx.actorId }, async (tx) => {
       const [row] = await tx
         .delete(discussionPosts)
-        .where(eq(discussionPosts.id, input.postId))
+        .where(
+          isSuperAdmin
+            ? eq(discussionPosts.id, input.postId)
+            : and(
+                eq(discussionPosts.id, input.postId),
+                eq(discussionPosts.authorId, ctx.actorId),
+              ),
+        )
         .returning({ id: discussionPosts.id });
-      if (!row) throw new Error("Comentário não encontrado");
+      if (!row) {
+        throw new Error("Comentário não encontrado ou você não pode removê-lo");
+      }
     });
 
     return { success: true };

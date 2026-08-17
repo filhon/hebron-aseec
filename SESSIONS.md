@@ -270,6 +270,7 @@
 | S-247  | 2026-08-15 | Ajustes de UI da Intranet: grid redimensionável do painel, avatar e link no user-bar, enquadramento de /meus-dados (CORRETIVO)   | concluido                            |
 | S-248  | 2026-08-15 | P-6.2b — A trilha que a barra lateral promete e o banco esconde (CORRETIVO)                                                      | concluido                            |
 | S-249  | 2026-08-17 | P-6.3c — O painel do instrutor que sempre lê zero (CORRETIVO)                                                                    | concluido                            |
+| S-250  | 2026-08-17 | P-6.4b — O curso que se cria e não se edita (CORRETIVO)                                                                          | concluido                            |
 
 ---
 
@@ -22539,4 +22540,152 @@ db:migrate`); reaplicação reporta "Nothing to apply — database is up to
 - `apps/plataforma/src/lib/queries.ts`
 - `apps/plataforma/src/__tests__/instrutor-stats.test.ts` (novo)
 - `PROMPTS.md` (critério de P-6.3)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+## S-250 — P-6.4b — O curso que se cria e não se edita (CORRETIVO)
+
+**Prompt:** P-6.4b
+**Data:** 2026-08-17
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+`CourseForm`/`CourseModuleForm` (`course-form.tsx`) já sabiam editar
+(`mode: "create" | "edit"`, aceitam `course`/`courseModule` para
+pré-preencher) desde P-6.4 — nenhuma tela os montava nesse modo.
+`updateCourse`/`updateCourseModule` (`actions/courses.ts`) só tinham
+chamador para o toggle Publicar/Despublicar (que reenvia os mesmos
+valores). `deleteCourse`/`deleteCourseModule`/`deleteLesson` faziam
+`DELETE` físico sem nenhum chamador de UI — as FKs de módulos/aulas/
+matrículas/progresso/certificados para `courses` são `on delete
+cascade`, então excluir um curso apagaria certificado já emitido,
+contornando por dentro a própria decisão do cabeçalho de
+`0020_plataforma_rls.sql` ("sem DELETE — trilha de auditoria
+acadêmica"). `updateNote`/`deleteNote`
+(`actions/discussions.ts`)/`updateDiscussionPost` também sem chamador;
+`deleteDiscussionPost` era `superAdminAction` só — sem policy de RLS
+que permitisse ao próprio autor remover o próprio post (só editar).
+Invocado `/impeccable` (register `product`, PRODUCT.md já existente) —
+tarefa é sobretudo fiação de ações já existentes com pequenos
+acréscimos de UI (diálogo de edição/arquivamento, botões de
+editar/remover em nota/post), então seguiu o padrão de diálogo de
+confirmação já estabelecido em `instructor-table.tsx` em vez de propor
+um novo.
+
+1. **Migration `0082_plataforma_arquivamento.sql`**: `archived_at`
+   nullable (idempotente, `ADD COLUMN IF NOT EXISTS`) em `courses`/
+   `modules`/`lessons`. `courses_select_published`/
+   `modules_select_published`/`lessons_select_enrolled` (RLS) passam a
+   exigir `archived_at IS NULL` na própria linha e no curso/módulo-pai
+   — `courses_mutate_staff` (FOR ALL, sem filtro) não muda, então o
+   filtro de "some do editor" para o instrutor é aplicado em
+   `queries.ts`, não na RLS. `plataforma.course_outline()`
+   (`CREATE OR REPLACE`, SECURITY DEFINER) ganhou o mesmo filtro à mão,
+   porque não passa pelas policies acima. Nova policy
+   `discussion_posts_delete_own` (autor remove o próprio post — só
+   existia UPDATE do próprio autor até aqui; moderação de terceiro
+   continua só `super_admin`). `REVOKE DELETE` em `courses`/`modules`/
+   `lessons` de `authenticated` — espelha a mesma decisão já tomada
+   para `enrollments`/`progress`/`quiz_attempts`, para que o "D" não
+   volte a ser fisicamente possível nem por fora da UI.
+2. **Arquivamento em vez de exclusão**: `deleteCourse`/
+   `deleteCourseModule`/`deleteLesson` (`actions/courses.ts`) passam a
+   `UPDATE ... SET archived_at = now()` em vez de `DELETE`. `queries.ts`
+   ganhou filtro `archived_at IS NULL` explícito em `getCourseBySlug`,
+   `getCourseModulesWithLessons`, `getInstructorDashboardCourses` e
+   `getCourseForEditor` (a RLS de staff não filtra sozinha); `searchCourses`
+   (`actions/courses.ts`) ganhou o mesmo filtro.
+3. **Editor de curso** (`course-editor-view.tsx`): botão "Editar curso"
+   abre `CourseForm` em modo edição dentro de um `Dialog` — as listas de
+   instrutores/séries/categorias são buscadas sob demanda por uma nova
+   Server Action (`getCourseEditOptions`, `actions/courses.ts`) na
+   primeira abertura, porque `app/instrutor/curso/[id]/page.tsx` não
+   está na lista de arquivos permitidos deste prompt para ganhar um
+   novo fetch de Server Component e `CourseEditorView` é Client
+   Component (decisão registrada aqui, não em código). Título/descrição
+   de módulo viram editáveis inline (mesmo lugar onde hoje só se
+   adiciona), via `CourseModuleForm` com `courseModule` preenchido.
+   "Arquivar" (curso/módulo/aula) abre um diálogo de confirmação
+   único, parametrizado por `kind`, que chama `deleteCourse`/
+   `deleteCourseModule`/`deleteLesson`; arquivar o curso redireciona
+   para `/instrutor` (a tela deixa de existir para esse curso).
+4. **Nota e post editáveis/removíveis** (`note-widget.tsx`,
+   `discussion-thread.tsx`, ligados em `lesson-view.tsx`): edição
+   inline (textarea + Salvar/Cancelar) direto no item da lista — sem
+   tocar `note-form.tsx`/`discussion-post-form.tsx` (fora da lista de
+   arquivos permitidos). Notas não precisam checar dono na UI:
+   `getLessonPageData` já filtra por `userId = actorId`, então toda
+   nota na lista já é do próprio viewer. Posts precisam saber "é meu?"/
+   "eu modero?" por item — sem prop nova de sessão em `LessonView`
+   (mesma razão do item 3: a página que a monta não está na lista de
+   arquivos permitidos), `getLessonPageData` (`queries.ts`) passou a
+   embutir `isOwnPost`/`canModerate` em cada post (tipo local
+   `LessonDiscussionPost`, checando `authorId === actorId` e o papel do
+   viewer via `resolveSession` chamado de novo dentro da própria
+   função). "· editado" (`discussion-thread.tsx:37`, já renderizado
+   desde P-6.4) passa a ser alcançável.
+5. **`deleteDiscussionPost`** (`actions/discussions.ts`) deixou de ser
+   `superAdminAction`: agora `plataformaAction`, filtrando por
+   `authorId = ctx.actorId` a menos que `ctx.roles` inclua
+   `super_admin` — RLS (`discussion_posts_delete_own` +
+   `discussion_posts_mutate_admin`) é a segunda camada.
+6. **Achado durante os testes**: arquivar um curso/módulo corta a
+   cadeia de visibilidade RLS de `plataforma.lessons` para um aluno
+   comum (`lessons_select_enrolled` exige módulo/curso não arquivados)
+   — e `discussion_posts_select_enrolled` depende dessa mesma cadeia
+   via `JOIN lessons`. Consequência real, não bug: editar/remover um
+   post ou nota de uma aula cujo curso já foi arquivado deixa de
+   funcionar para o aluno comum, porque só matrícula/progresso/
+   certificado são garantidos sobreviver ao arquivamento (critério de
+   aceite do prompt) — não o acesso ao conteúdo/discussão da aula.
+   `arquivamento.test.ts` roda os blocos de edição de nota/post _antes_
+   dos blocos de arquivamento por esse motivo (registrado como comentário
+   no próprio arquivo).
+7. **Bookkeeping em PROMPTS.md**: critério de P-6.3 (editor de curso) e
+   P-6.4 (curso form) anotados com a correção.
+
+### Suposições registradas
+
+- Sem escopo por curso: qualquer instrutor edita/arquiva qualquer
+  curso/módulo/aula (mesma suposição G1 de P-6.7/P-6.8, não revisitada
+  aqui).
+- Diálogo de confirmação para arquivar (em vez de UI inline) segue o
+  precedente já estabelecido em `instructor-table.tsx` — não um novo
+  padrão.
+- Nota e post não usam diálogo de confirmação para remover (ao
+  contrário de arquivar curso/módulo/aula): é conteúdo do próprio
+  usuário, de baixo risco, sem trilha de auditoria acadêmica em jogo.
+
+### Baseline verificado
+
+- Migration `0082` aplicada com sucesso (`pnpm --filter @hebron/db
+db:migrate`); reaplicação reporta "Nothing to apply — database is up
+  to date."
+- `pnpm --filter @hebron/db exec tsc --noEmit`: verde
+- `pnpm --filter @hebron/plataforma exec tsc --noEmit` / `exec eslint
+.`: verdes
+- `pnpm --filter @hebron/plataforma exec vitest run`: 51/51 verde (6
+  arquivos, incluindo os 19 testes novos de `arquivamento.test.ts`;
+  `rls.test.ts`/`trilha.test.ts`/`certificates.test.ts`/
+  `progress.test.ts`/`instrutor-stats.test.ts` inalterados e verdes)
+- `pnpm turbo build --filter=@hebron/plataforma`: verde
+- Não testado em navegador (sem sessão autenticada disponível neste
+  ambiente) — cobertura de comportamento veio dos testes automatizados
+  acima, que exercitam as Server Actions e a RLS real; recomenda-se
+  conferência visual manual antes de mesclar.
+
+### Arquivos modificados
+
+- `packages/db/src/migrations/0082_plataforma_arquivamento.sql` (novo)
+- `packages/db/src/schema/plataforma.ts`
+- `apps/plataforma/src/actions/courses.ts`
+- `apps/plataforma/src/actions/discussions.ts`
+- `apps/plataforma/src/lib/queries.ts`
+- `apps/plataforma/src/components/course-editor-view.tsx`
+- `apps/plataforma/src/components/note-widget.tsx`
+- `apps/plataforma/src/components/discussion-thread.tsx`
+- `apps/plataforma/src/components/lesson-view.tsx`
+- `apps/plataforma/src/__tests__/arquivamento.test.ts` (novo)
+- `PROMPTS.md` (critérios de P-6.3 e P-6.4)
 - `SESSIONS.md` (esta entrada + linha no índice)

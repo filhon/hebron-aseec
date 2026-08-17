@@ -1,6 +1,15 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { and, asc, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  sql,
+} from "drizzle-orm";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { CANONICAL_LOGIN_URL } from "@hebron/auth";
 import {
@@ -449,7 +458,7 @@ export async function getCourseBySlug(
       .from(courses)
       .leftJoin(instructors, eq(instructors.id, courses.instructorId))
       .leftJoin(series, eq(series.id, courses.seriesId))
-      .where(eq(courses.slug, slug))
+      .where(and(eq(courses.slug, slug), isNull(courses.archivedAt)))
       .limit(1),
   );
   const row = rows[0];
@@ -473,11 +482,14 @@ export async function getCourseModulesWithLessons(
     const moduleRows = await tx
       .select()
       .from(modules)
-      .where(eq(modules.courseId, courseId))
+      .where(and(eq(modules.courseId, courseId), isNull(modules.archivedAt)))
       .orderBy(asc(modules.order));
 
     // Esqueleto da trilha inteira (matriculado ou não, P-6.2b item 2/6) +
     // conteúdo só das aulas que a RLS de fato libera para este usuário.
+    // course_outline() já filtra módulo/aula/curso arquivado
+    // (0082_plataforma_arquivamento.sql) — moduleRows acima segue o mesmo
+    // filtro para a ementa nunca listar um módulo arquivado sem aulas.
     const outlineRows = await getCourseOutline(tx, courseId);
     const nextLessonIdByLessonId = computeNextLessonIds(outlineRows);
     const contentRows = await tx
@@ -552,6 +564,17 @@ export async function getUserProgressForCourse(
 // não duplicada aqui (defense in depth, G6 do CLAUDE.md).
 // ---------------------------------------------------------------------------
 
+// isOwnPost/canModerate são computados aqui (P-6.4b) para que
+// discussion-thread.tsx saiba, por post, se o autor pode editar/remover e se
+// o viewer modera qualquer post — sem precisar de um novo prop de sessão em
+// LessonView, já que app/(aluno)/curso/[slug]/aula/[id]/page.tsx não está na
+// lista de arquivos permitidos deste prompt para ganhar um novo campo
+// (decisão registrada em SESSIONS.md).
+export type LessonDiscussionPost = DiscussionPost & {
+  isOwnPost: boolean;
+  canModerate: boolean;
+};
+
 export interface LessonPageData {
   course: Course;
   modules: CourseModule[];
@@ -560,7 +583,7 @@ export interface LessonPageData {
   progress: Progress[];
   quiz: Quiz | null;
   lastAttempt: QuizAttempt | null;
-  posts: DiscussionPost[];
+  posts: LessonDiscussionPost[];
   notes: LessonNote[];
 }
 
@@ -569,6 +592,15 @@ export async function getLessonPageData(
   slug: string,
   lessonId: string,
 ): Promise<LessonPageData | null> {
+  const cookieStore = await cookies();
+  let isSuperAdmin = false;
+  try {
+    const session = await resolveSession(cookieStore);
+    isSuperAdmin = session.roles.includes("super_admin");
+  } catch {
+    isSuperAdmin = false;
+  }
+
   return withAuthenticatedContext({ actorId }, async (tx) => {
     const courseRows = await tx
       .select({
@@ -691,7 +723,7 @@ export async function getLessonPageData(
       .limit(1);
     const discussionRow = discussionRows[0];
 
-    let posts: DiscussionPost[] = [];
+    let posts: LessonDiscussionPost[] = [];
     if (discussionRow) {
       const postRows = await tx
         .select({ post: discussionPosts, authorName: users.fullName })
@@ -709,6 +741,8 @@ export async function getLessonPageData(
         parentPostId: r.post.parentPostId,
         createdAt: r.post.createdAt,
         updatedAt: r.post.updatedAt,
+        isOwnPost: r.post.authorId === actorId,
+        canModerate: isSuperAdmin,
       }));
     }
 
@@ -937,6 +971,9 @@ export async function getInstructorDashboardCourses(
   actorId: string,
 ): Promise<InstructorCourseStats[]> {
   return withAuthenticatedContext({ actorId }, async (tx) => {
+    // courses_mutate_staff (RLS) é FOR ALL sem filtro de archived_at —
+    // instrutor enxergaria curso arquivado sem este WHERE explícito (mesma
+    // razão de já enxergar rascunho aqui, intencional).
     const courseRows = await tx
       .select({
         course: courses,
@@ -946,6 +983,7 @@ export async function getInstructorDashboardCourses(
       .from(courses)
       .leftJoin(instructors, eq(instructors.id, courses.instructorId))
       .leftJoin(series, eq(series.id, courses.seriesId))
+      .where(isNull(courses.archivedAt))
       .orderBy(desc(courses.createdAt));
 
     if (courseRows.length === 0) return [];
@@ -994,6 +1032,10 @@ export async function getCourseForEditor(
   courseId: string,
 ): Promise<CourseEditorData | null> {
   return withAuthenticatedContext({ actorId }, async (tx) => {
+    // Mesmo motivo de getInstructorDashboardCourses: courses_mutate_staff
+    // não filtra archived_at, então curso/módulo/aula arquivado precisa
+    // sair explicitamente das três leituras abaixo para o editor não os
+    // listar mais.
     const courseRows = await tx
       .select({
         course: courses,
@@ -1003,7 +1045,7 @@ export async function getCourseForEditor(
       .from(courses)
       .leftJoin(instructors, eq(instructors.id, courses.instructorId))
       .leftJoin(series, eq(series.id, courses.seriesId))
-      .where(eq(courses.id, courseId))
+      .where(and(eq(courses.id, courseId), isNull(courses.archivedAt)))
       .limit(1);
     const courseRow = courseRows[0];
     if (!courseRow) return null;
@@ -1011,12 +1053,12 @@ export async function getCourseForEditor(
     const moduleRows = await tx
       .select()
       .from(modules)
-      .where(eq(modules.courseId, courseId))
+      .where(and(eq(modules.courseId, courseId), isNull(modules.archivedAt)))
       .orderBy(asc(modules.order));
     const lessonRows = await tx
       .select()
       .from(lessons)
-      .where(eq(lessons.courseId, courseId))
+      .where(and(eq(lessons.courseId, courseId), isNull(lessons.archivedAt)))
       .orderBy(asc(lessons.order));
 
     const quizLessonIds = lessonRows

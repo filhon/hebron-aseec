@@ -7824,7 +7824,7 @@ Páginas do aluno: Catálogo de cursos (filtros: categoria, instrutor — "dific
 - [x] "Minha jornada": cursos em andamento com progresso visual (progresso vinha inflado — denominador era só as aulas liberadas pela RLS, não o total da trilha — corrigido em P-6.2b)
 - [x] Certificados: lista com download PDF
 - [x] Dashboard do instrutor com estatísticas (matrículas, certificados, progresso médio por curso) — os quatro indicadores liam zero para o próprio instrutor, porque `enrollments`/`progress`/`certificates` são RLS "só o próprio" e um instrutor não é `super_admin`; corrigido em P-6.3c via `plataforma.course_stats()` (SECURITY DEFINER, guarda `super_admin` OU `is_instructor()`)
-- [x] Editor de curso: drag-drop para ordenar módulos e aulas
+- [x] Editor de curso: drag-drop para ordenar módulos e aulas — ganhou editar/arquivar curso, editar/arquivar módulo e arquivar aula em P-6.4b (só criar/reordenar existia; excluir seria `DELETE` físico com cascade sobre matrícula/progresso/certificado, corrigido para arquivamento)
 - [x] Editor de aula e editor de quiz têm página própria e são navegáveis a partir do editor de curso
 - [x] Responsivo
 - [x] Lint passa
@@ -7946,7 +7946,7 @@ Formulários: criar/editar curso (título, descrição, categoria, instrutor, ca
 
 **Critérios de aceite:**
 
-- [x] Curso form: título, descrição (editor compartilhado — D-1), capa (upload para o bucket plataforma-capas de P-0.12), categoria, instrutor
+- [x] Curso form: título, descrição (editor compartilhado — D-1), capa (upload para o bucket plataforma-capas de P-0.12), categoria, instrutor — `CourseForm`/`CourseModuleForm` já sabiam editar (`mode="edit"`) desde aqui, mas nenhuma tela os abria nesse modo; chamador adicionado em P-6.4b (editor de curso)
 - [x] Lesson form: upload de vídeo (URL Bunny.net) ou conteúdo rich text
 - [x] Quiz editor: adicionar/remover perguntas, definir respostas corretas
 - [x] Validação Zod
@@ -8006,17 +8006,17 @@ P-6.4 tem `[x]` em "Curso form: título, descrição, capa, categoria, instrutor
 
 **Critérios de aceite:**
 
-- [ ] Instrutor edita título, descrição, capa, categoria, instrutor e série de um curso já criado, e a mudança aparece no catálogo
-- [ ] Instrutor edita título e descrição de um módulo existente
-- [ ] Arquivar curso, módulo ou aula tira do catálogo/ementa sem apagar linha nenhuma; matrícula, progresso e certificado emitido continuam existindo e o certificado segue verificável em `/certificado/verificar`
-- [ ] Nenhuma ação exposta na UI executa `DELETE` físico em `courses`, `modules` ou `lessons`
-- [ ] Aluno edita e remove a própria nota; não alcança a de outro aluno
-- [ ] Autor edita e remove o próprio post; outro aluno não; `super_admin` modera (P-6.7 sem regressão — `rls.test.ts:316-350` verde)
-- [ ] "· editado" só aparece em post de fato editado
-- [ ] Migration idempotente, aplicada com sucesso; reaplicação reporta "Nothing to apply"
-- [ ] Responsivo em 360px, sem rolagem horizontal, nas telas tocadas
-- [ ] `apps/plataforma` e `packages/db` com typecheck, lint e testes verdes; `pnpm turbo build --filter=@hebron/plataforma` verde
-- [ ] Registrar em SESSIONS.md
+- [x] Instrutor edita título, descrição, capa, categoria, instrutor e série de um curso já criado, e a mudança aparece no catálogo
+- [x] Instrutor edita título e descrição de um módulo existente
+- [x] Arquivar curso, módulo ou aula tira do catálogo/ementa sem apagar linha nenhuma; matrícula, progresso e certificado emitido continuam existindo e o certificado segue verificável em `/certificado/verificar`
+- [x] Nenhuma ação exposta na UI executa `DELETE` físico em `courses`, `modules` ou `lessons`
+- [x] Aluno edita e remove a própria nota; não alcança a de outro aluno
+- [x] Autor edita e remove o próprio post; outro aluno não; `super_admin` modera (P-6.7 sem regressão — `rls.test.ts:316-350` verde)
+- [x] "· editado" só aparece em post de fato editado
+- [x] Migration idempotente, aplicada com sucesso; reaplicação reporta "Nothing to apply"
+- [x] Responsivo em 360px, sem rolagem horizontal, nas telas tocadas
+- [x] `apps/plataforma` e `packages/db` com typecheck, lint e testes verdes; `pnpm turbo build --filter=@hebron/plataforma` verde
+- [x] Registrar em SESSIONS.md
 
 **Notas:**
 Ref: P-4.8d ("O 'D' do CRUD"), P-2.8c e P-3.9c — o mesmo achado de actions sem porta de entrada — e P-5.3b, que estabeleceu o precedente de remover um selo que o sistema nunca produz em vez de mantê-lo como ruído. O arquivamento aqui é a leitura mais conservadora do princípio de imutabilidade do CLAUDE.md: o instrutor precisa poder tirar do ar uma aula errada sem que isso apague o histórico acadêmico de quem já a cursou.

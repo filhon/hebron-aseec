@@ -8,7 +8,6 @@ import { CheckCircle2, Download, FileText } from "lucide-react";
 import type {
   Course,
   CourseModule,
-  DiscussionPost,
   Lesson,
   Progress,
   Quiz,
@@ -22,7 +21,15 @@ import { DiscussionThread } from "./discussion-thread";
 import { NoteWidget, type LessonNote } from "./note-widget";
 import { markLessonComplete } from "../actions/progress";
 import { submitQuizAttempt } from "../actions/quizzes";
-import { createNote, createDiscussionPost } from "../actions/discussions";
+import {
+  createNote,
+  updateNote,
+  deleteNote,
+  createDiscussionPost,
+  updateDiscussionPost,
+  deleteDiscussionPost,
+} from "../actions/discussions";
+import type { LessonDiscussionPost } from "../lib/queries";
 
 export interface LessonViewProps {
   course: Course;
@@ -32,7 +39,7 @@ export interface LessonViewProps {
   progress: Progress[];
   quiz: Quiz | null;
   lastAttempt: QuizAttempt | null;
-  posts: DiscussionPost[];
+  posts: LessonDiscussionPost[];
   notes: LessonNote[];
 }
 
@@ -64,10 +71,30 @@ export function LessonView({
   const { execute: addNote } = useAction(createNote, {
     onSuccess: () => router.refresh(),
   });
+  const { execute: editNote, status: editNoteStatus } = useAction(updateNote, {
+    onSuccess: () => router.refresh(),
+  });
+  const { execute: removeNote, status: removeNoteStatus } = useAction(
+    deleteNote,
+    { onSuccess: () => router.refresh() },
+  );
   const { execute: addPost, status: postStatus } = useAction(
     createDiscussionPost,
     { onSuccess: () => router.refresh() },
   );
+  const { execute: editPost, status: editPostStatus } = useAction(
+    updateDiscussionPost,
+    { onSuccess: () => router.refresh() },
+  );
+  const { execute: removePost, status: removePostStatus } = useAction(
+    deleteDiscussionPost,
+    { onSuccess: () => router.refresh() },
+  );
+
+  const isMutatingNote =
+    editNoteStatus === "executing" || removeNoteStatus === "executing";
+  const isMutatingPost =
+    editPostStatus === "executing" || removePostStatus === "executing";
 
   const isComplete = progress.some(
     (p) => p.lessonId === lesson.id && p.completedAt,
@@ -97,6 +124,22 @@ export function LessonView({
 
   function handleAddNote(content: string, timestampSeconds: number) {
     addNote({ lessonId: lesson.id, timestampSeconds, content });
+  }
+
+  function handleUpdateNote(noteId: string, content: string) {
+    editNote({ noteId, content });
+  }
+
+  function handleDeleteNote(noteId: string) {
+    removeNote({ noteId });
+  }
+
+  function handleUpdatePost(postId: string, content: string) {
+    editPost({ postId, content });
+  }
+
+  function handleDeletePost(postId: string) {
+    removePost({ postId });
   }
 
   return (
@@ -129,6 +172,9 @@ export function LessonView({
                 notes={notes}
                 currentTimeSeconds={currentTimeSeconds}
                 onAddNote={handleAddNote}
+                onUpdateNote={handleUpdateNote}
+                onDeleteNote={handleDeleteNote}
+                isMutating={isMutatingNote}
               />
             </>
           )}
@@ -211,7 +257,10 @@ export function LessonView({
               lessonId={lesson.id}
               posts={posts}
               onSubmit={handleDiscussionSubmit}
+              onUpdatePost={handleUpdatePost}
+              onDeletePost={handleDeletePost}
               isLoading={postStatus === "executing"}
+              isMutatingPost={isMutatingPost}
             />
           </section>
         </div>

@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { and, asc, eq, ilike, or, type SQL } from "drizzle-orm";
+import { and, asc, eq, ilike, isNull, or, type SQL } from "drizzle-orm";
 import {
   withAuthenticatedContext,
   withSystemRole,
@@ -23,6 +23,11 @@ import {
 import { plataformaAction, staffAction } from "../lib/safe-action";
 import { logPlataformaAudit } from "../lib/audit";
 import { notifyNewCoursePublished } from "../lib/notifications";
+import {
+  getInstructors,
+  getSeriesList,
+  getCourseCategories,
+} from "../lib/queries";
 
 // ---------------------------------------------------------------------------
 // courses — CRUD (super_admin/instrutor); publicação com audit central
@@ -140,18 +145,42 @@ export const updateCourse = staffAction
 
 const deleteCourseSchema = z.object({ courseId: z.string().uuid() });
 
+// Arquiva em vez de excluir (P-6.4b) — DELETE físico cascateia para
+// enrollments/progress/certificates (FK on delete cascade,
+// packages/db/src/schema/plataforma.ts), apagando certificado já emitido.
+// Nunca mais que uma linha muda de estado aqui.
 export const deleteCourse = staffAction
   .schema(deleteCourseSchema)
   .action(async ({ parsedInput: input, ctx }) => {
     await withAuthenticatedContext({ actorId: ctx.actorId }, async (tx) => {
       const [row] = await tx
-        .delete(courses)
+        .update(courses)
+        .set({ archivedAt: new Date(), updatedAt: new Date() })
         .where(eq(courses.id, input.courseId))
         .returning({ id: courses.id });
       if (!row) throw new Error("Curso não encontrado");
     });
 
     return { success: true };
+  });
+
+// Reúne as listas usadas pelo CourseForm em modo de edição
+// (instrutores/séries/categorias) — o editor de curso
+// (apps/instrutor/curso/[id]/page.tsx) não está na lista de arquivos
+// permitidos deste prompt para ganhar um novo fetch de Server Component, e
+// CourseEditorView é Client Component; a mesma leitura de novo-curso/page.tsx
+// fica disponível aqui via Server Action, chamada sob demanda ao abrir o
+// diálogo de edição (decisão registrada em SESSIONS.md).
+export const getCourseEditOptions = staffAction
+  .schema(z.object({}))
+  .action(async ({ ctx }) => {
+    const [instructorsList, seriesList, categories] = await Promise.all([
+      getInstructors(ctx.actorId),
+      getSeriesList(ctx.actorId),
+      getCourseCategories(ctx.actorId),
+    ]);
+
+    return { instructors: instructorsList, series: seriesList, categories };
   });
 
 // ---------------------------------------------------------------------------
@@ -211,12 +240,14 @@ export const updateCourseModule = staffAction
 
 const deleteCourseModuleSchema = z.object({ moduleId: z.string().uuid() });
 
+// Arquiva em vez de excluir (P-6.4b) — mesma razão de deleteCourse.
 export const deleteCourseModule = staffAction
   .schema(deleteCourseModuleSchema)
   .action(async ({ parsedInput: input, ctx }) => {
     await withAuthenticatedContext({ actorId: ctx.actorId }, async (tx) => {
       const [row] = await tx
-        .delete(modules)
+        .update(modules)
+        .set({ archivedAt: new Date(), updatedAt: new Date() })
         .where(eq(modules.id, input.moduleId))
         .returning({ id: modules.id });
       if (!row) throw new Error("Módulo não encontrado");
@@ -329,12 +360,14 @@ export const updateLesson = staffAction
 
 const deleteLessonSchema = z.object({ lessonId: z.string().uuid() });
 
+// Arquiva em vez de excluir (P-6.4b) — mesma razão de deleteCourse.
 export const deleteLesson = staffAction
   .schema(deleteLessonSchema)
   .action(async ({ parsedInput: input, ctx }) => {
     await withAuthenticatedContext({ actorId: ctx.actorId }, async (tx) => {
       const [row] = await tx
-        .delete(lessons)
+        .update(lessons)
+        .set({ archivedAt: new Date(), updatedAt: new Date() })
         .where(eq(lessons.id, input.lessonId))
         .returning({ id: lessons.id });
       if (!row) throw new Error("Aula não encontrada");
@@ -381,7 +414,7 @@ const searchCoursesSchema = z.object({
 export const searchCourses = plataformaAction
   .schema(searchCoursesSchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    const conditions: SQL[] = [];
+    const conditions: SQL[] = [isNull(courses.archivedAt)];
     if (input.seriesId) conditions.push(eq(courses.seriesId, input.seriesId));
     if (input.category) conditions.push(eq(courses.category, input.category));
     if (input.query) {
