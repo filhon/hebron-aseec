@@ -8048,6 +8048,8 @@ Loading, empty e error states. Skeletons para catálogo, player, jornada. Estado
 
 - [x] Skeletons por tela
 - [x] Estados vazios contextuais
+- [x] Estados de carregamento (`Suspense` + esqueleto) em catálogo, jornada, certificados, página do curso, página de aula, painel do instrutor e editor de curso — fechado em P-6.5b (CORRETIVO)
+- [x] Estados de erro (`ErrorState`) nas leituras que podem falhar, sem se disfarçar de vazio — fechado em P-6.5b (CORRETIVO)
 - [x] Lint passa
 - [x] Types passam
 
@@ -8101,14 +8103,14 @@ P-6.5 tem `[x]` em "Skeletons por tela" e "Estados vazios contextuais". Os estad
 
 **Critérios de aceite:**
 
-- [ ] Cada uma das telas listadas pinta cabeçalho e esqueleto antes de o servidor responder — verificado em browser real, com rede lenta simulada
-- [ ] A tela de aula usa `PlayerSkeleton` e `CourseSidebarSkeleton`; nenhum dos dois continua órfão
-- [ ] Falha de leitura mostra `ErrorState`, nunca "Nenhum curso disponível ainda"
-- [ ] Catálogo vazio de verdade continua mostrando o vazio contextual de P-6.5, com a citação
-- [ ] O HTML do servidor do catálogo já vem com os cursos; filtros de título, categoria, instrutor e série continuam funcionando (P-6.3b sem regressão)
-- [ ] Responsivo em 360px, sem rolagem horizontal, nas telas tocadas
-- [ ] `apps/plataforma` com typecheck, lint e testes verdes; `pnpm turbo build --filter=@hebron/plataforma` verde
-- [ ] Registrar em SESSIONS.md
+- [~] Cada uma das telas listadas pinta cabeçalho e esqueleto antes de o servidor responder — implementado (`Suspense` em todas as 7 telas); não verificado em browser real com sessão autenticada nesta sessão (sandbox sem acesso ao Supabase do projeto para logar — ver SESSIONS.md)
+- [x] A tela de aula usa `PlayerSkeleton` e `CourseSidebarSkeleton`; nenhum dos dois continua órfão
+- [x] Falha de leitura mostra `ErrorState`, nunca "Nenhum curso disponível ainda"
+- [x] Catálogo vazio de verdade continua mostrando o vazio contextual de P-6.5, com a citação
+- [x] O HTML do servidor do catálogo já vem com os cursos; filtros de título, categoria, instrutor e série continuam funcionando (P-6.3b sem regressão)
+- [~] Responsivo em 360px, sem rolagem horizontal, nas telas tocadas — classes responsivas mantidas sem alteração; não verificado visualmente (mesma limitação acima)
+- [x] `apps/plataforma` com typecheck, lint e testes verdes; `pnpm turbo build --filter=@hebron/plataforma` verde
+- [x] Registrar em SESSIONS.md
 
 **Notas:**
 Ref: P-5.3b (o mesmo achado na Intranet, com o desenho de `Suspense` que este prompt repete), P-3.5b ("nenhuma fronteira de erro, doze telas sem carregamento") e S-107, que registrou os dois esqueletos órfãos esperando P-6.9. Este prompt fecha o débito com o dono original: o módulo que promete "estados" no nome do prompt.

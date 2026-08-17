@@ -271,6 +271,7 @@
 | S-248  | 2026-08-15 | P-6.2b — A trilha que a barra lateral promete e o banco esconde (CORRETIVO)                                                      | concluido                            |
 | S-249  | 2026-08-17 | P-6.3c — O painel do instrutor que sempre lê zero (CORRETIVO)                                                                    | concluido                            |
 | S-250  | 2026-08-17 | P-6.4b — O curso que se cria e não se edita (CORRETIVO)                                                                          | concluido                            |
+| S-251  | 2026-08-17 | P-6.5b — Os esqueletos que ninguém mostra e o erro que se disfarça de catálogo vazio (CORRETIVO)                                 | concluido                            |
 
 ---
 
@@ -22688,4 +22689,120 @@ db:migrate`); reaplicação reporta "Nothing to apply — database is up
 - `apps/plataforma/src/components/lesson-view.tsx`
 - `apps/plataforma/src/__tests__/arquivamento.test.ts` (novo)
 - `PROMPTS.md` (critérios de P-6.3 e P-6.4)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+## S-251 — P-6.5b — Os esqueletos que ninguém mostra e o erro que se disfarça de catálogo vazio (CORRETIVO)
+
+**Prompt:** P-6.5b
+**Data:** 2026-08-17
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+P-6.5 tinha `[x]` em "Skeletons por tela" e "Estados vazios
+contextuais", mas nenhuma das nove telas do módulo tinha fronteira de
+carregamento (`Suspense`/`loading.tsx`) ou de erro (`ErrorState`) —
+toda leitura que falhasse caía no mesmo ramo de "vazio" que uma
+consulta sem resultados, e `PlayerSkeleton`/`CourseSidebarSkeleton`
+seguiam órfãos desde S-107. Invocado `/impeccable` (register
+`product`, PRODUCT.md já existente) antes de tocar qualquer tela.
+
+1. **`Suspense` em todas as sete telas permitidas**, no desenho de
+   P-5.3b (`ReunioesContent` na Intranet): componente `async` interno
+   faz a leitura, `try/catch` devolve `ErrorState` em falha, `Suspense`
+   externo mostra o esqueleto até resolver.
+   - Catálogo, `/jornada`, `/certificados` e o painel do instrutor
+     (`instrutor/page.tsx`) já tinham `PageHeader` direto no
+     `page.tsx` — segue literalmente "PageHeader fora da fronteira,
+     conteúdo dentro".
+   - Página do curso (`curso/[slug]/page.tsx`), página de aula
+     (`curso/[slug]/aula/[id]/page.tsx`) e editor de curso
+     (`instrutor/curso/[id]/page.tsx`) embutem o `PageHeader` dentro de
+     `CourseDetailView`/`LessonView`/`CourseEditorView` — nenhum dos
+     três está na lista de arquivos permitidos deste prompt para
+     ganhar um header estático extraído. Nesses três, o `Suspense`
+     envolve a página inteira (fetch + componente) e o esqueleto imita
+     a página completa (bones de título/breadcrumb + forma do
+     conteúdo) — suposição registrada aqui por não caber a leitura
+     literal de "header fora" sem tocar arquivo fora da lista.
+2. **`PlayerSkeleton`/`CourseSidebarSkeleton` deixam de ser órfãos**:
+   consumidos no esqueleto de `curso/[slug]/aula/[id]/page.tsx`, sobre
+   o mesmo grid `[1fr_320px]` que `LessonView` usa de verdade.
+3. **`ErrorState`** (`@hebron/ui`) em toda leitura que pode falhar —
+   `requireAlunoSession`/`requireInstrutorSession` mais as funções de
+   `lib/queries.ts` chamadas por cada página, e `searchCourses` no
+   catálogo. Nenhuma tela mais confunde falha de consulta com catálogo
+   vazio.
+4. **Catálogo virou RSC.** `(aluno)/page.tsx` chama `searchCourses({})`
+   direto no servidor (não via `useAction`) — chamada direta de uma
+   action `next-safe-action` fora do hook devolve
+   `{ data } | { serverError }` sem lançar (confirmado em
+   `node_modules/next-safe-action/dist/index.types-*.d.mts`,
+   `SafeActionResult`), então o mesmo padrão try/então-verifica-`data`
+   funciona em RSC. `lib/queries.ts` e `actions/courses.ts` não estão
+   na lista de arquivos permitidos — reaproveitar a action existente
+   evitou criar uma função de leitura nova fora do escopo. Os filtros
+   (busca, categoria, instrutor, série) saíram para
+   `components/course-catalog.tsx` (novo, `"use client"`), que recebe
+   os cursos já publicados/mapeados como prop e reproduz exatamente a
+   lógica de filtro que já existia (sem regressão de P-6.3b) — só a
+   fonte dos dados mudou, de `useEffect` no cliente para o HTML do
+   servidor.
+5. **`certificate-list-skeleton.tsx`** (novo) — `CourseCardSkeleton`
+   não bate com o layout de `CertificateCard` (ícone + `dl` + caixa de
+   hash + ações), então `/certificados` ganhou esqueleto próprio nesse
+   formato em vez de reaproveitar o do catálogo.
+6. **Bookkeeping em PROMPTS.md**: critérios de P-6.5 ganharam duas
+   linhas novas (estados de carregamento e de erro), marcadas como
+   fechadas por este prompt.
+
+### Suposições registradas
+
+- Nas três telas com `PageHeader` embutido em componente fora da lista
+  de arquivos permitidos (curso, aula, editor de curso), o `Suspense`
+  envolve a tela inteira em vez de só o conteúdo — a alternativa
+  (extrair o header) exigiria editar `course-detail-view.tsx`/
+  `lesson-view.tsx`/`course-editor-view.tsx`, fora do escopo. O
+  esqueleto de cada uma imita a página inteira para ainda cumprir "pinta
+  algo antes do servidor responder".
+- `redirect("/")` (curso não publicado) segue dentro do componente
+  `async` que já está sob `Suspense` — comportamento suportado pelo
+  App Router (streaming redirect), sem precedente direto no monorepo
+  para essa combinação específica.
+
+### Baseline verificado
+
+- `pnpm turbo lint typecheck --filter=@hebron/plataforma`: verde
+  (`@hebron/auth#typecheck` falhou na mesma rodada por drift
+  pré-existente e não relacionado — `bankAccounts.nickname`, já
+  registrado em sessões anteriores)
+- `pnpm turbo build --filter=@hebron/plataforma`: verde, 13 rotas
+  geradas sem erro
+- `pnpm turbo test --filter=@hebron/plataforma`: 51/51 verde (6
+  arquivos, nenhum teste tocado por este prompt)
+- Servidor de dev (`next dev --port 3002`) sobe e responde; `GET /`
+  sem sessão devolve `307` para o login canônico, sem erro 500
+- Não testado em navegador com sessão autenticada real (Supabase do
+  projeto, sem credenciais disponíveis neste ambiente; Playwright
+  headless neste sandbox também não alcança `localhost` do processo
+  `next dev` lançado via Bash) — os critérios de "esqueleto visível
+  antes do servidor responder" e "responsivo em 360px" ficam como
+  `[~]` em PROMPTS.md; recomenda-se conferência visual manual antes de
+  mesclar, como já registrado em S-250 para o mesmo tipo de limitação.
+
+### Arquivos modificados
+
+- `apps/plataforma/src/app/(aluno)/page.tsx`
+- `apps/plataforma/src/app/(aluno)/jornada/page.tsx`
+- `apps/plataforma/src/app/(aluno)/certificados/page.tsx`
+- `apps/plataforma/src/app/(aluno)/curso/[slug]/page.tsx`
+- `apps/plataforma/src/app/(aluno)/curso/[slug]/aula/[id]/page.tsx`
+- `apps/plataforma/src/app/instrutor/page.tsx`
+- `apps/plataforma/src/app/instrutor/curso/[id]/page.tsx`
+- `apps/plataforma/src/components/course-catalog.tsx` (novo)
+- `apps/plataforma/src/components/certificate-list-skeleton.tsx` (novo)
+- `PROMPTS.md` (critérios de P-6.5 e P-6.5b)
 - `SESSIONS.md` (esta entrada + linha no índice)

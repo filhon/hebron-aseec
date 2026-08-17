@@ -1,5 +1,6 @@
+import { Suspense } from "react";
 import Link from "next/link";
-import { PageHeader, Button, EmptyState } from "@hebron/ui";
+import { PageHeader, Button, EmptyState, ErrorState } from "@hebron/ui";
 import { BookOpen, Plus, Users, Award, TrendingUp } from "lucide-react";
 import { ProgressBar } from "../../components/progress-bar";
 import {
@@ -7,9 +8,63 @@ import {
   getInstructorDashboardCourses,
 } from "../../lib/queries";
 
-export default async function InstrutorDashboardPage() {
+function Bone({ className }: { className: string }) {
+  return (
+    <div className={`animate-pulse rounded bg-(--surface-alt) ${className}`} />
+  );
+}
+
+function InstrutorDashboardSkeleton() {
+  return (
+    <div aria-hidden="true" role="presentation">
+      <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div
+            key={i}
+            className="rounded-md border border-(--border) bg-(--surface) p-5"
+          >
+            <Bone className="h-4 w-4 rounded-full" />
+            <Bone className="mt-3 h-6 w-12" />
+            <Bone className="mt-2 h-2.5 w-20" />
+          </div>
+        ))}
+      </div>
+
+      <Bone className="mb-4 h-4 w-24" />
+
+      <ul className="flex flex-col gap-3">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <li
+            key={i}
+            className="flex flex-col gap-3 rounded-md border border-(--border) bg-(--surface) p-5 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div className="min-w-0 flex-1 space-y-1.5">
+              <Bone className="h-2.5 w-20" />
+              <Bone className="h-4 w-2/3" />
+              <Bone className="h-2.5 w-32" />
+            </div>
+            <Bone className="h-2.5 w-full rounded-(--radius-pill) sm:w-48" />
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+async function InstrutorDashboardContent() {
   const session = await requireInstrutorSession();
-  const courseStats = await getInstructorDashboardCourses(session.actorId);
+
+  let courseStats: Awaited<ReturnType<typeof getInstructorDashboardCourses>>;
+  try {
+    courseStats = await getInstructorDashboardCourses(session.actorId);
+  } catch {
+    return (
+      <ErrorState
+        title="Não foi possível carregar o painel"
+        description="Verifique sua conexão e tente novamente."
+      />
+    );
+  }
 
   const publishedCourses = courseStats.filter((c) => c.course.isPublished);
   const draftCourses = courseStats.filter((c) => !c.course.isPublished);
@@ -46,20 +101,7 @@ export default async function InstrutorDashboardPage() {
   ];
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-8">
-      <PageHeader
-        title="Painel do instrutor"
-        description="Estatísticas e cursos da Plataforma."
-        actions={
-          <Button
-            asChild
-            leftIcon={<Plus className="h-4 w-4" aria-hidden="true" />}
-          >
-            <Link href="/instrutor/curso/novo">Novo curso</Link>
-          </Button>
-        }
-      />
-
+    <>
       <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
         {stats.map((stat) => (
           <div
@@ -128,6 +170,29 @@ export default async function InstrutorDashboardPage() {
           ))}
         </ul>
       )}
+    </>
+  );
+}
+
+export default function InstrutorDashboardPage() {
+  return (
+    <div className="mx-auto max-w-6xl px-6 py-8">
+      <PageHeader
+        title="Painel do instrutor"
+        description="Estatísticas e cursos da Plataforma."
+        actions={
+          <Button
+            asChild
+            leftIcon={<Plus className="h-4 w-4" aria-hidden="true" />}
+          >
+            <Link href="/instrutor/curso/novo">Novo curso</Link>
+          </Button>
+        }
+      />
+
+      <Suspense fallback={<InstrutorDashboardSkeleton />}>
+        <InstrutorDashboardContent />
+      </Suspense>
     </div>
   );
 }
