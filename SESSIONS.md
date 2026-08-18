@@ -272,6 +272,8 @@
 | S-249  | 2026-08-17 | P-6.3c — O painel do instrutor que sempre lê zero (CORRETIVO)                                                                    | concluido                            |
 | S-250  | 2026-08-17 | P-6.4b — O curso que se cria e não se edita (CORRETIVO)                                                                          | concluido                            |
 | S-251  | 2026-08-17 | P-6.5b — Os esqueletos que ninguém mostra e o erro que se disfarça de catálogo vazio (CORRETIVO)                                 | concluido                            |
+| S-252  | 2026-08-18 | Auditoria: débitos técnicos P-6.6–P-6.15 (Plataforma, Bloco B, 2ª rodada)                                                        | concluido (gera P-6.16 a P-6.19)     |
+| S-253  | 2026-08-18 | P-6.16 — A aula arquivada que ainda tranca a trilha (CORRETIVO)                                                                  | concluido                            |
 
 ---
 
@@ -22805,4 +22807,267 @@ seguiam órfãos desde S-107. Invocado `/impeccable` (register
 - `apps/plataforma/src/components/course-catalog.tsx` (novo)
 - `apps/plataforma/src/components/certificate-list-skeleton.tsx` (novo)
 - `PROMPTS.md` (critérios de P-6.5 e P-6.5b)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+## S-252 — Auditoria: débitos técnicos P-6.6–P-6.15 (Plataforma, Bloco B, 2ª rodada)
+
+**Prompt:** N/A (auditoria solicitada pelo Filipe — reler P-6.6–P-6.15 em
+PROMPTS.md + S-109–S-120 em SESSIONS.md, cruzar com a codebase real e com os
+corretivos posteriores que tocaram o módulo, gerar patches se necessário)
+**Data:** 2026-08-18
+**Modelo:** claude-fable-5
+**Status:** concluido (gera 4 prompts novos em PROMPTS.md, nenhum código
+alterado)
+
+### Resumo
+
+Segunda auditoria do Bloco B da Plataforma (a primeira foi S-117, que gerou
+P-6.13/6.14/6.15 — todos concluídos em S-118/S-119/S-120). O diferencial
+desta rodada: quatro corretivos posteriores tocaram o módulo de novo
+(P-6.2b/S-248 — outline; P-6.3c/S-249 — course_stats; P-6.4b/S-250 —
+arquivamento; P-6.5b/S-251 — estados de tela), além de P-9.1b-7/S-163
+(persistência de capa/anexo por storage path). A maior parte dos achados
+novos não é débito dos prompts originais P-6.6–P-6.15 em si, mas **regressão
+de interação**: a migration 0082 (arquivamento) atualizou as policies de
+SELECT e `course_outline()`, e deixou para trás as demais funções
+`SECURITY DEFINER` e as leituras de certificado — todas entregues pelo
+Bloco B antes de `archived_at` existir.
+
+### Achados confirmados na codebase E no banco de dev (não só em SESSIONS)
+
+Verificação no banco real via `pg_get_functiondef` (script ad-hoc read-only,
+descartado): `can_access_lesson`, `issue_certificate` e `course_stats` não
+contêm `archived_at`; só `course_outline` foi atualizada pela 0082. Hoje não
+há nenhuma linha arquivada no banco (0 cursos, 0 aulas) — os defeitos 1–4
+são latentes e disparam no primeiro arquivamento real.
+
+1. **`plataforma.can_access_lesson` (0020) ignora `archived_at`** — a cadeia
+   `LAG()` inclui aula/módulo arquivado: arquivar a aula N tranca
+   permanentemente a aula N+1 para todo aluno que não concluiu N (a aula
+   exigida é invisível e inconcluível). → **P-6.16**
+2. **`plataforma.issue_certificate` (0045) conta `lessons` cru** enquanto
+   `checkAndIssueCertificate` conta pela outline (que filtra arquivadas):
+   com aula arquivada não concluída, o check da app passa, a função levanta
+   exceção e a transação inteira de `markLessonComplete`/`submitQuizAttempt`
+   aborta — o aluno não consegue concluir a última aula. Além disso, os
+   contadores de `progress` da app (`checkAndIssueCertificate`,
+   `getUserEnrollmentsWithProgress`) contam por `course_id` sem interseção
+   com a outline — linhas de progresso de aula arquivada sobrevivem (por
+   design de P-6.4b) e inflam o numerador. `course_stats` (0081) tem o
+   mesmo denominador cru. `enrollments_insert_own` não exige
+   `archived_at IS NULL`; `getStudentKpiMetrics.activeCourses` (P-6.11)
+   conta curso arquivado como ativo (arquivar não despublica). → **P-6.16**
+3. **Certificado do aluno some com o curso.** `getUserCertificates`
+   (`queries.ts:894-906`) e `downloadCertificatePdf`
+   (`actions/certificates.ts:239-241`) fazem `innerJoin` em `courses` sob a
+   RLS do aluno; `courses_select_published` (0082) exige publicado E não
+   arquivado — arquivar OU despublicar um curso remove o certificado de
+   `/certificados` e quebra o download do PDF para o próprio dono,
+   contradizendo o critério de P-6.4b ("certificado emitido continua
+   existindo"). `arquivamento.test.ts` só assertava a sobrevivência da
+   linha via `db` cru (sem RLS) e a rota pública — nunca a visão do aluno.
+   Fix sem migration: `verify_certificate(hash)` já tem GRANT a
+   `authenticated` (`0020:416`). → **P-6.17**
+4. **Capa quebrada no catálogo — débito registrado de S-163, órfão.**
+   S-163 anotou que o catálogo ficaria sem imagem "até um P-9.1b-7b
+   corretivo" — que nunca foi criado (grep em PROMPTS.md: zero). P-6.5b
+   reescreveu o catálogo como RSC e herdou o mapeamento
+   `coverImageUrl: c.coverUrl` (`(aluno)/page.tsx:44`) — storage path cru
+   renderizado como `<img src>` pelo `CourseCard`, requisição relativa
+   quebrada sem cair no fallback de ícone. Jornada e aula já resolvem via
+   `resolveAssetUrl`; o catálogo é o único consumidor restante do path cru.
+   → **P-6.18**
+5. **Série é feature inerte + tela de equipe sem link (gaps irmãos de
+   S-113).** Zero `insert(series)`/`createSeries` no app; `seriesSchema`
+   (`@hebron/validators`) órfão desde o Bloco A — select "Série" do
+   `CourseForm` e filtro do catálogo (PATCH-024) vazios em qualquer
+   instalação sem INSERT manual, apesar de `series_mutate_staff` (P-6.7)
+   permitir CRUD a staff desde sempre. E o débito explícito de S-118 segue
+   aberto: `instrutor/shell.tsx` só tem "Painel" e "Novo curso" —
+   `/instrutor/equipe` (P-6.13) alcançável só por URL direta. → **P-6.19**
+
+### Débitos avaliados e NÃO convertidos em prompt
+
+- `Note`/`createNoteSchema` compartilhados — segue cosmético (mesma
+  avaliação de S-117); a feature de notas funciona ponta a ponta.
+- Ausência de caminho de **desarquivamento** na UI e `deleteCourse` não
+  despublicar — decisão de produto pendente do Filipe (hoje reversível só
+  via SQL; `courses_mutate_staff` permite o UPDATE). Registrado na nota de
+  auditoria em PROMPTS.md.
+- `getUsersForInstructorLink` sem busca/paginação — aceitável em ~150
+  usuários.
+- KPIs `activeCourses`/`completionRate` sem card na Intranet — intencional
+  (S-115).
+- Consentimento de `notifyNewCoursePublished` verificado OK: purpose
+  `"newsletter"` existe no enum e revogação seta `granted = false`
+  (`setConsent`, packages/db/src/consents.ts) — a query filtra correto.
+- P-6.13/6.14/6.15 em si conferidos como entregues e saudáveis
+  (instructors CRUD, rota `/certificado/verificar` consumindo só
+  `verify_certificate`, uploads com signed URL + TTL 1h pós-S-163).
+
+### Prompts corretivos gerados (inseridos em PROMPTS.md, após a nota de
+
+auditoria de 2026-07-14, antes da Fase 7 — nenhum bloqueia outras fases)
+
+- **P-6.16** — A aula arquivada que ainda tranca a trilha: migration 0083
+  (`can_access_lesson`/`issue_certificate`/`course_stats` na régua da
+  outline; `enrollments_insert_own` com filtro de arquivado) + contadores
+  da app + KPI da Intranet.
+- **P-6.17** — O certificado que some junto com o curso: leituras de
+  certificado do aluno via `verify_certificate`, sem `innerJoin` que a RLS
+  esvazia.
+- **P-6.18** — A capa que virou caminho de storage no catálogo: resolve o
+  débito de S-163 (o "P-9.1b-7b" que nunca existiu).
+- **P-6.19** — A série que ninguém pode criar e a equipe sem porta na
+  sidebar: CRUD de séries (staff) + navegação da área do instrutor.
+
+Nenhum código de produto foi alterado nesta sessão — só leitura (PROMPTS,
+SESSIONS, schema, migrations 0020/0045/0046/0080/0081/0082, actions,
+queries, componentes, testes, funções no banco de dev via
+`pg_get_functiondef`) e a escrita dos 4 prompts novos + esta entrada.
+
+### Arquivos modificados
+
+- `PROMPTS.md` (4 prompts novos: P-6.16 a P-6.19 + nota de auditoria
+  2026-08-18)
+- `SESSIONS.md` (esta entrada + linha na tabela-índice)
+
+---
+
+## S-253 — P-6.16 — A aula arquivada que ainda tranca a trilha (CORRETIVO)
+
+**Prompt:** P-6.16
+**Data:** 2026-08-18
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+S-252 (auditoria) confirmou no banco de dev, via `pg_get_functiondef`, que
+`0082_plataforma_arquivamento.sql` (P-6.4b) só atualizou as policies de
+SELECT e `plataforma.course_outline()` para ignorar linha arquivada —
+`can_access_lesson`, `issue_certificate` e `course_stats` (funções
+`SECURITY DEFINER` entregues antes de `archived_at` existir) continuavam
+com `count(*)`/`LAG()` cru, e `enrollments_insert_own` continuava sem
+exigir `archived_at IS NULL`. Cinco defeitos latentes, nenhum visível hoje
+(0 linhas arquivadas em produção), todos disparando no primeiro
+arquivamento real.
+
+1. **Migration `0083_plataforma_arquivamento_funcoes.sql`** (à mão,
+   conforme P-0.3c, `CREATE OR REPLACE` sem `DROP`/re-`GRANT` — privilégio
+   de `EXECUTE` já concedido em 0080/0045/0081 sobrevive ao `REPLACE`):
+   - `plataforma.can_access_lesson`: a CTE `ordered` (cadeia `LAG()`)
+     ganhou `WHERE l.archived_at IS NULL AND m.archived_at IS NULL` — aula/
+     módulo arquivado sai da partição, e quem vem depois de uma aula
+     arquivada enxerga o requisito real (a aula não-arquivada anterior, ou
+     nenhum) em vez de ficar trancado atrás de uma aula que já não existe
+     para ninguém.
+   - `plataforma.issue_certificate`: total e concluídas passam a vir de
+     uma fonte só, `plataforma.course_outline(p_course_id)` (CTE `outline`
+     reaproveitada num único `SELECT ... INTO`), com "concluídas" via
+     `count(*) FILTER (WHERE EXISTS (... progress ...))` interseccionando
+     `progress.lesson_id` com `outline.lesson_id` — nunca mais `count(*)`
+     cru em `lessons`/`progress`.
+   - `plataforma.course_stats`: numerador e denominador do `avg_percent`
+     restritos a `lessons`/`modules` com `archived_at IS NULL` (mesmo
+     filtro de `can_access_lesson`), sem usar `course_outline()` direto
+     porque o painel do instrutor lista também curso em rascunho
+     (`course_outline()` exige `published = true`, quebraria o
+     denominador de um curso não publicado).
+   - `enrollments_insert_own`: `DROP`/`CREATE` com `AND c.archived_at IS
+NULL` somado ao `published = true` já existente.
+2. **Aplicação na mesma régua**: `checkAndIssueCertificate`
+   (`actions/certificates.ts`) e `getUserEnrollmentsWithProgress`
+   (`lib/queries.ts`) passam a contar `completed` via `inArray(progress.
+lessonId, outlineLessonIds)` em vez de `eq(progress.courseId, ...)`/
+   `inArray(progress.courseId, courseIds)` — "concluídas" intersecciona
+   `progress.lesson_id` com os `lesson_id` que `course_outline()` já
+   devolveu, nunca mais contagem por `course_id` cru.
+3. **Arestas do editor**: `getLessonForEditor`, `getQuizEditorDataForLesson`
+   e `getQuizEditorDataByQuizId` (`lib/queries.ts`) ganharam
+   `isNull(lessons.archivedAt)` no `WHERE` da aula; `getCourseCategories`
+   ganhou `isNull(courses.archivedAt)`.
+4. **KPI da Intranet**: `getStudentKpiMetrics` (`packages/integrations/
+src/plataforma.ts`) ganhou `isNull(courses.archivedAt)` em `activeCourses`
+   (arquivar não despublica — sem o filtro, curso arquivado seguia
+   contando como ativo).
+5. **`@hebron/integrations` como dependência de `apps/plataforma`** —
+   fora da lista de arquivos permitidos do prompt (só `package.json` não
+   está listado), mas necessário para `arquivamento.test.ts` importar
+   `getStudentKpiMetrics` (critério de aceite exige o teste). G1
+   (PROMPTS.md) permite criar infra óbvia faltante fora da lista quando
+   necessário, registrando a suposição aqui: o monorepo usa `pnpm`
+   `node-linker` estrito (sem `.npmrc` de hoisting), então o import só
+   resolve com a dependência declarada — sem ela, `pnpm install` já teria
+   falhado antes mesmo do teste rodar. Adicionada em
+   `apps/plataforma/package.json` (`workspace:*`, mesmo padrão dos demais
+   pacotes `@hebron/*`); `pnpm install` rodado para atualizar o lockfile.
+   Sem ciclo: `@hebron/integrations` não depende de `@hebron/plataforma`.
+6. **Testes novos em `arquivamento.test.ts`** (12 testes, fixtures
+   dedicadas — `courseTrilha`/`courseCert`/`coursePercent`/`courseKpi`,
+   independentes do `IDS.course` que o arquivo já arquiva por completo nos
+   blocos de P-6.4b): trilha desbloqueia após arquivar a aula anterior sem
+   progresso; certificado emitido sem exceção ao concluir a última aula
+   não-arquivada de um curso com aula arquivada sem progresso (reproduz o
+   defeito 2 — a aula arquivada tem que estar **sem** progresso para
+   disparar o `RAISE EXCEPTION` do `issue_certificate` antigo: `v_total_
+lessons` cru maior que `v_completed_lessons`); percentual da jornada
+   trava em 100% mesmo com progresso remanescente numa aula arquivada
+   (reproduz o defeito 3 — aqui a aula arquivada precisa ter sido
+   **concluída antes** de arquivar, senão o numerador não infla);
+   `course_stats` bate com o percentual individual do aluno; `enrollInCourse`
+   negado por RLS num curso já arquivado (reaproveita o `IDS.course` que o
+   próprio arquivo arquiva no bloco anterior); `getStudentKpiMetrics().
+activeCourses` cai em 1 ao arquivar um curso dedicado (asserção por
+   delta, não por valor absoluto — banco de dev compartilhado, mesmo
+   cuidado de sessões anteriores).
+
+### Suposições registradas
+
+- `course_stats` não reusa `course_outline()` (ao contrário de
+  `issue_certificate`) porque o painel do instrutor precisa do agregado
+  também para curso em rascunho; replicar o filtro de arquivado à mão em
+  vez de trocar a fonte evita quebrar esse caso.
+- `@hebron/integrations` promovido a dependência declarada de
+  `apps/plataforma` (item 5 acima) — fora da lista de arquivos permitidos,
+  registrado como infra óbvia faltante (G1).
+
+### Baseline verificado
+
+- Migration `0083` aplicada com sucesso (`pnpm --filter @hebron/db
+db:migrate`); reaplicação reporta "Nothing to apply — database is up to
+  date."
+- `pnpm --filter @hebron/plataforma exec tsc --noEmit`: verde
+- `pnpm --filter @hebron/plataforma exec eslint .`: verde
+- `pnpm --filter @hebron/integrations exec tsc --noEmit` / `exec eslint .`:
+  verdes
+- `pnpm --filter @hebron/db exec eslint .`: verde
+- `pnpm --filter @hebron/plataforma exec vitest run`: 63/63 verde (6
+  arquivos — 51 testes pré-existentes inalterados + 12 novos em
+  `arquivamento.test.ts`)
+- `@hebron/auth#typecheck` falha neste checkout por causa alheia a esta
+  sessão (`data-deletion.test.ts`, drift de `bankAccounts.nickname` — já
+  registrado em sessões anteriores); roda via `turbo` porque `apps/
+plataforma` depende de `@hebron/auth`, então os comandos acima foram
+  executados direto por pacote (`pnpm --filter ... exec`), não via
+  `pnpm turbo typecheck`/`lint`.
+- Não testado em navegador (Server Actions/RLS/funções de banco, sem
+  tela nova) — cobertura veio dos testes automatizados acima, que
+  exercitam a RLS e as funções `SECURITY DEFINER` reais.
+
+### Arquivos modificados
+
+- `packages/db/src/migrations/0083_plataforma_arquivamento_funcoes.sql`
+  (novo)
+- `apps/plataforma/src/actions/certificates.ts`
+- `apps/plataforma/src/lib/queries.ts`
+- `packages/integrations/src/plataforma.ts`
+- `apps/plataforma/src/__tests__/arquivamento.test.ts` (estendido)
+- `apps/plataforma/package.json` (dependência `@hebron/integrations`,
+  fora da lista — item 5 acima)
+- `pnpm-lock.yaml` (consequência do item acima)
+- `PROMPTS.md` (critérios de P-6.4b e P-6.11 anotados; critérios de
+  P-6.16 marcados `[x]`)
 - `SESSIONS.md` (esta entrada + linha no índice)

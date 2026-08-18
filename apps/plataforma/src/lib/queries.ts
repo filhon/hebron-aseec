@@ -427,7 +427,10 @@ export async function getSeriesList(actorId: string): Promise<Series[]> {
 
 export async function getCourseCategories(actorId: string): Promise<string[]> {
   const rows = await withAuthenticatedContext({ actorId }, (tx) =>
-    tx.selectDistinct({ category: courses.category }).from(courses),
+    tx
+      .selectDistinct({ category: courses.category })
+      .from(courses)
+      .where(isNull(courses.archivedAt)),
   );
   return rows
     .map((r) => r.category)
@@ -827,27 +830,35 @@ export async function getUserEnrollmentsWithProgress(
     // Total real da trilha via plataforma.course_outline() (P-6.2b) — um
     // SELECT direto em `lessons` aqui contaria só as aulas que a RLS libera
     // para este aluno, inflando o percentual (mesmo defeito de
-    // checkAndIssueCertificate, actions/certificates.ts).
+    // checkAndIssueCertificate, actions/certificates.ts). "Concluídas"
+    // intersecciona progress.lesson_id com os lesson_id da outline (P-6.16)
+    // — nunca mais count(*) de progress por course_id: progresso de aula
+    // arquivada sobrevive ao arquivamento (por design de P-6.4b) e inflaria
+    // o percentual acima de 100 se contado cru.
     const totalsByCourse = new Map<string, number>();
+    const outlineLessonIds: string[] = [];
     for (const courseId of courseIds) {
       const outlineRows = await getCourseOutline(tx, courseId);
       totalsByCourse.set(courseId, outlineRows.length);
+      outlineLessonIds.push(...outlineRows.map((r) => r.lesson_id));
     }
 
-    const completedRows = await tx
-      .select({
-        courseId: progress.courseId,
-        completed: sql<number>`count(*)::int`,
-      })
-      .from(progress)
-      .where(
-        and(
-          eq(progress.userId, actorId),
-          inArray(progress.courseId, courseIds),
-          isNotNull(progress.completedAt),
-        ),
-      )
-      .groupBy(progress.courseId);
+    const completedRows = outlineLessonIds.length
+      ? await tx
+          .select({
+            courseId: progress.courseId,
+            completed: sql<number>`count(*)::int`,
+          })
+          .from(progress)
+          .where(
+            and(
+              eq(progress.userId, actorId),
+              inArray(progress.lessonId, outlineLessonIds),
+              isNotNull(progress.completedAt),
+            ),
+          )
+          .groupBy(progress.courseId)
+      : [];
     const completedByCourse = new Map(
       completedRows.map((r) => [r.courseId, r.completed]),
     );
@@ -1113,7 +1124,13 @@ export async function getLessonForEditor(
     const lessonRows = await tx
       .select()
       .from(lessons)
-      .where(and(eq(lessons.id, lessonId), eq(lessons.courseId, courseId)))
+      .where(
+        and(
+          eq(lessons.id, lessonId),
+          eq(lessons.courseId, courseId),
+          isNull(lessons.archivedAt),
+        ),
+      )
       .limit(1);
     const lessonRow = lessonRows[0];
     if (!lessonRow) return null;
@@ -1209,6 +1226,7 @@ export async function getQuizEditorDataForLesson(
           eq(lessons.id, lessonId),
           eq(lessons.courseId, courseId),
           eq(lessons.type, "quiz"),
+          isNull(lessons.archivedAt),
         ),
       )
       .limit(1);
@@ -1237,7 +1255,11 @@ export async function getQuizEditorDataByQuizId(
       .select()
       .from(lessons)
       .where(
-        and(eq(lessons.id, quizRow.lessonId), eq(lessons.courseId, courseId)),
+        and(
+          eq(lessons.id, quizRow.lessonId),
+          eq(lessons.courseId, courseId),
+          isNull(lessons.archivedAt),
+        ),
       )
       .limit(1);
     const lessonRow = lessonRows[0];

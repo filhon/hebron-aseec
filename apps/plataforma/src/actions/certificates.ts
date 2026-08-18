@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { z } from "zod";
-import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import {
   Document,
   Page,
@@ -52,24 +52,32 @@ export async function checkAndIssueCertificate(
   // Total real da trilha via plataforma.course_outline() (SECURITY DEFINER,
   // 0080_plataforma_course_outline.sql, P-6.2b) — um SELECT direto em
   // `lessons` aqui rodaria sob RLS (lessons_select_enrolled), contando só as
-  // aulas já liberadas para o aluno em vez do curso inteiro.
+  // aulas já liberadas para o aluno em vez do curso inteiro. A outline já
+  // exclui aula/módulo/curso arquivado (0082_plataforma_arquivamento.sql,
+  // P-6.4b) — "concluídas" precisa interseccionar progress.lesson_id com
+  // esse mesmo universo (P-6.16), nunca mais contar progress por
+  // course_id: uma linha de progresso de aula arquivada sobrevive ao
+  // arquivamento (por design) e infla o numerador se contada cru.
   const outlineRows = await tx.execute<{ lesson_id: string }>(
     sql`SELECT lesson_id FROM plataforma.course_outline(${params.courseId}::uuid)`,
   );
+  const total = outlineRows.length;
+  if (total === 0) return null;
+
+  const outlineLessonIds = outlineRows.map((r) => r.lesson_id);
   const [completedRow] = await tx
     .select({ completed: sql<number>`count(*)::int` })
     .from(progress)
     .where(
       and(
-        eq(progress.courseId, params.courseId),
         eq(progress.userId, params.actorId),
         isNotNull(progress.completedAt),
+        inArray(progress.lessonId, outlineLessonIds),
       ),
     );
 
-  const total = outlineRows.length;
   const completed = completedRow?.completed ?? 0;
-  if (total === 0 || completed < total) return null;
+  if (completed < total) return null;
 
   await tx
     .update(enrollments)

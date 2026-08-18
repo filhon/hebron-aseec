@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { db } from "@hebron/db/client";
 import { courses, enrollments } from "@hebron/db/schema";
 
@@ -11,8 +11,11 @@ import { courses, enrollments } from "@hebron/db/schema";
 //
 // totalEnrolled conta alunos distintos (não matrículas) — um aluno com
 // várias matrículas conta uma vez só, coerente com "alunos" como unidade do
-// KPI. activeCourses conta cursos publicados (courses.published), o
-// universo visível a qualquer usuário registrado (BRAIN §6.3). completionRate
+// KPI. activeCourses conta cursos publicados e não arquivados
+// (courses.published AND archived_at IS NULL, P-6.16 — arquivar não
+// despublica, então sem o segundo filtro um curso arquivado continuava
+// somando no KPI), o universo visível a qualquer usuário registrado (BRAIN
+// §6.3). completionRate
 // é a fração de matrículas concluídas (enrollments.completedAt) sobre o
 // total de matrículas, 0 quando não há nenhuma.
 //
@@ -38,7 +41,7 @@ export async function getStudentKpiMetrics(): Promise<StudentKpiMetrics> {
   const [courseRow] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(courses)
-    .where(eq(courses.published, true));
+    .where(and(eq(courses.published, true), isNull(courses.archivedAt)));
 
   const total = enrollmentRow?.total ?? 0;
   const completed = enrollmentRow?.completed ?? 0;
