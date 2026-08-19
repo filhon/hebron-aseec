@@ -275,6 +275,7 @@
 | S-252  | 2026-08-18 | Auditoria: débitos técnicos P-6.6–P-6.15 (Plataforma, Bloco B, 2ª rodada)                                                        | concluido (gera P-6.16 a P-6.19)     |
 | S-253  | 2026-08-18 | P-6.16 — A aula arquivada que ainda tranca a trilha (CORRETIVO)                                                                  | concluido                            |
 | S-254  | 2026-08-19 | P-6.17 — O certificado que some junto com o curso (CORRETIVO)                                                                    | concluido                            |
+| S-255  | 2026-08-19 | P-6.18 — A capa que virou caminho de storage no catálogo (CORRETIVO)                                                             | concluido                            |
 
 ---
 
@@ -12617,7 +12618,12 @@ prompt. Com a mudança de S-05, esse valor agora é um storage path, não uma
 URL, então o card de capa no catálogo (diferente de "Minha jornada", que usa
 `getUserEnrollmentsWithProgress` e já resolve) fica sem imagem até um
 P-9.1b-7b corretivo migrar `searchCourses` para resolver sob demanda também
-— registrado aqui como gap conhecido, não escondido. `course-detail-view.tsx`
+— registrado aqui como gap conhecido, não escondido. **Fechado em P-6.18/
+S-255** (2026-08-19): o "P-9.1b-7b" nunca foi criado como prompt próprio —
+P-6.5b (S-251) reescreveu o catálogo como RSC e herdou o mapeamento cru sem
+fechar o débito; P-6.18 resolve `coverUrl` no mapeamento de `CatalogContent`
+((aluno)/page.tsx) via o mesmo `resolveAssetUrl` (agora exportado de
+`lib/queries.ts`), em vez de migrar `searchCourses`. `course-detail-view.tsx`
 não renderiza `coverImageUrl` (sem banner de capa na página de detalhe),
 então `getCourseBySlug` não precisou de resolução.
 
@@ -23149,3 +23155,76 @@ src/__tests__/arquivamento.test.ts`: verde
 - `apps/plataforma/src/__tests__/arquivamento.test.ts` (estendido)
 - `PROMPTS.md` (critérios de P-6.4b e P-6.8 anotados)
 - `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+## S-255 — P-6.18 — A capa que virou caminho de storage no catálogo (CORRETIVO)
+
+**Prompt:** P-6.18
+**Data:** 2026-08-19
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+Débito registrado e nunca fechado desde S-163 (P-9.1b-7, 2026-07-18): a
+mudança de persistência de capa/anexo de signed URL de 10 anos para storage
+path deixou anotado que o catálogo "fica sem imagem até um P-9.1b-7b
+corretivo migrar `searchCourses` para resolver sob demanda também" — o
+"P-9.1b-7b" nunca existiu como prompt (grep em PROMPTS.md: zero). P-6.5b
+(S-251) depois reescreveu o catálogo como RSC, mas `searchCourses`/
+`lib/queries.ts` ficaram fora da lista de arquivos permitidos daquele prompt
+e o mapeamento herdou o problema: `(aluno)/page.tsx` entregava
+`coverImageUrl: c.coverUrl` — o storage path cru (ex. `"<uuid>/<uuid>.jpg"`)
+— direto para `<img src>` em `CourseCard`, uma requisição relativa quebrada
+que nem caía no fallback de ícone (o campo não era `null`). "Minha jornada"
+(`getUserEnrollmentsWithProgress`) já resolvia certo via `resolveAssetUrl`
+(TTL 1h); o catálogo era o único consumidor restante do path cru como URL.
+
+1. **`resolveAssetUrl` exportada** de `apps/plataforma/src/lib/queries.ts`
+   (antes privada) — mesma função já usada por `getUserEnrollmentsWithProgress`
+   e `getLessonPageData`, sem duplicar lógica de assinatura.
+2. **`CatalogContent`** (`app/(aluno)/page.tsx`) passa a resolver `coverUrl`
+   → signed URL via `resolveAssetUrl("plataforma-capas", c.coverUrl)` para
+   cada curso publicado, antes de entregar ao `CourseCatalog` — o valor
+   resolvido nunca é persistido (só existe no mapeamento da resposta, o path
+   cru continua sendo o que vive em `courses.cover_url` e o que
+   `CourseForm` reenvia ao salvar).
+3. **Linha legada** (signed URL de 10 anos gravada antes de S-163):
+   `createSignedUrl` falha para um valor que não é um path do bucket —
+   `resolveAssetUrl` já degradava para `null` nesse caso (mesmo
+   comportamento de S-163), agora também alcança o catálogo — cai no
+   fallback de ícone de `CourseCard`, nunca em imagem quebrada.
+
+### Suposições registradas
+
+- Nenhuma suposição de regra de negócio nova — correção estritamente técnica
+  (resolução de URL no ponto de entrega), sem alterar o que é persistido nem
+  o comportamento de busca/filtro do catálogo.
+
+### Baseline verificado
+
+- `pnpm typecheck` (dentro de `apps/plataforma`): verde
+- `pnpm lint` (dentro de `apps/plataforma`): verde
+- `pnpm turbo lint typecheck` no monorepo: falha isolada em
+  `@hebron/auth#typecheck` (`data-deletion.test.ts`, drift pré-existente de
+  `bankAccounts.nickname` — ver S-241/nota de memória, não relacionado a este
+  diff)
+- `pnpm exec vitest run` (`apps/plataforma`): 6 arquivos, 68/68 verde, sem
+  regressão (suíte não cobre o catálogo/`resolveAssetUrl` diretamente —
+  cobertura da mudança em si veio de lint/typecheck e leitura cuidadosa do
+  mapeamento; `resolveAssetUrl` é reuso direto da função já validada por
+  `getUserEnrollmentsWithProgress`/`getLessonPageData`, S-163, sem lógica
+  nova além do ponto de chamada)
+- Não testado em navegador nesta sessão (Server Component, sem tela nova
+  para clicar — a mudança é só a resolução de URL no mapeamento existente).
+
+### Arquivos modificados
+
+- `apps/plataforma/src/lib/queries.ts` (`resolveAssetUrl` exportada)
+- `apps/plataforma/src/app/(aluno)/page.tsx` (resolve `coverUrl` no
+  mapeamento de `CatalogContent`)
+- `PROMPTS.md` (critérios de P-6.18 marcados `[x]`; critério de P-9.1b-7
+  anotado com o fechamento; débito de S-163 marcado como resolvido)
+- `SESSIONS.md` (esta entrada + linha no índice + nota de fechamento em
+  S-163)

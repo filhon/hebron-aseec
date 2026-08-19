@@ -4,6 +4,7 @@ import type { Course } from "@hebron/types/plataforma";
 import { CourseCatalog } from "../../components/course-catalog";
 import { CourseCardSkeleton } from "../../components/course-card-skeleton";
 import { searchCourses } from "../../actions/courses";
+import { resolveAssetUrl } from "../../lib/queries";
 
 function CatalogSkeleton() {
   return (
@@ -34,23 +35,34 @@ async function CatalogContent() {
   // instrutor não existe na action (BRAIN §6.3 só pede título/série/categoria)
   // — mantido em CourseCatalog por cima do resultado, como já era em Bloco A
   // (S-105/S-108).
-  const publishedCourses: Course[] = result.data.courses
-    .filter((c) => c.published)
-    .map((c) => ({
-      id: c.id,
-      title: c.title,
-      slug: c.slug,
-      description: c.description,
-      coverImageUrl: c.coverUrl,
-      category: c.category,
-      instructorId: c.instructorId,
-      instructorName: c.instructorName,
-      seriesId: c.seriesId,
-      seriesName: c.seriesName,
-      isPublished: c.published,
-      createdAt: c.createdAt,
-      updatedAt: c.updatedAt,
-    }));
+  //
+  // c.coverUrl é o storage path cru (courses.cover_url, S-163) — nunca uma
+  // URL renderizável. Resolvido aqui via resolveAssetUrl (mesma função de
+  // getUserEnrollmentsWithProgress, lib/queries.ts) com TTL curto, só para a
+  // entrega ao componente; o path cru continua sendo o que vive no banco
+  // (P-6.18, fecha o débito de S-163/"P-9.1b-7b"). Linha legada (signed URL
+  // de 10 anos gravada antes de S-163) não é um path do bucket — createSignedUrl
+  // falha e resolveAssetUrl degrada para null, caindo no fallback de ícone de
+  // CourseCard.
+  const publishedCourses: Course[] = await Promise.all(
+    result.data.courses
+      .filter((c) => c.published)
+      .map(async (c) => ({
+        id: c.id,
+        title: c.title,
+        slug: c.slug,
+        description: c.description,
+        coverImageUrl: await resolveAssetUrl("plataforma-capas", c.coverUrl),
+        category: c.category,
+        instructorId: c.instructorId,
+        instructorName: c.instructorName,
+        seriesId: c.seriesId,
+        seriesName: c.seriesName,
+        isPublished: c.published,
+        createdAt: c.createdAt,
+        updatedAt: c.updatedAt,
+      })),
+  );
 
   return <CourseCatalog courses={publishedCourses} />;
 }

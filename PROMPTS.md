@@ -8595,11 +8595,13 @@ Débito **registrado e nunca fechado**: S-163 (P-9.1b-7) trocou a persistência 
 
 **Critérios de aceite:**
 
-- [ ] Card do catálogo com capa recém-enviada exibe a imagem (signed URL http(s), TTL ≤ 1h — guarda de `security-audit.test.ts` sem regressão)
-- [ ] Nenhum storage path cru chega a `src` de `<img>` no catálogo (verificação no mapeamento; linha legada degrada para fallback de ícone, sem broken image)
-- [ ] Nenhum valor resolvido é persistido (grep: `coverImageUrl` gravado continua sendo o path)
-- [ ] Lint passa · Types passam
-- [ ] Registrar em SESSIONS.md
+- [x] Card do catálogo com capa recém-enviada exibe a imagem (signed URL http(s), TTL ≤ 1h — guarda de `security-audit.test.ts` sem regressão)
+- [x] Nenhum storage path cru chega a `src` de `<img>` no catálogo (verificação no mapeamento; linha legada degrada para fallback de ícone, sem broken image)
+- [x] Nenhum valor resolvido é persistido (grep: `coverImageUrl` gravado continua sendo o path)
+- [x] Lint passa · Types passam
+- [x] Registrar em SESSIONS.md
+
+**Fechamento:** débito de S-163 (P-9.1b-7) marcado como resolvido — a referência a "P-9.1b-7b" nesta seção e em SESSIONS.md (S-163/S-255) passa a apontar para este prompt. Ver também o critério de P-9.1b-7 anotado abaixo.
 
 ---
 
@@ -10395,7 +10397,13 @@ Não alterar buckets nem policies de storage (regra original de P-9.1b).
 
 - [x] Grep limpo de `db` cru nos 3 `lib/queries.ts` (flats, plataforma, radio)
 - [x] URL de leitura da plataforma com TTL ≤1h; resolução sob demanda, sem URL
-      de longa duração persistida/propagada
+      de longa duração persistida/propagada — débito registrado nesta mesma
+      sessão (S-163): o catálogo (`searchCourses`) ficou fora dos arquivos
+      permitidos e seguiu entregando o storage path cru até o corretivo
+      "P-9.1b-7b" ser criado; nunca foi (grep zero). Fechado em **P-6.18**
+      (S-255, 2026-08-19): `(aluno)/page.tsx` resolve `coverUrl` via
+      `resolveAssetUrl` (exportado de `lib/queries.ts`) antes de entregar ao
+      `CourseCatalog`.
 - [x] `security-audit.test.ts` estendido (guarda de TTL da plataforma) e verde
 - [x] Lint passa · Types passam · SESSIONS.md atualizado
 - [x] **Fechamento de P-9.1b:** com P-9.1b-1..7 concluídos, os achados S-02 e

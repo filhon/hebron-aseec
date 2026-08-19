@@ -316,17 +316,19 @@ function mapOutlineLesson(
 // 10 anos), assinado aqui com TTL curto no exato momento em que a tela que
 // efetivamente exibe a imagem/anexo é montada — nunca persistido. Usado só
 // onde a capa/anexo é de fato renderizado como <img>/<a> (CourseCard via
-// getUserEnrollmentsWithProgress; download da aula via getLessonPageData) —
-// course-detail-view.tsx não tem banner de capa, e as leituras do editor
-// (getCourseForEditor, getLessonForEditor, buildQuizEditorData) mantêm o path
-// cru: CourseForm/LessonForm reenviam esse mesmo valor ao salvar sem alterar
-// a capa/anexo, e persistir uma URL assinada ali reproduziria o bug original.
+// getUserEnrollmentsWithProgress e via CatalogContent, (aluno)/page.tsx,
+// P-6.18; download da aula via getLessonPageData) — course-detail-view.tsx
+// não tem banner de capa, e as leituras do editor (getCourseForEditor,
+// getLessonForEditor, buildQuizEditorData) mantêm o path cru: CourseForm/
+// LessonForm reenviam esse mesmo valor ao salvar sem alterar a capa/anexo, e
+// persistir uma URL assinada ali reproduziria o bug original. Exportada
+// (P-6.18) para o mapeamento do catálogo, que fica fora deste arquivo.
 // Linhas gravadas antes desta correção ainda guardam a URL legada de 10 anos;
 // `createSignedUrl` falha para um valor que não é um path do bucket e
 // degrada para null (sem capa/anexo) até o instrutor reenviar o arquivo.
 const ASSET_URL_EXPIRES_IN_SECONDS = 60 * 60;
 
-async function resolveAssetUrl(
+export async function resolveAssetUrl(
   bucket: "plataforma-capas" | "plataforma-anexos",
   storagePath: string | null,
 ): Promise<string | null> {
