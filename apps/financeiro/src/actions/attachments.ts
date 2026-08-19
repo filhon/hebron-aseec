@@ -2,39 +2,10 @@
 
 import { z } from "zod";
 import { and, desc, eq } from "drizzle-orm";
-import { createClient } from "@supabase/supabase-js";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { financialAttachments } from "@hebron/db/schema";
 import { colaboradorAction } from "../lib/safe-action";
-
-function getSupabaseAdmin() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error("Variáveis Supabase não configuradas");
-  return createClient(url, key, { auth: { persistSession: false } });
-}
-
-// Expiração curta (BRAIN §5) — o link é gerado sob demanda no clique de
-// "Ver comprovante" ou no preenchimento por OCR (P-3.8c), não persistido em
-// lugar nenhum.
-const READ_URL_EXPIRES_IN_SECONDS = 300;
-
-// Exportada (função async — único jeito de exportar algo de um arquivo
-// "use server" além de safe-actions) para o OCR (actions/ocr.ts) reusar a
-// mesma geração de signed URL do bucket financeiro-recibos, em vez de
-// duplicar a leitura de SUPABASE_SERVICE_ROLE_KEY.
-export async function createReceiptSignedUrl(path: string): Promise<string> {
-  const supabase = getSupabaseAdmin();
-  const { data, error } = await supabase.storage
-    .from("financeiro-recibos")
-    .createSignedUrl(path, READ_URL_EXPIRES_IN_SECONDS);
-
-  if (error || !data) {
-    throw new Error("Não foi possível gerar o link do comprovante");
-  }
-
-  return data.signedUrl;
-}
+import { createReceiptSignedUrl } from "../lib/storage";
 
 const getAttachmentUrlSchema = z.union([
   z.object({ attachmentId: z.string().uuid() }),

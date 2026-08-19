@@ -164,6 +164,11 @@ export const auditActionEnum = adminSchema.enum("audit_action", [
   "data.deletion_executed",
   "data.deletion_rejected",
   "pii.accessed",
+  // PACOTE 2 (AUDIT/04-BACKLOG-CORRECAO.md, FLX-001) — falha da integração
+  // cross-app Projetos -> Financeiro (onProjectApproved) precisa de rastro
+  // observável além do console.error, added via ALTER TYPE in
+  // 0085_financeiro_integration_failed_audit_action.sql
+  "financeiro.integration.failed",
 ]);
 
 export const meetingTypeEnum = adminSchema.enum("meeting_type", [

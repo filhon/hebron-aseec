@@ -278,6 +278,7 @@
 | S-255  | 2026-08-19 | P-6.18 — A capa que virou caminho de storage no catálogo (CORRETIVO)                                                             | concluido                            |
 | S-256  | 2026-08-19 | P-6.19 — A série que ninguém pode criar e a equipe sem porta na sidebar (CORRETIVO)                                              | concluido                            |
 | S-257  | 2026-08-19 | AUDIT PACOTE 1 — LGPD: fechar o direito de exclusão (CORRETIVO)                                                                  | concluido                            |
+| S-258  | 2026-08-19 | AUDIT PACOTE 2 — As costuras que perdem dinheiro e registros (CORRETIVO)                                                         | parcial (D2-001 adiado)              |
 
 ---
 
@@ -23513,3 +23514,151 @@ apenas campos alterados`, que usava `name` como chave-exemplo genérica
 - `packages/db/src/__tests__/anonymization.test.ts` (novo teste do
   caminho de falha de D1-005, com `dbHandle` de teste)
 - `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+## S-258 — AUDIT PACOTE 2 — As costuras que perdem dinheiro e registros (CORRETIVO)
+
+**Prompt:** `AUDIT/04-BACKLOG-CORRECAO.md` § PACOTE 2
+**Data:** 2026-08-19
+**Modelo:** claude-sonnet-5
+**Status:** parcial — `FLX-001` e `D1-002` concluídos; `D2-001` adiado (ver
+abaixo) para uma sessão própria.
+
+### Resumo
+
+Três achados independentes do PACOTE 2. Dois fechados; o terceiro (`D2-001`)
+revelou, durante a implementação, um problema estrutural maior do que o
+achado original e foi revertido do banco de dev antes de terminar a sessão —
+decisão confirmada com o Filipe.
+
+1. **`[FLX-001]` (fechado).** `onProjectApproved` rodava fogo-e-esquece nos
+   dois call sites (`apps/projetos/src/actions/projects.ts:744`,
+   `packages/jobs/src/crons/projetos.ts:281`), violando `BRAIN.md:559-563`.
+   Agora `await` + `try/catch` nos dois, com o mesmo padrão de log
+   estruturado `cross_app_integration_failure` das outras quatro
+   integrações do ecossistema. Falha passou a gerar rastro observável de
+   verdade, não só `console.error`:
+   - Novo audit action `financeiro.integration.failed`
+     (`packages/db/src/schema/admin.ts` + migration
+     `0085_financeiro_integration_failed_audit_action.sql`).
+   - Nova `notifyProjectApprovalFailure` (`packages/db/src/projetos-
+approval.ts`) — grava o audit (`criticality: "best_effort"`, nunca
+     mascara o erro original) e notifica in-app todo `super_admin` ativo.
+     Reusada pelos dois call sites.
+   - Teste novo em `projetos-approval.test.ts` cobrindo audit + notificação.
+2. **`[D1-002]` (fechado).** `createReceiptSignedUrl` era exportada de
+   `apps/financeiro/src/actions/attachments.ts` (arquivo `"use server"`),
+   virando Server Action pública sem nenhuma checagem antes de assinar uma
+   URL do bucket de comprovantes fiscais com service role. Movida para
+   `apps/financeiro/src/lib/storage.ts` (sem `"use server"`) — só alcançável
+   agora via `getAttachmentUrl` (`colaboradorAction`) e
+   `extractNfFromAttachment`, que já faziam o gate de sessão+papel.
+   Inventário do PR (busca por função async exportada de arquivo
+   `"use server"` acessando service role sem gate, monorepo inteiro): zero
+   ocorrências restantes.
+3. **`[D2-001]` (adiado, revertido).** Ver seção própria abaixo.
+
+### `D2-001` — por que foi revertido
+
+O achado pedia trocar `public.users.id → auth.users(id)` de `CASCADE` para
+`RESTRICT`, mais revisão das 17 tabelas filhas. Escrevi e apliquei a
+migration no banco de dev compartilhado, verifiquei fim-a-fim que
+`DELETE FROM auth.users` de um usuário com `role_assignments` passa a falhar
+por FK (exatamente o critério de aceite) — e então, ao rodar a suíte de
+teste, descobri dois fatos que mudam o problema:
+
+- **A FK `public.users → auth.users` não existe hoje**, em nenhum ambiente
+  (confirmado via `pg_constraint` — não é uma troca de `CASCADE` para
+  `RESTRICT`, é a _primeira vez_ que essa FK seria criada). Sem ela,
+  `deleteTestAuthUser` (`packages/auth/src/testing.ts`) só apagava
+  `auth.users` e nunca tocava `public.users` — **542 linhas órfãs**
+  acumuladas no banco de dev compartilhado (mesmo achado do memory
+  `project_delete_test_auth_user_no_cascade`, S-244).
+- **84 arquivos de teste** (`grep -rl "insert(users)" --include="*.test.ts"`
+  em `apps/` e `packages/`) inserem fixtures em `public.users` com UUIDs
+  sintéticos que nunca foram usuários reais do Supabase Auth. Criar a FK de
+  verdade quebra TODOS eles imediatamente — não só no hard-delete, no
+  próprio `INSERT` da fixture (`NOT VALID` só pula a validação retroativa
+  das 542 linhas já existentes; toda operação nova, incluindo um `INSERT`
+  comum, respeita a constraint).
+
+Apliquei a migration, confirmei viva no banco (`DELETE FROM auth.users`
+falhando por FK como esperado) e então revertida para o estado original
+antes de terminar a sessão, com aprovação do Filipe — a alternativa era
+deixar o banco de dev compartilhado quebrado para qualquer sessão/teste
+subsequente até uma correção completa do padrão de fixtures, o que é maior
+que este pacote sozinho. `public.users`, `role_assignments`,
+`designations`, `consents`, `data_deletion_requests`,
+`plataforma.certificates` e `radio.term_acceptances` estão de volta ao
+`CASCADE`/sem-FK originais — confirmado via `pg_constraint` idêntico ao
+estado pré-sessão.
+
+**Correção que sobreviveu à reversão, por padronizar sozinha:**
+`deleteTestAuthUser` agora deleta explicitamente `role_assignments`,
+`designations`, `consents`, `data_deletion_requests`, `certificates`,
+`term_acceptances` e `public.users` antes de chamar
+`admin.auth.admin.deleteUser` — sem a FK isso é redundante com o `CASCADE`
+de hoje, mas corrige de verdade o vazamento de órfãos documentado (era
+puramente `admin.auth.admin.deleteUser` sem tocar `public.users`) e já
+deixa o helper pronto para quando `D2-001` for retomado.
+
+**Como retomar `D2-001`:** a migration certa é curta (ver histórico desta
+sessão) — o trabalho real é decidir e implementar como o padrão de fixture
+de teste passa a coexistir com uma FK real para `auth.users`: opção A,
+criar um `auth.users` real e barato (INSERT direto, sem round-trip do
+Admin API) num helper de fixture compartilhado; opção B, alguma outra
+forma de isolar os ~84 arquivos da constraint. Vale também considerar
+limpar as 542 linhas órfãs do banco de dev antes de rodar
+`VALIDATE CONSTRAINT` (a migration usaria `NOT VALID` para não falhar por
+causa delas, mas a constraint fica formalmente não-validada até alguém
+limpar e validar).
+
+### Verificação
+
+- `pnpm turbo lint typecheck` nos pacotes tocados (`@hebron/db`,
+  `@hebron/jobs`, `@hebron/auth`, `@hebron/financeiro`, `@hebron/projetos`):
+  verde. A única falha de `typecheck` (`@hebron/auth` e, transitivamente,
+  `@hebron/financeiro`/`@hebron/projetos`) é o drift pré-existente e já
+  documentado do fixture `nickname` em `bankAccounts`
+  (`data-deletion.test.ts:89`, `integrations-financeiro-execution.test.ts:95`
+  — memory `project_bankaccounts_nickname_test_drift`), não tocado por esta
+  sessão.
+- `grep` por `on[A-Z]\w+\(.*\)\.catch\(` em `apps/` e `packages/jobs/`:
+  vazio.
+- `pnpm vitest run` (banco de dev real): `projetos-approval.test.ts` (3/3,
+  incluindo o teste novo de `notifyProjectApprovalFailure`),
+  `apps/financeiro/attachments.test.ts` (6/6, cobre o novo
+  `getAttachmentUrl` via `lib/storage.ts`), `apps/projetos/state-
+machine.test.ts` (28/28, cobre `transitionProjectStage` →
+  `onProjectApproved`), `packages/jobs/projetos-homologacao.test.ts` (2/2),
+  `apps/financeiro/session-real.test.ts` (1/1, exercita o
+  `deleteTestAuthUser` corrigido em `afterAll` sem falhar).
+- Estado do banco de dev confirmado idêntico ao pré-sessão via
+  `pg_constraint` direto, após a reversão de `D2-001`.
+
+### Arquivos modificados
+
+- `apps/projetos/src/actions/projects.ts` (`onProjectApproved` awaited +
+  notificação de falha)
+- `packages/jobs/src/crons/projetos.ts` (idem, cron de homologação)
+- `packages/db/src/projetos-approval.ts` (`notifyProjectApprovalFailure`)
+- `packages/db/src/schema/admin.ts` (audit action
+  `financeiro.integration.failed`)
+- `packages/db/src/migrations/0085_financeiro_integration_failed_audit_action.sql`
+  (novo)
+- `packages/db/src/__tests__/projetos-approval.test.ts` (novo describe de
+  `notifyProjectApprovalFailure`)
+- `apps/financeiro/src/lib/storage.ts` (novo — `createReceiptSignedUrl` sem
+  `"use server"`)
+- `apps/financeiro/src/actions/attachments.ts` (importa de `lib/storage`)
+- `apps/financeiro/src/actions/ocr.ts` (idem)
+- `packages/auth/src/testing.ts` (`deleteTestAuthUser` limpa
+  `public.users`/filhas antes do `auth.users`)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+**Não modificado (revertido antes do fim da sessão):**
+`packages/db/src/schema/public.ts`, `packages/db/src/schema/plataforma.ts`,
+`packages/db/src/schema/radio.ts` — as mudanças de `onDelete` para
+`"restrict"` foram desfeitas junto com a reversão da migration de `D2-001`.
+Nenhuma migration de `D2-001` sobrou no repositório.

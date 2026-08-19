@@ -1,9 +1,12 @@
-import { eq } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "./client";
 import { costCenters, payables } from "./schema/financeiro";
 import { paymentSchedules, projects } from "./schema/projetos";
+import { roleAssignments, users } from "./schema/public";
 import { logAudit } from "./audit";
 import { getSystemActorId } from "./system-actor";
+import { makeNotificationInserter } from "./notifications";
+import { createNotification } from "@hebron/email/types";
 
 /**
  * Efeitos colaterais de um projeto entrar em stage "aprovado" — extraído de
@@ -167,4 +170,68 @@ export async function onProjectApproved(projectId: string): Promise<void> {
       );
     }
   });
+}
+
+// ---------------------------------------------------------------------------
+// notifyProjectApprovalFailure — chamada pelos dois call sites de
+// onProjectApproved (apps/projetos/src/actions/projects.ts e
+// packages/jobs/src/crons/projetos.ts, PACOTE 2 / FLX-001) quando a
+// integração falha. Um projeto aprovado sem centro de custo/payables é
+// intervenção humana obrigatória — a transição de estágio já foi commitada
+// e não é revertida por isso, mas ninguém pode ficar sem saber que o
+// dinheiro do projeto não foi provisionado. Best-effort (Promise.allSettled
+// + audit "best_effort"): a notificação da falha não pode ela mesma travar
+// o chamador nem mascarar o erro original.
+// ---------------------------------------------------------------------------
+
+export async function notifyProjectApprovalFailure(
+  projectId: string,
+  errorMessage: string,
+): Promise<void> {
+  const actorId = await getSystemActorId();
+
+  await logAudit({
+    actorId,
+    action: "financeiro.integration.failed",
+    entity: "project",
+    entityId: projectId,
+    diff: {
+      integration: "onProjectApproved",
+      error: errorMessage,
+    },
+    criticality: "best_effort",
+  });
+
+  const admins = await db
+    .select({ id: users.id, fullName: users.fullName, email: users.email })
+    .from(users)
+    .innerJoin(roleAssignments, eq(roleAssignments.userId, users.id))
+    .where(
+      and(
+        inArray(roleAssignments.role, ["super_admin"]),
+        isNull(roleAssignments.revokedAt),
+        isNull(users.suspendedAt),
+      ),
+    );
+
+  const title = "Integração financeira falhou";
+  const body =
+    "Um projeto foi aprovado, mas o centro de custo e os pagamentos não foram criados automaticamente. Verifique e crie manualmente se necessário.";
+  const href = `/pipeline/${projectId}`;
+
+  await Promise.allSettled(
+    admins.map((admin) =>
+      createNotification({
+        insert: makeNotificationInserter(),
+        data: {
+          userId: admin.id,
+          channel: "in_app",
+          type: "financeiro.integration.failed",
+          title,
+          body,
+          payload: { module: "projetos", projectId, href },
+        },
+      }),
+    ),
+  );
 }

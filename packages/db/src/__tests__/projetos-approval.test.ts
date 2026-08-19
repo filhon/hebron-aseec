@@ -14,13 +14,16 @@ import { users, roleAssignments } from "../schema/public";
 import { organizations, projects, paymentSchedules } from "../schema/projetos";
 import { costCenters, payables } from "../schema/financeiro";
 import { auditLog } from "../schema/admin";
+import { notifications } from "../schema/notifications";
 import {
   generatePaymentSchedule,
   onProjectApproved,
+  notifyProjectApprovalFailure,
 } from "../projetos-approval";
 
 const IDS = {
   submitter: "dbaa0000-0000-0000-0000-000000000001",
+  admin: "dbaa0000-0000-0000-0000-000000000002",
   org: "dbbb0000-0000-0000-0000-000000000001",
   project: "dbcc0000-0000-0000-0000-000000000001",
 };
@@ -37,6 +40,18 @@ beforeAll(async () => {
   await db
     .insert(roleAssignments)
     .values({ userId: IDS.submitter, role: "submissor" })
+    .onConflictDoNothing();
+  await db
+    .insert(users)
+    .values({
+      id: IDS.admin,
+      email: "approval-admin@test.hebron",
+      fullName: "Approval Admin",
+    })
+    .onConflictDoNothing();
+  await db
+    .insert(roleAssignments)
+    .values({ userId: IDS.admin, role: "super_admin" })
     .onConflictDoNothing();
   await db
     .insert(organizations)
@@ -90,10 +105,14 @@ afterAll(async () => {
   await db.delete(costCenters).where(eq(costCenters.projectId, IDS.project));
   await db.delete(projects).where(eq(projects.id, IDS.project));
   await db.delete(organizations).where(eq(organizations.id, IDS.org));
+  await db.delete(notifications).where(eq(notifications.userId, IDS.admin));
+  await db.delete(auditLog).where(eq(auditLog.entityId, IDS.project));
   await db
     .delete(roleAssignments)
     .where(eq(roleAssignments.userId, IDS.submitter));
+  await db.delete(roleAssignments).where(eq(roleAssignments.userId, IDS.admin));
   await db.delete(users).where(eq(users.id, IDS.submitter));
+  await db.delete(users).where(eq(users.id, IDS.admin));
 });
 
 describe("onProjectApproved", () => {
@@ -147,5 +166,39 @@ describe("onProjectApproved", () => {
       .from(payables)
       .where(eq(payables.costCenterId, costCenter.id));
     expect(createdPayables.length).toBe(3);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// notifyProjectApprovalFailure — PACOTE 2 (AUDIT/04-BACKLOG-CORRECAO.md,
+// FLX-001). Cobre o critério "falha de onProjectApproved gera notificação
+// para super_admin" e "deixa rastro observável, não só console.error": os
+// dois call sites (apps/projetos/actions/projects.ts,
+// packages/jobs/crons/projetos.ts) chamam esta função dentro do catch —
+// aqui testamos a própria função, que é a peça exportada e reusada.
+// ---------------------------------------------------------------------------
+describe("notifyProjectApprovalFailure", () => {
+  it("audita financeiro.integration.failed e notifica todo super_admin", async () => {
+    await notifyProjectApprovalFailure(IDS.project, "erro simulado de teste");
+
+    const audits = await db
+      .select()
+      .from(auditLog)
+      .where(eq(auditLog.entityId, IDS.project));
+    const failureAudit = audits.find(
+      (a) => a.action === "financeiro.integration.failed",
+    );
+    expect(failureAudit).toBeTruthy();
+    expect(JSON.stringify(failureAudit?.diff)).toContain(
+      "erro simulado de teste",
+    );
+
+    const notified = await db
+      .select()
+      .from(notifications)
+      .where(eq(notifications.userId, IDS.admin));
+    expect(
+      notified.some((n) => n.type === "financeiro.integration.failed"),
+    ).toBe(true);
   });
 });

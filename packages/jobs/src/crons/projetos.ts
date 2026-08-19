@@ -11,6 +11,7 @@ import {
 import {
   generatePaymentSchedule,
   onProjectApproved,
+  notifyProjectApprovalFailure,
 } from "@hebron/db/projetos-approval";
 import { getSystemActorId } from "@hebron/db/system-actor";
 import { logAudit } from "@hebron/db/audit";
@@ -278,9 +279,24 @@ export async function runHomologacaoAutoApprove(): Promise<{
     if (updated.parcelas && updated.meses && updated.budgetTotal) {
       await generatePaymentSchedule(updated);
     }
-    onProjectApproved(project.id).catch((err: unknown) =>
-      console.error("[jobs/projetos] onProjectApproved failed:", err),
-    );
+    // Aguardada (nunca fire-and-forget, BRAIN.md:559-563) — mesmo tratamento
+    // do call site manual em apps/projetos/src/actions/projects.ts
+    // (PACOTE 2 / FLX-001).
+    try {
+      await onProjectApproved(project.id);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      console.error(
+        JSON.stringify({
+          event: "cross_app_integration_failure",
+          integration: "financeiro.onProjectApproved",
+          caller: "jobs/crons/projetos.ts::homologacaoAutoApproveCron",
+          projectId: project.id,
+          message,
+        }),
+      );
+      await notifyProjectApprovalFailure(project.id, message);
+    }
 
     await logAudit({
       actorId,

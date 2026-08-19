@@ -51,6 +51,7 @@ import { logProjectAudit, computeDiff } from "../lib/audit";
 import {
   generatePaymentSchedule,
   onProjectApproved,
+  notifyProjectApprovalFailure,
 } from "@hebron/db/projetos-approval";
 import { onProjectSubmitted } from "@hebron/integrations/projetos-tarefas";
 import { checkOrganizationBudget } from "@hebron/integrations/projetos";
@@ -740,10 +741,26 @@ export const transitionProjectStage = diretorAction
     ) {
       await generatePaymentSchedule(afterProject);
 
-      // Cross-app: criar centro de custo no módulo financeiro
-      onProjectApproved(parsedInput.projectId).catch((err) =>
-        console.error("[projetos/approve] financeiro integration failed:", err),
-      );
+      // Cross-app: criar centro de custo no módulo financeiro. Aguardada
+      // (nunca fire-and-forget, BRAIN.md:559-563) — a transição de estágio
+      // já foi commitada acima e não é revertida por esta falha, mas o
+      // super_admin precisa ser avisado: projeto aprovado sem payables
+      // exige intervenção humana (PACOTE 2 / FLX-001).
+      try {
+        await onProjectApproved(parsedInput.projectId);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(
+          JSON.stringify({
+            event: "cross_app_integration_failure",
+            integration: "financeiro.onProjectApproved",
+            caller: "projetos/actions/projects.ts::transitionProjectStage",
+            projectId: parsedInput.projectId,
+            message,
+          }),
+        );
+        await notifyProjectApprovalFailure(parsedInput.projectId, message);
+      }
     }
 
     // When entering homologacao: notify submissor (7-day window)

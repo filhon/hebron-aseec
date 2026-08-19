@@ -82,12 +82,12 @@ Fechar as três perdas: a integração financeira passa a ser aguardada e observ
 
 ### Critérios de aceite
 
-- [ ] Nenhuma integração cross-app de mutação roda sem `await` — grep por `on[A-Z]\w+\(.*\)\.catch\(` em `apps/` e `packages/jobs/` retorna vazio
-- [ ] Falha de `onProjectApproved` gera notificação para super_admin (projeto aprovado sem payables exige intervenção humana)
-- [ ] Teste: aprovar projeto com integração falhando deixa rastro observável, não só `console.error`
-- [ ] `DELETE FROM auth.users` de um usuário com certificado/consentimento/papel **falha** por FK
-- [ ] Nenhuma função exportada de arquivo `"use server"` acessa service role sem gate — inventário no PR
-- [ ] Lint passa · Types passam
+- [x] Nenhuma integração cross-app de mutação roda sem `await` — grep por `on[A-Z]\w+\(.*\)\.catch\(` em `apps/` e `packages/jobs/` retorna vazio
+- [x] Falha de `onProjectApproved` gera notificação para super_admin (projeto aprovado sem payables exige intervenção humana)
+- [x] Teste: aprovar projeto com integração falhando deixa rastro observável, não só `console.error`
+- [ ] `DELETE FROM auth.users` de um usuário com certificado/consentimento/papel **falha** por FK — **ADIADO (S-258).** Migration escrita, aplicada e verificada fim-a-fim contra o banco de dev (funcionava), depois **revertida**: `public.users → auth.users` não tem FK nenhuma hoje (confirmado via `pg_constraint`), e 84 arquivos de teste inserem fixtures em `public.users` com UUIDs sintéticos sem `auth.users` correspondente — criar a FK quebra o `INSERT` da fixture, não só o hard-delete. Requer decidir o padrão de fixture de teste antes de retomar (ver S-258 em `SESSIONS.md`). `deleteTestAuthUser` (`packages/auth/src/testing.ts`) já foi corrigida nesta sessão para não vazar `public.users` órfão, independente da FK.
+- [x] Nenhuma função exportada de arquivo `"use server"` acessa service role sem gate — inventário no PR
+- [x] Lint passa · Types passam
 
 ---
 

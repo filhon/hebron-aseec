@@ -8,7 +8,7 @@ import {
 import { extractNfData } from "@hebron/ai/financeiro/ocr";
 import { colaboradorAction } from "../lib/safe-action";
 import { logFinanceiroAudit } from "../lib/audit";
-import { createReceiptSignedUrl } from "./attachments";
+import { createReceiptSignedUrl } from "../lib/storage";
 
 // Leitura automática só funciona sobre imagem (GPT-4.1 Vision) — PDF/outros
 // formatos aceitos pelo upload de comprovante não são suportados aqui.
