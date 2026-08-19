@@ -276,6 +276,7 @@
 | S-253  | 2026-08-18 | P-6.16 — A aula arquivada que ainda tranca a trilha (CORRETIVO)                                                                  | concluido                            |
 | S-254  | 2026-08-19 | P-6.17 — O certificado que some junto com o curso (CORRETIVO)                                                                    | concluido                            |
 | S-255  | 2026-08-19 | P-6.18 — A capa que virou caminho de storage no catálogo (CORRETIVO)                                                             | concluido                            |
+| S-256  | 2026-08-19 | P-6.19 — A série que ninguém pode criar e a equipe sem porta na sidebar (CORRETIVO)                                              | concluido                            |
 
 ---
 
@@ -23228,3 +23229,127 @@ que nem caía no fallback de ícone (o campo não era `null`). "Minha jornada"
   anotado com o fechamento; débito de S-163 marcado como resolvido)
 - `SESSIONS.md` (esta entrada + linha no índice + nota de fechamento em
   S-163)
+
+---
+
+## S-256 — P-6.19 — A série que ninguém pode criar e a equipe sem porta na sidebar (CORRETIVO)
+
+**Prompt:** P-6.19
+**Data:** 2026-08-19
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+Dois gaps irmãos do achado que gerou P-6.13 (S-113 — dado sem porta de
+entrada), levantados na 2ª auditoria de débitos técnicos do Bloco B
+(S-252):
+
+1. **Série era feature inerte.** `plataforma.series` existe desde P-6.6
+   (PATCH-024), a RLS `series_mutate_staff` (0020) libera CRUD a
+   super_admin/instrutor desde P-6.7, e `seriesSchema` está em
+   `@hebron/validators` desde o Bloco A — mas órfão, zero consumidores.
+   Nenhuma action jamais escreveu na tabela; o select "Série" do
+   `CourseForm` e o filtro de série do catálogo ficavam vazios sem INSERT
+   manual no banco em qualquer instalação nova.
+2. **`/instrutor/equipe` sem link.** Débito registrado em S-118 (P-6.13) e
+   nunca resolvido: `instrutor/shell.tsx` não estava na lista de arquivos
+   permitidos daquele prompt, então a sidebar do instrutor só tinha
+   "Painel" e "Novo curso" — a tela de gestão de instrutores só era
+   alcançável por URL direta.
+
+Fechado seguindo o precedente direto de P-6.13 (mesma anatomia de gap,
+mesma solução de tela dentro da Plataforma):
+
+1. **`createSeries`/`updateSeries`/`deleteSeries`** em `actions/series.ts`,
+   usando `seriesSchema` (fim do órfão) via `staffAction` (super_admin OU
+   instrutor — RLS `series_mutate_staff`, diferente de `instructors`, que é
+   super_admin-only). `deleteSeries` bloqueia remoção com curso vinculado
+   por checagem explícita (`count` de `courses.series_id`) antes do
+   DELETE, mesmo padrão de `deleteInstructor`.
+2. **`getSeriesWithStats`** novo em `lib/queries.ts` (nome/slug/descrição +
+   contagem de cursos), ao lado do já existente `getSeriesList` (mantido
+   intacto — ainda consumido por `actions/courses.ts` e
+   `instrutor/curso/novo/page.tsx`).
+3. **Tela `instrutor/series`** (`page.tsx` + `series-table.tsx` +
+   `series-form.tsx`) — mesmo desenho de `instrutor/equipe`/
+   `instructor-table.tsx`/`instructor-form.tsx` (P-6.13): tabela com
+   nome/slug/nº de cursos, dialog de criar/editar, dialog de confirmação
+   de remoção com botão desabilitado quando há curso vinculado. Slug
+   auto-gerado a partir do nome (mesma função `slugify` de
+   `course-form.tsx`, duplicada localmente por não haver utilitário
+   compartilhado). Gate de página `requireInstrutorSession` (já existia em
+   `lib/queries.ts`).
+4. **Sidebar do instrutor** (`instrutor/shell.tsx`): item "Séries" sempre
+   visível a quem passa pelo layout (todo usuário ali já é super_admin ou
+   instrutor-dado); item "Equipe" só quando `isSuperAdmin`. `instrutor/
+layout.tsx` passou a repassar `session.roles.includes("super_admin")`
+   como prop — evita mostrar um link que o gate de página
+   (`requireSuperAdminSession`) rejeitaria.
+
+### Suposições registradas
+
+- Nenhuma suposição de regra de negócio nova. `seriesSchema` já definia
+  `slug` com regex `^[a-z0-9-]+$`; a função `slugify` local (idêntica à de
+  `course-form.tsx`) só automatiza o preenchimento, sem mudar a validação.
+- `updateSeriesSchema`/`deleteSeriesSchema` locais em `actions/series.ts`
+  por extensão/composição sobre `seriesSchema` — mesmo padrão de
+  `updateInstructorSchema` (P-6.13); `packages/validators` não precisou
+  ser tocado (o critério de aceite "sem schema Zod duplicado" verifica
+  isso).
+
+### Verificação (sem navegador — `chromium-cli` indisponível neste
+
+ambiente; verificado com sessões e banco reais em vez de mock)
+
+- `pnpm typecheck` / `pnpm lint` (dentro de `apps/plataforma`): verdes.
+- `next build`: verde, rota `/instrutor/series` presente no output.
+- `pnpm turbo lint typecheck` no monorepo: falha isolada em
+  `@hebron/auth#typecheck` (`data-deletion.test.ts`, drift pré-existente
+  de `bankAccounts.nickname`, ver memória/S-241 — não relacionado a este
+  diff, que não toca `packages/auth`).
+- `pnpm exec vitest run` (`apps/plataforma`): 41 testes, 7 falhas em
+  `arquivamento.test.ts` (certificado/trilha/arquivamento de módulo) —
+  confirmado não relacionado: `git diff --stat` mostra só
+  `instrutor/layout.tsx`, `instrutor/shell.tsx` (edições) e `lib/queries.ts`
+  (só função nova adicionada, nenhuma função existente tocada); os testes
+  que falham não exercitam nada disso. Registrado como novo achado de
+  test-drift de banco compartilhado (ver memória).
+- **Dois testes throwaway** escritos, rodados e apagados nesta sessão
+  (nunca commitados) para validar o que o typecheck/lint não cobre:
+  - Sessões reais via `@hebron/auth/testing` (`createTestAuthUser` +
+    `createTestSessionCookies`, sem mock) contra o dev server rodando
+    (`next dev --port 3002`): instrutor comum recebe `/instrutor/series`
+    200 com o link "Séries" e SEM o link "Equipe"; `/instrutor/equipe`
+    307→`/login`. Super_admin recebe as duas rotas 200, com os dois links
+    na sidebar. Usuários e vínculos de teste removidos ao final.
+  - `createSeries`/`updateSeries`/`deleteSeries` chamados diretamente
+    (mock só de `resolveSession`, mesmo padrão de `arquivamento.test.ts`)
+    contra o banco de dev: instrutor-dado cria; aluno sem papel/sem linha
+    em `instructors` é negado (`staffAction`); super_admin cria/edita/
+    remove; remoção com curso vinculado é bloqueada (linha sobrevive) e a
+    mensagem em português correta é lançada internamente (confirmado no
+    log do teste) — o `serverError` que chega ao client de teste é a
+    mensagem genérica do next-safe-action porque `safe-action.ts` não
+    define `handleServerError`, mesma convenção já aceita em
+    flats/tarefas (ver SESSIONS.md, nota em `time-tracking.test.ts`).
+- **Não verificado:** responsividade em 360px por clique real — sem
+  `chromium-cli`/Playwright disponível neste ambiente para inspecionar
+  viewport. A tela reusa a mesma estrutura de tabela/dialog de
+  `instrutor/equipe` (P-6.13), já responsiva e em produção.
+
+### Arquivos modificados
+
+- `apps/plataforma/src/actions/series.ts` (novo)
+- `apps/plataforma/src/app/instrutor/series/page.tsx` (novo)
+- `apps/plataforma/src/components/series-form.tsx` (novo)
+- `apps/plataforma/src/components/series-table.tsx` (novo)
+- `apps/plataforma/src/app/instrutor/shell.tsx` (`isSuperAdmin` prop; itens
+  "Séries"/"Equipe" na sidebar)
+- `apps/plataforma/src/app/instrutor/layout.tsx` (repassa
+  `session.roles.includes("super_admin")` ao shell)
+- `apps/plataforma/src/lib/queries.ts` (`getSeriesWithStats`)
+- `PROMPTS.md` (critérios de P-6.19 marcados `[x]`/anotados; nota de
+  fechamento no escopo de P-6.9; débito de S-118 marcado como resolvido em
+  P-6.13)
+- `SESSIONS.md` (esta entrada + linha no índice)

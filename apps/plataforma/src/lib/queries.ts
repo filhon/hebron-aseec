@@ -427,6 +427,40 @@ export async function getSeriesList(actorId: string): Promise<Series[]> {
   );
 }
 
+// ---------------------------------------------------------------------------
+// Gestão de séries — staff (super_admin ou instrutor, P-6.19, gap irmão de
+// S-113/P-6.13).
+// ---------------------------------------------------------------------------
+
+export interface SeriesWithStats extends Series {
+  courseCount: number;
+}
+
+export async function getSeriesWithStats(
+  actorId: string,
+): Promise<SeriesWithStats[]> {
+  return withAuthenticatedContext({ actorId }, async (tx) => {
+    const seriesRows = await tx.select().from(series).orderBy(asc(series.name));
+
+    const courseCountRows = await tx
+      .select({
+        seriesId: courses.seriesId,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(courses)
+      .where(isNotNull(courses.seriesId))
+      .groupBy(courses.seriesId);
+    const courseCountBySeries = new Map(
+      courseCountRows.map((r) => [r.seriesId, r.count]),
+    );
+
+    return seriesRows.map((row) => ({
+      ...row,
+      courseCount: courseCountBySeries.get(row.id) ?? 0,
+    }));
+  });
+}
+
 export async function getCourseCategories(actorId: string): Promise<string[]> {
   const rows = await withAuthenticatedContext({ actorId }, (tx) =>
     tx

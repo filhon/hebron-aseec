@@ -8,10 +8,17 @@ export default async function InstrutorLayout({
 }: {
   children: React.ReactNode;
 }) {
-  await requireInstrutorSession();
+  const session = await requireInstrutorSession();
 
   const user = await getAuthUser();
   if (!user) redirect(CANONICAL_LOGIN_URL);
 
-  return <InstrutorShell user={user}>{children}</InstrutorShell>;
+  return (
+    <InstrutorShell
+      user={user}
+      isSuperAdmin={session.roles.includes("super_admin")}
+    >
+      {children}
+    </InstrutorShell>
+  );
 }

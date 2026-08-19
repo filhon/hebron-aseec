@@ -8243,6 +8243,8 @@ Server Actions: CRUD de cursos, módulos, aulas (instrutor/admin) — CRUD de cu
 **Escopo:**
 Substituir mocks. Catálogo com cursos reais, filtro de série consumindo dados reais (PATCH-024). Player com vídeo via Bunny.net HLS. Progresso real. Certificados reais com download PDF. Discussões reais. `course-form` conectado grava `series_id` (PATCH-024).
 
+> **Nota de fechamento (P-6.19, 2026-08-19):** o filtro de série do catálogo e o select "Série" do `CourseForm` já liam `plataforma.series` desde este prompt, mas a tabela ficava vazia em qualquer instalação nova — nenhuma action jamais escrevia nela (`seriesSchema` órfão em `@hebron/validators`, zero `insert(series)` no app). P-6.19 fechou o gap com `createSeries`/`updateSeries`/`deleteSeries` + tela `instrutor/series`. Critério "filtro de série consumindo dados reais" considerado satisfeito de fato só a partir de P-6.19.
+
 **Arquivos permitidos para criação/edição:**
 
 - `apps/plataforma/src/app/(aluno)/layout.tsx` (G5: autenticado; qualquer papel — BRAIN §6.3)
@@ -8398,6 +8400,8 @@ Corretivo — gap registrado em S-113 (SESSIONS.md), nunca resolvido em P-6.6–
 - [x] Não-super_admin não acessa a tela (RLS nega escrita + gate de página redireciona)
 - [x] `CourseForm` lista instrutores reais cadastrados — fim do select vazio (teste manual: criar instrutor → aparece no formulário de novo curso)
 - [x] Lint passa · Types passam
+
+> **Débito registrado nesta sessão (S-118):** `instrutor/shell.tsx` (nav lateral) não estava na lista de arquivos permitidos deste prompt — a tela `/instrutor/equipe` ficou sem link na sidebar, alcançável só por URL direta. **Fechado em P-6.19** (2026-08-19): item "Equipe" adicionado à sidebar, visível só para `super_admin`.
 
 ---
 
@@ -8643,13 +8647,13 @@ Dois gaps irmãos do achado que gerou P-6.13 (S-113 — dado sem porta de entrad
 
 **Critérios de aceite:**
 
-- [ ] Instrutor (não só super_admin) cria e edita série pela UI; série criada aparece no select do `CourseForm` e no filtro do catálogo (teste manual: criar série → novo curso com ela → filtrar catálogo)
-- [ ] Remoção de série com curso vinculado bloqueada com mensagem legível; sem curso, remove
-- [ ] `seriesSchema` de `@hebron/validators` é o schema das actions — sem schema Zod duplicado local (grep)
-- [ ] Sidebar: "Séries" visível para staff; "Equipe" visível só para super_admin; instrutor comum não vê link para tela que o gate rejeita
-- [ ] Responsivo em 360px, sem rolagem horizontal, nas telas tocadas
-- [ ] Lint passa · Types passam
-- [ ] Registrar em SESSIONS.md
+- [x] Instrutor (não só super_admin) cria e edita série pela UI; série criada aparece no select do `CourseForm` e no filtro do catálogo (verificado via `createSeries`/`updateSeries` reais contra o banco de dev, atuando como instrutor-dado sem papel `super_admin`; `CourseForm`/catálogo já consumiam `getSeriesList`/`getSeriesWithStats` desde P-6.9/P-6.19 — sem teste de clique em navegador, ver nota)
+- [x] Remoção de série com curso vinculado bloqueada com mensagem legível; sem curso, remove (`deleteSeries` verificado com curso vinculado → bloqueia + linha sobrevive; sem curso → remove; mensagem em português confirmada no lançamento interno do erro — `serverError` do next-safe-action chega mascarado em teste porque `safe-action.ts` não define `handleServerError`, mesma convenção aceita em flats/tarefas)
+- [x] `seriesSchema` de `@hebron/validators` é o schema das actions — sem schema Zod duplicado local (grep: só `updateSeriesSchema`/`deleteSeriesSchema` locais, ambos por `.extend`/composição sobre `seriesSchema`, mesmo padrão de `updateInstructorSchema`)
+- [x] Sidebar: "Séries" visível para staff; "Equipe" visível só para super_admin; instrutor comum não vê link para tela que o gate rejeita (verificado com sessões reais via Supabase Auth contra o dev server: instrutor comum recebe `/instrutor/series` 200 sem link "Equipe" e `/instrutor/equipe` 307→/login; super_admin recebe ambas 200 com os dois links)
+- [ ] Responsivo em 360px, sem rolagem horizontal, nas telas tocadas — **não verificado**: sem ferramenta de automação de navegador (`chromium-cli`) disponível neste ambiente para inspecionar viewport; a tela reusa a mesma estrutura de tabela/dialog de `instrutor/equipe` (P-6.13), já responsiva
+- [x] Lint passa · Types passam
+- [x] Registrar em SESSIONS.md
 
 **Notas:**
 Ref: P-6.13 é o precedente direto (mesma anatomia de gap, mesma solução de tela dentro da Plataforma). A diferença deliberada: série é conteúdo editorial de staff (RLS `series_mutate_staff`), não cadastro global — por isso o gate é `requireInstrutorSession`, não `requireSuperAdminSession`.
