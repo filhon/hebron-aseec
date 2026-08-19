@@ -1,8 +1,4 @@
-import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
-import { resolveSession } from "@hebron/auth/server";
-import { CANONICAL_LOGIN_URL } from "@hebron/auth";
-import type { ActionSession } from "@hebron/auth/server";
+import { createRoleGate } from "@hebron/auth/role-gate";
 
 /**
  * Gate para a área (submissor): submissor OU super_admin. Sem sessão ou sem
@@ -10,23 +6,9 @@ import type { ActionSession } from "@hebron/auth/server";
  * layout só checava `getAuthUser() !== null`, deixando qualquer autenticado
  * (inclusive diretor/conselheiro) entrar na área do submissor.
  */
-export async function requireSubmissorSession(): Promise<ActionSession> {
-  const cookieStore = await cookies();
-
-  let session: ActionSession;
-  try {
-    session = await resolveSession(cookieStore);
-  } catch {
-    redirect(CANONICAL_LOGIN_URL);
-  }
-
-  const allowed = ["submissor", "super_admin"];
-  if (!session.roles.some((r) => allowed.includes(r))) {
-    redirect(CANONICAL_LOGIN_URL);
-  }
-
-  return session;
-}
+export const requireSubmissorSession = createRoleGate({
+  allowedRoles: ["submissor", "super_admin"],
+});
 
 /**
  * Gate para a área (diretoria): diretor, conselheiro OU super_admin.
@@ -36,20 +18,6 @@ export async function requireSubmissorSession(): Promise<ActionSession> {
  * submissor autenticado navegasse para `/pipeline/<id>` e visse score IA,
  * breakdown, versão compacta e contagem de votos de qualquer projeto.
  */
-export async function requireDiretorSession(): Promise<ActionSession> {
-  const cookieStore = await cookies();
-
-  let session: ActionSession;
-  try {
-    session = await resolveSession(cookieStore);
-  } catch {
-    redirect(CANONICAL_LOGIN_URL);
-  }
-
-  const allowed = ["diretor", "conselheiro", "super_admin"];
-  if (!session.roles.some((r) => allowed.includes(r))) {
-    redirect(CANONICAL_LOGIN_URL);
-  }
-
-  return session;
-}
+export const requireDiretorSession = createRoleGate({
+  allowedRoles: ["diretor", "conselheiro", "super_admin"],
+});

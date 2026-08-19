@@ -10,6 +10,7 @@ import {
   hasVerifiedTotpFactor,
   getAssuranceLevel,
 } from "@hebron/auth";
+import { resolveReturnToDestination } from "@hebron/auth/app-middleware";
 import { getSessionSupabaseClient } from "../../../lib/session-client";
 
 interface PostLoginPageProps {
@@ -26,7 +27,7 @@ export default async function PostLoginPage({
   searchParams,
 }: PostLoginPageProps) {
   const { return_to } = await searchParams;
-  const destination = safeRedirectTarget(return_to);
+  const destination = resolveReturnToDestination(return_to);
 
   const cookieStore = await cookies();
   let session;
@@ -71,11 +72,4 @@ export default async function PostLoginPage({
   }
 
   redirect(destination);
-}
-
-/** Only ever redirect within this app — never to an attacker-supplied host. */
-function safeRedirectTarget(returnTo: string | undefined): string {
-  if (!returnTo) return "/";
-  if (!returnTo.startsWith("/") || returnTo.startsWith("//")) return "/";
-  return returnTo;
 }

@@ -7,6 +7,8 @@
     "./server": "./src/server.ts",
     "./client": "./src/client.ts",
     "./middleware": "./src/middleware.ts",
+    "./app-middleware": "./src/app-middleware.ts",
+    "./role-gate": "./src/role-gate.ts",
     "./impersonation": "./src/impersonation.ts",
     "./data-export": "./src/data-export.ts",
     "./data-deletion": "./src/data-deletion.ts",
@@ -23,7 +25,11 @@
     "@hebron/types": "workspace:*",
     "@supabase/ssr": "^0.5.0",
     "@supabase/supabase-js": "catalog:",
-    "drizzle-orm": "catalog:"
+    "drizzle-orm": "catalog:",
+    "next": "^15.3.0"
+  },
+  "peerDependencies": {
+    "next": "^15.3.0"
   },
   "devDependencies": {
     "@hebron/eslint-config": "workspace:*",

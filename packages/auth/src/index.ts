@@ -20,3 +20,9 @@ export * from "./types";
 export * from "./client";
 export * from "./mfa";
 export { CANONICAL_LOGIN_URL } from "./middleware";
+// Type-only — erased at compile time, so these don't pull `next/server` (a
+// server/edge-only module) into the client bundle. Runtime code lives at
+// "@hebron/auth/app-middleware" and "@hebron/auth/role-gate", imported
+// directly by each app's middleware.ts / lib/{session,queries}.ts.
+export type { HebronMiddlewareOptions } from "./app-middleware";
+export type { RoleGateOptions } from "./role-gate";

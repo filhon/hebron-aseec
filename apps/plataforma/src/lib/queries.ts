@@ -1,5 +1,4 @@
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import {
   and,
   asc,
@@ -11,12 +10,11 @@ import {
   sql,
 } from "drizzle-orm";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
-import { CANONICAL_LOGIN_URL } from "@hebron/auth";
 import {
   createSupabaseServerActionClient,
   resolveSession,
 } from "@hebron/auth/server";
-import type { ActionSession } from "@hebron/auth/server";
+import { createRoleGate } from "@hebron/auth/role-gate";
 import {
   certificates,
   courses,
@@ -101,14 +99,7 @@ export async function getAuthUser(): Promise<{
 
 /** Acesso liberado a qualquer usuário autenticado, sem restrição de papel
  * (BRAIN §6.3: "acesso a todos os cursos para qualquer usuário registrado"). */
-export async function requireAlunoSession(): Promise<ActionSession> {
-  const cookieStore = await cookies();
-  try {
-    return await resolveSession(cookieStore);
-  } catch {
-    redirect(CANONICAL_LOGIN_URL);
-  }
-}
+export const requireAlunoSession = createRoleGate();
 
 async function isInstructor(userId: string): Promise<boolean> {
   const [row] = await withAuthenticatedContext({ actorId: userId }, (tx) =>
@@ -124,44 +115,18 @@ async function isInstructor(userId: string): Promise<boolean> {
 /** super_admin OU instrutor (dado) — mesma checagem de
  * lib/safe-action.ts#staffAction. Qualquer instrutor gerencia qualquer
  * curso, sem escopo por curso (mesma suposição G1 de P-6.7/P-6.8). */
-export async function requireInstrutorSession(): Promise<ActionSession> {
-  const cookieStore = await cookies();
-  let session: ActionSession;
-  try {
-    session = await resolveSession(cookieStore);
-  } catch {
-    redirect(CANONICAL_LOGIN_URL);
-  }
-
-  if (
-    !session.roles.includes("super_admin") &&
-    !(await isInstructor(session.actorId))
-  ) {
-    redirect(CANONICAL_LOGIN_URL);
-  }
-
-  return session;
-}
+export const requireInstrutorSession = createRoleGate({
+  bypassRoles: ["super_admin"],
+  extraCheck: (session) => isInstructor(session.actorId),
+});
 
 /** super_admin exclusivamente — gestão do cadastro de instrutores (RLS
  * `instructors_mutate_admin`, 0020_plataforma_rls.sql). Diferente de
  * requireInstrutorSession: instrutor (dado, sem papel em public.role) não
  * deve acessar esta tela — só quem administra o cadastro global. */
-export async function requireSuperAdminSession(): Promise<ActionSession> {
-  const cookieStore = await cookies();
-  let session: ActionSession;
-  try {
-    session = await resolveSession(cookieStore);
-  } catch {
-    redirect(CANONICAL_LOGIN_URL);
-  }
-
-  if (!session.roles.includes("super_admin")) {
-    redirect(CANONICAL_LOGIN_URL);
-  }
-
-  return session;
-}
+export const requireSuperAdminSession = createRoleGate({
+  allowedRoles: ["super_admin"],
+});
 
 // ---------------------------------------------------------------------------
 // Mapeamento DB → forma "rica" de @hebron/types/plataforma (já consumida

@@ -27,7 +27,7 @@ vi.mock("next/navigation", () => ({
   }),
 }));
 
-vi.mock("@hebron/auth", () => ({
+vi.mock("@hebron/auth/middleware", () => ({
   CANONICAL_LOGIN_URL,
 }));
 

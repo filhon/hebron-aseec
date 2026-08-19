@@ -1,14 +1,9 @@
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import { asc, desc, eq, inArray } from "drizzle-orm";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import type { AuthenticatedTx } from "@hebron/db/authenticated";
-import { CANONICAL_LOGIN_URL } from "@hebron/auth";
-import {
-  createSupabaseServerActionClient,
-  resolveSession,
-} from "@hebron/auth/server";
-import type { ActionSession } from "@hebron/auth/server";
+import { createSupabaseServerActionClient } from "@hebron/auth/server";
+import { createRoleGate } from "@hebron/auth/role-gate";
 import { logPiiAccess } from "@hebron/auth/data-export";
 import {
   units,
@@ -101,50 +96,20 @@ export async function getAuthUser(): Promise<{
  * interesse — mesma regra replicada em actions/reservations.ts
  * #createReservation e na policy reservations_insert_own).
  */
-export async function requireHospedeSession(): Promise<ActionSession> {
-  const cookieStore = await cookies();
-
-  let session: ActionSession;
-  try {
-    session = await resolveSession(cookieStore);
-  } catch {
-    redirect(CANONICAL_LOGIN_URL);
-  }
-
-  const isEligible =
-    session.roles.includes("hospede") || session.roles.includes("super_admin");
-  const isBlocked =
-    session.roles.includes("diretor") || session.roles.includes("conselheiro");
-
-  if (!isEligible || isBlocked) redirect(CANONICAL_LOGIN_URL);
-
-  return session;
-}
+export const requireHospedeSession = createRoleGate({
+  allowedRoles: ["hospede", "super_admin"],
+  blockedRoles: ["diretor", "conselheiro"],
+});
 
 /**
  * Gate para a área (admin): diretor com designação "gestor" OU
  * super_admin — mesma checagem de lib/safe-action.ts#gestorAction.
  */
-export async function requireGestorSession(): Promise<ActionSession> {
-  const cookieStore = await cookies();
-
-  let session: ActionSession;
-  try {
-    session = await resolveSession(cookieStore);
-  } catch {
-    redirect(CANONICAL_LOGIN_URL);
-  }
-
-  if (session.roles.includes("super_admin")) return session;
-  if (
-    !session.roles.includes("diretor") ||
-    !session.designations.includes("gestor")
-  ) {
-    redirect(CANONICAL_LOGIN_URL);
-  }
-
-  return session;
-}
+export const requireGestorSession = createRoleGate({
+  allowedRoles: ["diretor"],
+  requireDesignation: "gestor",
+  bypassRoles: ["super_admin"],
+});
 
 // ---------------------------------------------------------------------------
 // Mapeamento DB → tipos de domínio (@hebron/types/flats). As leituras rodam

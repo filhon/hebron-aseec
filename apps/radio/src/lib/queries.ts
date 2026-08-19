@@ -1,13 +1,8 @@
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import { asc, eq } from "drizzle-orm";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
-import { CANONICAL_LOGIN_URL } from "@hebron/auth";
-import {
-  createSupabaseServerActionClient,
-  resolveSession,
-} from "@hebron/auth/server";
-import type { ActionSession } from "@hebron/auth/server";
+import { createSupabaseServerActionClient } from "@hebron/auth/server";
+import { createRoleGate } from "@hebron/auth/role-gate";
 import {
   authors,
   radioSeries as seriesTable,
@@ -81,22 +76,9 @@ export async function getAuthUser(): Promise<{
  * `*_mutate_admin` de 0050_radio_rls.sql (todo o schema radio só aceita
  * mutação de super_admin, sem designação adicional como em flats/financeiro).
  */
-export async function requireSuperAdminSession(): Promise<ActionSession> {
-  const cookieStore = await cookies();
-
-  let session: ActionSession;
-  try {
-    session = await resolveSession(cookieStore);
-  } catch {
-    redirect(CANONICAL_LOGIN_URL);
-  }
-
-  if (!session.roles.includes("super_admin")) {
-    redirect(CANONICAL_LOGIN_URL);
-  }
-
-  return session;
-}
+export const requireSuperAdminSession = createRoleGate({
+  allowedRoles: ["super_admin"],
+});
 
 // ---------------------------------------------------------------------------
 // Catálogo público (autores/séries/faixas) — leitura roda como `anon` via

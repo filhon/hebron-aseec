@@ -117,12 +117,12 @@ Um middleware compartilhado, montado nos 9 apps, cobrindo páginas e `/api`, com
 
 ### Critérios de aceite
 
-- [ ] Os 9 apps têm `middleware.ts` com `matcher` cobrindo páginas **e** `/api`
-- [ ] Sessão expirada é renovada em navegação de leitura (teste com token vencido)
-- [ ] Redirect para login preserva `return_to` e devolve o usuário à rota original após autenticar
-- [ ] `runtime = "nodejs"` onde o middleware toca o banco; nenhuma API Node em edge
-- [ ] O gate de papel vive em um único lugar; nenhuma cópia local sobra
-- [ ] Lint passa · Types passam
+- [x] Os 9 apps têm `middleware.ts` com `matcher` cobrindo páginas **e** `/api`
+- [ ] Sessão expirada é renovada em navegação de leitura (teste com token vencido) — **PARCIAL.** O mecanismo (`supabase.auth.getUser()` + `setAll` reescrevendo os cookies na resposta) é o mesmo que já rodava em produção só no intranet, agora compartilhado pelos 9 — mas nenhuma sessão desta correção escreveu um teste automatizado com um JWT vencido de verdade; validar manualmente ou com um teste de integração fica para uma sessão futura.
+- [x] Redirect para login preserva `return_to` e devolve o usuário à rota original após autenticar — inclui um gap que não estava no escopo original do achado: `safeRedirectTarget` (intranet `/post-login`) só aceitava caminho relativo, então o `return_to` cross-app (8 dos 9 apps logam em `app.hebronaseec.com.br`, origem diferente da sua própria) era descartado silenciosamente para "/". Corrigido junto (`resolveReturnToDestination`, `packages/auth/src/app-middleware.ts`), com teste unitário cobrindo origem confiável/não confiável/typosquat/dev vs. produção.
+- [x] `runtime = "nodejs"` onde o middleware toca o banco; nenhuma API Node em edge — verificado nos 9 `functions-config-manifest.json` pós-build.
+- [x] O gate de papel vive em um único lugar; nenhuma cópia local sobra — os 12 `require*Session` (`grep` confirmou a contagem) agora chamam `createRoleGate` (`packages/auth/src/role-gate.ts`).
+- [x] Lint passa · Types passam
 
 ---
 

@@ -11,7 +11,10 @@
  *   - sessão com super_admin → retorna a sessão normalmente, sem redirecionar
  *
  * Mocks: next/headers (sem contexto de request), next/navigation (redirect
- * lança, como no Next.js real), @hebron/auth/server (resolveSession).
+ * lança, como no Next.js real), @hebron/auth/server (resolveSession),
+ * @hebron/auth/middleware (CANONICAL_LOGIN_URL — o gate agora vive em
+ * @hebron/auth/role-gate, que importa a constante direto de lá, não do
+ * barrel "@hebron/auth").
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -30,7 +33,7 @@ vi.mock("next/navigation", () => ({
   }),
 }));
 
-vi.mock("@hebron/auth", () => ({
+vi.mock("@hebron/auth/middleware", () => ({
   CANONICAL_LOGIN_URL,
 }));
 

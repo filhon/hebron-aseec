@@ -1,12 +1,10 @@
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
-import { CANONICAL_LOGIN_URL } from "@hebron/auth";
 import {
   createSupabaseServerActionClient,
   resolveSession,
 } from "@hebron/auth/server";
-import type { ActionSession } from "@hebron/auth/server";
+import { createRoleGate } from "@hebron/auth/role-gate";
 import {
   withAuthenticatedContext,
   withSystemRole,
@@ -103,22 +101,9 @@ export async function getAuthUser(): Promise<{
 /** Gate para `(dashboard)/layout.tsx`: papel interno colaborador+ (mesmo
  * conjunto de `staffAction` em actions/*.ts) — transparência interna (BRAIN
  * §6.9). Bloqueia papéis externos (submissor, hospede, aluno, ouvinte). */
-export async function requireStaffSession(): Promise<ActionSession> {
-  const cookieStore = await cookies();
-
-  let session: ActionSession;
-  try {
-    session = await resolveSession(cookieStore);
-  } catch {
-    redirect(CANONICAL_LOGIN_URL);
-  }
-
-  if (!session.roles.some((r) => STAFF_ROLES.includes(r))) {
-    redirect(CANONICAL_LOGIN_URL);
-  }
-
-  return session;
-}
+export const requireStaffSession = createRoleGate({
+  allowedRoles: STAFF_ROLES,
+});
 
 /**
  * Resolve o actorId da sessão corrente para as funções de leitura abaixo,
