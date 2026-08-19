@@ -79,6 +79,10 @@ export const SENSITIVE_AUDIT_FIELDS = new Set([
   "responsavelLegal",
   "telefone",
   "endereco",
+  "name",
+  "cpf",
+  "birthDate",
+  "plate",
 ]);
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {

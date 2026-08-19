@@ -135,10 +135,22 @@ export async function anonymizeUser(
     // pode perder precisão de sub-milissegundo ao ser reserializado como
     // parâmetro, fazendo o WHERE não casar com a linha e o UPDATE virar
     // no-op silencioso.
-    await dbHandle
+    //
+    // `.returning()` + checagem de 0 linhas (D1-005): sem policy de UPDATE
+    // em admin.audit_log, um handle autenticado faria este UPDATE virar
+    // no-op silencioso — o `dbHandle` privilegiado de hoje não é afetado,
+    // mas a checagem torna a exclusão LGPD segura mesmo se essa premissa
+    // mudar (falhar alto em vez de reportar sucesso falso).
+    const updated = await dbHandle
       .update(auditLog)
       .set({ diff: redacted })
-      .where(eq(auditLog.id, row.id));
+      .where(eq(auditLog.id, row.id))
+      .returning({ id: auditLog.id });
+    if (updated.length === 0) {
+      throw new Error(
+        `Falha ao redigir PII em admin.audit_log (id=${row.id}): UPDATE afetou 0 linhas`,
+      );
+    }
     redactedAuditEntries++;
   }
 

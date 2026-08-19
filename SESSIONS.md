@@ -277,6 +277,7 @@
 | S-254  | 2026-08-19 | P-6.17 — O certificado que some junto com o curso (CORRETIVO)                                                                    | concluido                            |
 | S-255  | 2026-08-19 | P-6.18 — A capa que virou caminho de storage no catálogo (CORRETIVO)                                                             | concluido                            |
 | S-256  | 2026-08-19 | P-6.19 — A série que ninguém pode criar e a equipe sem porta na sidebar (CORRETIVO)                                              | concluido                            |
+| S-257  | 2026-08-19 | AUDIT PACOTE 1 — LGPD: fechar o direito de exclusão (CORRETIVO)                                                                  | concluido                            |
 
 ---
 
@@ -23352,4 +23353,163 @@ ambiente; verificado com sessões e banco reais em vez de mock)
 - `PROMPTS.md` (critérios de P-6.19 marcados `[x]`/anotados; nota de
   fechamento no escopo de P-6.9; débito de S-118 marcado como resolvido em
   P-6.13)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+## S-257 — AUDIT PACOTE 1 — LGPD: fechar o direito de exclusão (CORRETIVO)
+
+**Prompt:** `AUDIT/04-BACKLOG-CORRECAO.md` § PACOTE 1
+**Data:** 2026-08-19
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+Corretivo de quatro achados da auditoria externa (`AUDIT/`), todos em torno
+do mesmo buraco: `P-9.2` entregou a fundação LGPD completa e marcou seus
+critérios como cumpridos, mas dois entregáveis nunca receberam porta de
+entrada — o próprio `SESSIONS.md:12737-12745` (P-9.2) já registrava os dois
+como "corretivo futuro", nunca escrito até agora.
+
+1. **`[D8-001]` (P0, bloqueava go-live).** `requestDataDeletion` grava
+   ticket `pending`; `executeDataDeletion`/`rejectDataDeletion` existiam
+   como primitiva testada (`packages/auth/src/data-deletion.ts`) sem
+   NENHUM chamador em `apps/`. Fechado com:
+   - `apps/admin/src/actions/lgpd.ts` (novo) — `resolveDeletionRequest`
+     (executa, desativa login via `supabase.auth.admin.updateUserById`
+     com `ban_duration` de ~100 anos — GoTrue não tem "ban indefinido") e
+     `rejectDeletionRequest` (exige justificativa ≥10 caracteres, notifica
+     o titular via `notifyDeletionRejected`), ambas sob `adminAction`.
+   - `apps/admin/src/app/(dashboard)/lgpd/page.tsx` (novo) — fila com abas
+     pendentes/executados/recusados/todos, botão "Executar exclusão" e
+     disclosure "Recusar…" com textarea de justificativa (mesmo padrão de
+     `/convites`: forms server action puros, sem client JS).
+   - `apps/admin/src/components/admin-shell.tsx` — item "Exclusão de
+     dados" no menu "Operação".
+2. **`[D8-002]` (P1).** `logPiiAccess` existia e era testada
+   (`packages/auth/src/data-export.ts`), zero chamadores em código de
+   aplicação. Fechado nos dois pontos nomeados pelo próprio débito:
+   - `apps/flats/src/lib/queries.ts` — `getApprovalQueue`/
+     `getReservationDetail` (leitura do gestor) agora passam um
+     `accessLog: { actorId, context }` opcional a
+     `loadReservationsWithGuests`, que audita `pii.accessed` por
+     reserva/hóspede (pulando auto-leitura, já que `getMyReservations`
+     nunca passa o parâmetro).
+   - `apps/admin/src/app/(dashboard)/usuarios/[id]/page.tsx` — audita a
+     leitura do cadastro completo (CPF/telefone) quando o super_admin
+     visualizador não é o próprio titular (`requireAdminSession()` chamado
+     de novo na página, idempotente com o gate do layout).
+3. **`[D8-003]` (P3, latente).** `SENSITIVE_AUDIT_FIELDS`
+   (`packages/db/src/audit.ts`) não cobria `flats.guests`
+   (`name`/`cpf`/`birth_date`) nem `flats.vehicles.plate` — nomenclatura
+   diferente de `public.users` (`fullName`/`documentCpf`). Acrescentadas as
+   4 chaves. Novo teste em `audit-pii-redaction.test.ts` usa
+   `generateDrizzleJson` (mesma técnica de `schema-parity.test.ts`, sem
+   precisar de `DATABASE_URL`) para cruzar um registro curado de colunas de
+   PII conhecidas contra o schema real E contra `SENSITIVE_AUDIT_FIELDS` —
+   falha se a coluna sumir do schema OU se a chave sair da lista de
+   redação.
+4. **`[D1-005]` (P2).** `anonymizeUser` fazia `UPDATE admin.audit_log` sem
+   checar linhas afetadas — com o handle privilegiado de hoje funciona,
+   mas viraria no-op silencioso (reportando sucesso) no dia em que rodasse
+   sob um handle autenticado sem policy de UPDATE nessa tabela. Trocado
+   para `.returning({id})` + `throw` se 0 linhas.
+
+### Suposições registradas
+
+- **Duração do ban de login:** GoTrue (`AdminUserAttributes#ban_duration`)
+  não expõe "banimento indefinido", só duração. Usado `"876000h"` (~100
+  anos) para equivaler a "desativado permanentemente" sem inventar um
+  terceiro estado fora do modelo do Supabase Auth. Nenhuma decisão de
+  negócio nova — é a implementação do `disableLogin` que a primitiva de
+  P-9.2 já previa como callback externo.
+- **Notificação de recusa:** `notifyDeletionRejected` (novo em
+  `apps/admin/src/lib/notifications.ts`) segue o mesmo padrão de
+  `notifyUserSuspended`/`notifyRoleChanged` — in-app, corpo inclui a
+  justificativa. Nenhum template de e-mail dedicado (fora do escopo do
+  pacote).
+- **`getApprovalQueue` sem teste isolado:** a função lista TODAS as
+  reservas "solicitada" do banco compartilhado entre testes — cobri o
+  wiring (idêntico ao de `getReservationDetail`, mesma função
+  `loadReservationsWithGuests`) só via `getReservationDetail`, que é
+  escopado a uma única reserva e não sofre da contaminação cross-teste.
+- **`esbuild.jsx` no `vitest.config.ts` do admin (2ª rodada desta
+  sessão):** o critério de aceite exigia teste da leitura de PII de
+  terceiro em `usuarios/[id]/page.tsx` "que abre a tela". Chamar o Server
+  Component direto (é só uma função async) quebrava com `React is not
+defined` — o `tsconfig` usa `"jsx": "preserve"` (o SWC do Next
+  transforma no build real), e fora do pipeline do Next o esbuild do Vite
+  cai no runtime clássico sem `React` em escopo. Corrigido com
+  `esbuild: { jsx: "automatic" }` em `apps/admin/vitest.config.ts` —
+  primeiro teste deste repo a importar um `page.tsx` diretamente; suíte
+  inteira (117 testes) reverificada sem regressão.
+- **Teste do caminho de falha de D1-005:** com o `dbHandle` privilegiado
+  padrão o `UPDATE admin.audit_log` sempre afeta 1 linha (superuser ignora
+  RLS/grants), então não dá para forçar 0-linhas contra o banco real sem
+  um segundo papel de conexão. Um `dbHandle` de teste
+  (`withAuditLogUpdateBlackHole`, só em `anonymization.test.ts`) delega
+  `select`/`insert` ao `db` real e intercepta só `.update(auditLog)`,
+  fazendo `.returning()` resolver vazio — reproduz exatamente o efeito de
+  um handle sem policy de UPDATE nessa tabela, o cenário que o guard
+  existe para pegar.
+
+### Verificação
+
+- `packages/db` (`vitest run`): 86 testes, 83 passam (+1: teste do
+  caminho de falha de `anonymizeUser`/D1-005). As 3 falhas
+  (`system-actor.test.ts`, 2×`storage.test.ts`) são drift pré-existente e
+  documentado (banco de dev compartilhado) — confirmado via `git diff
+--stat` que nenhum arquivo tocado por este pacote os exercita.
+- `apps/admin` (`vitest run`): 119 testes, 117 passam (+2: `pii.accessed`
+  em `usuarios/[id]/page.tsx`, uma leitura de terceiro e uma auto-leitura
+  que confirma que NÃO audita). 19 em `actions.test.ts`, incluindo os 4
+  de `resolveDeletionRequest`/`rejectDeletionRequest` contra o banco real
+  — anonimização de PII, desativação de login via mock de
+  `auth.admin.updateUserById`, idempotência ao reexecutar, recusa com
+  notas e notificação, validação de justificativa curta. As 2 falhas
+  restantes (`security-audit.test.ts` grants de `data_deletion_requests`,
+  `settings-actions.test.ts` erro mascarado do next-safe-action) são
+  drift pré-existente já documentado (nenhum arquivo deste pacote os
+  toca).
+- `apps/flats` (`vitest run` — `reservations.test.ts`): 14 testes, 14
+  passam, incluindo o novo teste de `getReservationDetail` que confirma
+  `pii.accessed` gravado com o gestor como ator e o hóspede como sujeito,
+  campos por nome (nunca valor).
+- **Regressão pega e corrigida nesta sessão:** adicionar `"name"` a
+  `SENSITIVE_AUDIT_FIELDS` quebrou `audit.test.ts > computeDiff > retorna
+apenas campos alterados`, que usava `name` como chave-exemplo genérica
+  (não relacionada a PII). Renomeado para `title` no teste — `name` agora
+  é legitimamente redigido (é PII em `flats.guests`), e nenhum outro
+  chamador de `computeDiff`/diff manual no monorepo usa `name`, `cpf`,
+  `birthDate` ou `plate` fora de `flats/` (`grep` confirmado).
+- `next build` (admin e flats, `.next` limpo): verde nos dois; rota
+  `/lgpd` presente no output do admin.
+- `eslint`/`tsc --noEmit` em todos os arquivos tocados: verdes.
+
+### Arquivos modificados
+
+- `apps/admin/src/actions/lgpd.ts` (novo)
+- `apps/admin/src/app/(dashboard)/lgpd/page.tsx` (novo)
+- `apps/admin/src/components/admin-shell.tsx` (item de menu)
+- `apps/admin/src/lib/notifications.ts` (`notifyDeletionRejected`)
+- `apps/admin/src/app/(dashboard)/usuarios/[id]/page.tsx`
+  (`logPiiAccess` na leitura de terceiro)
+- `apps/admin/src/__tests__/actions.test.ts` (testes de
+  `resolveDeletionRequest`/`rejectDeletionRequest`; fixtures)
+- `apps/admin/src/__tests__/audit.test.ts` (regressão `name`→`title`)
+- `apps/admin/src/__tests__/usuarios-detail-pii.test.ts` (novo — chama
+  `UserDetailPage` direto e verifica `pii.accessed`)
+- `apps/admin/vitest.config.ts` (`esbuild.jsx: "automatic"` — necessário
+  para importar um `.tsx` de Server Component em teste)
+- `apps/flats/src/lib/queries.ts` (`logPiiAccess` em `getApprovalQueue`/
+  `getReservationDetail`)
+- `apps/flats/src/__tests__/reservations.test.ts` (novo teste de
+  `pii.accessed`)
+- `packages/db/src/audit.ts` (`SENSITIVE_AUDIT_FIELDS` +4 campos)
+- `packages/db/src/anonymization.ts` (`.returning()` + falha em 0 linhas)
+- `packages/db/src/__tests__/audit-pii-redaction.test.ts` (novo describe
+  de cobertura schema × redação)
+- `packages/db/src/__tests__/anonymization.test.ts` (novo teste do
+  caminho de falha de D1-005, com `dbHandle` de teste)
 - `SESSIONS.md` (esta entrada + linha no índice)

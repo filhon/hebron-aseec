@@ -24,7 +24,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@hebron/db/client";
 import {
   users,
@@ -662,6 +662,54 @@ describe("Fluxo completo da reserva", () => {
       .where(eq(usageHistory.reservationId, reservationId));
     expect(historyRows).toHaveLength(1);
     expect(historyRows[0]?.daysUsed).toBe(expectedDaysUsed);
+  });
+});
+
+// ── Leitura de PII de terceiro pelo gestor grava audit (D8-002) ────────────
+
+describe("getReservationDetail — leitura de PII pelo gestor audita pii.accessed", () => {
+  // getApprovalQueue não entra neste teste: ela lista TODAS as reservas
+  // "solicitada" do banco (compartilhado entre os testes deste arquivo), o
+  // que arrastaria o documento anexado pelo fixture de P-7.9c e exigiria um
+  // client Supabase Storage real (fora do que o mock de @hebron/auth/server
+  // deste arquivo provê). getReservationDetail exercita exatamente o mesmo
+  // caminho de wiring (loadReservationsWithGuests/accessLog) de forma
+  // isolada ao fixture criado aqui.
+  it("gestor lendo detalhe da reserva grava pii.accessed com o gestor como ator e o hóspede como sujeito", async () => {
+    const { createReservation } = await import("../actions/reservations");
+    const { getReservationDetail } = await import("../lib/queries");
+
+    asActor(IDS.users.aid, ["hospede"]);
+    const created = await createReservation(
+      buildInput({
+        preferredPeriods: [period(700), period(730), period(760)],
+      }),
+    );
+    expect(created?.serverError).toBeUndefined();
+    const reservationId = requireDefined(
+      created?.data?.reservationId,
+      "reservationId",
+    );
+    createdReservationIds.push(reservationId);
+
+    // O responsável da reserva é o próprio hóspede submissor (guest.userId =
+    // ctx.actorId em createReservation) — é ele o sujeito de logPiiAccess.
+    const detail = await getReservationDetail(IDS.users.gestor, reservationId);
+    expect(detail?.reservation.id).toBe(reservationId);
+
+    const piiEntries = await db
+      .select()
+      .from(auditLog)
+      .where(
+        and(
+          eq(auditLog.action, "pii.accessed"),
+          eq(auditLog.actorId, IDS.users.gestor),
+          eq(auditLog.entityId, IDS.users.aid),
+        ),
+      );
+    expect(piiEntries).toHaveLength(1);
+    expect(JSON.stringify(piiEntries[0]?.diff)).toContain("responsibleCpf");
+    expect(JSON.stringify(piiEntries[0]?.diff)).not.toContain("12345678901");
   });
 });
 

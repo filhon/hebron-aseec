@@ -21,6 +21,7 @@ import {
   auditLog,
   invitations,
   designations,
+  dataDeletionRequests,
 } from "@hebron/db/schema";
 
 // ── IDs fixos ────────────────────────────────────────────────────────────────
@@ -28,10 +29,14 @@ const ACTOR_ID = "d1000000-0000-0000-0000-000000000001";
 const TARGET_ID = "d1000000-0000-0000-0000-000000000002";
 const PENDING_ID = "d1000000-0000-0000-0000-000000000005";
 const PENDING_REJECT_ID = "d1000000-0000-0000-0000-000000000006";
+const LGPD_EXEC_ID = "d1000000-0000-0000-0000-000000000007";
+const LGPD_REJECT_ID = "d1000000-0000-0000-0000-000000000008";
 const ACTOR_EMAIL = "actions-actor@test.hebron";
 const TARGET_EMAIL = "actions-target@test.hebron";
 const PENDING_EMAIL = "actions-pending@test.hebron";
 const PENDING_REJECT_EMAIL = "actions-pending-reject@test.hebron";
+const LGPD_EXEC_EMAIL = "actions-lgpd-exec@test.hebron";
+const LGPD_REJECT_EMAIL = "actions-lgpd-reject@test.hebron";
 
 // ── Mocks globais ─────────────────────────────────────────────────────────────
 
@@ -136,6 +141,9 @@ async function lastAuditFor(
 
 // ── Setup / Teardown ─────────────────────────────────────────────────────────
 
+let lgpdExecRequestId = "";
+let lgpdRejectRequestId = "";
+
 beforeAll(async () => {
   await db
     .insert(users)
@@ -168,6 +176,32 @@ beforeAll(async () => {
     .onConflictDoNothing();
 
   await db
+    .insert(users)
+    .values({ id: LGPD_EXEC_ID, email: LGPD_EXEC_EMAIL, fullName: "LGPD Exec" })
+    .onConflictDoNothing();
+
+  await db
+    .insert(users)
+    .values({
+      id: LGPD_REJECT_ID,
+      email: LGPD_REJECT_EMAIL,
+      fullName: "LGPD Reject",
+    })
+    .onConflictDoNothing();
+
+  const [execRequest] = await db
+    .insert(dataDeletionRequests)
+    .values({ userId: LGPD_EXEC_ID, status: "pending" })
+    .returning();
+  lgpdExecRequestId = requireDefined(execRequest, "execRequest").id;
+
+  const [rejectRequest] = await db
+    .insert(dataDeletionRequests)
+    .values({ userId: LGPD_REJECT_ID, status: "pending" })
+    .returning();
+  lgpdRejectRequestId = requireDefined(rejectRequest, "rejectRequest").id;
+
+  await db
     .insert(roleAssignments)
     .values({ userId: ACTOR_ID, role: "super_admin", grantedBy: ACTOR_ID })
     .onConflictDoNothing();
@@ -186,6 +220,8 @@ afterAll(async () => {
     TARGET_ID,
     PENDING_ID,
     PENDING_REJECT_ID,
+    LGPD_EXEC_ID,
+    LGPD_REJECT_ID,
     ACTOR_ID,
   ]) {
     await db.delete(roleAssignments).where(eq(roleAssignments.userId, id));
@@ -525,5 +561,123 @@ describe("approveSignup / rejectSignup", () => {
     expect(requireDefined(entry, "audit entry").entityId).toBe(
       PENDING_REJECT_ID,
     );
+  });
+});
+
+// ── resolveDeletionRequest / rejectDeletionRequest (D8-001) ────────────────
+// Regressão para D8-001: `executeDataDeletion`/`rejectDataDeletion` existiam
+// como primitiva testada (packages/auth) sem nenhum caminho de produto que
+// as chamasse. Este bloco testa o caminho de produto — as Server Actions do
+// Admin — não a primitiva em isolado.
+
+describe("resolveDeletionRequest", () => {
+  it("anonimiza a PII de verdade, desativa o login e conclui o ticket", async () => {
+    const { resolveDeletionRequest } = await import("../actions/lgpd");
+    const { createClient } = await import("@supabase/supabase-js");
+    const supabaseMock = createClient("url", "key");
+
+    const result = await resolveDeletionRequest({
+      requestId: lgpdExecRequestId,
+    });
+    expect(result?.serverError).toBeUndefined();
+
+    const [row] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, LGPD_EXEC_ID));
+    expect(row?.email).not.toBe(LGPD_EXEC_EMAIL);
+    expect(row?.fullName).toBe("Usuário anonimizado");
+    expect(row?.anonymizedAt).not.toBeNull();
+
+    const [request] = await db
+      .select()
+      .from(dataDeletionRequests)
+      .where(eq(dataDeletionRequests.id, lgpdExecRequestId));
+    expect(request?.status).toBe("completed");
+    expect(request?.resolvedBy).toBe(ACTOR_ID);
+
+    // disableLogin foi chamado via Supabase Admin API com o usuário certo.
+    expect(supabaseMock.auth.admin.updateUserById).toHaveBeenCalledWith(
+      LGPD_EXEC_ID,
+      { ban_duration: "876000h" },
+    );
+
+    const entry = await lastAuditFor(ACTOR_ID, "data.deletion_executed");
+    expect(entry).toBeDefined();
+    expect(requireDefined(entry, "audit entry").entityId).toBe(
+      lgpdExecRequestId,
+    );
+  });
+
+  it("é idempotente — reexecutar um pedido já concluído não falha nem duplica a anonimização", async () => {
+    const { resolveDeletionRequest } = await import("../actions/lgpd");
+
+    // lgpdExecRequestId já foi concluído pelo teste anterior — anonymizeUser
+    // (P-0.13) é idempotente por design, então isso converge sem erro em vez
+    // de recusar (só "rejected" é um estado terminal que recusa reexecução).
+    const result = await resolveDeletionRequest({
+      requestId: lgpdExecRequestId,
+    });
+    expect(result?.serverError).toBeUndefined();
+
+    const [row] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, LGPD_EXEC_ID));
+    expect(row?.fullName).toBe("Usuário anonimizado");
+  });
+});
+
+describe("rejectDeletionRequest", () => {
+  it("recusa com justificativa, registra resolutionNotes e notifica o titular", async () => {
+    const { rejectDeletionRequest } = await import("../actions/lgpd");
+    const { createNotification } = await import("@hebron/email");
+
+    const notes = "Obrigação contábil em curso — retenção exigida por lei.";
+    const result = await rejectDeletionRequest({
+      requestId: lgpdRejectRequestId,
+      notes,
+    });
+    expect(result?.serverError).toBeUndefined();
+
+    const [request] = await db
+      .select()
+      .from(dataDeletionRequests)
+      .where(eq(dataDeletionRequests.id, lgpdRejectRequestId));
+    expect(request?.status).toBe("rejected");
+    expect(request?.resolutionNotes).toBe(notes);
+    expect(request?.resolvedBy).toBe(ACTOR_ID);
+
+    // O titular (não anonimizado) continua com a PII intacta.
+    const [row] = await db
+      .select()
+      .from(users)
+      .where(eq(users.id, LGPD_REJECT_ID));
+    expect(row?.anonymizedAt).toBeNull();
+
+    expect(createNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          userId: LGPD_REJECT_ID,
+          body: expect.stringContaining(notes),
+        }),
+      }),
+    );
+
+    const entry = await lastAuditFor(ACTOR_ID, "data.deletion_rejected");
+    expect(entry).toBeDefined();
+    expect(requireDefined(entry, "audit entry").entityId).toBe(
+      lgpdRejectRequestId,
+    );
+  });
+
+  it("exige justificativa com pelo menos 10 caracteres", async () => {
+    const { rejectDeletionRequest } = await import("../actions/lgpd");
+
+    const result = await rejectDeletionRequest({
+      requestId: lgpdRejectRequestId,
+      notes: "curto",
+    });
+    expect(result?.validationErrors).toBeDefined();
   });
 });

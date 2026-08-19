@@ -7,12 +7,14 @@ import { users, roleAssignments } from "@hebron/db/schema";
 import { auditLog } from "@hebron/db/schema";
 import { ChevronLeft, Shield, KeyRound, UserCog } from "lucide-react";
 import { Button } from "@hebron/ui";
+import { logPiiAccess } from "@hebron/auth/data-export";
 import {
   suspendUser,
   unsuspendUser,
   resetPassword,
 } from "../../../../actions/users";
 import { startImpersonationAction } from "../../../../actions/impersonation";
+import { requireAdminSession } from "../../../../lib/session";
 
 // ─── DB ───────────────────────────────────────────────────────────────────────
 
@@ -154,6 +156,7 @@ interface Props {
 export default async function UserDetailPage({ params, searchParams }: Props) {
   const { id } = await params;
   const { success, error } = await searchParams;
+  const { actorId } = await requireAdminSession();
 
   const [userRows, userRoles, activityRows] = await Promise.all([
     db.select().from(users).where(eq(users.id, id)),
@@ -177,6 +180,19 @@ export default async function UserDetailPage({ params, searchParams }: Props) {
 
   const user = userRows[0];
   if (!user) notFound();
+
+  // Leitura de terceiro (D8-002/LGPD art. 37): o cadastro completo expõe
+  // CPF/telefone de outra pessoa. Auto-visualização (super_admin vendo o
+  // próprio cadastro) não é acesso de terceiro.
+  if (actorId !== user.id) {
+    await logPiiAccess({
+      actorId,
+      subjectUserId: user.id,
+      entity: "user",
+      fields: ["documentCpf", "phone"],
+      context: "admin-detalhe-usuario",
+    });
+  }
 
   const roles = userRoles.map((ra) => ra.role);
   const status = getUserStatus(user.suspendedModules);

@@ -16,6 +16,7 @@ import {
   CalendarDays,
   ClipboardList,
   Settings,
+  UserX,
 } from "lucide-react";
 import {
   listBellNotifications,
@@ -69,6 +70,11 @@ export function AdminShell({
           label: "Auditoria",
           href: "/auditoria",
           icon: ClipboardList,
+        },
+        {
+          label: "Exclusão de dados",
+          href: "/lgpd",
+          icon: UserX,
         },
       ],
     },

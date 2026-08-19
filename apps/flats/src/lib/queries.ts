@@ -9,6 +9,7 @@ import {
   resolveSession,
 } from "@hebron/auth/server";
 import type { ActionSession } from "@hebron/auth/server";
+import { logPiiAccess } from "@hebron/auth/data-export";
 import {
   units,
   reservations,
@@ -394,9 +395,21 @@ export interface ReservationWithGuest {
  * são descartadas defensivamente (não deveria acontecer — createReservation
  * sempre grava os dois juntos, na mesma transação).
  */
+/**
+ * Presente apenas quando a leitura é feita por um terceiro (gestor/
+ * super_admin vendo o cadastro de outra pessoa) — dispara `logPiiAccess`
+ * (D8-002/LGPD art. 37). `getMyReservations` (o próprio hóspede lendo seu
+ * cadastro) nunca passa este parâmetro.
+ */
+interface GuestPiiAccessLog {
+  actorId: string;
+  context: string;
+}
+
 async function loadReservationsWithGuests(
   tx: AuthenticatedTx,
   reservationRows: ReservationRow[],
+  accessLog?: GuestPiiAccessLog,
 ): Promise<ReservationWithGuest[]> {
   const ids = reservationRows.map((row) => row.id);
   if (ids.length === 0) return [];
@@ -517,6 +530,29 @@ async function loadReservationsWithGuests(
     });
   }
 
+  if (accessLog) {
+    for (const { guest } of result) {
+      // Auto-serviço (hóspede lendo o próprio cadastro) não é leitura de
+      // terceiro — nunca deveria acontecer aqui (accessLog só é passado
+      // pelas leituras do gestor), mas a checagem é defensiva e barata.
+      if (guest.userId === accessLog.actorId) continue;
+
+      const fields = ["responsibleCpf"];
+      if (guest.responsibleDocumentUrl) fields.push("responsibleDocumentUrl");
+      if (guest.companions.length > 0 || guest.youngChildren.length > 0) {
+        fields.push("companions.cpf", "companions.birthDate");
+      }
+
+      await logPiiAccess({
+        actorId: accessLog.actorId,
+        subjectUserId: guest.userId ?? guest.id,
+        entity: "flats.guest",
+        fields,
+        context: accessLog.context,
+      });
+    }
+  }
+
   return result;
 }
 
@@ -561,7 +597,10 @@ export async function getApprovalQueue(
       .where(eq(reservations.status, "solicitada"))
       .orderBy(desc(reservations.createdAt));
 
-    return loadReservationsWithGuests(tx, rows);
+    return loadReservationsWithGuests(tx, rows, {
+      actorId,
+      context: "fila-aprovacao",
+    });
   });
 }
 
@@ -577,7 +616,10 @@ export async function getReservationDetail(
       .where(eq(reservations.id, reservationId))
       .limit(1);
 
-    const loaded = await loadReservationsWithGuests(tx, rows);
+    const loaded = await loadReservationsWithGuests(tx, rows, {
+      actorId,
+      context: "detalhe-reserva",
+    });
     return loaded[0] ?? null;
   });
 }

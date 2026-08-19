@@ -87,13 +87,17 @@ async function insertAuditEntry(params: {
 
 describe("computeDiff", () => {
   it("retorna apenas campos alterados", () => {
-    const before = { name: "Alice", age: 30, email: "a@b.com" };
-    const after = { name: "Alice Souza", age: 30, email: "a@b.com" };
+    // "title" (não "name") — desde D8-003, "name" é PII conhecida
+    // (flats.guests.name) e SENSITIVE_AUDIT_FIELDS redige o valor; esse
+    // comportamento é coberto à parte em audit-pii-redaction.test.ts. Este
+    // teste cobre só a mecânica de before/after do computeDiff.
+    const before = { title: "Alice", age: 30, email: "a@b.com" };
+    const after = { title: "Alice Souza", age: 30, email: "a@b.com" };
 
     const diff = computeDiff(before, after);
 
     expect(diff).toEqual({
-      name: { before: "Alice", after: "Alice Souza" },
+      title: { before: "Alice", after: "Alice Souza" },
     });
   });
 

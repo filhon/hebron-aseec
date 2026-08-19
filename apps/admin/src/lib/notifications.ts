@@ -90,6 +90,30 @@ export async function notifyUserSuspended(
 }
 
 /**
+ * Notifica o titular sobre a recusa do seu pedido de exclusão de dados
+ * (in_app) — LGPD art. 18, VI c/c §3º: a resposta ao pedido precisa chegar
+ * ao titular, não só ficar registrada no ticket para o super_admin.
+ *
+ * Deve ser chamado após rejectDataDeletion bem-sucedido.
+ */
+export async function notifyDeletionRejected(
+  userId: string,
+  notes: string,
+): Promise<void> {
+  await createNotification({
+    insert: (data) => insertNotification(data),
+    data: {
+      userId,
+      channel: "in_app",
+      type: "data.deletion_rejected",
+      title: "Pedido de exclusão de dados recusado",
+      body: `Seu pedido de exclusão de dados foi recusado. Motivo: ${notes}`,
+      payload: { module: "admin" },
+    },
+  });
+}
+
+/**
  * Notifica o usuário quando um papel é atribuído ou removido (in_app).
  *
  * Deve ser chamado após assignRole ou revokeRole bem-sucedido.
