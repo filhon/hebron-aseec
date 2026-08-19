@@ -15,13 +15,7 @@ import {
   withSystemRole,
 } from "@hebron/db/authenticated";
 import type { AuthenticatedTx } from "@hebron/db/authenticated";
-import {
-  certificates,
-  courses,
-  enrollments,
-  progress,
-  users,
-} from "@hebron/db/schema";
+import { certificates, enrollments, progress } from "@hebron/db/schema";
 import type { Certificate } from "@hebron/db/schema";
 import { plataformaAction } from "../lib/safe-action";
 import { logPlataformaAudit } from "../lib/audit";
@@ -235,41 +229,51 @@ const downloadCertificatePdfSchema = z.object({
 export const downloadCertificatePdf = plataformaAction
   .schema(downloadCertificatePdfSchema)
   .action(async ({ parsedInput: input, ctx }) => {
+    // Sem join em `courses`/`users`: curso arquivado ou despublicado some
+    // da RLS do aluno (courses_select_published, 0082) e um innerJoin
+    // barraria o download do próprio certificado (P-6.17). O certificado é
+    // lido por RLS própria (certificates_select_own); título do curso e
+    // nome do aluno vêm de plataforma.verify_certificate (SECURITY DEFINER,
+    // imune à RLS de courses).
     const rows = await withAuthenticatedContext(
       { actorId: ctx.actorId },
       (tx) =>
         tx
-          .select({
-            certificate: certificates,
-            courseTitle: courses.title,
-            userFullName: users.fullName,
-          })
+          .select()
           .from(certificates)
-          .innerJoin(courses, eq(courses.id, certificates.courseId))
-          .innerJoin(users, eq(users.id, certificates.userId))
           .where(eq(certificates.id, input.certificateId))
           .limit(1),
     );
-    const row = rows[0];
-    if (!row) throw new Error("Certificado não encontrado");
+    const certificate = rows[0];
+    if (!certificate) throw new Error("Certificado não encontrado");
     if (
-      row.certificate.userId !== ctx.actorId &&
+      certificate.userId !== ctx.actorId &&
       !ctx.roles.includes("super_admin")
     ) {
       throw new Error("Acesso negado");
     }
 
+    const verification = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      (tx) =>
+        tx.execute<{ course_title: string; user_name: string | null }>(
+          sql`SELECT * FROM plataforma.verify_certificate(${certificate.verificationHash})`,
+        ),
+    );
+    const v = verification[0];
+    if (!v) throw new Error("Certificado não encontrado");
+
     const pdfBuffer = await renderToBuffer(
       buildCertificatePdfDocument({
-        courseTitle: row.courseTitle,
-        userName: row.userFullName ?? "Aluno",
-        issuedAt: row.certificate.issuedAt,
-        verificationHash: row.certificate.verificationHash,
+        courseTitle: v.course_title,
+        userName: v.user_name ?? "Aluno",
+        issuedAt: certificate.issuedAt,
+        verificationHash: certificate.verificationHash,
       }),
     );
 
     return {
-      fileName: `certificado-${row.certificate.verificationHash.slice(0, 8)}.pdf`,
+      fileName: `certificado-${certificate.verificationHash.slice(0, 8)}.pdf`,
       base64: pdfBuffer.toString("base64"),
     };
   });

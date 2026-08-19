@@ -274,6 +274,7 @@
 | S-251  | 2026-08-17 | P-6.5b — Os esqueletos que ninguém mostra e o erro que se disfarça de catálogo vazio (CORRETIVO)                                 | concluido                            |
 | S-252  | 2026-08-18 | Auditoria: débitos técnicos P-6.6–P-6.15 (Plataforma, Bloco B, 2ª rodada)                                                        | concluido (gera P-6.16 a P-6.19)     |
 | S-253  | 2026-08-18 | P-6.16 — A aula arquivada que ainda tranca a trilha (CORRETIVO)                                                                  | concluido                            |
+| S-254  | 2026-08-19 | P-6.17 — O certificado que some junto com o curso (CORRETIVO)                                                                    | concluido                            |
 
 ---
 
@@ -23070,4 +23071,81 @@ plataforma` depende de `@hebron/auth`, então os comandos acima foram
 - `pnpm-lock.yaml` (consequência do item acima)
 - `PROMPTS.md` (critérios de P-6.4b e P-6.11 anotados; critérios de
   P-6.16 marcados `[x]`)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+## S-254 — P-6.17 — O certificado que some junto com o curso (CORRETIVO)
+
+**Prompt:** P-6.17
+**Data:** 2026-08-19
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+Mesma família do achado de S-252/P-6.16, mas do lado inverso: lá o dado
+certo existia no banco sem caminho de UI até ele; aqui o caminho existia
+e uma mudança de RLS posterior (`0082_plataforma_arquivamento.sql`,
+`courses_select_published` exigindo `published = true AND archived_at IS
+NULL`) o esvaziou por baixo. `getUserCertificates` e
+`downloadCertificatePdf` liam o certificado com `innerJoin` em `courses`
+sob a RLS do aluno — arquivar **ou** despublicar um curso fazia o
+certificado já emitido sumir de `/certificados` e o download falhar com
+"Certificado não encontrado" para o próprio dono, contradizendo o
+critério de P-6.4b ("certificado emitido continua existindo") e a
+imutabilidade de BRAIN §6.3. `arquivamento.test.ts` cobria a sobrevivência
+da linha (via `db` cru, sem RLS) e a rota pública de verificação — nunca a
+visão do aluno.
+
+1. **`getUserCertificates`** (`apps/plataforma/src/lib/queries.ts`) —
+   removido o `innerJoin` em `courses`/`users`. Agora lê só a própria
+   linha de `certificates` (RLS `certificates_select_own`) e resolve
+   `courseName`/`userName` por `plataforma.verify_certificate(hash)`
+   (`SECURITY DEFINER`, já teria `GRANT` a `anon, authenticated` desde
+   P-6.7/`0020_plataforma_rls.sql`, usado pela rota pública desde P-6.14)
+   — imune à visibilidade de `courses`.
+2. **`downloadCertificatePdf`** (`apps/plataforma/src/actions/
+certificates.ts`) — mesmo tratamento: lê o certificado próprio (por id,
+   RLS + checagem de dono/`super_admin` como antes) e resolve título/nome
+   via `verify_certificate(hash)` em vez do `innerJoin`. O PDF de um curso
+   arquivado ou despublicado volta a ser baixável pelo dono.
+3. **`notifications.ts`** (`lib/notifications.ts:190`) mantém `innerJoin`
+   em `courses`/`certificates`, fora de escopo: roda com `db` cru (sem RLS
+   de aluno) no instante da emissão, quando o curso ainda não foi
+   arquivado — não é o mesmo defeito, e o arquivo não está na lista de
+   permitidos deste prompt.
+4. **Testes em `arquivamento.test.ts`** — duas fixtures novas
+   (`IDS.courseUnpublished`/`IDS.certificateUnpublished`, curso
+   `published: true` na criação, despublicado dentro do próprio describe
+   para não interferir nos blocos anteriores) e dois `describe` novos logo
+   depois do bloco de `deleteCourse` (que já arquiva `IDS.course`):
+   `getUserCertificates` continua listando o certificado do curso
+   arquivado/despublicado, com o `courseName` correto; `downloadCertificatePdf`
+   gera o PDF (base64 não vazio) nos dois casos, sem `serverError`.
+
+### Suposições registradas
+
+- Nenhuma suposição de regra de negócio nova — a correção é estritamente
+  técnica (troca de fonte de leitura), sem mudar o comportamento definido
+  em P-6.4b (curso arquivado continua saindo do catálogo/ementa).
+
+### Baseline verificado
+
+- `pnpm exec tsc --noEmit` (dentro de `apps/plataforma`): verde
+- `pnpm exec eslint src/lib/queries.ts src/actions/certificates.ts
+src/__tests__/arquivamento.test.ts`: verde
+- `pnpm exec vitest run` (`apps/plataforma`): 6 arquivos, 68/68 verde
+  (36 em `arquivamento.test.ts`, incl. os 6 novos deste prompt; sem
+  regressão nos demais)
+- Não testado em navegador (Server Actions/queries, sem tela nova) —
+  cobertura veio dos testes automatizados acima, que exercitam a RLS real
+  (`certificates_select_own`) e `verify_certificate` no banco.
+
+### Arquivos modificados
+
+- `apps/plataforma/src/lib/queries.ts`
+- `apps/plataforma/src/actions/certificates.ts`
+- `apps/plataforma/src/__tests__/arquivamento.test.ts` (estendido)
+- `PROMPTS.md` (critérios de P-6.4b e P-6.8 anotados)
 - `SESSIONS.md` (esta entrada + linha no índice)

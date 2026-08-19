@@ -49,6 +49,7 @@ import {
   getCourseForEditor,
   getCertificateVerification,
   getUserEnrollmentsWithProgress,
+  getUserCertificates,
 } from "../lib/queries";
 import { getStudentKpiMetrics } from "@hebron/integrations/plataforma";
 
@@ -115,6 +116,10 @@ const IDS = {
     pB: "9f400000-0000-0000-0000-000000000031",
   },
   courseKpi: "9f200000-0000-0000-0000-000000000005",
+  // P-6.17 (CORRETIVO) — curso despublicado, sem passar por arquivamento;
+  // certificado próprio precisa continuar visível/baixável do mesmo jeito.
+  courseUnpublished: "9f200000-0000-0000-0000-000000000006",
+  certificateUnpublished: "9f500000-0000-0000-0000-000000000002",
 } as const;
 
 beforeAll(async () => {
@@ -310,7 +315,27 @@ beforeAll(async () => {
         instructorId: IDS.instructor,
         published: true,
       },
+      {
+        id: IDS.courseUnpublished,
+        title: "P-6.17 — Despublicado Test",
+        slug: "p617-despublicado-test",
+        description:
+          "Curso despublicado usado para testar visibilidade do certificado",
+        category: "teste",
+        instructorId: IDS.instructor,
+        published: true,
+      },
     ])
+    .onConflictDoNothing();
+
+  await db
+    .insert(certificates)
+    .values({
+      id: IDS.certificateUnpublished,
+      courseId: IDS.courseUnpublished,
+      userId: IDS.student,
+      verificationHash: "arquiv-plat-hash-unpub-test",
+    })
     .onConflictDoNothing();
 
   await db
@@ -445,6 +470,8 @@ afterAll(async () => {
         IDS.courseKpi,
       ]),
     );
+  // P-6.17 — cascade limpa o certificado junto.
+  await db.delete(courses).where(eq(courses.id, IDS.courseUnpublished));
   await db.delete(instructors).where(eq(instructors.id, IDS.instructor));
   await db
     .delete(roleAssignments)
@@ -735,6 +762,66 @@ describe("Arquivamento — deleteCourse marca archived_at; matrícula/progresso/
     );
     expect(verification).not.toBeNull();
     expect(verification?.userName).toBe("Arquivamento Plataforma Aluno");
+  });
+});
+
+// ── Certificado (P-6.17, CORRETIVO) — sobrevive ao arquivamento e à
+// despublicação do curso, tanto em /certificados (getUserCertificates)
+// quanto no download do PDF (downloadCertificatePdf). Antes deste prompt,
+// as duas leituras faziam innerJoin em `courses` sob RLS do aluno
+// (courses_select_published), que some assim que archived_at é preenchido
+// ou published vira false — o certificado emitido ficava invisível/
+// inacessível para o próprio dono.
+
+describe("Certificado (P-6.17) — /certificados e o PDF sobrevivem ao curso arquivado", () => {
+  it("getUserCertificates continua listando o certificado do curso arquivado", async () => {
+    const certs = await getUserCertificates(IDS.student);
+    const entry = certs.find((c) => c.id === IDS.certificate);
+    expect(entry).toBeDefined();
+    expect(entry?.courseName).toBe("Arquivamento — Curso Test (editado)");
+  });
+
+  it("downloadCertificatePdf gera o PDF do certificado do curso arquivado", async () => {
+    await actingAs(IDS.student);
+    const { downloadCertificatePdf } = await import("../actions/certificates");
+    const result = await downloadCertificatePdf({
+      certificateId: IDS.certificate,
+    });
+    expect(result?.serverError).toBeUndefined();
+    expect(result?.data?.base64).toBeTruthy();
+  });
+});
+
+describe("Certificado (P-6.17) — /certificados e o PDF sobrevivem ao curso despublicado", () => {
+  it("despublica o curso (published = false, sem arquivar)", async () => {
+    await db
+      .update(courses)
+      .set({ published: false })
+      .where(eq(courses.id, IDS.courseUnpublished));
+
+    const [row] = await db
+      .select()
+      .from(courses)
+      .where(eq(courses.id, IDS.courseUnpublished));
+    expect(row?.published).toBe(false);
+    expect(row?.archivedAt).toBeNull();
+  });
+
+  it("getUserCertificates continua listando o certificado do curso despublicado", async () => {
+    const certs = await getUserCertificates(IDS.student);
+    const entry = certs.find((c) => c.id === IDS.certificateUnpublished);
+    expect(entry).toBeDefined();
+    expect(entry?.courseName).toBe("P-6.17 — Despublicado Test");
+  });
+
+  it("downloadCertificatePdf gera o PDF do certificado do curso despublicado", async () => {
+    await actingAs(IDS.student);
+    const { downloadCertificatePdf } = await import("../actions/certificates");
+    const result = await downloadCertificatePdf({
+      certificateId: IDS.certificateUnpublished,
+    });
+    expect(result?.serverError).toBeUndefined();
+    expect(result?.data?.base64).toBeTruthy();
   });
 });
 

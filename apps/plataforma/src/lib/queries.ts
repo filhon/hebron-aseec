@@ -902,29 +902,42 @@ export async function getUserEnrollmentsWithProgress(
 export async function getUserCertificates(
   actorId: string,
 ): Promise<Certificate[]> {
+  // Sem join em `courses`/`users`: curso arquivado ou despublicado some da
+  // RLS do aluno (courses_select_published, 0082) e um innerJoin esvaziaria
+  // o certificado junto (P-6.17). O certificado em si é lido por RLS própria
+  // (certificates_select_own); nome do curso e do aluno vêm de
+  // plataforma.verify_certificate (SECURITY DEFINER, imune à RLS de courses).
   const rows = await withAuthenticatedContext({ actorId }, (tx) =>
     tx
-      .select({
-        certificate: certificates,
-        courseTitle: courses.title,
-        userFullName: users.fullName,
-      })
+      .select()
       .from(certificates)
-      .innerJoin(courses, eq(courses.id, certificates.courseId))
-      .innerJoin(users, eq(users.id, certificates.userId))
       .where(eq(certificates.userId, actorId))
       .orderBy(desc(certificates.issuedAt)),
   );
 
-  return rows.map((r) => ({
-    id: r.certificate.id,
-    courseId: r.certificate.courseId,
-    courseName: r.courseTitle,
-    userId: r.certificate.userId,
-    userName: r.userFullName ?? "Aluno",
-    issuedAt: r.certificate.issuedAt,
-    hash: r.certificate.verificationHash,
-  }));
+  return Promise.all(
+    rows.map(async (certificate) => {
+      const verification = await withAuthenticatedContext({ actorId }, (tx) =>
+        tx.execute<{
+          course_title: string;
+          user_name: string | null;
+        }>(
+          sql`SELECT * FROM plataforma.verify_certificate(${certificate.verificationHash})`,
+        ),
+      );
+      const v = verification[0];
+
+      return {
+        id: certificate.id,
+        courseId: certificate.courseId,
+        courseName: v?.course_title ?? "",
+        userId: certificate.userId,
+        userName: v?.user_name ?? "Aluno",
+        issuedAt: certificate.issuedAt,
+        hash: certificate.verificationHash,
+      };
+    }),
+  );
 }
 
 export interface CertificateVerification {

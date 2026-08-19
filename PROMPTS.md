@@ -8008,7 +8008,7 @@ P-6.4 tem `[x]` em "Curso form: título, descrição, capa, categoria, instrutor
 
 - [x] Instrutor edita título, descrição, capa, categoria, instrutor e série de um curso já criado, e a mudança aparece no catálogo
 - [x] Instrutor edita título e descrição de um módulo existente
-- [x] Arquivar curso, módulo ou aula tira do catálogo/ementa sem apagar linha nenhuma; matrícula, progresso e certificado emitido continuam existindo e o certificado segue verificável em `/certificado/verificar` — a migration só atualizou as policies de SELECT e `course_outline()`; `can_access_lesson`, `issue_certificate`, `course_stats` e `enrollments_insert_own` continuaram ignorando `archived_at`, travando a trilha e abortando o certificado no primeiro arquivamento real; corrigido em P-6.16
+- [x] Arquivar curso, módulo ou aula tira do catálogo/ementa sem apagar linha nenhuma; matrícula, progresso e certificado emitido continuam existindo e o certificado segue verificável em `/certificado/verificar` — a migration só atualizou as policies de SELECT e `course_outline()`; `can_access_lesson`, `issue_certificate`, `course_stats` e `enrollments_insert_own` continuaram ignorando `archived_at`, travando a trilha e abortando o certificado no primeiro arquivamento real; corrigido em P-6.16. A linha sobrevivia, mas a visão do próprio aluno (`getUserCertificates`/`/certificados`) fazia `innerJoin` em `courses` sob a RLS do aluno (`courses_select_published`, 0082) — arquivar ou despublicar o curso esvaziava o join e o certificado emitido sumia da tela do dono; corrigido em P-6.17
 - [x] Nenhuma ação exposta na UI executa `DELETE` físico em `courses`, `modules` ou `lessons`
 - [x] Aluno edita e remove a própria nota; não alcança a de outro aluno
 - [x] Autor edita e remove o próprio post; outro aluno não; `super_admin` modera (P-6.7 sem regressão — `rls.test.ts:316-350` verde)
@@ -8221,7 +8221,7 @@ Server Actions: CRUD de cursos, módulos, aulas (instrutor/admin) — CRUD de cu
 - [x] Quiz: attempt < passing_score NÃO conclui a aula; attempt >= passing_score conclui (teste)
 - [x] Tentativas ilimitadas, todas registradas
 - [x] Certificado: emitido automaticamente quando 100% das aulas concluídas — incluindo aulas-quiz (teste)
-- [x] Certificado em PDF (@react-pdf/renderer) com verification_hash único
+- [x] Certificado em PDF (@react-pdf/renderer) com verification_hash único — `downloadCertificatePdf` fazia `innerJoin` em `courses` sob a RLS do aluno (`courses_select_published`, 0082); curso arquivado ou despublicado barrava o download do próprio dono com "Certificado não encontrado", corrigido em P-6.17 (título/nome via `plataforma.verify_certificate`, sem depender da visibilidade de `courses`)
 - [x] Actions via kit de @hebron/auth; publicação de curso e emissão de certificado com audit central (ALTER TYPE com valores do módulo na migration de P-6.6)- [x] Certificado com hash de verificação pública
 - [x] Discussões por aula com moderação (super_admin pode deletar)
 - [x] Lint passa
@@ -8553,13 +8553,13 @@ Ref: S-250 item 6 já documentava a perda de visibilidade de conteúdo pós-arqu
 
 **Critérios de aceite:**
 
-- [ ] Aluno vê o próprio certificado em `/certificados` com o curso arquivado (teste)
-- [ ] `downloadCertificatePdf` funciona para curso arquivado e para curso despublicado (teste)
-- [ ] Nenhum `innerJoin` de `certificates` → `courses` sob contexto de aluno sobra nas duas leituras (grep)
-- [ ] Jornada permanece como P-6.4b definiu (curso arquivado sai da lista) — este prompt não muda esse comportamento
-- [ ] Suíte existente do módulo segue verde, sem regressão
-- [ ] Lint passa · Types passam
-- [ ] Registrar em SESSIONS.md
+- [x] Aluno vê o próprio certificado em `/certificados` com o curso arquivado (teste)
+- [x] `downloadCertificatePdf` funciona para curso arquivado e para curso despublicado (teste)
+- [x] Nenhum `innerJoin` de `certificates` → `courses` sob contexto de aluno sobra nas duas leituras (grep)
+- [x] Jornada permanece como P-6.4b definiu (curso arquivado sai da lista) — este prompt não muda esse comportamento
+- [x] Suíte existente do módulo segue verde, sem regressão
+- [x] Lint passa · Types passam
+- [x] Registrar em SESSIONS.md
 
 **Notas:**
 Mesma família do achado que gerou P-6.14: o dado certo existia no banco, mas nenhum caminho de UI chegava até ele. Aqui é o inverso — o caminho existia e uma mudança de RLS posterior (0082) o esvaziou por baixo, sem nenhum teste na perspectiva do aluno para acusar.
