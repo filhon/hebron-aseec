@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { eq, and, isNull, count } from "drizzle-orm";
+import { eq, and, isNull, count, desc, inArray } from "drizzle-orm";
 import { db } from "@hebron/db/client";
 import { BusinessError } from "@hebron/auth/safe-action-error";
 import { enforceRateLimit, getRateLimiter } from "@hebron/auth/rate-limit";
@@ -12,6 +12,7 @@ import {
 import {
   projects,
   projectVersions,
+  projectCategories,
   compactVersions,
   contestations,
   projectAttachments,
@@ -149,6 +150,165 @@ async function loadCompactTemplate(
     (rows[0].value as CompactVersionTemplate | null) ?? DEFAULT_COMPACT_TEMPLATE
   );
 }
+
+// ---------------------------------------------------------------------------
+// findRenewalCandidate — detecta um projeto anual anterior da mesma
+// organização em estágio final, para o wizard oferecer como base ao
+// submissor (P-2.13, BRAIN §6.2 "Renovação/continuação: nova entrada
+// vinculada via parent_project_id"). Só informa o candidato — nunca grava
+// vínculo; o vínculo é sempre opt-in ("Usar como base" no wizard).
+// ---------------------------------------------------------------------------
+
+const RENEWAL_CANDIDATE_STAGES: ProjectStage[] = [
+  "concluido",
+  "aprovado",
+  "em_execucao",
+];
+
+export type RenewalCandidatePrefill = {
+  titulo: string;
+  categoria: string;
+  objetivos: string;
+  justificativa: string;
+  metodologia: string;
+  contextoMinisterial: string;
+  tempoMinisterioAnos: string;
+  regiao: string;
+  pais: string;
+  beneficiariosQuantidade: string;
+  beneficiariosDescricao: string;
+  resultadosEsperados: string;
+  valorTotal: string;
+  numeroParcelas: string;
+  cofinancimento: string;
+  anoReferencia: string;
+  mesesSelecionados: number[];
+};
+
+export type RenewalCandidate = {
+  id: string;
+  titulo: string;
+  ano: number | null;
+  categoriaSlug: string | null;
+  prefill: RenewalCandidatePrefill;
+};
+
+export const findRenewalCandidate = submissorAction
+  .schema(z.object({ organizationId: z.string().uuid("Instituição inválida") }))
+  .action(async ({ parsedInput, ctx }) => {
+    const candidate = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx): Promise<RenewalCandidate | null> => {
+        const rows = await tx
+          .select({
+            id: projects.id,
+            title: projects.title,
+            objectives: projects.objectives,
+            justification: projects.justification,
+            expectedResults: projects.expectedResults,
+            ministryRegion: projects.ministryRegion,
+            ministryArea: projects.ministryArea,
+            budgetTotal: projects.budgetTotal,
+            parcelas: projects.parcelas,
+            evaluationYear: projects.evaluationYear,
+            categorySlug: projectCategories.slug,
+          })
+          .from(projects)
+          .leftJoin(
+            projectCategories,
+            eq(projects.categoryId, projectCategories.id),
+          )
+          .where(
+            and(
+              eq(projects.organizationId, parsedInput.organizationId),
+              eq(projects.tipo, "anual"),
+              inArray(projects.stage, RENEWAL_CANDIDATE_STAGES),
+              isNull(projects.deletedAt),
+            ),
+          )
+          .orderBy(desc(projects.createdAt))
+          .limit(1);
+
+        const project = rows[0];
+        if (!project) return null;
+
+        // Campos sem coluna própria (metodologia, contexto ministerial,
+        // tempo de ministério, beneficiários, cofinanciamento, meses de
+        // pagamento) só existem no snapshot da versão 1 — mesmo padrão de
+        // getSubmissorProjectDetail/getDirectorProjectDetail (lib/queries.ts).
+        // RLS "project_versions_select" só libera o próprio submissor (mais
+        // estrito que "projects_select_own_or_org"): se o candidato foi
+        // submetido por outro membro da organização, esta consulta volta
+        // vazia e o pré-preenchimento cai só nos campos que já vêm de
+        // `projects` — nunca falha, só fica parcial.
+        const versionRows = await tx
+          .select({ data: projectVersions.data })
+          .from(projectVersions)
+          .where(eq(projectVersions.projectId, project.id))
+          .orderBy(projectVersions.versionNumber)
+          .limit(1);
+
+        const snapshot = (versionRows[0]?.data ?? {}) as Record<
+          string,
+          unknown
+        >;
+
+        const mesesSelecionados = Array.isArray(snapshot.mesesPagamento)
+          ? (snapshot.mesesPagamento as number[])
+          : [];
+
+        return {
+          id: project.id,
+          titulo: project.title,
+          ano: project.evaluationYear,
+          categoriaSlug: project.categorySlug,
+          prefill: {
+            titulo: project.title,
+            categoria: project.categorySlug ?? "",
+            objetivos: project.objectives ?? "",
+            justificativa: project.justification ?? "",
+            metodologia:
+              typeof snapshot.metodologia === "string"
+                ? snapshot.metodologia
+                : "",
+            contextoMinisterial:
+              typeof snapshot.contextoMinisterial === "string"
+                ? snapshot.contextoMinisterial
+                : "",
+            tempoMinisterioAnos:
+              typeof snapshot.tempoMinisterioAnos === "number"
+                ? String(snapshot.tempoMinisterioAnos)
+                : "",
+            regiao: project.ministryRegion ?? "",
+            pais: project.ministryArea ?? "",
+            beneficiariosQuantidade:
+              typeof snapshot.beneficiariosQuantidade === "number"
+                ? String(snapshot.beneficiariosQuantidade)
+                : "",
+            beneficiariosDescricao:
+              typeof snapshot.beneficiariosDescricao === "string"
+                ? snapshot.beneficiariosDescricao
+                : "",
+            resultadosEsperados: project.expectedResults ?? "",
+            valorTotal: project.budgetTotal ?? "",
+            numeroParcelas:
+              project.parcelas !== null ? String(project.parcelas) : "",
+            cofinancimento:
+              typeof snapshot.cofinancimento === "string"
+                ? snapshot.cofinancimento
+                : "",
+            anoReferencia:
+              project.evaluationYear !== null
+                ? String(project.evaluationYear)
+                : "",
+            mesesSelecionados,
+          },
+        };
+      },
+    );
+
+    return { candidate };
+  });
 
 // ---------------------------------------------------------------------------
 // createAnnualDraft — submissor creates an annual project draft

@@ -284,6 +284,7 @@
 | S-261  | 2026-08-20 | AUDIT PACOTE 5 — Prontidão de produção (P-9.5) (CORRETIVO)                                                                       | parcial (infra externa pendente — ver runbook)                                       |
 | S-262  | 2026-08-20 | AUDIT PACOTE 6 — Impersonação: implementar ou revogar (CORRETIVO)                                                                | concluido                                                                            |
 | S-263  | 2026-08-20 | AUDIT PACOTE 7 — Escopo v1 pendente: decisão da diretoria (CORRETIVO)                                                            | parcial (decisão tomada + 6 prompts escritos; P-9.0 escrito, execução real pendente) |
+| S-264  | 2026-08-20 | P-2.13 — Detecção de renovação de projetos                                                                                       | concluido                                                                            |
 
 ---
 
@@ -24405,4 +24406,96 @@ edição de texto (os quatro itens de PATCH-012 já apontavam certo).
 - `.env.example` (raiz — `LEGACY_SUPABASE_URL`, `LEGACY_SUPABASE_SERVICE_ROLE_KEY`)
 - `.gitignore` (`migration-reports/`)
 - `AUDIT/04-BACKLOG-CORRECAO.md` (critérios de aceite do Pacote 7)
+- `SESSIONS.md` (esta entrada)
+
+---
+
+## S-264 — P-2.13 — Detecção de renovação de projetos
+
+**Prompt:** `PROMPTS.md` P-2.13
+**Data:** 2026-08-20
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+`parent_project_id` existia no schema e no Zod desde o início (P-2.4b) sem
+nada preenchê-lo. Implementado o requisito 5 do PRD ("formulário
+inteligente"): ao selecionar a organização no wizard anual, `findRenewalCandidate`
+(nova Server Action, `submissorAction`) busca o projeto anual mais recente
+(`orderBy(desc(createdAt))`, `limit(1)`) da mesma organização em estágio
+final (`concluido`/`aprovado`/`em_execucao`). Se houver candidato, o wizard
+mostra um banner (`renewal-banner.tsx`, novo) com resumo (título, ano,
+categoria) e duas ações: "Usar como base" (pré-preenche proposta/orçamento/
+cronograma e grava `parentProjectId` no rascunho) ou "Começar do zero"
+(dispensa sem gravar nada). Vínculo é sempre opt-in — a action só informa o
+candidato, nunca grava.
+
+**Fonte do pré-preenchimento.** Campos com coluna própria em `projects`
+(título, objetivos, justificativa, resultados esperados, região, país,
+orçamento, parcelas, ano) vêm direto da tabela. Campos sem coluna (metodologia,
+contexto ministerial, tempo de ministério, beneficiários, cofinanciamento,
+meses de pagamento) só existem no snapshot da versão 1 — mesmo padrão já
+usado por `getSubmissorProjectDetail`/`getDirectorProjectDetail`
+(`lib/queries.ts`). A RLS `project_versions_select` é mais estrita que
+`projects_select_own_or_org` (só libera o próprio submissor, não qualquer
+membro da organização): se o candidato foi submetido por outro membro da
+mesma organização, essa consulta volta vazia e o pré-preenchimento cai só
+nos campos de `projects` — nunca falha, só fica parcial. Documentado inline
+em `actions/projects.ts`, não corrigido (mudar a RLS está fora do escopo
+deste prompt).
+
+**`WizardFormData` ganhou `parentProjectId: string | null`**
+(`project-wizard.tsx`), enviado por `buildAnnualPayload`/`buildPontualPayload`
+— `createAnnualDraft`/`createPunctualDraft` já aceitavam e gravavam esse
+campo desde a criação original (P-2.4/P-2.9), não precisaram mudar.
+`step-institution.tsx` zera `parentProjectId` sempre que a organização ou o
+tipo de projeto muda (evita vínculo remanescente de uma seleção anterior); o
+banner só renderiza para `projectType === "anual"` (pontual nunca tem
+continuação, BRAIN §6.2 "sem parcelas, pagamento único").
+
+**Suposição registrada (G1):** "Usar como base" pré-preenche também o
+título (parte da etapa "Proposta" no wizard) e o ano de referência do
+candidato tal como estava — não incrementa automaticamente para o ano
+seguinte. O submissor ajusta manualmente na revisão se necessário; nada no
+BRAIN.md/PRD especifica esse comportamento.
+
+**Desvio de caminho do teste (G1, registrar divergência):** `PROMPTS.md`
+lista `apps/projetos/src/actions/__tests__/renewal.test.ts` entre os
+arquivos permitidos, mas `apps/projetos/vitest.config.ts` só descobre
+`src/__tests__/**/*.test.ts` — os 14 arquivos de teste existentes do app
+vivem todos ali, nenhum em `actions/__tests__`. Um arquivo no caminho
+literal do prompt nunca rodaria (falso-positivo silencioso). Criado em
+`apps/projetos/src/__tests__/renewal.test.ts` em vez disso.
+
+### Verificação
+
+- `pnpm --filter @hebron/projetos typecheck` — limpo.
+- `pnpm --filter @hebron/projetos lint` — limpo (ajuste: o
+  `eslint-disable-next-line react-hooks/exhaustive-deps` inicial do
+  `useEffect` de busca falhou com "rule not found" — a regra não está
+  registrada neste projeto; trocado por incluir `execute` no array de
+  dependências, seguro porque `next-safe-action` envolve `execute` em
+  `useCallback`, referência estável entre renders).
+- `apps/projetos/src/__tests__/renewal.test.ts` (novo, 5 testes, DB real via
+  `withAuthenticatedContext`/RLS, sem mocks de banco): candidato mais recente
+  é escolhido sobre um mais antigo da mesma organização; pré-preenchimento
+  combina colunas de `projects` com o snapshot da versão 1; projeto de outra
+  organização nunca aparece; organização sem histórico final → sem
+  candidato; projeto pontual nunca é oferecido como renovação mesmo sendo
+  mais recente e em estágio final. 5/5 passando.
+- `pnpm --filter @hebron/projetos build` (`next build` real) — compilado com
+  sucesso, todas as 14 rotas geradas, sem erros de tipo.
+
+### Arquivos modificados
+
+- `apps/projetos/src/actions/projects.ts` (`findRenewalCandidate`, tipos
+  `RenewalCandidate`/`RenewalCandidatePrefill`)
+- `apps/projetos/src/components/renewal-banner.tsx` (novo)
+- `apps/projetos/src/components/project-wizard-steps/step-institution.tsx`
+  (banner + reset de `parentProjectId` ao trocar organização/tipo)
+- `apps/projetos/src/components/project-wizard.tsx` (`parentProjectId` em
+  `WizardFormData`/`INITIAL`/`buildAnnualPayload`/`buildPontualPayload`)
+- `apps/projetos/src/__tests__/renewal.test.ts` (novo — caminho diferente do
+  listado no prompt, ver "Desvio" acima)
 - `SESSIONS.md` (esta entrada)

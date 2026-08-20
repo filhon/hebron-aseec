@@ -64,6 +64,10 @@ export type WizardFormData = {
   // Step 1
   orgId: string;
   projectType: "anual" | "pontual";
+  // Renovação (P-2.13) — opt-in via banner "Usar como base"; nunca setado
+  // automaticamente. Só é enviado para createAnnualDraft/createPunctualDraft
+  // (ambos já aceitam parentProjectId, ver actions/projects.ts).
+  parentProjectId: string | null;
   // Step 2 — anual
   titulo: string;
   categoria: string;
@@ -98,6 +102,7 @@ const INITIAL: WizardFormData = {
   editalTitle: null,
   orgId: "",
   projectType: "anual",
+  parentProjectId: null,
   titulo: "",
   categoria: "",
   objetivos: "",
@@ -282,6 +287,7 @@ function buildAnnualPayload(data: WizardFormData) {
     numeroParcelas: toIntOrUndefined(data.numeroParcelas),
     mesesPagamento: data.mesesSelecionados,
     editalId: data.editalId,
+    parentProjectId: data.parentProjectId,
     cofinancimento: data.cofinancimento || null,
     attachments: data.anexos.map((a) => ({
       fileUrl: a.fileUrl,
@@ -306,6 +312,7 @@ function buildPontualPayload(data: WizardFormData) {
     regiao: data.regiao || undefined,
     pais: data.pais || undefined,
     editalId: data.editalId,
+    parentProjectId: data.parentProjectId,
     attachments: data.anexos.map((a) => ({
       fileUrl: a.fileUrl,
       fileName: a.fileName,

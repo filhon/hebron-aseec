@@ -2,8 +2,10 @@
 
 import { Check } from "lucide-react";
 import { FieldLabel, FieldError } from "./field-controls";
+import { RenewalBanner } from "../renewal-banner";
 import type { OrgOption } from "../../lib/queries";
 import type { WizardFormData } from "../project-wizard";
+import type { RenewalCandidate } from "../../actions/projects";
 
 export function StepInstitution({
   data,
@@ -18,6 +20,10 @@ export function StepInstitution({
   orgsLoading: boolean;
   error?: string;
 }) {
+  function handleUseAsBase(candidate: RenewalCandidate) {
+    onChange({ ...candidate.prefill, parentProjectId: candidate.id });
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -46,7 +52,9 @@ export function StepInstitution({
               <button
                 key={org.id}
                 type="button"
-                onClick={() => onChange({ orgId: org.id })}
+                onClick={() =>
+                  onChange({ orgId: org.id, parentProjectId: null })
+                }
                 className="flex items-center gap-4 rounded-md border-2 px-4 py-3 text-left transition-all duration-(--dur-fast) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--brand)"
                 style={{
                   borderColor:
@@ -104,6 +112,16 @@ export function StepInstitution({
         <FieldError id="orgId-error" error={error} />
       </div>
 
+      {/* Renovação (P-2.13): só faz sentido para projeto anual — pontual não
+          tem continuação, BRAIN §6.2 "sem parcelas, pagamento único". */}
+      {data.projectType === "anual" && data.orgId && (
+        <RenewalBanner
+          key={data.orgId}
+          organizationId={data.orgId}
+          onUseAsBase={handleUseAsBase}
+        />
+      )}
+
       <div>
         <FieldLabel required>Tipo de Projeto</FieldLabel>
         <div className="flex gap-3">
@@ -111,7 +129,9 @@ export function StepInstitution({
             <button
               key={type}
               type="button"
-              onClick={() => onChange({ projectType: type })}
+              onClick={() =>
+                onChange({ projectType: type, parentProjectId: null })
+              }
               className="flex-1 rounded-md border-2 px-4 py-3 text-sm font-semibold transition-all duration-(--dur-fast) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--brand)"
               style={{
                 borderColor:
