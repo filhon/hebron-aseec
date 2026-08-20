@@ -20,269 +20,270 @@
 
 > Atualizar conforme sessoes sao executadas.
 
-| Sessao | Data       | Prompt                                                                                                                           | Status                                               |
-| ------ | ---------- | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------- |
-| S-1    | 2026-05-21 | P-0.1 — Monorepo Setup                                                                                                           | concluido                                            |
-| S-2    | 2026-05-22 | P-0.1 — Monorepo Setup (complemento)                                                                                             | concluido                                            |
-| S-3    | 2026-05-22 | P-0.2 — Design System Base                                                                                                       | concluido                                            |
-| S-4    | 2026-05-22 | P-0.3 — Supabase Setup                                                                                                           | concluido                                            |
-| S-5    | 2026-05-22 | P-0.4 — Autenticação e SSO                                                                                                       | concluido                                            |
-| S-6    | 2026-05-22 | P-0.5 — Layout Compartilhado (AppShell)                                                                                          | concluido                                            |
-| S-7    | 2026-05-22 | P-0.6 — Sistema de Notificações                                                                                                  | concluido                                            |
-| S-8    | 2026-05-22 | P-1.1 — Schema de Tipos Admin                                                                                                    | concluido                                            |
-| S-9    | 2026-05-22 | P-1.2 — Componentes UI Admin                                                                                                     | concluido                                            |
-| S-10   | 2026-05-22 | P-1.3 — Telas e Páginas Admin                                                                                                    | concluido                                            |
-| S-11   | 2026-05-22 | P-1.4 — Formulários Admin                                                                                                        | concluido                                            |
-| S-12   | 2026-05-22 | P-1.5 — Estados Admin                                                                                                            | concluido                                            |
-| S-13   | 2026-05-25 | P-1.6 — Schema do Banco Admin                                                                                                    | concluido                                            |
-| S-14   | 2026-05-25 | P-1.7 — RLS Policies Admin                                                                                                       | concluido                                            |
-| S-15   | 2026-05-25 | P-1.8 — Server Actions Admin                                                                                                     | concluido                                            |
-| S-16   | 2026-05-25 | P-1.9 — Integração UI ↔ Backend Admin                                                                                            | concluido                                            |
-| S-17   | 2026-05-25 | P-1.10 — Notificações e Emails Admin                                                                                             | concluido                                            |
-| S-18   | 2026-05-26 | P-1.11 — Impersonation e Audit Avançado                                                                                          | concluido                                            |
-| S-19   | 2026-05-26 | P-1.12 — Testes Admin                                                                                                            | concluido                                            |
-| S-20   | 2026-06-13 | P-0.2b — Unificação do Design System                                                                                             | concluido                                            |
-| S-21   | 2026-06-15 | P-1.12b — Ajustes Menores DS Admin                                                                                               | concluido                                            |
-| S-22   | 2026-06-15 | P-0.3b — Pipeline de Migrations                                                                                                  | concluido                                            |
-| S-23   | 2026-06-16 | P-1.13 — Schema de Tipos Documentos                                                                                              | concluido                                            |
-| S-24   | 2026-06-16 | P-1.14 — Componentes UI Documentos                                                                                               | concluido                                            |
-| S-25   | 2026-06-16 | P-1.15 — Telas e Páginas Documentos                                                                                              | concluido                                            |
-| S-26   | 2026-06-17 | P-1.16 — Formulários Documentos                                                                                                  | concluido                                            |
-| S-27   | 2026-06-17 | P-1.17 — Estados Documentos                                                                                                      | concluido                                            |
-| S-28   | 2026-06-17 | P-1.18 — Schema do Banco Documentos                                                                                              | concluido                                            |
-| S-29   | 2026-06-17 | P-1.20 — Server Actions Documentos                                                                                               | concluido                                            |
-| S-30   | 2026-06-18 | P-1.22 — Notificações e Emails Documentos                                                                                        | concluido                                            |
-| S-31   | 2026-06-18 | P-1.23 — Integração Documentos ↔ Projetos                                                                                        | concluido                                            |
-| S-32   | 2026-06-18 | P-1.24 — Testes Documentos                                                                                                       | concluido                                            |
-| S-33   | 2026-06-20 | P-2.1 — Schema de Tipos Projetos                                                                                                 | concluido                                            |
-| S-34   | 2026-06-20 | P-2.2 — Componentes UI Projetos                                                                                                  | concluido                                            |
-| S-35   | 2026-06-20 | P-2.3 — Telas e Páginas Projetos                                                                                                 | concluido                                            |
-| S-36   | 2026-06-20 | P-2.4 — Formulários Projetos                                                                                                     | concluido                                            |
-| S-37   | 2026-06-22 | P-2.5 — Estados Projetos                                                                                                         | concluido                                            |
-| S-38   | 2026-06-22 | P-2.6 — Schema do Banco Projetos                                                                                                 | concluido                                            |
-| S-39   | 2026-06-22 | P-2.7 — RLS Policies Projetos                                                                                                    | concluido                                            |
-| S-40   | 2026-06-22 | P-2.8 — Server Actions Projetos                                                                                                  | concluido                                            |
-| S-41   | 2026-06-22 | P-2.9 — Integração UI ↔ Backend Projetos                                                                                         | concluido                                            |
-| S-42   | 2026-06-23 | P-2.10 — Notificações e Emails Projetos                                                                                          | concluido                                            |
-| S-43   | 2026-06-23 | P-2.11 — Integrações Cross-App Projetos                                                                                          | parcial                                              |
-| S-44   | 2026-06-23 | P-2.9b — Usuário Real no Header Projetos                                                                                         | concluido                                            |
-| S-45   | 2026-06-23 | Polish — apps/projetos/src/app                                                                                                   | concluido                                            |
-| S-46   | 2026-06-23 | P-3.1 — Schema de Tipos Financeiro                                                                                               | concluido                                            |
-| S-47   | 2026-06-25 | P-3.2 — Componentes UI Financeiro                                                                                                | concluido                                            |
-| S-48   | 2026-06-25 | P-3.3 — Telas e Páginas Financeiro                                                                                               | concluido                                            |
-| S-49   | 2026-06-26 | P-3.4 — Formulários Financeiro                                                                                                   | concluido                                            |
-| S-50   | 2026-06-26 | P-3.5 — Estados Financeiro                                                                                                       | concluido                                            |
-| S-51   | 2026-06-26 | P-3.6 — Schema do Banco Financeiro                                                                                               | concluido                                            |
-| S-52   | 2026-06-26 | P-3.7 — RLS Policies Financeiro                                                                                                  | concluido                                            |
-| S-53   | 2026-06-26 | P-3.8 — Server Actions Financeiro                                                                                                | concluido                                            |
-| S-54   | 2026-07-03 | P-0.7 — Resgate do Banco (Onda 0)                                                                                                | concluido                                            |
-| S-55   | 2026-07-03 | P-0.8 — Kit de Backend Compartilhado (Onda 0)                                                                                    | concluido                                            |
-| S-56   | 2026-07-03 | P-0.9 — CI Mínimo (Onda 0)                                                                                                       | concluido (validação em PR pendente)                 |
-| S-57   | 2026-07-03 | P-0.10 — Decisão B: RLS Ativa (Onda 0)                                                                                           | concluido                                            |
-| S-58   | 2026-07-04 | P-0.11 — Drizzle-kit Reconciliado (Onda 0)                                                                                       | concluido                                            |
-| S-59   | 2026-07-04 | P-1.25 — Admin: leitura protegida e fiação completa (Onda 1)                                                                     | concluido                                            |
-| S-60   | 2026-07-04 | P-1.26 — Onboarding: convite, auto-signup e MFA (Onda 1)                                                                         | concluido                                            |
-| S-61   | 2026-07-04 | P-1.27 — Documentos: visibilidade e área editorial verdadeiras (Onda 1)                                                          | concluido                                            |
-| S-62   | 2026-07-04 | P-2.9c — Projetos: operável de ponta a ponta                                                                                     | concluido                                            |
-| S-63   | 2026-07-04 | P-3.8b — Financeiro: governança e conciliação verdadeiras                                                                        | concluido                                            |
-| S-64   | 2026-07-05 | P-0.12 — Storage: buckets e policies (Onda 2)                                                                                    | concluido                                            |
-| S-65   | 2026-07-05 | P-0.13 — LGPD: fundação (Onda 2)                                                                                                 | concluido                                            |
-| S-66   | 2026-07-06 | P-0.14 — Jobs: Inngest de verdade (Onda 2)                                                                                       | concluido                                            |
-| S-67   | 2026-07-06 | P-0.15 — packages/integrations + contrato de settings (Onda 2)                                                                   | concluido                                            |
-| S-68   | 2026-07-06 | P-0.16 — Registro retroativo (Onda 2)                                                                                            | concluido                                            |
-| S-69   | 2026-07-06 | P-3.9 — Financeiro: Integração UI ↔ Backend                                                                                      | concluido                                            |
-| S-70   | 2026-07-07 | P-3.10 — Financeiro: Notificações e Emails                                                                                       | concluido                                            |
-| S-71   | 2026-07-07 | P-3.11 — Financeiro: Integrações Cross-App                                                                                       | concluido                                            |
-| S-72   | 2026-07-07 | P-3.12 — Testes Financeiro                                                                                                       | concluido                                            |
-| S-73   | 2026-07-07 | P-4.1 — Schema de Tipos Tarefas                                                                                                  | concluido                                            |
-| S-74   | 2026-07-07 | P-4.2 — Componentes UI Tarefas                                                                                                   | concluido                                            |
-| S-75   | 2026-07-07 | P-4.3 — Telas e Páginas Tarefas                                                                                                  | concluido                                            |
-| S-76   | 2026-07-07 | P-4.4 — Formulários Tarefas                                                                                                      | concluido                                            |
-| S-77   | 2026-07-07 | P-4.5 — Estados Tarefas                                                                                                          | concluido                                            |
-| S-79   | 2026-07-07 | P-4.7 — RLS Policies Tarefas                                                                                                     | concluido                                            |
-| S-80   | 2026-07-07 | P-4.8 — Server Actions Tarefas                                                                                                   | concluido                                            |
-| S-81   | 2026-07-07 | P-4.9 — Integração UI ↔ Backend Tarefas                                                                                          | concluido                                            |
-| S-82   | 2026-07-08 | P-4.10 — Notificações e Emails Tarefas                                                                                           | concluido                                            |
-| S-83   | 2026-07-08 | P-4.11 — Integrações Cross-App Tarefas                                                                                           | concluido                                            |
-| S-84   | 2026-07-08 | P-4.12 — Testes Tarefas                                                                                                          | concluido                                            |
-| S-85   | 2026-07-08 | P-5.1 — Schema de Tipos Intranet                                                                                                 | concluido                                            |
-| S-86   | 2026-07-08 | P-5.2 — Componentes UI Intranet                                                                                                  | concluido                                            |
-| S-87   | 2026-07-08 | P-5.3 — Telas e Páginas Intranet                                                                                                 | concluido                                            |
-| S-88   | 2026-07-09 | P-5.4 — Formulários Intranet                                                                                                     | concluido                                            |
-| S-89   | 2026-07-09 | P-5.5 — Estados Intranet                                                                                                         | concluido                                            |
-| S-90   | 2026-07-09 | P-5.6 — Schema do Banco Intranet                                                                                                 | concluido                                            |
-| S-91   | 2026-07-09 | P-5.7 — RLS Policies Intranet                                                                                                    | concluido                                            |
-| S-92   | 2026-07-09 | P-5.8 — Server Actions Intranet                                                                                                  | concluido                                            |
-| S-93   | 2026-07-09 | P-5.9 — Integração UI ↔ Backend Intranet                                                                                         | concluido                                            |
-| S-94   | 2026-07-10 | P-5.10 — Notificações e Emails Intranet                                                                                          | concluido                                            |
-| S-95   | 2026-07-10 | P-0.17 — Runtime RLS para mutações críticas (PATCH-016)                                                                          | concluido                                            |
-| S-96   | 2026-07-10 | P-5.9b — Intranet: decisões por presidente da sessão (PATCH-017)                                                                 | concluido                                            |
-| S-97   | 2026-07-10 | P-5.9c — Intranet: snapshot de KPIs e tendências (PATCH-018)                                                                     | concluido                                            |
-| S-98   | 2026-07-10 | P-4.11b — Tarefas: seed e configuração do checklist padrão (PATCH-019)                                                           | concluido                                            |
-| S-99   | 2026-07-13 | P-4.9b — Tarefas: anexos persistidos e gestão de templates (PATCH-020)                                                           | concluido                                            |
-| S-100  | 2026-07-13 | P-1.25b — Admin: designações honestas e revogação sem hard delete (PATCH-021)                                                    | concluido                                            |
-| S-101  | 2026-07-13 | P-5.11 — Integrações Cross-App Intranet                                                                                          | concluido                                            |
-| S-102  | 2026-07-13 | P-5.12 — Testes Intranet                                                                                                         | concluido                                            |
-| S-103  | 2026-07-13 | P-6.1 — Schema de Tipos Plataforma                                                                                               | concluido                                            |
-| S-104  | 2026-07-13 | P-6.2 — Componentes UI Plataforma                                                                                                | parcial                                              |
-| S-105  | 2026-07-13 | P-6.3 — Telas e Páginas Plataforma                                                                                               | parcial                                              |
-| S-106  | 2026-07-13 | P-6.4 — Formulários Plataforma                                                                                                   | parcial                                              |
-| S-107  | 2026-07-14 | P-6.5 — Estados Plataforma                                                                                                       | parcial                                              |
-| S-108  | 2026-07-14 | P-6.3b — Plataforma: série como coleção temática (PATCH-024)                                                                     | concluido                                            |
-| S-109  | 2026-07-14 | P-6.6 — Schema do Banco Plataforma                                                                                               | concluido                                            |
-| S-110  | 2026-07-14 | P-6.7 — RLS Policies Plataforma                                                                                                  | concluido                                            |
-| S-111  | 2026-07-14 | P-6.8 — Server Actions Plataforma                                                                                                | concluido                                            |
-| S-112  | 2026-07-14 | P-6.9 — Integração UI ↔ Backend Plataforma                                                                                       | concluido                                            |
-| S-113  | 2026-07-14 | Gap: gestão de instrutores (Plataforma)                                                                                          | bloqueado                                            |
-| S-114  | 2026-07-14 | P-6.10 — Notificações e Emails Plataforma                                                                                        | concluido                                            |
-| S-115  | 2026-07-14 | P-6.11 — Integração Cross-App Plataforma                                                                                         | concluido                                            |
-| S-116  | 2026-07-14 | P-6.12 — Testes Plataforma                                                                                                       | concluido                                            |
-| S-117  | 2026-07-14 | Auditoria: débitos técnicos P-6.6–P-6.12 (Plataforma, Bloco B)                                                                   | concluido (gera P-6.13/6.14/6.15)                    |
-| S-118  | 2026-07-14 | P-6.13 — Gestão de Instrutores (Plataforma)                                                                                      | concluido                                            |
-| S-119  | 2026-07-14 | P-6.14 — Verificação Pública de Certificado (Plataforma)                                                                         | concluido                                            |
-| S-120  | 2026-07-14 | P-6.15 — Upload de Mídia da Plataforma (capa de curso, anexo de aula)                                                            | concluido                                            |
-| S-121  | 2026-07-15 | P-7.1 — Schema de Tipos Flats                                                                                                    | concluido                                            |
-| S-122  | 2026-07-15 | P-7.2 — Componentes UI Flats                                                                                                     | concluido                                            |
-| S-123  | 2026-07-15 | P-7.3 — Telas e Páginas Flats                                                                                                    | concluido                                            |
-| S-124  | 2026-07-15 | P-7.4 — Formulários Flats                                                                                                        | concluido                                            |
-| S-125  | 2026-07-16 | P-7.5 — Estados Flats                                                                                                            | concluido                                            |
-| S-126  | 2026-07-16 | P-7.1b — Correção do máximo de scoring em BRAIN §6.8 (CORRETIVO)                                                                 | concluido                                            |
-| S-127  | 2026-07-16 | P-7.5b — Fiação das telas do Bloco A Flats para validação da diretoria (CORRETIVO)                                               | concluido                                            |
-| S-128  | 2026-07-16 | P-7.6 — Schema do Banco Flats                                                                                                    | concluido                                            |
-| S-129  | 2026-07-16 | P-7.7 — RLS Policies Flats                                                                                                       | concluido                                            |
-| S-130  | 2026-07-16 | P-7.8 — Server Actions Flats                                                                                                     | concluido                                            |
-| S-131  | 2026-07-16 | P-7.9 — Integração UI ↔ Backend Flats                                                                                            | concluido                                            |
-| S-132  | 2026-07-16 | P-7.10 — Notificações e Emails Flats                                                                                             | concluido                                            |
-| S-133  | 2026-07-16 | P-7.11 — Integrações Cross-App Flats                                                                                             | concluido                                            |
-| S-134  | 2026-07-16 | P-7.12 — Testes Flats                                                                                                            | concluido                                            |
-| S-135  | 2026-07-16 | P-7.6b — Canonicalização estável do `daterange` (CORRETIVO)                                                                      | concluido                                            |
-| S-136  | 2026-07-16 | P-7.9b — Fiação do ciclo de vida pós-aprovação e revisão de auxílio (CORRETIVO)                                                  | concluido                                            |
-| S-137  | 2026-07-16 | P-7.9c — Persistência do documento do responsável em `flats.document_files` (CORRETIVO)                                          | concluido                                            |
-| S-138  | 2026-07-17 | P-8.1 — Schema de Tipos Rádio                                                                                                    | concluido                                            |
-| S-139  | 2026-07-17 | P-8.2 — Componentes UI Rádio                                                                                                     | concluido                                            |
-| S-140  | 2026-07-17 | P-8.3 — Telas e Páginas Rádio                                                                                                    | concluido                                            |
-| S-141  | 2026-07-17 | P-8.4 — Formulários Rádio                                                                                                        | concluido                                            |
-| S-142  | 2026-07-17 | P-8.5 — Estados Rádio                                                                                                            | concluido                                            |
-| S-143  | 2026-07-17 | Auditoria Bloco A Rádio (P-8.1–8.5) — patch P-8.5b gerado                                                                        | concluido                                            |
-| S-144  | 2026-07-17 | P-8.5b — Estados reais do player (CORRETIVO)                                                                                     | concluido                                            |
-| S-145  | 2026-07-17 | P-8.6 — Schema do Banco Rádio                                                                                                    | concluido                                            |
-| S-146  | 2026-07-17 | P-8.7 — RLS Policies Rádio                                                                                                       | concluido                                            |
-| S-147  | 2026-07-17 | P-8.8 — Server Actions Rádio                                                                                                     | concluido                                            |
-| S-148  | 2026-07-17 | P-8.9 — Integração UI ↔ Backend Rádio                                                                                            | concluido                                            |
-| S-149  | 2026-07-17 | P-8.10 — Notificações Rádio                                                                                                      | concluido                                            |
-| S-150  | 2026-07-17 | P-8.11 — Integração Cross-App Rádio                                                                                              | concluido                                            |
-| S-151  | 2026-07-17 | P-8.12 — Testes Rádio                                                                                                            | concluido                                            |
-| S-152  | 2026-07-17 | P-8.9b — Persistência da descrição de material exclusivo (CORRETIVO)                                                             | concluido                                            |
-| S-153  | 2026-07-17 | P-8.11b — Fiação do heartbeat de audiência no player (CORRETIVO)                                                                 | concluido                                            |
-| S-154  | 2026-07-17 | P-9.1 — Revisão de Segurança (RLS Audit)                                                                                         | concluido                                            |
-| S-155  | 2026-07-17 | P-9.1b — Fechamento dos achados abertos da auditoria (S-02 + S-05) (CORRETIVO)                                                   | concluido                                            |
-| S-156  | 2026-07-17 | P-9.1b-1 — Fechamento do achado S-02 em `admin` (CORRETIVO)                                                                      | concluido                                            |
-| S-157  | 2026-07-17 | P-9.1b-2 — Fechamento do achado S-02 em `financeiro` (CORRETIVO)                                                                 | concluido                                            |
-| S-158  | 2026-07-18 | P-9.1b-3 — Fechamento do achado S-02 em `projetos` (CORRETIVO)                                                                   | parcial                                              |
-| S-159  | 2026-07-18 | P-9.1b-3 — Causa raiz do drift de GRANT em `projetos` (CORRETIVO)                                                                | concluido                                            |
-| S-160  | 2026-07-18 | P-9.1b-4 — Fechamento do achado S-02 em `documentos` (CORRETIVO)                                                                 | concluido                                            |
-| S-161  | 2026-07-18 | P-9.1b-5 — Fechamento do achado S-02 em `intranet` (CORRETIVO)                                                                   | concluido                                            |
-| S-162  | 2026-07-18 | P-9.1b-6 — Fechamento do achado S-02 em `tarefas` (CORRETIVO)                                                                    | concluido                                            |
-| S-163  | 2026-07-18 | P-9.1b-7 — Residual S-02 (flats/plataforma/radio) + S-05 (CORRETIVO) — fecha P-9.1b                                              | concluido                                            |
-| S-164  | 2026-07-18 | P-9.2 — LGPD Audit (superfícies de titular "Meus Dados" + varredura final)                                                       | concluido                                            |
-| S-165  | 2026-07-19 | P-9.3 — Performance e Otimização                                                                                                 | concluido                                            |
-| S-166  | 2026-07-19 | P-9.4 — Copy Review (humanizar textos + citações bíblicas por contexto)                                                          | concluido                                            |
-| S-167  | 2026-07-20 | P-0.1b — Restauração do Build e Uniformização da Config dos 9 Apps (CORRETIVO)                                                   | concluido                                            |
-| S-168  | 2026-07-20 | P-0.1c — `packages/config`: validação de env em runtime (CORRETIVO)                                                              | concluido                                            |
-| S-169  | 2026-07-20 | P-0.2c — Aposentadoria dos aliases DEPRECATED (CORRETIVO)                                                                        | concluido                                            |
-| S-170  | 2026-07-20 | P-0.2d — Primitivos Drawer e Tooltip (CORRETIVO — fecha débito da S-3)                                                           | concluido                                            |
-| S-171  | 2026-07-20 | P-0.3c — Aposentar `drizzle-kit generate/check` (CORRETIVO — remove footgun de migrations)                                       | concluido                                            |
-| S-172  | 2026-07-22 | P-0.4b — Simetria de codificação de cookies no browser client (CORRETIVO — round-trip de cookie quebrado latente)                | concluido                                            |
-| S-173  | 2026-07-22 | P-0.5b — `profileHref` opcional e correção dos alvos de "Meu perfil" (CORRETIVO — links 404 no user menu)                        | concluido                                            |
-| S-174  | 2026-07-22 | P-0.5c — App launcher canônico e higiene de API do sidebar (CORRETIVO — duplicação com drift + launcher exposto a papel externo) | concluido                                            |
-| S-175  | 2026-07-22 | P-0.6b — Notificações in_app operáveis: slot no AppShell + piloto na intranet (CORRETIVO — bell/central nunca fiados)            | concluido                                            |
-| S-176  | 2026-07-23 | P-0.6c — Notificações in_app: rollout do sino/central aos demais apps (CORRETIVO — continuação de P-0.6b)                        | concluido                                            |
-| S-177  | 2026-07-23 | P-0.6d — Client Drizzle tipado com o schema completo (CORRETIVO — débito S-7/F2-F2 nunca liquidado)                              | concluido                                            |
-| S-178  | 2026-07-22 | P-0.6e — Tipografia institucional nos emails (CORRETIVO — EmailLayout usava Inter)                                               | concluido                                            |
-| S-179  | 2026-07-22 | Débito ad-hoc — `PreviewProps` nos 27 templates de email (fix do `email:dev`, fora do escopo original do P-0.6e)                 | concluido                                            |
-| S-180  | 2026-07-23 | P-1.26b — Admin: remover `moduleAccess` fantasma, schemas de usuário mortos e tipos de domínio órfãos (PATCH-025)                | concluido                                            |
-| S-181  | 2026-07-23 | P-1.10b — Admin: consolidação e acesso ao editor de templates de email (CORRETIVO)                                               | concluido                                            |
-| S-182  | 2026-07-24 | P-1.10c — Emails enviados a partir dos templates do banco (CORRETIVO)                                                            | concluido                                            |
-| S-183  | 2026-07-24 | P-1.14b — Documentos: badge de visibilidade e pílula de status únicos (CORRETIVO)                                                | concluido                                            |
-| S-184  | 2026-07-25 | P-1.15b — Documentos: listagem por categoria, a rota que nunca foi criada (CORRETIVO)                                            | concluido                                            |
-| S-185  | 2026-07-25 | P-1.16b — Documentos: assinaturas, preferência por tipo de alerta de verdade (CORRETIVO)                                         | concluido                                            |
-| S-186  | 2026-07-25 | P-1.16c — Documentos: reordenação de categorias, ligar a UI ao backend ou remover a promessa (CORRETIVO)                         | concluido                                            |
-| S-187  | 2026-07-25 | P-1.17b — Documentos: fronteiras de erro e cópia de estados vazios (CORRETIVO)                                                   | concluido                                            |
-| S-188  | 2026-07-25 | P-1.18b — Documentos: campos que a UI coleta e o banco não guarda (CORRETIVO)                                                    | concluido                                            |
-| S-189  | 2026-07-25 | P-1.19b — Documentos: RLS de rascunho, lixeira e o papel conselheiro (CORRETIVO)                                                 | concluido                                            |
-| S-190  | 2026-07-27 | P-1.20b — Documentos: busca com acento, índice e fim da action órfã (CORRETIVO)                                                  | concluido                                            |
-| S-191  | 2026-07-27 | P-1.20c — Documentos: registro de leitura (`views`) que ninguém escreve (CORRETIVO)                                              | concluido                                            |
-| S-192  | 2026-07-27 | P-1.21b — Documentos: área editorial ainda lê como superusuário (CORRETIVO)                                                      | concluido                                            |
-| S-193  | 2026-07-27 | P-1.22b — Documentos: alerta de "novas versões" que nunca chega (CORRETIVO)                                                      | concluido                                            |
-| S-194  | 2026-07-27 | P-1.23b — O botão "submeter projeto" que o wizard ignora (CORRETIVO)                                                             | concluido                                            |
-| S-195  | 2026-07-27 | P-1.24b — Testes: o audit mockado e o caminho de escrita sem cobertura (CORRETIVO) — fecha o bloco B de Documentos               | concluido                                            |
-| S-196  | 2026-07-27 | Auditoria Bloco A Projetos (P-2.1–P-2.5) — patches P-2.1b/2.2b/2.3b/2.3c/2.4b/2.5b gerados                                       | concluido                                            |
-| S-197  | 2026-07-27 | P-2.1b — O contrato compartilhado que a implementação abandonou (CORRETIVO)                                                      | concluido                                            |
-| S-198  | 2026-07-28 | P-2.2b — O voto que se dá por registrado sem o servidor confirmar (CORRETIVO)                                                    | concluido                                            |
-| S-199  | 2026-07-28 | P-2.3b — A pauta da reunião que nunca teve pauta (CORRETIVO)                                                                     | concluido                                            |
-| S-200  | 2026-07-28 | P-2.3c — O teto de R$ 150 mil que ninguém definiu (CORRETIVO)                                                                    | concluido                                            |
-| S-201  | 2026-07-28 | P-2.4b — O wizard que não valida nada (CORRETIVO)                                                                                | concluido                                            |
-| S-202  | 2026-07-28 | P-2.5b — Nenhuma fronteira de erro, o skeleton errado e o vazio que pisca (CORRETIVO)                                            | concluido                                            |
-| S-203  | 2026-07-28 | Auditoria Bloco B Projetos (P-2.6–P-2.12) — patches P-2.6b/2.8b/2.8c/2.10b/2.12b gerados                                         | concluido                                            |
-| S-204  | 2026-07-28 | P-2.6b — O relatório que é rejeitado sem motivo e não pode voltar (CORRETIVO)                                                    | concluido                                            |
-| S-205  | 2026-07-28 | P-2.8b — A reprovação que o mapa de estágios não permite e o quórum que conta quem já saiu (CORRETIVO)                           | concluido                                            |
-| S-206  | 2026-07-28 | P-2.8c — Quatro actions sem porta de entrada: rascunho, instituição e membros (CORRETIVO)                                        | concluido                                            |
-| S-207  | 2026-07-28 | P-2.10b — Sete notificações que nunca disparam e um link que leva a lugar nenhum (CORRETIVO)                                     | concluido                                            |
-| S-208  | 2026-07-29 | P-2.12b — O teste que examina a cópia em vez do original (CORRETIVO)                                                             | concluido                                            |
-| S-209  | 2026-07-29 | P-0.5d — A navegação que recarrega a página inteira a cada clique (CORRETIVO)                                                    | concluido                                            |
-| S-210  | 2026-07-29 | P-3.2b — Sete botões que não fazem nada e um CSV com extensão de Excel (CORRETIVO)                                               | concluido                                            |
-| S-211  | 2026-07-29 | P-3.3b — O plano de contas que esconde a categoria recém-criada (CORRETIVO)                                                      | concluido                                            |
-| S-212  | 2026-07-29 | P-3.4b — O comprovante que a tela pede e o sistema descarta (CORRETIVO)                                                          | concluido                                            |
-| S-213  | 2026-07-29 | P-3.5b — Nenhuma fronteira de erro, doze telas sem carregamento e 45 cores fora do sistema (CORRETIVO)                           | concluido                                            |
-| S-214  | 2026-07-29 | Auditoria: débitos técnicos P-3.6–P-3.12 (Financeiro, Bloco B) — 6 prompts corretivos gerados                                    | concluido                                            |
-| S-215  | 2026-07-30 | P-3.6b — Seis campos que o formulário coleta e o banco não tem onde guardar (CORRETIVO)                                          | concluido                                            |
-| S-216  | 2026-07-30 | P-3.7b — A segunda camada de defesa que oito mutações contornam por dentro (CORRETIVO)                                           | concluido                                            |
-| S-217  | 2026-07-30 | P-3.11b — O centro de custo que só nasce de um projeto e o selo "Geral" que nunca aparece (CORRETIVO)                            | concluido                                            |
-| S-218  | 2026-07-30 | P-3.9c — Cinco actions e quatro estados que nenhuma tela alcança (CORRETIVO)                                                     | concluido                                            |
-| S-219  | 2026-07-30 | P-3.10b — Três emails que o Admin não consegue editar e um lote semanal escrito duas vezes (CORRETIVO)                           | concluido                                            |
-| S-220  | 2026-07-30 | P-3.8c — O OCR de nota fiscal que existe, funciona e ninguém chama (CORRETIVO)                                                   | concluido                                            |
-| S-221  | 2026-07-30 | Auditoria: débitos técnicos P-4.1–P-4.5 (Tarefas, Bloco A) — 5 prompts corretivos gerados                                        | concluido                                            |
-| S-222  | 2026-08-03 | P-4.1b — A recorrência anual que não sabe em que mês cai (CORRETIVO)                                                             | concluido                                            |
-| S-223  | 2026-08-03 | P-4.2b — O quadro que só se move com mouse (CORRETIVO)                                                                           | concluido                                            |
-| S-224  | 2026-08-03 | P-4.4b — A descrição que o editor formata e a tela mostra com as tags à vista (CORRETIVO)                                        | concluido                                            |
-| S-225  | 2026-08-03 | P-4.4c — O lançamento manual de horas sem tela e os quatro schemas que ainda fingem que não há UUID (CORRETIVO)                  | concluido                                            |
-| S-226  | 2026-08-03 | P-4.5b — O esqueleto de árvore que nenhuma tela mostra e a visão que o recarregamento esquece (CORRETIVO)                        | concluido                                            |
-| S-227  | 2026-08-04 | P-4.8b — A tarefa automática que nasce órfã e continua órfã (CORRETIVO)                                                          | concluido                                            |
-| S-228  | 2026-08-04 | P-4.8c — O pedido de aprovação que o pedido seguinte esconde (CORRETIVO)                                                         | concluido                                            |
-| S-229  | 2026-08-05 | P-4.10b — A notificação que não leva a lugar nenhum (CORRETIVO)                                                                  | concluido                                            |
-| S-230  | 2026-08-05 | P-4.9c — O anexo que sobe e não desce (CORRETIVO)                                                                                | concluido                                            |
-| S-231  | 2026-08-05 | P-4.9d — A regra de recorrência que só sabe nascer (CORRETIVO)                                                                   | concluido                                            |
-| S-232  | 2026-08-05 | P-4.8d — O "D" do CRUD e o campo de módulo que a edição joga fora (CORRETIVO)                                                    | concluido                                            |
-| S-233  | 2026-08-05 | P-4.6b — O histórico que o banco guarda e a tela não mostra (CORRETIVO)                                                          | concluido                                            |
-| S-234  | 2026-08-06 | P-5.2b — O sparkline que desenha ruído sobre um número real (CORRETIVO)                                                          | concluido                                            |
-| S-235  | 2026-08-06 | P-5.2c — O feed cross-app que o backend agrega e o painel não mostra (CORRETIVO)                                                 | concluido                                            |
-| S-236  | 2026-08-11 | P-5.2d — O painel que só se monta com mouse e perde o widget recém-adicionado (CORRETIVO)                                        | concluido                                            |
-| S-237  | 2026-08-11 | P-5.1b — O diretório com foto e bio que ninguém pode preencher (CORRETIVO)                                                       | concluido                                            |
-| S-238  | 2026-08-11 | P-5.3b — As três telas que carregam em branco e o anúncio zero que fala de filtro (CORRETIVO)                                    | concluido                                            |
-| S-239  | 2026-08-11 | P-5.3c — A busca que leva a uma rota inexistente e o lançador que reescreve o catálogo do ecossistema (CORRETIVO)                | concluido                                            |
-| S-240  | 2026-08-11 | Auditoria: débitos técnicos P-5.6–P-5.12 (Intranet, Bloco B)                                                                     | concluido                                            |
-| S-241  | 2026-08-12 | P-5.10b — O anúncio urgente que falha depois de publicado e os dois emails que ninguém pode editar (CORRETIVO)                   | concluido                                            |
-| S-242  | 2026-08-12 | P-5.11b — A decisão que vira tarefa e some (CORRETIVO)                                                                           | concluido                                            |
-| S-243  | 2026-08-12 | P-5.8b — O KPI de audiência que a Rádio calcula todo dia e o painel nunca pediu (CORRETIVO)                                      | concluido                                            |
-| S-244  | 2026-08-12 | P-5.9d — A agenda que promete prazos e a leitura que traz a diretoria inteira (CORRETIVO)                                        | concluido                                            |
-| S-245  | 2026-08-14 | P-5.9e — O diretório que abre uma conexão de rede por pessoa (CORRETIVO)                                                         | concluido                                            |
-| S-246  | 2026-08-14 | P-5.8c — A busca que trata "%" como coringa e chama a reunião de "ordinaria" (CORRETIVO)                                         | concluido                                            |
-| S-247  | 2026-08-15 | Ajustes de UI da Intranet: grid redimensionável do painel, avatar e link no user-bar, enquadramento de /meus-dados (CORRETIVO)   | concluido                                            |
-| S-248  | 2026-08-15 | P-6.2b — A trilha que a barra lateral promete e o banco esconde (CORRETIVO)                                                      | concluido                                            |
-| S-249  | 2026-08-17 | P-6.3c — O painel do instrutor que sempre lê zero (CORRETIVO)                                                                    | concluido                                            |
-| S-250  | 2026-08-17 | P-6.4b — O curso que se cria e não se edita (CORRETIVO)                                                                          | concluido                                            |
-| S-251  | 2026-08-17 | P-6.5b — Os esqueletos que ninguém mostra e o erro que se disfarça de catálogo vazio (CORRETIVO)                                 | concluido                                            |
-| S-252  | 2026-08-18 | Auditoria: débitos técnicos P-6.6–P-6.15 (Plataforma, Bloco B, 2ª rodada)                                                        | concluido (gera P-6.16 a P-6.19)                     |
-| S-253  | 2026-08-18 | P-6.16 — A aula arquivada que ainda tranca a trilha (CORRETIVO)                                                                  | concluido                                            |
-| S-254  | 2026-08-19 | P-6.17 — O certificado que some junto com o curso (CORRETIVO)                                                                    | concluido                                            |
-| S-255  | 2026-08-19 | P-6.18 — A capa que virou caminho de storage no catálogo (CORRETIVO)                                                             | concluido                                            |
-| S-256  | 2026-08-19 | P-6.19 — A série que ninguém pode criar e a equipe sem porta na sidebar (CORRETIVO)                                              | concluido                                            |
-| S-257  | 2026-08-19 | AUDIT PACOTE 1 — LGPD: fechar o direito de exclusão (CORRETIVO)                                                                  | concluido                                            |
-| S-258  | 2026-08-19 | AUDIT PACOTE 2 — As costuras que perdem dinheiro e registros (CORRETIVO)                                                         | parcial (D2-001 adiado)                              |
-| S-259  | 2026-08-19 | AUDIT PACOTE 3 — Camada 1: middleware nos 8 apps (CORRETIVO)                                                                     | parcial (renovação de sessão sem teste automatizado) |
-| S-260  | 2026-08-20 | AUDIT PACOTE 4 — O que o usuário lê quando algo falha (CORRETIVO)                                                                | concluido                                            |
-| S-261  | 2026-08-20 | AUDIT PACOTE 5 — Prontidão de produção (P-9.5) (CORRETIVO)                                                                       | parcial (infra externa pendente — ver runbook)       |
-| S-262  | 2026-08-20 | AUDIT PACOTE 6 — Impersonação: implementar ou revogar (CORRETIVO)                                                                | concluido                                            |
+| Sessao | Data       | Prompt                                                                                                                           | Status                                                                               |
+| ------ | ---------- | -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| S-1    | 2026-05-21 | P-0.1 — Monorepo Setup                                                                                                           | concluido                                                                            |
+| S-2    | 2026-05-22 | P-0.1 — Monorepo Setup (complemento)                                                                                             | concluido                                                                            |
+| S-3    | 2026-05-22 | P-0.2 — Design System Base                                                                                                       | concluido                                                                            |
+| S-4    | 2026-05-22 | P-0.3 — Supabase Setup                                                                                                           | concluido                                                                            |
+| S-5    | 2026-05-22 | P-0.4 — Autenticação e SSO                                                                                                       | concluido                                                                            |
+| S-6    | 2026-05-22 | P-0.5 — Layout Compartilhado (AppShell)                                                                                          | concluido                                                                            |
+| S-7    | 2026-05-22 | P-0.6 — Sistema de Notificações                                                                                                  | concluido                                                                            |
+| S-8    | 2026-05-22 | P-1.1 — Schema de Tipos Admin                                                                                                    | concluido                                                                            |
+| S-9    | 2026-05-22 | P-1.2 — Componentes UI Admin                                                                                                     | concluido                                                                            |
+| S-10   | 2026-05-22 | P-1.3 — Telas e Páginas Admin                                                                                                    | concluido                                                                            |
+| S-11   | 2026-05-22 | P-1.4 — Formulários Admin                                                                                                        | concluido                                                                            |
+| S-12   | 2026-05-22 | P-1.5 — Estados Admin                                                                                                            | concluido                                                                            |
+| S-13   | 2026-05-25 | P-1.6 — Schema do Banco Admin                                                                                                    | concluido                                                                            |
+| S-14   | 2026-05-25 | P-1.7 — RLS Policies Admin                                                                                                       | concluido                                                                            |
+| S-15   | 2026-05-25 | P-1.8 — Server Actions Admin                                                                                                     | concluido                                                                            |
+| S-16   | 2026-05-25 | P-1.9 — Integração UI ↔ Backend Admin                                                                                            | concluido                                                                            |
+| S-17   | 2026-05-25 | P-1.10 — Notificações e Emails Admin                                                                                             | concluido                                                                            |
+| S-18   | 2026-05-26 | P-1.11 — Impersonation e Audit Avançado                                                                                          | concluido                                                                            |
+| S-19   | 2026-05-26 | P-1.12 — Testes Admin                                                                                                            | concluido                                                                            |
+| S-20   | 2026-06-13 | P-0.2b — Unificação do Design System                                                                                             | concluido                                                                            |
+| S-21   | 2026-06-15 | P-1.12b — Ajustes Menores DS Admin                                                                                               | concluido                                                                            |
+| S-22   | 2026-06-15 | P-0.3b — Pipeline de Migrations                                                                                                  | concluido                                                                            |
+| S-23   | 2026-06-16 | P-1.13 — Schema de Tipos Documentos                                                                                              | concluido                                                                            |
+| S-24   | 2026-06-16 | P-1.14 — Componentes UI Documentos                                                                                               | concluido                                                                            |
+| S-25   | 2026-06-16 | P-1.15 — Telas e Páginas Documentos                                                                                              | concluido                                                                            |
+| S-26   | 2026-06-17 | P-1.16 — Formulários Documentos                                                                                                  | concluido                                                                            |
+| S-27   | 2026-06-17 | P-1.17 — Estados Documentos                                                                                                      | concluido                                                                            |
+| S-28   | 2026-06-17 | P-1.18 — Schema do Banco Documentos                                                                                              | concluido                                                                            |
+| S-29   | 2026-06-17 | P-1.20 — Server Actions Documentos                                                                                               | concluido                                                                            |
+| S-30   | 2026-06-18 | P-1.22 — Notificações e Emails Documentos                                                                                        | concluido                                                                            |
+| S-31   | 2026-06-18 | P-1.23 — Integração Documentos ↔ Projetos                                                                                        | concluido                                                                            |
+| S-32   | 2026-06-18 | P-1.24 — Testes Documentos                                                                                                       | concluido                                                                            |
+| S-33   | 2026-06-20 | P-2.1 — Schema de Tipos Projetos                                                                                                 | concluido                                                                            |
+| S-34   | 2026-06-20 | P-2.2 — Componentes UI Projetos                                                                                                  | concluido                                                                            |
+| S-35   | 2026-06-20 | P-2.3 — Telas e Páginas Projetos                                                                                                 | concluido                                                                            |
+| S-36   | 2026-06-20 | P-2.4 — Formulários Projetos                                                                                                     | concluido                                                                            |
+| S-37   | 2026-06-22 | P-2.5 — Estados Projetos                                                                                                         | concluido                                                                            |
+| S-38   | 2026-06-22 | P-2.6 — Schema do Banco Projetos                                                                                                 | concluido                                                                            |
+| S-39   | 2026-06-22 | P-2.7 — RLS Policies Projetos                                                                                                    | concluido                                                                            |
+| S-40   | 2026-06-22 | P-2.8 — Server Actions Projetos                                                                                                  | concluido                                                                            |
+| S-41   | 2026-06-22 | P-2.9 — Integração UI ↔ Backend Projetos                                                                                         | concluido                                                                            |
+| S-42   | 2026-06-23 | P-2.10 — Notificações e Emails Projetos                                                                                          | concluido                                                                            |
+| S-43   | 2026-06-23 | P-2.11 — Integrações Cross-App Projetos                                                                                          | parcial                                                                              |
+| S-44   | 2026-06-23 | P-2.9b — Usuário Real no Header Projetos                                                                                         | concluido                                                                            |
+| S-45   | 2026-06-23 | Polish — apps/projetos/src/app                                                                                                   | concluido                                                                            |
+| S-46   | 2026-06-23 | P-3.1 — Schema de Tipos Financeiro                                                                                               | concluido                                                                            |
+| S-47   | 2026-06-25 | P-3.2 — Componentes UI Financeiro                                                                                                | concluido                                                                            |
+| S-48   | 2026-06-25 | P-3.3 — Telas e Páginas Financeiro                                                                                               | concluido                                                                            |
+| S-49   | 2026-06-26 | P-3.4 — Formulários Financeiro                                                                                                   | concluido                                                                            |
+| S-50   | 2026-06-26 | P-3.5 — Estados Financeiro                                                                                                       | concluido                                                                            |
+| S-51   | 2026-06-26 | P-3.6 — Schema do Banco Financeiro                                                                                               | concluido                                                                            |
+| S-52   | 2026-06-26 | P-3.7 — RLS Policies Financeiro                                                                                                  | concluido                                                                            |
+| S-53   | 2026-06-26 | P-3.8 — Server Actions Financeiro                                                                                                | concluido                                                                            |
+| S-54   | 2026-07-03 | P-0.7 — Resgate do Banco (Onda 0)                                                                                                | concluido                                                                            |
+| S-55   | 2026-07-03 | P-0.8 — Kit de Backend Compartilhado (Onda 0)                                                                                    | concluido                                                                            |
+| S-56   | 2026-07-03 | P-0.9 — CI Mínimo (Onda 0)                                                                                                       | concluido (validação em PR pendente)                                                 |
+| S-57   | 2026-07-03 | P-0.10 — Decisão B: RLS Ativa (Onda 0)                                                                                           | concluido                                                                            |
+| S-58   | 2026-07-04 | P-0.11 — Drizzle-kit Reconciliado (Onda 0)                                                                                       | concluido                                                                            |
+| S-59   | 2026-07-04 | P-1.25 — Admin: leitura protegida e fiação completa (Onda 1)                                                                     | concluido                                                                            |
+| S-60   | 2026-07-04 | P-1.26 — Onboarding: convite, auto-signup e MFA (Onda 1)                                                                         | concluido                                                                            |
+| S-61   | 2026-07-04 | P-1.27 — Documentos: visibilidade e área editorial verdadeiras (Onda 1)                                                          | concluido                                                                            |
+| S-62   | 2026-07-04 | P-2.9c — Projetos: operável de ponta a ponta                                                                                     | concluido                                                                            |
+| S-63   | 2026-07-04 | P-3.8b — Financeiro: governança e conciliação verdadeiras                                                                        | concluido                                                                            |
+| S-64   | 2026-07-05 | P-0.12 — Storage: buckets e policies (Onda 2)                                                                                    | concluido                                                                            |
+| S-65   | 2026-07-05 | P-0.13 — LGPD: fundação (Onda 2)                                                                                                 | concluido                                                                            |
+| S-66   | 2026-07-06 | P-0.14 — Jobs: Inngest de verdade (Onda 2)                                                                                       | concluido                                                                            |
+| S-67   | 2026-07-06 | P-0.15 — packages/integrations + contrato de settings (Onda 2)                                                                   | concluido                                                                            |
+| S-68   | 2026-07-06 | P-0.16 — Registro retroativo (Onda 2)                                                                                            | concluido                                                                            |
+| S-69   | 2026-07-06 | P-3.9 — Financeiro: Integração UI ↔ Backend                                                                                      | concluido                                                                            |
+| S-70   | 2026-07-07 | P-3.10 — Financeiro: Notificações e Emails                                                                                       | concluido                                                                            |
+| S-71   | 2026-07-07 | P-3.11 — Financeiro: Integrações Cross-App                                                                                       | concluido                                                                            |
+| S-72   | 2026-07-07 | P-3.12 — Testes Financeiro                                                                                                       | concluido                                                                            |
+| S-73   | 2026-07-07 | P-4.1 — Schema de Tipos Tarefas                                                                                                  | concluido                                                                            |
+| S-74   | 2026-07-07 | P-4.2 — Componentes UI Tarefas                                                                                                   | concluido                                                                            |
+| S-75   | 2026-07-07 | P-4.3 — Telas e Páginas Tarefas                                                                                                  | concluido                                                                            |
+| S-76   | 2026-07-07 | P-4.4 — Formulários Tarefas                                                                                                      | concluido                                                                            |
+| S-77   | 2026-07-07 | P-4.5 — Estados Tarefas                                                                                                          | concluido                                                                            |
+| S-79   | 2026-07-07 | P-4.7 — RLS Policies Tarefas                                                                                                     | concluido                                                                            |
+| S-80   | 2026-07-07 | P-4.8 — Server Actions Tarefas                                                                                                   | concluido                                                                            |
+| S-81   | 2026-07-07 | P-4.9 — Integração UI ↔ Backend Tarefas                                                                                          | concluido                                                                            |
+| S-82   | 2026-07-08 | P-4.10 — Notificações e Emails Tarefas                                                                                           | concluido                                                                            |
+| S-83   | 2026-07-08 | P-4.11 — Integrações Cross-App Tarefas                                                                                           | concluido                                                                            |
+| S-84   | 2026-07-08 | P-4.12 — Testes Tarefas                                                                                                          | concluido                                                                            |
+| S-85   | 2026-07-08 | P-5.1 — Schema de Tipos Intranet                                                                                                 | concluido                                                                            |
+| S-86   | 2026-07-08 | P-5.2 — Componentes UI Intranet                                                                                                  | concluido                                                                            |
+| S-87   | 2026-07-08 | P-5.3 — Telas e Páginas Intranet                                                                                                 | concluido                                                                            |
+| S-88   | 2026-07-09 | P-5.4 — Formulários Intranet                                                                                                     | concluido                                                                            |
+| S-89   | 2026-07-09 | P-5.5 — Estados Intranet                                                                                                         | concluido                                                                            |
+| S-90   | 2026-07-09 | P-5.6 — Schema do Banco Intranet                                                                                                 | concluido                                                                            |
+| S-91   | 2026-07-09 | P-5.7 — RLS Policies Intranet                                                                                                    | concluido                                                                            |
+| S-92   | 2026-07-09 | P-5.8 — Server Actions Intranet                                                                                                  | concluido                                                                            |
+| S-93   | 2026-07-09 | P-5.9 — Integração UI ↔ Backend Intranet                                                                                         | concluido                                                                            |
+| S-94   | 2026-07-10 | P-5.10 — Notificações e Emails Intranet                                                                                          | concluido                                                                            |
+| S-95   | 2026-07-10 | P-0.17 — Runtime RLS para mutações críticas (PATCH-016)                                                                          | concluido                                                                            |
+| S-96   | 2026-07-10 | P-5.9b — Intranet: decisões por presidente da sessão (PATCH-017)                                                                 | concluido                                                                            |
+| S-97   | 2026-07-10 | P-5.9c — Intranet: snapshot de KPIs e tendências (PATCH-018)                                                                     | concluido                                                                            |
+| S-98   | 2026-07-10 | P-4.11b — Tarefas: seed e configuração do checklist padrão (PATCH-019)                                                           | concluido                                                                            |
+| S-99   | 2026-07-13 | P-4.9b — Tarefas: anexos persistidos e gestão de templates (PATCH-020)                                                           | concluido                                                                            |
+| S-100  | 2026-07-13 | P-1.25b — Admin: designações honestas e revogação sem hard delete (PATCH-021)                                                    | concluido                                                                            |
+| S-101  | 2026-07-13 | P-5.11 — Integrações Cross-App Intranet                                                                                          | concluido                                                                            |
+| S-102  | 2026-07-13 | P-5.12 — Testes Intranet                                                                                                         | concluido                                                                            |
+| S-103  | 2026-07-13 | P-6.1 — Schema de Tipos Plataforma                                                                                               | concluido                                                                            |
+| S-104  | 2026-07-13 | P-6.2 — Componentes UI Plataforma                                                                                                | parcial                                                                              |
+| S-105  | 2026-07-13 | P-6.3 — Telas e Páginas Plataforma                                                                                               | parcial                                                                              |
+| S-106  | 2026-07-13 | P-6.4 — Formulários Plataforma                                                                                                   | parcial                                                                              |
+| S-107  | 2026-07-14 | P-6.5 — Estados Plataforma                                                                                                       | parcial                                                                              |
+| S-108  | 2026-07-14 | P-6.3b — Plataforma: série como coleção temática (PATCH-024)                                                                     | concluido                                                                            |
+| S-109  | 2026-07-14 | P-6.6 — Schema do Banco Plataforma                                                                                               | concluido                                                                            |
+| S-110  | 2026-07-14 | P-6.7 — RLS Policies Plataforma                                                                                                  | concluido                                                                            |
+| S-111  | 2026-07-14 | P-6.8 — Server Actions Plataforma                                                                                                | concluido                                                                            |
+| S-112  | 2026-07-14 | P-6.9 — Integração UI ↔ Backend Plataforma                                                                                       | concluido                                                                            |
+| S-113  | 2026-07-14 | Gap: gestão de instrutores (Plataforma)                                                                                          | bloqueado                                                                            |
+| S-114  | 2026-07-14 | P-6.10 — Notificações e Emails Plataforma                                                                                        | concluido                                                                            |
+| S-115  | 2026-07-14 | P-6.11 — Integração Cross-App Plataforma                                                                                         | concluido                                                                            |
+| S-116  | 2026-07-14 | P-6.12 — Testes Plataforma                                                                                                       | concluido                                                                            |
+| S-117  | 2026-07-14 | Auditoria: débitos técnicos P-6.6–P-6.12 (Plataforma, Bloco B)                                                                   | concluido (gera P-6.13/6.14/6.15)                                                    |
+| S-118  | 2026-07-14 | P-6.13 — Gestão de Instrutores (Plataforma)                                                                                      | concluido                                                                            |
+| S-119  | 2026-07-14 | P-6.14 — Verificação Pública de Certificado (Plataforma)                                                                         | concluido                                                                            |
+| S-120  | 2026-07-14 | P-6.15 — Upload de Mídia da Plataforma (capa de curso, anexo de aula)                                                            | concluido                                                                            |
+| S-121  | 2026-07-15 | P-7.1 — Schema de Tipos Flats                                                                                                    | concluido                                                                            |
+| S-122  | 2026-07-15 | P-7.2 — Componentes UI Flats                                                                                                     | concluido                                                                            |
+| S-123  | 2026-07-15 | P-7.3 — Telas e Páginas Flats                                                                                                    | concluido                                                                            |
+| S-124  | 2026-07-15 | P-7.4 — Formulários Flats                                                                                                        | concluido                                                                            |
+| S-125  | 2026-07-16 | P-7.5 — Estados Flats                                                                                                            | concluido                                                                            |
+| S-126  | 2026-07-16 | P-7.1b — Correção do máximo de scoring em BRAIN §6.8 (CORRETIVO)                                                                 | concluido                                                                            |
+| S-127  | 2026-07-16 | P-7.5b — Fiação das telas do Bloco A Flats para validação da diretoria (CORRETIVO)                                               | concluido                                                                            |
+| S-128  | 2026-07-16 | P-7.6 — Schema do Banco Flats                                                                                                    | concluido                                                                            |
+| S-129  | 2026-07-16 | P-7.7 — RLS Policies Flats                                                                                                       | concluido                                                                            |
+| S-130  | 2026-07-16 | P-7.8 — Server Actions Flats                                                                                                     | concluido                                                                            |
+| S-131  | 2026-07-16 | P-7.9 — Integração UI ↔ Backend Flats                                                                                            | concluido                                                                            |
+| S-132  | 2026-07-16 | P-7.10 — Notificações e Emails Flats                                                                                             | concluido                                                                            |
+| S-133  | 2026-07-16 | P-7.11 — Integrações Cross-App Flats                                                                                             | concluido                                                                            |
+| S-134  | 2026-07-16 | P-7.12 — Testes Flats                                                                                                            | concluido                                                                            |
+| S-135  | 2026-07-16 | P-7.6b — Canonicalização estável do `daterange` (CORRETIVO)                                                                      | concluido                                                                            |
+| S-136  | 2026-07-16 | P-7.9b — Fiação do ciclo de vida pós-aprovação e revisão de auxílio (CORRETIVO)                                                  | concluido                                                                            |
+| S-137  | 2026-07-16 | P-7.9c — Persistência do documento do responsável em `flats.document_files` (CORRETIVO)                                          | concluido                                                                            |
+| S-138  | 2026-07-17 | P-8.1 — Schema de Tipos Rádio                                                                                                    | concluido                                                                            |
+| S-139  | 2026-07-17 | P-8.2 — Componentes UI Rádio                                                                                                     | concluido                                                                            |
+| S-140  | 2026-07-17 | P-8.3 — Telas e Páginas Rádio                                                                                                    | concluido                                                                            |
+| S-141  | 2026-07-17 | P-8.4 — Formulários Rádio                                                                                                        | concluido                                                                            |
+| S-142  | 2026-07-17 | P-8.5 — Estados Rádio                                                                                                            | concluido                                                                            |
+| S-143  | 2026-07-17 | Auditoria Bloco A Rádio (P-8.1–8.5) — patch P-8.5b gerado                                                                        | concluido                                                                            |
+| S-144  | 2026-07-17 | P-8.5b — Estados reais do player (CORRETIVO)                                                                                     | concluido                                                                            |
+| S-145  | 2026-07-17 | P-8.6 — Schema do Banco Rádio                                                                                                    | concluido                                                                            |
+| S-146  | 2026-07-17 | P-8.7 — RLS Policies Rádio                                                                                                       | concluido                                                                            |
+| S-147  | 2026-07-17 | P-8.8 — Server Actions Rádio                                                                                                     | concluido                                                                            |
+| S-148  | 2026-07-17 | P-8.9 — Integração UI ↔ Backend Rádio                                                                                            | concluido                                                                            |
+| S-149  | 2026-07-17 | P-8.10 — Notificações Rádio                                                                                                      | concluido                                                                            |
+| S-150  | 2026-07-17 | P-8.11 — Integração Cross-App Rádio                                                                                              | concluido                                                                            |
+| S-151  | 2026-07-17 | P-8.12 — Testes Rádio                                                                                                            | concluido                                                                            |
+| S-152  | 2026-07-17 | P-8.9b — Persistência da descrição de material exclusivo (CORRETIVO)                                                             | concluido                                                                            |
+| S-153  | 2026-07-17 | P-8.11b — Fiação do heartbeat de audiência no player (CORRETIVO)                                                                 | concluido                                                                            |
+| S-154  | 2026-07-17 | P-9.1 — Revisão de Segurança (RLS Audit)                                                                                         | concluido                                                                            |
+| S-155  | 2026-07-17 | P-9.1b — Fechamento dos achados abertos da auditoria (S-02 + S-05) (CORRETIVO)                                                   | concluido                                                                            |
+| S-156  | 2026-07-17 | P-9.1b-1 — Fechamento do achado S-02 em `admin` (CORRETIVO)                                                                      | concluido                                                                            |
+| S-157  | 2026-07-17 | P-9.1b-2 — Fechamento do achado S-02 em `financeiro` (CORRETIVO)                                                                 | concluido                                                                            |
+| S-158  | 2026-07-18 | P-9.1b-3 — Fechamento do achado S-02 em `projetos` (CORRETIVO)                                                                   | parcial                                                                              |
+| S-159  | 2026-07-18 | P-9.1b-3 — Causa raiz do drift de GRANT em `projetos` (CORRETIVO)                                                                | concluido                                                                            |
+| S-160  | 2026-07-18 | P-9.1b-4 — Fechamento do achado S-02 em `documentos` (CORRETIVO)                                                                 | concluido                                                                            |
+| S-161  | 2026-07-18 | P-9.1b-5 — Fechamento do achado S-02 em `intranet` (CORRETIVO)                                                                   | concluido                                                                            |
+| S-162  | 2026-07-18 | P-9.1b-6 — Fechamento do achado S-02 em `tarefas` (CORRETIVO)                                                                    | concluido                                                                            |
+| S-163  | 2026-07-18 | P-9.1b-7 — Residual S-02 (flats/plataforma/radio) + S-05 (CORRETIVO) — fecha P-9.1b                                              | concluido                                                                            |
+| S-164  | 2026-07-18 | P-9.2 — LGPD Audit (superfícies de titular "Meus Dados" + varredura final)                                                       | concluido                                                                            |
+| S-165  | 2026-07-19 | P-9.3 — Performance e Otimização                                                                                                 | concluido                                                                            |
+| S-166  | 2026-07-19 | P-9.4 — Copy Review (humanizar textos + citações bíblicas por contexto)                                                          | concluido                                                                            |
+| S-167  | 2026-07-20 | P-0.1b — Restauração do Build e Uniformização da Config dos 9 Apps (CORRETIVO)                                                   | concluido                                                                            |
+| S-168  | 2026-07-20 | P-0.1c — `packages/config`: validação de env em runtime (CORRETIVO)                                                              | concluido                                                                            |
+| S-169  | 2026-07-20 | P-0.2c — Aposentadoria dos aliases DEPRECATED (CORRETIVO)                                                                        | concluido                                                                            |
+| S-170  | 2026-07-20 | P-0.2d — Primitivos Drawer e Tooltip (CORRETIVO — fecha débito da S-3)                                                           | concluido                                                                            |
+| S-171  | 2026-07-20 | P-0.3c — Aposentar `drizzle-kit generate/check` (CORRETIVO — remove footgun de migrations)                                       | concluido                                                                            |
+| S-172  | 2026-07-22 | P-0.4b — Simetria de codificação de cookies no browser client (CORRETIVO — round-trip de cookie quebrado latente)                | concluido                                                                            |
+| S-173  | 2026-07-22 | P-0.5b — `profileHref` opcional e correção dos alvos de "Meu perfil" (CORRETIVO — links 404 no user menu)                        | concluido                                                                            |
+| S-174  | 2026-07-22 | P-0.5c — App launcher canônico e higiene de API do sidebar (CORRETIVO — duplicação com drift + launcher exposto a papel externo) | concluido                                                                            |
+| S-175  | 2026-07-22 | P-0.6b — Notificações in_app operáveis: slot no AppShell + piloto na intranet (CORRETIVO — bell/central nunca fiados)            | concluido                                                                            |
+| S-176  | 2026-07-23 | P-0.6c — Notificações in_app: rollout do sino/central aos demais apps (CORRETIVO — continuação de P-0.6b)                        | concluido                                                                            |
+| S-177  | 2026-07-23 | P-0.6d — Client Drizzle tipado com o schema completo (CORRETIVO — débito S-7/F2-F2 nunca liquidado)                              | concluido                                                                            |
+| S-178  | 2026-07-22 | P-0.6e — Tipografia institucional nos emails (CORRETIVO — EmailLayout usava Inter)                                               | concluido                                                                            |
+| S-179  | 2026-07-22 | Débito ad-hoc — `PreviewProps` nos 27 templates de email (fix do `email:dev`, fora do escopo original do P-0.6e)                 | concluido                                                                            |
+| S-180  | 2026-07-23 | P-1.26b — Admin: remover `moduleAccess` fantasma, schemas de usuário mortos e tipos de domínio órfãos (PATCH-025)                | concluido                                                                            |
+| S-181  | 2026-07-23 | P-1.10b — Admin: consolidação e acesso ao editor de templates de email (CORRETIVO)                                               | concluido                                                                            |
+| S-182  | 2026-07-24 | P-1.10c — Emails enviados a partir dos templates do banco (CORRETIVO)                                                            | concluido                                                                            |
+| S-183  | 2026-07-24 | P-1.14b — Documentos: badge de visibilidade e pílula de status únicos (CORRETIVO)                                                | concluido                                                                            |
+| S-184  | 2026-07-25 | P-1.15b — Documentos: listagem por categoria, a rota que nunca foi criada (CORRETIVO)                                            | concluido                                                                            |
+| S-185  | 2026-07-25 | P-1.16b — Documentos: assinaturas, preferência por tipo de alerta de verdade (CORRETIVO)                                         | concluido                                                                            |
+| S-186  | 2026-07-25 | P-1.16c — Documentos: reordenação de categorias, ligar a UI ao backend ou remover a promessa (CORRETIVO)                         | concluido                                                                            |
+| S-187  | 2026-07-25 | P-1.17b — Documentos: fronteiras de erro e cópia de estados vazios (CORRETIVO)                                                   | concluido                                                                            |
+| S-188  | 2026-07-25 | P-1.18b — Documentos: campos que a UI coleta e o banco não guarda (CORRETIVO)                                                    | concluido                                                                            |
+| S-189  | 2026-07-25 | P-1.19b — Documentos: RLS de rascunho, lixeira e o papel conselheiro (CORRETIVO)                                                 | concluido                                                                            |
+| S-190  | 2026-07-27 | P-1.20b — Documentos: busca com acento, índice e fim da action órfã (CORRETIVO)                                                  | concluido                                                                            |
+| S-191  | 2026-07-27 | P-1.20c — Documentos: registro de leitura (`views`) que ninguém escreve (CORRETIVO)                                              | concluido                                                                            |
+| S-192  | 2026-07-27 | P-1.21b — Documentos: área editorial ainda lê como superusuário (CORRETIVO)                                                      | concluido                                                                            |
+| S-193  | 2026-07-27 | P-1.22b — Documentos: alerta de "novas versões" que nunca chega (CORRETIVO)                                                      | concluido                                                                            |
+| S-194  | 2026-07-27 | P-1.23b — O botão "submeter projeto" que o wizard ignora (CORRETIVO)                                                             | concluido                                                                            |
+| S-195  | 2026-07-27 | P-1.24b — Testes: o audit mockado e o caminho de escrita sem cobertura (CORRETIVO) — fecha o bloco B de Documentos               | concluido                                                                            |
+| S-196  | 2026-07-27 | Auditoria Bloco A Projetos (P-2.1–P-2.5) — patches P-2.1b/2.2b/2.3b/2.3c/2.4b/2.5b gerados                                       | concluido                                                                            |
+| S-197  | 2026-07-27 | P-2.1b — O contrato compartilhado que a implementação abandonou (CORRETIVO)                                                      | concluido                                                                            |
+| S-198  | 2026-07-28 | P-2.2b — O voto que se dá por registrado sem o servidor confirmar (CORRETIVO)                                                    | concluido                                                                            |
+| S-199  | 2026-07-28 | P-2.3b — A pauta da reunião que nunca teve pauta (CORRETIVO)                                                                     | concluido                                                                            |
+| S-200  | 2026-07-28 | P-2.3c — O teto de R$ 150 mil que ninguém definiu (CORRETIVO)                                                                    | concluido                                                                            |
+| S-201  | 2026-07-28 | P-2.4b — O wizard que não valida nada (CORRETIVO)                                                                                | concluido                                                                            |
+| S-202  | 2026-07-28 | P-2.5b — Nenhuma fronteira de erro, o skeleton errado e o vazio que pisca (CORRETIVO)                                            | concluido                                                                            |
+| S-203  | 2026-07-28 | Auditoria Bloco B Projetos (P-2.6–P-2.12) — patches P-2.6b/2.8b/2.8c/2.10b/2.12b gerados                                         | concluido                                                                            |
+| S-204  | 2026-07-28 | P-2.6b — O relatório que é rejeitado sem motivo e não pode voltar (CORRETIVO)                                                    | concluido                                                                            |
+| S-205  | 2026-07-28 | P-2.8b — A reprovação que o mapa de estágios não permite e o quórum que conta quem já saiu (CORRETIVO)                           | concluido                                                                            |
+| S-206  | 2026-07-28 | P-2.8c — Quatro actions sem porta de entrada: rascunho, instituição e membros (CORRETIVO)                                        | concluido                                                                            |
+| S-207  | 2026-07-28 | P-2.10b — Sete notificações que nunca disparam e um link que leva a lugar nenhum (CORRETIVO)                                     | concluido                                                                            |
+| S-208  | 2026-07-29 | P-2.12b — O teste que examina a cópia em vez do original (CORRETIVO)                                                             | concluido                                                                            |
+| S-209  | 2026-07-29 | P-0.5d — A navegação que recarrega a página inteira a cada clique (CORRETIVO)                                                    | concluido                                                                            |
+| S-210  | 2026-07-29 | P-3.2b — Sete botões que não fazem nada e um CSV com extensão de Excel (CORRETIVO)                                               | concluido                                                                            |
+| S-211  | 2026-07-29 | P-3.3b — O plano de contas que esconde a categoria recém-criada (CORRETIVO)                                                      | concluido                                                                            |
+| S-212  | 2026-07-29 | P-3.4b — O comprovante que a tela pede e o sistema descarta (CORRETIVO)                                                          | concluido                                                                            |
+| S-213  | 2026-07-29 | P-3.5b — Nenhuma fronteira de erro, doze telas sem carregamento e 45 cores fora do sistema (CORRETIVO)                           | concluido                                                                            |
+| S-214  | 2026-07-29 | Auditoria: débitos técnicos P-3.6–P-3.12 (Financeiro, Bloco B) — 6 prompts corretivos gerados                                    | concluido                                                                            |
+| S-215  | 2026-07-30 | P-3.6b — Seis campos que o formulário coleta e o banco não tem onde guardar (CORRETIVO)                                          | concluido                                                                            |
+| S-216  | 2026-07-30 | P-3.7b — A segunda camada de defesa que oito mutações contornam por dentro (CORRETIVO)                                           | concluido                                                                            |
+| S-217  | 2026-07-30 | P-3.11b — O centro de custo que só nasce de um projeto e o selo "Geral" que nunca aparece (CORRETIVO)                            | concluido                                                                            |
+| S-218  | 2026-07-30 | P-3.9c — Cinco actions e quatro estados que nenhuma tela alcança (CORRETIVO)                                                     | concluido                                                                            |
+| S-219  | 2026-07-30 | P-3.10b — Três emails que o Admin não consegue editar e um lote semanal escrito duas vezes (CORRETIVO)                           | concluido                                                                            |
+| S-220  | 2026-07-30 | P-3.8c — O OCR de nota fiscal que existe, funciona e ninguém chama (CORRETIVO)                                                   | concluido                                                                            |
+| S-221  | 2026-07-30 | Auditoria: débitos técnicos P-4.1–P-4.5 (Tarefas, Bloco A) — 5 prompts corretivos gerados                                        | concluido                                                                            |
+| S-222  | 2026-08-03 | P-4.1b — A recorrência anual que não sabe em que mês cai (CORRETIVO)                                                             | concluido                                                                            |
+| S-223  | 2026-08-03 | P-4.2b — O quadro que só se move com mouse (CORRETIVO)                                                                           | concluido                                                                            |
+| S-224  | 2026-08-03 | P-4.4b — A descrição que o editor formata e a tela mostra com as tags à vista (CORRETIVO)                                        | concluido                                                                            |
+| S-225  | 2026-08-03 | P-4.4c — O lançamento manual de horas sem tela e os quatro schemas que ainda fingem que não há UUID (CORRETIVO)                  | concluido                                                                            |
+| S-226  | 2026-08-03 | P-4.5b — O esqueleto de árvore que nenhuma tela mostra e a visão que o recarregamento esquece (CORRETIVO)                        | concluido                                                                            |
+| S-227  | 2026-08-04 | P-4.8b — A tarefa automática que nasce órfã e continua órfã (CORRETIVO)                                                          | concluido                                                                            |
+| S-228  | 2026-08-04 | P-4.8c — O pedido de aprovação que o pedido seguinte esconde (CORRETIVO)                                                         | concluido                                                                            |
+| S-229  | 2026-08-05 | P-4.10b — A notificação que não leva a lugar nenhum (CORRETIVO)                                                                  | concluido                                                                            |
+| S-230  | 2026-08-05 | P-4.9c — O anexo que sobe e não desce (CORRETIVO)                                                                                | concluido                                                                            |
+| S-231  | 2026-08-05 | P-4.9d — A regra de recorrência que só sabe nascer (CORRETIVO)                                                                   | concluido                                                                            |
+| S-232  | 2026-08-05 | P-4.8d — O "D" do CRUD e o campo de módulo que a edição joga fora (CORRETIVO)                                                    | concluido                                                                            |
+| S-233  | 2026-08-05 | P-4.6b — O histórico que o banco guarda e a tela não mostra (CORRETIVO)                                                          | concluido                                                                            |
+| S-234  | 2026-08-06 | P-5.2b — O sparkline que desenha ruído sobre um número real (CORRETIVO)                                                          | concluido                                                                            |
+| S-235  | 2026-08-06 | P-5.2c — O feed cross-app que o backend agrega e o painel não mostra (CORRETIVO)                                                 | concluido                                                                            |
+| S-236  | 2026-08-11 | P-5.2d — O painel que só se monta com mouse e perde o widget recém-adicionado (CORRETIVO)                                        | concluido                                                                            |
+| S-237  | 2026-08-11 | P-5.1b — O diretório com foto e bio que ninguém pode preencher (CORRETIVO)                                                       | concluido                                                                            |
+| S-238  | 2026-08-11 | P-5.3b — As três telas que carregam em branco e o anúncio zero que fala de filtro (CORRETIVO)                                    | concluido                                                                            |
+| S-239  | 2026-08-11 | P-5.3c — A busca que leva a uma rota inexistente e o lançador que reescreve o catálogo do ecossistema (CORRETIVO)                | concluido                                                                            |
+| S-240  | 2026-08-11 | Auditoria: débitos técnicos P-5.6–P-5.12 (Intranet, Bloco B)                                                                     | concluido                                                                            |
+| S-241  | 2026-08-12 | P-5.10b — O anúncio urgente que falha depois de publicado e os dois emails que ninguém pode editar (CORRETIVO)                   | concluido                                                                            |
+| S-242  | 2026-08-12 | P-5.11b — A decisão que vira tarefa e some (CORRETIVO)                                                                           | concluido                                                                            |
+| S-243  | 2026-08-12 | P-5.8b — O KPI de audiência que a Rádio calcula todo dia e o painel nunca pediu (CORRETIVO)                                      | concluido                                                                            |
+| S-244  | 2026-08-12 | P-5.9d — A agenda que promete prazos e a leitura que traz a diretoria inteira (CORRETIVO)                                        | concluido                                                                            |
+| S-245  | 2026-08-14 | P-5.9e — O diretório que abre uma conexão de rede por pessoa (CORRETIVO)                                                         | concluido                                                                            |
+| S-246  | 2026-08-14 | P-5.8c — A busca que trata "%" como coringa e chama a reunião de "ordinaria" (CORRETIVO)                                         | concluido                                                                            |
+| S-247  | 2026-08-15 | Ajustes de UI da Intranet: grid redimensionável do painel, avatar e link no user-bar, enquadramento de /meus-dados (CORRETIVO)   | concluido                                                                            |
+| S-248  | 2026-08-15 | P-6.2b — A trilha que a barra lateral promete e o banco esconde (CORRETIVO)                                                      | concluido                                                                            |
+| S-249  | 2026-08-17 | P-6.3c — O painel do instrutor que sempre lê zero (CORRETIVO)                                                                    | concluido                                                                            |
+| S-250  | 2026-08-17 | P-6.4b — O curso que se cria e não se edita (CORRETIVO)                                                                          | concluido                                                                            |
+| S-251  | 2026-08-17 | P-6.5b — Os esqueletos que ninguém mostra e o erro que se disfarça de catálogo vazio (CORRETIVO)                                 | concluido                                                                            |
+| S-252  | 2026-08-18 | Auditoria: débitos técnicos P-6.6–P-6.15 (Plataforma, Bloco B, 2ª rodada)                                                        | concluido (gera P-6.16 a P-6.19)                                                     |
+| S-253  | 2026-08-18 | P-6.16 — A aula arquivada que ainda tranca a trilha (CORRETIVO)                                                                  | concluido                                                                            |
+| S-254  | 2026-08-19 | P-6.17 — O certificado que some junto com o curso (CORRETIVO)                                                                    | concluido                                                                            |
+| S-255  | 2026-08-19 | P-6.18 — A capa que virou caminho de storage no catálogo (CORRETIVO)                                                             | concluido                                                                            |
+| S-256  | 2026-08-19 | P-6.19 — A série que ninguém pode criar e a equipe sem porta na sidebar (CORRETIVO)                                              | concluido                                                                            |
+| S-257  | 2026-08-19 | AUDIT PACOTE 1 — LGPD: fechar o direito de exclusão (CORRETIVO)                                                                  | concluido                                                                            |
+| S-258  | 2026-08-19 | AUDIT PACOTE 2 — As costuras que perdem dinheiro e registros (CORRETIVO)                                                         | parcial (D2-001 adiado)                                                              |
+| S-259  | 2026-08-19 | AUDIT PACOTE 3 — Camada 1: middleware nos 8 apps (CORRETIVO)                                                                     | parcial (renovação de sessão sem teste automatizado)                                 |
+| S-260  | 2026-08-20 | AUDIT PACOTE 4 — O que o usuário lê quando algo falha (CORRETIVO)                                                                | concluido                                                                            |
+| S-261  | 2026-08-20 | AUDIT PACOTE 5 — Prontidão de produção (P-9.5) (CORRETIVO)                                                                       | parcial (infra externa pendente — ver runbook)                                       |
+| S-262  | 2026-08-20 | AUDIT PACOTE 6 — Impersonação: implementar ou revogar (CORRETIVO)                                                                | concluido                                                                            |
+| S-263  | 2026-08-20 | AUDIT PACOTE 7 — Escopo v1 pendente: decisão da diretoria (CORRETIVO)                                                            | parcial (decisão tomada + 6 prompts escritos; P-9.0 escrito, execução real pendente) |
 
 ---
 
@@ -24285,4 +24286,123 @@ banida pelo projeto) e mostram um link "Encerrar no Admin" em vez do botão.
 - `packages/db/src/__tests__/audit-impersonation.test.ts` (novo)
 - `apps/admin/src/__tests__`: `audit.test.ts` (caso reescrito), `session-gate.test.ts` (caso novo), `safe-action-impersonation.test.ts` (novo)
 - `AUDIT/04-BACKLOG-CORRECAO.md` (critérios de aceite do Pacote 6)
+- `SESSIONS.md` (esta entrada)
+
+---
+
+## S-263 — AUDIT PACOTE 7 — Escopo v1 pendente: decisão da diretoria (CORRETIVO)
+
+**Prompt:** `AUDIT/04-BACKLOG-CORRECAO.md` § PACOTE 7
+**Data:** 2026-08-20
+**Modelo:** claude-sonnet-5
+**Status:** parcial — decisão tomada e os seis prompts escritos; P-9.0 teve código escrito e verificado, execução real fica para o Filipe
+
+### Resumo
+
+Diferente dos demais pacotes da auditoria, este começa com uma decisão, não
+código: seis entregas declaradas escopo v1 (`BRAIN.md` §8, quatro delas via
+PATCH-012 — "Pode criar os prompts") nunca tiveram prompt escrito: P-2.13
+(renovação), P-2.14 (duplicidade via embeddings/pgvector), P-7.13
+(assistência de IA no scoring de Flats), P-9.0 (migração de usuários do
+legado — o mais urgente, pré-condição declarada de P-9.5 desde
+`PROMPTS.md:10531`), Bunny.net Stream (upload de vídeo do LMS) e Google
+Calendar (Intranet). O texto do prompt pedia, para cada um, "implementar ou
+emitir PATCH revogando" — sem meio-termo.
+
+Perguntado a Filipe item a item (`AskUserQuestion`, duas rodadas): **nenhum
+foi revogado**. P-2.13+P-2.14 (exigência direta do requisito 5 do PRD, não
+só do BRAIN) e P-7.13, "implementar agora". Bunny, "implementar upload + URL
+assinada". Google Calendar, escopo **reduzido**: de sincronização
+bidirecional (OAuth2, como o BRAIN original sugeria) para exportação
+unidirecional sem OAuth — botão "Adicionar ao Google Calendar" + download de
+`.ics` por reunião, decisão explícita de Filipe ("poderíamos reduzir o
+escopo para um export de evento").
+
+**P-9.0 teve tratamento especial.** É o único bloqueante real (P-9.5
+depende dele) e Filipe confirmou de onde vêm os ~150 usuários atuais: outro
+projeto Supabase (só Auth), construído por uma empresa terceirizada — não
+uma planilha, não outro tipo de banco. Sem credenciais desse projeto
+disponíveis nesta sessão, a decisão foi "escrever o script agora, você roda
+depois": `packages/db/src/scripts/migrate-legacy-users.ts` faz a extração
+via Admin API (paginada), cria a conta equivalente aqui
+(`auth.admin.createUser`, sem senha) e envia um **magic link** por e-mail
+institucional (`LegacyAccessEmail`, novo em `packages/email`) — sem
+inventar nenhuma tela nova, o link leva direto a `/post-login`, que já
+existe. Deliberadamente não atribui papel (`role_assignments`): o legado é
+só identidade, sem garantia de que os papéis de lá batam com os 8 papéis
+daqui — atribuição fica manual, pós-migração, pela tela de usuários do
+Admin que já existe. Dry-run é o padrão; só grava com `--execute`.
+Idempotente por e-mail. Gera relatório CSV local (`migration-reports/`,
+agora no `.gitignore` — nunca commitar, tem PII de pessoas reais).
+
+Construir o script expôs uma lacuna de tooling: `packages/db` nunca
+importou um template `.tsx` de `@hebron/email` antes (só apps/\* fazem
+isso), e o `tsconfig.json` do pacote não tinha `jsx` configurado — `tsc
+--noEmit` falhava tentando resolver o JSX interno de `legacy-access.tsx`
+via `TS6142`. Corrigido com `"jsx": "react-jsx"` no `tsconfig.json` de
+`packages/db` e `react`/`@types/react` como dependência real (antes só
+chegava transitivamente). Um segundo erro real: o callback `insert` de
+`createNotification` não pode repassar `data` inteiro para
+`.insert(notifications).values(data)` — `sentAt` chega como `string` (ISO)
+e a coluna Drizzle espera `Date`; corrigido convertendo explicitamente
+(`apps/admin/src/actions/invitations.ts` evita o mesmo bug construindo o
+objeto de inserção campo a campo, nunca espalhando `data` — padrão que
+deveria ser documentado para o próximo consumidor de `createNotification`).
+`pnpm --filter @hebron/db typecheck lint` verdes depois das correções.
+
+**Os outros cinco prompts (P-2.13, P-2.14, P-5.13, P-6.20, P-7.13) foram
+escritos, não implementados**, nesta sessão — decisão explícita de
+sequenciamento de Filipe ("um prompt por vez, em sessões separadas") diante
+de duas informações levantadas antes de codificar: nenhuma credencial de
+Bunny.net ou Google existe no repositório hoje (`BUNNY_*`/`GOOGLE_*`: zero
+ocorrências), então mesmo implementando agora, essas duas integrações não
+seriam testáveis ponta a ponta sem contas externas que ainda não existem
+(mesmo padrão do Sentry em PACOTE 5); e cravar cinco features distintas em
+apps diferentes (Projetos, Flats, Plataforma, Intranet) numa única sessão
+contraria a convenção "uma sessão = um prompt" do próprio projeto. Cada
+prompt em `PROMPTS.md` está completo o bastante (contexto, escopo, arquivos
+permitidos, critérios de aceite) para ser executado sem re-derivar decisão
+de negócio numa sessão futura.
+
+### Decisão registrada
+
+`PATCHES/027-pacote-7-escopo-v1-pendente.md` — tabela item a item, motivo de
+cada decisão, e por que nenhum foi revogado (todos tinham motivo de negócio
+concreto: dois exigidos pelo PRD, um fecha risco de acesso já identificado,
+um é via de entrada obrigatória para usuários existentes, dois são
+assistência/conveniência de baixo custo). `BRAIN.md` §6.6 (linha 428)
+atualizada para o escopo reduzido do Google Calendar; §8 não precisou de
+edição de texto (os quatro itens de PATCH-012 já apontavam certo).
+
+### Verificação
+
+- `pnpm --filter @hebron/db typecheck` — verde, incluindo o script novo e o
+  template de e-mail novo.
+- `pnpm --filter @hebron/db lint` (`eslint src/scripts/migrate-legacy-users.ts`,
+  `eslint src/templates/legacy-access.tsx` via `@hebron/email`) — verde.
+- `pnpm install --filter @hebron/db...` — confirma `react`/`@types/react`
+  resolvidos corretamente após a mudança de `package.json`.
+- **Não verificado** (fora do alcance desta sessão, por falta de
+  credenciais): dry-run/execução real do script contra um projeto Supabase
+  de verdade — a validação de env var ausente (`requireEnv`) foi conferida
+  por leitura de código, não por execução, já que nem `LEGACY_SUPABASE_URL`
+  nem as credenciais de produção estavam disponíveis. Passos e verificação
+  completa em `AUDIT/PACOTE-7-P9.0-RUNBOOK.md`.
+- Os cinco prompts restantes (P-2.13, P-2.14, P-5.13, P-6.20, P-7.13) não
+  têm código para verificar nesta sessão — são especificação, não
+  implementação.
+
+### Arquivos modificados
+
+- `PATCHES/027-pacote-7-escopo-v1-pendente.md` (novo)
+- `AUDIT/PACOTE-7-P9.0-RUNBOOK.md` (novo)
+- `BRAIN.md` (§6.6, linha 428 — escopo reduzido do Google Calendar)
+- `PROMPTS.md` (header/total, e novos: P-2.13, P-2.14, P-5.13, P-6.20, P-7.13, P-9.0)
+- `packages/db/src/scripts/migrate-legacy-users.ts` (novo)
+- `packages/db/package.json` (script `migrate:legacy-users`; dependências `react`, `@types/react`)
+- `packages/db/tsconfig.json` (`jsx: "react-jsx"`)
+- `packages/email/src/templates/legacy-access.tsx` (novo)
+- `.env.example` (raiz — `LEGACY_SUPABASE_URL`, `LEGACY_SUPABASE_SERVICE_ROLE_KEY`)
+- `.gitignore` (`migration-reports/`)
+- `AUDIT/04-BACKLOG-CORRECAO.md` (critérios de aceite do Pacote 7)
 - `SESSIONS.md` (esta entrada)

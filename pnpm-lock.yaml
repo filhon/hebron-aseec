@@ -1026,6 +1026,9 @@ importers:
       postgres:
         specifier: ^3.4.4
         version: 3.4.9
+      react:
+        specifier: ^19.0.0
+        version: 19.2.6
     devDependencies:
       "@hebron/eslint-config":
         specifier: workspace:*
@@ -1036,6 +1039,9 @@ importers:
       "@types/node":
         specifier: ^22.0.0
         version: 22.19.19
+      "@types/react":
+        specifier: ^19.0.0
+        version: 19.2.15
       dotenv:
         specifier: ^16.4.5
         version: 16.6.1

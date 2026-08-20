@@ -425,7 +425,7 @@ Todo o estilo visual compartilhado vive em **`packages/ui`**. O arquivo **`packa
 - Produção de conteúdo: diretores/conselheiros fazem anúncios curtos (normal/importante/urgente); presidente de sessão registra decisões; super_admins elaboram conteúdo
 - Relatórios financeiros automáticos mensais por email
 - Diretório de membros (todos: diretores, conselheiros, colaboradores, submissores, parceiros)
-- Calendário compartilhado (integração Google Calendar)
+- Calendário compartilhado com exportação para o Google Calendar — escopo reduzido de sincronização bidirecional (OAuth2) para exportação unidirecional sem OAuth: botão "Adicionar ao Google Calendar" (URL de criação de evento) + download de `.ics` por reunião (P-5.13, PATCH-027)
 - Widgets configuráveis por usuário
 - Busca unificada cross-app
 - Briefing diário opcional (opt-in, frequência configurável)

@@ -53,3 +53,7 @@ drizzle/
 # Documentos
 .docs/
 .claude/
+
+# Relatórios de migração (packages/db/src/scripts/migrate-legacy-users.ts) —
+# contêm e-mail/nome de usuários reais, nunca versionar (P-9.0).
+migration-reports/

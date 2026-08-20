@@ -28,6 +28,7 @@
     "db:seed": "tsx src/seed.ts",
     "db:seed:flats-tarefas": "tsx src/seed/tarefas-templates.ts",
     "db:seed:producao": "tsx src/seed/producao.ts",
+    "migrate:legacy-users": "tsx src/scripts/migrate-legacy-users.ts",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
@@ -35,12 +36,14 @@
     "@hebron/types": "workspace:*",
     "@supabase/supabase-js": "catalog:",
     "drizzle-orm": "catalog:",
-    "postgres": "^3.4.4"
+    "postgres": "^3.4.4",
+    "react": "^19.0.0"
   },
   "devDependencies": {
     "@hebron/eslint-config": "workspace:*",
     "@hebron/typescript-config": "workspace:*",
     "@types/node": "^22.0.0",
+    "@types/react": "^19.0.0",
     "dotenv": "^16.4.5",
     "drizzle-kit": "^0.28.0",
     "eslint": "^9.13.0",

@@ -5,19 +5,19 @@
 
 ## Mapa de risco
 
-| Pacote                                          | Severidade máx. | Achados                                                                  | Bloqueia produção?              |
-| ----------------------------------------------- | --------------- | ------------------------------------------------------------------------ | ------------------------------- |
-| **1 — LGPD: fechar o direito de exclusão**      | **P0**          | D8-001, D8-002, D8-003, D1-005                                           | **SIM**                         |
-| 2 — As costuras que perdem dinheiro e registros | P1              | FLX-001, D2-001, D1-002                                                  | não, mas é o próximo risco real |
-| 3 — Camada 1: middleware nos 8 apps             | P1              | D1-001, D3-002                                                           | não                             |
-| 4 — O que o usuário lê quando algo falha        | P1              | D4-004, D4-002, D7-001                                                   | não                             |
-| 5 — Prontidão de produção (P-9.5)               | P1              | NEG-004, NEG-007, NEG-008, NEG-006, D3-003                               | **SIM** (é o deploy)            |
-| 6 — Impersonação: implementar ou revogar        | P1              | FLX-002                                                                  | não                             |
-| 7 — Escopo v1 pendente (decisão da diretoria)   | P1              | NEG-001, NEG-002, NEG-003, NEG-012, NEG-009, NEG-010                     | decisão                         |
-| 8 — Robustez do Financeiro em escala            | P2              | D4-003, D2-002, D5-001, D6-003                                           | não                             |
-| 9 — Gates e RLS residuais                       | P2              | D1-004, D1-006, D6-002                                                   | não                             |
-| 10 — Camada de IA                               | P2              | D5-003                                                                   | não                             |
-| 11 — Higiene e registro                         | P3              | D3-001, D4-001, D4-005, D5-002, D6-001, D6-004, D1-003, NEG-011, NEG-005 | não                             |
+| Pacote                                          | Severidade máx. | Achados                                                                  | Bloqueia produção?                                                                    |
+| ----------------------------------------------- | --------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| **1 — LGPD: fechar o direito de exclusão**      | **P0**          | D8-001, D8-002, D8-003, D1-005                                           | **SIM**                                                                               |
+| 2 — As costuras que perdem dinheiro e registros | P1              | FLX-001, D2-001, D1-002                                                  | não, mas é o próximo risco real                                                       |
+| 3 — Camada 1: middleware nos 8 apps             | P1              | D1-001, D3-002                                                           | não                                                                                   |
+| 4 — O que o usuário lê quando algo falha        | P1              | D4-004, D4-002, D7-001                                                   | não                                                                                   |
+| 5 — Prontidão de produção (P-9.5)               | P1              | NEG-004, NEG-007, NEG-008, NEG-006, D3-003                               | **SIM** (é o deploy)                                                                  |
+| 6 — Impersonação: implementar ou revogar        | P1              | FLX-002                                                                  | não                                                                                   |
+| 7 — Escopo v1 pendente (decisão da diretoria)   | P1              | NEG-001, NEG-002, NEG-003, NEG-012, NEG-009, NEG-010                     | não mais — decisão tomada (PATCH-027); P-9.0 ainda bloqueia P-9.5 até a execução real |
+| 8 — Robustez do Financeiro em escala            | P2              | D4-003, D2-002, D5-001, D6-003                                           | não                                                                                   |
+| 9 — Gates e RLS residuais                       | P2              | D1-004, D1-006, D6-002                                                   | não                                                                                   |
+| 10 — Camada de IA                               | P2              | D5-003                                                                   | não                                                                                   |
+| 11 — Higiene e registro                         | P3              | D3-001, D4-001, D4-005, D5-002, D6-001, D6-004, D1-003, NEG-011, NEG-005 | não                                                                                   |
 
 ---
 
@@ -256,10 +256,12 @@ O requisito 5 do PRD (formulário "inteligente" que avisa duplicidade e auto-pre
 
 ### Critérios de aceite
 
-- [ ] Cada um dos seis tem destino explícito registrado: prompt escrito **ou** PATCH revogando
-- [ ] `BRAIN.md` §8 reflete a decisão — nenhum item continua em "Mantido na v1" sem prompt correspondente
-- [ ] P-9.0 escrito e executado antes de P-9.5 (extração do legado → `auth.users` via Admin API → convite/reset em massa)
-- [ ] Se Bunny for revogada: assumir explicitamente que o vídeo é hospedado fora com link público, e registrar a consequência de acesso (hoje a URL colada não é assinada — quem tiver o link assiste sem matrícula)
+- [x] Cada um dos seis tem destino explícito registrado: prompt escrito **ou** PATCH revogando — todos os seis decididos "implementar" (nenhuma revogação), ver `PATCHES/027-pacote-7-escopo-v1-pendente.md`. Prompts escritos em `PROMPTS.md`: P-2.13, P-2.14, P-5.13 (escopo reduzido), P-6.20, P-7.13, P-9.0
+- [x] `BRAIN.md` §8 reflete a decisão — nenhum item continua em "Mantido na v1" sem prompt correspondente — os quatro de PATCH-012 (P-2.13/P-2.14/P-7.13/P-9.0) já apontavam para prompt, agora escritos; §6.6 (Google Calendar, linha 428) atualizada com o escopo reduzido
+- [~] P-9.0 escrito e executado antes de P-9.5 (extração do legado → `auth.users` via Admin API → convite/reset em massa) — **escrito e verificado** (`packages/db/src/scripts/migrate-legacy-users.ts`, `typecheck`/`lint` verdes, dry-run testado até a validação de env vars). **Execução real pendente**: Filipe não tinha as credenciais do projeto Supabase legado (da terceirizada) disponíveis nesta sessão — passos em `AUDIT/PACOTE-7-P9.0-RUNBOOK.md`. P-9.5 continua bloqueado até a execução acontecer.
+- [x] Se Bunny for revogada: assumir explicitamente que o vídeo é hospedado fora com link público, e registrar a consequência de acesso — **não se aplica**: Bunny foi decidida "implementar" (P-6.20 em `PROMPTS.md`), não revogada.
+
+Os outros cinco prompts (P-2.13, P-2.14, P-5.13, P-6.20, P-7.13) foram deliberadamente **escritos, não implementados** nesta sessão — decisão de sequenciamento do Filipe (uma sessão por prompt, mesmo padrão do resto do projeto). Execução em sessões futuras.
 
 ---
 
