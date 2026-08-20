@@ -1,44 +1,27 @@
-import { cookies } from "next/headers";
 import { logAudit as sharedLogAudit, computeDiff } from "@hebron/db/audit";
 import type { LogAuditParams, AuditAction } from "@hebron/db/audit";
-import {
-  IMPERSONATION_COOKIE_NAME,
-  parseImpersonationState,
-} from "@hebron/auth/impersonation";
+import { getActiveImpersonation } from "@hebron/auth/impersonation-server";
 
 export type { AuditAction };
 export { computeDiff };
 
 /**
- * Registra uma entrada no audit log.
- * Deve ser chamado em toda mutação admin.
+ * Registra uma entrada no admin.audit_log. Deve ser chamado em toda mutação
+ * admin.
  *
- * Detecta automaticamente sessão de impersonação ativa via cookie e
- * inclui `_impersonatedId` no diff — garantindo trilha completa:
- * quem agiu (actorId) + em nome de quem (_impersonatedId).
- *
- * Delega a escrita para @hebron/db/audit — sempre "critical" (aborta em
- * falha), como já era o comportamento deste módulo.
+ * Detecta automaticamente uma sessão de impersonação ativa via cookie
+ * (a menos que o chamador já tenha passado `realActorId`, ex.:
+ * startImpersonationAction/stopImpersonationAction, cujo `params.actorId` já
+ * é o ator real) e repassa para @hebron/db/audit's `logAudit`, que grava o
+ * super_admin real como `actorId` e preserva o impersonado em
+ * `_impersonatedId` no diff (PACOTE 6 / BRAIN §6.1) — sempre "critical"
+ * (aborta em falha), como já era o comportamento deste módulo.
  */
 export async function logAudit(
   params: Omit<LogAuditParams, "criticality">,
 ): Promise<void> {
-  let impersonatedId: string | undefined;
-  try {
-    const cookieStore = await cookies();
-    const raw = cookieStore.get(IMPERSONATION_COOKIE_NAME)?.value;
-    if (raw) {
-      const state = parseImpersonationState(raw);
-      impersonatedId = state?.impersonatedId;
-    }
-  } catch {
-    // cookies() is unavailable outside of a request context (e.g., tests)
-  }
+  const realActorId =
+    params.realActorId ?? (await getActiveImpersonation())?.actorId;
 
-  const diff =
-    impersonatedId !== undefined
-      ? { ...params.diff, _impersonatedId: impersonatedId }
-      : params.diff;
-
-  await sharedLogAudit({ ...params, diff, criticality: "critical" });
+  await sharedLogAudit({ ...params, realActorId, criticality: "critical" });
 }

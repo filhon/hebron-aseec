@@ -1,5 +1,6 @@
 import { logAudit } from "@hebron/db/audit";
 import type { AuditDbHandle } from "@hebron/db/audit";
+import { getActiveImpersonation } from "@hebron/auth/impersonation-server";
 
 // ---------------------------------------------------------------------------
 // Flats-specific audit action types — valores já existem em
@@ -41,5 +42,6 @@ export async function logFlatsAudit(
   params: LogFlatsAuditParams,
   dbHandle?: AuditDbHandle,
 ): Promise<void> {
-  await logAudit({ ...params, criticality: "critical" }, dbHandle);
+  const realActorId = (await getActiveImpersonation())?.actorId;
+  await logAudit({ ...params, realActorId, criticality: "critical" }, dbHandle);
 }

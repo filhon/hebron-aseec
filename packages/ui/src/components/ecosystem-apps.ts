@@ -98,6 +98,16 @@ export function getAppShortcuts(currentAppId: string): AppShortcut[] {
 }
 
 /**
+ * URL canônica do Admin — usada pelos outros 8 apps para linkar de volta
+ * (ex.: "Encerrar no Admin" no banner de impersonação, PACOTE 6).
+ */
+export function getAdminUrl(): string {
+  const admin = ECOSYSTEM_APPS.find((app) => app.id === "admin");
+  if (!admin) throw new Error("ECOSYSTEM_APPS: entrada 'admin' não encontrada");
+  return admin.href;
+}
+
+/**
  * Resolve o destino de clique de uma notificação a partir do seu `payload`.
  *
  * Contrato do payload (P-0.6b): `module` é o id canônico do app de origem

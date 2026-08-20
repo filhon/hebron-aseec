@@ -7,6 +7,7 @@ import {
   ModuleLogo,
   NotificationBellContainer,
   type NavSection,
+  type ImpersonationBannerProps,
 } from "@hebron/ui";
 import {
   LayoutDashboard,
@@ -62,10 +63,15 @@ const SECTIONS: NavSection[] = [
 
 type Props = {
   user: { fullName: string | null; email: string | null };
+  impersonation?: ImpersonationBannerProps | null;
   children: React.ReactNode;
 };
 
-export default function DiretoriaShell({ user, children }: Props) {
+export default function DiretoriaShell({
+  user,
+  impersonation,
+  children,
+}: Props) {
   const path = usePathname();
   const router = useRouter();
 
@@ -82,6 +88,7 @@ export default function DiretoriaShell({ user, children }: Props) {
       logo={<ModuleLogo module="projetos" />}
       sidebarDark
       LinkComponent={Link}
+      impersonation={impersonation}
       headerActions={
         <NotificationBellContainer
           currentAppId="projetos"

@@ -109,6 +109,7 @@ export type { PageHeaderProps, BreadcrumbItem } from "./components/page-header";
 export {
   ECOSYSTEM_APPS,
   getAppShortcuts,
+  getAdminUrl,
   resolveNotificationHref,
 } from "./components/ecosystem-apps";
 

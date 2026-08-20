@@ -1,4 +1,5 @@
 import { logAudit, type AuditDbHandle } from "@hebron/db/audit";
+import { getActiveImpersonation } from "@hebron/auth/impersonation-server";
 
 export type DocumentAuditAction =
   | "document.created"
@@ -26,5 +27,6 @@ export async function logDocumentAudit(
   },
   dbHandle?: AuditDbHandle,
 ): Promise<void> {
-  await logAudit(params, dbHandle);
+  const realActorId = (await getActiveImpersonation())?.actorId;
+  await logAudit({ ...params, realActorId }, dbHandle);
 }

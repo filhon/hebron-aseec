@@ -8,6 +8,7 @@ import {
   NotificationBellContainer,
   getAppShortcuts,
   type NavSection,
+  type ImpersonationBannerProps,
 } from "@hebron/ui";
 import {
   LayoutDashboard,
@@ -104,10 +105,15 @@ const SECTIONS: NavSection[] = [
 
 type ShellProps = {
   user: { fullName: string | null; email: string | null };
+  impersonation?: ImpersonationBannerProps | null;
   children: React.ReactNode;
 };
 
-export default function FinanceiroShell({ user, children }: ShellProps) {
+export default function FinanceiroShell({
+  user,
+  impersonation,
+  children,
+}: ShellProps) {
   const path = usePathname();
   const router = useRouter();
 
@@ -125,6 +131,7 @@ export default function FinanceiroShell({ user, children }: ShellProps) {
       logo={<ModuleLogo module="financeiro" />}
       sidebarDark
       LinkComponent={Link}
+      impersonation={impersonation}
       headerActions={
         <NotificationBellContainer
           currentAppId="financeiro"

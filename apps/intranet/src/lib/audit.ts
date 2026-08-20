@@ -1,5 +1,6 @@
 import { logAudit } from "@hebron/db/audit";
 import type { AuditDbHandle, LogAuditParams } from "@hebron/db/audit";
+import { getActiveImpersonation } from "@hebron/auth/impersonation-server";
 
 export type { AuditAction } from "@hebron/db/audit";
 
@@ -14,5 +15,7 @@ export async function logIntranetAudit(
   params: Omit<LogAuditParams, "criticality">,
   dbHandle?: AuditDbHandle,
 ): Promise<void> {
-  await logAudit(params, dbHandle);
+  const realActorId =
+    params.realActorId ?? (await getActiveImpersonation())?.actorId;
+  await logAudit({ ...params, realActorId }, dbHandle);
 }

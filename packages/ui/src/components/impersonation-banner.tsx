@@ -13,8 +13,16 @@ export interface ImpersonationBannerProps {
   impersonatedName: string;
   actorName: string;
   startedAt: string;
-  /** Server action (FormData) — called when the user clicks "Sair da impersonação" */
-  onStop: (_fd: FormData) => Promise<void> | void;
+  /**
+   * Server action (FormData) — called when the user clicks "Sair da
+   * impersonação". Omit in apps that don't own the impersonation cookie's
+   * Server Action (only the Admin app does — a Server Action reference can't
+   * cross an app's bundle boundary); pass `stopHref` instead so the banner
+   * still tells the operator where to end the session.
+   */
+  onStop?: (_fd: FormData) => Promise<void> | void;
+  /** Shown as a link ("Encerrar no Admin") when `onStop` isn't provided. */
+  stopHref?: string;
 }
 
 function formatTime(iso: string): string {
@@ -55,6 +63,7 @@ export function ImpersonationBanner({
   actorName,
   startedAt,
   onStop,
+  stopHref,
 }: ImpersonationBannerProps) {
   const elapsed = useElapsed(startedAt);
   const [pending, startTransition] = React.useTransition();
@@ -92,33 +101,49 @@ export function ImpersonationBanner({
         </span>
       </span>
 
-      <form
-        action={onStop}
-        onSubmit={(e) => {
-          e.preventDefault();
-          startTransition(() => {
-            const fd = new FormData(e.currentTarget);
-            void Promise.resolve(onStop(fd));
-          });
-        }}
-        className="shrink-0"
-      >
-        <button
-          type="submit"
-          disabled={pending}
+      {onStop ? (
+        <form
+          action={onStop}
+          onSubmit={(e) => {
+            e.preventDefault();
+            startTransition(() => {
+              const fd = new FormData(e.currentTarget);
+              void Promise.resolve(onStop(fd));
+            });
+          }}
+          className="shrink-0"
+        >
+          <button
+            type="submit"
+            disabled={pending}
+            className={cn(
+              "flex items-center gap-1.5 rounded-(--radius-sm) px-3.5 py-1.5",
+              "border-[1.5px] border-(--impersonation-action-border) bg-white/10",
+              "text-xs font-(--font-weight-semibold) tracking-[0.01em] text-(--impersonation-fg)",
+              "transition-colors duration-(--transition-fast) hover:bg-white/[0.18]",
+              "disabled:cursor-not-allowed disabled:opacity-70",
+              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50",
+            )}
+          >
+            <X className="h-3 w-3" aria-hidden="true" strokeWidth={2.5} />
+            {pending ? "Saindo…" : "Sair da impersonação"}
+          </button>
+        </form>
+      ) : stopHref ? (
+        <a
+          href={stopHref}
           className={cn(
-            "flex items-center gap-1.5 rounded-(--radius-sm) px-3.5 py-1.5",
+            "shrink-0 flex items-center gap-1.5 rounded-(--radius-sm) px-3.5 py-1.5",
             "border-[1.5px] border-(--impersonation-action-border) bg-white/10",
             "text-xs font-(--font-weight-semibold) tracking-[0.01em] text-(--impersonation-fg)",
             "transition-colors duration-(--transition-fast) hover:bg-white/[0.18]",
-            "disabled:cursor-not-allowed disabled:opacity-70",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50",
           )}
         >
           <X className="h-3 w-3" aria-hidden="true" strokeWidth={2.5} />
-          {pending ? "Saindo…" : "Sair da impersonação"}
-        </button>
-      </form>
+          Encerrar no Admin
+        </a>
+      ) : null}
     </div>
   );
 }

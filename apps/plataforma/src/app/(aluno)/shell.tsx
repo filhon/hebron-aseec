@@ -7,6 +7,7 @@ import {
   ModuleLogo,
   NotificationBellContainer,
   type NavSection,
+  type ImpersonationBannerProps,
 } from "@hebron/ui";
 import { LayoutGrid, Route, Award } from "lucide-react";
 import { logoutAction } from "../../actions/auth";
@@ -42,10 +43,15 @@ const SECTIONS: NavSection[] = [
 
 interface AlunoShellProps {
   user: { fullName: string | null; email: string | null };
+  impersonation?: ImpersonationBannerProps | null;
   children: React.ReactNode;
 }
 
-export default function AlunoShell({ user, children }: AlunoShellProps) {
+export default function AlunoShell({
+  user,
+  impersonation,
+  children,
+}: AlunoShellProps) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -62,6 +68,7 @@ export default function AlunoShell({ user, children }: AlunoShellProps) {
       appName="Plataforma"
       logo={<ModuleLogo module="plataforma" />}
       LinkComponent={Link}
+      impersonation={impersonation}
       headerActions={
         <NotificationBellContainer
           currentAppId="plataforma"

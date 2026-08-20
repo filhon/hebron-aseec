@@ -7,6 +7,7 @@ import {
   ModuleLogo,
   NotificationBellContainer,
   type NavSection,
+  type ImpersonationBannerProps,
 } from "@hebron/ui";
 import { Home, CalendarPlus, History } from "lucide-react";
 import { logoutAction } from "../../actions/auth";
@@ -42,10 +43,15 @@ const SECTIONS: NavSection[] = [
 
 interface ShellProps {
   user: { fullName: string | null; email: string | null };
+  impersonation?: ImpersonationBannerProps | null;
   children: React.ReactNode;
 }
 
-export default function HospedeShell({ user, children }: ShellProps) {
+export default function HospedeShell({
+  user,
+  impersonation,
+  children,
+}: ShellProps) {
   const path = usePathname();
   const router = useRouter();
 
@@ -62,6 +68,7 @@ export default function HospedeShell({ user, children }: ShellProps) {
       logo={<ModuleLogo module="flats" />}
       sidebarDark
       LinkComponent={Link}
+      impersonation={impersonation}
       headerActions={
         <NotificationBellContainer
           currentAppId="flats"

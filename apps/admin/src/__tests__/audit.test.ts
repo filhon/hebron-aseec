@@ -194,7 +194,13 @@ describe("logAudit — persistência no banco", () => {
     });
   });
 
-  it("inclui _impersonatedId no diff quando cookie de impersonação está presente", async () => {
+  it("PACOTE 6: grava o super_admin real como actorId e preserva o impersonado em _impersonatedId", async () => {
+    // Pós-PACOTE 6, resolveSession já resolve `actorId` como o usuário
+    // IMPERSONADO enquanto uma sessão está ativa (é isso que faz "ver como o
+    // usuário" ser real nos outros apps) — então uma action chamando logAudit
+    // durante impersonação passa actorId = alvo. O cookie continua guardando
+    // o ator real em `actorId` (nome mantido por compat com o payload
+    // assinado) — é dele que a auto-detecção em lib/audit.ts lê realActorId.
     const IMPERSONATED_ID = "b0000000-0000-0000-0000-000000000099";
     const { serializeImpersonationState } =
       await import("@hebron/auth/impersonation");
@@ -219,10 +225,10 @@ describe("logAudit — persistência no banco", () => {
 
     const { logAudit } = await import("../lib/audit");
     await logAudit({
-      actorId: ACTOR_ID,
+      actorId: IMPERSONATED_ID,
       action: "user.updated",
       entity: "user",
-      entityId: ACTOR_ID,
+      entityId: IMPERSONATED_ID,
       diff: { fullName: { before: "Old", after: "New" } },
     });
 
@@ -241,6 +247,8 @@ describe("logAudit — persistência no banco", () => {
     const last = rows[0];
     expect(last).toBeDefined();
     if (!last) throw new Error("Expected audit entry to be defined");
+    // O audit NUNCA nomeia o impersonado como ator — sempre o super_admin real.
+    expect(last.actorId).toBe(ACTOR_ID);
     expect((last.diff as Record<string, unknown>)["_impersonatedId"]).toBe(
       IMPERSONATED_ID,
     );

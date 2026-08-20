@@ -1,5 +1,6 @@
 import { logAudit } from "@hebron/db/audit";
 import type { AuditDbHandle } from "@hebron/db/audit";
+import { getActiveImpersonation } from "@hebron/auth/impersonation-server";
 
 // ---------------------------------------------------------------------------
 // Plataforma-specific audit action types. Valores já existem no enum
@@ -29,5 +30,6 @@ export async function logPlataformaAudit(
   params: LogPlataformaAuditParams,
   dbHandle?: AuditDbHandle,
 ): Promise<void> {
-  await logAudit({ ...params, criticality: "critical" }, dbHandle);
+  const realActorId = (await getActiveImpersonation())?.actorId;
+  await logAudit({ ...params, realActorId, criticality: "critical" }, dbHandle);
 }

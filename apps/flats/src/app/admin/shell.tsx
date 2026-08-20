@@ -8,6 +8,7 @@ import {
   NotificationBellContainer,
   getAppShortcuts,
   type NavSection,
+  type ImpersonationBannerProps,
 } from "@hebron/ui";
 import { CalendarDays, ClipboardCheck } from "lucide-react";
 import { logoutAction } from "../../actions/auth";
@@ -38,10 +39,15 @@ const SECTIONS: NavSection[] = [
 
 interface ShellProps {
   user: { fullName: string | null; email: string | null };
+  impersonation?: ImpersonationBannerProps | null;
   children: React.ReactNode;
 }
 
-export default function AdminShell({ user, children }: ShellProps) {
+export default function AdminShell({
+  user,
+  impersonation,
+  children,
+}: ShellProps) {
   const path = usePathname();
   const router = useRouter();
 
@@ -59,6 +65,7 @@ export default function AdminShell({ user, children }: ShellProps) {
       logo={<ModuleLogo module="flats" />}
       sidebarDark
       LinkComponent={Link}
+      impersonation={impersonation}
       headerActions={
         <NotificationBellContainer
           currentAppId="flats"

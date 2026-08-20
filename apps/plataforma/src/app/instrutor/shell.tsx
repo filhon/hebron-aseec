@@ -7,6 +7,7 @@ import {
   ModuleLogo,
   NotificationBellContainer,
   type NavSection,
+  type ImpersonationBannerProps,
 } from "@hebron/ui";
 import { LayoutDashboard, Layers, Plus, Users } from "lucide-react";
 import { logoutAction } from "../../actions/auth";
@@ -19,12 +20,14 @@ import {
 interface InstrutorShellProps {
   user: { fullName: string | null; email: string | null };
   isSuperAdmin: boolean;
+  impersonation?: ImpersonationBannerProps | null;
   children: React.ReactNode;
 }
 
 export default function InstrutorShell({
   user,
   isSuperAdmin,
+  impersonation,
   children,
 }: InstrutorShellProps) {
   const pathname = usePathname();
@@ -80,6 +83,7 @@ export default function InstrutorShell({
       logo={<ModuleLogo module="plataforma" />}
       sidebarDark
       LinkComponent={Link}
+      impersonation={impersonation}
       headerActions={
         <NotificationBellContainer
           currentAppId="plataforma"

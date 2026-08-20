@@ -6,6 +6,10 @@ import { db } from "@hebron/db/client";
 import { designations, roleAssignments } from "@hebron/db/schema";
 import type { DesignationType, Role } from "@hebron/types/roles";
 import { BusinessError } from "./safe-action-error";
+import {
+  IMPERSONATION_COOKIE_NAME,
+  resolveVerifiedImpersonationState,
+} from "./impersonation";
 
 export interface ServerCookieHandlers {
   getAll(): Array<{ name: string; value: string }>;
@@ -54,6 +58,42 @@ export interface ActionSession {
   actorId: string;
   roles: Role[];
   designations: DesignationType[];
+  /**
+   * Set only while an impersonation cookie is active: the real, authenticated
+   * super_admin's id. `actorId`/`roles`/`designations` above describe the
+   * *impersonated* user in that case — the effective identity every RLS
+   * policy and role gate sees, so "view as" genuinely shows what that user
+   * sees (BRAIN §6.1/§6.8). Audit call sites must log `impersonatedBy` (when
+   * present) as the actor, never `actorId` — @hebron/db/audit's `logAudit`
+   * does this automatically via its `realActorId` param.
+   */
+  impersonatedBy?: string;
+}
+
+async function fetchRolesAndDesignations(
+  userId: string,
+): Promise<Pick<ActionSession, "roles" | "designations">> {
+  const rows = await db
+    .select({ role: roleAssignments.role })
+    .from(roleAssignments)
+    .where(
+      and(
+        eq(roleAssignments.userId, userId),
+        isNull(roleAssignments.revokedAt),
+      ),
+    );
+
+  const designationRows = await db
+    .select({ type: designations.type })
+    .from(designations)
+    .where(
+      and(eq(designations.userId, userId), isNull(designations.revokedAt)),
+    );
+
+  return {
+    roles: rows.map((r) => r.role),
+    designations: designationRows.map((d) => d.type),
+  };
 }
 
 /**
@@ -68,6 +108,16 @@ export interface ActionSession {
  * actually decodes the session cookie and validates the JWT.
  *
  * Throws "Não autenticado" when there is no valid session.
+ *
+ * When a verified `hb-impersonation` cookie is present AND belongs to this
+ * exact authenticated user AND that user currently still holds `super_admin`
+ * (re-checked fresh from the DB, not trusted from the cookie), the returned
+ * session describes the *impersonated* user instead — see `impersonatedBy`
+ * on `ActionSession`. Any other case (missing/invalid/expired cookie,
+ * cookie minted for a different user, role since revoked) is treated as "not
+ * impersonating" and falls back to the real session — fail-closed to the
+ * caller's own identity rather than throwing, so a stale cookie never locks
+ * anyone out.
  */
 export async function resolveSession(
   cookieStore: ActionCookieStore,
@@ -92,26 +142,28 @@ export async function resolveSession(
 
   if (error || !user) throw new BusinessError("Não autenticado");
 
-  const rows = await db
-    .select({ role: roleAssignments.role })
-    .from(roleAssignments)
-    .where(
-      and(
-        eq(roleAssignments.userId, user.id),
-        isNull(roleAssignments.revokedAt),
-      ),
-    );
+  const real = await fetchRolesAndDesignations(user.id);
 
-  const designationRows = await db
-    .select({ type: designations.type })
-    .from(designations)
-    .where(
-      and(eq(designations.userId, user.id), isNull(designations.revokedAt)),
-    );
+  const impersonationCookie = cookieStore
+    .getAll()
+    .find((c) => c.name === IMPERSONATION_COOKIE_NAME)?.value;
+  const impersonation = resolveVerifiedImpersonationState(impersonationCookie);
 
-  return {
-    actorId: user.id,
-    roles: rows.map((r) => r.role),
-    designations: designationRows.map((d) => d.type),
-  };
+  if (
+    impersonation &&
+    impersonation.actorId === user.id &&
+    real.roles.includes("super_admin")
+  ) {
+    const impersonated = await fetchRolesAndDesignations(
+      impersonation.impersonatedId,
+    );
+    return {
+      actorId: impersonation.impersonatedId,
+      roles: impersonated.roles,
+      designations: impersonated.designations,
+      impersonatedBy: user.id,
+    };
+  }
+
+  return { actorId: user.id, ...real };
 }

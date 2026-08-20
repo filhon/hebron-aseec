@@ -1,5 +1,6 @@
 import { logAudit } from "@hebron/db/audit";
 import type { AuditDbHandle } from "@hebron/db/audit";
+import { getActiveImpersonation } from "@hebron/auth/impersonation-server";
 
 // ---------------------------------------------------------------------------
 // Radio-specific audit action types — valores adicionados a
@@ -40,5 +41,6 @@ export async function logRadioAudit(
   params: LogRadioAuditParams,
   dbHandle?: AuditDbHandle,
 ): Promise<void> {
-  await logAudit({ ...params, criticality: "critical" }, dbHandle);
+  const realActorId = (await getActiveImpersonation())?.actorId;
+  await logAudit({ ...params, realActorId, criticality: "critical" }, dbHandle);
 }

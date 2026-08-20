@@ -10,6 +10,7 @@ import {
   NotificationBellContainer,
   getAppShortcuts,
   type NavSection,
+  type ImpersonationBannerProps,
 } from "@hebron/ui";
 import {
   ListTodo,
@@ -110,10 +111,16 @@ const SECTIONS: NavSection[] = [
 interface ShellProps {
   user: { fullName: string | null; email: string | null };
   tasks: Task[];
+  impersonation?: ImpersonationBannerProps | null;
   children: React.ReactNode;
 }
 
-export default function TarefasShell({ user, tasks, children }: ShellProps) {
+export default function TarefasShell({
+  user,
+  tasks,
+  impersonation,
+  children,
+}: ShellProps) {
   const path = usePathname();
   const router = useRouter();
 
@@ -138,6 +145,7 @@ export default function TarefasShell({ user, tasks, children }: ShellProps) {
       logo={<ModuleLogo module="tarefas" />}
       sidebarDark
       LinkComponent={Link}
+      impersonation={impersonation}
       headerActions={
         <NotificationBellContainer
           currentAppId="tarefas"

@@ -15,6 +15,16 @@ export interface AuditDbHandle {
 
 export interface LogAuditParams {
   actorId: string;
+  /**
+   * The true authenticated actor when `actorId` above describes an
+   * impersonated user (PACOTE 6 / BRAIN §6.1) — pass
+   * `getActiveImpersonation()`'s `actorId` (from `@hebron/auth/impersonation-server`)
+   * here. When set and different from `actorId`, the audit row's actor
+   * becomes `realActorId` and the impersonated identity is preserved in the
+   * diff as `_impersonatedId` — the audit trail must always name the real
+   * super_admin, never the impersonated user. Omit outside impersonation.
+   */
+  realActorId?: string;
   action: AuditAction;
   entity: string;
   entityId?: string;
@@ -46,13 +56,22 @@ export async function logAudit(
   dbHandle: AuditDbHandle = defaultDb,
 ): Promise<void> {
   const criticality = params.criticality ?? "critical";
+  const isImpersonating =
+    params.realActorId !== undefined && params.realActorId !== params.actorId;
+  const actorId =
+    params.realActorId !== undefined && params.realActorId !== params.actorId
+      ? params.realActorId
+      : params.actorId;
+  const diff = isImpersonating
+    ? { ...(params.diff ?? {}), _impersonatedId: params.actorId }
+    : params.diff;
   try {
     await dbHandle.insert(auditLog).values({
-      actorId: params.actorId,
+      actorId,
       action: params.action,
       entity: params.entity,
       entityId: params.entityId,
-      diff: params.diff ? redactSensitiveFields(params.diff) : null,
+      diff: diff ? redactSensitiveFields(diff) : null,
       ip: params.ip ?? null,
       userAgent: params.userAgent ?? null,
     });

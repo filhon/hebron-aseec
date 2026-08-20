@@ -282,6 +282,7 @@
 | S-259  | 2026-08-19 | AUDIT PACOTE 3 — Camada 1: middleware nos 8 apps (CORRETIVO)                                                                     | parcial (renovação de sessão sem teste automatizado) |
 | S-260  | 2026-08-20 | AUDIT PACOTE 4 — O que o usuário lê quando algo falha (CORRETIVO)                                                                | concluido                                            |
 | S-261  | 2026-08-20 | AUDIT PACOTE 5 — Prontidão de produção (P-9.5) (CORRETIVO)                                                                       | parcial (infra externa pendente — ver runbook)       |
+| S-262  | 2026-08-20 | AUDIT PACOTE 6 — Impersonação: implementar ou revogar (CORRETIVO)                                                                | concluido                                            |
 
 ---
 
@@ -24147,4 +24148,141 @@ completo, com exatamente o que fazer em cada console, em
   `packages/db/package.json` (script `db:seed:producao`)
 - `AUDIT/PACOTE-5-RUNBOOK.md` (novo)
 - `AUDIT/04-BACKLOG-CORRECAO.md` (critérios de aceite do Pacote 5)
+- `SESSIONS.md` (esta entrada)
+
+---
+
+## S-262 — AUDIT PACOTE 6 — Impersonação: implementar ou revogar (CORRETIVO)
+
+**Prompt:** `AUDIT/04-BACKLOG-CORRECAO.md` § PACOTE 6
+**Data:** 2026-08-20
+**Modelo:** claude-sonnet-5
+**Status:** concluido — caminho (a) implementar, decisão confirmada com Filipe antes de executar
+
+### Resumo
+
+`BRAIN.md:279`/`:573` marca a impersonação como ESSENCIAL (suporte
+telefônico sem AnyDesk). Toda a moldura já existia (cookie HMAC-SHA256,
+`timingSafeEqual`, expiração de 8h no cookie, audit de início/fim, banner) —
+mas `resolveSession` (`packages/auth/src/server.ts`) nunca lia o cookie:
+impersonar gravava um cookie e mostrava uma tarja no Admin enquanto o
+super_admin continuava sendo ele mesmo em todos os 9 apps. Pedida a decisão
+a Filipe (implementar vs. revogar, "sem terceira opção" por texto do
+prompt) — escolheu implementar.
+
+**`resolveSession`** (`packages/auth/src/server.ts`) agora lê o cookie: se
+válido (assinatura + `resolveVerifiedImpersonationState` checando o teto de
+8h **no servidor**, não só via `maxAge` do cookie, novo em
+`packages/auth/src/impersonation.ts`), pertence ao usuário real autenticado
+(`state.actorId === user.id` — impede reuso de um cookie roubado sob outra
+sessão) e esse usuário real ainda tem `super_admin` (reconsultado no banco,
+nunca confiado no cookie), a sessão devolvida passa a descrever o
+**impersonado**: `actorId`/`roles`/`designations` viram os do alvo, e um novo
+campo `impersonatedBy` guarda o ator real. Isso é o que faz "ver como o
+usuário" valer de verdade nos outros 8 apps: toda Camada 2
+(`createRoleGate`) e toda RLS via `withAuthenticatedContext({actorId})`
+passam a enxergar o alvo — a visão fica estritamente limitada ao que o
+alvo já podia ver (nunca mais), então não há escalonamento (critério 4).
+
+**Audit nunca nomeia o impersonado.** `packages/db/src/audit.ts`'s
+`logAudit` ganhou `realActorId?` — quando presente e diferente de
+`actorId`, a linha grava `realActorId` como ator e preserva o impersonado
+em `_impersonatedId` no diff. Como as 9 chamadas de app para `logAudit`
+passam sempre pelo wrapper local (`apps/*/src/lib/audit.ts`, nunca a raiz
+`@hebron/db/audit` direto — confirmado por grep), a correção mora num único
+lugar por app: cada wrapper chama o novo `getActiveImpersonation()`
+(`packages/auth/src/impersonation-server.ts`, novo — isolado do resto de
+`impersonation.ts` pra não puxar `next/headers` para quem só quer os tipos)
+e passa `realActorId` automaticamente. Nenhum dos ~400 call sites em
+`apps/*/src/actions/**` precisou mudar.
+
+**Admin é torre de controle, não área do usuário-alvo.** Diferente dos
+outros 8 apps, o Admin não tem nenhuma tela pensada para quem não é
+super_admin — é de onde a impersonação é iniciada/encerrada. Sem tratamento
+especial, o próprio swap de `resolveSession` teria travado o operador para
+fora do Admin assim que a impersonação começasse (`requireAdminSession`/
+`adminAction` checando `super_admin` contra os papéis do alvo) e teria
+atribuído `logPiiAccess` (Pacote 1, `usuarios/[id]/page.tsx`) ao
+impersonado. `apps/admin/src/lib/session.ts` (`requireAdminSession`) e
+`apps/admin/src/lib/safe-action.ts` (`adminAction`'s middleware) passaram a
+devolver sempre o **ator real** (`impersonatedBy ?? actorId`) quando
+`impersonatedBy` está presente — a mera presença do campo já prova que o
+ator real é super_admin (`resolveSession` só o define depois de
+reconfirmar isso). Os outros 8 apps continuam vendo o alvo normalmente:
+Camada 1 (middleware) já usava o papel do usuário **real** direto do banco,
+nunca `resolveSession` — só a Camada 2 precisava do ajuste, e só em Admin.
+
+`apps/admin/src/actions/impersonation.ts`: `requireSuperAdmin` virou
+`requireImpersonationController` (mesma lógica real-ator-sempre, usada por
+`start`/`stopImpersonationAction`) e ganhou uma guarda nova: iniciar uma
+impersonação enquanto já impersonando agora falha com mensagem clara (antes
+não era tratado).
+
+**Banner nos 9 apps.** `packages/ui/src/components/app-shell.tsx` ganhou
+prop `impersonation?` — os 8 apps que usam `AppShell` (11 pontos de
+wiring: admin, financeiro, intranet, tarefas, radio/admin,
+projetos/submissor+diretoria, plataforma/aluno+instrutor,
+flats/hospede+admin) leem `getActiveImpersonation()` no layout (Server
+Component) e passam para o Shell. Documentos não usa `AppShell` (layout
+próprio em CSS Grid 2 colunas) — `ImpersonationBanner` inserida direto em
+`.docs-editorial-main`, não como filho do grid (quebraria as 2 colunas).
+`ImpersonationBannerProps.onStop` virou opcional: só o Admin tem a Server
+Action de stop (não atravessa bundle de app); os outros 8 recebem
+`stopHref` apontando para `{admin}/usuarios` via novo `getAdminUrl()`
+(`packages/ui/src/components/ecosystem-apps.ts` — evita non-null assertion
+banida pelo projeto) e mostram um link "Encerrar no Admin" em vez do botão.
+
+### Verificação
+
+- `pnpm --filter {@hebron/auth,@hebron/db,@hebron/ui}` + todos os 9 apps —
+  `typecheck`/`lint` limpos.
+- `packages/auth/src/__tests__/impersonation.test.ts` (novo, 6 testes
+  puros): assinatura/expiração de `resolveVerifiedImpersonationState`.
+- `packages/auth/src/__tests__/server-impersonation.test.ts` (novo, 6
+  testes, login real via Supabase Auth — não mockado): `resolveSession`
+  troca de identidade com cookie válido; ignora cookie de outro usuário;
+  ignora cookie expirado (>8h); ignora para não-super_admin (sem
+  escalonamento).
+- `packages/db/src/__tests__/audit-impersonation.test.ts` (novo, 3 testes):
+  `realActorId` sobrescreve o ator gravado e preserva `_impersonatedId`.
+- `apps/admin/src/__tests__/audit.test.ts` — caso existente de
+  `_impersonatedId` reescrito para o contrato novo (actorId de chamada =
+  impersonado, `realActorId` detectado via cookie) e passando.
+- `apps/admin/src/__tests__/session-gate.test.ts` +
+  `safe-action-impersonation.test.ts` (novo): `requireAdminSession`/
+  `adminAction` continuam liberando o Admin para o ator real durante
+  impersonação, sem redirecionar/bloquear.
+- `apps/admin/src/__tests__/impersonation.test.ts` — 6 testes existentes,
+  intactos.
+- `next build` real: admin, documentos (grid editorial), flats
+  (hospede+admin) — 3/3 limpos.
+- Não verificado (fora do alcance desta sessão): clique manual em
+  navegador do fluxo completo impersonar → abrir Projetos/Plataforma/Flats
+  → ver a visão do alvo. A cobertura vem de teste de integração real contra
+  `resolveSession` (login Supabase de verdade, não mock) + o fato de que
+  `createRoleGate`/`withAuthenticatedContext` em todo o ecossistema já
+  consomem `ActionSession` da mesma forma testada aqui.
+
+### Arquivos modificados
+
+- `packages/auth/src/impersonation.ts` (`resolveVerifiedImpersonationState`)
+- `packages/auth/src/impersonation-server.ts` (novo — `getActiveImpersonation()`)
+- `packages/auth/src/server.ts` (`resolveSession` honra o cookie; `ActionSession.impersonatedBy`)
+- `packages/auth/package.json` (subpath `./impersonation-server`)
+- `packages/db/src/audit.ts` (`LogAuditParams.realActorId`)
+- `packages/ui/src/components/impersonation-banner.tsx` (`onStop` opcional, `stopHref`)
+- `packages/ui/src/components/app-shell.tsx` (prop `impersonation`)
+- `packages/ui/src/components/ecosystem-apps.ts` (`getAdminUrl`)
+- `packages/ui/src/index.ts` (export `getAdminUrl`)
+- `apps/admin/src/actions/impersonation.ts` (`requireImpersonationController`, guarda anti-chaining)
+- `apps/admin/src/lib/audit.ts`, `apps/admin/src/lib/session.ts`, `apps/admin/src/lib/safe-action.ts`
+- `apps/admin/src/components/admin-shell.tsx`, `apps/admin/src/app/(dashboard)/layout.tsx`
+- `apps/{financeiro,projetos,documentos,radio,flats,plataforma,intranet,tarefas}/src/lib/audit.ts` (8 arquivos)
+- 10 pares `shell.tsx`+`layout.tsx` (financeiro, intranet, tarefas, radio/admin,
+  projetos/submissor+diretoria, plataforma/aluno+instrutor, flats/hospede+admin)
+- `apps/documentos/src/app/editorial/layout.tsx`
+- `apps/auth/__tests__`: `impersonation.test.ts` (novo), `server-impersonation.test.ts` (novo)
+- `packages/db/src/__tests__/audit-impersonation.test.ts` (novo)
+- `apps/admin/src/__tests__`: `audit.test.ts` (caso reescrito), `session-gate.test.ts` (caso novo), `safe-action-impersonation.test.ts` (novo)
+- `AUDIT/04-BACKLOG-CORRECAO.md` (critérios de aceite do Pacote 6)
 - `SESSIONS.md` (esta entrada)

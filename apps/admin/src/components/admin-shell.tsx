@@ -8,6 +8,7 @@ import {
   NotificationBellContainer,
   getAppShortcuts,
   type NavSection,
+  type ImpersonationBannerProps,
 } from "@hebron/ui";
 import {
   LayoutDashboard,
@@ -29,12 +30,14 @@ type Props = {
   children: React.ReactNode;
   userCount: number;
   pendingInvitesCount: number;
+  impersonation?: ImpersonationBannerProps | null;
 };
 
 export function AdminShell({
   children,
   userCount,
   pendingInvitesCount,
+  impersonation,
 }: Props) {
   const path = usePathname();
   const router = useRouter();
@@ -105,6 +108,7 @@ export function AdminShell({
       logo={<ModuleLogo module="admin" />}
       sidebarDark
       LinkComponent={Link}
+      impersonation={impersonation}
       headerActions={
         <NotificationBellContainer
           currentAppId="admin"

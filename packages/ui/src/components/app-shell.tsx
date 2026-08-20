@@ -12,6 +12,10 @@ import {
 } from "./navigation-sidebar";
 import { UserMenu, type UserMenuUser } from "./user-menu";
 import { Drawer, DrawerContent, DrawerTitle } from "./drawer";
+import {
+  ImpersonationBanner,
+  type ImpersonationBannerProps,
+} from "./impersonation-banner";
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -37,6 +41,12 @@ export interface AppShellProps {
   sidebarDark?: boolean;
   /** Ações renderadas no header, entre o espaçador e o UserMenu (ex.: sino de notificações). */
   headerActions?: React.ReactNode;
+  /**
+   * Present + non-null while a super_admin is impersonating a user (PACOTE 6
+   * / BRAIN §6.1) — renders the persistent banner across all 9 apps. `null`
+   * or omitted renders nothing.
+   */
+  impersonation?: ImpersonationBannerProps | null;
 }
 
 // ── Brand row shown inside the sidebar ────────────────────────────────────────
@@ -186,6 +196,7 @@ export function AppShell({
   className,
   sidebarDark,
   headerActions,
+  impersonation,
 }: AppShellProps) {
   const [desktopCollapsed, setDesktopCollapsed] = React.useState(false);
   const [mobileOpen, setMobileOpen] = React.useState(false);
@@ -315,6 +326,7 @@ export function AppShell({
           desktopCollapsed ? "lg:ml-16" : "lg:ml-64",
         )}
       >
+        {impersonation && <ImpersonationBanner {...impersonation} />}
         {children}
       </main>
     </div>

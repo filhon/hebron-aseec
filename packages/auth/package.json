@@ -10,6 +10,7 @@
     "./app-middleware": "./src/app-middleware.ts",
     "./role-gate": "./src/role-gate.ts",
     "./impersonation": "./src/impersonation.ts",
+    "./impersonation-server": "./src/impersonation-server.ts",
     "./data-export": "./src/data-export.ts",
     "./data-deletion": "./src/data-deletion.ts",
     "./safe-action-error": "./src/safe-action-error.ts",

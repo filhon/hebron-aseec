@@ -97,3 +97,24 @@ function isImpersonationState(v: unknown): v is ImpersonationState {
     typeof s["startedAt"] === "string"
   );
 }
+
+/**
+ * Parses + verifies the cookie's signature AND enforces the 8h ceiling
+ * server-side (F3-13 / PACOTE 6): the cookie's own `maxAge` only makes the
+ * browser stop sending it, so a client that kept resending an old-but
+ * validly-signed cookie past 8h would otherwise still be honored. Returns
+ * `null` for anything missing, unsigned, malformed, or expired — callers
+ * treat that identically to "no impersonation active".
+ */
+export function resolveVerifiedImpersonationState(
+  raw: string | undefined,
+): ImpersonationState | null {
+  if (!raw) return null;
+  const state = parseImpersonationState(raw);
+  if (!state) return null;
+  const ageMs = Date.now() - new Date(state.startedAt).getTime();
+  if (!(ageMs >= 0) || ageMs > IMPERSONATION_COOKIE_MAX_AGE_SECONDS * 1000) {
+    return null;
+  }
+  return state;
+}

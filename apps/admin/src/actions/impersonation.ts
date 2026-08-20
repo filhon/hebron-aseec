@@ -17,9 +17,26 @@ import {
 
 // ─── Auth helper ─────────────────────────────────────────────────────────────
 
-async function requireSuperAdmin(): Promise<string> {
+/**
+ * Resolves the real actor allowed to start/stop impersonation.
+ *
+ * While already impersonating, `resolveSession` returns the *impersonated*
+ * user's roles (by design — that's what makes "view as" real, see
+ * @hebron/auth/server), so `roles.includes("super_admin")` would wrongly
+ * fail here and lock the operator into the impersonated session until the 8h
+ * ceiling. `impersonatedBy` is only ever set by `resolveSession` after it
+ * already re-verified the real user holds `super_admin`, so its presence
+ * alone is sufficient to authorize — no separate role check needed.
+ */
+async function requireImpersonationController(): Promise<{
+  realActorId: string;
+  isImpersonating: boolean;
+}> {
   const cookieStore = await cookies();
-  const { actorId, roles } = await resolveSession(cookieStore);
+  const { actorId, roles, impersonatedBy } = await resolveSession(cookieStore);
+
+  if (impersonatedBy)
+    return { realActorId: impersonatedBy, isImpersonating: true };
 
   if (!roles.includes("super_admin")) {
     throw new BusinessError(
@@ -27,7 +44,7 @@ async function requireSuperAdmin(): Promise<string> {
     );
   }
 
-  return actorId;
+  return { realActorId: actorId, isImpersonating: false };
 }
 
 const COOKIE_DOMAIN =
@@ -38,7 +55,13 @@ const COOKIE_DOMAIN =
 export async function startImpersonationAction(
   formData: FormData,
 ): Promise<void> {
-  const actorId = await requireSuperAdmin();
+  const { realActorId: actorId, isImpersonating } =
+    await requireImpersonationController();
+  if (isImpersonating) {
+    throw new BusinessError(
+      "Já em impersonação — encerre a sessão atual antes de iniciar outra",
+    );
+  }
   const targetUserId = formData.get("userId") as string;
 
   if (!targetUserId) throw new BusinessError("userId ausente");
@@ -111,7 +134,7 @@ export async function startImpersonationAction(
 export async function stopImpersonationAction(
   _formData: FormData,
 ): Promise<void> {
-  const actorId = await requireSuperAdmin();
+  const { realActorId: actorId } = await requireImpersonationController();
 
   const cookieStore = await cookies();
   const raw = cookieStore.get(IMPERSONATION_COOKIE_NAME)?.value;

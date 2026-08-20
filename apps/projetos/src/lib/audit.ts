@@ -1,5 +1,6 @@
 import { logAudit } from "@hebron/db/audit";
 import type { AuditDbHandle } from "@hebron/db/audit";
+import { getActiveImpersonation } from "@hebron/auth/impersonation-server";
 
 // ---------------------------------------------------------------------------
 // Project-specific audit action types
@@ -46,7 +47,8 @@ export async function logProjectAudit(
   params: LogProjectAuditParams,
   dbHandle?: AuditDbHandle,
 ): Promise<void> {
-  await logAudit({ ...params, criticality: "critical" }, dbHandle);
+  const realActorId = (await getActiveImpersonation())?.actorId;
+  await logAudit({ ...params, realActorId, criticality: "critical" }, dbHandle);
 }
 
 /**

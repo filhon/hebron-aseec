@@ -16,6 +16,7 @@ import {
   NotificationBellContainer,
   getAppShortcuts,
   type NavSection,
+  type ImpersonationBannerProps,
 } from "@hebron/ui";
 import { logoutAction } from "../../actions/auth";
 import {
@@ -82,10 +83,15 @@ export interface IntranetShellProps {
     /** URL assinada já resolvida no layout; null cai nas iniciais. */
     avatarUrl: string | null;
   };
+  impersonation?: ImpersonationBannerProps | null;
   children: React.ReactNode;
 }
 
-export default function IntranetShell({ user, children }: IntranetShellProps) {
+export default function IntranetShell({
+  user,
+  impersonation,
+  children,
+}: IntranetShellProps) {
   const pathname = usePathname();
   const router = useRouter();
 
@@ -106,6 +112,7 @@ export default function IntranetShell({ user, children }: IntranetShellProps) {
       logo={<ModuleLogo module="intranet" />}
       sidebarDark
       LinkComponent={Link}
+      impersonation={impersonation}
       headerActions={
         <NotificationBellContainer
           currentAppId="intranet"

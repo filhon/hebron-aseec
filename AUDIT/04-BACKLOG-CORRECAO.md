@@ -223,11 +223,13 @@ _(caminho b)_ `apps/admin/src/actions/impersonation.ts`, `packages/auth/src/impe
 
 ### Critérios de aceite (caminho a)
 
-- [ ] Impersonar e abrir Projetos/Plataforma/Flats mostra o que o usuário-alvo vê
-- [ ] O audit registra o super_admin como ator, nunca o impersonado
-- [ ] Banner visível nos 9 apps enquanto a impersonação estiver ativa
-- [ ] Impersonação não permite ao super_admin fazer nada que ele já não pudesse (sem escalonamento)
-- [ ] Expiração de 8h encerra a sessão impersonada
+- [x] Impersonar e abrir Projetos/Plataforma/Flats mostra o que o usuário-alvo vê — `resolveSession` (`packages/auth/src/server.ts`) passa a devolver `actorId`/`roles`/`designations` do impersonado quando o cookie é válido, pertence ao usuário real autenticado e esse usuário ainda tem `super_admin` (reconsultado no banco). Todo `createRoleGate`/`withAuthenticatedContext` do ecossistema consome essa sessão sem mudança — verificado por teste de integração real (login Supabase, não mock, `packages/auth/src/__tests__/server-impersonation.test.ts`); **não verificado por clique manual em navegador** nesta sessão.
+- [x] O audit registra o super_admin como ator, nunca o impersonado — `logAudit` (`packages/db/src/audit.ts`) ganhou `realActorId`, que sobrescreve o `actorId` gravado e preserva o impersonado em `_impersonatedId` no diff; os 9 wrappers `apps/*/src/lib/audit.ts` detectam a impersonação ativa via `getActiveImpersonation()` automaticamente, sem tocar nos ~400 call sites em `apps/*/src/actions/**`. Testado em `packages/db/src/__tests__/audit-impersonation.test.ts` e no caso reescrito de `apps/admin/src/__tests__/audit.test.ts`.
+- [x] Banner visível nos 9 apps enquanto a impersonação estiver ativa — `packages/ui/src/components/app-shell.tsx` ganhou a prop `impersonation`, consumida nos 11 pontos de wiring dos 8 apps que usam `AppShell` (admin, financeiro, intranet, tarefas, radio/admin, projetos/submissor+diretoria, plataforma/aluno+instrutor, flats/hospede+admin); Documentos (sem `AppShell`, layout CSS Grid próprio) recebeu a banner direto em `editorial/layout.tsx`. Só o Admin tem o botão funcional de encerrar (Server Action não atravessa bundle de app); os outros 8 mostram um link "Encerrar no Admin" (`stopHref`).
+- [x] Impersonação não permite ao super_admin fazer nada que ele já não pudesse (sem escalonamento) — a sessão impersonada usa os papéis reais do alvo (nunca amplia); o cookie só é honrado se pertencer ao usuário real autenticado (`state.actorId === user.id`) e esse usuário ainda tiver `super_admin`; guarda nova contra encadear uma impersonação dentro de outra (`startImpersonationAction`). O Admin (torre de controle, sem área voltada ao usuário-alvo) foi deliberadamente isolado do swap — `requireAdminSession`/`adminAction` continuam operando como o ator real, nunca com menos acesso do que já tinham.
+- [x] Expiração de 8h encerra a sessão impersonada — `resolveVerifiedImpersonationState` (`packages/auth/src/impersonation.ts`) reforça o teto de 8h **no servidor** (não só via `maxAge` do cookie, que é só client-side); testado com casos de fronteira e expirado em `packages/auth/src/__tests__/impersonation.test.ts`.
+
+**Ver S-262 em `SESSIONS.md` para o detalhamento completo da implementação e verificação.**
 
 ---
 

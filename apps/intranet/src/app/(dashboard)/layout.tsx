@@ -1,10 +1,14 @@
 import { redirect } from "next/navigation";
 import { Parkinsans, Titillium_Web } from "next/font/google";
 import { CANONICAL_LOGIN_URL } from "@hebron/auth";
+import { getActiveImpersonation } from "@hebron/auth/impersonation-server";
+import { getAdminUrl } from "@hebron/ui";
 import type { Role } from "@hebron/types/roles";
 import { getAuthUser, resolveAvatarReadUrl } from "../../lib/queries";
 import IntranetShell from "./shell";
 import "../globals.css";
+
+const ADMIN_URL = getAdminUrl();
 
 const parkinsans = Parkinsans({
   subsets: ["latin"],
@@ -51,6 +55,8 @@ export default async function DashboardLayout({
     avatarUrl = null;
   }
 
+  const impersonation = await getActiveImpersonation();
+
   return (
     <html
       lang="pt-BR"
@@ -63,6 +69,16 @@ export default async function DashboardLayout({
             email: user.email,
             avatarUrl,
           }}
+          impersonation={
+            impersonation
+              ? {
+                  impersonatedName: impersonation.impersonatedName,
+                  actorName: impersonation.actorName,
+                  startedAt: impersonation.startedAt,
+                  stopHref: `${ADMIN_URL}/usuarios`,
+                }
+              : null
+          }
         >
           {children}
         </IntranetShell>

@@ -7,6 +7,7 @@ import {
   ModuleLogo,
   NotificationBellContainer,
   type NavSection,
+  type ImpersonationBannerProps,
 } from "@hebron/ui";
 import { LayoutDashboard, FolderPlus, Building2, FileText } from "lucide-react";
 import { logoutAction } from "../../actions/auth";
@@ -34,10 +35,15 @@ const SECTIONS: NavSection[] = [
 
 type Props = {
   user: { fullName: string | null; email: string | null };
+  impersonation?: ImpersonationBannerProps | null;
   children: React.ReactNode;
 };
 
-export default function SubmissorShell({ user, children }: Props) {
+export default function SubmissorShell({
+  user,
+  impersonation,
+  children,
+}: Props) {
   const path = usePathname();
   const router = useRouter();
 
@@ -55,6 +61,7 @@ export default function SubmissorShell({ user, children }: Props) {
       logo={<ModuleLogo module="projetos" />}
       sidebarDark
       LinkComponent={Link}
+      impersonation={impersonation}
       headerActions={
         <NotificationBellContainer
           currentAppId="projetos"

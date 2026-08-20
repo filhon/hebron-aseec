@@ -87,4 +87,26 @@ describe("requireAdminSession", () => {
     expect(session.actorId).toBe("admin-1");
     expect(redirect).not.toHaveBeenCalled();
   });
+
+  it("PACOTE 6: super_admin impersonando um alvo sem super_admin → NÃO bloqueado, retorna o ATOR REAL (não o impersonado)", async () => {
+    // Admin não tem área voltada ao usuário-alvo (ao contrário dos outros 8
+    // apps) — é a torre de controle de onde a impersonação é gerida, então
+    // deve continuar acessível ao ator real mesmo com resolveSession
+    // devolvendo a identidade impersonada (por design, para os outros apps).
+    const { resolveSession } = await import("@hebron/auth/server");
+    const { redirect } = await import("next/navigation");
+    vi.mocked(resolveSession).mockResolvedValue({
+      actorId: "target-user-1",
+      roles: ["submissor"],
+      designations: [],
+      impersonatedBy: "admin-1",
+    });
+
+    const { requireAdminSession } = await import("../lib/session");
+
+    const session = await requireAdminSession();
+    expect(session.actorId).toBe("admin-1");
+    expect(session.roles).toContain("super_admin");
+    expect(redirect).not.toHaveBeenCalled();
+  });
 });

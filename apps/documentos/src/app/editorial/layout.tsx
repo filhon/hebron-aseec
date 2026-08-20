@@ -9,8 +9,11 @@ import {
   Bell,
   ClipboardList,
 } from "lucide-react";
-import { ModuleLogo } from "@hebron/ui";
+import { ModuleLogo, ImpersonationBanner, getAdminUrl } from "@hebron/ui";
+import { getActiveImpersonation } from "@hebron/auth/impersonation-server";
 import { requireEditorSession } from "../../lib/session";
+
+const ADMIN_URL = getAdminUrl();
 
 export default async function EditorialLayout({
   children,
@@ -18,6 +21,8 @@ export default async function EditorialLayout({
   children: React.ReactNode;
 }) {
   await requireEditorSession();
+
+  const impersonation = await getActiveImpersonation();
 
   return (
     <div className="docs-editorial-shell">
@@ -111,6 +116,14 @@ export default async function EditorialLayout({
 
       {/* Main area */}
       <div className="docs-editorial-main">
+        {impersonation && (
+          <ImpersonationBanner
+            impersonatedName={impersonation.impersonatedName}
+            actorName={impersonation.actorName}
+            startedAt={impersonation.startedAt}
+            stopHref={`${ADMIN_URL}/usuarios`}
+          />
+        )}
         {/* Top bar */}
         <div className="docs-editorial-topbar">
           <span
