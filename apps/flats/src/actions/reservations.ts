@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { and, eq, inArray } from "drizzle-orm";
 import type { AuthenticatedTx } from "@hebron/db/authenticated";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   withAuthenticatedContext,
   withSystemRole,
@@ -41,7 +42,7 @@ const TWELVE_MONTHS_MS = MS_PER_DAY * 365;
 
 function toISODate(date: Date): string {
   const iso = date.toISOString().split("T")[0];
-  if (!iso) throw new Error("Data inválida");
+  if (!iso) throw new BusinessError("Data inválida");
   return iso;
 }
 
@@ -110,7 +111,7 @@ export const createReservation = hospedeAction
     // (0022_flats_rls.sql), replicada aqui para uma mensagem de erro clara
     // em vez de deixar a RLS rejeitar com um erro genérico de Postgres.
     if (ctx.roles.includes("diretor") || ctx.roles.includes("conselheiro")) {
-      throw new Error(
+      throw new BusinessError(
         "Diretores e conselheiros não podem solicitar hospedagem nos flats (conflito de interesse)",
       );
     }
@@ -125,7 +126,7 @@ export const createReservation = hospedeAction
           ctx.actorId,
         );
         if (!reservationConsents.dadosReserva) {
-          throw new Error(
+          throw new BusinessError(
             "Consentimento para processamento dos dados da reserva é obrigatório antes de enviar a solicitação",
           );
         }
@@ -135,7 +136,7 @@ export const createReservation = hospedeAction
 
         const usedDays = await usedDaysInLast12Months(tx, ctx.actorId, now);
         if (usedDays >= MAX_DAYS_PER_12_MONTHS) {
-          throw new Error(
+          throw new BusinessError(
             `Limite de ${MAX_DAYS_PER_12_MONTHS} dias de hospedagem nos últimos 12 meses já atingido (${usedDays} dia(s) usados)`,
           );
         }
@@ -150,7 +151,7 @@ export const createReservation = hospedeAction
           })
           .returning();
 
-        if (!reservation) throw new Error("Falha ao criar reserva");
+        if (!reservation) throw new BusinessError("Falha ao criar reserva");
 
         await tx.insert(preferredPeriods).values(
           input.preferredPeriods.map((period, index) => ({
@@ -180,7 +181,8 @@ export const createReservation = hospedeAction
           })
           .returning();
 
-        if (!responsible) throw new Error("Falha ao criar hóspede responsável");
+        if (!responsible)
+          throw new BusinessError("Falha ao criar hóspede responsável");
 
         // Persistência do documento do responsável em flats.document_files
         // (P-7.9c, CORRETIVO) — antes desta linha o upload feito pelo wizard
@@ -331,7 +333,7 @@ export const confirmReservation = flatsAction
           .where(eq(reservations.id, input.reservationId))
           .limit(1);
 
-        if (!reservation) throw new Error("Reserva não encontrada");
+        if (!reservation) throw new BusinessError("Reserva não encontrada");
 
         const isOwner = reservation.requestedBy === ctx.actorId;
         const isGestor =
@@ -340,13 +342,13 @@ export const confirmReservation = flatsAction
             ctx.designations.includes("gestor"));
 
         if (!isOwner && !isGestor) {
-          throw new Error(
+          throw new BusinessError(
             "Acesso negado: só o hóspede ou o gestor podem confirmar",
           );
         }
 
         if (reservation.status !== "aprovada") {
-          throw new Error(
+          throw new BusinessError(
             `Só é possível confirmar reservas aprovadas — status atual: "${reservation.status}"`,
           );
         }
@@ -418,7 +420,7 @@ export const cancelReservation = flatsAction
         .where(eq(reservations.id, input.reservationId))
         .limit(1);
 
-      if (!reservation) throw new Error("Reserva não encontrada");
+      if (!reservation) throw new BusinessError("Reserva não encontrada");
 
       const isOwner = reservation.requestedBy === ctx.actorId;
       const isGestor =
@@ -426,13 +428,13 @@ export const cancelReservation = flatsAction
         (ctx.roles.includes("diretor") && ctx.designations.includes("gestor"));
 
       if (!isOwner && !isGestor) {
-        throw new Error(
+        throw new BusinessError(
           "Acesso negado: só o hóspede ou o gestor podem cancelar",
         );
       }
 
       if (TERMINAL_STATUSES.has(reservation.status)) {
-        throw new Error(
+        throw new BusinessError(
           `Reserva em status "${reservation.status}" não pode ser cancelada`,
         );
       }

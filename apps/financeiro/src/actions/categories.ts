@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   financialCategories,
   budgets,
@@ -39,10 +40,10 @@ export const createCategory = diretorAction
             .limit(1);
 
           const parent = parentRows[0];
-          if (!parent) throw new Error("Categoria pai não encontrada");
+          if (!parent) throw new BusinessError("Categoria pai não encontrada");
 
           if (parent.type !== input.type) {
-            throw new Error(
+            throw new BusinessError(
               "A categoria filha deve ter o mesmo tipo (receita/despesa) que a categoria pai",
             );
           }
@@ -57,7 +58,7 @@ export const createCategory = diretorAction
           .limit(1);
 
         if (existingCode.length > 0) {
-          throw new Error(
+          throw new BusinessError(
             `Código "${input.code}" já existe no plano de contas`,
           );
         }
@@ -74,7 +75,7 @@ export const createCategory = diretorAction
           .returning();
 
         const category = inserted[0];
-        if (!category) throw new Error("Falha ao criar categoria");
+        if (!category) throw new BusinessError("Falha ao criar categoria");
         return category;
       },
     );
@@ -120,10 +121,12 @@ export const updateCategory = diretorAction
           .limit(1);
 
         const category = rows[0];
-        if (!category) throw new Error("Categoria não encontrada");
+        if (!category) throw new BusinessError("Categoria não encontrada");
 
         if (category.isSystem) {
-          throw new Error("Categorias do sistema não podem ser alteradas");
+          throw new BusinessError(
+            "Categorias do sistema não podem ser alteradas",
+          );
         }
 
         const patch: Partial<typeof financialCategories.$inferInsert> = {
@@ -173,10 +176,10 @@ export const deleteCategory = superAdminAction
           .limit(1);
 
         const category = rows[0];
-        if (!category) throw new Error("Categoria não encontrada");
+        if (!category) throw new BusinessError("Categoria não encontrada");
 
         if (category.isSystem) {
-          throw new Error(
+          throw new BusinessError(
             "Categorias do sistema não podem ser removidas. Entre em contato com o administrador técnico.",
           );
         }
@@ -189,7 +192,7 @@ export const deleteCategory = superAdminAction
           .limit(1);
 
         if (children.length > 0) {
-          throw new Error(
+          throw new BusinessError(
             "Remova ou re-categorize todas as subcategorias antes de excluir esta categoria",
           );
         }
@@ -202,7 +205,7 @@ export const deleteCategory = superAdminAction
             .delete(financialCategories)
             .where(eq(financialCategories.id, input.categoryId));
         } catch {
-          throw new Error(
+          throw new BusinessError(
             "Não é possível excluir esta categoria pois ela está em uso por lançamentos ou orçamentos",
           );
         }
@@ -265,7 +268,7 @@ export const createBudget = diretorAction
           .returning();
 
         const budget = budgetInserted[0];
-        if (!budget) throw new Error("Falha ao criar orçamento");
+        if (!budget) throw new BusinessError("Falha ao criar orçamento");
 
         // Insert budget items
         await tx.insert(budgetItems).values(
@@ -325,7 +328,7 @@ export const updateBudget = diretorAction
           .limit(1);
 
         const budget = rows[0];
-        if (!budget) throw new Error("Orçamento não encontrado");
+        if (!budget) throw new BusinessError("Orçamento não encontrado");
 
         const patch: Partial<typeof budgets.$inferInsert> = {
           updatedAt: new Date(),
@@ -374,11 +377,11 @@ export const deleteBudget = superAdminAction
           .limit(1);
 
         const budget = rows[0];
-        if (!budget) throw new Error("Orçamento não encontrado");
+        if (!budget) throw new BusinessError("Orçamento não encontrado");
 
         const currentYear = new Date().getFullYear();
         if (budget.year === currentYear) {
-          throw new Error(
+          throw new BusinessError(
             "Não é possível excluir o orçamento do ano corrente. Contate o super_admin para uma exceção.",
           );
         }

@@ -6,6 +6,7 @@ import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { timeEntries } from "@hebron/db/schema";
 import { createTimeEntrySchema } from "@hebron/validators/tarefas";
 import { colaboradorAction } from "../lib/safe-action";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 
 // Time tracking é opcional por tarefa (BRAIN §6.9, "features v1") — sempre em
 // nome do próprio usuário (RLS time_entries_write_own, 0033_tarefas_rls.sql).
@@ -38,7 +39,7 @@ export const startTimeEntry = colaboradorAction
           )
           .limit(1);
         if (open) {
-          throw new Error(
+          throw new BusinessError(
             "Você já tem um cronômetro em andamento — pare-o antes de iniciar outro",
           );
         }
@@ -51,7 +52,7 @@ export const startTimeEntry = colaboradorAction
             startedAt: new Date(),
           })
           .returning();
-        if (!row) throw new Error("Falha ao iniciar cronômetro");
+        if (!row) throw new BusinessError("Falha ao iniciar cronômetro");
         return row;
       },
     );
@@ -81,9 +82,10 @@ export const stopTimeEntry = colaboradorAction
             ),
           )
           .limit(1);
-        if (!existing) throw new Error("Registro de tempo não encontrado");
+        if (!existing)
+          throw new BusinessError("Registro de tempo não encontrado");
         if (existing.endedAt) {
-          throw new Error("Este cronômetro já foi finalizado");
+          throw new BusinessError("Este cronômetro já foi finalizado");
         }
 
         const endedAt = new Date();
@@ -94,7 +96,7 @@ export const stopTimeEntry = colaboradorAction
           .set({ endedAt, durationMinutes })
           .where(eq(timeEntries.id, input.timeEntryId))
           .returning();
-        if (!row) throw new Error("Falha ao finalizar cronômetro");
+        if (!row) throw new BusinessError("Falha ao finalizar cronômetro");
         return row;
       },
     );
@@ -125,7 +127,7 @@ export const createManualTimeEntry = colaboradorAction
           )
           .limit(1);
         if (open && input.endedAt > open.startedAt) {
-          throw new Error(
+          throw new BusinessError(
             "Você tem um cronômetro em andamento que se sobrepõe a este intervalo — pare-o antes de lançar esse período manualmente",
           );
         }
@@ -141,7 +143,7 @@ export const createManualTimeEntry = colaboradorAction
             notes: input.notes,
           })
           .returning();
-        if (!row) throw new Error("Falha ao registrar tempo");
+        if (!row) throw new BusinessError("Falha ao registrar tempo");
         return row;
       },
     );

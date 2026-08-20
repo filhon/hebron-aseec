@@ -5,6 +5,7 @@ import { bankAccounts } from "@hebron/db/schema";
 import { createBankAccountSchema } from "@hebron/validators/financeiro";
 import { colaboradorAction } from "../lib/safe-action";
 import { logFinanceiroAudit } from "../lib/audit";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 
 // ---------------------------------------------------------------------------
 // createBankAccount — débito de P-3.6/P-3.8 (nenhuma action existia para o
@@ -35,7 +36,8 @@ export const createBankAccount = colaboradorAction
           .returning();
 
         const account = inserted[0];
-        if (!account) throw new Error("Falha ao cadastrar conta bancária");
+        if (!account)
+          throw new BusinessError("Falha ao cadastrar conta bancária");
         return account;
       },
     );

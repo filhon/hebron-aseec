@@ -4,6 +4,7 @@ import * as React from "react";
 import { z } from "zod";
 import { eq, and, isNull, inArray } from "drizzle-orm";
 import { db } from "@hebron/db/client";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   withAuthenticatedContext,
   withSystemRole,
@@ -87,7 +88,7 @@ export const createWeeklyBatch = superAdminAction
     );
 
     if (pendingPayables.length === 0) {
-      throw new Error(
+      throw new BusinessError(
         `Nenhuma conta a pagar pendente para a semana de ${weekStart} a ${weekEnd}`,
       );
     }
@@ -100,7 +101,7 @@ export const createWeeklyBatch = superAdminAction
           .insert(batchApprovals)
           .values({ weekStart, weekEnd })
           .returning();
-        if (!row) throw new Error("Falha ao criar lote de aprovação");
+        if (!row) throw new BusinessError("Falha ao criar lote de aprovação");
 
         await tx.insert(batchApprovalItems).values(
           pendingPayables.map((p) => ({
@@ -223,10 +224,10 @@ export const approveBatch = diretorWithDesignationAction("gestor")
           .limit(1);
 
         const batch = batchRows[0];
-        if (!batch) throw new Error("Lote de aprovação não encontrado");
+        if (!batch) throw new BusinessError("Lote de aprovação não encontrado");
 
         if (batch.approvedBy) {
-          throw new Error("Este lote já foi aprovado");
+          throw new BusinessError("Este lote já foi aprovado");
         }
 
         // Update batch
@@ -343,21 +344,21 @@ export const authorizeBatch = diretorWithDesignationAction("autorizador")
           .limit(1);
 
         const batch = batchRows[0];
-        if (!batch) throw new Error("Lote de aprovação não encontrado");
+        if (!batch) throw new BusinessError("Lote de aprovação não encontrado");
 
         if (!batch.approvedBy) {
-          throw new Error(
+          throw new BusinessError(
             "O lote precisa ser aprovado pelo diretor antes de ser autorizado",
           );
         }
 
         if (batch.authorizedBy) {
-          throw new Error("Este lote já foi autorizado");
+          throw new BusinessError("Este lote já foi autorizado");
         }
 
         // Dual governance: authorizer must differ from approver
         if (batch.approvedBy === ctx.actorId) {
-          throw new Error(
+          throw new BusinessError(
             "O autorizador deve ser uma pessoa diferente do aprovador (governança dual)",
           );
         }
@@ -451,10 +452,10 @@ export const markPayableAsPaid = superAdminAction
           .limit(1);
 
         const payable = payableRows[0];
-        if (!payable) throw new Error("Conta a pagar não encontrada");
+        if (!payable) throw new BusinessError("Conta a pagar não encontrada");
 
         if (payable.status !== "autorizado") {
-          throw new Error(
+          throw new BusinessError(
             `Apenas contas com status "autorizado" podem ser marcadas como pagas. ` +
               `Status atual: "${payable.status}"`,
           );
@@ -482,7 +483,8 @@ export const markPayableAsPaid = superAdminAction
           .returning();
 
         const ledgerTx = txInserted[0];
-        if (!ledgerTx) throw new Error("Falha ao criar transação de pagamento");
+        if (!ledgerTx)
+          throw new BusinessError("Falha ao criar transação de pagamento");
 
         // Update payable
         await dbTx

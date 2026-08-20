@@ -3,6 +3,7 @@
 import { eq } from "drizzle-orm";
 import type { z } from "zod";
 import type { AuthenticatedTx } from "@hebron/db/authenticated";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   withAuthenticatedContext,
   withSystemRole,
@@ -51,7 +52,8 @@ export async function createAidRequest(
     })
     .returning();
 
-  if (!aidRequest) throw new Error("Falha ao criar solicitação de auxílio");
+  if (!aidRequest)
+    throw new BusinessError("Falha ao criar solicitação de auxílio");
 
   await withSystemRole(tx, (sysTx) =>
     logFlatsAudit(
@@ -96,10 +98,10 @@ export const reviewAidRequest = gestorAction
           .limit(1);
 
         if (!aidRequest)
-          throw new Error("Solicitação de auxílio não encontrada");
+          throw new BusinessError("Solicitação de auxílio não encontrada");
 
         if (aidRequest.status !== "solicitado") {
-          throw new Error(
+          throw new BusinessError(
             `Esta solicitação já foi revisada — status atual: "${aidRequest.status}"`,
           );
         }
@@ -134,14 +136,16 @@ export const reviewAidRequest = gestorAction
         }
 
         if (aidRequest.requestsDailyAllowance && !input.dailyAllowanceAmount) {
-          throw new Error("Informe o valor da diária fixa para aprovar");
+          throw new BusinessError(
+            "Informe o valor da diária fixa para aprovar",
+          );
         }
 
         if (
           aidRequest.transportMode === "combustivel" &&
           !input.transportAmount
         ) {
-          throw new Error(
+          throw new BusinessError(
             "Informe o valor do transporte (combustível) para aprovar",
           );
         }
@@ -200,7 +204,8 @@ export const reviewAidRequest = gestorAction
           .where(eq(reservations.id, aidRequest.reservationId))
           .limit(1);
 
-        if (!reservation) throw new Error("Reserva vinculada não encontrada");
+        if (!reservation)
+          throw new BusinessError("Reserva vinculada não encontrada");
 
         return {
           approved: true as const,

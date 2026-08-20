@@ -1,6 +1,7 @@
 "use server";
 
 import { eq } from "drizzle-orm";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   withAuthenticatedContext,
   withSystemRole,
@@ -13,7 +14,7 @@ import { notifyReservationDecision } from "../lib/notifications";
 
 function toISODate(date: Date): string {
   const iso = date.toISOString().split("T")[0];
-  if (!iso) throw new Error("Data inválida");
+  if (!iso) throw new BusinessError("Data inválida");
   return iso;
 }
 
@@ -37,10 +38,10 @@ export const reviewReservation = gestorAction
           .where(eq(reservations.id, input.reservationId))
           .limit(1);
 
-        if (!reservation) throw new Error("Reserva não encontrada");
+        if (!reservation) throw new BusinessError("Reserva não encontrada");
 
         if (reservation.status !== "solicitada") {
-          throw new Error(
+          throw new BusinessError(
             `Só é possível aprovar/rejeitar reservas com status "solicitada" — status atual: "${reservation.status}"`,
           );
         }
@@ -84,7 +85,7 @@ export const reviewReservation = gestorAction
         // decision === "aprovada" — schema já garante unitId + confirmedPeriod
         // presentes (refine em reviewReservationSchema).
         if (!input.unitId || !input.confirmedPeriod) {
-          throw new Error("Selecione a unidade e confirme o período");
+          throw new BusinessError("Selecione a unidade e confirme o período");
         }
 
         const confirmedStart = toISODate(input.confirmedPeriod.start);
@@ -102,7 +103,7 @@ export const reviewReservation = gestorAction
         );
 
         if (!matchesPreference) {
-          throw new Error(
+          throw new BusinessError(
             "O período confirmado deve ser um dos 3 períodos de preferência do hóspede",
           );
         }
@@ -125,7 +126,7 @@ export const reviewReservation = gestorAction
             .where(eq(reservations.id, reservation.id));
         } catch (err) {
           if (err instanceof Error && /exclu(sion|de)/i.test(err.message)) {
-            throw new Error(
+            throw new BusinessError(
               "Conflito de datas: a unidade já está ocupada nesse período",
             );
           }

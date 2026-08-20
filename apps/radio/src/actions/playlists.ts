@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { eq, sql } from "drizzle-orm";
 import type { AuthenticatedTx } from "@hebron/db/authenticated";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   withAuthenticatedContext,
   withSystemRole,
@@ -50,7 +51,7 @@ export const createPlaylist = superAdminAction
         .insert(playlists)
         .values({ name: input.name, loop: input.loop })
         .returning();
-      if (!playlist) throw new Error("Falha ao criar playlist");
+      if (!playlist) throw new BusinessError("Falha ao criar playlist");
 
       await replacePlaylistTracks(tx, playlist.id, input.trackIds);
 
@@ -84,14 +85,14 @@ export const updatePlaylist = superAdminAction
         .from(playlists)
         .where(eq(playlists.id, playlistId))
         .limit(1);
-      if (!before) throw new Error("Playlist não encontrada");
+      if (!before) throw new BusinessError("Playlist não encontrada");
 
       const [updated] = await tx
         .update(playlists)
         .set({ ...values, updatedAt: new Date() })
         .where(eq(playlists.id, playlistId))
         .returning();
-      if (!updated) throw new Error("Falha ao atualizar playlist");
+      if (!updated) throw new BusinessError("Falha ao atualizar playlist");
 
       await replacePlaylistTracks(tx, playlistId, trackIds);
 
@@ -126,10 +127,10 @@ export const deletePlaylist = superAdminAction
         .from(playlists)
         .where(eq(playlists.id, input.playlistId))
         .limit(1);
-      if (!before) throw new Error("Playlist não encontrada");
+      if (!before) throw new BusinessError("Playlist não encontrada");
 
       if (before.isActive) {
-        throw new Error(
+        throw new BusinessError(
           "Não é possível remover a playlist ativa. Ative outra playlist antes.",
         );
       }
@@ -171,7 +172,7 @@ export const activatePlaylist = superAdminAction
         .from(playlists)
         .where(eq(playlists.id, input.playlistId))
         .limit(1);
-      if (!target) throw new Error("Playlist não encontrada");
+      if (!target) throw new BusinessError("Playlist não encontrada");
 
       await tx.update(playlists).set({
         isActive: sql`(${playlists.id} = ${input.playlistId})`,

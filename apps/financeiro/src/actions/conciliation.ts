@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { eq, and, sql } from "drizzle-orm";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   bankImportRows,
   bankImports,
@@ -65,7 +66,7 @@ export const autoMatchImport = colaboradorAction
         .limit(1);
 
       const bankImport = importRecord[0];
-      if (!bankImport) throw new Error("Import não encontrado");
+      if (!bankImport) throw new BusinessError("Import não encontrado");
 
       // Load recent transactions for the same account (last 90 days)
       // We cast date comparison via sql for portability
@@ -109,7 +110,7 @@ export const autoMatchImport = colaboradorAction
     });
 
     if (unmatchedRows.length === 0) return { matched: 0, suggestions: [] };
-    if (!bankImport) throw new Error("Import não encontrado");
+    if (!bankImport) throw new BusinessError("Import não encontrado");
 
     type Suggestion = {
       rowId: string;
@@ -257,10 +258,10 @@ export const reconcileRow = colaboradorAction
           .limit(1);
 
         const row = rowRows[0];
-        if (!row) throw new Error("Linha de import não encontrada");
+        if (!row) throw new BusinessError("Linha de import não encontrada");
 
         if (row.status === "matched") {
-          throw new Error("Esta linha já está conciliada");
+          throw new BusinessError("Esta linha já está conciliada");
         }
 
         let createdTransactionId: string | null = null;
@@ -268,7 +269,7 @@ export const reconcileRow = colaboradorAction
         switch (input.action) {
           case "vincular_payable": {
             if (!input.payableId)
-              throw new Error("Selecione uma conta a pagar");
+              throw new BusinessError("Selecione uma conta a pagar");
 
             const payable = await dbTx
               .select()
@@ -276,7 +277,8 @@ export const reconcileRow = colaboradorAction
               .where(eq(payables.id, input.payableId))
               .limit(1);
 
-            if (!payable[0]) throw new Error("Conta a pagar não encontrada");
+            if (!payable[0])
+              throw new BusinessError("Conta a pagar não encontrada");
 
             // Find or verify there's a transaction for this payable
             const txRows = await dbTx
@@ -305,7 +307,7 @@ export const reconcileRow = colaboradorAction
 
           case "vincular_receivable": {
             if (!input.receivableId)
-              throw new Error("Selecione uma conta a receber");
+              throw new BusinessError("Selecione uma conta a receber");
 
             const txRows = await dbTx
               .select()
@@ -347,7 +349,7 @@ export const reconcileRow = colaboradorAction
               .limit(1);
 
             const bankImport = importRecord[0];
-            if (!bankImport) throw new Error("Import não encontrado");
+            if (!bankImport) throw new BusinessError("Import não encontrado");
 
             const rowAmount = parseFloat(row.amount);
             const txType = rowAmount >= 0 ? "credito" : "debito";
@@ -365,7 +367,8 @@ export const reconcileRow = colaboradorAction
               .returning();
 
             const insertedTx = newTx[0];
-            if (!insertedTx) throw new Error("Falha ao criar transação");
+            if (!insertedTx)
+              throw new BusinessError("Falha ao criar transação");
             createdTransactionId = insertedTx.id;
 
             await dbTx

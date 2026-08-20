@@ -5,6 +5,7 @@ import { ECOSYSTEM_APPS } from "@hebron/ui";
 import { authenticatedAction } from "../lib/safe-action";
 import { getSessionSupabaseClient } from "../lib/session-client";
 import { MEETING_TYPE_LABEL } from "../lib/queries";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 
 // ---------------------------------------------------------------------------
 // globalSearch — busca cross-app (projetos.projects, documentos.documents,
@@ -83,7 +84,7 @@ export const globalSearch = authenticatedAction
       _query: parsedInput.query,
     });
 
-    if (error) throw new Error(error.message);
+    if (error) throw new BusinessError(error.message);
 
     const rows = (data ?? []) as SearchRow[];
 

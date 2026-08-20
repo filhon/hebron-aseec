@@ -7,6 +7,7 @@ import { discussionPosts, discussions, notes } from "@hebron/db/schema";
 import { createDiscussionPostSchema } from "@hebron/validators";
 import { plataformaAction } from "../lib/safe-action";
 import { notifyDiscussionReply } from "../lib/notifications";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 
 // ---------------------------------------------------------------------------
 // discussion posts — fórum por aula (BRAIN §6.3). O registro plataforma.
@@ -31,7 +32,7 @@ export const createDiscussionPost = plataformaAction
           .where(eq(discussions.lessonId, input.lessonId))
           .limit(1);
         if (!discussion)
-          throw new Error("Discussão não encontrada para esta aula");
+          throw new BusinessError("Discussão não encontrada para esta aula");
 
         const [row] = await tx
           .insert(discussionPosts)
@@ -42,7 +43,7 @@ export const createDiscussionPost = plataformaAction
             parentPostId: input.parentPostId,
           })
           .returning();
-        if (!row) throw new Error("Falha ao publicar comentário");
+        if (!row) throw new BusinessError("Falha ao publicar comentário");
         return row;
       },
     );
@@ -81,7 +82,9 @@ export const updateDiscussionPost = plataformaAction
           )
           .returning();
         if (!row) {
-          throw new Error("Comentário não encontrado ou você não é o autor");
+          throw new BusinessError(
+            "Comentário não encontrado ou você não é o autor",
+          );
         }
         return row;
       },
@@ -115,7 +118,9 @@ export const deleteDiscussionPost = plataformaAction
         )
         .returning({ id: discussionPosts.id });
       if (!row) {
-        throw new Error("Comentário não encontrado ou você não pode removê-lo");
+        throw new BusinessError(
+          "Comentário não encontrado ou você não pode removê-lo",
+        );
       }
     });
 
@@ -151,7 +156,7 @@ export const createNote = plataformaAction
             content: input.content,
           })
           .returning();
-        if (!row) throw new Error("Falha ao salvar nota");
+        if (!row) throw new BusinessError("Falha ao salvar nota");
         return row;
       },
     );
@@ -175,7 +180,7 @@ export const updateNote = plataformaAction
           .set({ content: input.content })
           .where(and(eq(notes.id, input.noteId), eq(notes.userId, ctx.actorId)))
           .returning();
-        if (!row) throw new Error("Nota não encontrada");
+        if (!row) throw new BusinessError("Nota não encontrada");
         return row;
       },
     );
@@ -193,7 +198,7 @@ export const deleteNote = plataformaAction
         .delete(notes)
         .where(and(eq(notes.id, input.noteId), eq(notes.userId, ctx.actorId)))
         .returning({ id: notes.id });
-      if (!row) throw new Error("Nota não encontrada");
+      if (!row) throw new BusinessError("Nota não encontrada");
     });
 
     return { success: true };

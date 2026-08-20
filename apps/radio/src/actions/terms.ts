@@ -1,6 +1,7 @@
 "use server";
 
 import { eq } from "drizzle-orm";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   withAuthenticatedContext,
   withSystemRole,
@@ -39,7 +40,8 @@ export const acceptTerm = radioAction
           .insert(termAcceptances)
           .values({ userId: ctx.actorId })
           .returning();
-        if (!created) throw new Error("Falha ao registrar aceite do termo");
+        if (!created)
+          throw new BusinessError("Falha ao registrar aceite do termo");
 
         await withSystemRole(tx, (sysTx) =>
           logRadioAudit(

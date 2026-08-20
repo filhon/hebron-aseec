@@ -6,6 +6,7 @@ import { enrollments } from "@hebron/db/schema";
 import { enrollInCourseSchema } from "@hebron/validators";
 import { plataformaAction } from "../lib/safe-action";
 import { notifyEnrollmentConfirmed } from "../lib/notifications";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 
 // ---------------------------------------------------------------------------
 // enrollInCourse — cria a matrícula (RLS enrollments_insert_own já valida
@@ -40,7 +41,7 @@ export const enrollInCourse = plataformaAction
             ),
           )
           .limit(1);
-        if (!existing) throw new Error("Falha ao matricular no curso");
+        if (!existing) throw new BusinessError("Falha ao matricular no curso");
         return { enrollment: existing, isNew: false };
       },
     );

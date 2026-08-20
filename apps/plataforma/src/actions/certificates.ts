@@ -3,6 +3,7 @@
 import * as React from "react";
 import { z } from "zod";
 import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   Document,
   Page,
@@ -100,7 +101,7 @@ export async function checkAndIssueCertificate(
     sql`SELECT * FROM plataforma.issue_certificate(${params.courseId}::uuid)`,
   );
   const row = rows[0];
-  if (!row) throw new Error("Falha ao emitir certificado");
+  if (!row) throw new BusinessError("Falha ao emitir certificado");
 
   const issued: Certificate = {
     id: row.id,
@@ -245,12 +246,12 @@ export const downloadCertificatePdf = plataformaAction
           .limit(1),
     );
     const certificate = rows[0];
-    if (!certificate) throw new Error("Certificado não encontrado");
+    if (!certificate) throw new BusinessError("Certificado não encontrado");
     if (
       certificate.userId !== ctx.actorId &&
       !ctx.roles.includes("super_admin")
     ) {
-      throw new Error("Acesso negado");
+      throw new BusinessError("Acesso negado");
     }
 
     const verification = await withAuthenticatedContext(
@@ -261,7 +262,7 @@ export const downloadCertificatePdf = plataformaAction
         ),
     );
     const v = verification[0];
-    if (!v) throw new Error("Certificado não encontrado");
+    if (!v) throw new BusinessError("Certificado não encontrado");
 
     const pdfBuffer = await renderToBuffer(
       buildCertificatePdfDocument({

@@ -5,6 +5,7 @@ import { authenticatedAction } from "../lib/safe-action";
 import { getSessionSupabaseClient } from "../lib/session-client";
 import { logIntranetAudit } from "../lib/audit";
 import { notifySignupPendingReview } from "../lib/notifications";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 
 // ─── searchOrganizationsForSignup ────────────────────────────────────────────
 // Usa a RPC SECURITY DEFINER (só funciona enquanto o próprio usuário está
@@ -20,7 +21,7 @@ export const searchOrganizationsForSignup = authenticatedAction
       { _query: parsedInput.query },
     );
 
-    if (error) throw new Error(error.message);
+    if (error) throw new BusinessError(error.message);
     return {
       organizations: (data ?? []) as Array<{
         id: string;
@@ -59,7 +60,7 @@ export const completeSignupOrganization = authenticatedAction
       },
     );
 
-    if (error) throw new Error(error.message);
+    if (error) throw new BusinessError(error.message);
 
     const {
       data: { user },

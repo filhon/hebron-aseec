@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   featureFlags,
   systemSettings,
@@ -34,7 +35,9 @@ export const toggleFeatureFlag = adminAction
 
         const before = beforeRows[0];
         if (!before)
-          throw new Error(`Feature flag "${parsedInput.key}" não encontrada`);
+          throw new BusinessError(
+            `Feature flag "${parsedInput.key}" não encontrada`,
+          );
 
         const patch: Partial<typeof featureFlags.$inferInsert> = {
           enabled: parsedInput.enabled,
@@ -53,7 +56,8 @@ export const toggleFeatureFlag = adminAction
           .returning();
 
         const updated = updatedRows[0];
-        if (!updated) throw new Error("Falha ao atualizar feature flag");
+        if (!updated)
+          throw new BusinessError("Falha ao atualizar feature flag");
 
         return { before, updated };
       },
@@ -99,7 +103,9 @@ export const updateSystemSetting = adminAction
 
         const before = beforeRows[0];
         if (!before)
-          throw new Error(`Configuração "${parsedInput.key}" não encontrada`);
+          throw new BusinessError(
+            `Configuração "${parsedInput.key}" não encontrada`,
+          );
 
         const updatedRows = await tx
           .update(systemSettings)
@@ -112,7 +118,8 @@ export const updateSystemSetting = adminAction
           .returning();
 
         const updated = updatedRows[0];
-        if (!updated) throw new Error("Falha ao atualizar configuração");
+        if (!updated)
+          throw new BusinessError("Falha ao atualizar configuração");
 
         return { before, updated };
       },
@@ -152,9 +159,9 @@ export const setProjetosChecklistTemplate = adminAction
           .from(taskTemplates)
           .where(eq(taskTemplates.id, parsedInput.templateId))
           .limit(1);
-        if (!template) throw new Error("Template não encontrado");
+        if (!template) throw new BusinessError("Template não encontrado");
         if (!template.isActive) {
-          throw new Error(
+          throw new BusinessError(
             `Template "${template.name}" está inativo — ative-o antes de associá-lo a Projetos`,
           );
         }
@@ -165,7 +172,7 @@ export const setProjetosChecklistTemplate = adminAction
           .where(eq(templateItems.taskTemplateId, template.id))
           .limit(1);
         if (items.length === 0) {
-          throw new Error(
+          throw new BusinessError(
             `Template "${template.name}" não possui tarefas definidas`,
           );
         }
@@ -179,7 +186,7 @@ export const setProjetosChecklistTemplate = adminAction
 
         const before = beforeRows[0];
         if (!before) {
-          throw new Error(
+          throw new BusinessError(
             `Configuração "${PROJETOS_CHECKLIST_TEMPLATE_SETTING_KEY}" não encontrada — rode "pnpm db:seed" antes de trocar o template`,
           );
         }
@@ -197,7 +204,8 @@ export const setProjetosChecklistTemplate = adminAction
           .returning();
 
         const updated = updatedRows[0];
-        if (!updated) throw new Error("Falha ao atualizar configuração");
+        if (!updated)
+          throw new BusinessError("Falha ao atualizar configuração");
 
         return { before, updated, template };
       },

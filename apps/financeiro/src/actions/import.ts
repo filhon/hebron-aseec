@@ -7,6 +7,7 @@ import { bankImports, bankImportRows, transactions } from "@hebron/db/schema";
 import { colaboradorAction } from "../lib/safe-action";
 import { logFinanceiroAudit } from "../lib/audit";
 import { parseFileContent } from "../lib/import-parsers";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 
 // ---------------------------------------------------------------------------
 // parseImportFile — parse file content and return preview rows (no DB write)
@@ -27,7 +28,7 @@ export const parseImportFile = colaboradorAction
     const rows = parseFileContent(input.content, input.format);
 
     if (rows.length === 0) {
-      throw new Error(
+      throw new BusinessError(
         "Nenhuma transação encontrada no arquivo. Verifique o formato.",
       );
     }
@@ -61,7 +62,7 @@ export const confirmImport = colaboradorAction
     const rows = parseFileContent(input.content, input.format);
 
     if (rows.length === 0) {
-      throw new Error(
+      throw new BusinessError(
         "Nenhuma transação encontrada no arquivo. Verifique o formato.",
       );
     }
@@ -83,7 +84,8 @@ export const confirmImport = colaboradorAction
           .returning();
 
         const bankImport = importInserted[0];
-        if (!bankImport) throw new Error("Falha ao criar registro de import");
+        if (!bankImport)
+          throw new BusinessError("Falha ao criar registro de import");
 
         // Bulk-insert import rows
         const rowValues = rows.map((row) => ({

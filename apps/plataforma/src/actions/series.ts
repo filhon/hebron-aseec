@@ -6,6 +6,7 @@ import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { courses, series } from "@hebron/db/schema";
 import { seriesSchema } from "@hebron/validators";
 import { staffAction } from "../lib/safe-action";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 
 // ---------------------------------------------------------------------------
 // series — CRUD restrito a staff (super_admin OU instrutor, RLS
@@ -30,7 +31,7 @@ export const createSeries = staffAction
             description: input.description,
           })
           .returning();
-        if (!row) throw new Error("Falha ao criar série");
+        if (!row) throw new BusinessError("Falha ao criar série");
         return row;
       },
     );
@@ -58,7 +59,7 @@ export const updateSeries = staffAction
           })
           .where(eq(series.id, input.seriesId))
           .returning();
-        if (!row) throw new Error("Série não encontrada");
+        if (!row) throw new BusinessError("Série não encontrada");
         return row;
       },
     );
@@ -84,7 +85,7 @@ export const deleteSeries = staffAction
         .from(courses)
         .where(eq(courses.seriesId, input.seriesId));
       if ((countRow?.count ?? 0) > 0) {
-        throw new Error(
+        throw new BusinessError(
           "Não é possível remover: há cursos vinculados a esta série",
         );
       }
@@ -93,7 +94,7 @@ export const deleteSeries = staffAction
         .delete(series)
         .where(eq(series.id, input.seriesId))
         .returning({ id: series.id });
-      if (!row) throw new Error("Série não encontrada");
+      if (!row) throw new BusinessError("Série não encontrada");
     });
 
     return { success: true };

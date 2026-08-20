@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { createClient } from "@supabase/supabase-js";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   executeDataDeletion,
   rejectDataDeletion,
@@ -12,7 +13,8 @@ import { notifyDeletionRejected } from "../lib/notifications";
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error("Variáveis Supabase não configuradas");
+  if (!url || !key)
+    throw new BusinessError("Variáveis Supabase não configuradas");
   return createClient(url, key, { auth: { persistSession: false } });
 }
 
@@ -41,7 +43,7 @@ export const resolveDeletionRequest = adminAction
         const { error } = await supabase.auth.admin.updateUserById(userId, {
           ban_duration: PERMANENT_BAN_DURATION,
         });
-        if (error) throw new Error(error.message);
+        if (error) throw new BusinessError(error.message);
       },
     });
 

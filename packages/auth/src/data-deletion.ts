@@ -6,6 +6,7 @@ import { logAudit } from "@hebron/db/audit";
 import type { AuditDbHandle } from "@hebron/db/audit";
 import { anonymizeUser } from "@hebron/db/anonymization";
 import type { AnonymizeUserResult } from "@hebron/db/anonymization";
+import { BusinessError } from "./safe-action-error";
 
 /**
  * packages/auth/src/data-deletion.ts — LGPD, direito de exclusão do titular
@@ -100,7 +101,8 @@ export async function requestDataDeletion(
     .returning();
 
   const request = inserted[0];
-  if (!request) throw new Error("Falha ao registrar pedido de exclusão");
+  if (!request)
+    throw new BusinessError("Falha ao registrar pedido de exclusão");
 
   await logAudit(
     {
@@ -152,9 +154,9 @@ export async function executeDataDeletion(
     .limit(1);
 
   const request = rows[0];
-  if (!request) throw new Error("Pedido de exclusão não encontrado");
+  if (!request) throw new BusinessError("Pedido de exclusão não encontrado");
   if (request.status === "rejected") {
-    throw new Error("Pedido de exclusão já foi recusado");
+    throw new BusinessError("Pedido de exclusão já foi recusado");
   }
 
   const anonymization = await anonymizeUser(
@@ -224,7 +226,7 @@ export async function rejectDataDeletion(
     .returning();
 
   const request = updated[0];
-  if (!request) throw new Error("Pedido de exclusão não encontrado");
+  if (!request) throw new BusinessError("Pedido de exclusão não encontrado");
 
   await logAudit(
     {

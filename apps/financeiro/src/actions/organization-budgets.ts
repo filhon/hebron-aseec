@@ -3,6 +3,7 @@
 import { and, eq } from "drizzle-orm";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { organizationBudgets } from "@hebron/db/schema";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   createOrganizationBudgetSchema,
   updateOrganizationBudgetSchema,
@@ -34,7 +35,7 @@ export const createOrganizationBudget = colaboradorAction
           .limit(1);
 
         if (existing[0]) {
-          throw new Error(
+          throw new BusinessError(
             "Já existe um orçamento cadastrado para esta instituição neste ano — edite o valor existente",
           );
         }
@@ -50,7 +51,8 @@ export const createOrganizationBudget = colaboradorAction
           .returning();
 
         const budget = inserted[0];
-        if (!budget) throw new Error("Falha ao criar orçamento da instituição");
+        if (!budget)
+          throw new BusinessError("Falha ao criar orçamento da instituição");
         return budget;
       },
     );
@@ -88,7 +90,7 @@ export const updateOrganizationBudget = colaboradorAction
           .limit(1);
 
         const budget = rows[0];
-        if (!budget) throw new Error("Orçamento não encontrado");
+        if (!budget) throw new BusinessError("Orçamento não encontrado");
 
         const updated = await tx
           .update(organizationBudgets)

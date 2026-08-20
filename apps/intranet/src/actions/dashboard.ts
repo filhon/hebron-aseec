@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { eq } from "drizzle-orm";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   withAuthenticatedContext,
   withSystemRole,
@@ -51,7 +52,8 @@ export const saveDashboardConfig = staffAction
             set: { widgets: input.widgets, updatedAt: new Date() },
           })
           .returning();
-        if (!row) throw new Error("Falha ao salvar configuração do painel");
+        if (!row)
+          throw new BusinessError("Falha ao salvar configuração do painel");
 
         await withSystemRole(tx, (sysTx) =>
           logIntranetAudit(

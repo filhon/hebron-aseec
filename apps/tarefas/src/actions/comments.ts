@@ -8,6 +8,7 @@ import { createNotification } from "@hebron/email";
 import { createCommentSchema } from "@hebron/validators/tarefas";
 import { staffAction } from "../lib/safe-action";
 import { buildTaskNotificationPayload } from "../lib/notifications";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 
 const insertNotification = makeNotificationInserter();
 
@@ -28,7 +29,7 @@ export const createComment = staffAction
           .from(tasks)
           .where(and(eq(tasks.id, input.taskId), isNull(tasks.deletedAt)))
           .limit(1);
-        if (!task) throw new Error("Tarefa não encontrada");
+        if (!task) throw new BusinessError("Tarefa não encontrada");
 
         const [row] = await tx
           .insert(comments)
@@ -39,7 +40,7 @@ export const createComment = staffAction
             mentions: input.mentions,
           })
           .returning();
-        if (!row) throw new Error("Falha ao criar comentário");
+        if (!row) throw new BusinessError("Falha ao criar comentário");
 
         return { comment: row, taskTitle: task.title };
       },

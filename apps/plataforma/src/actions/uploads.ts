@@ -4,11 +4,13 @@ import { z } from "zod";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "node:crypto";
 import { staffAction } from "../lib/safe-action";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error("Variáveis Supabase não configuradas");
+  if (!url || !key)
+    throw new BusinessError("Variáveis Supabase não configuradas");
   return createClient(url, key, { auth: { persistSession: false } });
 }
 
@@ -44,7 +46,7 @@ export const getCourseCoverUploadUrl = staffAction
       .createSignedUploadUrl(path);
 
     if (error)
-      throw new Error(`Falha ao gerar URL de upload: ${error.message}`);
+      throw new BusinessError(`Falha ao gerar URL de upload: ${error.message}`);
 
     return { uploadUrl: data.signedUrl, storagePath: path };
   });
@@ -62,7 +64,9 @@ export const getCourseCoverReadUrl = staffAction
       .createSignedUrl(parsedInput.storagePath, READ_URL_EXPIRES_IN_SECONDS);
 
     if (error)
-      throw new Error(`Falha ao gerar URL de leitura: ${error.message}`);
+      throw new BusinessError(
+        `Falha ao gerar URL de leitura: ${error.message}`,
+      );
 
     return { url: data.signedUrl };
   });
@@ -95,7 +99,7 @@ export const getLessonAttachmentUploadUrl = staffAction
       .createSignedUploadUrl(path);
 
     if (error)
-      throw new Error(`Falha ao gerar URL de upload: ${error.message}`);
+      throw new BusinessError(`Falha ao gerar URL de upload: ${error.message}`);
 
     return { uploadUrl: data.signedUrl, storagePath: path };
   });

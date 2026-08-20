@@ -3,6 +3,7 @@
 import { eq } from "drizzle-orm";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { costCenters } from "@hebron/db/schema";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   createCostCenterSchema,
   updateCostCenterSchema,
@@ -33,7 +34,7 @@ export const createCostCenter = diretorAction
           .limit(1);
 
         if (existingCode.length > 0) {
-          throw new Error(`Código "${input.code}" já está em uso`);
+          throw new BusinessError(`Código "${input.code}" já está em uso`);
         }
 
         const inserted = await tx
@@ -48,7 +49,8 @@ export const createCostCenter = diretorAction
           .returning();
 
         const costCenter = inserted[0];
-        if (!costCenter) throw new Error("Falha ao criar centro de custo");
+        if (!costCenter)
+          throw new BusinessError("Falha ao criar centro de custo");
         return costCenter;
       },
     );
@@ -90,7 +92,8 @@ export const updateCostCenter = diretorAction
           .limit(1);
 
         const costCenter = rows[0];
-        if (!costCenter) throw new Error("Centro de custo não encontrado");
+        if (!costCenter)
+          throw new BusinessError("Centro de custo não encontrado");
 
         const patch: Partial<typeof costCenters.$inferInsert> = {
           updatedAt: new Date(),

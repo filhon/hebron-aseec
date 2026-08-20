@@ -4,6 +4,7 @@ import { z } from "zod";
 import { and, desc, eq, gte, isNull, sql } from "drizzle-orm";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "node:crypto";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   withAuthenticatedContext,
   withSystemRole,
@@ -50,7 +51,8 @@ function slugify(text: string): string {
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error("Variáveis Supabase não configuradas");
+  if (!url || !key)
+    throw new BusinessError("Variáveis Supabase não configuradas");
   return createClient(url, key, { auth: { persistSession: false } });
 }
 
@@ -74,7 +76,7 @@ export const getUploadUrl = editorAction
       .createSignedUploadUrl(path);
 
     if (error)
-      throw new Error(`Falha ao gerar URL de upload: ${error.message}`);
+      throw new BusinessError(`Falha ao gerar URL de upload: ${error.message}`);
 
     return { uploadUrl: data.signedUrl, storagePath: path };
   });
@@ -116,7 +118,7 @@ export const createDocument = editorAction
           })
           .returning();
 
-        if (!document) throw new Error("Falha ao criar documento");
+        if (!document) throw new BusinessError("Falha ao criar documento");
 
         await tx.insert(documentVersions).values({
           documentId: document.id,
@@ -193,7 +195,7 @@ export const updateDocument = editorAction
           .where(and(eq(documents.id, id), isNull(documents.deletedAt)))
           .limit(1);
 
-        if (!before) throw new Error("Documento não encontrado");
+        if (!before) throw new BusinessError("Documento não encontrado");
 
         const updateValues: Partial<typeof documents.$inferInsert> = {};
         if (fields.title !== undefined) updateValues.title = fields.title;
@@ -213,7 +215,7 @@ export const updateDocument = editorAction
           .where(eq(documents.id, id))
           .returning();
 
-        if (!updated) throw new Error("Falha ao atualizar documento");
+        if (!updated) throw new BusinessError("Falha ao atualizar documento");
 
         // Última versão — usada para next version number e para herdar
         // fileSizeBytes/mimeType quando a edição não troca o arquivo.
@@ -298,8 +300,9 @@ export const publishDocument = editorAction
           )
           .limit(1);
 
-        if (!before) throw new Error("Documento não encontrado");
-        if (before.publishedAt) throw new Error("Documento já está publicado");
+        if (!before) throw new BusinessError("Documento não encontrado");
+        if (before.publishedAt)
+          throw new BusinessError("Documento já está publicado");
 
         // Republicar (despublicar + publicar de novo) não é primeira
         // publicação: `published_at` volta a NULL ao despublicar, então o
@@ -330,7 +333,7 @@ export const publishDocument = editorAction
           .where(eq(documents.id, parsedInput.id))
           .returning();
 
-        if (!updated) throw new Error("Falha ao publicar documento");
+        if (!updated) throw new BusinessError("Falha ao publicar documento");
 
         await withSystemRole(tx, (sysTx) =>
           logDocumentAudit(
@@ -386,9 +389,9 @@ export const unpublishDocument = editorAction
           )
           .limit(1);
 
-        if (!before) throw new Error("Documento não encontrado");
+        if (!before) throw new BusinessError("Documento não encontrado");
         if (!before.publishedAt)
-          throw new Error("Documento não está publicado");
+          throw new BusinessError("Documento não está publicado");
 
         const [updated] = await tx
           .update(documents)
@@ -396,7 +399,7 @@ export const unpublishDocument = editorAction
           .where(eq(documents.id, parsedInput.id))
           .returning();
 
-        if (!updated) throw new Error("Falha ao despublicar documento");
+        if (!updated) throw new BusinessError("Falha ao despublicar documento");
 
         await withSystemRole(tx, (sysTx) =>
           logDocumentAudit(
@@ -435,8 +438,9 @@ export const deleteDocument = editorAction
           .where(eq(documents.id, parsedInput.id))
           .limit(1);
 
-        if (!before) throw new Error("Documento não encontrado");
-        if (before.deletedAt) throw new Error("Documento já foi removido");
+        if (!before) throw new BusinessError("Documento não encontrado");
+        if (before.deletedAt)
+          throw new BusinessError("Documento já foi removido");
 
         const now = new Date();
         const [updated] = await tx
@@ -445,7 +449,7 @@ export const deleteDocument = editorAction
           .where(eq(documents.id, parsedInput.id))
           .returning();
 
-        if (!updated) throw new Error("Falha ao remover documento");
+        if (!updated) throw new BusinessError("Falha ao remover documento");
 
         await withSystemRole(tx, (sysTx) =>
           logDocumentAudit(
@@ -485,8 +489,9 @@ export const restoreDocument = editorAction
           .where(eq(documents.id, parsedInput.id))
           .limit(1);
 
-        if (!before) throw new Error("Documento não encontrado");
-        if (!before.deletedAt) throw new Error("Documento não está na lixeira");
+        if (!before) throw new BusinessError("Documento não encontrado");
+        if (!before.deletedAt)
+          throw new BusinessError("Documento não está na lixeira");
 
         const now = new Date();
         const [updated] = await tx
@@ -495,7 +500,7 @@ export const restoreDocument = editorAction
           .where(eq(documents.id, parsedInput.id))
           .returning();
 
-        if (!updated) throw new Error("Falha ao restaurar documento");
+        if (!updated) throw new BusinessError("Falha ao restaurar documento");
 
         await withSystemRole(tx, (sysTx) =>
           logDocumentAudit(
@@ -544,7 +549,7 @@ export const registerView = authenticatedAction
         )
         .limit(1);
 
-      if (!doc) throw new Error("Documento não encontrado");
+      if (!doc) throw new BusinessError("Documento não encontrado");
 
       // Dedupe: mesmo usuário + mesmo documento dentro da janela não grava
       // segunda linha (um F5 não pode virar métrica).

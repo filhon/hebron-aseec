@@ -4,6 +4,7 @@ import { z } from "zod";
 import { asc, eq } from "drizzle-orm";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import type { AuthenticatedTx } from "@hebron/db/authenticated";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   taskTemplates,
   templateItems,
@@ -28,7 +29,7 @@ async function resolveWorkspaceId(
     .from(workspaces)
     .where(eq(workspaces.slug, slug))
     .limit(1);
-  if (!ws) throw new Error("Módulo inválido");
+  if (!ws) throw new BusinessError("Módulo inválido");
   return ws.id;
 }
 
@@ -62,7 +63,7 @@ export const createTaskTemplate = colaboradorAction
             createdBy: ctx.actorId,
           })
           .returning();
-        if (!row) throw new Error("Falha ao criar template");
+        if (!row) throw new BusinessError("Falha ao criar template");
 
         await tx.insert(templateItems).values(
           input.tasks.map((item, index) => ({
@@ -108,7 +109,7 @@ export const updateTaskTemplate = colaboradorAction
           })
           .where(eq(taskTemplates.id, input.templateId))
           .returning();
-        if (!row) throw new Error("Template não encontrado");
+        if (!row) throw new BusinessError("Template não encontrado");
 
         // Substitui a lista de tarefas pré-definidas por completo — a UI
         // envia o conjunto final, não um diff.
@@ -150,7 +151,7 @@ export const toggleTaskTemplate = colaboradorAction
           .set({ isActive: input.isActive, updatedAt: new Date() })
           .where(eq(taskTemplates.id, input.templateId))
           .returning();
-        if (!row) throw new Error("Template não encontrado");
+        if (!row) throw new BusinessError("Template não encontrado");
         return row;
       },
     );
@@ -178,8 +179,9 @@ export const instantiateTaskTemplate = colaboradorAction
           .from(taskTemplates)
           .where(eq(taskTemplates.id, input.templateId))
           .limit(1);
-        if (!template) throw new Error("Template não encontrado");
-        if (!template.isActive) throw new Error("Template está inativo");
+        if (!template) throw new BusinessError("Template não encontrado");
+        if (!template.isActive)
+          throw new BusinessError("Template está inativo");
 
         const items = await tx
           .select()
@@ -187,7 +189,7 @@ export const instantiateTaskTemplate = colaboradorAction
           .where(eq(templateItems.taskTemplateId, template.id))
           .orderBy(asc(templateItems.order));
         if (items.length === 0) {
-          throw new Error("Template não possui tarefas definidas");
+          throw new BusinessError("Template não possui tarefas definidas");
         }
 
         const ids: string[] = [];

@@ -6,6 +6,7 @@ import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { courses, instructors } from "@hebron/db/schema";
 import { createInstructorSchema } from "@hebron/validators";
 import { superAdminAction } from "../lib/safe-action";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 
 // ---------------------------------------------------------------------------
 // instructors — CRUD restrito a super_admin (RLS `instructors_mutate_admin`,
@@ -29,7 +30,7 @@ export const createInstructor = superAdminAction
             bio: input.bio,
           })
           .returning();
-        if (!row) throw new Error("Falha ao criar instrutor");
+        if (!row) throw new BusinessError("Falha ao criar instrutor");
         return row;
       },
     );
@@ -58,7 +59,7 @@ export const updateInstructor = superAdminAction
           })
           .where(eq(instructors.id, input.instructorId))
           .returning();
-        if (!row) throw new Error("Instrutor não encontrado");
+        if (!row) throw new BusinessError("Instrutor não encontrado");
         return row;
       },
     );
@@ -83,7 +84,7 @@ export const deleteInstructor = superAdminAction
         .from(courses)
         .where(eq(courses.instructorId, input.instructorId));
       if ((countRow?.count ?? 0) > 0) {
-        throw new Error(
+        throw new BusinessError(
           "Não é possível remover: há cursos vinculados a este instrutor",
         );
       }
@@ -92,7 +93,7 @@ export const deleteInstructor = superAdminAction
         .delete(instructors)
         .where(eq(instructors.id, input.instructorId))
         .returning({ id: instructors.id });
-      if (!row) throw new Error("Instrutor não encontrado");
+      if (!row) throw new BusinessError("Instrutor não encontrado");
     });
 
     return { success: true };

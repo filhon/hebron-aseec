@@ -12,6 +12,7 @@ import { createNotification, interpolateStoredTemplate } from "@hebron/email";
 import { InvitationEmail } from "@hebron/email/templates/invitation";
 import { adminAction } from "../lib/safe-action";
 import { logAudit } from "../lib/audit";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 
 const roleEnum = z.enum([
   "super_admin",
@@ -56,7 +57,7 @@ export const sendInvitation = adminAction
     );
 
     const invitation = inserted[0];
-    if (!invitation) throw new Error("Falha ao criar convite");
+    if (!invitation) throw new BusinessError("Falha ao criar convite");
 
     const appUrl =
       process.env.NEXT_PUBLIC_APP_URL ?? "https://app.hebronaseec.com.br";
@@ -102,7 +103,7 @@ export const sendInvitation = adminAction
           })
           .returning();
         const notif = notifInserted[0];
-        if (!notif) throw new Error("Falha ao inserir notificação");
+        if (!notif) throw new BusinessError("Falha ao inserir notificação");
         return { id: notif.id };
       },
       data: {
@@ -161,7 +162,7 @@ export const revokeInvitation = adminAction
     );
 
     const invitation = updated[0];
-    if (!invitation) throw new Error("Convite não encontrado");
+    if (!invitation) throw new BusinessError("Convite não encontrado");
 
     await logAudit({
       actorId: ctx.actorId,

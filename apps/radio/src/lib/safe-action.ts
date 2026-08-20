@@ -1,4 +1,8 @@
 import { createSafeActionClient } from "next-safe-action";
+import {
+  BusinessError,
+  handleServerError,
+} from "@hebron/auth/safe-action-error";
 import { cookies } from "next/headers";
 import { resolveSession } from "@hebron/auth/server";
 
@@ -7,11 +11,13 @@ import { resolveSession } from "@hebron/auth/server";
 // resolveSession de @hebron/auth/server, nunca um createClient local).
 // ---------------------------------------------------------------------------
 
-const baseAction = createSafeActionClient().use(async ({ next }) => {
-  const cookieStore = await cookies();
-  const { actorId, roles, designations } = await resolveSession(cookieStore);
-  return next({ ctx: { actorId, roles, designations } });
-});
+const baseAction = createSafeActionClient({ handleServerError }).use(
+  async ({ next }) => {
+    const cookieStore = await cookies();
+    const { actorId, roles, designations } = await resolveSession(cookieStore);
+    return next({ ctx: { actorId, roles, designations } });
+  },
+);
 
 export { baseAction as radioAction };
 
@@ -26,7 +32,7 @@ export { baseAction as radioAction };
  */
 export const superAdminAction = baseAction.use(async ({ next, ctx }) => {
   if (!ctx.roles.includes("super_admin")) {
-    throw new Error("Acesso negado: apenas super_admin");
+    throw new BusinessError("Acesso negado: apenas super_admin");
   }
   return next({ ctx });
 });

@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   withAuthenticatedContext,
   withSystemRole,
@@ -31,13 +32,13 @@ export const extractNfFromAttachment = colaboradorAction
   .action(async ({ parsedInput, ctx }) => {
     const ext = parsedInput.path.split(".").pop()?.toLowerCase() ?? "";
     if (!OCR_SUPPORTED_EXTENSIONS.includes(ext)) {
-      throw new Error(
+      throw new BusinessError(
         "Leitura automática só funciona para imagens (JPG ou PNG). Preencha os campos manualmente.",
       );
     }
 
     if (!process.env.OPENAI_API_KEY) {
-      throw new Error(
+      throw new BusinessError(
         "Leitura automática de nota fiscal não está configurada. Preencha os campos manualmente.",
       );
     }
@@ -46,7 +47,7 @@ export const extractNfFromAttachment = colaboradorAction
     try {
       signedUrl = await createReceiptSignedUrl(parsedInput.path);
     } catch {
-      throw new Error("Não foi possível acessar o comprovante enviado");
+      throw new BusinessError("Não foi possível acessar o comprovante enviado");
     }
 
     let result;
@@ -55,7 +56,7 @@ export const extractNfFromAttachment = colaboradorAction
         imageSource: { type: "url", url: signedUrl },
       });
     } catch {
-      throw new Error(
+      throw new BusinessError(
         "Não foi possível ler a nota fiscal automaticamente. Preencha os campos manualmente.",
       );
     }

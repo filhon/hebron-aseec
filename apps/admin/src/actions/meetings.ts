@@ -7,6 +7,7 @@ import { meetingSessions } from "@hebron/db/schema";
 import { ensureMonthlyMeetings } from "@hebron/db/meetings";
 import { adminAction } from "../lib/safe-action";
 import { logAudit, computeDiff } from "../lib/audit";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 
 // ─── createMeeting ────────────────────────────────────────────────────────────
 
@@ -36,7 +37,7 @@ export const createMeeting = adminAction
     );
 
     const meeting = inserted[0];
-    if (!meeting) throw new Error("Falha ao criar reunião");
+    if (!meeting) throw new BusinessError("Falha ao criar reunião");
 
     await logAudit({
       actorId: ctx.actorId,
@@ -80,7 +81,7 @@ export const updateMeeting = adminAction
           .where(eq(meetingSessions.id, parsedInput.id));
 
         const before = beforeRows[0];
-        if (!before) throw new Error("Reunião não encontrada");
+        if (!before) throw new BusinessError("Reunião não encontrada");
 
         const patch: Partial<typeof meetingSessions.$inferInsert> = {
           updatedAt: new Date(),
@@ -101,7 +102,7 @@ export const updateMeeting = adminAction
           .returning();
 
         const updated = updatedRows[0];
-        if (!updated) throw new Error("Falha ao atualizar reunião");
+        if (!updated) throw new BusinessError("Falha ao atualizar reunião");
 
         return { before, updated };
       },

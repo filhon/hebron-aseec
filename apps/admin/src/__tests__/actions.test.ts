@@ -626,6 +626,20 @@ describe("resolveDeletionRequest", () => {
       .where(eq(users.id, LGPD_EXEC_ID));
     expect(row?.fullName).toBe("Usuário anonimizado");
   });
+
+  // PACOTE 4 (correção P1): next-safe-action@7.10.8 substitui QUALQUER erro
+  // sem handleServerError pela genérica em inglês do pacote — as 267+
+  // mensagens de negócio do ecossistema nunca chegavam à UI. Prova que a
+  // mensagem exata (não a genérica, não em inglês) sai em result.serverError.
+  it("erro de negócio (pedido inexistente) chega à UI com a mensagem exata, não a genérica", async () => {
+    const { resolveDeletionRequest } = await import("../actions/lgpd");
+
+    const result = await resolveDeletionRequest({
+      requestId: "00000000-0000-0000-0000-000000000000",
+    });
+
+    expect(result?.serverError).toBe("Pedido de exclusão não encontrado");
+  });
 });
 
 describe("rejectDeletionRequest", () => {

@@ -1,4 +1,8 @@
 import { createSafeActionClient } from "next-safe-action";
+import {
+  BusinessError,
+  handleServerError,
+} from "@hebron/auth/safe-action-error";
 import { cookies } from "next/headers";
 import { eq } from "drizzle-orm";
 import { resolveSession } from "@hebron/auth/server";
@@ -10,11 +14,13 @@ import { instructors } from "@hebron/db/schema";
 // a qualquer usuário registrado, sem restrição por papel (BRAIN §6.3).
 // ---------------------------------------------------------------------------
 
-const baseAction = createSafeActionClient().use(async ({ next }) => {
-  const cookieStore = await cookies();
-  const { actorId, roles } = await resolveSession(cookieStore);
-  return next({ ctx: { actorId, roles } });
-});
+const baseAction = createSafeActionClient({ handleServerError }).use(
+  async ({ next }) => {
+    const cookieStore = await cookies();
+    const { actorId, roles } = await resolveSession(cookieStore);
+    return next({ ctx: { actorId, roles } });
+  },
+);
 
 export { baseAction as plataformaAction };
 
@@ -44,13 +50,13 @@ async function isInstructor(userId: string): Promise<boolean> {
 export const staffAction = baseAction.use(async ({ next, ctx }) => {
   if (ctx.roles.includes("super_admin")) return next({ ctx });
   if (await isInstructor(ctx.actorId)) return next({ ctx });
-  throw new Error("Acesso negado: apenas super_admin ou instrutor");
+  throw new BusinessError("Acesso negado: apenas super_admin ou instrutor");
 });
 
 /** Requires super_admin exclusively — moderação de discussões. */
 export const superAdminAction = baseAction.use(async ({ next, ctx }) => {
   if (!ctx.roles.includes("super_admin")) {
-    throw new Error("Acesso negado: apenas super_admin");
+    throw new BusinessError("Acesso negado: apenas super_admin");
   }
   return next({ ctx });
 });

@@ -1,4 +1,8 @@
 import { createSafeActionClient } from "next-safe-action";
+import {
+  BusinessError,
+  handleServerError,
+} from "@hebron/auth/safe-action-error";
 import { cookies } from "next/headers";
 import { resolveSession } from "@hebron/auth/server";
 import type { Role } from "@hebron/types/roles";
@@ -9,11 +13,13 @@ import type { Role } from "@hebron/types/roles";
 // resolveSession de @hebron/auth/server, nunca um createClient local.
 // ---------------------------------------------------------------------------
 
-const baseAction = createSafeActionClient().use(async ({ next }) => {
-  const cookieStore = await cookies();
-  const { actorId, roles, designations } = await resolveSession(cookieStore);
-  return next({ ctx: { actorId, roles, designations } });
-});
+const baseAction = createSafeActionClient({ handleServerError }).use(
+  async ({ next }) => {
+    const cookieStore = await cookies();
+    const { actorId, roles, designations } = await resolveSession(cookieStore);
+    return next({ ctx: { actorId, roles, designations } });
+  },
+);
 
 export { baseAction as flatsAction };
 
@@ -31,7 +37,7 @@ export { baseAction as flatsAction };
 export const hospedeAction = baseAction.use(async ({ next, ctx }) => {
   const allowed: Role[] = ["hospede", "super_admin"];
   if (!ctx.roles.some((r) => allowed.includes(r))) {
-    throw new Error("Acesso negado: papel hóspede obrigatório");
+    throw new BusinessError("Acesso negado: papel hóspede obrigatório");
   }
   return next({ ctx });
 });
@@ -44,7 +50,9 @@ export const hospedeAction = baseAction.use(async ({ next, ctx }) => {
 export const gestorAction = baseAction.use(async ({ next, ctx }) => {
   if (ctx.roles.includes("super_admin")) return next({ ctx });
   if (!ctx.roles.includes("diretor") || !ctx.designations.includes("gestor")) {
-    throw new Error('Acesso negado: requer diretor com designação "gestor"');
+    throw new BusinessError(
+      'Acesso negado: requer diretor com designação "gestor"',
+    );
   }
   return next({ ctx });
 });

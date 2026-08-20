@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { eq } from "drizzle-orm";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   withAuthenticatedContext,
   withSystemRole,
@@ -54,7 +55,7 @@ async function assertCanMutateSessionDecisions(
     .where(eq(meetingSessions.id, meetingSessionId));
 
   if (!session || session.chairUserId !== actorId) {
-    throw new Error(
+    throw new BusinessError(
       "Acesso negado: apenas o presidente da sessão ou super_admin pode registrar decisões desta reunião",
     );
   }
@@ -86,7 +87,8 @@ export const createMeetingDecision = boardAction
             dueDate: input.dueDate,
           })
           .returning();
-        if (!row) throw new Error("Falha ao registrar decisão de reunião");
+        if (!row)
+          throw new BusinessError("Falha ao registrar decisão de reunião");
         return row;
       },
     );
@@ -154,7 +156,8 @@ export const updateMeetingDecisionStatus = boardAction
           .from(meetingDecisions)
           .where(eq(meetingDecisions.id, input.meetingDecisionId));
 
-        if (!existing) throw new Error("Decisão de reunião não encontrada");
+        if (!existing)
+          throw new BusinessError("Decisão de reunião não encontrada");
 
         await assertCanMutateSessionDecisions(
           tx,
@@ -169,7 +172,9 @@ export const updateMeetingDecisionStatus = boardAction
           .where(eq(meetingDecisions.id, input.meetingDecisionId))
           .returning();
         if (!row)
-          throw new Error("Falha ao atualizar status da decisão de reunião");
+          throw new BusinessError(
+            "Falha ao atualizar status da decisão de reunião",
+          );
         return row;
       },
     );

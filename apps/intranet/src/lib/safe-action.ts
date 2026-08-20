@@ -1,4 +1,8 @@
 import { createSafeActionClient } from "next-safe-action";
+import {
+  BusinessError,
+  handleServerError,
+} from "@hebron/auth/safe-action-error";
 import { cookies } from "next/headers";
 import { resolveSession } from "@hebron/auth/server";
 import type { Role } from "@hebron/types/roles";
@@ -8,11 +12,13 @@ import type { Role } from "@hebron/types/roles";
  * (createServerClient from @supabase/ssr). Ver packages/auth/src/server.ts
  * para o porquê de não existir uma alternativa manual.
  */
-const baseAction = createSafeActionClient().use(async ({ next }) => {
-  const cookieStore = await cookies();
-  const { actorId, roles } = await resolveSession(cookieStore);
-  return next({ ctx: { actorId, roles } });
-});
+const baseAction = createSafeActionClient({ handleServerError }).use(
+  async ({ next }) => {
+    const cookieStore = await cookies();
+    const { actorId, roles } = await resolveSession(cookieStore);
+    return next({ ctx: { actorId, roles } });
+  },
+);
 
 /** authenticatedAction: qualquer usuário com sessão válida (papel algum exigido). */
 export { baseAction as authenticatedAction };
@@ -21,7 +27,7 @@ export { baseAction as authenticatedAction };
  * Public safe-action client — sem autenticação.
  * Usar apenas em actions que aceitam tokens públicos (ex.: aceitação de convite).
  */
-export const publicAction = createSafeActionClient();
+export const publicAction = createSafeActionClient({ handleServerError });
 
 /**
  * staffAction: colaborador, diretor, conselheiro ou super_admin — "equipe
@@ -37,7 +43,7 @@ export const staffAction = baseAction.use(async ({ next, ctx }) => {
     "super_admin",
   ];
   if (!ctx.roles.some((r) => allowed.includes(r))) {
-    throw new Error("Acesso negado: acesso restrito à equipe interna");
+    throw new BusinessError("Acesso negado: acesso restrito à equipe interna");
   }
   return next({ ctx });
 });
@@ -49,7 +55,7 @@ export const staffAction = baseAction.use(async ({ next, ctx }) => {
 export const boardAction = baseAction.use(async ({ next, ctx }) => {
   const allowed: Role[] = ["diretor", "conselheiro", "super_admin"];
   if (!ctx.roles.some((r) => allowed.includes(r))) {
-    throw new Error("Acesso negado: papel de diretoria obrigatório");
+    throw new BusinessError("Acesso negado: papel de diretoria obrigatório");
   }
   return next({ ctx });
 });
@@ -57,7 +63,7 @@ export const boardAction = baseAction.use(async ({ next, ctx }) => {
 /** superAdminAction: exclusivamente super_admin. */
 export const superAdminAction = baseAction.use(async ({ next, ctx }) => {
   if (!ctx.roles.includes("super_admin")) {
-    throw new Error("Acesso negado: apenas super_admin");
+    throw new BusinessError("Acesso negado: apenas super_admin");
   }
   return next({ ctx });
 });

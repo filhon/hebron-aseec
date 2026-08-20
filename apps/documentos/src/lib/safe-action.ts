@@ -1,4 +1,8 @@
 import { createSafeActionClient } from "next-safe-action";
+import {
+  BusinessError,
+  handleServerError,
+} from "@hebron/auth/safe-action-error";
 import { cookies } from "next/headers";
 import { resolveSession } from "@hebron/auth/server";
 import { DOCUMENT_WRITE_ROLES } from "./session";
@@ -7,11 +11,13 @@ import { DOCUMENT_WRITE_ROLES } from "./session";
  * Base authenticated action — resolves the real session via @hebron/auth
  * (createServerClient from @supabase/ssr).
  */
-const baseAction = createSafeActionClient().use(async ({ next }) => {
-  const cookieStore = await cookies();
-  const { actorId, roles } = await resolveSession(cookieStore);
-  return next({ ctx: { actorId, roles } });
-});
+const baseAction = createSafeActionClient({ handleServerError }).use(
+  async ({ next }) => {
+    const cookieStore = await cookies();
+    const { actorId, roles } = await resolveSession(cookieStore);
+    return next({ ctx: { actorId, roles } });
+  },
+);
 
 /** authenticatedAction: qualquer usuário autenticado */
 export { baseAction as authenticatedAction };
@@ -24,7 +30,9 @@ export { baseAction as authenticatedAction };
  */
 export const editorAction = baseAction.use(async ({ next, ctx }) => {
   if (!ctx.roles.some((r) => DOCUMENT_WRITE_ROLES.includes(r))) {
-    throw new Error("Acesso negado: papel insuficiente para esta operação");
+    throw new BusinessError(
+      "Acesso negado: papel insuficiente para esta operação",
+    );
   }
   return next({ ctx });
 });
@@ -33,7 +41,7 @@ export const editorAction = baseAction.use(async ({ next, ctx }) => {
 export const adminDocAction = baseAction.use(async ({ next, ctx }) => {
   const adminRoles = ["super_admin", "diretor"];
   if (!ctx.roles.some((r) => adminRoles.includes(r))) {
-    throw new Error("Acesso negado: apenas super_admin ou diretor");
+    throw new BusinessError("Acesso negado: apenas super_admin ou diretor");
   }
   return next({ ctx });
 });

@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { and, asc, eq, ilike, isNull, or, type SQL } from "drizzle-orm";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   withAuthenticatedContext,
   withSystemRole,
@@ -54,7 +55,7 @@ export const createCourse = staffAction
             published: input.isPublished,
           })
           .returning();
-        if (!row) throw new Error("Falha ao criar curso");
+        if (!row) throw new BusinessError("Falha ao criar curso");
 
         if (row.published) {
           await withSystemRole(tx, (sysTx) =>
@@ -95,7 +96,7 @@ export const updateCourse = staffAction
           .from(courses)
           .where(eq(courses.id, input.courseId))
           .limit(1);
-        if (!existing) throw new Error("Curso não encontrado");
+        if (!existing) throw new BusinessError("Curso não encontrado");
 
         const [row] = await tx
           .update(courses)
@@ -112,7 +113,7 @@ export const updateCourse = staffAction
           })
           .where(eq(courses.id, input.courseId))
           .returning();
-        if (!row) throw new Error("Curso não encontrado");
+        if (!row) throw new BusinessError("Curso não encontrado");
 
         const newlyPublished = !existing.published && row.published;
         if (newlyPublished) {
@@ -158,7 +159,7 @@ export const deleteCourse = staffAction
         .set({ archivedAt: new Date(), updatedAt: new Date() })
         .where(eq(courses.id, input.courseId))
         .returning({ id: courses.id });
-      if (!row) throw new Error("Curso não encontrado");
+      if (!row) throw new BusinessError("Curso não encontrado");
     });
 
     return { success: true };
@@ -202,7 +203,7 @@ export const createCourseModule = staffAction
             order: input.order,
           })
           .returning();
-        if (!row) throw new Error("Falha ao criar módulo");
+        if (!row) throw new BusinessError("Falha ao criar módulo");
         return row;
       },
     );
@@ -230,7 +231,7 @@ export const updateCourseModule = staffAction
           })
           .where(eq(modules.id, input.moduleId))
           .returning();
-        if (!row) throw new Error("Módulo não encontrado");
+        if (!row) throw new BusinessError("Módulo não encontrado");
         return row;
       },
     );
@@ -250,7 +251,7 @@ export const deleteCourseModule = staffAction
         .set({ archivedAt: new Date(), updatedAt: new Date() })
         .where(eq(modules.id, input.moduleId))
         .returning({ id: modules.id });
-      if (!row) throw new Error("Módulo não encontrado");
+      if (!row) throw new BusinessError("Módulo não encontrado");
     });
 
     return { success: true };
@@ -309,7 +310,7 @@ export const createLesson = staffAction
             requiresCompletion: input.requiresCompletion,
           })
           .returning();
-        if (!row) throw new Error("Falha ao criar aula");
+        if (!row) throw new BusinessError("Falha ao criar aula");
 
         await tx.insert(discussions).values({
           lessonId: row.id,
@@ -350,7 +351,7 @@ export const updateLesson = staffAction
           })
           .where(eq(lessons.id, input.lessonId))
           .returning();
-        if (!row) throw new Error("Aula não encontrada");
+        if (!row) throw new BusinessError("Aula não encontrada");
         return row;
       },
     );
@@ -370,7 +371,7 @@ export const deleteLesson = staffAction
         .set({ archivedAt: new Date(), updatedAt: new Date() })
         .where(eq(lessons.id, input.lessonId))
         .returning({ id: lessons.id });
-      if (!row) throw new Error("Aula não encontrada");
+      if (!row) throw new BusinessError("Aula não encontrada");
     });
 
     return { success: true };

@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { and, eq, isNull } from "drizzle-orm";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   withAuthenticatedContext,
   withSystemRole,
@@ -63,7 +64,7 @@ export const createPayable = colaboradorAction
             createdBy: ctx.actorId,
           })
           .returning();
-        if (!row) throw new Error("Falha ao criar conta a pagar");
+        if (!row) throw new BusinessError("Falha ao criar conta a pagar");
 
         // Comprovante já foi enviado ao bucket financeiro-recibos pelo
         // formulário antes do submit — aqui só gravamos a referência. Mesma
@@ -83,7 +84,7 @@ export const createPayable = colaboradorAction
             })
             .returning();
           if (!attachmentRow)
-            throw new Error("Falha ao registrar o comprovante");
+            throw new BusinessError("Falha ao registrar o comprovante");
           attachmentId = attachmentRow.id;
         }
 
@@ -140,7 +141,7 @@ export const cancelPayable = colaboradorAction
       const payable = await getPayableOrThrow(tx, input.payableId);
 
       if (payable.status === "pago") {
-        throw new Error(
+        throw new BusinessError(
           "Não é possível cancelar uma conta já paga. Use o estorno de transação.",
         );
       }
@@ -150,7 +151,7 @@ export const cancelPayable = colaboradorAction
       const isCreator = payable.createdBy === ctx.actorId;
 
       if (!isSuperAdmin && !isDiretor && !isCreator) {
-        throw new Error(
+        throw new BusinessError(
           "Apenas o criador da conta ou a diretoria pode cancelar",
         );
       }
@@ -211,7 +212,7 @@ export const createReceivable = colaboradorAction
             createdBy: ctx.actorId,
           })
           .returning();
-        if (!row) throw new Error("Falha ao criar conta a receber");
+        if (!row) throw new BusinessError("Falha ao criar conta a receber");
 
         // Mesmo padrão de createPayable: comprovante já está no bucket, só
         // gravamos a referência na mesma transação/audit da criação.
@@ -229,7 +230,7 @@ export const createReceivable = colaboradorAction
             })
             .returning();
           if (!attachmentRow)
-            throw new Error("Falha ao registrar o comprovante");
+            throw new BusinessError("Falha ao registrar o comprovante");
           attachmentId = attachmentRow.id;
         }
 
@@ -292,10 +293,13 @@ export const markReceivableReceived = colaboradorAction
           .limit(1);
 
         const receivable = rows[0];
-        if (!receivable) throw new Error("Conta a receber não encontrada");
+        if (!receivable)
+          throw new BusinessError("Conta a receber não encontrada");
 
         if (receivable.status !== "pendente") {
-          throw new Error(`Conta já está com status "${receivable.status}"`);
+          throw new BusinessError(
+            `Conta já está com status "${receivable.status}"`,
+          );
         }
 
         // Create immutable credit transaction
@@ -317,7 +321,7 @@ export const markReceivableReceived = colaboradorAction
 
         const ledgerTx = txInserted[0];
         if (!ledgerTx)
-          throw new Error("Falha ao criar transação de recebimento");
+          throw new BusinessError("Falha ao criar transação de recebimento");
 
         // Update receivable status
         await authTx
@@ -392,10 +396,11 @@ export const cancelReceivable = colaboradorAction
         .limit(1);
 
       const receivable = rows[0];
-      if (!receivable) throw new Error("Conta a receber não encontrada");
+      if (!receivable)
+        throw new BusinessError("Conta a receber não encontrada");
 
       if (receivable.status === "recebido") {
-        throw new Error(
+        throw new BusinessError(
           "Não é possível cancelar uma conta já recebida. Use o estorno de transação.",
         );
       }
@@ -405,7 +410,7 @@ export const cancelReceivable = colaboradorAction
       const isCreator = receivable.createdBy === ctx.actorId;
 
       if (!isSuperAdmin && !isDiretor && !isCreator) {
-        throw new Error(
+        throw new BusinessError(
           "Apenas o criador da conta ou a diretoria pode cancelar",
         );
       }
@@ -477,7 +482,7 @@ export const createManualTransaction = colaboradorAction
             createdBy: ctx.actorId,
           })
           .returning();
-        if (!row) throw new Error("Falha ao criar transação");
+        if (!row) throw new BusinessError("Falha ao criar transação");
 
         await withSystemRole(authTx, (sysTx) =>
           logFinanceiroAudit(
@@ -547,7 +552,9 @@ export const createReversal = superAdminAction
           .limit(1);
 
         if (existingReversal.length > 0) {
-          throw new Error("Esta transação já possui um estorno registrado");
+          throw new BusinessError(
+            "Esta transação já possui um estorno registrado",
+          );
         }
 
         // Counter-transaction: opposite type
@@ -571,7 +578,7 @@ export const createReversal = superAdminAction
 
         const insertedReversalTx = reversalTxInserted[0];
         if (!insertedReversalTx)
-          throw new Error("Falha ao criar transação de estorno");
+          throw new BusinessError("Falha ao criar transação de estorno");
 
         // Audit record
         const reversalRecordInserted = await tx

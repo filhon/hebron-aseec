@@ -1,6 +1,7 @@
 "use server";
 
 import { and, eq, isNull } from "drizzle-orm";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   withAuthenticatedContext,
   withSystemRole,
@@ -39,7 +40,7 @@ export const requestApproval = colaboradorAction
           .from(tasks)
           .where(and(eq(tasks.id, input.taskId), isNull(tasks.deletedAt)))
           .limit(1);
-        if (!task) throw new Error("Tarefa não encontrada");
+        if (!task) throw new BusinessError("Tarefa não encontrada");
 
         // Guarda de aplicação (P-4.8c): sem ela, nada impede um segundo
         // pedido 'pendente' na mesma tarefa — depois de resolvido (aprovado/
@@ -58,7 +59,7 @@ export const requestApproval = colaboradorAction
           )
           .limit(1);
         if (existingPending) {
-          throw new Error(
+          throw new BusinessError(
             "Já existe um pedido de aprovação pendente para esta tarefa.",
           );
         }
@@ -74,7 +75,7 @@ export const requestApproval = colaboradorAction
             .where(eq(users.id, input.approverId))
             .limit(1),
         );
-        if (!approver) throw new Error("Aprovador não encontrado");
+        if (!approver) throw new BusinessError("Aprovador não encontrado");
 
         const [row] = await tx
           .insert(approvalRequests)
@@ -86,7 +87,7 @@ export const requestApproval = colaboradorAction
             notes: input.notes,
           })
           .returning();
-        if (!row) throw new Error("Falha ao criar pedido de aprovação");
+        if (!row) throw new BusinessError("Falha ao criar pedido de aprovação");
 
         await withSystemRole(tx, (sysTx) =>
           logTarefasAudit(
@@ -133,18 +134,19 @@ export const resolveApprovalRequest = diretorAction
           .from(approvalRequests)
           .where(eq(approvalRequests.id, input.approvalRequestId))
           .limit(1);
-        if (!existing) throw new Error("Pedido de aprovação não encontrado");
+        if (!existing)
+          throw new BusinessError("Pedido de aprovação não encontrado");
 
         if (
           existing.approverId !== ctx.actorId &&
           !ctx.roles.includes("super_admin")
         ) {
-          throw new Error(
+          throw new BusinessError(
             "Apenas o diretor designado pode responder este pedido",
           );
         }
         if (existing.status !== "pendente") {
-          throw new Error("Este pedido já foi respondido");
+          throw new BusinessError("Este pedido já foi respondido");
         }
 
         const now = new Date();
@@ -157,7 +159,8 @@ export const resolveApprovalRequest = diretorAction
           })
           .where(eq(approvalRequests.id, input.approvalRequestId))
           .returning();
-        if (!updated) throw new Error("Falha ao atualizar pedido de aprovação");
+        if (!updated)
+          throw new BusinessError("Falha ao atualizar pedido de aprovação");
 
         if (input.decision === "aprovado") {
           // tarefas.tasks_update_creator_or_assignee (0033_tarefas_rls.sql) não

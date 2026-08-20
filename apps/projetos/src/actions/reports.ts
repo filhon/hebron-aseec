@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { eq, and, isNull } from "drizzle-orm";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   withAuthenticatedContext,
   type AuthenticatedTx,
@@ -66,10 +67,10 @@ async function getProjectForReport(
     .limit(1);
 
   const project = projectRows[0];
-  if (!project) throw new Error("Projeto não encontrado");
+  if (!project) throw new BusinessError("Projeto não encontrado");
 
   if (project.stage !== "em_execucao" && project.stage !== "concluido") {
-    throw new Error(
+    throw new BusinessError(
       "Relatórios só podem ser criados para projetos em execução ou concluídos",
     );
   }
@@ -79,7 +80,7 @@ async function getProjectForReport(
   const isSubmitter = project.submitterId === actorId;
 
   if (!isSuperAdmin && !isDiretor && !isSubmitter) {
-    throw new Error(
+    throw new BusinessError(
       "Acesso negado: apenas o submissor ou a diretoria podem gerenciar relatórios",
     );
   }
@@ -113,9 +114,9 @@ export const createReport = diretorAction
           .limit(1);
 
         const project = projectRows[0];
-        if (!project) throw new Error("Projeto não encontrado");
+        if (!project) throw new BusinessError("Projeto não encontrado");
         if (project.stage !== "em_execucao" && project.stage !== "concluido") {
-          throw new Error(
+          throw new BusinessError(
             "Relatórios só podem ser criados para projetos em execução",
           );
         }
@@ -133,7 +134,7 @@ export const createReport = diretorAction
           .returning();
 
         const report = inserted[0];
-        if (!report) throw new Error("Falha ao criar relatório");
+        if (!report) throw new BusinessError("Falha ao criar relatório");
         return report;
       },
     );
@@ -172,9 +173,11 @@ export const submitReport = projetosAction
           .limit(1);
 
         const report = reportRows[0];
-        if (!report) throw new Error("Relatório não encontrado");
+        if (!report) throw new BusinessError("Relatório não encontrado");
         if (report.status !== "pendente") {
-          throw new Error("Apenas relatórios pendentes podem ser submetidos");
+          throw new BusinessError(
+            "Apenas relatórios pendentes podem ser submetidos",
+          );
         }
 
         // Verify actor is the project's submitter OR diretor/super_admin
@@ -195,7 +198,8 @@ export const submitReport = projetosAction
           .returning();
 
         const finalReport = updated[0];
-        if (!finalReport) throw new Error("Falha ao submeter relatório");
+        if (!finalReport)
+          throw new BusinessError("Falha ao submeter relatório");
 
         // Insert attachments if provided
         if (parsedInput.attachments && parsedInput.attachments.length > 0) {
@@ -249,9 +253,11 @@ export const reviewReport = diretorAction
           .limit(1);
 
         const report = reportRows[0];
-        if (!report) throw new Error("Relatório não encontrado");
+        if (!report) throw new BusinessError("Relatório não encontrado");
         if (report.status !== "submitted") {
-          throw new Error("Apenas relatórios submetidos podem ser revisados");
+          throw new BusinessError(
+            "Apenas relatórios submetidos podem ser revisados",
+          );
         }
 
         // Rejeição reabre o ciclo: o relatório volta a "pendente" (não fica
@@ -285,7 +291,7 @@ export const reviewReport = diretorAction
           .returning();
 
         const finalReport = updated[0];
-        if (!finalReport) throw new Error("Falha ao revisar relatório");
+        if (!finalReport) throw new BusinessError("Falha ao revisar relatório");
 
         return { finalReport, projectId: report.projectId, now };
       },

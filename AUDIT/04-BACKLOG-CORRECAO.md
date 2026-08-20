@@ -151,11 +151,13 @@ Toda falha de negócio chega ao usuário com a mensagem que o desenvolvedor escr
 
 ### Critérios de aceite
 
-- [ ] Uma action que lança erro de negócio devolve a mensagem em português na UI (teste por app)
-- [ ] Erro inesperado devolve a genérica **e** vai para o log estruturado (nunca a mensagem crua)
-- [ ] Os 9 apps têm `error.tsx` + `global-error.tsx` com identidade visual Hebron
-- [ ] `pnpm turbo lint typecheck` verde — **verificado lendo a saída, não o exit code de um pipe**
-- [ ] Nenhuma mensagem de erro do sistema em inglês visível ao usuário
+- [x] Uma action que lança erro de negócio devolve a mensagem em português na UI (teste por app) — `packages/auth/src/safe-action-error.ts` (`BusinessError` + `handleServerError`), passado a `createSafeActionClient` nos 9 `apps/*/src/lib/safe-action.ts`. Os ~393 `throw new Error(...)` em `apps/*/src/actions/**`, nos 9 `lib/safe-action.ts` (gates de papel) e no `resolveSession`/`data-deletion.ts` compartilhados (`packages/auth`) viraram `BusinessError` — a plumbing é byte-idêntica nos 9 apps. "Teste por app" coberto por: unit test exaustivo do mecanismo compartilhado (`packages/auth/src/__tests__/safe-action-error.test.ts`) + um teste de integração real contra o banco em `apps/admin/src/__tests__/actions.test.ts` provando que `result.serverError` chega com a mensagem exata (não a genérica) numa action real.
+- [x] Erro inesperado devolve a genérica **e** vai para o log estruturado (nunca a mensagem crua) — coberto pelo mesmo unit test (`console.error(JSON.stringify({event: "safe_action_unexpected_error", ...}))`).
+- [x] Os 9 apps têm `error.tsx` + `global-error.tsx` com identidade visual Hebron — 6 apps criados (admin, plataforma, radio, flats, tarefas + intranet); intranet não tem `layout.tsx` raiz (usa o padrão "multiple root layouts" do Next.js via route groups `(auth)`/`(dashboard)`, cada um com seu próprio `<html>`/`<body>`), então recebeu `error.tsx` em cada route group (2 arquivos) + `global-error.tsx` único na raiz — 13 arquivos no total, não 12; verificado com `next build` real nos 9 apps (não só typecheck).
+- [x] `pnpm turbo lint typecheck` verde — **verificado lendo a saída**: 19/19 pacotes lint, 19/19 typecheck, sem cache stale.
+- [x] Nenhuma mensagem de erro do sistema em inglês visível ao usuário — as únicas mensagens em inglês remanescentes (`Missing required environment variable: ...`) são falhas de configuração fail-fast, nunca disparadas por uma ação do usuário; se disparassem dentro de uma Server Action, `handleServerError` as mascara para a genérica em português mesmo assim (não são `BusinessError`).
+
+**Achado fora de escopo, registrado mas não corrigido nesta sessão:** ao rodar a suíte completa (`pnpm turbo test`), `apps/documentos/src/__tests__/actions.test.ts` (`updateCategory`) revelou que `SENSITIVE_AUDIT_FIELDS` (PACOTE 1/S-257) redige qualquer campo chamado `name` em **qualquer** entidade, não só nomes de pessoa — o nome de uma categoria de documento vira `{ redacted: true }` no audit log. Pré-existente à esta sessão, não causado por PACOTE 4. Ver memória `project_sensitive_audit_fields_name_overredaction`.
 
 ---
 

@@ -6,6 +6,7 @@ import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { financialAttachments } from "@hebron/db/schema";
 import { colaboradorAction } from "../lib/safe-action";
 import { createReceiptSignedUrl } from "../lib/storage";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 
 const getAttachmentUrlSchema = z.union([
   z.object({ attachmentId: z.string().uuid() }),
@@ -53,7 +54,7 @@ export const getAttachmentUrl = colaboradorAction
     );
 
     if (!attachment) {
-      throw new Error("Nenhum comprovante anexado a este registro");
+      throw new BusinessError("Nenhum comprovante anexado a este registro");
     }
 
     const url = await createReceiptSignedUrl(attachment.fileUrl);

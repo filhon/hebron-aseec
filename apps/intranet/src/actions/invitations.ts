@@ -5,6 +5,7 @@ import { z } from "zod";
 import { and, eq, isNull, gt } from "drizzle-orm";
 import { createClient } from "@supabase/supabase-js";
 import { db } from "@hebron/db/client";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   withAuthenticatedContext,
   withSystemRole,
@@ -20,7 +21,7 @@ import { makeNotificationInserter } from "@hebron/db/notifications";
 
 function requireEnv(name: string): string {
   const value = process.env[name];
-  if (!value) throw new Error(`Missing required env var: ${name}`);
+  if (!value) throw new BusinessError(`Missing required env var: ${name}`);
   return value;
 }
 
@@ -78,12 +79,12 @@ export const acceptInvitation = publicAction
 
     const invitation = rows[0];
     if (!invitation) {
-      throw new Error("Convite inválido, expirado ou já utilizado.");
+      throw new BusinessError("Convite inválido, expirado ou já utilizado.");
     }
 
     const roles = invitation.roles as string[];
     if (roles.length === 0) {
-      throw new Error(
+      throw new BusinessError(
         "Convite sem papéis atribuídos — contate a administração.",
       );
     }
@@ -99,8 +100,8 @@ export const acceptInvitation = publicAction
         user_metadata: { full_name: parsedInput.name },
       });
 
-    if (authError) throw new Error(authError.message);
-    if (!authData.user) throw new Error("Falha ao criar a conta.");
+    if (authError) throw new BusinessError(authError.message);
+    if (!authData.user) throw new BusinessError("Falha ao criar a conta.");
 
     const userId = authData.user.id;
 

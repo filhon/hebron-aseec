@@ -7,6 +7,7 @@ import { markLessonCompleteSchema } from "@hebron/validators";
 import { plataformaAction } from "../lib/safe-action";
 import { checkAndIssueCertificate } from "./certificates";
 import { notifyCertificateIssued } from "../lib/notifications";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 
 // ---------------------------------------------------------------------------
 // markLessonComplete — RLS (progress_insert_own/progress_update_own,
@@ -32,9 +33,9 @@ export const markLessonComplete = plataformaAction
           .from(lessons)
           .where(eq(lessons.id, input.lessonId))
           .limit(1);
-        if (!lesson) throw new Error("Aula não encontrada");
+        if (!lesson) throw new BusinessError("Aula não encontrada");
         if (lesson.type === "quiz") {
-          throw new Error(
+          throw new BusinessError(
             "Aulas de quiz são concluídas ao atingir a nota mínima no quiz",
           );
         }
@@ -52,7 +53,8 @@ export const markLessonComplete = plataformaAction
             set: { completedAt: new Date() },
           })
           .returning();
-        if (!progressRow) throw new Error("Falha ao registrar progresso");
+        if (!progressRow)
+          throw new BusinessError("Falha ao registrar progresso");
 
         const certificate = await checkAndIssueCertificate(tx, {
           actorId: ctx.actorId,

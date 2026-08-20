@@ -5,6 +5,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@hebron/db/client";
 import { designations, roleAssignments } from "@hebron/db/schema";
 import type { DesignationType, Role } from "@hebron/types/roles";
+import { BusinessError } from "./safe-action-error";
 
 export interface ServerCookieHandlers {
   getAll(): Array<{ name: string; value: string }>;
@@ -89,7 +90,7 @@ export async function resolveSession(
     error,
   } = await supabase.auth.getUser();
 
-  if (error || !user) throw new Error("Não autenticado");
+  if (error || !user) throw new BusinessError("Não autenticado");
 
   const rows = await db
     .select({ role: roleAssignments.role })

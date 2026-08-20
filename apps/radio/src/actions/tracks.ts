@@ -3,6 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   withAuthenticatedContext,
   withSystemRole,
@@ -67,7 +68,7 @@ export const createAuthor = superAdminAction
   .action(async ({ parsedInput: input, ctx }) => {
     return withAuthenticatedContext({ actorId: ctx.actorId }, async (tx) => {
       const [author] = await tx.insert(authors).values(input).returning();
-      if (!author) throw new Error("Falha ao criar autor");
+      if (!author) throw new BusinessError("Falha ao criar autor");
 
       await withSystemRole(tx, (sysTx) =>
         logRadioAudit(
@@ -97,14 +98,14 @@ export const updateAuthor = superAdminAction
         .from(authors)
         .where(eq(authors.id, authorId))
         .limit(1);
-      if (!before) throw new Error("Autor não encontrado");
+      if (!before) throw new BusinessError("Autor não encontrado");
 
       const [updated] = await tx
         .update(authors)
         .set({ ...values, updatedAt: new Date() })
         .where(eq(authors.id, authorId))
         .returning();
-      if (!updated) throw new Error("Falha ao atualizar autor");
+      if (!updated) throw new BusinessError("Falha ao atualizar autor");
 
       await withSystemRole(tx, (sysTx) =>
         logRadioAudit(
@@ -137,7 +138,7 @@ export const deleteAuthor = superAdminAction
         .from(authors)
         .where(eq(authors.id, input.authorId))
         .limit(1);
-      if (!before) throw new Error("Autor não encontrado");
+      if (!before) throw new BusinessError("Autor não encontrado");
 
       const [linkedSeries] = await tx
         .select({ id: series.id })
@@ -150,7 +151,7 @@ export const deleteAuthor = superAdminAction
         .where(eq(tracks.authorId, input.authorId))
         .limit(1);
       if (linkedSeries || linkedTrack) {
-        throw new Error(
+        throw new BusinessError(
           "Não é possível remover autor com séries ou faixas vinculadas",
         );
       }
@@ -181,7 +182,7 @@ export const createSeries = superAdminAction
   .action(async ({ parsedInput: input, ctx }) => {
     return withAuthenticatedContext({ actorId: ctx.actorId }, async (tx) => {
       const [row] = await tx.insert(series).values(input).returning();
-      if (!row) throw new Error("Falha ao criar série");
+      if (!row) throw new BusinessError("Falha ao criar série");
 
       await withSystemRole(tx, (sysTx) =>
         logRadioAudit(
@@ -211,14 +212,14 @@ export const updateSeries = superAdminAction
         .from(series)
         .where(eq(series.id, seriesId))
         .limit(1);
-      if (!before) throw new Error("Série não encontrada");
+      if (!before) throw new BusinessError("Série não encontrada");
 
       const [updated] = await tx
         .update(series)
         .set({ ...values, updatedAt: new Date() })
         .where(eq(series.id, seriesId))
         .returning();
-      if (!updated) throw new Error("Falha ao atualizar série");
+      if (!updated) throw new BusinessError("Falha ao atualizar série");
 
       await withSystemRole(tx, (sysTx) =>
         logRadioAudit(
@@ -251,7 +252,7 @@ export const deleteSeries = superAdminAction
         .from(series)
         .where(eq(series.id, input.seriesId))
         .limit(1);
-      if (!before) throw new Error("Série não encontrada");
+      if (!before) throw new BusinessError("Série não encontrada");
 
       // tracks.seriesId é `onDelete: "set null"` — remover a série não
       // remove as faixas, só desvincula (packages/db/src/schema/radio.ts).
@@ -301,7 +302,7 @@ export const createTrack = superAdminAction
   .action(async ({ parsedInput: input, ctx }) => {
     return withAuthenticatedContext({ actorId: ctx.actorId }, async (tx) => {
       const [track] = await tx.insert(tracks).values(input).returning();
-      if (!track) throw new Error("Falha ao criar faixa");
+      if (!track) throw new BusinessError("Falha ao criar faixa");
 
       await withSystemRole(tx, (sysTx) =>
         logRadioAudit(

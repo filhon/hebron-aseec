@@ -7,6 +7,7 @@ import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { eq } from "drizzle-orm";
 import { users } from "@hebron/db/schema";
 import { logAudit } from "../lib/audit";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   IMPERSONATION_COOKIE_NAME,
   IMPERSONATION_COOKIE_MAX_AGE_SECONDS,
@@ -21,7 +22,9 @@ async function requireSuperAdmin(): Promise<string> {
   const { actorId, roles } = await resolveSession(cookieStore);
 
   if (!roles.includes("super_admin")) {
-    throw new Error("Acesso negado: apenas super_admin pode impersonar");
+    throw new BusinessError(
+      "Acesso negado: apenas super_admin pode impersonar",
+    );
   }
 
   return actorId;
@@ -38,9 +41,9 @@ export async function startImpersonationAction(
   const actorId = await requireSuperAdmin();
   const targetUserId = formData.get("userId") as string;
 
-  if (!targetUserId) throw new Error("userId ausente");
+  if (!targetUserId) throw new BusinessError("userId ausente");
   if (targetUserId === actorId)
-    throw new Error("Não é possível impersonar a si mesmo");
+    throw new BusinessError("Não é possível impersonar a si mesmo");
 
   const [actorRows, targetRows] = await withAuthenticatedContext(
     { actorId },
@@ -59,7 +62,7 @@ export async function startImpersonationAction(
 
   const actor = actorRows[0];
   const target = targetRows[0];
-  if (!target) throw new Error("Usuário alvo não encontrado");
+  if (!target) throw new BusinessError("Usuário alvo não encontrado");
 
   const state = {
     actorId,

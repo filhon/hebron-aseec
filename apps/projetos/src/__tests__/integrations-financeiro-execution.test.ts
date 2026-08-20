@@ -95,6 +95,7 @@ beforeAll(async () => {
     .values({
       id: IDS.account,
       bankName: "Banco Teste",
+      nickname: "Conta Teste",
       createdBy: IDS.submitter,
     })
     .onConflictDoNothing();

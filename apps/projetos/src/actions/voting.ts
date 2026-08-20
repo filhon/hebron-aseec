@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { eq, and, count, countDistinct, inArray, isNull } from "drizzle-orm";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   withAuthenticatedContext,
   withSystemRole,
@@ -36,9 +37,9 @@ async function getVotingProject(executor: DbExecutor, projectId: string) {
     .limit(1);
 
   const project = rows[0];
-  if (!project) throw new Error("Projeto não encontrado");
+  if (!project) throw new BusinessError("Projeto não encontrado");
   if (project.stage !== "votacao")
-    throw new Error("Projeto não está em fase de votação");
+    throw new BusinessError("Projeto não está em fase de votação");
   return project;
 }
 
@@ -153,7 +154,7 @@ export const castVote = conselheiroDiretorAction
 
           const validNextStages = VALID_STAGE_TRANSITIONS[project.stage];
           if (!(validNextStages as string[]).includes(newStage)) {
-            throw new Error(
+            throw new BusinessError(
               `Transição inválida: ${project.stage} → ${newStage}. ` +
                 `Próximos estágios válidos: ${validNextStages.join(", ")}`,
             );
@@ -258,7 +259,7 @@ export const closeVoting = superAdminAction
       const result = await getVoteResult(tx, parsedInput.projectId);
 
       if (!result.quorumMet) {
-        throw new Error(
+        throw new BusinessError(
           "Quórum não atingido — use o botão de pânico para forçar o encerramento.",
         );
       }
@@ -269,7 +270,7 @@ export const closeVoting = superAdminAction
 
       const validNextStages = VALID_STAGE_TRANSITIONS[project.stage];
       if (!(validNextStages as string[]).includes(newStage)) {
-        throw new Error(
+        throw new BusinessError(
           `Transição inválida: ${project.stage} → ${newStage}. ` +
             `Próximos estágios válidos: ${validNextStages.join(", ")}`,
         );
@@ -350,7 +351,7 @@ export const triggerPanicButton = superAdminAction
 
       const validNextStages = VALID_STAGE_TRANSITIONS[project.stage];
       if (!(validNextStages as string[]).includes(newStage)) {
-        throw new Error(
+        throw new BusinessError(
           `Transição inválida: ${project.stage} → ${newStage}. ` +
             `Próximos estágios válidos: ${validNextStages.join(", ")}`,
         );

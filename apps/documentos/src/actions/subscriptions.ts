@@ -5,6 +5,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { categories, subscriptions } from "@hebron/db/schema";
 import { authenticatedAction } from "../lib/safe-action";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 
 // ─── saveSubscriptions ──────────────────────────────────────────────────────
 // Upsert por (user_id, category_id): categorias com os dois toggles desligados
@@ -32,7 +33,7 @@ export const saveSubscriptions = authenticatedAction
             .where(inArray(categories.id, categoryIds));
           const existingIds = new Set(existing.map((c) => c.id));
           if (categoryIds.some((id) => !existingIds.has(id))) {
-            throw new Error("Categoria não encontrada");
+            throw new BusinessError("Categoria não encontrada");
           }
         }
 
@@ -67,7 +68,7 @@ export const saveSubscriptions = authenticatedAction
             })
             .returning();
 
-          if (!row) throw new Error("Falha ao salvar inscrição");
+          if (!row) throw new BusinessError("Falha ao salvar inscrição");
           results.push(row);
         }
 

@@ -6,6 +6,7 @@ import crypto from "node:crypto";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { tags } from "@hebron/db/schema";
 import { editorAction } from "../lib/safe-action";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 
 function slugify(text: string): string {
   return text
@@ -54,7 +55,7 @@ export const createTag = editorAction
           .values({ name: parsedInput.name, slug })
           .returning();
 
-        if (!tag) throw new Error("Falha ao criar tag");
+        if (!tag) throw new BusinessError("Falha ao criar tag");
         return tag;
       },
     );

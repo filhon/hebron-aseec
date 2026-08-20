@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { and, eq, isNull } from "drizzle-orm";
 import crypto from "node:crypto";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   withAuthenticatedContext,
   withSystemRole,
@@ -107,7 +108,8 @@ export const createEdital = adminDocAction
           })
           .returning();
 
-        if (!document) throw new Error("Falha ao criar documento do edital");
+        if (!document)
+          throw new BusinessError("Falha ao criar documento do edital");
 
         const [edital] = await tx
           .insert(editals)
@@ -123,7 +125,7 @@ export const createEdital = adminDocAction
           })
           .returning();
 
-        if (!edital) throw new Error("Falha ao criar edital");
+        if (!edital) throw new BusinessError("Falha ao criar edital");
 
         if (parsedInput.tagIds?.length) {
           await tx.insert(documentTags).values(
@@ -203,7 +205,7 @@ export const updateEdital = adminDocAction
           .where(and(eq(documents.id, id), isNull(documents.deletedAt)))
           .limit(1);
 
-        if (!existingDoc) throw new Error("Edital não encontrado");
+        if (!existingDoc) throw new BusinessError("Edital não encontrado");
 
         const docUpdate: Partial<typeof documents.$inferInsert> = {
           updatedAt: new Date(),
@@ -289,8 +291,8 @@ export const deleteEdital = adminDocAction
           .where(eq(documents.id, parsedInput.id))
           .limit(1);
 
-        if (!doc) throw new Error("Edital não encontrado");
-        if (doc.deletedAt) throw new Error("Edital já foi removido");
+        if (!doc) throw new BusinessError("Edital não encontrado");
+        if (doc.deletedAt) throw new BusinessError("Edital já foi removido");
 
         const now = new Date();
 

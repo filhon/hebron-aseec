@@ -8,6 +8,7 @@ import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { users } from "@hebron/db/schema";
 import { updateMyProfileSchema } from "@hebron/validators/intranet";
 import { staffAction } from "../lib/safe-action";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 
 // ---------------------------------------------------------------------------
 // P-5.1b — perfil de autoatendimento (bio, telefone, avatar). O titular só
@@ -26,7 +27,8 @@ import { staffAction } from "../lib/safe-action";
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error("Variáveis Supabase não configuradas");
+  if (!url || !key)
+    throw new BusinessError("Variáveis Supabase não configuradas");
   return createClient(url, key, { auth: { persistSession: false } });
 }
 
@@ -52,7 +54,7 @@ export const getMyAvatarUploadUrl = staffAction
       .createSignedUploadUrl(path);
 
     if (error)
-      throw new Error(`Falha ao gerar URL de upload: ${error.message}`);
+      throw new BusinessError(`Falha ao gerar URL de upload: ${error.message}`);
 
     return { uploadUrl: data.signedUrl, storagePath: path };
   });
@@ -70,7 +72,9 @@ export const getMyAvatarReadUrl = staffAction
       .createSignedUrl(parsedInput.storagePath, READ_URL_EXPIRES_IN_SECONDS);
 
     if (error)
-      throw new Error(`Falha ao gerar URL de leitura: ${error.message}`);
+      throw new BusinessError(
+        `Falha ao gerar URL de leitura: ${error.message}`,
+      );
 
     return { url: data.signedUrl };
   });
@@ -96,7 +100,7 @@ export const updateMyProfile = staffAction
             avatarUrl: users.avatarUrl,
           }),
     );
-    if (!row) throw new Error("Falha ao salvar perfil");
+    if (!row) throw new BusinessError("Falha ao salvar perfil");
 
     return { profile: row };
   });

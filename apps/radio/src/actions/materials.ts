@@ -3,6 +3,7 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   withAuthenticatedContext,
   withSystemRole,
@@ -57,7 +58,7 @@ export const createMaterial = superAdminAction
           .insert(exclusiveMaterials)
           .values(input)
           .returning();
-        if (!material) throw new Error("Falha ao criar material");
+        if (!material) throw new BusinessError("Falha ao criar material");
 
         await withSystemRole(tx, (sysTx) =>
           logRadioAudit(
@@ -109,7 +110,7 @@ export const getMaterialDownloadUrl = radioAction
     // de termo — `material` só existe aqui se o usuário tiver ao menos um
     // term_acceptances. Sem aceite, a query retorna vazio.
     if (!material) {
-      throw new Error(
+      throw new BusinessError(
         "Material não encontrado ou aceite do termo de uso é necessário",
       );
     }

@@ -7,6 +7,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { createSupabaseServerActionClient } from "@hebron/auth/server";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import type { AuthenticatedTx } from "@hebron/db/authenticated";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   tasks,
   assignees,
@@ -108,7 +109,7 @@ export const createTask = colaboradorAction
           .from(workspaces)
           .where(eq(workspaces.slug, input.workspace))
           .limit(1);
-        if (!ws) throw new Error("Módulo inválido");
+        if (!ws) throw new BusinessError("Módulo inválido");
 
         const [row] = await tx
           .insert(tasks)
@@ -122,7 +123,7 @@ export const createTask = colaboradorAction
             createdBy: ctx.actorId,
           })
           .returning();
-        if (!row) throw new Error("Falha ao criar tarefa");
+        if (!row) throw new BusinessError("Falha ao criar tarefa");
 
         if (input.assigneeIds.length > 0) {
           await tx
@@ -189,7 +190,7 @@ export const updateTask = colaboradorAction
           !ctx.roles.includes("super_admin") &&
           !(await canManageTask(tx, input.taskId, ctx.actorId))
         ) {
-          throw new Error(
+          throw new BusinessError(
             "Você só pode editar tarefas que criou ou das quais é responsável",
           );
         }
@@ -200,7 +201,7 @@ export const updateTask = colaboradorAction
             .from(workspaces)
             .where(eq(workspaces.slug, input.workspace))
             .limit(1);
-          if (!ws) throw new Error("Módulo inválido");
+          if (!ws) throw new BusinessError("Módulo inválido");
           patch.workspaceId = ws.id;
         }
 
@@ -226,7 +227,7 @@ export const updateTask = colaboradorAction
           .set(patch)
           .where(eq(tasks.id, input.taskId))
           .returning();
-        if (!row) throw new Error("Tarefa não encontrada");
+        if (!row) throw new BusinessError("Tarefa não encontrada");
 
         if (input.assigneeIds !== undefined) {
           const previousAssignees = await tx
@@ -297,7 +298,7 @@ export const updateTaskStatus = colaboradorAction
           !ctx.roles.includes("super_admin") &&
           !(await canManageTask(tx, input.taskId, ctx.actorId))
         ) {
-          throw new Error(
+          throw new BusinessError(
             "Você só pode mover tarefas que criou ou das quais é responsável",
           );
         }
@@ -311,7 +312,7 @@ export const updateTaskStatus = colaboradorAction
           })
           .where(eq(tasks.id, input.taskId))
           .returning();
-        if (!row) throw new Error("Tarefa não encontrada");
+        if (!row) throw new BusinessError("Tarefa não encontrada");
 
         await logTaskEvent(
           {
@@ -346,7 +347,7 @@ export const deleteTask = colaboradorAction
           !ctx.roles.includes("super_admin") &&
           !(await canManageTask(tx, input.taskId, ctx.actorId))
         ) {
-          throw new Error(
+          throw new BusinessError(
             "Você só pode remover tarefas que criou ou das quais é responsável",
           );
         }
@@ -366,7 +367,7 @@ export const deleteTask = colaboradorAction
           .set({ deletedAt: new Date() })
           .where(eq(tasks.id, input.taskId))
           .returning();
-        if (!row) throw new Error("Tarefa não encontrada");
+        if (!row) throw new BusinessError("Tarefa não encontrada");
 
         return row;
       },
@@ -408,7 +409,7 @@ export const assignTaskManually = superAdminAction
           .set({ needsManualAssignment: false, updatedAt: new Date() })
           .where(eq(tasks.id, input.taskId))
           .returning();
-        if (!row) throw new Error("Tarefa não encontrada");
+        if (!row) throw new BusinessError("Tarefa não encontrada");
 
         await logTaskEvent(
           {
@@ -445,7 +446,7 @@ export const createSubtask = colaboradorAction
           !ctx.roles.includes("super_admin") &&
           !(await canManageTask(tx, input.taskId, ctx.actorId))
         ) {
-          throw new Error(
+          throw new BusinessError(
             "Você só pode adicionar subtarefas em tarefas que criou ou das quais é responsável",
           );
         }
@@ -464,7 +465,7 @@ export const createSubtask = colaboradorAction
             order: countRow?.count ?? 0,
           })
           .returning();
-        if (!row) throw new Error("Falha ao criar subtarefa");
+        if (!row) throw new BusinessError("Falha ao criar subtarefa");
 
         await logTaskEvent(
           {
@@ -494,13 +495,13 @@ export const toggleSubtask = colaboradorAction
           .from(subtasks)
           .where(eq(subtasks.id, input.subtaskId))
           .limit(1);
-        if (!existing) throw new Error("Subtarefa não encontrada");
+        if (!existing) throw new BusinessError("Subtarefa não encontrada");
 
         if (
           !ctx.roles.includes("super_admin") &&
           !(await canManageTask(tx, existing.taskId, ctx.actorId))
         ) {
-          throw new Error(
+          throw new BusinessError(
             "Você só pode atualizar subtarefas de tarefas que criou ou das quais é responsável",
           );
         }
@@ -513,7 +514,7 @@ export const toggleSubtask = colaboradorAction
           })
           .where(eq(subtasks.id, input.subtaskId))
           .returning();
-        if (!row) throw new Error("Falha ao atualizar subtarefa");
+        if (!row) throw new BusinessError("Falha ao atualizar subtarefa");
 
         await logTaskEvent(
           {
@@ -554,14 +555,15 @@ export const createAttachment = staffAction
           input.parentType === "task"
             ? input.parentId
             : await resolveCommentTaskId(tx, input.parentId);
-        if (!resolvedTaskId) throw new Error("Referência inválida para anexo");
+        if (!resolvedTaskId)
+          throw new BusinessError("Referência inválida para anexo");
 
         const [task] = await tx
           .select({ id: tasks.id })
           .from(tasks)
           .where(and(eq(tasks.id, resolvedTaskId), isNull(tasks.deletedAt)))
           .limit(1);
-        if (!task) throw new Error("Tarefa não encontrada");
+        if (!task) throw new BusinessError("Tarefa não encontrada");
 
         return resolvedTaskId;
       },
@@ -578,7 +580,7 @@ export const createAttachment = staffAction
       .from("tarefas-anexos")
       .createSignedUploadUrl(storageKey);
     if (error)
-      throw new Error(`Falha ao gerar URL de upload: ${error.message}`);
+      throw new BusinessError(`Falha ao gerar URL de upload: ${error.message}`);
 
     const attachment = await withAuthenticatedContext(
       { actorId: ctx.actorId },
@@ -595,7 +597,7 @@ export const createAttachment = staffAction
             uploadedBy: ctx.actorId,
           })
           .returning();
-        if (!row) throw new Error("Falha ao registrar anexo");
+        if (!row) throw new BusinessError("Falha ao registrar anexo");
 
         await logTaskEvent(
           {

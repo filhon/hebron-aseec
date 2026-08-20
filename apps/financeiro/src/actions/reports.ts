@@ -7,6 +7,7 @@ import { and, eq, gte, inArray, lte, or } from "drizzle-orm";
 import { createClient } from "@supabase/supabase-js";
 import archiver from "archiver";
 import ExcelJS from "exceljs";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   Document,
   Page,
@@ -46,7 +47,8 @@ function fmtBRL(n: number): string {
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error("Variáveis Supabase não configuradas");
+  if (!url || !key)
+    throw new BusinessError("Variáveis Supabase não configuradas");
   return createClient(url, key, { auth: { persistSession: false } });
 }
 

@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { eq, and, isNull } from "drizzle-orm";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   withAuthenticatedContext,
   withSystemRole,
@@ -41,10 +42,10 @@ export const overrideBlock = superAdminAction
         .limit(1);
 
       const payable = rows[0];
-      if (!payable) throw new Error("Conta a pagar não encontrada");
+      if (!payable) throw new BusinessError("Conta a pagar não encontrada");
 
       if (payable.status !== "bloqueado") {
-        throw new Error(
+        throw new BusinessError(
           `Apenas contas bloqueadas podem ter o bloqueio sobrescrito. ` +
             `Status atual: "${payable.status}"`,
         );

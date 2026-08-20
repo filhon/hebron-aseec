@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { and, eq, isNull } from "drizzle-orm";
 import crypto from "node:crypto";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   withAuthenticatedContext,
   withSystemRole,
@@ -73,7 +74,7 @@ export const createCategory = editorAction
           })
           .returning();
 
-        if (!category) throw new Error("Falha ao criar categoria");
+        if (!category) throw new BusinessError("Falha ao criar categoria");
 
         await withSystemRole(tx, (sysTx) =>
           logDocumentAudit(
@@ -119,13 +120,13 @@ export const updateCategory = editorAction
           .where(eq(categories.id, id))
           .limit(1);
 
-        if (!before) throw new Error("Categoria não encontrada");
+        if (!before) throw new BusinessError("Categoria não encontrada");
 
         // Previne ciclo: não deixa mover categoria para um de seus descendentes
         if (parentId !== undefined && parentId !== null) {
           const isDescendant = await checkIsDescendant(tx, id, parentId);
           if (isDescendant) {
-            throw new Error(
+            throw new BusinessError(
               "Não é possível mover uma categoria para um de seus descendentes",
             );
           }
@@ -143,7 +144,7 @@ export const updateCategory = editorAction
           .where(eq(categories.id, id))
           .returning();
 
-        if (!updated) throw new Error("Falha ao atualizar categoria");
+        if (!updated) throw new BusinessError("Falha ao atualizar categoria");
 
         await withSystemRole(tx, (sysTx) =>
           logDocumentAudit(
@@ -182,7 +183,7 @@ export const deleteCategory = editorAction
         .where(eq(categories.id, parsedInput.id))
         .limit(1);
 
-      if (!category) throw new Error("Categoria não encontrada");
+      if (!category) throw new BusinessError("Categoria não encontrada");
 
       // Verifica documentos ativos vinculados
       const [docRow] = await tx
@@ -197,7 +198,7 @@ export const deleteCategory = editorAction
         .limit(1);
 
       if (docRow) {
-        throw new Error(
+        throw new BusinessError(
           "Não é possível remover categoria com documentos ativos. Mova ou remova os documentos primeiro.",
         );
       }
@@ -248,7 +249,7 @@ export const moveCategoryInTree = editorAction
         if (newParentId !== null) {
           const isDescendant = await checkIsDescendant(tx, id, newParentId);
           if (isDescendant) {
-            throw new Error(
+            throw new BusinessError(
               "Destino inválido: categoria não pode ser movida para um de seus descendentes",
             );
           }
@@ -260,7 +261,7 @@ export const moveCategoryInTree = editorAction
           .where(eq(categories.id, id))
           .returning();
 
-        if (!updated) throw new Error("Categoria não encontrada");
+        if (!updated) throw new BusinessError("Categoria não encontrada");
 
         await withSystemRole(tx, (sysTx) =>
           logDocumentAudit(

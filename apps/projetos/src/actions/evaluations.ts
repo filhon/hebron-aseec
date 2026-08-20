@@ -8,6 +8,7 @@ import { createEvaluationSchema } from "@hebron/validators/projetos";
 import { diretorAction, projetosAction } from "../lib/safe-action";
 import { logProjectAudit } from "../lib/audit";
 import { notifyEvaluatorDesignated } from "../lib/notifications";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 
 // ---------------------------------------------------------------------------
 // Schemas
@@ -41,10 +42,10 @@ export const assignEvaluator = diretorAction
           .limit(1);
 
         const project = projectRows[0];
-        if (!project) throw new Error("Projeto não encontrado");
-        if (project.deletedAt) throw new Error("Projeto excluído");
+        if (!project) throw new BusinessError("Projeto não encontrado");
+        if (project.deletedAt) throw new BusinessError("Projeto excluído");
         if (project.stage !== "validacao") {
-          throw new Error(
+          throw new BusinessError(
             `Avaliadores só podem ser designados durante a validação (estágio atual: ${project.stage})`,
           );
         }
@@ -62,7 +63,9 @@ export const assignEvaluator = diretorAction
           .limit(1);
 
         if (existingRows[0]) {
-          throw new Error("Este avaliador já foi designado para este projeto");
+          throw new BusinessError(
+            "Este avaliador já foi designado para este projeto",
+          );
         }
 
         const inserted = await tx
@@ -74,7 +77,7 @@ export const assignEvaluator = diretorAction
           .returning();
 
         const evaluation = inserted[0];
-        if (!evaluation) throw new Error("Falha ao designar avaliador");
+        if (!evaluation) throw new BusinessError("Falha ao designar avaliador");
 
         // Próxima reunião mensal agendada (BRAIN §6.1: auto-criada na 1ª
         // quarta-feira) — usada só para compor a notificação abaixo.
@@ -153,7 +156,7 @@ export const submitEvaluation = projetosAction
 
         const evaluation = evalRows[0];
         if (!evaluation) {
-          throw new Error(
+          throw new BusinessError(
             "Avaliação não encontrada ou você não é o avaliador designado",
           );
         }
@@ -166,10 +169,10 @@ export const submitEvaluation = projetosAction
           .limit(1);
 
         const project = projectRows[0];
-        if (!project) throw new Error("Projeto não encontrado");
-        if (project.deletedAt) throw new Error("Projeto excluído");
+        if (!project) throw new BusinessError("Projeto não encontrado");
+        if (project.deletedAt) throw new BusinessError("Projeto excluído");
         if (project.stage !== "validacao") {
-          throw new Error(
+          throw new BusinessError(
             "O projeto não está mais em fase de validação — avaliação encerrada",
           );
         }
@@ -190,7 +193,8 @@ export const submitEvaluation = projetosAction
           .returning();
 
         const finalEvaluation = updated[0];
-        if (!finalEvaluation) throw new Error("Falha ao registrar avaliação");
+        if (!finalEvaluation)
+          throw new BusinessError("Falha ao registrar avaliação");
         return finalEvaluation;
       },
     );

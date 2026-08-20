@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { desc, eq } from "drizzle-orm";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   withAuthenticatedContext,
   withSystemRole,
@@ -70,7 +71,7 @@ export const createAnnouncement = boardAction
             publishedAt: new Date(),
           })
           .returning();
-        if (!row) throw new Error("Falha ao criar anúncio");
+        if (!row) throw new BusinessError("Falha ao criar anúncio");
 
         await withSystemRole(tx, (sysTx) =>
           logIntranetAudit(
@@ -149,7 +150,7 @@ export const updateAnnouncement = superAdminAction
     );
 
     const existing = rows[0];
-    if (!existing) throw new Error("Anúncio não encontrado");
+    if (!existing) throw new BusinessError("Anúncio não encontrado");
 
     const updated = await withAuthenticatedContext(
       { actorId: ctx.actorId },
@@ -164,7 +165,7 @@ export const updateAnnouncement = superAdminAction
           })
           .where(eq(announcements.id, input.announcementId))
           .returning();
-        if (!row) throw new Error("Falha ao atualizar anúncio");
+        if (!row) throw new BusinessError("Falha ao atualizar anúncio");
 
         await withSystemRole(tx, (sysTx) =>
           logIntranetAudit(

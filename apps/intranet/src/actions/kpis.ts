@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { and, desc, eq, isNull, ne, sql } from "drizzle-orm";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   withAuthenticatedContext,
   withSystemRole,
@@ -268,7 +269,7 @@ function kpiFromSnapshot(result: PersistableKpiResult, period: string): KPI {
   const { config, samples } = result;
   const [latest, previous] = samples;
   if (!latest) {
-    throw new Error(
+    throw new BusinessError(
       `Snapshot ausente para métrica persistível "${config.metricName}"`,
     );
   }
@@ -314,7 +315,7 @@ async function kpiFromLive(
 function requireKpi(kpiByMetric: Map<string, KPI>, metricName: string): KPI {
   const kpi = kpiByMetric.get(metricName);
   if (!kpi) {
-    throw new Error(`KPI ausente para métrica "${metricName}"`);
+    throw new BusinessError(`KPI ausente para métrica "${metricName}"`);
   }
   return kpi;
 }

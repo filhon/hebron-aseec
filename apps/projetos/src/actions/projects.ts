@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { eq, and, isNull, count } from "drizzle-orm";
 import { db } from "@hebron/db/client";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   withAuthenticatedContext,
   type AuthenticatedTx,
@@ -74,7 +75,7 @@ async function getProjectOrThrow(tx: AuthenticatedTx, projectId: string) {
     .limit(1);
 
   const project = rows[0];
-  if (!project) throw new Error("Projeto não encontrado");
+  if (!project) throw new BusinessError("Projeto não encontrado");
   return project;
 }
 
@@ -187,7 +188,7 @@ export const createAnnualDraft = submissorAction
           .returning();
 
         const project = inserted[0];
-        if (!project) throw new Error("Falha ao criar projeto");
+        if (!project) throw new BusinessError("Falha ao criar projeto");
 
         // Store full form data (including fields without DB columns) in version 1
         await createVersionSnapshot(
@@ -271,7 +272,7 @@ export const createPunctualDraft = submissorAction
           .returning();
 
         const project = inserted[0];
-        if (!project) throw new Error("Falha ao criar projeto pontual");
+        if (!project) throw new BusinessError("Falha ao criar projeto pontual");
 
         await createVersionSnapshot(
           tx,
@@ -370,7 +371,7 @@ export const updateDraftProject = submissorAction
         const project = await getProjectOrThrow(tx, parsedInput.projectId);
 
         if (project.stage !== "rascunho") {
-          throw new Error(
+          throw new BusinessError(
             "Apenas projetos em rascunho podem ser editados. Solicite nova revisão se necessário.",
           );
         }
@@ -378,7 +379,9 @@ export const updateDraftProject = submissorAction
         // Only the submitter or super_admin can edit their own draft
         const isSuperAdmin = ctx.roles.includes("super_admin");
         if (!isSuperAdmin && project.submitterId !== ctx.actorId) {
-          throw new Error("Apenas o submissor pode editar o próprio rascunho");
+          throw new BusinessError(
+            "Apenas o submissor pode editar o próprio rascunho",
+          );
         }
 
         const patch: Partial<typeof projects.$inferInsert> = {
@@ -413,7 +416,7 @@ export const updateDraftProject = submissorAction
           .returning();
 
         const after = updated[0];
-        if (!after) throw new Error("Falha ao atualizar projeto");
+        if (!after) throw new BusinessError("Falha ao atualizar projeto");
 
         // Update version snapshot with new data
         await createVersionSnapshot(
@@ -460,18 +463,20 @@ export const submitProject = submissorAction
     );
 
     if (project.stage !== "rascunho") {
-      throw new Error("Apenas rascunhos podem ser submetidos");
+      throw new BusinessError("Apenas rascunhos podem ser submetidos");
     }
     if (
       project.submitterId !== ctx.actorId &&
       !ctx.roles.includes("super_admin")
     ) {
-      throw new Error("Apenas o submissor pode submeter o próprio projeto");
+      throw new BusinessError(
+        "Apenas o submissor pode submeter o próprio projeto",
+      );
     }
 
     // Guard: required fields
     if (!project.title || !project.organizationId) {
-      throw new Error(
+      throw new BusinessError(
         "Preencha todos os campos obrigatórios antes de submeter",
       );
     }
@@ -502,7 +507,8 @@ export const submitProject = submissorAction
           .returning();
 
         const submittedProject = updated[0];
-        if (!submittedProject) throw new Error("Falha ao submeter projeto");
+        if (!submittedProject)
+          throw new BusinessError("Falha ao submeter projeto");
 
         // Version snapshot
         await createVersionSnapshot(
@@ -687,7 +693,7 @@ export const transitionProjectStage = diretorAction
         const validNext =
           VALID_STAGE_TRANSITIONS[project.stage as ProjectStage];
         if (!(validNext as string[]).includes(parsedInput.toStage)) {
-          throw new Error(
+          throw new BusinessError(
             `Transição inválida: ${project.stage} → ${parsedInput.toStage}. ` +
               `Próximos estágios válidos: ${validNext.join(", ")}`,
           );
@@ -711,7 +717,8 @@ export const transitionProjectStage = diretorAction
           .returning();
 
         const afterProject = updated[0];
-        if (!afterProject) throw new Error("Falha ao transicionar estágio");
+        if (!afterProject)
+          throw new BusinessError("Falha ao transicionar estágio");
 
         // Version snapshot
         await createVersionSnapshot(
@@ -811,7 +818,7 @@ export const createContestation = projetosAction
         const project = await getProjectOrThrow(tx, parsedInput.projectId);
 
         if (project.stage !== "homologacao") {
-          throw new Error(
+          throw new BusinessError(
             "Contestações só podem ser feitas durante a homologação",
           );
         }
@@ -823,7 +830,9 @@ export const createContestation = projetosAction
           .where(eq(contestations.projectId, parsedInput.projectId));
 
         if ((countResult[0]?.total ?? 0) >= 2) {
-          throw new Error("Limite de 2 contestações por projeto atingido");
+          throw new BusinessError(
+            "Limite de 2 contestações por projeto atingido",
+          );
         }
 
         // Insert — unique constraint (project_id, user_id) blocks double contestation
@@ -838,7 +847,8 @@ export const createContestation = projetosAction
           .returning();
 
         const contestation = inserted[0];
-        if (!contestation) throw new Error("Falha ao registrar contestação");
+        if (!contestation)
+          throw new BusinessError("Falha ao registrar contestação");
 
         // Return project to votacao
         const now = new Date();
@@ -908,7 +918,7 @@ export const deleteProject = projetosAction
         const isSubmitter = project.submitterId === ctx.actorId;
 
         if (!isSuperAdmin && !isDiretor && !isSubmitter) {
-          throw new Error(
+          throw new BusinessError(
             "Apenas o submissor ou a diretoria podem excluir projetos",
           );
         }
@@ -920,7 +930,7 @@ export const deleteProject = projetosAction
           isSubmitter &&
           project.stage !== "rascunho"
         ) {
-          throw new Error(
+          throw new BusinessError(
             "Submissores só podem excluir projetos em rascunho. Contate a diretoria para outros estágios.",
           );
         }

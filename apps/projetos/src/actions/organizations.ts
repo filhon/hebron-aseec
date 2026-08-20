@@ -4,6 +4,7 @@ import { z } from "zod";
 import { eq, and } from "drizzle-orm";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { organizations, organizationMembers } from "@hebron/db/schema";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   submissorAction,
   diretorAction,
@@ -74,7 +75,7 @@ export const createOrganization = submissorAction
           .returning();
 
         const org = inserted[0];
-        if (!org) throw new Error("Falha ao criar organização");
+        if (!org) throw new BusinessError("Falha ao criar organização");
 
         // Auto-add creator as member
         await tx.insert(organizationMembers).values({
@@ -123,12 +124,12 @@ export const updateOrganization = projetosAction
           .limit(1);
 
         const before = rows[0];
-        if (!before) throw new Error("Organização não encontrada");
+        if (!before) throw new BusinessError("Organização não encontrada");
 
         const isPrivileged =
           ctx.roles.includes("super_admin") || ctx.roles.includes("diretor");
         if (!isPrivileged && before.createdBy !== ctx.actorId) {
-          throw new Error(
+          throw new BusinessError(
             "Apenas quem cadastrou a organização ou a diretoria pode editar seus dados",
           );
         }
@@ -157,7 +158,7 @@ export const updateOrganization = projetosAction
           .returning();
 
         const after = updated[0];
-        if (!after) throw new Error("Falha ao atualizar organização");
+        if (!after) throw new BusinessError("Falha ao atualizar organização");
 
         return { before, after };
       },
@@ -198,7 +199,7 @@ export const addOrganizationMember = diretorAction
         .where(eq(organizations.id, parsedInput.organizationId))
         .limit(1);
 
-      if (!orgRows[0]) throw new Error("Organização não encontrada");
+      if (!orgRows[0]) throw new BusinessError("Organização não encontrada");
 
       await tx
         .insert(organizationMembers)
@@ -246,7 +247,7 @@ export const removeOrganizationMember = diretorAction
         );
 
       if (memberRows.length <= 1) {
-        throw new Error(
+        throw new BusinessError(
           "Não é possível remover o último membro da organização",
         );
       }

@@ -5,6 +5,7 @@ import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { createClient } from "@supabase/supabase-js";
 import { db } from "@hebron/db/client";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   withAuthenticatedContext,
   withSystemRole,
@@ -23,7 +24,8 @@ import { notifyUserSuspended } from "../lib/notifications";
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error("Variáveis Supabase não configuradas");
+  if (!url || !key)
+    throw new BusinessError("Variáveis Supabase não configuradas");
   return createClient(url, key, { auth: { persistSession: false } });
 }
 
@@ -61,8 +63,9 @@ export const createUser = adminAction
         user_metadata: { full_name: parsedInput.fullName },
       });
 
-    if (authError) throw new Error(authError.message);
-    if (!authData.user) throw new Error("Falha ao criar usuário no Auth");
+    if (authError) throw new BusinessError(authError.message);
+    if (!authData.user)
+      throw new BusinessError("Falha ao criar usuário no Auth");
     const authUser = authData.user;
 
     // public.users só tem policy de INSERT "auth.uid() = id" (self-insert,
@@ -87,7 +90,8 @@ export const createUser = adminAction
             .returning();
 
           const newUser = inserted[0];
-          if (!newUser) throw new Error("Falha ao inserir usuário no banco");
+          if (!newUser)
+            throw new BusinessError("Falha ao inserir usuário no banco");
           return newUser;
         }),
     );
@@ -133,7 +137,7 @@ export const updateUser = adminAction
           .where(eq(users.id, parsedInput.id));
 
         const before = beforeRows[0];
-        if (!before) throw new Error("Usuário não encontrado");
+        if (!before) throw new BusinessError("Usuário não encontrado");
 
         const patch: Partial<typeof users.$inferInsert> = {
           updatedAt: new Date(),
@@ -150,7 +154,7 @@ export const updateUser = adminAction
             .returning();
 
           const updated = updatedRows[0];
-          if (!updated) throw new Error("Falha ao atualizar usuário");
+          if (!updated) throw new BusinessError("Falha ao atualizar usuário");
           return updated;
         });
 
@@ -197,7 +201,7 @@ export const suspendUser = adminAction
           .where(eq(users.id, parsedInput.id));
 
         const before = beforeRows[0];
-        if (!before) throw new Error("Usuário não encontrado");
+        if (!before) throw new BusinessError("Usuário não encontrado");
 
         const suspendedModules = parsedInput.modules.includes("global")
           ? ["global"]
@@ -215,7 +219,7 @@ export const suspendUser = adminAction
             .returning();
 
           const updated = updatedRows[0];
-          if (!updated) throw new Error("Falha ao suspender usuário");
+          if (!updated) throw new BusinessError("Falha ao suspender usuário");
           return updated;
         });
 
@@ -262,7 +266,7 @@ export const unsuspendUser = adminAction
           .where(eq(users.id, parsedInput.id));
 
         const before = beforeRows[0];
-        if (!before) throw new Error("Usuário não encontrado");
+        if (!before) throw new BusinessError("Usuário não encontrado");
 
         const removingAll = parsedInput.modules.includes("global");
         const suspendedModules = removingAll
@@ -285,7 +289,7 @@ export const unsuspendUser = adminAction
             .returning();
 
           const updated = updatedRows[0];
-          if (!updated) throw new Error("Falha ao reativar usuário");
+          if (!updated) throw new BusinessError("Falha ao reativar usuário");
           return updated;
         });
 
@@ -325,7 +329,7 @@ export const resetPassword = adminAction
           .where(eq(users.id, parsedInput.id));
 
         const user = userRows[0];
-        if (!user) throw new Error("Usuário não encontrado");
+        if (!user) throw new BusinessError("Usuário não encontrado");
         return user;
       },
     );
@@ -335,10 +339,11 @@ export const resetPassword = adminAction
       email: user.email,
     });
 
-    if (error) throw new Error(error.message);
+    if (error) throw new BusinessError(error.message);
 
     const resetUrl = data.properties?.action_link;
-    if (!resetUrl) throw new Error("Falha ao gerar link de redefinição");
+    if (!resetUrl)
+      throw new BusinessError("Falha ao gerar link de redefinição");
 
     // P-1.10c: admin.email_templates tem precedência sobre o componente
     // React Email hardcoded quando existe uma linha para o slug — mesmo
@@ -368,7 +373,7 @@ export const resetPassword = adminAction
           })
           .returning();
         const notif = notifInserted[0];
-        if (!notif) throw new Error("Falha ao inserir notificação");
+        if (!notif) throw new BusinessError("Falha ao inserir notificação");
         return { id: notif.id };
       },
       data: {
@@ -415,7 +420,7 @@ export const approveUser = adminAction
         .where(eq(users.id, parsedInput.id));
 
       const user = userRows[0];
-      if (!user) throw new Error("Usuário não encontrado");
+      if (!user) throw new BusinessError("Usuário não encontrado");
     });
 
     await supabase.auth.admin.updateUserById(parsedInput.id, {
@@ -450,9 +455,11 @@ export const approveSignup = adminAction
           .where(eq(users.id, parsedInput.id));
 
         const user = userRows[0];
-        if (!user) throw new Error("Usuário não encontrado");
+        if (!user) throw new BusinessError("Usuário não encontrado");
         if (user.status !== "pending_approval") {
-          throw new Error("Este cadastro não está aguardando aprovação.");
+          throw new BusinessError(
+            "Este cadastro não está aguardando aprovação.",
+          );
         }
         return user;
       },
@@ -518,7 +525,7 @@ export const approveSignup = adminAction
           })
           .returning();
         const notif = notifInserted[0];
-        if (!notif) throw new Error("Falha ao inserir notificação");
+        if (!notif) throw new BusinessError("Falha ao inserir notificação");
         return { id: notif.id };
       },
       data: {
@@ -570,9 +577,11 @@ export const rejectSignup = adminAction
           .where(eq(users.id, parsedInput.id));
 
         const user = userRows[0];
-        if (!user) throw new Error("Usuário não encontrado");
+        if (!user) throw new BusinessError("Usuário não encontrado");
         if (user.status !== "pending_approval") {
-          throw new Error("Este cadastro não está aguardando aprovação.");
+          throw new BusinessError(
+            "Este cadastro não está aguardando aprovação.",
+          );
         }
 
         await withSystemRole(tx, (sysTx) =>
@@ -599,7 +608,7 @@ export const rejectSignup = adminAction
           })
           .returning();
         const notif = notifInserted[0];
-        if (!notif) throw new Error("Falha ao inserir notificação");
+        if (!notif) throw new BusinessError("Falha ao inserir notificação");
         return { id: notif.id };
       },
       data: {

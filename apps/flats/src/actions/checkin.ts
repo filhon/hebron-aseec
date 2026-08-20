@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { eq } from "drizzle-orm";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   withAuthenticatedContext,
   withSystemRole,
@@ -25,7 +26,7 @@ const checkinTransitionSchema = z.object({
 
 function toISODate(date: Date): string {
   const iso = date.toISOString().split("T")[0];
-  if (!iso) throw new Error("Data inválida");
+  if (!iso) throw new BusinessError("Data inválida");
   return iso;
 }
 
@@ -39,10 +40,10 @@ export const checkIn = gestorAction
         .where(eq(reservations.id, input.reservationId))
         .limit(1);
 
-      if (!reservation) throw new Error("Reserva não encontrada");
+      if (!reservation) throw new BusinessError("Reserva não encontrada");
 
       if (reservation.status !== "confirmada") {
-        throw new Error(
+        throw new BusinessError(
           `Só é possível fazer check-in em reservas confirmadas — status atual: "${reservation.status}"`,
         );
       }
@@ -87,16 +88,16 @@ export const checkOut = gestorAction
         .where(eq(reservations.id, input.reservationId))
         .limit(1);
 
-      if (!reservation) throw new Error("Reserva não encontrada");
+      if (!reservation) throw new BusinessError("Reserva não encontrada");
 
       if (reservation.status !== "em_curso") {
-        throw new Error(
+        throw new BusinessError(
           `Só é possível fazer check-out em reservas em curso — status atual: "${reservation.status}"`,
         );
       }
 
       if (!reservation.selectedPeriod) {
-        throw new Error(
+        throw new BusinessError(
           "Reserva sem período confirmado — não é possível fazer check-out",
         );
       }

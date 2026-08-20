@@ -1,4 +1,8 @@
 import { createSafeActionClient } from "next-safe-action";
+import {
+  BusinessError,
+  handleServerError,
+} from "@hebron/auth/safe-action-error";
 import { cookies } from "next/headers";
 import { resolveSession } from "@hebron/auth/server";
 import type { DesignationType, Role } from "@hebron/types/roles";
@@ -7,11 +11,13 @@ import type { DesignationType, Role } from "@hebron/types/roles";
 // Base authenticated action — any role
 // ---------------------------------------------------------------------------
 
-const baseAction = createSafeActionClient().use(async ({ next }) => {
-  const cookieStore = await cookies();
-  const { actorId, roles, designations } = await resolveSession(cookieStore);
-  return next({ ctx: { actorId, roles, designations } });
-});
+const baseAction = createSafeActionClient({ handleServerError }).use(
+  async ({ next }) => {
+    const cookieStore = await cookies();
+    const { actorId, roles, designations } = await resolveSession(cookieStore);
+    return next({ ctx: { actorId, roles, designations } });
+  },
+);
 
 export { baseAction as financeiroAction };
 
@@ -23,7 +29,7 @@ export { baseAction as financeiroAction };
 export const colaboradorAction = baseAction.use(async ({ next, ctx }) => {
   const allowed: Role[] = ["colaborador", "diretor", "super_admin"];
   if (!ctx.roles.some((r) => allowed.includes(r))) {
-    throw new Error("Acesso negado: papel colaborador obrigatório");
+    throw new BusinessError("Acesso negado: papel colaborador obrigatório");
   }
   return next({ ctx });
 });
@@ -32,7 +38,7 @@ export const colaboradorAction = baseAction.use(async ({ next, ctx }) => {
 export const diretorAction = baseAction.use(async ({ next, ctx }) => {
   const allowed: Role[] = ["diretor", "super_admin"];
   if (!ctx.roles.some((r) => allowed.includes(r))) {
-    throw new Error("Acesso negado: papel diretor obrigatório");
+    throw new BusinessError("Acesso negado: papel diretor obrigatório");
   }
   return next({ ctx });
 });
@@ -40,7 +46,7 @@ export const diretorAction = baseAction.use(async ({ next, ctx }) => {
 /** Requires super_admin exclusively */
 export const superAdminAction = baseAction.use(async ({ next, ctx }) => {
   if (!ctx.roles.includes("super_admin")) {
-    throw new Error("Acesso negado: apenas super_admin");
+    throw new BusinessError("Acesso negado: apenas super_admin");
   }
   return next({ ctx });
 });
@@ -55,7 +61,9 @@ export function diretorWithDesignationAction(designation: DesignationType) {
   return diretorAction.use(async ({ next, ctx }) => {
     if (ctx.roles.includes("super_admin")) return next({ ctx });
     if (!ctx.designations.includes(designation)) {
-      throw new Error(`Acesso negado: requer designação "${designation}"`);
+      throw new BusinessError(
+        `Acesso negado: requer designação "${designation}"`,
+      );
     }
     return next({ ctx });
   });

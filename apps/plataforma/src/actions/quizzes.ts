@@ -3,6 +3,7 @@
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   lessons,
   progress,
@@ -32,9 +33,11 @@ export const createQuiz = staffAction
           .from(lessons)
           .where(eq(lessons.id, input.lessonId))
           .limit(1);
-        if (!lesson) throw new Error("Aula não encontrada");
+        if (!lesson) throw new BusinessError("Aula não encontrada");
         if (lesson.type !== "quiz") {
-          throw new Error("Só é possível criar quiz em aulas do tipo quiz");
+          throw new BusinessError(
+            "Só é possível criar quiz em aulas do tipo quiz",
+          );
         }
 
         const [quizRow] = await tx
@@ -44,7 +47,7 @@ export const createQuiz = staffAction
             passingScore: input.passingScore,
           })
           .returning();
-        if (!quizRow) throw new Error("Falha ao criar quiz");
+        if (!quizRow) throw new BusinessError("Falha ao criar quiz");
 
         await tx.insert(quizQuestions).values(
           input.questions.map((question, index) => ({
@@ -80,7 +83,7 @@ export const updateQuiz = staffAction
           .set({ passingScore: input.passingScore, updatedAt: new Date() })
           .where(eq(quizzes.id, input.quizId))
           .returning();
-        if (!quizRow) throw new Error("Quiz não encontrado");
+        if (!quizRow) throw new BusinessError("Quiz não encontrado");
 
         await tx
           .delete(quizQuestions)
@@ -127,7 +130,7 @@ export const submitQuizAttempt = plataformaAction
           .from(quizzes)
           .where(eq(quizzes.id, input.quizId))
           .limit(1);
-        if (!quiz) throw new Error("Quiz não encontrado");
+        if (!quiz) throw new BusinessError("Quiz não encontrado");
 
         const questions = await tx
           .select({
@@ -136,7 +139,8 @@ export const submitQuizAttempt = plataformaAction
           })
           .from(quizQuestions)
           .where(eq(quizQuestions.quizId, input.quizId));
-        if (questions.length === 0) throw new Error("Quiz sem perguntas");
+        if (questions.length === 0)
+          throw new BusinessError("Quiz sem perguntas");
 
         const correctByQuestionId = new Map(
           questions.map((q) => [q.id, q.correctOptionId]),
@@ -158,7 +162,7 @@ export const submitQuizAttempt = plataformaAction
             passed,
           })
           .returning();
-        if (!attempt) throw new Error("Falha ao registrar tentativa");
+        if (!attempt) throw new BusinessError("Falha ao registrar tentativa");
 
         if (!passed) return { attempt, certificate: null };
 
@@ -167,7 +171,7 @@ export const submitQuizAttempt = plataformaAction
           .from(lessons)
           .where(eq(lessons.id, quiz.lessonId))
           .limit(1);
-        if (!lesson) throw new Error("Aula do quiz não encontrada");
+        if (!lesson) throw new BusinessError("Aula do quiz não encontrada");
 
         await tx
           .insert(progress)

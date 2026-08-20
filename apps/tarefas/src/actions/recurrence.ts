@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { and, eq, gte, isNull, ne, or } from "drizzle-orm";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   withAuthenticatedContext,
   type AuthenticatedTx,
@@ -40,7 +41,7 @@ async function assertNoOtherActiveRule(
     .where(and(...conditions))
     .limit(1);
   if (existingActive) {
-    throw new Error(
+    throw new BusinessError(
       "Este template já tem uma regra de recorrência ativa. Encerre-a antes de criar outra.",
     );
   }
@@ -70,7 +71,7 @@ export const createRecurrenceRule = colaboradorAction
           .from(taskTemplates)
           .where(eq(taskTemplates.id, input.taskTemplateId))
           .limit(1);
-        if (!template) throw new Error("Template não encontrado");
+        if (!template) throw new BusinessError("Template não encontrado");
 
         await assertNoOtherActiveRule(tx, input.taskTemplateId);
 
@@ -87,7 +88,8 @@ export const createRecurrenceRule = colaboradorAction
             nextRunAt,
           })
           .returning();
-        if (!row) throw new Error("Falha ao criar regra de recorrência");
+        if (!row)
+          throw new BusinessError("Falha ao criar regra de recorrência");
         return row;
       },
     );
@@ -117,7 +119,8 @@ export const updateRecurrenceRule = colaboradorAction
           .from(recurrenceRules)
           .where(eq(recurrenceRules.id, input.recurrenceRuleId))
           .limit(1);
-        if (!existing) throw new Error("Regra de recorrência não encontrada");
+        if (!existing)
+          throw new BusinessError("Regra de recorrência não encontrada");
 
         await assertNoOtherActiveRule(
           tx,
@@ -138,7 +141,8 @@ export const updateRecurrenceRule = colaboradorAction
           })
           .where(eq(recurrenceRules.id, input.recurrenceRuleId))
           .returning();
-        if (!row) throw new Error("Regra de recorrência não encontrada");
+        if (!row)
+          throw new BusinessError("Regra de recorrência não encontrada");
         return row;
       },
     );
@@ -170,7 +174,8 @@ export const endRecurrenceRule = colaboradorAction
           .set({ endDate: new Date() })
           .where(eq(recurrenceRules.id, input.recurrenceRuleId))
           .returning();
-        if (!row) throw new Error("Regra de recorrência não encontrada");
+        if (!row)
+          throw new BusinessError("Regra de recorrência não encontrada");
         return row;
       },
     );

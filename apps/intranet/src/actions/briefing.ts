@@ -6,6 +6,7 @@ import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { briefingPreferences } from "@hebron/db/schema";
 import { briefingPreferenceSchema } from "@hebron/validators/intranet";
 import { staffAction } from "../lib/safe-action";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 
 // ---------------------------------------------------------------------------
 // Preferência de briefing (intranet.briefing_preferences) — não estava na
@@ -62,7 +63,8 @@ export const saveBriefingPreference = staffAction
             },
           })
           .returning();
-        if (!row) throw new Error("Falha ao salvar preferência de briefing");
+        if (!row)
+          throw new BusinessError("Falha ao salvar preferência de briefing");
         return row;
       },
     );

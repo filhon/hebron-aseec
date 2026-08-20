@@ -7,6 +7,7 @@ import { createSupabaseServerActionClient } from "@hebron/auth/server";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { taskAttachments } from "@hebron/db/schema";
 import { staffAction } from "../lib/safe-action";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 
 // Expiração curta (mesmo padrão de apps/financeiro/src/actions/attachments.ts)
 // — o link é gerado sob demanda no clique do anexo e nunca persistido.
@@ -46,7 +47,7 @@ export const getAttachmentUrl = staffAction
     );
 
     if (!attachment) {
-      throw new Error("Anexo não encontrado");
+      throw new BusinessError("Anexo não encontrado");
     }
 
     const cookieStore = await cookies();
@@ -57,7 +58,7 @@ export const getAttachmentUrl = staffAction
       .from("tarefas-anexos")
       .createSignedUrl(attachment.storageKey, READ_URL_EXPIRES_IN_SECONDS);
     if (error || !data) {
-      throw new Error("Não foi possível gerar o link do anexo");
+      throw new BusinessError("Não foi possível gerar o link do anexo");
     }
 
     return { url: data.signedUrl, fileName: attachment.fileName };

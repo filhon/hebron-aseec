@@ -280,6 +280,7 @@
 | S-257  | 2026-08-19 | AUDIT PACOTE 1 — LGPD: fechar o direito de exclusão (CORRETIVO)                                                                  | concluido                                            |
 | S-258  | 2026-08-19 | AUDIT PACOTE 2 — As costuras que perdem dinheiro e registros (CORRETIVO)                                                         | parcial (D2-001 adiado)                              |
 | S-259  | 2026-08-19 | AUDIT PACOTE 3 — Camada 1: middleware nos 8 apps (CORRETIVO)                                                                     | parcial (renovação de sessão sem teste automatizado) |
+| S-260  | 2026-08-20 | AUDIT PACOTE 4 — O que o usuário lê quando algo falha (CORRETIVO)                                                                | concluido                                            |
 
 ---
 
@@ -23829,4 +23830,129 @@ tarefas}/src/middleware.ts` (novos, 8 arquivos)
   `apps/documentos/src/__tests__/session-gate.test.ts` (mock ajustado para
   `@hebron/auth/middleware`)
 - `AUDIT/04-BACKLOG-CORRECAO.md` (critérios de aceite do Pacote 3)
+- `SESSIONS.md` (esta entrada)
+
+## S-260 — AUDIT PACOTE 4 — O que o usuário lê quando algo falha (CORRETIVO)
+
+**Prompt:** `AUDIT/04-BACKLOG-CORRECAO.md` § PACOTE 4
+**Data:** 2026-08-20
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+`[D4-004]`: next-safe-action@7.10.8 substitui qualquer erro pela mensagem
+genérica em inglês do pacote quando `handleServerError` não é definido —
+confirmado no código-fonte instalado. Nenhum dos 9 apps definia. As ~393
+mensagens de negócio em português escritas em `apps/*/src/actions/**`
+nunca chegavam à UI, embora todo componente já lesse
+`result.serverError` para exibi-las.
+
+**`packages/auth/src/safe-action-error.ts`** (novo) — `BusinessError`
+(subclasse de `Error`, marcador para mensagem destinada ao usuário) +
+`handleServerError(error)`: se `error instanceof BusinessError`, repassa
+`.message` intacto; qualquer outro erro vira a genérica em português
+(`"Não foi possível concluir esta operação..."`) e é logado como JSON
+estruturado (`{ event: "safe_action_unexpected_error", message, stack }`)
+via `console.error` — nunca a mensagem crua chega à tela.
+
+Os 9 `apps/*/src/lib/safe-action.ts` passam `{ handleServerError }` a
+`createSafeActionClient`. Migração mecânica (script Node, não sed manual
+— Windows/Git Bash não tem `find -o` confiável) de `throw new Error(` →
+`throw new BusinessError(` em:
+
+- `apps/*/src/actions/**/*.ts` (71 arquivos, ~370 ocorrências) — toda
+  mensagem de negócio escrita para o usuário.
+- Os próprios 9 `lib/safe-action.ts` (23 ocorrências) — os gates de papel
+  ("Acesso negado: papel X obrigatório") são tão "erro de negócio" quanto
+  qualquer throw dentro de uma action.
+- `packages/auth/src/server.ts` — `resolveSession`'s `"Não autenticado"`,
+  disparado por **todo** app em toda sessão expirada/ausente; é o erro
+  mais comum do ecossistema e não estava no escopo de arquivos original
+  do achado, mas é a mesma plumbing (roda dentro do `.use()` de todo
+  `baseAction`).
+- `packages/auth/src/data-deletion.ts` — os 3 throws que alimentam
+  `apps/admin/src/actions/lgpd.ts` (`resolveDeletionRequest`/
+  `rejectDeletionRequest`, Pacote 1/S-257).
+
+Deliberadamente **não** migrados: erros de configuração fail-fast
+(`Missing required environment variable: ...`, `client.ts`/
+`middleware.ts`/`server.ts`/`testing.ts`) — nunca são disparados por ação
+do usuário, e continuam sendo mascarados pela genérica se algum dia
+dispararem dentro de uma action. `packages/auth/src/impersonation.ts`'s
+`IMPERSONATION_COOKIE_SECRET is required in production` — mesma
+categoria. `packages/auth/src/data-export.ts` — `getMyDataSnapshot`/
+`exportMyData` são chamados só por Server Actions **inline** (`"use
+server"` dentro do `page.tsx` de "Meus Dados", não pelo cliente
+`createSafeActionClient`), então não passam por `handleServerError` de
+qualquer forma; ficam sujeitos ao masking próprio do Next.js para Server
+Actions inline — gap real, mas de mecanismo diferente do achado, fora de
+escopo.
+
+**`[D4-002]`**: 6 dos 9 apps sem `error.tsx`/`global-error.tsx` — copiado
+o padrão de `apps/projetos/src/app/`. `apps/intranet` não tem
+`layout.tsx` na raiz de `src/app/` (usa o padrão Next.js de "multiple
+root layouts" via route groups `(auth)`/`(dashboard)`, cada um com seu
+próprio `<html>`/`<body>`) — confirmado com `next build` real que um
+`error.tsx` na raiz não teria layout para envolver, então foi criado
+dentro de cada route group (2 arquivos) + `global-error.tsx` único na
+raiz (sempre top-level, independente de haver `layout.tsx` raiz) — 13
+arquivos, não 12 como o inventário do achado previa.
+
+**`[D7-001]`**: `pnpm turbo typecheck` falhava por um fixture faltando
+`nickname` em `packages/auth/src/__tests__/data-deletion.test.ts:89`
+(NOT NULL desde commit `c3b32da`, achado original). No processo de
+verificar o typecheck completo, achado o mesmo problema em
+`apps/projetos/src/__tests__/integrations-financeiro-execution.test.ts`
+— não estava no escopo do achado original mas bloqueava o mesmo
+`pnpm turbo typecheck` verde exigido pelo critério de aceite; corrigido
+junto. `pnpm turbo lint typecheck` confirmado 19/19 pacotes verde (saída
+lida, não exit code de pipe).
+
+### Regressão fora de escopo, encontrada e registrada (não corrigida)
+
+Ao rodar a suíte de testes completa para verificar ausência de
+regressão, `apps/documentos/src/__tests__/actions.test.ts`
+(`updateCategory`) revelou que `SENSITIVE_AUDIT_FIELDS` (extendido com
+`"name"` no Pacote 1/S-257) redige **qualquer** campo chamado `name` em
+**qualquer** entidade — não só nome de pessoa. `documentos.categories.name`
+(nome de categoria, não PII) vira `{ redacted: true }` no audit log.
+Pré-existente ao Pacote 4, primeira vez que a suíte de `documentos` rodou
+nesta linha de auditoria. Registrado em memória
+(`project_sensitive_audit_fields_name_overredaction`); não corrigido —
+fora do escopo deste pacote, precisa de escopo por entidade em
+`redactSensitiveFields`, candidato a corretivo próprio (Pacote 11 ou novo
+achado).
+
+A suíte completa (`pnpm turbo test`) também mostrou falhas em
+`storage.test.ts`, `system-actor.test.ts`, `feed.test.ts` (drift já
+documentado em memória, pré-existente) e várias falhas com stack trace
+`postgres/src/connection.js` (esgotamento do pool de conexões do banco de
+dev compartilhado sob carga paralela total, não uma regressão — todas
+passaram limpo quando reexecutadas isoladas).
+
+### Arquivos modificados
+
+- `packages/auth/src/safe-action-error.ts` (novo) — `BusinessError` +
+  `handleServerError`
+- `packages/auth/src/__tests__/safe-action-error.test.ts` (novo)
+- `packages/auth/package.json` (subpath `./safe-action-error`)
+- `packages/auth/src/server.ts`, `packages/auth/src/data-deletion.ts`
+  (`throw new Error` → `throw new BusinessError` nos throws de negócio)
+- `apps/*/src/lib/safe-action.ts` (9 arquivos) — `handleServerError`
+  passado a `createSafeActionClient`; gates de papel migrados a
+  `BusinessError`
+- `apps/*/src/actions/**/*.ts` (71 arquivos) — migração mecânica
+  `Error` → `BusinessError`
+- `apps/{admin,plataforma,radio,flats,tarefas}/src/app/{error,global-error}.tsx`
+  (novos, 10 arquivos)
+- `apps/intranet/src/app/(auth)/error.tsx`,
+  `apps/intranet/src/app/(dashboard)/error.tsx`,
+  `apps/intranet/src/app/global-error.tsx` (novos, 3 arquivos)
+- `packages/auth/src/__tests__/data-deletion.test.ts`,
+  `apps/projetos/src/__tests__/integrations-financeiro-execution.test.ts`
+  (fixture `bankAccounts.nickname` ausente)
+- `apps/admin/src/__tests__/actions.test.ts` (novo teste: erro de negócio
+  chega com a mensagem exata via `serverError`)
+- `AUDIT/04-BACKLOG-CORRECAO.md` (critérios de aceite do Pacote 4)
 - `SESSIONS.md` (esta entrada)

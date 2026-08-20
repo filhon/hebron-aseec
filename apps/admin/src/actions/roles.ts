@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { and, eq, isNull } from "drizzle-orm";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   withAuthenticatedContext,
   type AuthenticatedTx,
@@ -38,7 +39,7 @@ async function checkConflictOfInterest(
   if (GOVERNANCE_ROLES.includes(newRole)) {
     const conflicts = current.filter((r) => RESTRICTED_ROLES.includes(r));
     if (conflicts.length > 0) {
-      throw new Error(
+      throw new BusinessError(
         `Conflito de interesse: o usuário já possui o(s) papel(éis) ${conflicts.join(", ")}. ` +
           `Diretores e conselheiros não podem ser submissores nem hóspedes.`,
       );
@@ -48,7 +49,7 @@ async function checkConflictOfInterest(
   if (RESTRICTED_ROLES.includes(newRole)) {
     const conflicts = current.filter((r) => GOVERNANCE_ROLES.includes(r));
     if (conflicts.length > 0) {
-      throw new Error(
+      throw new BusinessError(
         `Conflito de interesse: o usuário já possui o(s) papel(éis) ${conflicts.join(", ")}. ` +
           `Submissores e hóspedes não podem ser diretores nem conselheiros.`,
       );
@@ -113,7 +114,7 @@ export const assignRole = adminAction
           );
 
         if (existingRows[0]) {
-          throw new Error(
+          throw new BusinessError(
             "Este papel já foi atribuído ao usuário neste escopo",
           );
         }
@@ -129,7 +130,7 @@ export const assignRole = adminAction
           .returning();
 
         const assignment = inserted[0];
-        if (!assignment) throw new Error("Falha ao atribuir papel");
+        if (!assignment) throw new BusinessError("Falha ao atribuir papel");
         return assignment;
       },
     );
@@ -178,7 +179,9 @@ export const revokeRole = adminAction
 
         const assignment = rows[0];
         if (!assignment)
-          throw new Error("Atribuição de papel não encontrada ou já revogada");
+          throw new BusinessError(
+            "Atribuição de papel não encontrada ou já revogada",
+          );
 
         await tx
           .update(roleAssignments)
@@ -245,7 +248,7 @@ export const updateDesignation = adminAction
 
           const active = activeRows[0];
           if (!active)
-            throw new Error(
+            throw new BusinessError(
               "Designação ativa não encontrada para este usuário",
             );
 
@@ -295,7 +298,7 @@ export const updateDesignation = adminAction
         );
 
         if (!hasGovernanceRole) {
-          throw new Error(
+          throw new BusinessError(
             "Apenas diretores ou conselheiros podem receber designações especiais",
           );
         }
@@ -310,7 +313,7 @@ export const updateDesignation = adminAction
           .returning();
 
         const designation = inserted[0];
-        if (!designation) throw new Error("Falha ao criar designação");
+        if (!designation) throw new BusinessError("Falha ao criar designação");
         return designation;
       },
     );
