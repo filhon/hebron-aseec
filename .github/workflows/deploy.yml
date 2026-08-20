@@ -1,0 +1,87 @@
+name: Deploy
+
+# PACOTE 5 (AUDIT/04-BACKLOG-CORRECAO.md): dispara só depois que o workflow
+# CI (.github/workflows/ci.yml) terminar com sucesso na main — nunca deploya
+# um commit que não passou por lint/typecheck/test. `workflow_run` (não
+# `push`) é o gate correto para isso: CI e Deploy são workflows separados,
+# então "on: push" aqui rodaria em paralelo com o CI, sem esperar o
+# resultado.
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
+
+concurrency:
+  group: deploy-main
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        app:
+          - admin
+          - documentos
+          - financeiro
+          - flats
+          - intranet
+          - plataforma
+          - projetos
+          - radio
+          - tarefas
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+      # Um Project ID por app — GitHub Actions não permite indexar `secrets`
+      # dinamicamente (`secrets[matrix.app]` não é uma expressão válida), só
+      # `env` pode ser indexado via expansão indireta do bash abaixo.
+      VERCEL_PROJECT_ID_ADMIN: ${{ secrets.VERCEL_PROJECT_ID_ADMIN }}
+      VERCEL_PROJECT_ID_DOCUMENTOS: ${{ secrets.VERCEL_PROJECT_ID_DOCUMENTOS }}
+      VERCEL_PROJECT_ID_FINANCEIRO: ${{ secrets.VERCEL_PROJECT_ID_FINANCEIRO }}
+      VERCEL_PROJECT_ID_FLATS: ${{ secrets.VERCEL_PROJECT_ID_FLATS }}
+      VERCEL_PROJECT_ID_INTRANET: ${{ secrets.VERCEL_PROJECT_ID_INTRANET }}
+      VERCEL_PROJECT_ID_PLATAFORMA: ${{ secrets.VERCEL_PROJECT_ID_PLATAFORMA }}
+      VERCEL_PROJECT_ID_PROJETOS: ${{ secrets.VERCEL_PROJECT_ID_PROJETOS }}
+      VERCEL_PROJECT_ID_RADIO: ${{ secrets.VERCEL_PROJECT_ID_RADIO }}
+      VERCEL_PROJECT_ID_TAREFAS: ${{ secrets.VERCEL_PROJECT_ID_TAREFAS }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: pnpm
+
+      # Resolve VERCEL_PROJECT_ID_ADMIN / _DOCUMENTOS / ... para o app deste
+      # job via expansão indireta do bash (${!VAR_NAME}) — não existe forma
+      # segura de fazer isso na sintaxe de expressão do GitHub Actions.
+      - name: Resolve o Project ID deste app
+        run: |
+          VAR_NAME="VERCEL_PROJECT_ID_$(echo "${{ matrix.app }}" | tr '[:lower:]' '[:upper:]')"
+          if [ -z "${!VAR_NAME}" ]; then
+            echo "::error::Secret $VAR_NAME não configurado — crie o projeto Vercel de ${{ matrix.app }} e adicione o secret."
+            exit 1
+          fi
+          echo "VERCEL_PROJECT_ID=${!VAR_NAME}" >> "$GITHUB_ENV"
+
+      # `vercel build` roda o install + build localmente no runner (usa o
+      # packageManager do package.json raiz para escolher pnpm), respeitando
+      # o "Root Directory" configurado no dashboard do projeto Vercel
+      # (apps/<app>) — não precisamos rodar `pnpm install` manualmente antes.
+      - name: Deploy ${{ matrix.app }} para produção
+        working-directory: apps/${{ matrix.app }}
+        run: |
+          npx vercel@latest pull --yes --environment=production --token="$VERCEL_TOKEN"
+          npx vercel@latest build --prod --token="$VERCEL_TOKEN"
+          npx vercel@latest deploy --prebuilt --prod --token="$VERCEL_TOKEN"

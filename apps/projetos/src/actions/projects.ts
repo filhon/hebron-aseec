@@ -4,6 +4,7 @@ import { z } from "zod";
 import { eq, and, isNull, count } from "drizzle-orm";
 import { db } from "@hebron/db/client";
 import { BusinessError } from "@hebron/auth/safe-action-error";
+import { enforceRateLimit, getRateLimiter } from "@hebron/auth/rate-limit";
 import {
   withAuthenticatedContext,
   type AuthenticatedTx,
@@ -457,6 +458,13 @@ export const updateDraftProject = submissorAction
 export const submitProject = submissorAction
   .schema(z.object({ projectId: z.string().uuid("Projeto inválido") }))
   .action(async ({ parsedInput, ctx }) => {
+    // PACOTE 5: submissão dispara scoring de IA (custo) + notificações —
+    // limite generoso por ator, só para conter um script em loop.
+    await enforceRateLimit(
+      getRateLimiter("submit-project", 10, 3600),
+      `actor:${ctx.actorId}`,
+    );
+
     const project = await withAuthenticatedContext(
       { actorId: ctx.actorId },
       (tx) => getProjectOrThrow(tx, parsedInput.projectId),

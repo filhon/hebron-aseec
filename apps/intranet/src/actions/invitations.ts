@@ -6,6 +6,7 @@ import { and, eq, isNull, gt } from "drizzle-orm";
 import { createClient } from "@supabase/supabase-js";
 import { db } from "@hebron/db/client";
 import { BusinessError } from "@hebron/auth/safe-action-error";
+import { enforceRateLimit, getRateLimiter } from "@hebron/auth/rate-limit";
 import {
   withAuthenticatedContext,
   withSystemRole,
@@ -52,6 +53,19 @@ export const acceptInvitation = publicAction
     }),
   )
   .action(async ({ parsedInput }) => {
+    // PACOTE 5: única rota de criação de conta sem sessão prévia — alvo
+    // natural de brute-force/spam (BusinessError chega ao usuário via
+    // handleServerError, mesma mensagem genérica do login). Chave é o
+    // próprio token do convite, não IP: o ataque relevante aqui é martelar
+    // um convite específico (vazado/adivinhado), e `publicAction` não passa
+    // por next/headers (evita o "headers() outside a request scope" que
+    // next-safe-action encontra fora de uma Server Action real, ex.: nos
+    // testes de integração que chamam a action diretamente).
+    await enforceRateLimit(
+      getRateLimiter("accept-invitation", 10, 600),
+      `token:${parsedInput.token}`,
+    );
+
     const now = new Date();
 
     // Exceção service-level, já documentada no schema (0003_admin_rls.sql:

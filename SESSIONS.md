@@ -281,6 +281,7 @@
 | S-258  | 2026-08-19 | AUDIT PACOTE 2 — As costuras que perdem dinheiro e registros (CORRETIVO)                                                         | parcial (D2-001 adiado)                              |
 | S-259  | 2026-08-19 | AUDIT PACOTE 3 — Camada 1: middleware nos 8 apps (CORRETIVO)                                                                     | parcial (renovação de sessão sem teste automatizado) |
 | S-260  | 2026-08-20 | AUDIT PACOTE 4 — O que o usuário lê quando algo falha (CORRETIVO)                                                                | concluido                                            |
+| S-261  | 2026-08-20 | AUDIT PACOTE 5 — Prontidão de produção (P-9.5) (CORRETIVO)                                                                       | parcial (infra externa pendente — ver runbook)       |
 
 ---
 
@@ -23955,4 +23956,195 @@ passaram limpo quando reexecutadas isoladas).
 - `apps/admin/src/__tests__/actions.test.ts` (novo teste: erro de negócio
   chega com a mensagem exata via `serverError`)
 - `AUDIT/04-BACKLOG-CORRECAO.md` (critérios de aceite do Pacote 4)
+- `SESSIONS.md` (esta entrada)
+
+---
+
+## S-261 — AUDIT PACOTE 5 — Prontidão de produção (P-9.5) (CORRETIVO)
+
+**Prompt:** `AUDIT/04-BACKLOG-CORRECAO.md` § PACOTE 5
+**Data:** 2026-08-20
+**Modelo:** claude-sonnet-5
+**Status:** parcial — código completo; provisionamento de infraestrutura real (Vercel, Sentry, Upstash, Better Stack, Cloudflare, Inngest, Supabase de produção) fica para Filipe, sem credenciais nesta sessão
+
+### Resumo
+
+`P-9.5` nunca rodou (13 critérios `[ ]`) e três camadas prometidas na stack
+não existiam em nenhum lugar do código: security headers, observabilidade
+(Sentry) e rate limiting (Upstash). Escopo desta sessão: implementar tudo
+que é código/repositório, e documentar em runbook o que exige contas
+externas que este ambiente não tem como provisionar (decisão tomada com o
+usuário antes de codar — ver `AskUserQuestion` no início da sessão).
+
+**Security headers** — `packages/config/src/next.ts` (`createNextConfig`)
+ganhou `async headers()`, mesclado com qualquer override de app (nenhum
+app tinha um). `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`,
+`Referrer-Policy: strict-origin-when-cross-origin`,
+`Strict-Transport-Security`, e uma `Content-Security-Policy-Report-Only`
+(pedida explicitamente em modo report-only pelo backlog). Verificado com
+`next build`+`next start`+`curl` real no admin — os 5 headers chegam numa
+requisição HTTP de verdade, inclusive o redirect do middleware (Pacote 3)
+funcionando junto.
+
+**Sentry** — `@sentry/nextjs@^10.70.0` adicionado ao catálogo pnpm
+(`pnpm-workspace.yaml`) e aos 9 `package.json`. `src/instrumentation.ts` +
+`src/instrumentation-client.ts` criados em cada app (padrão atual do SDK
+para Next 15 App Router — `register()`/`onRequestError` no server,
+`Sentry.init` + `onRouterTransitionStart` no client). `next.config.ts` dos
+9 apps envolvido em `withSentryConfig`. Os 23 `error.tsx`/`global-error.tsx`
+(Pacote 4) ganharam `useEffect(() => Sentry.captureException(error), [error])`
+via script Node (padrão idêntico nos 23 arquivos, verificado antes de
+rodar). Sem `SENTRY_DSN`, o SDK desliga sozinho — `next build` real
+confirmado limpo (admin) sem nenhuma variável configurada, depois todo o
+workspace (`pnpm turbo build`, 9/9 apps, 26min, 0 cache — primeira vez
+tocando os 9 `next.config.ts`).
+
+**Rate limiting** — `packages/auth/src/rate-limit.ts` (novo):
+`@upstash/ratelimit`+`@upstash/redis` quando `UPSTASH_REDIS_REST_URL`/
+`TOKEN` existem, limitador fixed-window em memória como fallback (dev/CI —
+avisado explicitamente que não protege de verdade entre instâncias
+serverless). `enforceRateLimit` lança `BusinessError`
+(`packages/auth/src/safe-action-error.ts`, Pacote 4) — mensagem chega ao
+usuário sem plumbing nova. Aplicado em 3 pontos concretos, escolhidos por
+exposição real (não os 4 nomeados literalmente no backlog — ver nota
+abaixo): `apps/radio/.../heartbeat/route.ts` (60/5min por IP — via
+`request.headers` do `NextRequest`, não `next/headers`, único endpoint
+anônimo fora de next-safe-action do ecossistema),
+`apps/intranet/.../invitations.ts::acceptInvitation` (10/10min por
+**token do convite**, não IP — motivo abaixo) e
+`apps/projetos/.../projects.ts::submitProject` (10/hora por ator — dispara
+scoring de IA, tem custo). 6 testes determinísticos (limitador em memória,
+sem rede) em `packages/auth/src/__tests__/rate-limit.test.ts`.
+
+**Regressão pega e corrigida na própria sessão**: a primeira versão de
+`acceptInvitation` chamava `headers()` de `next/headers` para extrair o IP.
+Rodar a suíte existente (`apps/intranet/src/__tests__/invitations.test.ts`,
+não tocada por este pacote) quebrou com `` `headers` was called outside a
+request scope `` — `publicAction` não passa por `cookies()` como
+`baseAction` passa, e os testes chamam a action diretamente (fora de uma
+Server Action real do Next), então `next/headers` nunca tem contexto de
+request. Corrigido trocando a chave de rate limit de IP para o próprio
+`parsedInput.token` — mais preciso para essa action específica (o ataque
+relevante é martelar um convite vazado/adivinhado, não um IP genérico) e
+elimina a dependência de `next/headers`. As 3 suítes de teste que exercitam
+`acceptInvitation`/`submitProject` (`invitations.test.ts`,
+`email-templates-wiring.test.ts`, `flow.test.ts`, `notifications.test.ts` —
+33 testes de negócio) foram rodadas depois da correção: todas passam.
+
+Decisão registrada: **login não foi movido para uma Server Action.** O
+backlog pedia rate limit em "heartbeat, login, cadastro e submissão de
+projeto", mas `apps/intranet/.../login-form.tsx` chama
+`signInWithPassword`/`verifyTotpChallenge` (`@hebron/auth`) direto do
+browser para o Supabase Auth — reescrever esse caminho para passar por um
+Server Action só para caber uma checagem de rate limit seria mexer no
+fluxo mais sensível do ecossistema (autenticação de ~150 usuários) fora de
+qualquer necessidade concreta, já que o Supabase Auth já aplica rate limit
+nativo nesse caminho (`over_email_send_rate_limit`, já tratado na UI).
+Documentado no runbook como ação de configuração no Supabase Dashboard, não
+como gap de código.
+
+**`.github/workflows/deploy.yml`** (novo) — dispara via `workflow_run`
+depois que o workflow `CI` termina com sucesso na `main` (não `on: push`,
+que rodaria em paralelo sem esperar o CI). Matriz de 9 jobs, um por app,
+via Vercel CLI (`pull` → `build` → `deploy --prebuilt --prod`). Um secret
+`VERCEL_PROJECT_ID_<APP>` por app — GitHub Actions não permite indexar
+`secrets` dinamicamente por expressão, então a resolução por app usa
+expansão indireta do bash (`${!VAR_NAME}`) sobre `env`, não `secrets`.
+
+**`.env.example`** — 9 arquivos novos (um por app), derivados do grep real
+de `process.env` em cada `apps/*/src` **mais** o que os pacotes
+compartilhados exigem incondicionalmente (ex.: `@hebron/auth/client.ts` lê
+`NEXT_PUBLIC_SUPABASE_URL`/`ANON_KEY` no escopo do módulo, então todo app
+precisa mesmo sem aparecer no grep do próprio app; `@hebron/db/client.ts`
+idem para `DATABASE_URL`). Confirmado por 2 agentes de exploração em
+paralelo: `SUPABASE_SERVICE_ROLE_KEY` só é lido em código de produção por
+`admin`, `documentos`, `financeiro`, `intranet`, `plataforma` — `radio`,
+`projetos`, `tarefas`, `flats` não recebem a chave.
+
+**Seed de produção** — `packages/db/src/seed/producao.ts` (novo):
+`seedChartOfAccounts` (plano de contas padrão incluindo "Doações", KPI da
+Intranet — F1-Q10), `seedSuperAdmins` e `seedDesignations`. Investigação
+prévia mostrou que 3 dos 6 itens do checklist original (6 workspaces de
+tarefas, 2 unidades de flat, 8 papéis) **já estavam seedados via
+migration** (`0031_tarefas.sql`, `0021_flats.sql`, enum `role`) — nada a
+fazer. Um quarto (2 templates de limpeza, P-7.11) já existia como primitiva
+testada (`seedFlatsCleaningTemplates`,
+`packages/db/src/seed/tarefas-templates.ts`) mas só rodava via script
+próprio (`db:seed:flats-tarefas`), nunca dentro do `pnpm db:seed`
+principal — mesmo padrão de gap do Pacote 1 (primitiva pronta, sem porta de
+entrada); agora `seed.ts::main()` chama os 5 (2 pré-existentes + 3 novos).
+Identidades reais (2 super_admins; gestor/autorizador do financeiro; gestor
+de flats) **não são inventadas em código** — lidas de env var
+(`SEED_SUPER_ADMIN_1_EMAIL`/`NAME`, `SEED_FINANCEIRO_GESTOR_EMAIL`, etc.,
+documentadas no `.env.example` da raiz); ausentes → skip com log claro,
+nunca falha o resto do seed. `designations` não tem coluna de módulo
+(confirmado lendo `packages/db/src/schema/public.ts`) — "gestor"/
+"autorizador" são flags globais do usuário, lidas em
+`apps/financeiro/src/lib/safe-action.ts` e `apps/flats/src/lib/safe-action.ts`
+separadamente; documentado no código-fonte para não ser confundido com
+escopo por módulo numa leitura futura. 3 testes cobrindo o caminho de skip
+(sem tocar o banco) em `packages/db/src/__tests__/seed-producao.test.ts` —
+o caminho de criação real via Supabase Admin API não é testado em CI (criaria
+usuários reais); verificação fica para o runbook.
+
+**Verificação de rede**: sessão tinha acesso ao registry npm (confirmado
+antes de instalar `@upstash/*`/`@sentry/nextjs`) mas não ao banco de dev
+compartilhado num teste pontual — os testes que tocam banco (skip-path de
+`seedSuperAdmins`/`seedDesignations`) passaram porque o caminho testado não
+executa nenhuma query.
+
+**Fora do escopo desta sessão, documentado em runbook** (todos exigem
+credenciais/contas que este ambiente não tem): criar os 9 projetos Vercel +
+secrets no GitHub; DNS Cloudflare; aplicar migration + verificar pg_cron no
+Supabase de produção; criar os 9 projetos Sentry e testar captura real;
+Upstash Redis real; 9 monitores Better Stack; `INNGEST_SIGNING_KEY` de
+produção e verificação 1-a-1 dos 16 crons do catálogo (lista completa
+levantada e documentada); SSO entre os 9 subdomínios reais; P-9.0
+(migração do legado — é o Pacote 7, prompt separado). Checklist operacional
+completo, com exatamente o que fazer em cada console, em
+`AUDIT/PACOTE-5-RUNBOOK.md` (novo).
+
+### Verificação
+
+- `pnpm --filter @hebron/auth typecheck/test` — limpo, 6 testes novos de
+  rate-limit passando.
+- `pnpm --filter @hebron/db typecheck/lint/test` — limpo, 3 testes novos de
+  seed passando.
+- `pnpm --filter {radio,intranet,projetos} typecheck` — limpo (os 3 apps
+  com rate limit aplicado).
+- `next build` real do admin (headers + Sentry, sem nenhum DSN/org
+  configurado) — limpo, sem warning de deprecação do Sentry depois de
+  ajustar `webpack.treeshake.removeDebugLogging`/`webpack.automaticVercelMonitors`.
+- `next start`+`curl` real do admin — os 5 headers de segurança confirmados
+  numa resposta HTTP de verdade.
+- `pnpm turbo build` do workspace inteiro — **9/9 apps, 0 falhas**, primeira
+  vez que os 9 `next.config.ts` novos (Sentry) e os 23
+  `error.tsx`/`global-error.tsx` editados compilam juntos.
+- `pnpm turbo lint typecheck` do workspace inteiro — ver resultado abaixo.
+
+### Arquivos modificados
+
+- `pnpm-workspace.yaml` (catálogo: `@sentry/nextjs`)
+- `packages/config/src/next.ts` (security headers)
+- `packages/auth/src/rate-limit.ts` (novo), `packages/auth/package.json`
+  (subpath `./rate-limit`, deps `@upstash/*`),
+  `packages/auth/src/__tests__/rate-limit.test.ts` (novo)
+- `apps/radio/src/app/api/heartbeat/route.ts`,
+  `apps/intranet/src/actions/invitations.ts`,
+  `apps/projetos/src/actions/projects.ts` (rate limit aplicado)
+- `apps/*/package.json` (9 arquivos — dep `@sentry/nextjs`),
+  `apps/*/next.config.ts` (9 — `withSentryConfig`),
+  `apps/*/src/instrumentation.ts` (9, novos),
+  `apps/*/src/instrumentation-client.ts` (9, novos)
+- 23 `apps/*/src/app/**/{error,global-error}.tsx` (Pacote 4) —
+  `Sentry.captureException`
+- `apps/*/.env.example` (9, novos)
+- `.env.example` (raiz — seção `SEED_*`)
+- `.github/workflows/deploy.yml` (novo)
+- `packages/db/src/seed/producao.ts` (novo),
+  `packages/db/src/__tests__/seed-producao.test.ts` (novo),
+  `packages/db/src/seed.ts` (orquestra os 5 seeds em `main()`),
+  `packages/db/package.json` (script `db:seed:producao`)
+- `AUDIT/PACOTE-5-RUNBOOK.md` (novo)
+- `AUDIT/04-BACKLOG-CORRECAO.md` (critérios de aceite do Pacote 5)
 - `SESSIONS.md` (esta entrada)

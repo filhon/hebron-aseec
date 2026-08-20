@@ -9,5 +9,6 @@ packages:
 # processo). Sempre referenciar via "catalog:" nos package.json.
 catalog:
   "@supabase/supabase-js": ^2.106.1
+  "@sentry/nextjs": ^10.70.0
   drizzle-orm: ^0.36.4
   zod: ^3.24.0

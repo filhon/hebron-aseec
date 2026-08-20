@@ -571,6 +571,18 @@ export async function seedEmailTemplates(): Promise<SeedEmailTemplatesResult> {
 }
 
 async function main() {
+  // PACOTE 5 (AUDIT/04-BACKLOG-CORRECAO.md, P-9.5): um único `pnpm db:seed`
+  // cobre tudo que P-9.5 pede — os passos abaixo importam de ./seed/* em vez
+  // de duplicar lógica; cada um continua rodável isoladamente pelo seu
+  // próprio script (db:seed:flats-tarefas, db:seed:producao).
+  const [
+    { seedFlatsCleaningTemplates },
+    { seedChartOfAccounts, seedSuperAdmins, seedDesignations },
+  ] = await Promise.all([
+    import("./seed/tarefas-templates"),
+    import("./seed/producao"),
+  ]);
+
   const result = await seedProjetosChecklistTemplate();
   console.log(
     result.created
@@ -584,6 +596,45 @@ async function main() {
       ? `Semeados ${emailTemplatesResult.inserted} template(s) de e-mail em admin.email_templates.`
       : "Templates de e-mail já semeados — nada a fazer.",
   );
+
+  const cleaningResult = await seedFlatsCleaningTemplates();
+  for (const [name, { templateId, created }] of Object.entries(
+    cleaningResult.templates,
+  )) {
+    console.log(
+      created
+        ? `Criado template de limpeza "${name}" (${templateId}).`
+        : `Template de limpeza "${name}" já existia (${templateId}) — nada a fazer.`,
+    );
+  }
+
+  const chartResult = await seedChartOfAccounts();
+  console.log(
+    chartResult.inserted > 0
+      ? `Plano de contas: ${chartResult.inserted} categoria(s) criada(s) (inclui "Doações").`
+      : 'Plano de contas já semeado — nada a fazer (categoria "Doações" já existe).',
+  );
+
+  const adminsResult = await seedSuperAdmins();
+  if (adminsResult.skippedReason) {
+    console.warn(adminsResult.skippedReason);
+  } else {
+    for (const p of adminsResult.processed) {
+      console.log(
+        `super_admin ${p.email}: ${p.created ? "conta criada" : "conta já existia"}, papel ${p.roleGranted ? "concedido agora" : "já concedido"}.`,
+      );
+    }
+  }
+
+  const designationsResult = await seedDesignations();
+  for (const p of designationsResult.processed) {
+    console.log(
+      `Designação ${p.label} → ${p.email}: ${p.granted ? "concedida agora" : "já concedida"}.`,
+    );
+  }
+  for (const s of designationsResult.skipped) {
+    console.warn(`Designação ${s.label} não processada: ${s.reason}`);
+  }
 
   // `db` (./client) é um pool compartilhado sem `.end()` exposto (singleton
   // pensado para o runtime da app, reaproveitado aqui por getSystemActorId/

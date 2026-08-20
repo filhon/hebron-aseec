@@ -12,6 +12,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
+    "@sentry/nextjs": "catalog:",
     "@hebron/auth": "workspace:*",
     "@hebron/config": "workspace:*",
     "@hebron/db": "workspace:*",

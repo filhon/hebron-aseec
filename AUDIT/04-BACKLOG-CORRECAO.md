@@ -188,14 +188,14 @@ Executar P-9.5 com as camadas de produção que faltam, tratando-as como pré-re
 
 ### Critérios de aceite
 
-- [ ] Os 9 apps enviam o conjunto completo de security headers (verificado por requisição real)
-- [ ] Sentry captura erro em todos os 9 apps (teste com erro proposital)
-- [ ] `/api/heartbeat` recusa acima do limite configurado
-- [ ] Cada app tem `.env.example` só com as variáveis que ele lê; nenhum app sem uso de service role recebe a chave
-- [ ] `INNGEST_SIGNING_KEY` configurada em produção (sem ela o serve opera em modo dev)
-- [ ] Todos os crons do catálogo registrados em produção, verificados 1 a 1
-- [ ] pg_cron de partições ativo; SSO verificado entre os 9 subdomínios
-- [ ] Demais critérios originais de P-9.5
+- [x] Os 9 apps enviam o conjunto completo de security headers (verificado por requisição real) — `packages/config/src/next.ts` (`createNextConfig`), verificado com `next build`+`next start`+`curl` real no app admin (os outros 8 usam o mesmo `createNextConfig`, sem override). CSP em `Report-Only` conforme pedido; endurecer para bloqueante fica para depois de observar violações em produção.
+- [ ] Sentry captura erro em todos os 9 apps (teste com erro proposital) — **PARCIAL.** SDK completo nos 9 apps (`@sentry/nextjs`, `instrumentation.ts`+`instrumentation-client.ts`, `withSentryConfig`, os 23 `error.tsx`/`global-error.tsx` chamando `Sentry.captureException`), build real verificado sem DSN configurado (SDK desliga sozinho). Falta criar os 9 projetos Sentry e testar captura em produção — ver `AUDIT/PACOTE-5-RUNBOOK.md` §5.
+- [x] `/api/heartbeat` recusa acima do limite configurado — `packages/auth/src/rate-limit.ts` + `apps/radio/.../heartbeat/route.ts` (60/5min por IP, 429 real), mais `acceptInvitation` (intranet) e `submitProject` (projetos). Testado com o limitador em memória (`packages/auth/src/__tests__/rate-limit.test.ts`, 6 testes); proteção real entre instâncias serverless depende de Upstash em produção (runbook §6).
+- [x] Cada app tem `.env.example` só com as variáveis que ele lê; nenhum app sem uso de service role recebe a chave — 9 arquivos criados a partir do grep real de `process.env` por app + o que cada pacote compartilhado exige incondicionalmente (mapa completo na sessão).
+- [ ] `INNGEST_SIGNING_KEY` configurada em produção (sem ela o serve opera em modo dev) — ação manual, runbook §8.
+- [ ] Todos os crons do catálogo registrados em produção, verificados 1 a 1 — catálogo completo dos 16 crons levantado e documentado no runbook §8; verificação em produção é manual, pós-deploy.
+- [ ] pg_cron de partições ativo; SSO verificado entre os 9 subdomínios — ação manual (depende do Supabase de produção e dos domínios reais no ar), runbook §4 e §9.
+- [ ] Demais critérios originais de P-9.5 — **PARCIAL.** `.github/workflows/deploy.yml` criado (dispara após CI verde na main, um job por app via Vercel CLI); falta criar os 9 projetos Vercel + secrets no GitHub (runbook §1–2), Better Stack (runbook §7), aplicar a migration no Supabase de produção e migrar os usuários do legado (P-9.0 — fora do escopo desta sessão, é o PACOTE 7). Seed de produção estendido (`packages/db/src/seed/producao.ts`): plano de contas com "Doações", 2 super_admins e as 3 designações, todos idempotentes e sem identidade inventada (lêem de env var, pulam com aviso se ausente) — 6 workspaces/2 unidades de flat/8 papéis já vinham prontos por migration, confirmado nesta sessão. Checklist operacional completo em `AUDIT/PACOTE-5-RUNBOOK.md`.
 
 ---
 

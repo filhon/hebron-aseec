@@ -27,6 +27,7 @@
     "db:migrate": "tsx src/migrate.ts",
     "db:seed": "tsx src/seed.ts",
     "db:seed:flats-tarefas": "tsx src/seed/tarefas-templates.ts",
+    "db:seed:producao": "tsx src/seed/producao.ts",
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {

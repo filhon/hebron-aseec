@@ -13,6 +13,7 @@
     "./data-export": "./src/data-export.ts",
     "./data-deletion": "./src/data-deletion.ts",
     "./safe-action-error": "./src/safe-action-error.ts",
+    "./rate-limit": "./src/rate-limit.ts",
     "./testing": "./src/testing.ts"
   },
   "scripts": {
@@ -26,6 +27,8 @@
     "@hebron/types": "workspace:*",
     "@supabase/ssr": "^0.5.0",
     "@supabase/supabase-js": "catalog:",
+    "@upstash/ratelimit": "^2.0.5",
+    "@upstash/redis": "^1.34.3",
     "drizzle-orm": "catalog:",
     "next": "^15.3.0"
   },
