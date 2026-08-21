@@ -1,12 +1,16 @@
 import { Suspense } from "react";
-import { CalendarDays } from "lucide-react";
-import { EmptyState, ErrorState, PageHeader } from "@hebron/ui";
+import { CalendarDays, CalendarPlus, Download } from "lucide-react";
+import { EmptyState, ErrorState, PageHeader, Button } from "@hebron/ui";
 import {
   getMeetingSessionsWithDecisions,
   meetingSessionsToCalendarEvents,
 } from "../../../lib/queries";
 import { CalendarWidget } from "../../../components/calendar-widget";
 import { FeedSkeleton } from "../../../components/feed-skeleton";
+import {
+  buildGoogleCalendarUrl,
+  buildIcsDataUrl,
+} from "../../../lib/calendar-export";
 
 function formatDate(date: Date): string {
   return date.toLocaleDateString("pt-BR", {
@@ -78,6 +82,11 @@ async function CalendarioContent() {
     .filter((session) => session.date >= todayStart)
     .sort((a, b) => a.date.getTime() - b.date.getTime());
   const calendarEvents = meetingSessionsToCalendarEvents(sessions);
+  const calendarEventBySessionId = new Map(
+    calendarEvents
+      .filter((event) => event.type === "reuniao" && event.meetingSessionId)
+      .map((event) => [event.meetingSessionId as string, event]),
+  );
 
   return (
     <div className="hb-grid hb-grid-stat">
@@ -96,44 +105,88 @@ async function CalendarioContent() {
         ) : (
           <div className="hb-card-body" style={{ paddingTop: 8 }}>
             <ul style={{ display: "flex", flexDirection: "column" }}>
-              {upcoming.map((session) => (
-                <li
-                  key={session.id}
-                  style={{
-                    display: "flex",
-                    gap: 14,
-                    padding: "14px 0",
-                    borderBottom: "1px solid var(--divider)",
-                  }}
-                >
-                  <div
-                    className="text-xs"
-                    style={{ width: 88, flexShrink: 0, paddingTop: 2 }}
+              {upcoming.map((session) => {
+                const exportEvent = calendarEventBySessionId.get(session.id);
+
+                return (
+                  <li
+                    key={session.id}
+                    style={{
+                      display: "flex",
+                      gap: 14,
+                      padding: "14px 0",
+                      borderBottom: "1px solid var(--divider)",
+                    }}
                   >
-                    {formatDate(session.date)}
-                  </div>
-                  <div style={{ minWidth: 0, flex: 1 }}>
                     <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 8,
-                        flexWrap: "wrap",
-                      }}
+                      className="text-xs"
+                      style={{ width: 88, flexShrink: 0, paddingTop: 2 }}
                     >
-                      <span className="hb-badge">{session.typeLabel}</span>
-                      <span className="text-sm font-semibold">
-                        Reunião {session.typeLabel}
-                      </span>
+                      {formatDate(session.date)}
                     </div>
-                    {session.chairName && (
-                      <p className="text-xs" style={{ marginTop: 4 }}>
-                        Presidida por {session.chairName}
-                      </p>
-                    )}
-                  </div>
-                </li>
-              ))}
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <span className="hb-badge">{session.typeLabel}</span>
+                        <span className="text-sm font-semibold">
+                          Reunião {session.typeLabel}
+                        </span>
+                      </div>
+                      {session.chairName && (
+                        <p className="text-xs" style={{ marginTop: 4 }}>
+                          Presidida por {session.chairName}
+                        </p>
+                      )}
+                      {exportEvent && (
+                        <div
+                          style={{
+                            display: "flex",
+                            gap: 8,
+                            marginTop: 8,
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          <Button
+                            asChild
+                            variant="outline"
+                            size="sm"
+                            className="rounded-full"
+                          >
+                            <a
+                              href={buildGoogleCalendarUrl(exportEvent)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              <CalendarPlus size={14} aria-hidden="true" />
+                              Google Calendar
+                            </a>
+                          </Button>
+                          <Button
+                            asChild
+                            variant="ghost"
+                            size="sm"
+                            className="rounded-full"
+                          >
+                            <a
+                              href={buildIcsDataUrl(exportEvent)}
+                              download={`reuniao-${session.id}.ics`}
+                            >
+                              <Download size={14} aria-hidden="true" />
+                              .ics
+                            </a>
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
             </ul>
           </div>
         )}

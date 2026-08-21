@@ -1,4 +1,10 @@
+import { CalendarPlus, Download } from "lucide-react";
+import { Button } from "@hebron/ui";
 import type { CalendarEvent, CalendarEventType } from "@hebron/types/intranet";
+import {
+  buildGoogleCalendarUrl,
+  buildIcsDataUrl,
+} from "../lib/calendar-export";
 
 export interface CalendarWidgetProps {
   events: CalendarEvent[];
@@ -191,6 +197,47 @@ export function CalendarWidget({ events, referenceDate }: CalendarWidgetProps) {
                       label
                     )}
                   </div>
+                  {event.type === "reuniao" && (
+                    <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
+                      <Button
+                        asChild
+                        variant="ghost"
+                        size="icon-sm"
+                        title="Adicionar ao Google Calendar"
+                      >
+                        <a
+                          href={buildGoogleCalendarUrl(event)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          <CalendarPlus
+                            className="h-3.5 w-3.5"
+                            aria-hidden="true"
+                          />
+                          <span className="sr-only">
+                            Adicionar ao Google Calendar
+                          </span>
+                        </a>
+                      </Button>
+                      <Button
+                        asChild
+                        variant="ghost"
+                        size="icon-sm"
+                        title="Baixar .ics"
+                      >
+                        <a
+                          href={buildIcsDataUrl(event)}
+                          download={`reuniao-${event.id}.ics`}
+                        >
+                          <Download
+                            className="h-3.5 w-3.5"
+                            aria-hidden="true"
+                          />
+                          <span className="sr-only">Baixar .ics</span>
+                        </a>
+                      </Button>
+                    </div>
+                  )}
                 </li>
               );
             })}

@@ -87,7 +87,9 @@ function makeVector(entries: Array<[number, number]>): number[] {
   return v;
 }
 
-const BASE_VECTOR = makeVector([0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => [i, 1]));
+const BASE_VECTOR = makeVector(
+  [0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map((i) => [i, 1]),
+);
 const SIMILAR_VECTOR = makeVector(
   [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((i) => [i, i === 10 ? 0.05 : 1]),
 );
@@ -206,7 +208,9 @@ beforeAll(async () => {
 
   await db
     .insert(projects)
-    .values(draftProjectFixture(IDS.distinctDraft, "Projeto Claramente Distinto"))
+    .values(
+      draftProjectFixture(IDS.distinctDraft, "Projeto Claramente Distinto"),
+    )
     .onConflictDoNothing();
 
   await db
@@ -223,7 +227,9 @@ afterAll(async () => {
   await db
     .delete(notifications)
     .where(eq(notifications.userId, IDS.users.submissor));
-  await db.delete(notifications).where(eq(notifications.userId, IDS.users.admin));
+  await db
+    .delete(notifications)
+    .where(eq(notifications.userId, IDS.users.admin));
   for (const id of ALL_PROJECT_IDS) {
     await db.delete(projects).where(eq(projects.id, id));
   }

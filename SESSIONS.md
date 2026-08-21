@@ -286,6 +286,7 @@
 | S-263  | 2026-08-20 | AUDIT PACOTE 7 — Escopo v1 pendente: decisão da diretoria (CORRETIVO)                                                            | parcial (decisão tomada + 6 prompts escritos; P-9.0 escrito, execução real pendente) |
 | S-264  | 2026-08-20 | P-2.13 — Detecção de renovação de projetos                                                                                       | concluido                                                                            |
 | S-265  | 2026-08-21 | P-2.14 — Detecção de duplicidade de projetos via embeddings/pgvector                                                             | concluido                                                                            |
+| S-266  | 2026-08-21 | P-5.13 — Exportação de eventos para o Google Calendar                                                                            | concluido                                                                            |
 
 ---
 
@@ -24676,4 +24677,85 @@ prompt — mas com risco real de flakiness intermitente em CI até lá.
   já é genérico por `key`, suficiente para o novo formulário.
 - `apps/admin/src/app/(dashboard)/configuracoes/page.tsx` (formulário do
   limiar na aba Sistema)
+
+## S-266 — P-5.13 — Exportação de eventos para o Google Calendar
+
+**Prompt:** `PROMPTS.md` P-5.13
+**Data:** 2026-08-21
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+Escopo reduzido por PATCH-027 (Filipe): exportação unidirecional, sem OAuth,
+em vez da sincronização bidirecional lida originalmente em BRAIN.md:428. Cada
+reunião (`meeting_sessions`, mesma fonte de `/calendario` e `CalendarWidget`,
+via `MeetingSessionWithDecisions`/`meetingSessionsToCalendarEvents` de
+P-5.9d) ganha dois links estáticos, sem JS: "Adicionar ao Google Calendar"
+(URL `calendar.google.com/calendar/render?action=TEMPLATE&...`) e "Baixar
+.ics" (`data:text/calendar` com o conteúdo do arquivo embutido no próprio
+`href`, `download="reuniao-<id>.ics"`). Como ambos são apenas `<a href>`,
+nem `calendar-widget.tsx` nem `calendario/page.tsx` precisaram virar Client
+Component — a página inteira continua Server Component com Suspense.
+
+`apps/intranet/src/lib/calendar-export.ts` (novo) exporta
+`buildGoogleCalendarUrl`, `buildIcsFile` e `buildIcsDataUrl`, todas puras e
+recebendo `ExportableEvent` (subconjunto de `CalendarEvent`, já existente em
+`@hebron/types/intranet` desde P-5.9d — não foi preciso criar tipo novo).
+`meeting_sessions` não guarda horário de término (`endAt` é sempre `null` em
+`meetingSessionsToCalendarEvents`), então os dois formatos usam 1h de
+duração padrão quando `endAt` falta. `location` também é sempre `null` hoje
+(a tabela não tem essa coluna) — `LOCATION`/`details` de local só aparecem
+se um `CalendarEvent` algum dia vier com `location` preenchido; nenhuma
+mudança de schema foi feita (fora da lista de arquivos permitidos e fora do
+escopo reduzido do PATCH-027).
+
+**Onde os botões aparecem:** só em eventos `type === "reuniao"` (o texto do
+prompt e os critérios de aceite falam de "cada reunião", não de prazos de
+decisão nem dos outros tipos de `CalendarEvent`) — em `calendar-widget.tsx`,
+botões-ícone (`icon-sm`, `ghost`, com `sr-only`) nos até 3 itens da lista
+"próximos" por causa do espaço apertado do card lateral; em
+`calendario/page.tsx`, botões com rótulo (`sm`, `rounded-full`, mesmo padrão
+visual de `apps/admin/.../reunioes/page.tsx`) abaixo de cada linha da lista
+"Próximas reuniões", envolvidos em `flexWrap` para não quebrar em mobile.
+
+**Desvio de caminho do teste (G1, mesmo padrão de S-264/P-2.13):**
+`PROMPTS.md` lista `apps/intranet/src/lib/__tests__/calendar-export.test.ts`,
+mas todo `vitest.config.ts` de app do monorepo (conferido nos 9 apps) só
+inclui `src/__tests__/**/*.test.ts` — nenhum usa `src/**/__tests__/**` (esse
+padrão mais amplo existe só em `packages/ui`). Um arquivo no caminho literal
+do prompt nunca seria descoberto (falso-positivo silencioso: `vitest run`
+reportaria "No test files found" e falharia, não passaria vazio). Como
+`vitest.config.ts` não está na lista de arquivos permitidos, criado em
+`apps/intranet/src/__tests__/calendar-export.test.ts` em vez disso.
+
+### Verificação
+
+- `pnpm --filter @hebron/intranet exec tsc --noEmit` — limpo.
+- `pnpm --filter @hebron/intranet lint` — limpo.
+- `apps/intranet/src/__tests__/calendar-export.test.ts` (novo, 8 testes,
+  puros/sem banco): URL do Google aponta para `calendar/render` com
+  `action=TEMPLATE`/`text` corretos; `dates` usa 1h de duração padrão sem
+  `endAt` e o `endAt` informado quando presente; `details`/`location`
+  omitidos quando ausentes; `.ics` gera `VCALENDAR`/`VEVENT` com
+  `DTSTART`/`DTEND`/`SUMMARY`/`UID` estável; `DESCRIPTION`/`LOCATION`
+  condicionais com escape de vírgula/ponto-e-vírgula; `buildIcsDataUrl`
+  decodifica de volta para o mesmo conteúdo de `buildIcsFile`. 8/8 passando.
+- `pnpm turbo lint typecheck --filter=@hebron/intranet` — 11/14 tarefas
+  passam; a única falha (`@hebron/db#lint`, `check_locks.mjs`/
+  `check_locks2.mjs` fora do `tsconfig.json` do parser) é débito
+  pré-existente em `packages/db` (fora da lista de arquivos permitidos deste
+  prompt, confirmado sem mudanças pendentes via `git status`), não uma
+  regressão desta sessão.
+
+### Arquivos modificados
+
+- `apps/intranet/src/lib/calendar-export.ts` (novo)
+- `apps/intranet/src/components/calendar-widget.tsx` (botões por evento de
+  reunião)
+- `apps/intranet/src/app/(dashboard)/calendario/page.tsx` (botões na lista
+  de "Próximas reuniões")
+- `apps/intranet/src/__tests__/calendar-export.test.ts` (novo — caminho
+  diferente do listado no prompt, ver "Desvio" acima)
+- `SESSIONS.md` (esta entrada)
 - `SESSIONS.md` (esta entrada)
