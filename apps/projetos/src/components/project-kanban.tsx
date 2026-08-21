@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import type { CompactProjectView, ProjectStage } from "@hebron/types";
+import { DuplicateBadge } from "./duplicate-badge";
 
 function cn(...cls: (string | undefined | false | null)[]): string {
   return cls.filter(Boolean).join(" ");
@@ -163,6 +164,11 @@ function KanbanCard({
       <p className="text-xs text-(--fg-muted) truncate mb-2">
         {project.organizacaoNome}
       </p>
+      {project.possibleDuplicate && (
+        <div className="mb-2">
+          <DuplicateBadge />
+        </div>
+      )}
       <div className="flex items-center justify-between gap-1">
         <span className="text-xs font-semibold text-(--fg) tabular-nums">
           {BRL.format(project.valorTotal)}

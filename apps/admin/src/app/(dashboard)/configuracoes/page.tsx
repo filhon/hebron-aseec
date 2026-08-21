@@ -11,7 +11,10 @@ import {
   emailTemplates,
   taskTemplates,
 } from "@hebron/db/schema";
-import { PROJETOS_CHECKLIST_TEMPLATE_SETTING_KEY } from "@hebron/db/seed";
+import {
+  PROJETOS_CHECKLIST_TEMPLATE_SETTING_KEY,
+  PROJETOS_DUPLICATE_THRESHOLD_SETTING_KEY,
+} from "@hebron/db/seed";
 import { resolveSession } from "@hebron/auth/server";
 import {
   Shield,
@@ -28,6 +31,7 @@ import {
 import {
   toggleFeatureFlag,
   setProjetosChecklistTemplate,
+  updateSystemSetting,
 } from "../../../actions/settings";
 import { RoleAssignmentPanel } from "../../../components/role-assignment-panel";
 import { DesignationPanel } from "../../../components/designation-panel";
@@ -532,6 +536,21 @@ async function handleSetChecklistTemplate(formData: FormData) {
   redirect("/configuracoes?tab=sistema");
 }
 
+async function handleSetDuplicateThreshold(formData: FormData) {
+  "use server";
+  const raw = formData.get("threshold") as string;
+  const value = Number(raw);
+  if (!Number.isFinite(value) || value < 0 || value > 1) {
+    throw new Error("Limiar deve ser um número entre 0 e 1");
+  }
+  await updateSystemSetting({
+    key: PROJETOS_DUPLICATE_THRESHOLD_SETTING_KEY,
+    value,
+  });
+  revalidatePath("/configuracoes");
+  redirect("/configuracoes?tab=sistema");
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatDate(date: Date): string {
@@ -972,6 +991,49 @@ function SistemaPanel({
                       </option>
                     ))}
                   </select>
+                  <button
+                    type="submit"
+                    className="hb-btn hb-btn-secondary hb-btn-sm"
+                  >
+                    Salvar
+                  </button>
+                </form>
+              </div>
+            );
+          }
+
+          if (setting.key === PROJETOS_DUPLICATE_THRESHOLD_SETTING_KEY) {
+            const currentValue =
+              typeof setting.value === "number" ? setting.value : 0.92;
+            return (
+              <div key={setting.id} className="hb-setting-row">
+                <div>
+                  <div className="hb-setting-label">{setting.label}</div>
+                  {setting.description && (
+                    <div className="hb-setting-desc">{setting.description}</div>
+                  )}
+                  <div className="hb-setting-key">{setting.key}</div>
+                </div>
+                <form
+                  action={handleSetDuplicateThreshold}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    flexShrink: 0,
+                  }}
+                >
+                  <input
+                    type="number"
+                    name="threshold"
+                    defaultValue={currentValue}
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    className="hb-form-input"
+                    style={{ width: 90 }}
+                    aria-label="Limiar de similaridade para duplicidade de projetos"
+                  />
                   <button
                     type="submit"
                     className="hb-btn hb-btn-secondary hb-btn-sm"

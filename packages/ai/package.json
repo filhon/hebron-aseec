@@ -6,6 +6,7 @@
     ".": "./src/index.ts",
     "./projects/scoring": "./src/projects/scoring.ts",
     "./projects/compact-version": "./src/projects/compact-version.ts",
+    "./projects/duplicate-detection": "./src/projects/duplicate-detection.ts",
     "./financeiro/ocr": "./src/financeiro/ocr.ts"
   },
   "scripts": {

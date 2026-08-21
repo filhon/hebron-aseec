@@ -33,6 +33,10 @@ import { ReportReviewActions } from "../../../../components/report-review-action
 import { VotePanelWrapper } from "../../../../components/vote-panel-wrapper";
 import { ProjectTimeline } from "../../../../components/project-timeline";
 import {
+  DuplicateBadge,
+  DuplicateCandidatesPanel,
+} from "../../../../components/duplicate-badge";
+import {
   BRL,
   STAGE_LABELS,
   CATEGORY_LABELS,
@@ -247,6 +251,9 @@ export default async function DirectorProjectDetailPage({
             </div>
           )}
 
+          {/* Duplicate detection (P-2.14) */}
+          <DuplicateCandidatesPanel candidates={project.duplicateCandidates} />
+
           {/* Contestations */}
           {project.contestations.length > 0 && (
             <div className="rounded-md border border-(--hb-orange) bg-(--hb-orange-muted) px-4 py-4">
@@ -290,6 +297,7 @@ export default async function DirectorProjectDetailPage({
                 <span className="text-xs text-(--fg-muted)">
                   {isAnnual ? "Anual" : "Pontual"}
                 </span>
+                {project.duplicateCandidates.length > 0 && <DuplicateBadge />}
               </div>
               <h1
                 className="text-xl font-bold text-(--fg) leading-snug mb-3"

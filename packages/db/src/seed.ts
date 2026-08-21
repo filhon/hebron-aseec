@@ -221,6 +221,65 @@ export async function seedProjetosChecklistTemplate(): Promise<SeedProjetosCheck
 }
 
 // ---------------------------------------------------------------------------
+// seedProjetosDuplicateThreshold — P-2.14 / débito registrado em sessão.
+//
+// O prompt original (PROMPTS.md P-2.14) lista só a migration + a coluna
+// embedding + duplicate-detection.ts + o wiring em submitProject/Admin, mas
+// "Limiar configurável no Admin" (critério de aceite) exige que a linha
+// admin.system_settings["projetos_duplicate_threshold"] exista: a action
+// genérica updateSystemSetting (apps/admin/src/actions/settings.ts) só
+// atualiza chaves já cadastradas, e a UI (Configurações → Sistema) só lista
+// o que está na tabela — sem seed, a configuração nunca aparece para editar.
+// Mesmo motivo estrutural de seedProjetosChecklistTemplate acima:
+// system_settings.updated_by é NOT NULL com FK para public.users, sem ator
+// "de sistema" utilizável em SQL puro.
+// ---------------------------------------------------------------------------
+
+export const PROJETOS_DUPLICATE_THRESHOLD_SETTING_KEY =
+  "projetos_duplicate_threshold";
+
+export interface SeedProjetosDuplicateThresholdResult {
+  /** false quando a chave já existia e nada mudou. */
+  created: boolean;
+}
+
+export async function seedProjetosDuplicateThreshold(): Promise<SeedProjetosDuplicateThresholdResult> {
+  await ensureEnvLoaded();
+  const [
+    { db },
+    { systemSettings },
+    { getSystemActorId },
+    { getSystemSetting },
+  ] = await Promise.all([
+    import("./client"),
+    import("./schema/admin"),
+    import("./system-actor"),
+    import("./settings"),
+  ]);
+
+  const existing = await getSystemSetting<number>(
+    PROJETOS_DUPLICATE_THRESHOLD_SETTING_KEY,
+  );
+  if (existing !== null) return { created: false };
+
+  const systemActorId = await getSystemActorId();
+
+  await db
+    .insert(systemSettings)
+    .values({
+      key: PROJETOS_DUPLICATE_THRESHOLD_SETTING_KEY,
+      value: 0.92,
+      label: "Limiar de similaridade para duplicidade de projetos",
+      description:
+        "Similaridade de cosseno (0–1) acima da qual um projeto submetido é sinalizado como possível duplicata para a diretoria (BRAIN §6.2, P-2.14). Alterar não recalcula projetos já submetidos.",
+      updatedBy: systemActorId,
+    })
+    .onConflictDoNothing({ target: systemSettings.key });
+
+  return { created: true };
+}
+
+// ---------------------------------------------------------------------------
 // seedEmailTemplates — P-1.10b.
 //
 // `admin.email_templates` nunca foi semeada: num banco novo, a aba
@@ -588,6 +647,13 @@ async function main() {
     result.created
       ? `Criado template "${PROJETOS_CHECKLIST_TEMPLATE_NAME}" (${result.templateId}) e configurado admin.system_settings.`
       : `Checklist de análise de projeto já configurado (${result.templateId}) — nada a fazer.`,
+  );
+
+  const duplicateThresholdResult = await seedProjetosDuplicateThreshold();
+  console.log(
+    duplicateThresholdResult.created
+      ? `Criada configuração "${PROJETOS_DUPLICATE_THRESHOLD_SETTING_KEY}" (padrão 0.92) em admin.system_settings.`
+      : `Limiar de duplicidade de projetos já configurado — nada a fazer.`,
   );
 
   const emailTemplatesResult = await seedEmailTemplates();

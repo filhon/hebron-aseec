@@ -1,7 +1,19 @@
 "use server";
 
 import { z } from "zod";
-import { eq, and, isNull, count, desc, inArray } from "drizzle-orm";
+import {
+  eq,
+  and,
+  isNull,
+  isNotNull,
+  ne,
+  gte,
+  count,
+  desc,
+  inArray,
+  sql,
+  cosineDistance,
+} from "drizzle-orm";
 import { db } from "@hebron/db/client";
 import { BusinessError } from "@hebron/auth/safe-action-error";
 import { enforceRateLimit, getRateLimiter } from "@hebron/auth/rate-limit";
@@ -21,7 +33,10 @@ import {
   systemSettings,
 } from "@hebron/db/schema";
 import { VALID_STAGE_TRANSITIONS } from "@hebron/db/schema";
-import type { ProjectStage } from "@hebron/db/schema";
+import type {
+  ProjectStage,
+  DuplicateCandidateSnapshot,
+} from "@hebron/db/schema";
 import {
   createAnnualProjectSchema,
   createPunctualProjectSchema,
@@ -37,6 +52,11 @@ import {
   generateCompactVersion,
   DEFAULT_COMPACT_TEMPLATE,
 } from "@hebron/ai/projects/compact-version";
+import {
+  generateProjectEmbedding,
+  DEFAULT_DUPLICATE_THRESHOLD,
+} from "@hebron/ai/projects/duplicate-detection";
+import { PROJETOS_DUPLICATE_THRESHOLD_SETTING_KEY } from "@hebron/db/seed";
 import type {
   ScoringCriteria,
   ProjectScoringInput,
@@ -149,6 +169,17 @@ async function loadCompactTemplate(
   return (
     (rows[0].value as CompactVersionTemplate | null) ?? DEFAULT_COMPACT_TEMPLATE
   );
+}
+
+async function loadDuplicateThreshold(tx: AuthenticatedTx): Promise<number> {
+  const rows = await tx
+    .select({ value: systemSettings.value })
+    .from(systemSettings)
+    .where(eq(systemSettings.key, PROJETOS_DUPLICATE_THRESHOLD_SETTING_KEY))
+    .limit(1);
+
+  const value = rows[0]?.value;
+  return typeof value === "number" ? value : DEFAULT_DUPLICATE_THRESHOLD;
 }
 
 // ---------------------------------------------------------------------------
@@ -756,6 +787,69 @@ export const submitProject = submissorAction
       );
     } catch (err) {
       console.error("[projetos/submit] AI scoring failed:", err);
+    }
+
+    // Duplicate detection via embeddings (P-2.14, non-blocking): gera o
+    // embedding do texto livre e compara por similaridade de cosseno contra
+    // projetos JÁ submetidos de QUALQUER organização — duplicidade é sobre o
+    // conteúdo da proposta, não sobre quem propõe (BRAIN §6.2). O resultado
+    // é um snapshot gravado agora com o limiar vigente; nunca recalculado
+    // retroativamente se o limiar mudar depois. Falha de IA nunca impede a
+    // submissão, mesmo padrão do bloco de scoring acima.
+    try {
+      const embedding = await generateProjectEmbedding({
+        title: project.title,
+        objectives: project.objectives,
+        justification: project.justification,
+      });
+
+      await withAuthenticatedContext({ actorId: ctx.actorId }, async (tx) => {
+        const threshold = await loadDuplicateThreshold(tx);
+        const similarity = sql<number>`1 - (${cosineDistance(projects.embedding, embedding)})`;
+
+        const candidateRows = await tx
+          .select({
+            id: projects.id,
+            title: projects.title,
+            orgNome: organizations.nome,
+            similarity,
+          })
+          .from(projects)
+          .leftJoin(
+            organizations,
+            eq(projects.organizationId, organizations.id),
+          )
+          .where(
+            and(
+              isNotNull(projects.embedding),
+              isNull(projects.deletedAt),
+              ne(projects.id, parsedInput.projectId),
+              gte(similarity, threshold),
+            ),
+          )
+          .orderBy(desc(similarity))
+          .limit(5);
+
+        const duplicateCandidates: DuplicateCandidateSnapshot[] =
+          candidateRows.map((c) => ({
+            projectId: c.id,
+            title: c.title,
+            orgName: c.orgNome ?? "Instituição",
+            similarity: Number(c.similarity),
+          }));
+
+        await tx
+          .update(projects)
+          .set({
+            embedding,
+            possibleDuplicate: duplicateCandidates.length > 0,
+            duplicateCandidates,
+            updatedAt: new Date(),
+          })
+          .where(eq(projects.id, parsedInput.projectId));
+      });
+    } catch (err) {
+      console.error("[projetos/submit] Duplicate detection failed:", err);
     }
 
     // Generate compact version (non-blocking)

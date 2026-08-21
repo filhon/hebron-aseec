@@ -197,6 +197,7 @@ export {
 export type {
   ProjectStage,
   ProjectCategory,
+  DuplicateCandidateSnapshot,
   NewProjectCategory,
   Organization,
   NewOrganization,

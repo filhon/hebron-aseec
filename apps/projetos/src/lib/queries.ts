@@ -32,6 +32,7 @@ import {
   users,
   votes,
 } from "@hebron/db/schema";
+import type { DuplicateCandidateSnapshot } from "@hebron/db/schema";
 import type {
   CompactProjectView,
   MeetingAgenda,
@@ -797,6 +798,7 @@ export async function getKanbanProjects(): Promise<CompactProjectView[]> {
         budgetTotal: projects.budgetTotal,
         evaluationYear: projects.evaluationYear,
         scoreAi: projects.scoreAi,
+        possibleDuplicate: projects.possibleDuplicate,
         createdAt: projects.createdAt,
         updatedAt: projects.updatedAt,
       })
@@ -845,6 +847,7 @@ export async function getKanbanProjects(): Promise<CompactProjectView[]> {
       valorTotal: parseFloat(r.budgetTotal ?? "0"),
       anoReferencia: r.evaluationYear,
       aiScore: r.scoreAi !== null ? parseFloat(r.scoreAi) : null,
+      possibleDuplicate: r.possibleDuplicate,
       pendingReports: pendingMap.get(r.id) ?? 0,
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
@@ -895,6 +898,7 @@ export type DirectorProjectDetail = {
   budgetTotal: number;
   parcelas: number | null;
   scoreAi: number | null;
+  duplicateCandidates: DuplicateCandidateSnapshot[];
   orgNome: string;
   submitterId: string;
   submitterName: string | null;
@@ -937,6 +941,7 @@ export async function getDirectorProjectDetail(
         budgetTotal: projects.budgetTotal,
         parcelas: projects.parcelas,
         scoreAi: projects.scoreAi,
+        duplicateCandidates: projects.duplicateCandidates,
         objectives: projects.objectives,
         expectedResults: projects.expectedResults,
         ministryRegion: projects.ministryRegion,
@@ -1138,6 +1143,7 @@ export async function getDirectorProjectDetail(
       budgetTotal: parseFloat(project.budgetTotal ?? "0"),
       parcelas: project.parcelas,
       scoreAi: project.scoreAi !== null ? parseFloat(project.scoreAi) : null,
+      duplicateCandidates: project.duplicateCandidates ?? [],
       orgNome: project.orgNome ?? "Instituição",
       submitterId: project.submitterId,
       submitterName: project.submitterName,

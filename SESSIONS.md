@@ -285,6 +285,7 @@
 | S-262  | 2026-08-20 | AUDIT PACOTE 6 — Impersonação: implementar ou revogar (CORRETIVO)                                                                | concluido                                                                            |
 | S-263  | 2026-08-20 | AUDIT PACOTE 7 — Escopo v1 pendente: decisão da diretoria (CORRETIVO)                                                            | parcial (decisão tomada + 6 prompts escritos; P-9.0 escrito, execução real pendente) |
 | S-264  | 2026-08-20 | P-2.13 — Detecção de renovação de projetos                                                                                       | concluido                                                                            |
+| S-265  | 2026-08-21 | P-2.14 — Detecção de duplicidade de projetos via embeddings/pgvector                                                             | concluido                                                                            |
 
 ---
 
@@ -24498,4 +24499,181 @@ literal do prompt nunca rodaria (falso-positivo silencioso). Criado em
   `WizardFormData`/`INITIAL`/`buildAnnualPayload`/`buildPontualPayload`)
 - `apps/projetos/src/__tests__/renewal.test.ts` (novo — caminho diferente do
   listado no prompt, ver "Desvio" acima)
+- `SESSIONS.md` (esta entrada)
+
+## S-265 — P-2.14 — Detecção de duplicidade de projetos via embeddings/pgvector
+
+**Prompt:** `PROMPTS.md` P-2.14
+**Data:** 2026-08-21
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+pgvector nunca tinha sido implementado (BRAIN §2/§6.2/§8 declaravam v1 desde
+PATCH-012, mas zero ocorrências no repo). Implementado: ao submeter um
+projeto (`submitProject`), gera-se um embedding (`text-embedding-3-small`)
+de `title + objectives + justification` (mesmos campos de `scoring.ts`) e
+compara-se por similaridade de cosseno (pgvector `<=>`, via `cosineDistance`
+do drizzle-orm 0.36) contra `embedding` de qualquer outro projeto já
+submetido, de qualquer organização. Acima do limiar configurável (default
+0.92), o projeto é marcado: badge "Possível duplicata" no card do kanban +
+lista de candidatos similares (título, organização, % de similaridade) no
+detalhe do projeto — visível só a diretor/conselheiro/super_admin, mesma
+regra de `score_ai` (nunca ao submissor). Chamada não-bloqueante: falha da
+IA (rede, quota) nunca impede a submissão, mesmo padrão try/catch do bloco
+de scoring já existente em `submitProject`.
+
+**Snapshot, não live query (critério de aceite "mudar o limiar não
+recalcula retroativamente").** `possible_duplicate`/`duplicate_candidates`
+são colunas gravadas em `projects` no momento da submissão, com o limiar
+então vigente — não um cálculo ao vivo a cada leitura da página. Se fosse
+live, mudar o limiar no Admin afetaria instantaneamente a marcação de TODOS
+os projetos já submetidos ao próximo carregamento da tela, o oposto do que
+o critério pede. Mesmo padrão de `score_ai`/`score_ai_breakdown` (P-2.10):
+calculado uma vez, nunca recalculado sozinho.
+
+**Índice HNSW parcial.** `CREATE INDEX ... USING hnsw (embedding
+vector_cosine_ops) WHERE embedding IS NOT NULL` — HNSW em vez de ivfflat
+porque não exige dados pré-existentes para treinar listas (funciona desde
+tabela vazia/pequena); parcial porque a maioria das linhas (rascunhos nunca
+submetidos) nunca tem embedding.
+
+**Suposição registrada (G1):** projetos vinculados por renovação
+(`parent_project_id`, P-2.13) NÃO são excluídos da comparação de
+duplicidade — uma renovação legítima ("Usar como base") gera texto muito
+similar ao projeto-pai e pode disparar o badge tanto quanto uma duplicata
+real. Nada no BRAIN.md/PROMPTS.md distingue os dois casos, e o critério de
+aceite é claro que a decisão final é sempre da diretoria (nunca automática)
+— um falso-positivo aqui é visível e descartável em segundos pelo avaliador
+que já vê o `parent_project_id`/histórico na tela. Registrado para revisão
+de Filipe se isso gerar ruído na prática.
+
+### Débito: arquivos além da lista permitida (G1 — infraestrutura óbvia)
+
+A lista de "Arquivos permitidos" do prompt cobre a geração+gravação do
+embedding e o componente de badge, mas não o caminho de leitura que os
+exibe — sem os arquivos abaixo o critério de aceite ("aparece marcado para
+diretor/conselheiro/super_admin") seria impossível de cumprir (dado gravado,
+nunca mostrado). Mesmo padrão da lacuna de G5 (P-2.9b) e do seed de
+`admin.system_settings` (PATCH-019/S-83) — infraestrutura óbvia faltando,
+criada e registrada aqui:
+
+- `apps/projetos/src/lib/queries.ts` — `possibleDuplicate` em
+  `getKanbanProjects`, `duplicateCandidates` em `getDirectorProjectDetail`
+  (ambas já restritas à rota `(diretoria)`, nunca chamadas por telas do
+  submissor).
+- `packages/types/src/projetos/index.ts` — `CompactProjectView.possibleDuplicate`.
+- `apps/projetos/src/components/project-kanban.tsx` — renderiza
+  `DuplicateBadge` no card.
+- `apps/projetos/src/app/(diretoria)/pipeline/[id]/page.tsx` — renderiza
+  `DuplicateBadge` no cabeçalho + `DuplicateCandidatesPanel` na coluna
+  esquerda.
+- `apps/admin/src/app/(dashboard)/configuracoes/page.tsx` — a action
+  genérica `updateSystemSetting` (já existente) só edita chaves já
+  cadastradas, e a aba Sistema só lista/edita o que está na tabela; sem um
+  formulário próprio (igual ao já existente para o template de checklist),
+  o limiar apareceria como texto read-only, não "configurável".
+- `packages/db/src/seed.ts` — nova `seedProjetosDuplicateThreshold`
+  (chave `projetos_duplicate_threshold`, default 0.92), chamada em `main()`.
+  Mesmo motivo estrutural do seed do checklist de análise (PATCH-019/S-83):
+  `system_settings.updated_by` é NOT NULL/FK, sem ator de sistema utilizável
+  em SQL puro — sem seed, a chave nunca existe para a UI editar.
+- `packages/ai/package.json` — export `./projects/duplicate-detection`.
+- `packages/db/src/schema/index.ts` — export do tipo `DuplicateCandidateSnapshot`.
+- `apps/projetos/src/__tests__/notifications.test.ts` — ver "Achado" abaixo.
+
+### Achado (pré-existente, fora de escopo): `submitProject` em teste paga um "imposto" de e-mail real
+
+`notifications.test.ts` (`submitProject não retorna erro`) estourava 30s
+mesmo depois de mockar `@hebron/ai/projects/duplicate-detection` — sinal de
+que a causa não era o código deste prompt. Causa raiz encontrada: `.env.local`
+tem `RESEND_API_KEY` real configurada, e `notifyProjectSubmitted`/
+`notifyProjectInValidation` (`lib/notifications.ts`, nunca mockadas nesse
+arquivo — é o que ele testa) despacham e-mail de verdade via Resend por
+`createNotification`, aguardado dentro de `Promise.allSettled` sem timeout
+próprio. `git stash` confirmou que o MESMO teste, no código-base original
+sem nenhuma mudança deste prompt, também trava perto de 30s isolado — ou
+seja, característica pré-existente do ambiente de teste (chave real +
+domínio de e-mail fake `*.test.hebron`), não uma regressão de P-2.14.
+Ao escrever `apps/projetos/src/__tests__/duplicate-detection.test.ts` (novo,
+ver abaixo) o mesmo "imposto" apareceu de forma 100% reprodutível (3/3
+chamadas a `submitProject` estourando exatamente ~30000ms, inclusive a que
+testava falha de IA com mock rejeitando na hora) — descartando de vez
+lentidão aleatória do banco como causa. Corrigido no arquivo novo mockando
+também `../lib/notifications` (mesmo raciocínio de isolamento já aplicado a
+scoring/compact-version/projetos-tarefas): as 4 asserções passaram em
+2.6–17s, sem nenhum timeout. `notifications.test.ts` não pode receber o
+mesmo mock (é o que ele testa) — permanece perto do limiar de 30s, e numa
+das execuções da suíte completa desta sessão o timeout foi realmente
+atingido (30016ms), derrubando em cascata a asserção seguinte ("submissor
+recebe in_app...", `expected undefined to be defined`) — sintoma do mesmo
+problema (o `submitProject` interrompido por timeout ainda tem trabalho
+assíncrono em voo quando o teste seguinte roda), não um bug novo. Rodado
+isolado, o mesmo arquivo passa (3/3, ~37-41s de suíte, submissão em
+29-30s). Consertar isso (timeout explícito no cliente de e-mail, ou mock de
+rede no teste) fica para um corretivo dedicado, fora do escopo deste
+prompt — mas com risco real de flakiness intermitente em CI até lá.
+
+### Verificação
+
+- `pnpm --filter @hebron/db typecheck` / `lint` — limpo.
+- `pnpm --filter @hebron/ai typecheck` / `lint` / `test` — limpo; 6 testes
+  novos em `duplicate-detection.test.ts` (mock do client OpenAI, mesmo
+  padrão de `ocr.test.ts`): parsing da chamada ao endpoint de embeddings,
+  campos vazios/nulos ignorados no texto concatenado, erro sem texto e sem
+  embedding retornado, e um par de testes de matemática de similaridade de
+  cosseno (vetores determinísticos simulando texto quase idêntico vs.
+  claramente distinto) confirmando que `DEFAULT_DUPLICATE_THRESHOLD` (0.92)
+  separa os dois casos — a similaridade "de verdade" roda no pgvector do
+  banco, não reproduzível sem chamar a OpenAI ao vivo.
+- `pnpm --filter @hebron/types typecheck` / `lint` — limpo.
+- `pnpm --filter projetos typecheck` / `lint` — limpo.
+- `pnpm --filter admin typecheck` / `lint` / `test -- settings-actions` —
+  limpo, 3/3 passando.
+- `pnpm db:migrate` (banco real de dev) — `0086_projetos_embeddings.sql`
+  aplicada com sucesso (extensão `vector`, 3 colunas, índice HNSW parcial).
+- `pnpm db:seed` (banco real de dev) — `projetos_duplicate_threshold`
+  criada com o padrão 0.92 em `admin.system_settings`.
+- `apps/projetos/src/__tests__/duplicate-detection.test.ts` (novo, 4
+  testes, DB real via `withAuthenticatedContext`, `generateProjectEmbedding`
+  mockado com vetores determinísticos de 1536 dims — a comparação de
+  similaridade em si roda contra o pgvector real): projeto com embedding
+  quase idêntico a um já submetido é marcado `possibleDuplicate=true` com o
+  candidato e similaridade corretos (>0.92); projeto com embedding
+  claramente distinto não é marcado; falha da IA não impede a submissão
+  (`embedding` fica `null`, `possibleDuplicate=false`); `getSubmissorProjectDetail`
+  nunca expõe `possibleDuplicate`/`duplicateCandidates`. 4/4 passando.
+- `pnpm --filter projetos test` (suíte completa, banco real) — 3 execuções
+  nesta sessão: 14/14 arquivos com 147/147 testes verdes na primeira e
+  147/147 numa repetição; numa terceira, `notifications.test.ts` bateu o
+  timeout de 30s e sua asserção seguinte falhou em cascata (149/151) — ver
+  "Achado" acima, mesma causa pré-existente em todas as execuções, nunca o
+  código deste prompt.
+
+### Arquivos modificados
+
+- `packages/db/src/migrations/0086_projetos_embeddings.sql` (novo)
+- `packages/db/src/schema/projetos.ts` (`embedding`, `possibleDuplicate`,
+  `duplicateCandidates`, tipo `DuplicateCandidateSnapshot`)
+- `packages/db/src/schema/index.ts` (export do tipo)
+- `packages/db/src/seed.ts` (`seedProjetosDuplicateThreshold`, novo)
+- `packages/ai/src/projects/duplicate-detection.ts` (novo)
+- `packages/ai/src/__tests__/duplicate-detection.test.ts` (novo)
+- `packages/ai/package.json` (export)
+- `packages/types/src/projetos/index.ts` (`CompactProjectView.possibleDuplicate`)
+- `apps/projetos/src/actions/projects.ts` (`submitProject` — geração de
+  embedding + busca de candidatos + gravação do snapshot)
+- `apps/projetos/src/lib/queries.ts` (exposição em `getKanbanProjects`/`getDirectorProjectDetail`)
+- `apps/projetos/src/components/duplicate-badge.tsx` (novo)
+- `apps/projetos/src/components/project-kanban.tsx` (badge no card)
+- `apps/projetos/src/app/(diretoria)/pipeline/[id]/page.tsx` (badge + painel de candidatos)
+- `apps/projetos/src/__tests__/notifications.test.ts` (mock de
+  `duplicate-detection`, ver "Achado" acima)
+- `apps/projetos/src/__tests__/duplicate-detection.test.ts` (novo — teste de
+  integração end-to-end do fluxo de duplicidade, ver "Verificação" acima)
+- `apps/admin/src/actions/settings.ts` — **não alterado**: `updateSystemSetting`
+  já é genérico por `key`, suficiente para o novo formulário.
+- `apps/admin/src/app/(dashboard)/configuracoes/page.tsx` (formulário do
+  limiar na aba Sistema)
 - `SESSIONS.md` (esta entrada)

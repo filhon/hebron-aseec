@@ -302,6 +302,8 @@ export interface CompactProjectView {
   valorTotal: number;
   anoReferencia: number | null; // only annual
   aiScore: number | null;
+  /** Possível duplicata (P-2.14) — visível apenas a super_admin, diretor, conselheiro */
+  possibleDuplicate: boolean;
   pendingReports: number;
   createdAt: Date;
   updatedAt: Date;

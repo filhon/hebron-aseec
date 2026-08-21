@@ -10,6 +10,7 @@ import {
   timestamp,
   unique,
   uuid,
+  vector,
   type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { projetosSchema, users } from "./public";
@@ -166,6 +167,17 @@ export const organizationMembers = projetosSchema.table(
 );
 
 // ---------------------------------------------------------------------------
+// DuplicateCandidateSnapshot — shape de projects.duplicate_candidates (P-2.14)
+// ---------------------------------------------------------------------------
+export interface DuplicateCandidateSnapshot {
+  projectId: string;
+  title: string;
+  orgName: string;
+  /** Similaridade de cosseno no momento da submissão, 0–1 */
+  similarity: number;
+}
+
+// ---------------------------------------------------------------------------
 // projetos.projects
 // ---------------------------------------------------------------------------
 export const projects = projetosSchema.table(
@@ -214,6 +226,23 @@ export const projects = projetosSchema.table(
     scoreAi: numeric("score_ai", { precision: 5, scale: 2 }),
     scoreAiBreakdown:
       jsonb("score_ai_breakdown").$type<Record<string, number>>(),
+
+    // Detecção de duplicidade via embeddings (P-2.14, BRAIN §2/§6.2/§8,
+    // PATCH-012). Gerado em submitProject a partir de title+objectives+
+    // justification (text-embedding-3-small, 1536 dims). possibleDuplicate/
+    // duplicateCandidates são um SNAPSHOT calculado no momento da submissão
+    // com o limiar então vigente (admin.system_settings
+    // ["projetos_duplicate_threshold"]) — mudar o limiar depois não
+    // recalcula projetos já submetidos (critério de aceite P-2.14).
+    // Visibilidade: apenas diretor/conselheiro/super_admin (mesma regra de
+    // scoreAi/scoreAiBreakdown acima) — nunca ao submissor. Índice HNSW de
+    // similaridade de cosseno não é representável no builder Drizzle; vive
+    // só na migration SQL (mesmo padrão do EXCLUDE de flats.reservations).
+    embedding: vector("embedding", { dimensions: 1536 }),
+    possibleDuplicate: boolean("possible_duplicate").notNull().default(false),
+    duplicateCandidates: jsonb("duplicate_candidates").$type<
+      DuplicateCandidateSnapshot[]
+    >(),
 
     // Stage timestamps
     submittedAt: timestamp("submitted_at", { withTimezone: true }),

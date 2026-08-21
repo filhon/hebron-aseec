@@ -52,6 +52,11 @@ vi.mock("@hebron/ai/projects/compact-version", () => ({
   DEFAULT_COMPACT_TEMPLATE: { sections: [] },
 }));
 
+vi.mock("@hebron/ai/projects/duplicate-detection", () => ({
+  generateProjectEmbedding: vi.fn().mockResolvedValue(new Array(1536).fill(0)),
+  DEFAULT_DUPLICATE_THRESHOLD: 0.92,
+}));
+
 vi.mock("@hebron/integrations/projetos-tarefas", () => ({
   onProjectSubmitted: vi.fn().mockResolvedValue(undefined),
 }));
