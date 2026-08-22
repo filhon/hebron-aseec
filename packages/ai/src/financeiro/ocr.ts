@@ -32,6 +32,12 @@ export interface NfOcrResult {
   rawResponse: string;
 }
 
+// timeout/maxRetries explícitos no client (AUDIT/04-BACKLOG-CORRECAO.md,
+// PACOTE 10) — a Server Function que chama isso tem seu próprio limite de
+// execução; o SDK nunca deve ficar esperando indefinidamente.
+const OPENAI_TIMEOUT_MS = 15_000;
+const OPENAI_MAX_RETRIES = 1;
+
 // ---------------------------------------------------------------------------
 // parseAmount — aceita number (formato instruído no prompt) ou string em
 // formato brasileiro ("1.234,56") sem descartar o valor extraído.
@@ -65,7 +71,11 @@ export async function extractNfData(
   input: NfOcrInput,
   apiKey?: string,
 ): Promise<NfOcrResult> {
-  const client = new OpenAI({ apiKey: apiKey ?? process.env.OPENAI_API_KEY });
+  const client = new OpenAI({
+    apiKey: apiKey ?? process.env.OPENAI_API_KEY,
+    timeout: OPENAI_TIMEOUT_MS,
+    maxRetries: OPENAI_MAX_RETRIES,
+  });
 
   const imageContent: OpenAI.Chat.ChatCompletionContentPartImage =
     input.imageSource.type === "base64"

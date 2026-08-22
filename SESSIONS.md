@@ -291,6 +291,7 @@
 | S-268  | 2026-08-22 | P-7.13 — Assistência de IA no scoring de Flats                                                                                   | concluido                                                                            |
 | S-269  | 2026-08-22 | AUDIT PACOTE 8 — Robustez do Financeiro em escala (CORRETIVO)                                                                    | concluido                                                                            |
 | S-270  | 2026-08-22 | AUDIT PACOTE 9 — Gates e RLS residuais (CORRETIVO)                                                                               | concluido                                                                            |
+| S-271  | 2026-08-22 | AUDIT PACOTE 10 — Camada de IA (CORRETIVO)                                                                                       | concluido                                                                            |
 
 ---
 
@@ -25424,4 +25425,97 @@ que agora processa `createdAuthUserIds` em ordem reversa.
 - `apps/financeiro/src/actions/approval.ts` (`authorizeBatch` — sem `withSystemRole`)
 - `apps/financeiro/src/__tests__/runtime-rls.test.ts` (teste novo "ghost autorizador")
 - `AUDIT/04-BACKLOG-CORRECAO.md` (critérios de aceite do PACOTE 9)
+- `SESSIONS.md` (esta entrada)
+
+---
+
+## S-271 — AUDIT PACOTE 10 — Camada de IA (CORRETIVO)
+
+**Prompt:** `AUDIT/04-BACKLOG-CORRECAO.md` § PACOTE 10
+**Data:** 2026-08-22
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+Corretivo do único achado do pacote (`D5-003`): os três módulos de
+`packages/ai` (`projects/scoring.ts`, `projects/compact-version.ts`,
+`financeiro/ocr.ts`) construíam o client OpenAI sem `timeout`/`maxRetries`,
+e `scoring.ts`/`compact-version.ts` interpolavam texto livre do submissor
+(título, objetivos, justificativa, público-alvo, resultados esperados,
+dados adicionais do formulário) direto na mesma string enviada como prompt
+`user`, sem isolamento de uma eventual instrução embutida.
+
+O padrão correto já existia no repositório em dois lugares — `ocr.ts:119`
+(contexto adicional como mensagem separada) e, mais recentemente,
+`packages/ai/src/flats/scoring-assistance.ts` (P-7.13, PACOTE 7), que já
+citava este pacote nos comentários (`OPENAI_TIMEOUT_MS = 15_000`,
+`OPENAI_MAX_RETRIES = 1`, texto do hóspede em mensagem `user` própria e
+delimitada) como a correção que ainda faltava aplicar aqui. Reaproveitados
+os mesmos valores e o mesmo padrão, em vez de inventar um novo.
+
+1. **Timeout/maxRetries.** Os três clients passam a declarar
+   `new OpenAI({ apiKey, timeout: OPENAI_TIMEOUT_MS, maxRetries: OPENAI_MAX_RETRIES })`
+   com `OPENAI_TIMEOUT_MS = 15_000` e `OPENAI_MAX_RETRIES = 1` — evita que
+   uma chamada pendurada estoure o tempo da Server Function enquanto o
+   projeto/lançamento já foi persistido com sucesso (cenário descrito no
+   achado: usuário reenvia achando que falhou).
+2. **Isolamento do texto livre.** `scoring.ts` e `compact-version.ts`
+   passaram a separar campos estruturados/institucionais (tipo, ano,
+   região, área, orçamento, parcelas — baixo risco de injeção) de texto
+   livre do submissor, que agora vai em uma segunda
+   `ChatCompletionContentPart` própria, delimitada por `"""`. O `system`
+   prompt ganhou a instrução explícita de que esse texto é "DADO A
+   AVALIAR"/"DADO A SINTETIZAR", nunca uma instrução a seguir — mesma
+   redação usada em `scoring-assistance.ts`. `ocr.ts` já seguia o padrão
+   correto (`expectedCategoryHint` como mensagem separada); só o client
+   mudou.
+3. **Não-blocante inalterado.** Nenhuma mudança em
+   `apps/projetos/src/actions/projects.ts` (os dois `try/catch` que
+   envolvem `scoreProject`/`generateCompactVersion`) nem nas assinaturas
+   exportadas das três funções — os call sites em `apps/projetos` e
+   `apps/financeiro` não precisaram de nenhuma alteração.
+
+### Testes novos
+
+Como as três funções são mockadas em teste (sem chamada de rede real ao
+model), o teste de "payload de injeção não altera o score" verifica a
+defesa que o código de fato controla — isolamento estrutural da mensagem
+— e não o comportamento do model em si (inverificável sem chamada ao vivo):
+
+- `packages/ai/src/__tests__/scoring.test.ts` (novo): client construído
+  com `timeout`/`maxRetries` explícitos; um payload de injeção na
+  `justification` nunca aparece na mensagem `system`, aparece só na
+  segunda parte delimitada da mensagem `user`, e o `score` devolvido é
+  exatamente o que o model mockado respondeu (nenhuma lógica local reage
+  a palavras-chave do texto); score fora do intervalo é limitado ao
+  `maxScore` (comportamento pré-existente, agora coberto por teste).
+- `packages/ai/src/__tests__/compact-version.test.ts` (novo): mesmo padrão
+  de verificação para `generateCompactVersion`.
+- `packages/ai/src/__tests__/ocr.test.ts`: teste novo de
+  `timeout`/`maxRetries` explícitos no client (o isolamento de mensagem já
+  era coberto pelos testes existentes, pois já era o padrão correto).
+
+### Verificação
+
+- `pnpm --filter @hebron/ai test` — 4/4 arquivos, 19/19 testes.
+- `pnpm --filter @hebron/ai lint` — limpo.
+- `pnpm --filter @hebron/ai typecheck` — limpo.
+- `pnpm --filter @hebron/projetos typecheck` e
+  `pnpm --filter @hebron/financeiro typecheck` — limpos (confirma que os
+  call sites de `apps/projetos/src/actions/projects.ts` e
+  `apps/financeiro/src/actions/ocr.ts` continuam compatíveis com as
+  assinaturas inalteradas).
+
+### Arquivos modificados
+
+- `packages/ai/src/projects/scoring.ts` (timeout/maxRetries + isolamento
+  de mensagem)
+- `packages/ai/src/projects/compact-version.ts` (idem)
+- `packages/ai/src/financeiro/ocr.ts` (timeout/maxRetries)
+- `packages/ai/src/__tests__/scoring.test.ts` (novo)
+- `packages/ai/src/__tests__/compact-version.test.ts` (novo)
+- `packages/ai/src/__tests__/ocr.test.ts` (teste novo de
+  timeout/maxRetries)
+- `AUDIT/04-BACKLOG-CORRECAO.md` (critérios de aceite do PACOTE 10)
 - `SESSIONS.md` (esta entrada)

@@ -1,11 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mockCreate = vi.fn();
+const mockConstructorCalls: unknown[] = [];
 
 vi.mock("openai", () => ({
-  default: vi.fn().mockImplementation(() => ({
-    chat: { completions: { create: mockCreate } },
-  })),
+  default: vi.fn().mockImplementation((args: unknown) => {
+    mockConstructorCalls.push(args);
+    return { chat: { completions: { create: mockCreate } } };
+  }),
 }));
 
 const { extractNfData } = await import("../financeiro/ocr");
@@ -19,6 +21,20 @@ function mockResponse(content: string) {
 describe("extractNfData", () => {
   beforeEach(() => {
     mockCreate.mockReset();
+    mockConstructorCalls.length = 0;
+  });
+
+  it("constructs the OpenAI client with an explicit timeout and maxRetries", async () => {
+    mockResponse(JSON.stringify({}));
+
+    await extractNfData(
+      { imageSource: { type: "url", url: "https://example.com/nf.png" } },
+      "test-key",
+    );
+
+    expect(mockConstructorCalls[0]).toEqual(
+      expect.objectContaining({ timeout: 15_000, maxRetries: 1 }),
+    );
   });
 
   it("parses a well-formed JSON response into the expected fields", async () => {

@@ -352,10 +352,11 @@ O padrão certo já existe no repositório: `ocr.ts:119` passa o contexto adicio
 
 ### Critérios de aceite
 
-- [ ] Os três clients declaram `timeout` compatível com o limite da Server Function e `maxRetries` explícito
-- [ ] Texto do submissor vai em mensagem `user` separada e delimitada; o `system` instrui que é dado a avaliar, não instrução a seguir
-- [ ] Teste com payload de injeção conhecido não altera o score
-- [ ] O comportamento não-bloqueante em falha permanece inalterado
+- [x] Os três clients declaram `timeout` compatível com o limite da Server Function e `maxRetries` explícito — `scoring.ts`, `compact-version.ts` e `ocr.ts` agora constroem `new OpenAI({ apiKey, timeout: OPENAI_TIMEOUT_MS, maxRetries: OPENAI_MAX_RETRIES })` com `OPENAI_TIMEOUT_MS = 15_000` e `OPENAI_MAX_RETRIES = 1` — os mesmos valores já adotados em `packages/ai/src/flats/scoring-assistance.ts` (P-7.13), que já citava este pacote como referência. Verificado por teste (constructor args capturados via mock).
+- [x] Texto do submissor vai em mensagem `user` separada e delimitada; o `system` instrui que é dado a avaliar, não instrução a seguir — `scoring.ts` e `compact-version.ts` passaram a separar campos estruturados/institucionais (tipo, ano, região, área, orçamento, parcelas) de texto livre do submissor (título, objetivos, justificativa, público-alvo, resultados esperados, dados adicionais do formulário), que agora vai em uma segunda `ChatCompletionContentPart` delimitada por `"""`; o `system` prompt ganhou a instrução explícita de que esse texto é "DADO A AVALIAR"/"DADO A SINTETIZAR", nunca uma instrução. `ocr.ts` já seguia o padrão correto (`expectedCategoryHint` como mensagem separada) — sem mudança de estrutura, só o client.
+- [x] Teste com payload de injeção conhecido não altera o score — `packages/ai/src/__tests__/scoring.test.ts` e `compact-version.test.ts` (novos): um payload de injeção na `justification` é verificado como (a) nunca presente na mensagem `system`, (b) presente apenas na segunda parte delimitada da mensagem `user`, e (c) o `score`/`content` devolvido é exatamente o que o model (mockado) respondeu, sem lógica local reagindo a palavras-chave do texto. Um teste real contra o modelo não é possível em teste unitário (sem chamada de rede ao vivo) — a defesa estrutural (isolamento de mensagem) é o que o código controla e o que foi verificado.
+- [x] O comportamento não-bloqueante em falha permanece inalterado — nenhuma mudança em `apps/projetos/src/actions/projects.ts:771-791` (scoring) e `:857-876` (compact version), que continuam envolvendo as chamadas em `try/catch` não-bloqueante; as assinaturas exportadas de `scoreProject`/`generateCompactVersion`/`extractNfData` não mudaram. `pnpm --filter @hebron/projetos typecheck` e `pnpm --filter @hebron/financeiro typecheck` verdes.
+- [x] Lint passa · Types passam — `pnpm --filter @hebron/ai lint`/`typecheck`/`test` verdes (19/19 testes), `@hebron/projetos` e `@hebron/financeiro` typecheck verdes.
 
 ---
 
