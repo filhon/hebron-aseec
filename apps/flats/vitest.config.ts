@@ -4,7 +4,10 @@ export default defineConfig({
   test: {
     environment: "node",
     globals: true,
-    include: ["src/__tests__/**/*.test.ts"],
+    include: [
+      "src/__tests__/**/*.test.ts",
+      "src/actions/__tests__/**/*.test.ts",
+    ],
     pool: "forks",
     poolOptions: {
       forks: { singleFork: true },

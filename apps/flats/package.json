@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@sentry/nextjs": "catalog:",
+    "@hebron/ai": "workspace:*",
     "@hebron/auth": "workspace:*",
     "@hebron/config": "workspace:*",
     "@hebron/db": "workspace:*",
@@ -40,6 +41,7 @@
     "@types/react-dom": "^19.0.0",
     "dotenv": "^16.4.5",
     "eslint": "^9.13.0",
+    "openai": "^4.67.0",
     "tailwindcss": "^4.0.0",
     "typescript": "^5.6.3",
     "vitest": "^2.1.0"

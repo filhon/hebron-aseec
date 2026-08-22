@@ -1,9 +1,24 @@
-import { eq } from "drizzle-orm";
-import { usageHistory } from "@hebron/db/schema";
+import { and, eq } from "drizzle-orm";
+import { z } from "zod";
+import {
+  reservations,
+  scoringResponses,
+  usageHistory,
+} from "@hebron/db/schema";
 import type { AuthenticatedTx } from "@hebron/db/authenticated";
+import {
+  withAuthenticatedContext,
+  withSystemRole,
+} from "@hebron/db/authenticated";
+import { BusinessError } from "@hebron/auth/safe-action-error";
 import { getProjectParticipationScore } from "@hebron/integrations/projetos-flats";
-import type { scoringAnswersSchema } from "@hebron/validators/flats";
-import type { z } from "zod";
+import { suggestFlatsScoringPoints } from "@hebron/ai/flats/scoring-assistance";
+import {
+  confirmScoringSchema,
+  type scoringAnswersSchema,
+} from "@hebron/validators/flats";
+import { gestorAction } from "../lib/safe-action";
+import { logFlatsAudit } from "../lib/audit";
 
 // ---------------------------------------------------------------------------
 // Cálculo automático do score (BRAIN §6.8) — 10 critérios (a-j),
@@ -207,3 +222,174 @@ export async function computeScoringResponses({
 
   return { responses, totalPoints };
 }
+
+// ---------------------------------------------------------------------------
+// Assistência de IA no scoring (P-7.13/PATCH-012) — só para os critérios d
+// (saúde autodeclarada) e g (intensidade ministerial), a partir do texto
+// livre que o gestor já lê hoje (finalidade da estadia, exibido em
+// approval-form.tsx; e situação familiar especial, critério e). A IA nunca
+// decide sozinha: a pontuação gravada é sempre a que o gestor confirmar em
+// confirmScoringPoints, nunca a sugestão diretamente. Os outros 8 critérios
+// não têm — e nunca terão — sugestão de IA.
+// ---------------------------------------------------------------------------
+
+export interface ScoringAiSuggestion {
+  healthDeclaredPoints: 0 | 5 | null;
+  ministryIntensityPoints: 0 | 5 | 10 | null;
+}
+
+/**
+ * Chamada não-bloqueante ao módulo de IA (packages/ai/src/flats/
+ * scoring-assistance.ts): qualquer falha (timeout, erro de API, resposta
+ * malformada) degrada para "sem sugestão" (mesmo padrão de leitura
+ * degradável do BRAIN §7/S1-22) e nunca impede o scoring manual do gestor.
+ */
+export async function fetchScoringSuggestion(
+  purpose: string,
+  specialFamilySituation: string | null,
+): Promise<ScoringAiSuggestion> {
+  try {
+    const suggestion = await suggestFlatsScoringPoints({
+      purpose,
+      specialFamilySituation,
+    });
+    return {
+      healthDeclaredPoints: suggestion.healthDeclaredPoints,
+      ministryIntensityPoints: suggestion.ministryIntensityPoints,
+    };
+  } catch (err) {
+    console.error("[flats/scoring] AI suggestion failed:", err);
+    return { healthDeclaredPoints: null, ministryIntensityPoints: null };
+  }
+}
+
+const requestScoringSuggestionSchema = z.object({
+  reservationId: z.string().uuid(),
+});
+
+/**
+ * Server Action chamada "ao abrir a tela de scoring" (P-7.13) — lê o texto
+ * livre já persistido (reservations.purpose e o `value` do critério
+ * e_situacao_familiar) e devolve a sugestão de IA para d/g. Restrita a
+ * gestor/super_admin, mesma RLS de scoring_responses_select_gestor
+ * (0022_flats_rls.sql).
+ *
+ * "use server" inline (não no topo do arquivo, mesmo padrão de motivo do
+ * comentário em lib/tie-break.ts): este arquivo também exporta
+ * SCORING_MAX_POINTS (uma const, não uma função) e computeScoringResponses
+ * (recebe `tx` — só chamado dentro de outra transação, nunca do client) — um
+ * módulo "use server" de arquivo inteiro só pode exportar Server Actions
+ * (build quebra com "Only async functions are allowed to be exported").
+ */
+export const requestScoringSuggestion = gestorAction
+  .schema(requestScoringSuggestionSchema)
+  .action(async ({ parsedInput, ctx }) => {
+    "use server";
+
+    const { purpose, specialFamilySituation } = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const [reservation] = await tx
+          .select({ purpose: reservations.purpose })
+          .from(reservations)
+          .where(eq(reservations.id, parsedInput.reservationId))
+          .limit(1);
+
+        if (!reservation) throw new BusinessError("Reserva não encontrada");
+
+        const [familyRow] = await tx
+          .select({ value: scoringResponses.value })
+          .from(scoringResponses)
+          .where(
+            and(
+              eq(scoringResponses.reservationId, parsedInput.reservationId),
+              eq(scoringResponses.criterion, "e_situacao_familiar"),
+            ),
+          )
+          .limit(1);
+
+        return {
+          purpose: reservation.purpose,
+          specialFamilySituation: familyRow?.value ?? null,
+        };
+      },
+    );
+
+    return fetchScoringSuggestion(purpose, specialFamilySituation);
+  });
+
+/**
+ * Gestor confirma ou ajusta os critérios d, g (com sugestão de IA) e e (sem
+ * IA — avaliação humana, inalterado desde P-7.9/P-7.12) antes de gravar. A
+ * pontuação persistida em flats.scoring_responses é sempre este valor
+ * confirmado — a sugestão de IA nunca é gravada diretamente (BRAIN §6.8/§8).
+ * confirmScoringSchema já existe em @hebron/validators/flats desde P-7.1
+ * (fora do escopo deste prompt); este é o primeiro consumidor.
+ */
+export const confirmScoringPoints = gestorAction
+  .schema(confirmScoringSchema)
+  .action(async ({ parsedInput, ctx }) => {
+    "use server";
+
+    return withAuthenticatedContext({ actorId: ctx.actorId }, async (tx) => {
+      const [reservation] = await tx
+        .select({ id: reservations.id })
+        .from(reservations)
+        .where(eq(reservations.id, parsedInput.reservationId))
+        .limit(1);
+
+      if (!reservation) throw new BusinessError("Reserva não encontrada");
+
+      const now = new Date();
+      const updates: [ScoringCriterionValue, number][] = [
+        ["d_saude", parsedInput.healthDeclaredPoints],
+        ["g_intensidade_ministerial", parsedInput.ministryIntensityPoints],
+        ["e_situacao_familiar", parsedInput.specialFamilySituationPoints],
+      ];
+
+      for (const [criterion, points] of updates) {
+        await tx
+          .update(scoringResponses)
+          .set({ points, updatedAt: now })
+          .where(
+            and(
+              eq(scoringResponses.reservationId, parsedInput.reservationId),
+              eq(scoringResponses.criterion, criterion),
+            ),
+          );
+      }
+
+      const rows = await tx
+        .select({ points: scoringResponses.points })
+        .from(scoringResponses)
+        .where(eq(scoringResponses.reservationId, parsedInput.reservationId));
+
+      const totalPoints = rows.reduce((sum, r) => sum + r.points, 0);
+
+      await tx
+        .update(reservations)
+        .set({ scoreTotal: totalPoints, updatedAt: now })
+        .where(eq(reservations.id, parsedInput.reservationId));
+
+      await withSystemRole(tx, (sysTx) =>
+        logFlatsAudit(
+          {
+            actorId: ctx.actorId,
+            action: "scoring.confirmed",
+            entity: "reservation",
+            entityId: parsedInput.reservationId,
+            diff: {
+              healthDeclaredPoints: parsedInput.healthDeclaredPoints,
+              ministryIntensityPoints: parsedInput.ministryIntensityPoints,
+              specialFamilySituationPoints:
+                parsedInput.specialFamilySituationPoints,
+              totalPoints,
+            },
+          },
+          sysTx,
+        ),
+      );
+
+      return { reservationId: parsedInput.reservationId, totalPoints };
+    });
+  });

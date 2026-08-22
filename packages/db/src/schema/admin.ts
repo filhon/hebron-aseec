@@ -169,6 +169,10 @@ export const auditActionEnum = adminSchema.enum("audit_action", [
   // observável além do console.error, added via ALTER TYPE in
   // 0085_financeiro_integration_failed_audit_action.sql
   "financeiro.integration.failed",
+  // Flats — confirmação/ajuste do gestor nos critérios d/g/e do scoring
+  // (P-7.13, PATCH-012), added via ALTER TYPE in
+  // 0088_flats_scoring_confirmed_audit_action.sql
+  "scoring.confirmed",
 ]);
 
 export const meetingTypeEnum = adminSchema.enum("meeting_type", [

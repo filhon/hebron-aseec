@@ -288,6 +288,7 @@
 | S-265  | 2026-08-21 | P-2.14 — Detecção de duplicidade de projetos via embeddings/pgvector                                                             | concluido                                                                            |
 | S-266  | 2026-08-21 | P-5.13 — Exportação de eventos para o Google Calendar                                                                            | concluido                                                                            |
 | S-267  | 2026-08-21 | P-6.20 — Upload de vídeo via Bunny.net Stream                                                                                    | concluido                                                                            |
+| S-268  | 2026-08-22 | P-7.13 — Assistência de IA no scoring de Flats                                                                                   | concluido                                                                            |
 
 ---
 
@@ -24932,4 +24933,135 @@ collectionCount}` com essa chave) — isso exige a chave de conta principal
   `BUNNY_STREAM_API_KEY`, `BUNNY_STREAM_CDN_HOSTNAME`,
   `BUNNY_STREAM_TOKEN_AUTH_KEY` (últimas duas são débito G1)
 - `apps/plataforma/package.json` (`tus-js-client`)
+- `SESSIONS.md` (esta entrada)
+
+---
+
+## S-268 — P-7.13 — Assistência de IA no scoring de Flats
+
+**Prompt:** `PROMPTS.md` P-7.13
+**Data:** 2026-08-22
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+Sugestão de IA (v1) para os 2 critérios subjetivos do scoring de Flats — d)
+saúde autodeclarada e g) intensidade ministerial — a partir do texto livre
+que o gestor já lê hoje (`reservations.purpose`, exibido em
+`approval-form.tsx`, e o `value` de `e_situacao_familiar`). A IA nunca
+decide: `packages/ai/src/flats/scoring-assistance.ts` (novo) só sugere;
+`confirmScoringPoints` (novo, `actions/scoring.ts`) grava sempre o valor que
+o gestor confirmar. Os outros 8 critérios (a, b, c, e, f, h, i, j) não
+mudam — 100% determinísticos, sem IA, exatamente como antes.
+
+**Suposição registrada (G1) — "texto livre" e localização do componente:**
+o prompt descreve d/g como "hoje dependem de leitura humana de texto
+livre", mas no código atual essas respostas já são dropdowns fechados
+(`healthDeclared`/`ministryIntensity` em `scoringAnswersSchema`), preenchidos
+pelo hóspede — não há campo de texto livre dedicado a esses dois critérios.
+A fonte de texto livre mais próxima e já lida pelo gestor hoje é
+`reservations.purpose` ("finalidade da estadia", exibida no topo de
+`approval-form.tsx`) + o `value` livre do critério e. Assumido como a fonte
+correta. O prompt também pedia `apps/flats/src/components/scoring-form.tsx`,
+mas o componente de scoring já existente (read-only, usado por
+`approval-form.tsx`) se chama `scoring-panel.tsx` — criado `scoring-form.tsx`
+como um componente NOVO e separado (formulário editável do gestor para
+d/g/e, com badge de sugestão), sem tocar `scoring-panel.tsx`/
+`approval-form.tsx` (fora da lista de arquivos permitidos) — portanto ele
+não está wireado em nenhuma página nesta sessão (mesmo padrão de "componente
+pronto, integração para depois" já visto no histórico deste módulo).
+
+**Segurança contra injeção (ocr.ts:119/PACOTE 10):** o texto do hóspede vai
+em mensagem `user` própria, delimitada (`"""..."""`), nunca concatenado à
+instrução `system`; o `system` instrui explicitamente que é dado a avaliar,
+nunca uma instrução. Mesmo que o modelo "obedeça" a uma injeção e devolva um
+valor fora da tabela do BRAIN §6.8 (ex. `999999`), `pointsOrNull` descarta
+qualquer valor que não seja exatamente um dos permitidos — testado com
+payload de injeção conhecido (`scoring-assistance.test.ts`).
+
+**Débitos G1 (infra faltante não coberta pela lista de arquivos do prompt):**
+
+1. `confirmScoringPoints` grava uma mutação crítica (BRAIN "audit log em
+   toda mutação crítica") — precisava de um novo valor de
+   `admin.audit_action` (`scoring.confirmed`, mesmo padrão de G6.3 e do
+   precedente `0047_flats_audit_actions_p78.sql`). Adicionados
+   `packages/db/src/migrations/0088_flats_scoring_confirmed_audit_action.sql`,
+   `packages/db/src/schema/admin.ts` (enum TS espelhado) e
+   `apps/flats/src/lib/audit.ts` (`FlatsAuditAction`). Sem isso a auditoria
+   falharia em runtime (mesmo achado F3-02 da auditoria) — migration já
+   aplicada no banco de dev compartilhado.
+2. `packages/ai/package.json` — export `./flats/scoring-assistance` (novo
+   subpath, mesmo padrão dos outros módulos de `packages/ai`).
+3. `apps/flats/package.json` — dependência `@hebron/ai` (faltava; nenhum
+   prompt anterior de Flats precisou de IA) e devDependency `openai` (só
+   para tipar `vi.mock("openai", ...)` no teste novo — mesmo padrão de
+   `packages/ai`).
+4. `apps/flats/vitest.config.ts` — `include` só cobria
+   `src/__tests__/**/*.test.ts`; o prompt pediu o teste em
+   `src/actions/__tests__/`, um diretório fora do glob (nunca rodaria via
+   `pnpm test`). Adicionado `src/actions/__tests__/**/*.test.ts` ao include.
+5. `apps/flats/src/actions/scoring.ts` já exportava `SCORING_MAX_POINTS`
+   (uma const) e `computeScoringResponses` (recebe `tx`, só chamado de
+   dentro de outra transação) — um `"use server"` de arquivo inteiro só
+   pode exportar Server Actions (`next build` falha com "Only async
+   functions are allowed to be exported"), mesma classe de restrição já
+   documentada em `lib/tie-break.ts` (P-7.9). Resolvido com `"use server"`
+   inline dentro dos dois novos `.action(async (...) => { "use server"; ... })`
+   (`requestScoringSuggestion`/`confirmScoringPoints`), sem tocar o resto do
+   arquivo — confirmado com `next build` limpo.
+
+**Skill `/impeccable` (Princípios invioláveis):** invocada só depois de
+escrever `scoring-form.tsx` (deveria ter sido antes) — usada em modo
+`audit` para corrigir o gap: adicionados `role="status" aria-live="polite"`
+no feedback de salvar, `aria-describedby` ligando cada Select à sua badge de
+sugestão, um indicador leve "Buscando sugestão da IA…" enquanto a Server
+Action roda, e o form passou de `<div>`+`onClick` para `<form onSubmit>`
+(Enter-to-submit — combina com o perfil de usuário do BRAIN, "acostumados
+com formulários físicos").
+
+### Verificação
+
+- `pnpm --filter @hebron/ai --filter @hebron/db --filter @hebron/flats typecheck` — limpo.
+- `pnpm --filter @hebron/ai --filter @hebron/flats lint` — limpo (`@hebron/db#lint`
+  falha por `check_locks.mjs`/`check_locks2.mjs`, pré-existente e não
+  relacionado, já documentado em sessões anteriores).
+- `pnpm --filter @hebron/flats build` (`next build`) — limpo (2 tentativas
+  falharam por um erro de worker do Windows/jest-worker não relacionado a
+  código, "Cannot find module './NNN.js'" durante "Collecting page data";
+  reproduzido de forma inconsistente mesmo sem tocar mais código — ambiente,
+  não regressão).
+- `apps/flats/src/actions/__tests__/scoring-assistance.test.ts` (novo, 11
+  testes): 5 cobrem `suggestFlatsScoringPoints` isolada (mock de `openai`,
+  mesmo padrão de `packages/ai/src/__tests__/ocr.test.ts`) — sugestão válida,
+  separação system/user, clamp de payload de injeção, `timeout`/`maxRetries`
+  explícitos, resposta vazia/malformada não lança; 2 cobrem
+  `fetchScoringSuggestion` (não-bloqueante, sem banco); 4 cobrem
+  `requestScoringSuggestion`/`confirmScoringPoints` contra o banco real
+  (RBAC gestor, sugestão ≠ valor gravado quando o gestor ajusta, falha da
+  IA não bloqueia). 11/11 passando.
+- Suíte completa de Flats (`pnpm test`): 4 arquivos, 64/64 passando —
+  `reservations.test.ts`, `scoring.test.ts`, `rls.test.ts` sem regressão.
+- `packages/ai` (`pnpm test`): 13/13 passando (ocr + duplicate-detection),
+  sem regressão.
+- Migration `0088_flats_scoring_confirmed_audit_action.sql` aplicada ao
+  banco de dev compartilhado via `pnpm --filter @hebron/db db:migrate`.
+- **Não verificado nesta sessão:** `scoring-form.tsx` numa página real do
+  navegador — o componente não está wireado em nenhuma rota (fora do
+  escopo de arquivos permitidos deste prompt, ver suposição acima).
+  Verificado só via typecheck/lint/build/testes automatizados.
+
+### Arquivos modificados
+
+- `packages/ai/src/flats/scoring-assistance.ts` (novo)
+- `packages/ai/package.json` (export `./flats/scoring-assistance`, débito G1)
+- `apps/flats/src/actions/scoring.ts` (`fetchScoringSuggestion`,
+  `requestScoringSuggestion`, `confirmScoringPoints`)
+- `apps/flats/src/components/scoring-form.tsx` (novo)
+- `apps/flats/src/actions/__tests__/scoring-assistance.test.ts` (novo)
+- `apps/flats/package.json` (`@hebron/ai`, `openai` devDependency — débito G1)
+- `apps/flats/vitest.config.ts` (`include` — débito G1)
+- `apps/flats/src/lib/audit.ts` (`FlatsAuditAction` — débito G1)
+- `packages/db/src/schema/admin.ts` (`auditActionEnum` — débito G1)
+- `packages/db/src/migrations/0088_flats_scoring_confirmed_audit_action.sql` (novo — débito G1)
 - `SESSIONS.md` (esta entrada)

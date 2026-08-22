@@ -4,8 +4,12 @@ import { getActiveImpersonation } from "@hebron/auth/impersonation-server";
 
 // ---------------------------------------------------------------------------
 // Flats-specific audit action types — valores já existem em
-// admin.audit_action desde 0022_flats_audit_actions.sql (P-7.6) e
-// 0047_flats_audit_actions_p78.sql (P-7.8, G6.3).
+// admin.audit_action desde 0022_flats_audit_actions.sql (P-7.6),
+// 0047_flats_audit_actions_p78.sql (P-7.8, G6.3) e
+// 0088_flats_scoring_confirmed_audit_action.sql (P-7.13, G6.3 — arquivo de
+// infraestrutura óbvia faltando na lista de "Arquivos permitidos" do
+// prompt, registrado em SESSIONS.md; sem isso confirmScoringPoints
+// (actions/scoring.ts) falharia em runtime, mesmo achado F3-02 da auditoria).
 // ---------------------------------------------------------------------------
 
 export type FlatsAuditAction =
@@ -18,7 +22,8 @@ export type FlatsAuditAction =
   | "reservation.checked_out"
   | "aid.requested"
   | "aid.approved"
-  | "aid.rejected";
+  | "aid.rejected"
+  | "scoring.confirmed";
 
 export interface LogFlatsAuditParams {
   actorId: string;
