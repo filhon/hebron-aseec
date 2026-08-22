@@ -4,6 +4,7 @@ import {
   getTransactions,
   getBudgets,
   getPayables,
+  AGGREGATE_FETCH_LIMIT,
 } from "../../../lib/queries";
 import { NewCostCenterButton } from "../../../components/cost-center-form";
 
@@ -67,12 +68,13 @@ function StatusDot({ hasProject }: { hasProject: boolean }) {
 }
 
 export default async function CentrosCustoPage() {
-  const [costCenters, transactions, budgets, payables] = await Promise.all([
-    getCostCenterOptions(),
-    getTransactions(),
-    getBudgets(),
-    getPayables(),
-  ]);
+  const [costCenters, { items: transactions }, budgets, { items: payables }] =
+    await Promise.all([
+      getCostCenterOptions(),
+      getTransactions({ limit: AGGREGATE_FETCH_LIMIT }),
+      getBudgets(),
+      getPayables({ limit: AGGREGATE_FETCH_LIMIT }),
+    ]);
 
   const rows = costCenters.map((cc) => {
     const spent = transactions

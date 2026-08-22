@@ -521,6 +521,11 @@ export const batchApprovals = financeiroSchema.table(
     approvedAt: timestamp("approved_at", { withTimezone: true }),
     authorizedBy: uuid("authorized_by").references(() => users.id),
     authorizedAt: timestamp("authorized_at", { withTimezone: true }),
+    // Guarda de idempotência do cron semanal (D5-001): marcada só depois que
+    // o laço de e-mails aos destinatários termina sem lançar. Substitui "o
+    // lote existe?" (que fazia o retry pular o envio inteiro se a criação já
+    // tivesse sido concluída) por "o lote já foi anunciado?".
+    notifiedAt: timestamp("notified_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

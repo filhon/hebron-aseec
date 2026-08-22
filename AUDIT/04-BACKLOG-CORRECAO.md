@@ -289,11 +289,13 @@ Tirar o Financeiro do formato "carrega tudo" antes que o volume force, e fechar 
 
 ### Critérios de aceite
 
-- [ ] Nenhuma listagem carrega tabela inteira; toda tela de lançamento tem filtro de período e paginação
-- [ ] Auditoria alcança registros além dos 500 mais recentes
-- [ ] Falha no envio do e-mail do lote não impede o reenvio no retry (teste simulando falha no destinatário 2 de 3)
-- [ ] Sugestão de conciliação usa valor + data + descrição
-- [ ] Lint passa · Types passam
+- [x] Nenhuma listagem carrega tabela inteira; toda tela de lançamento tem filtro de período e paginação — `getTransactions`/`getPayables`/`getReceivables`/`getBatchApprovals` (`apps/financeiro/src/lib/queries.ts`) trocaram `select().from(T)` irrestrito por `{ from?, to?, limit?, offset? }` com `where`+`orderBy`+`limit`/`offset` reais, retornando `{ items, total }`; as consultas auxiliares de cada função (reversals, itens de lote, anexos) escoparam para `inArray(..., rowIds)` da página atual. **Lançamentos** ganhou filtro De/Até (padrão mês corrente, `PeriodFilter` novo) + paginação client-side já existente (`TransactionTable`) agora sobre um conjunto bounded pelo período, com KPIs vindo de `getTransactionTotals` (soma em SQL, não em JS). **Contas a Pagar/Receber** ganharam o mesmo filtro, mas **sem período por padrão** (decisão deliberada — são telas por aba de status, não cronológicas; um pendente antigo não pode sumir sem o usuário pedir), bounded por `AGGREGATE_FETCH_LIMIT` (10.000) em vez de sem `limit` nenhum. Os 5 agregados (dashboard, relatórios, orçamento, centros de custo, fluxo de caixa) passaram a declarar `{ limit: AGGREGATE_FETCH_LIMIT }` explicitamente. **Paginação por offset real nas abas de Contas a Pagar/Receber ficou fora do escopo desta sessão** — ver S-269 em `SESSIONS.md`.
+- [x] Auditoria alcança registros além dos 500 mais recentes — `apps/admin/.../auditoria/page.tsx`: teto rígido `.limit(500)` trocado por paginação keyset sobre `(created_at, id)`, com pilha de cursores (`stack` no searchParams) para "Anterior" sem reler do início.
+- [x] Falha no envio do e-mail do lote não impede o reenvio no retry (teste simulando falha no destinatário 2 de 3) — `packages/jobs/src/crons/financeiro.ts`: `createWeeklyBatch`/`notifyWeeklyBatchRecipients` separados em dois `step.run`; idempotência deslocada para `batch_approvals.notified_at` (coluna nova), marcada só depois que o laço de e-mail termina sem lançar. Teste novo em `packages/jobs/src/__tests__/financeiro.test.ts` simula falha no 2º de 3 destinatários e confirma que o retry reenvia a todos.
+- [x] Sugestão de conciliação usa valor + data + descrição — `apps/financeiro/src/actions/conciliation.ts`: `pickBestDateDescriptionMatch` reaplica a heurística de `txMatch` (janela ±5 dias + sobreposição de descrição) na sugestão de payable/receivable, que antes usava só valor. Teste novo em `conciliation.test.ts`.
+- [x] Lint passa · Types passam — `@hebron/financeiro`/`@hebron/admin`/`@hebron/jobs`/`@hebron/db` typecheck limpo; lint limpo (exceto `@hebron/db#lint`, que falha por `check_locks.mjs`/`check_locks2.mjs` pré-existentes e não relacionados).
+
+**Ver S-269 em `SESSIONS.md` para o detalhamento completo da implementação e verificação.**
 
 ---
 

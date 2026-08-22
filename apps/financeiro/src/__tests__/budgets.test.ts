@@ -156,7 +156,8 @@ describe("cancelPayable — motivo e autor persistidos na tabela (P-3.6b)", () =
   it("cancellationReason e cancelledBy voltam preenchidos de getPayables", async () => {
     const { createPayable, cancelPayable } =
       await import("../actions/transactions");
-    const { getPayables } = await import("../lib/queries");
+    const { getPayables, AGGREGATE_FETCH_LIMIT } =
+      await import("../lib/queries");
 
     await actingAsDiretor();
     const created = await createPayable({
@@ -181,7 +182,10 @@ describe("cancelPayable — motivo e autor persistidos na tabela (P-3.6b)", () =
     // internamente — dois consumos de resolveSession por chamada.
     await actingAsDiretor();
     await actingAsDiretor();
-    const payable = (await getPayables()).find((p) => p.id === payableId);
+    const { items: payablesAfterCancel } = await getPayables({
+      limit: AGGREGATE_FETCH_LIMIT,
+    });
+    const payable = payablesAfterCancel.find((p) => p.id === payableId);
     expect(payable?.status).toBe("cancelado");
     expect(payable?.cancellationReason).toBe(
       "Fornecedor cancelou o pedido antes da entrega",

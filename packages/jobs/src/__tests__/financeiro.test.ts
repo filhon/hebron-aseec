@@ -35,7 +35,12 @@ vi.mock("@hebron/email", () => ({
 }));
 
 import { getWeeklyBatchWindow } from "@hebron/integrations/financeiro";
-import { runWeeklyBatchCreation, runMonthlyReport } from "../crons/financeiro";
+import {
+  runWeeklyBatchCreation,
+  runMonthlyReport,
+  createWeeklyBatch,
+  notifyWeeklyBatchRecipients,
+} from "../crons/financeiro";
 
 const IDS = {
   gestor: "cd150000-0000-0000-0000-000000000001",
@@ -283,5 +288,130 @@ describe("Templates de email do Financeiro — override do Admin no cron (P-3.10
     expect(emailCall).toBeDefined();
     const email = (emailCall?.[0] as { email: { subject: string } }).email;
     expect(email.subject).toMatch(/^TESTE OVERRIDE RELATÓRIO — /);
+  });
+});
+
+describe("notifyWeeklyBatchRecipients — falha no meio do envio não bloqueia o reenvio no retry (D5-001)", () => {
+  const gestorIds = [
+    "cd170000-0000-0000-0000-000000000001",
+    "cd170000-0000-0000-0000-000000000002",
+    "cd170000-0000-0000-0000-000000000003",
+  ] as const;
+  const payableId = "cd170000-0000-0000-0000-000000000004";
+  let createdBatchId: string | null = null;
+
+  beforeAll(async () => {
+    await db
+      .insert(users)
+      .values(
+        gestorIds.map((id, i) => ({
+          id,
+          email: `jobs-fin-retry-${i}@test.hebron`,
+          fullName: `Jobs Financeiro Retry ${i}`,
+        })),
+      )
+      .onConflictDoNothing();
+
+    await db
+      .insert(roleAssignments)
+      .values(
+        gestorIds.map((id) => ({
+          userId: id,
+          role: "diretor" as const,
+          grantedBy: id,
+        })),
+      )
+      .onConflictDoNothing();
+
+    // 3 gestores designados — garante pelo menos 3 destinatários "to" no
+    // envio, independente de outras designações reais já existentes no
+    // banco de dev compartilhado.
+    await db
+      .insert(designations)
+      .values(
+        gestorIds.map((id) => ({
+          type: "gestor" as const,
+          userId: id,
+          assignedBy: id,
+        })),
+      )
+      .onConflictDoNothing();
+
+    await db.insert(payables).values({
+      id: payableId,
+      description: "Payable — teste retry de notificação do lote (cron)",
+      amount: "77.00",
+      dueDate: weekStart,
+      status: "pendente",
+      createdBy: gestorIds[0],
+    });
+  });
+
+  afterAll(async () => {
+    if (createdBatchId) {
+      await db
+        .delete(batchApprovals)
+        .where(eq(batchApprovals.id, createdBatchId));
+    }
+    await db.delete(payables).where(eq(payables.id, payableId));
+    await db
+      .delete(designations)
+      .where(inArray(designations.userId, [...gestorIds]));
+    await db
+      .delete(roleAssignments)
+      .where(inArray(roleAssignments.userId, [...gestorIds]));
+    await db.delete(users).where(inArray(users.id, [...gestorIds]));
+  });
+
+  it("falha simulada no 2º destinatário não marca notified_at; retry reenvia a todos e completa", async () => {
+    const created = await createWeeklyBatch();
+    createdBatchId = created.batchId;
+    expect(created.batchId).toBeTruthy();
+    const batchId = created.batchId as string;
+
+    createNotificationMock.mockClear();
+    let callCount = 0;
+    createNotificationMock.mockImplementation(async () => {
+      callCount += 1;
+      if (callCount === 2) {
+        throw new Error("Falha simulada — destinatário 2 indisponível");
+      }
+      return { id: "mock-id" };
+    });
+
+    await expect(notifyWeeklyBatchRecipients(batchId)).rejects.toThrow(
+      "Falha simulada — destinatário 2 indisponível",
+    );
+
+    const afterFailure = await db
+      .select({ notifiedAt: batchApprovals.notifiedAt })
+      .from(batchApprovals)
+      .where(eq(batchApprovals.id, batchId))
+      .limit(1);
+    expect(afterFailure[0]?.notifiedAt).toBeNull();
+
+    // Retry (equivalente ao Inngest reexecutando o step "notify-recipients")
+    // — a guarda antiga ("existe lote?") teria pulado o laço inteiro aqui.
+    createNotificationMock.mockClear();
+    createNotificationMock.mockImplementation(async () => ({ id: "mock-id" }));
+
+    await notifyWeeklyBatchRecipients(batchId);
+
+    const notifiedUserIds = createNotificationMock.mock.calls
+      .filter(
+        (call) =>
+          (call[0] as { data: { channel: string } }).data.channel === "email",
+      )
+      .map((call) => (call[0] as { data: { userId: string } }).data.userId);
+    for (const id of gestorIds) {
+      expect(notifiedUserIds).toContain(id);
+    }
+
+    const afterRetry = await db
+      .select({ notifiedAt: batchApprovals.notifiedAt })
+      .from(batchApprovals)
+      .where(eq(batchApprovals.id, batchId))
+      .limit(1);
+    expect(afterRetry[0]?.notifiedAt).not.toBeNull();
   });
 });

@@ -10,6 +10,7 @@ import {
   getCategories,
   getCostCenterOptions,
   getLatestBankImport,
+  AGGREGATE_FETCH_LIMIT,
 } from "../../lib/queries";
 import { buildCashFlowData } from "../../lib/cashflow";
 import { CashFlowChart } from "../../components/cash-flow-chart";
@@ -40,8 +41,10 @@ function fmtDeltaBRL(n: number): string {
 }
 
 function buildSparkline(
-  transactions: Awaited<ReturnType<typeof getTransactions>>,
-  filter: (t: Awaited<ReturnType<typeof getTransactions>>[number]) => boolean,
+  transactions: Awaited<ReturnType<typeof getTransactions>>["items"],
+  filter: (
+    t: Awaited<ReturnType<typeof getTransactions>>["items"][number],
+  ) => boolean,
 ): number[] {
   const now = Date.now();
   const buckets = new Array(12).fill(0);
@@ -153,19 +156,19 @@ function KpiCard({
 async function DashboardContent() {
   const [
     bankAccounts,
-    transactions,
-    payables,
-    receivables,
-    batchApprovals,
+    { items: transactions },
+    { items: payables },
+    { items: receivables },
+    { items: batchApprovals },
     categories,
     costCenters,
     conciliation,
   ] = await Promise.all([
     getBankAccounts(),
-    getTransactions(),
-    getPayables(),
-    getReceivables(),
-    getBatchApprovals(),
+    getTransactions({ limit: AGGREGATE_FETCH_LIMIT }),
+    getPayables({ limit: AGGREGATE_FETCH_LIMIT }),
+    getReceivables({ limit: AGGREGATE_FETCH_LIMIT }),
+    getBatchApprovals({ limit: AGGREGATE_FETCH_LIMIT }),
     getCategories(),
     getCostCenterOptions(),
     getLatestBankImport(),

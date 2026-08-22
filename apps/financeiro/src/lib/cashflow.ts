@@ -5,8 +5,8 @@ const DAY = 86_400_000;
 
 export function buildCashFlowData(
   startBalance: number,
-  receivables: Awaited<ReturnType<typeof getReceivables>>,
-  payables: Awaited<ReturnType<typeof getPayables>>,
+  receivables: Awaited<ReturnType<typeof getReceivables>>["items"],
+  payables: Awaited<ReturnType<typeof getPayables>>["items"],
   horizonDays = 90,
 ): CashFlowDataPoint[] {
   const now = Date.now();

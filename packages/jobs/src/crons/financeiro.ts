@@ -66,27 +66,59 @@ function dateOnlyUTC(daysFromNow: number): string {
 }
 
 // ---------------------------------------------------------------------------
-// runWeeklyBatchCreation — cron equivalente ao "createWeeklyBatch" manual
-// (apps/financeiro/src/actions/approval.ts, P-3.9), rodando com o ator
-// sistema em vez de um super_admin logado. A seleção de payables da semana e
-// a resolução de destinatários vêm de @hebron/integrations/financeiro
-// (packages/jobs → packages/integrations é permitido por G6.5 — só
-// packages/jobs → apps/* é proibido) — uma única implementação da regra
-// inviolável de BRAIN §6.5, compartilhada com a action (P-3.10b/S-70).
-// Idempotente e silencioso: um lote já existente ou sem payable pendente não
-// gera erro, diferente da action (que lança para o usuário ver o motivo).
+// createWeeklyBatch / notifyWeeklyBatchRecipients — D5-001: o cron era um
+// único step.run cobrindo criação do lote + envio de e-mail + audit. Se o
+// Resend falhasse no segundo destinatário de três, o retry do Inngest
+// reexecutava o step inteiro — e a guarda de idempotência original ("existe
+// lote da semana?") fazia o retry retornar cedo, sem nunca notificar os
+// destinatários restantes nem gravar o audit. Variante pior: se o INSERT dos
+// itens falhasse, sobrava um batch_approvals vazio que bloqueava toda
+// tentativa futura daquela semana (a guarda via "existe lote?" nunca deixava
+// tentar de novo).
+//
+// A correção separa em dois steps (ver weeklyBatchCreationCron abaixo) e
+// desloca a guarda de "existe lote?" para duas perguntas independentes: "o
+// lote tem os itens da semana?" (createWeeklyBatch completa um lote
+// encontrado sem itens em vez de considerá-lo pronto) e "os destinatários já
+// foram avisados?" (notifiedAt, checado só depois que o laço de e-mail
+// termina sem lançar — batch_approvals.notified_at).
 // ---------------------------------------------------------------------------
 
-export async function runWeeklyBatchCreation(): Promise<{
+export interface CreateWeeklyBatchResult {
   batchId: string | null;
   payableCount: number;
-}> {
-  const actorId = await getSystemActorId();
+}
+
+export async function createWeeklyBatch(): Promise<CreateWeeklyBatchResult> {
   const window = getWeeklyBatchWindow(new Date());
   const { weekStart, weekEnd } = window;
 
   const existing = await findExistingWeeklyBatch(window);
-  if (existing) return { batchId: existing.id, payableCount: 0 };
+
+  if (existing) {
+    const existingItems = await db
+      .select({ payableId: batchApprovalItems.payableId })
+      .from(batchApprovalItems)
+      .where(eq(batchApprovalItems.batchApprovalId, existing.id));
+
+    if (existingItems.length > 0) {
+      return { batchId: existing.id, payableCount: existingItems.length };
+    }
+
+    // Lote existe mas ficou sem itens (falha parcial de uma tentativa
+    // anterior) — completa em vez de tratar como "nada a fazer".
+    const pendingPayables = await selectWeeklyBatchPendingPayables(window);
+    if (pendingPayables.length === 0) {
+      return { batchId: existing.id, payableCount: 0 };
+    }
+    await db.insert(batchApprovalItems).values(
+      pendingPayables.map((p) => ({
+        batchApprovalId: existing.id,
+        payableId: p.id,
+      })),
+    );
+    return { batchId: existing.id, payableCount: pendingPayables.length };
+  }
 
   const pendingPayables = await selectWeeklyBatchPendingPayables(window);
   if (pendingPayables.length === 0) return { batchId: null, payableCount: 0 };
@@ -104,10 +136,43 @@ export async function runWeeklyBatchCreation(): Promise<{
     })),
   );
 
+  return { batchId: batch.id, payableCount: pendingPayables.length };
+}
+
+export async function notifyWeeklyBatchRecipients(
+  batchId: string,
+): Promise<void> {
+  const batchRows = await db
+    .select()
+    .from(batchApprovals)
+    .where(eq(batchApprovals.id, batchId))
+    .limit(1);
+  const batch = batchRows[0];
+  if (!batch) throw new Error("Lote não encontrado para notificação (cron)");
+  if (batch.notifiedAt) return;
+
+  const { weekStart, weekEnd } = batch;
+
+  const itemRows = await db
+    .select({ payableId: batchApprovalItems.payableId })
+    .from(batchApprovalItems)
+    .where(eq(batchApprovalItems.batchApprovalId, batchId));
+  if (itemRows.length === 0) return;
+
+  const payableRows = await db
+    .select({ amount: payables.amount })
+    .from(payables)
+    .where(
+      inArray(
+        payables.id,
+        itemRows.map((i) => i.payableId),
+      ),
+    );
+
   const { recipients, usingGestorRecipients, autorizadorEmails } =
     await resolveWeeklyBatchRecipients();
 
-  const totalAmount = pendingPayables.reduce(
+  const totalAmount = payableRows.reduce(
     (sum, p) => sum + parseFloat(p.amount),
     0,
   );
@@ -121,7 +186,7 @@ export async function runWeeklyBatchCreation(): Promise<{
           nome: displayName,
           semanaInicio: weekStart,
           semanaFim: weekEnd,
-          quantidade: String(pendingPayables.length),
+          quantidade: String(itemRows.length),
           valorTotal: totalAmount.toLocaleString("pt-BR", {
             style: "currency",
             currency: "BRL",
@@ -139,7 +204,7 @@ export async function runWeeklyBatchCreation(): Promise<{
         type: "financeiro.batch.created",
         title: `Lote de pagamentos aguarda aprovação (${weekStart})`,
         body:
-          `${pendingPayables.length} conta(s) totalizando ` +
+          `${itemRows.length} conta(s) totalizando ` +
           `R$ ${totalAmount.toFixed(2)} aguardam aprovação — semana ` +
           `${weekStart} a ${weekEnd}.`,
         payload: { batchId: batch.id, weekStart, weekEnd },
@@ -153,7 +218,7 @@ export async function runWeeklyBatchCreation(): Promise<{
             recipientName: displayName,
             weekStart,
             weekEnd,
-            payableCount: pendingPayables.length,
+            payableCount: itemRows.length,
             totalAmount,
             financeiroUrl: FINANCEIRO_BASE_URL,
           }),
@@ -162,16 +227,28 @@ export async function runWeeklyBatchCreation(): Promise<{
     });
   }
 
+  await db
+    .update(batchApprovals)
+    .set({ notifiedAt: new Date() })
+    .where(eq(batchApprovals.id, batchId));
+
+  const actorId = await getSystemActorId();
   await logAudit({
     actorId,
     action: "financeiro.batch.created",
     entity: "batch_approval",
     entityId: batch.id,
-    diff: { weekStart, weekEnd, payableCount: pendingPayables.length },
+    diff: { weekStart, weekEnd, payableCount: itemRows.length },
     criticality: "critical",
   });
+}
 
-  return { batchId: batch.id, payableCount: pendingPayables.length };
+// Composto usado por chamadores diretos (fora do Inngest — ex.: testes) que
+// esperam criação + notificação em uma única chamada síncrona.
+export async function runWeeklyBatchCreation(): Promise<CreateWeeklyBatchResult> {
+  const result = await createWeeklyBatch();
+  if (result.batchId) await notifyWeeklyBatchRecipients(result.batchId);
+  return result;
 }
 
 export const weeklyBatchCreationCron = inngest.createFunction(
@@ -180,8 +257,15 @@ export const weeklyBatchCreationCron = inngest.createFunction(
     name: "Financeiro: lote semanal de aprovação de pagamentos",
   },
   { cron: "0 8 * * 1" },
-  async ({ step }) =>
-    step.run("run-weekly-batch-creation", runWeeklyBatchCreation),
+  async ({ step }) => {
+    const result = await step.run("create-batch", createWeeklyBatch);
+    if (result.batchId) {
+      await step.run("notify-recipients", () =>
+        notifyWeeklyBatchRecipients(result.batchId as string),
+      );
+    }
+    return result;
+  },
 );
 
 // ---------------------------------------------------------------------------

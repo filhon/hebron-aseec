@@ -4,15 +4,18 @@ import {
   getTransactions,
   getCategories,
   getBankAccounts,
+  AGGREGATE_FETCH_LIMIT,
 } from "../../../lib/queries";
 import { RelatoriosView } from "../../../components/relatorios-view";
 
 export default async function RelatoriosPage() {
-  const [transactions, categories, bankAccounts] = await Promise.all([
-    getTransactions(),
-    getCategories(),
-    getBankAccounts(),
-  ]);
+  const [{ items: transactions }, categories, bankAccounts] = await Promise.all(
+    [
+      getTransactions({ limit: AGGREGATE_FETCH_LIMIT }),
+      getCategories(),
+      getBankAccounts(),
+    ],
+  );
 
   const cookieStore = await cookies();
   const session = await resolveSession(cookieStore);

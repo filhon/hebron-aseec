@@ -4,6 +4,7 @@ import {
   getTransactions,
   getCategories,
   getCostCenterOptions,
+  AGGREGATE_FETCH_LIMIT,
 } from "../../../lib/queries";
 import { BudgetComparison } from "../../../components/budget-comparison";
 
@@ -70,12 +71,13 @@ function KpiCard({ label, value, sub, accent, dir }: KpiCardProps) {
 }
 
 export default async function OrcamentoPage() {
-  const [budgets, transactions, categories, costCenters] = await Promise.all([
-    getBudgets(),
-    getTransactions(),
-    getCategories(),
-    getCostCenterOptions(),
-  ]);
+  const [budgets, { items: transactions }, categories, costCenters] =
+    await Promise.all([
+      getBudgets(),
+      getTransactions({ limit: AGGREGATE_FETCH_LIMIT }),
+      getCategories(),
+      getCostCenterOptions(),
+    ]);
 
   const totalApproved = budgets.reduce((s, b) => s + b.totalAmount, 0);
   const totalUsed = budgets.reduce((s, b) => {

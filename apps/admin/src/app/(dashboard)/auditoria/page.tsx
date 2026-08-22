@@ -6,9 +6,11 @@ import {
   count,
   sql,
   and,
+  or,
   ilike,
   gte,
   lte,
+  lt,
   type SQL,
 } from "drizzle-orm";
 import type { AuditLog } from "@hebron/db/schema";
@@ -81,12 +83,40 @@ function StatCardSmall({
 
 // ─── Audit Content ────────────────────────────────────────────────────────────
 
+const PAGE_SIZE = 50;
+
 interface AuditContentProps {
   actor?: string;
   action?: string;
   entity?: string;
   from?: string;
   to?: string;
+  /** Pilha de cursores das páginas já visitadas ("Anterior" faz pop). */
+  stack: string[];
+  /** Cursor da página atual: "<createdAt ISO>_<id>" da última linha da página anterior. */
+  cursor?: string;
+}
+
+// Paginação por keyset sobre (created_at, id) — D4-003: o teto rígido de 500
+// linhas tornava inalcançável qualquer registro além dos poucos dias mais
+// recentes, contradizendo BRAIN §6.1 ("audit logs pesquisáveis com filtros
+// avançados"). (created_at, id) em vez de só created_at porque a tabela é
+// particionada por mês e pode ter timestamps empatados no mesmo milissegundo
+// — id como desempate evita pular ou repetir linha na virada de página.
+function parseCursor(
+  raw: string | undefined,
+): { createdAt: Date; id: string } | null {
+  if (!raw) return null;
+  const sep = raw.lastIndexOf("_");
+  if (sep < 0) return null;
+  const createdAt = new Date(raw.slice(0, sep));
+  const id = raw.slice(sep + 1);
+  if (Number.isNaN(createdAt.getTime()) || !id) return null;
+  return { createdAt, id };
+}
+
+function encodeCursor(row: { createdAt: Date; id: string }): string {
+  return `${row.createdAt.toISOString()}_${row.id}`;
 }
 
 async function AuditContent({
@@ -95,6 +125,8 @@ async function AuditContent({
   entity,
   from,
   to,
+  stack,
+  cursor,
 }: AuditContentProps) {
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
@@ -112,9 +144,22 @@ async function AuditContent({
     conditions.push(lte(auditLog.createdAt, toEnd));
   }
 
+  const parsedCursor = parseCursor(cursor);
+  if (parsedCursor) {
+    conditions.push(
+      or(
+        lt(auditLog.createdAt, parsedCursor.createdAt),
+        and(
+          eq(auditLog.createdAt, parsedCursor.createdAt),
+          lt(auditLog.id, parsedCursor.id),
+        ),
+      ) as SQL,
+    );
+  }
+
   const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-  const [entries, statsRows] = await Promise.all([
+  const [entriesPlusOne, statsRows] = await Promise.all([
     db
       .select({
         id: auditLog.id,
@@ -130,8 +175,8 @@ async function AuditContent({
       .from(auditLog)
       .innerJoin(users, eq(auditLog.actorId, users.id))
       .where(whereClause)
-      .orderBy(desc(auditLog.createdAt))
-      .limit(500),
+      .orderBy(desc(auditLog.createdAt), desc(auditLog.id))
+      .limit(PAGE_SIZE + 1),
 
     db
       .select({
@@ -141,6 +186,11 @@ async function AuditContent({
       })
       .from(auditLog),
   ]);
+
+  const hasNextPage = entriesPlusOne.length > PAGE_SIZE;
+  const entries = entriesPlusOne.slice(0, PAGE_SIZE);
+  const lastEntry = entries[entries.length - 1];
+  const nextCursor = hasNextPage && lastEntry ? encodeCursor(lastEntry) : null;
 
   const stats = statsRows[0] ?? { total: 0, todayCount: 0, impersonations: 0 };
   const isFiltered = !!(actor || action || entity || from || to);
@@ -324,6 +374,62 @@ async function AuditContent({
         </table>
       </div>
 
+      {/* Pager — keyset (created_at, id). `stack` guarda o cursor de cada
+          página já visitada antes da atual (a página 1 nunca entra na pilha,
+          já que ela não usa cursor nenhum), permitindo "Anterior" sem reler
+          do início. */}
+      {(cursor || nextCursor) && (
+        <div
+          style={{
+            marginTop: 14,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "flex-end",
+            gap: 8,
+          }}
+        >
+          {cursor && (
+            <form method="get">
+              {actor && <input type="hidden" name="actor" value={actor} />}
+              {action && <input type="hidden" name="action" value={action} />}
+              {entity && <input type="hidden" name="entity" value={entity} />}
+              {from && <input type="hidden" name="from" value={from} />}
+              {to && <input type="hidden" name="to" value={to} />}
+              {stack.slice(0, -1).map((c) => (
+                <input key={c} type="hidden" name="stack" value={c} />
+              ))}
+              {stack.length > 0 && (
+                <input
+                  type="hidden"
+                  name="cursor"
+                  value={stack[stack.length - 1]}
+                />
+              )}
+              <Button variant="ghost" size="sm" type="submit">
+                ← Anterior
+              </Button>
+            </form>
+          )}
+          {nextCursor && (
+            <form method="get">
+              {actor && <input type="hidden" name="actor" value={actor} />}
+              {action && <input type="hidden" name="action" value={action} />}
+              {entity && <input type="hidden" name="entity" value={entity} />}
+              {from && <input type="hidden" name="from" value={from} />}
+              {to && <input type="hidden" name="to" value={to} />}
+              {stack.map((c) => (
+                <input key={c} type="hidden" name="stack" value={c} />
+              ))}
+              {cursor && <input type="hidden" name="stack" value={cursor} />}
+              <input type="hidden" name="cursor" value={nextCursor} />
+              <Button variant="ghost" size="sm" type="submit">
+                Próxima →
+              </Button>
+            </form>
+          )}
+        </div>
+      )}
+
       {/* Footer note */}
       <div
         style={{
@@ -358,9 +464,14 @@ export default async function AuditoriaPage({
     entity?: string;
     from?: string;
     to?: string;
+    cursor?: string;
+    stack?: string | string[];
   }>;
 }) {
-  const { state, actor, action, entity, from, to } = await searchParams;
+  const { state, actor, action, entity, from, to, cursor, stack } =
+    await searchParams;
+  const stackArr =
+    stack === undefined ? [] : Array.isArray(stack) ? stack : [stack];
 
   return (
     <div className="hb-page">
@@ -413,6 +524,8 @@ export default async function AuditoriaPage({
             entity={entity}
             from={from}
             to={to}
+            stack={stackArr}
+            cursor={cursor}
           />
         </Suspense>
       )}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useAction } from "next-safe-action/hooks";
 import { useRouter } from "next/navigation";
 import {
@@ -48,6 +48,8 @@ interface ReceivablesViewProps {
   categories: AccountCategory[];
   costCenters: CostCenterOption[];
   bankAccounts: BankAccount[];
+  /** Filtro de período (D4-003) — renderizado no topo da área de conteúdo. */
+  filterSlot?: ReactNode;
 }
 
 export function ReceivablesView({
@@ -55,6 +57,7 @@ export function ReceivablesView({
   categories,
   costCenters,
   bankAccounts,
+  filterSlot,
 }: ReceivablesViewProps) {
   const router = useRouter();
   const [formOpen, setFormOpen] = useState(false);
@@ -121,6 +124,8 @@ export function ReceivablesView({
       </div>
 
       <div className="p-6 space-y-5">
+        {filterSlot}
+
         {/* KPI row */}
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
           <div

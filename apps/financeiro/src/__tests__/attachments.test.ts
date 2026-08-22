@@ -200,7 +200,8 @@ describe("createPayable — persiste o comprovante em financeiro.attachments", (
       designations: [],
     };
     const { createPayable } = await import("../actions/transactions");
-    const { getPayables } = await import("../lib/queries");
+    const { getPayables, AGGREGATE_FETCH_LIMIT } =
+      await import("../lib/queries");
 
     const result = await createPayable({
       description: "Aluguel do salão de eventos — teste P-3.4b",
@@ -246,7 +247,9 @@ describe("createPayable — persiste o comprovante em financeiro.attachments", (
     // O mesmo anexo precisa voltar por getPayables() — é o que PayableCard
     // usa para decidir se mostra "Ver comprovante" (sem isso, a linha
     // existiria no banco mas a tela nunca saberia).
-    const allPayables = await getPayables();
+    const { items: allPayables } = await getPayables({
+      limit: AGGREGATE_FETCH_LIMIT,
+    });
     const created = allPayables.find((p) => p.id === payableId);
     expect(created?.attachments).toHaveLength(1);
     expect(created?.attachments[0]?.fileName).toBe("recibo-despesa-teste.pdf");

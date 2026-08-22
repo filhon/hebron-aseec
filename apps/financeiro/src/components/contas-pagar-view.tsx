@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useAction } from "next-safe-action/hooks";
 import { useRouter } from "next/navigation";
 import { Plus, Loader2, AlertCircle, X, Landmark } from "lucide-react";
@@ -73,6 +73,8 @@ interface ContasPagarViewProps {
   bankAccounts: BankAccount[];
   categories: AccountCategory[];
   costCenters: CostCenterOption[];
+  /** Filtro de período (D4-003) — renderizado no topo da área de conteúdo. */
+  filterSlot?: ReactNode;
 }
 
 export function ContasPagarView({
@@ -81,6 +83,7 @@ export function ContasPagarView({
   bankAccounts,
   categories,
   costCenters,
+  filterSlot,
 }: ContasPagarViewProps) {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<Tab>("pendente");
@@ -220,6 +223,8 @@ export function ContasPagarView({
       </div>
 
       <div className="p-6 space-y-5">
+        {filterSlot}
+
         {/* Stage info banner */}
         <div
           className="flex items-start gap-3 rounded-(--radius) border px-5 py-4"

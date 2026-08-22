@@ -1,11 +1,15 @@
 import { Info, ArrowUp, ArrowDown } from "lucide-react";
 import {
   getTransactions,
+  getTransactionTotals,
   getCategories,
   getBankAccounts,
   getCostCenterOptions,
+  currentMonthRange,
+  AGGREGATE_FETCH_LIMIT,
 } from "../../../lib/queries";
 import { TransactionTable } from "../../../components/transaction-table";
+import { PeriodFilter } from "../../../components/period-filter";
 
 const DAY = 86_400_000;
 
@@ -71,31 +75,40 @@ function KpiCard({ label, value, sub, accent, dir }: KpiCardProps) {
   );
 }
 
-export default async function LancamentosPage() {
-  const [transactions, categories, accounts, costCenters] = await Promise.all([
-    getTransactions(),
+interface LancamentosPageProps {
+  searchParams: Promise<{ from?: string; to?: string }>;
+}
+
+export default async function LancamentosPage({
+  searchParams,
+}: LancamentosPageProps) {
+  const sp = await searchParams;
+  const defaultRange = currentMonthRange();
+  const from = sp.from ?? defaultRange.from;
+  const to = sp.to ?? defaultRange.to;
+
+  const last30Str =
+    new Date(Date.now() - 30 * DAY).toISOString().split("T")[0] ?? "";
+
+  const [
+    { items: transactions, total },
+    categories,
+    accounts,
+    costCenters,
+    allTimeTotals,
+    last30Totals,
+  ] = await Promise.all([
+    getTransactions({ from, to, limit: AGGREGATE_FETCH_LIMIT }),
     getCategories(),
     getBankAccounts(),
     getCostCenterOptions(),
+    getTransactionTotals(),
+    getTransactionTotals({ from: last30Str }),
   ]);
 
-  const LAST_30 = new Date(Date.now() - 30 * DAY);
-
-  const allIn = transactions
-    .filter((t) => t.type === "credito")
-    .reduce((s, t) => s + t.amount, 0);
-  const allOut = transactions
-    .filter((t) => t.type === "debito")
-    .reduce((s, t) => s + t.amount, 0);
-  const result = allIn - allOut;
-
-  const recent30 = transactions.filter((t) => t.occurredAt >= LAST_30);
-  const recentIn = recent30
-    .filter((t) => t.type === "credito")
-    .reduce((s, t) => s + t.amount, 0);
-  const recentOut = recent30
-    .filter((t) => t.type === "debito")
-    .reduce((s, t) => s + t.amount, 0);
+  const result = allTimeTotals.credito - allTimeTotals.debito;
+  const recentIn = last30Totals.credito;
+  const recentOut = last30Totals.debito;
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg-alt)" }}>
@@ -124,25 +137,25 @@ export default async function LancamentosPage() {
         {/* KPI row */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           <KpiCard
-            label="Total de lançamentos"
-            value={`${transactions.length}`}
-            sub={`${recent30.length} nos últimos 30 dias`}
+            label="Lançamentos no período"
+            value={`${total}`}
+            sub="Conforme filtro de período abaixo"
           />
           <KpiCard
             label="Entradas (30 dias)"
             value={fmtBRL(recentIn)}
-            sub="Créditos no período"
+            sub="Créditos — últimos 30 dias"
             dir="up"
           />
           <KpiCard
             label="Saídas (30 dias)"
             value={fmtBRL(recentOut)}
-            sub="Débitos no período"
+            sub="Débitos — últimos 30 dias"
             dir="down"
           />
           <KpiCard
             label="Resultado acumulado"
-            value={fmtBRL(allIn - allOut)}
+            value={fmtBRL(result)}
             sub={result > 0 ? "Superávit acumulado" : "Déficit acumulado"}
             dir={result > 0 ? "up" : "down"}
             accent
@@ -169,6 +182,14 @@ export default async function LancamentosPage() {
             gera trilha de auditoria.
           </span>
         </div>
+
+        {/* Period filter */}
+        <PeriodFilter
+          defaultFrom={defaultRange.from}
+          defaultTo={defaultRange.to}
+          total={total}
+          label="lançamentos"
+        />
 
         {/* Table */}
         <TransactionTable

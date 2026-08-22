@@ -3,6 +3,7 @@ import {
   getBankAccounts,
   getPayables,
   getReceivables,
+  AGGREGATE_FETCH_LIMIT,
 } from "../../../lib/queries";
 import { buildCashFlowData } from "../../../lib/cashflow";
 import { CashFlowChart } from "../../../components/cash-flow-chart";
@@ -32,11 +33,12 @@ interface UpcomingRow {
 }
 
 export default async function FluxoCaixaPage() {
-  const [bankAccounts, payables, receivables] = await Promise.all([
-    getBankAccounts(),
-    getPayables(),
-    getReceivables(),
-  ]);
+  const [bankAccounts, { items: payables }, { items: receivables }] =
+    await Promise.all([
+      getBankAccounts(),
+      getPayables({ limit: AGGREGATE_FETCH_LIMIT }),
+      getReceivables({ limit: AGGREGATE_FETCH_LIMIT }),
+    ]);
 
   const totalBalance = bankAccounts.reduce((s, a) => s + a.currentBalance, 0);
   const now = Date.now();

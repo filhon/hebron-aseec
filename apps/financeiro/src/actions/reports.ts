@@ -21,7 +21,11 @@ import {
   withSystemRole,
 } from "@hebron/db/authenticated";
 import { financialAttachments, payables, receivables } from "@hebron/db/schema";
-import { getCategories, getTransactions } from "../lib/queries";
+import {
+  AGGREGATE_FETCH_LIMIT,
+  getCategories,
+  getTransactions,
+} from "../lib/queries";
 import { superAdminAction } from "../lib/safe-action";
 import { logFinanceiroAudit } from "../lib/audit";
 
@@ -260,14 +264,14 @@ export const exportMonthlyReport = superAdminAction
     const rangeStart = new Date(`${dateStartStr}T00:00:00.000Z`);
     const rangeEnd = new Date(`${dateEndStr}T23:59:59.999Z`);
 
-    const [allTransactions, categories] = await Promise.all([
-      getTransactions(),
+    const [{ items: monthTransactions }, categories] = await Promise.all([
+      getTransactions({
+        from: dateStartStr,
+        to: dateEndStr,
+        limit: AGGREGATE_FETCH_LIMIT,
+      }),
       getCategories(),
     ]);
-
-    const monthTransactions = allTransactions.filter(
-      (t) => t.occurredAt >= rangeStart && t.occurredAt <= rangeEnd,
-    );
 
     const categoryNameById = new Map(categories.map((c) => [c.id, c.name]));
 

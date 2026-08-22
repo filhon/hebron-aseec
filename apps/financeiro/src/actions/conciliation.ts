@@ -27,6 +27,68 @@ const autoMatchSchema = z.object({
   bankImportId: z.string().uuid("Import inválido"),
 });
 
+// D6-003 — BRAIN.md:413 pede "match automático por valor + data +
+// descrição" para a conciliação. O casamento contra transação já lançada
+// (txMatch, abaixo) já respeitava os três critérios; a sugestão de
+// payable/receivable usava só valor, e `.find()` pegava o primeiro pendente
+// do mesmo valor — o Financeiro tem várias recorrências de valor idêntico
+// (conta de consumo mensal, IPTU anual, convite mensal — BRAIN §6.9).
+// withinDays/descriptionOverlap reaplicam a mesma heurística de txMatch.
+function withinDays(dateA: string, dateB: string, maxDays: number): boolean {
+  const diffDays =
+    Math.abs(new Date(dateA).getTime() - new Date(dateB).getTime()) /
+    86_400_000;
+  return diffDays <= maxDays;
+}
+
+function descriptionOverlap(entityDesc: string, rowDesc: string): boolean {
+  const a = entityDesc.toLowerCase();
+  const b = rowDesc.toLowerCase();
+  return (
+    a.length > 3 &&
+    b.length > 3 &&
+    (a.includes(b.slice(0, 10)) || b.includes(a.slice(0, 10)))
+  );
+}
+
+// Valor (já filtrado pelo caller) + janela de data (±5 dias, BRAIN §6.9 —
+// recorrências não caem sempre no mesmo dia) são exigidos; entre os que
+// sobram, desempata por sobreposição de descrição, e cai pro mais próximo
+// por data se nenhum tiver descrição parecida (ainda é sugestão "medium" —
+// um humano confirma antes de aplicar).
+function pickBestDateDescriptionMatch<T extends { description: string | null }>(
+  candidates: T[],
+  getDate: (item: T) => string | null,
+  rowDate: string,
+  rowDescription: string | null,
+): T | null {
+  const dateCandidates = candidates.filter((item) => {
+    const itemDate = getDate(item);
+    return itemDate !== null && withinDays(itemDate, rowDate, 5);
+  });
+  if (dateCandidates.length === 0) return null;
+  if (dateCandidates.length === 1) return dateCandidates[0] ?? null;
+
+  const byDescription = dateCandidates.find(
+    (item) =>
+      item.description !== null &&
+      rowDescription !== null &&
+      descriptionOverlap(item.description, rowDescription),
+  );
+  if (byDescription) return byDescription;
+
+  return (
+    [...dateCandidates].sort((a, b) => {
+      const da = new Date(getDate(a) ?? rowDate).getTime();
+      const db = new Date(getDate(b) ?? rowDate).getTime();
+      return (
+        Math.abs(da - new Date(rowDate).getTime()) -
+        Math.abs(db - new Date(rowDate).getTime())
+      );
+    })[0] ?? null
+  );
+}
+
 export const autoMatchImport = colaboradorAction
   .schema(autoMatchSchema)
   .action(async ({ parsedInput: input, ctx }) => {
@@ -161,12 +223,19 @@ export const autoMatchImport = colaboradorAction
         continue;
       }
 
-      // Try to suggest payable (for debit rows)
+      // Try to suggest payable (for debit rows) — valor + data (dueDate) +
+      // descrição, não só valor (D6-003).
       if (rowAmount < 0) {
-        const payableMatch = pendingPayables.find((p) => {
+        const amountCandidates = pendingPayables.filter((p) => {
           const pAmount = parseFloat(p.amount);
           return Math.abs(pAmount - Math.abs(rowAmount)) < 0.01;
         });
+        const payableMatch = pickBestDateDescriptionMatch(
+          amountCandidates,
+          (p) => p.dueDate,
+          row.date,
+          row.description,
+        );
         if (payableMatch) {
           suggestions.push({
             rowId: row.id,
@@ -179,12 +248,18 @@ export const autoMatchImport = colaboradorAction
         }
       }
 
-      // Try to suggest receivable (for credit rows)
+      // Try to suggest receivable (for credit rows) — mesma correção.
       if (rowAmount > 0) {
-        const receivableMatch = pendingReceivables.find((r) => {
+        const amountCandidates = pendingReceivables.filter((r) => {
           const rAmount = parseFloat(r.amount);
           return Math.abs(rAmount - Math.abs(rowAmount)) < 0.01;
         });
+        const receivableMatch = pickBestDateDescriptionMatch(
+          amountCandidates,
+          (r) => r.expectedDate,
+          row.date,
+          row.description,
+        );
         if (receivableMatch) {
           suggestions.push({
             rowId: row.id,

@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { db } from "@hebron/db/client";
 import {
   createSupabaseServerActionClient,
@@ -100,6 +100,54 @@ async function getUsersMap(): Promise<Map<string, string>> {
     ),
   );
   return new Map(rows.map((r) => [r.id, r.fullName ?? "—"]));
+}
+
+// ---------------------------------------------------------------------------
+// Paginação e filtro de período (D4-003 — nenhuma listagem tinha where nem
+// limit; transactions/payables/receivables/batchApprovals crescem sem teto).
+//
+// Todo caller precisa declarar sua intenção: um `limit`/`offset` real vira a
+// listagem paginada de uma tela; AGGREGATE_FETCH_LIMIT é o teto explícito
+// para os callers que hoje somam/agrupam em JS sobre "tudo" (dashboard,
+// relatórios, centros de custo, fluxo de caixa) — no volume atual (~150
+// usuários) nenhum desses agregados chega perto disso; fecha o risco real
+// (sem teto nenhum) sem reescrever a aritmética de cada tela nesta sessão.
+// ---------------------------------------------------------------------------
+
+export interface DateRangeParams {
+  /** yyyy-mm-dd, inclusivo */
+  from?: string;
+  /** yyyy-mm-dd, inclusivo */
+  to?: string;
+}
+
+export interface PageParams {
+  limit?: number;
+  offset?: number;
+}
+
+export const AGGREGATE_FETCH_LIMIT = 10_000;
+const DEFAULT_PAGE_SIZE = 50;
+
+function resolveLimit(limit?: number): number {
+  return limit && limit > 0 ? limit : DEFAULT_PAGE_SIZE;
+}
+
+function resolveOffset(offset?: number): number {
+  return offset && offset > 0 ? offset : 0;
+}
+
+export function currentMonthRange(reference: Date = new Date()): {
+  from: string;
+  to: string;
+} {
+  const year = reference.getUTCFullYear();
+  const month = reference.getUTCMonth();
+  const fmt = (d: Date) => d.toISOString().split("T")[0] ?? "";
+  return {
+    from: fmt(new Date(Date.UTC(year, month, 1))),
+    to: fmt(new Date(Date.UTC(year, month + 1, 0))),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -208,24 +256,74 @@ export async function getCostCenterOptions(): Promise<CostCenterOption[]> {
 // escopo de P-3.6b (só cobre accounts/budgets/budget_items/payables).
 // ---------------------------------------------------------------------------
 
-export async function getTransactions(): Promise<Transaction[]> {
-  const actorId = await getActorId();
-  const { rows, reversalRows, matchedRows } = await withAuthenticatedContext(
-    { actorId },
-    async (tx) => {
-      const rows = await tx.select().from(transactions);
-      const reversalRows = await tx.select().from(transactionReversals);
-      const matchedRows = await tx
-        .select({
-          transactionId: bankImportRows.matchTransactionId,
-          bankImportId: bankImportRows.bankImportId,
-        })
-        .from(bankImportRows)
-        .where(eq(bankImportRows.status, "matched"));
+export interface TransactionListParams extends DateRangeParams, PageParams {
+  bankAccountId?: string;
+}
 
-      return { rows, reversalRows, matchedRows };
-    },
-  );
+export interface TransactionListResult {
+  items: Transaction[];
+  total: number;
+}
+
+export async function getTransactions(
+  params: TransactionListParams = {},
+): Promise<TransactionListResult> {
+  const actorId = await getActorId();
+  const limit = resolveLimit(params.limit);
+  const offset = resolveOffset(params.offset);
+
+  const conditions = [];
+  if (params.from) conditions.push(gte(transactions.date, params.from));
+  if (params.to) conditions.push(lte(transactions.date, params.to));
+  if (params.bankAccountId)
+    conditions.push(eq(transactions.accountId, params.bankAccountId));
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+  const { rows, total, reversalRows, matchedRows } =
+    await withAuthenticatedContext({ actorId }, async (tx) => {
+      const rows = await tx
+        .select()
+        .from(transactions)
+        .where(whereClause)
+        .orderBy(desc(transactions.date), desc(transactions.createdAt))
+        .limit(limit)
+        .offset(offset);
+
+      const totalRows = await tx
+        .select({ value: sql<number>`count(*)::int` })
+        .from(transactions)
+        .where(whereClause);
+      const total = totalRows[0]?.value ?? 0;
+
+      const rowIds = rows.map((r) => r.id);
+      const reversalRows = rowIds.length
+        ? await tx
+            .select()
+            .from(transactionReversals)
+            .where(
+              or(
+                inArray(transactionReversals.originalTransactionId, rowIds),
+                inArray(transactionReversals.reversalTransactionId, rowIds),
+              ),
+            )
+        : [];
+      const matchedRows = rowIds.length
+        ? await tx
+            .select({
+              transactionId: bankImportRows.matchTransactionId,
+              bankImportId: bankImportRows.bankImportId,
+            })
+            .from(bankImportRows)
+            .where(
+              and(
+                eq(bankImportRows.status, "matched"),
+                inArray(bankImportRows.matchTransactionId, rowIds),
+              ),
+            )
+        : [];
+
+      return { rows, total, reversalRows, matchedRows };
+    });
 
   const reversedIds = new Set(reversalRows.map((r) => r.originalTransactionId));
   const reversalOfByTx = new Map(
@@ -238,7 +336,7 @@ export async function getTransactions(): Promise<Transaction[]> {
       .map((r) => [r.transactionId as string, r.bankImportId]),
   );
 
-  return rows.map((t) => ({
+  const items = rows.map((t) => ({
     id: t.id,
     bankAccountId: t.accountId,
     type: t.type,
@@ -259,6 +357,40 @@ export async function getTransactions(): Promise<Transaction[]> {
     createdBy: t.createdBy,
     createdAt: t.createdAt,
   }));
+
+  return { items, total };
+}
+
+// Somas por SQL (não carrega linha nenhuma) — usada pelos cartões de KPI que
+// hoje somavam `getTransactions()` inteiro em JS (Lançamentos: acumulado e
+// últimos 30 dias).
+export async function getTransactionTotals(
+  params: DateRangeParams = {},
+): Promise<{ credito: number; debito: number; count: number }> {
+  const actorId = await getActorId();
+
+  const conditions = [];
+  if (params.from) conditions.push(gte(transactions.date, params.from));
+  if (params.to) conditions.push(lte(transactions.date, params.to));
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+  const rows = await withAuthenticatedContext({ actorId }, (tx) =>
+    tx
+      .select({
+        credito: sql<string>`coalesce(sum(case when ${transactions.type} = 'credito' then ${transactions.amount} else 0 end), 0)`,
+        debito: sql<string>`coalesce(sum(case when ${transactions.type} = 'debito' then ${transactions.amount} else 0 end), 0)`,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(transactions)
+      .where(whereClause),
+  );
+
+  const row = rows[0];
+  return {
+    credito: parseFloat(row?.credito ?? "0"),
+    debito: parseFloat(row?.debito ?? "0"),
+    count: row?.count ?? 0,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -306,31 +438,143 @@ function toAttachment(
 // do escopo de P-3.6b (não está entre os seis campos deste prompt).
 // ---------------------------------------------------------------------------
 
-export async function getPayables(): Promise<Payable[]> {
+interface PayableMappingContext {
+  projectByCc: Map<string, string | null>;
+  batchByPayable: Map<string, string>;
+  paidTxByPayable: Map<string, string>;
+  attachmentsByPayable: Map<string, Attachment[]>;
+  usersMap: Map<string, string>;
+}
+
+function toPayable(
+  p: typeof payables.$inferSelect,
+  ctx: PayableMappingContext,
+): Payable {
+  return {
+    id: p.id,
+    description: p.description,
+    supplierName: p.supplier ?? "",
+    supplierCnpj: null,
+    amount: parseFloat(p.amount),
+    dueAt: new Date(p.dueDate),
+    status: p.status,
+    categoryId: p.categoryId ?? "",
+    costCenterId: p.costCenterId,
+    projectId: p.costCenterId
+      ? (ctx.projectByCc.get(p.costCenterId) ?? null)
+      : null,
+    batchApprovalId: ctx.batchByPayable.get(p.id) ?? null,
+    attachments: ctx.attachmentsByPayable.get(p.id) ?? [],
+    approvedBy: p.approvedBy,
+    approvedByName: p.approvedBy
+      ? (ctx.usersMap.get(p.approvedBy) ?? null)
+      : null,
+    approvedAt: p.approvedAt,
+    authorizedBy: p.authorizedBy,
+    authorizedByName: p.authorizedBy
+      ? (ctx.usersMap.get(p.authorizedBy) ?? null)
+      : null,
+    authorizedAt: p.authorizedAt,
+    paidAt: p.paidAt,
+    paidByTransactionId: ctx.paidTxByPayable.get(p.id) ?? null,
+    // cancelPayable não seta deletedAt (ver comentário na action — RLS não
+    // permite); updatedAt é o melhor timestamp disponível para o momento do
+    // cancelamento, já que não há coluna cancelled_at dedicada.
+    cancelledAt: p.status === "cancelado" ? p.updatedAt : null,
+    cancelledBy: p.cancelledBy,
+    cancellationReason: p.cancellationReason,
+    blockedAt: p.blockedAt,
+    blockReason: p.blockReason,
+    overriddenBy: p.overriddenBy,
+    overriddenByName: p.overriddenBy
+      ? (ctx.usersMap.get(p.overriddenBy) ?? null)
+      : null,
+    overriddenAt: p.overriddenAt,
+    overrideJustification: p.overrideJustification,
+    notes: p.notes,
+    createdBy: p.createdBy,
+    createdAt: p.createdAt,
+    updatedAt: p.updatedAt,
+  };
+}
+
+export interface PayableListParams extends DateRangeParams, PageParams {}
+
+export interface PayableListResult {
+  items: Payable[];
+  total: number;
+}
+
+export async function getPayables(
+  params: PayableListParams = {},
+): Promise<PayableListResult> {
   const actorId = await getActorId();
   const usersMap = await getUsersMap();
+  const limit = resolveLimit(params.limit);
+  const offset = resolveOffset(params.offset);
 
-  const { rows, ccRows, batchItemRows, paidTxRows, attachmentRows } =
+  const conditions = [];
+  if (params.from) conditions.push(gte(payables.dueDate, params.from));
+  if (params.to) conditions.push(lte(payables.dueDate, params.to));
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+  const { rows, total, ccRows, batchItemRows, paidTxRows, attachmentRows } =
     await withAuthenticatedContext({ actorId }, async (tx) => {
-      const rows = await tx.select().from(payables);
+      const rows = await tx
+        .select()
+        .from(payables)
+        .where(whereClause)
+        .orderBy(desc(payables.dueDate), desc(payables.createdAt))
+        .limit(limit)
+        .offset(offset);
+
+      const totalRows = await tx
+        .select({ value: sql<number>`count(*)::int` })
+        .from(payables)
+        .where(whereClause);
+      const total = totalRows[0]?.value ?? 0;
 
       const ccRows = await tx
         .select({ id: costCenters.id, projectId: costCenters.projectId })
         .from(costCenters);
 
-      const batchItemRows = await tx.select().from(batchApprovalItems);
+      const rowIds = rows.map((r) => r.id);
 
-      const paidTxRows = await tx
-        .select({ id: transactions.id, referenceId: transactions.referenceId })
-        .from(transactions)
-        .where(eq(transactions.referenceType, "payable"));
+      const batchItemRows = rowIds.length
+        ? await tx
+            .select()
+            .from(batchApprovalItems)
+            .where(inArray(batchApprovalItems.payableId, rowIds))
+        : [];
 
-      const attachmentRows = await tx
-        .select()
-        .from(financialAttachments)
-        .where(eq(financialAttachments.refType, "payable"));
+      const paidTxRows = rowIds.length
+        ? await tx
+            .select({
+              id: transactions.id,
+              referenceId: transactions.referenceId,
+            })
+            .from(transactions)
+            .where(
+              and(
+                eq(transactions.referenceType, "payable"),
+                inArray(transactions.referenceId, rowIds),
+              ),
+            )
+        : [];
 
-      return { rows, ccRows, batchItemRows, paidTxRows, attachmentRows };
+      const attachmentRows = rowIds.length
+        ? await tx
+            .select()
+            .from(financialAttachments)
+            .where(
+              and(
+                eq(financialAttachments.refType, "payable"),
+                inArray(financialAttachments.refId, rowIds),
+              ),
+            )
+        : [];
+
+      return { rows, total, ccRows, batchItemRows, paidTxRows, attachmentRows };
     });
 
   const projectByCc = new Map(ccRows.map((c) => [c.id, c.projectId]));
@@ -352,50 +596,15 @@ export async function getPayables(): Promise<Payable[]> {
     attachmentsByPayable.set(row.refId, list);
   }
 
-  return rows.map((p) => ({
-    id: p.id,
-    description: p.description,
-    supplierName: p.supplier ?? "",
-    supplierCnpj: null,
-    amount: parseFloat(p.amount),
-    dueAt: new Date(p.dueDate),
-    status: p.status,
-    categoryId: p.categoryId ?? "",
-    costCenterId: p.costCenterId,
-    projectId: p.costCenterId
-      ? (projectByCc.get(p.costCenterId) ?? null)
-      : null,
-    batchApprovalId: batchByPayable.get(p.id) ?? null,
-    attachments: attachmentsByPayable.get(p.id) ?? [],
-    approvedBy: p.approvedBy,
-    approvedByName: p.approvedBy ? (usersMap.get(p.approvedBy) ?? null) : null,
-    approvedAt: p.approvedAt,
-    authorizedBy: p.authorizedBy,
-    authorizedByName: p.authorizedBy
-      ? (usersMap.get(p.authorizedBy) ?? null)
-      : null,
-    authorizedAt: p.authorizedAt,
-    paidAt: p.paidAt,
-    paidByTransactionId: paidTxByPayable.get(p.id) ?? null,
-    // cancelPayable não seta deletedAt (ver comentário na action — RLS não
-    // permite); updatedAt é o melhor timestamp disponível para o momento do
-    // cancelamento, já que não há coluna cancelled_at dedicada.
-    cancelledAt: p.status === "cancelado" ? p.updatedAt : null,
-    cancelledBy: p.cancelledBy,
-    cancellationReason: p.cancellationReason,
-    blockedAt: p.blockedAt,
-    blockReason: p.blockReason,
-    overriddenBy: p.overriddenBy,
-    overriddenByName: p.overriddenBy
-      ? (usersMap.get(p.overriddenBy) ?? null)
-      : null,
-    overriddenAt: p.overriddenAt,
-    overrideJustification: p.overrideJustification,
-    notes: p.notes,
-    createdBy: p.createdBy,
-    createdAt: p.createdAt,
-    updatedAt: p.updatedAt,
-  }));
+  const ctx: PayableMappingContext = {
+    projectByCc,
+    batchByPayable,
+    paidTxByPayable,
+    attachmentsByPayable,
+    usersMap,
+  };
+
+  return { items: rows.map((p) => toPayable(p, ctx)), total };
 }
 
 // ---------------------------------------------------------------------------
@@ -418,32 +627,64 @@ export interface ReceivableRow {
   createdAt: Date;
 }
 
-export async function getReceivables(): Promise<ReceivableRow[]> {
+export interface ReceivableListParams extends DateRangeParams, PageParams {}
+
+export interface ReceivableListResult {
+  items: ReceivableRow[];
+  total: number;
+}
+
+export async function getReceivables(
+  params: ReceivableListParams = {},
+): Promise<ReceivableListResult> {
   const actorId = await getActorId();
-  const rows = await withAuthenticatedContext({ actorId }, (tx) =>
-    tx
-      .select({
-        id: receivables.id,
-        description: receivables.description,
-        amount: receivables.amount,
-        expectedDate: receivables.expectedDate,
-        receivedDate: receivables.receivedDate,
-        status: receivables.status,
-        categoryId: receivables.categoryId,
-        categoryName: financialCategories.name,
-        costCenterId: receivables.costCenterId,
-        bankAccountId: receivables.accountId,
-        notes: receivables.notes,
-        createdAt: receivables.createdAt,
-      })
-      .from(receivables)
-      .leftJoin(
-        financialCategories,
-        eq(financialCategories.id, receivables.categoryId),
-      ),
+  const limit = resolveLimit(params.limit);
+  const offset = resolveOffset(params.offset);
+
+  const conditions = [];
+  if (params.from) conditions.push(gte(receivables.expectedDate, params.from));
+  if (params.to) conditions.push(lte(receivables.expectedDate, params.to));
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+  const { rows, total } = await withAuthenticatedContext(
+    { actorId },
+    async (tx) => {
+      const rows = await tx
+        .select({
+          id: receivables.id,
+          description: receivables.description,
+          amount: receivables.amount,
+          expectedDate: receivables.expectedDate,
+          receivedDate: receivables.receivedDate,
+          status: receivables.status,
+          categoryId: receivables.categoryId,
+          categoryName: financialCategories.name,
+          costCenterId: receivables.costCenterId,
+          bankAccountId: receivables.accountId,
+          notes: receivables.notes,
+          createdAt: receivables.createdAt,
+        })
+        .from(receivables)
+        .leftJoin(
+          financialCategories,
+          eq(financialCategories.id, receivables.categoryId),
+        )
+        .where(whereClause)
+        .orderBy(desc(receivables.expectedDate), desc(receivables.createdAt))
+        .limit(limit)
+        .offset(offset);
+
+      const totalRows = await tx
+        .select({ value: sql<number>`count(*)::int` })
+        .from(receivables)
+        .where(whereClause);
+      const total = totalRows[0]?.value ?? 0;
+
+      return { rows, total };
+    },
   );
 
-  return rows.map((r) => ({
+  const items = rows.map((r) => ({
     id: r.id,
     description: r.description,
     amount: parseFloat(r.amount),
@@ -457,6 +698,8 @@ export async function getReceivables(): Promise<ReceivableRow[]> {
     notes: r.notes,
     createdAt: r.createdAt,
   }));
+
+  return { items, total };
 }
 
 // ---------------------------------------------------------------------------
@@ -535,18 +778,135 @@ export async function getBudgets(): Promise<Budget[]> {
 // batch_approvals não tem essas colunas — fora do escopo de P-3.6b.
 // ---------------------------------------------------------------------------
 
-export async function getBatchApprovals(): Promise<BatchApproval[]> {
-  const actorId = await getActorId();
-  const allPayables = await getPayables();
-  const usersMap = await getUsersMap();
+export interface BatchApprovalListParams extends DateRangeParams, PageParams {}
 
-  const { batchRows, itemRows } = await withAuthenticatedContext(
-    { actorId },
-    async (tx) => {
-      const batchRows = await tx.select().from(batchApprovals);
-      const itemRows = await tx.select().from(batchApprovalItems);
-      return { batchRows, itemRows };
-    },
+export interface BatchApprovalListResult {
+  items: BatchApproval[];
+  total: number;
+}
+
+// Não chama getPayables() — um lote pode referenciar payables com dueDate
+// fora da janela de período que a tela de Contas a Pagar filtra hoje.
+// Hidrata só os payables realmente citados pelos itens dos lotes da página
+// atual, direto na mesma transação (D4-003).
+export async function getBatchApprovals(
+  params: BatchApprovalListParams = {},
+): Promise<BatchApprovalListResult> {
+  const actorId = await getActorId();
+  const usersMap = await getUsersMap();
+  const limit = resolveLimit(params.limit);
+  const offset = resolveOffset(params.offset);
+
+  const conditions = [];
+  if (params.from) conditions.push(gte(batchApprovals.weekStart, params.from));
+  if (params.to) conditions.push(lte(batchApprovals.weekStart, params.to));
+  const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+  const {
+    batchRows,
+    total,
+    itemRows,
+    payableRows,
+    ccRows,
+    paidTxRows,
+    attachmentRows,
+  } = await withAuthenticatedContext({ actorId }, async (tx) => {
+    const batchRows = await tx
+      .select()
+      .from(batchApprovals)
+      .where(whereClause)
+      .orderBy(desc(batchApprovals.weekStart))
+      .limit(limit)
+      .offset(offset);
+
+    const totalRows = await tx
+      .select({ value: sql<number>`count(*)::int` })
+      .from(batchApprovals)
+      .where(whereClause);
+    const total = totalRows[0]?.value ?? 0;
+
+    const batchIds = batchRows.map((b) => b.id);
+    const itemRows = batchIds.length
+      ? await tx
+          .select()
+          .from(batchApprovalItems)
+          .where(inArray(batchApprovalItems.batchApprovalId, batchIds))
+      : [];
+
+    const payableIds = itemRows.map((i) => i.payableId);
+
+    const payableRows = payableIds.length
+      ? await tx.select().from(payables).where(inArray(payables.id, payableIds))
+      : [];
+
+    const ccRows = await tx
+      .select({ id: costCenters.id, projectId: costCenters.projectId })
+      .from(costCenters);
+
+    const paidTxRows = payableIds.length
+      ? await tx
+          .select({
+            id: transactions.id,
+            referenceId: transactions.referenceId,
+          })
+          .from(transactions)
+          .where(
+            and(
+              eq(transactions.referenceType, "payable"),
+              inArray(transactions.referenceId, payableIds),
+            ),
+          )
+      : [];
+
+    const attachmentRows = payableIds.length
+      ? await tx
+          .select()
+          .from(financialAttachments)
+          .where(
+            and(
+              eq(financialAttachments.refType, "payable"),
+              inArray(financialAttachments.refId, payableIds),
+            ),
+          )
+      : [];
+
+    return {
+      batchRows,
+      total,
+      itemRows,
+      payableRows,
+      ccRows,
+      paidTxRows,
+      attachmentRows,
+    };
+  });
+
+  const projectByCc = new Map(ccRows.map((c) => [c.id, c.projectId]));
+  const batchByPayable = new Map(
+    itemRows.map((i) => [i.payableId, i.batchApprovalId]),
+  );
+  const paidTxByPayable = new Map(
+    paidTxRows
+      .filter((r) => r.referenceId !== null)
+      .map((r) => [r.referenceId as string, r.id]),
+  );
+  const attachmentsByPayable = new Map<string, Attachment[]>();
+  for (const row of attachmentRows) {
+    const list = attachmentsByPayable.get(row.refId) ?? [];
+    list.push(toAttachment(row));
+    attachmentsByPayable.set(row.refId, list);
+  }
+
+  const payableMappingCtx: PayableMappingContext = {
+    projectByCc,
+    batchByPayable,
+    paidTxByPayable,
+    attachmentsByPayable,
+    usersMap,
+  };
+
+  const payablesById = new Map(
+    payableRows.map((p) => [p.id, toPayable(p, payableMappingCtx)]),
   );
 
   const payableIdsByBatch = new Map<string, string[]>();
@@ -556,9 +916,7 @@ export async function getBatchApprovals(): Promise<BatchApproval[]> {
     payableIdsByBatch.set(item.batchApprovalId, list);
   }
 
-  const payablesById = new Map(allPayables.map((p) => [p.id, p]));
-
-  return batchRows.map((b) => {
+  const items = batchRows.map((b) => {
     const payableIds = payableIdsByBatch.get(b.id) ?? [];
     const batchPayables = payableIds
       .map((id) => payablesById.get(id))
@@ -595,6 +953,8 @@ export async function getBatchApprovals(): Promise<BatchApproval[]> {
       updatedAt: b.createdAt,
     };
   });
+
+  return { items, total };
 }
 
 // ---------------------------------------------------------------------------
@@ -686,8 +1046,11 @@ export async function getLatestBankImport(): Promise<{
 export async function getTransactionsForAccount(
   accountId: string,
 ): Promise<Transaction[]> {
-  const all = await getTransactions();
-  return all.filter((t) => t.bankAccountId === accountId);
+  const { items } = await getTransactions({
+    bankAccountId: accountId,
+    limit: AGGREGATE_FETCH_LIMIT,
+  });
+  return items;
 }
 
 // ---------------------------------------------------------------------------

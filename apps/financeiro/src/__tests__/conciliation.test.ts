@@ -22,6 +22,7 @@ import {
   bankImports,
   bankImportRows,
   auditLog,
+  payables,
 } from "@hebron/db/schema";
 import { parseFileContent } from "../lib/import-parsers";
 
@@ -203,5 +204,103 @@ describe("autoMatchImport — Match automático (valor + data)", () => {
     expect(
       audits.some((a) => a.action === "financeiro.import.row.reconciled"),
     ).toBe(true);
+  });
+});
+
+describe("autoMatchImport — sugestão de payable usa valor + data + descrição, não só valor (D6-003)", () => {
+  const ACCOUNT_ID = "bb110000-0000-0000-0000-000000000030";
+  const BANK_IMPORT_ID = "bb110000-0000-0000-0000-000000000031";
+  const ROW_ID = "bb110000-0000-0000-0000-000000000032";
+  // Mesmo valor nos dois payables — antes da correção, `.find()` pegava
+  // sempre o primeiro pendente do mesmo valor, ignorando data e descrição.
+  const FAR_PAYABLE_ID = "bb110000-0000-0000-0000-000000000033"; // inserido primeiro, fora da janela de ±5 dias
+  const CLOSE_PAYABLE_ID = "bb110000-0000-0000-0000-000000000034"; // dentro da janela e com descrição parecida
+
+  beforeAll(async () => {
+    await db
+      .insert(users)
+      .values({
+        id: ACTOR_ID,
+        email: "conciliation-actor@test.hebron",
+        fullName: "Conciliation Actor",
+      })
+      .onConflictDoNothing();
+    await db
+      .insert(roleAssignments)
+      .values({ userId: ACTOR_ID, role: "colaborador", grantedBy: ACTOR_ID })
+      .onConflictDoNothing();
+    await db
+      .insert(bankAccounts)
+      .values({
+        id: ACCOUNT_ID,
+        bankName: "Banco Conciliation D6-003",
+        nickname: "Conta Conciliation D6-003",
+        createdBy: ACTOR_ID,
+      })
+      .onConflictDoNothing();
+
+    // Inserida primeiro de propósito: sob o bug antigo (só valor), o
+    // `.find()` teria escolhido esta — mesmo estando 20 dias longe da linha
+    // do extrato e com descrição sem relação nenhuma.
+    await db.insert(payables).values([
+      {
+        id: FAR_PAYABLE_ID,
+        description: "Aluguel do salão de eventos",
+        amount: "500.00",
+        dueDate: "2026-01-01",
+        accountId: ACCOUNT_ID,
+        status: "autorizado",
+        createdBy: ACTOR_ID,
+      },
+      {
+        id: CLOSE_PAYABLE_ID,
+        description: "Conta de luz abril",
+        amount: "500.00",
+        dueDate: "2026-06-12",
+        accountId: ACCOUNT_ID,
+        status: "autorizado",
+        createdBy: ACTOR_ID,
+      },
+    ]);
+
+    await db.insert(bankImports).values({
+      id: BANK_IMPORT_ID,
+      accountId: ACCOUNT_ID,
+      fileUrl: `${ACCOUNT_ID}/extrato-teste.ofx`,
+      format: "ofx",
+      importedBy: ACTOR_ID,
+      rowCount: 1,
+      matchedCount: 0,
+    });
+
+    await db.insert(bankImportRows).values({
+      id: ROW_ID,
+      bankImportId: BANK_IMPORT_ID,
+      date: "2026-06-10", // 2 dias de CLOSE_PAYABLE_ID; 161 dias de FAR_PAYABLE_ID
+      amount: "-500.00",
+      description: "PAGAMENTO CONTA DE LUZ ABRIL COPEL",
+      status: "unmatched",
+    });
+  });
+
+  afterAll(async () => {
+    await db
+      .delete(bankImportRows)
+      .where(eq(bankImportRows.bankImportId, BANK_IMPORT_ID));
+    await db.delete(bankImports).where(eq(bankImports.id, BANK_IMPORT_ID));
+    await db.delete(auditLog).where(eq(auditLog.entityId, BANK_IMPORT_ID));
+    await db.delete(payables).where(eq(payables.id, FAR_PAYABLE_ID));
+    await db.delete(payables).where(eq(payables.id, CLOSE_PAYABLE_ID));
+  });
+
+  it("sugere o payable dentro da janela de data e com descrição parecida, não o primeiro do mesmo valor", async () => {
+    const { autoMatchImport } = await import("../actions/conciliation");
+    const result = await autoMatchImport({ bankImportId: BANK_IMPORT_ID });
+
+    expect(result?.serverError).toBeUndefined();
+    const suggestion = result?.data?.suggestions.find(
+      (s) => s.rowId === ROW_ID,
+    );
+    expect(suggestion?.suggestedPayableId).toBe(CLOSE_PAYABLE_ID);
   });
 });

@@ -289,6 +289,7 @@
 | S-266  | 2026-08-21 | P-5.13 — Exportação de eventos para o Google Calendar                                                                            | concluido                                                                            |
 | S-267  | 2026-08-21 | P-6.20 — Upload de vídeo via Bunny.net Stream                                                                                    | concluido                                                                            |
 | S-268  | 2026-08-22 | P-7.13 — Assistência de IA no scoring de Flats                                                                                   | concluido                                                                            |
+| S-269  | 2026-08-22 | AUDIT PACOTE 8 — Robustez do Financeiro em escala (CORRETIVO)                                                                    | concluido                                                                            |
 
 ---
 
@@ -25064,4 +25065,205 @@ com formulários físicos").
 - `apps/flats/src/lib/audit.ts` (`FlatsAuditAction` — débito G1)
 - `packages/db/src/schema/admin.ts` (`auditActionEnum` — débito G1)
 - `packages/db/src/migrations/0088_flats_scoring_confirmed_audit_action.sql` (novo — débito G1)
+- `SESSIONS.md` (esta entrada)
+
+---
+
+## S-269 — AUDIT PACOTE 8 — Robustez do Financeiro em escala (CORRETIVO)
+
+**Prompt:** `AUDIT/04-BACKLOG-CORRECAO.md` § PACOTE 8
+**Data:** 2026-08-22
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+Corretivo de quatro achados (`D4-003`, `D2-002`, `D5-001`, `D6-003`), todos em
+torno do mesmo traço: o Financeiro foi construído no formato "carrega tudo",
+sem teto natural em nenhuma das tabelas que crescem para sempre (ledger,
+contas a pagar/receber, itens de lote).
+
+1. **`[D4-003]` — paginação e filtro de período.** `apps/financeiro/src/lib/queries.ts`:
+   `getTransactions`/`getPayables`/`getReceivables`/`getBatchApprovals`
+   passaram de `select().from(T)` irrestrito para `{ from?, to?, limit?,
+offset? }` com `where` por período, `orderBy(desc(date/dueDate/...))` e
+   `limit`/`offset` reais — retornam `{ items, total }`. As consultas
+   auxiliares dentro de cada função (reversals, itens de lote, anexos,
+   transações de pagamento) passaram de "tabela inteira" para
+   `inArray(..., rowIds)`, escopadas às linhas da página atual.
+   `getBatchApprovals` parou de chamar `getPayables()` internamente (um
+   lote pode referenciar payable com `dueDate` fora do período que a tela
+   filtra) — hidrata só os payables citados pelos itens da página, na
+   mesma transação, reusando o mapeamento extraído para `toPayable()`.
+   Nova `getTransactionTotals({ from?, to? })` soma créditos/débitos via
+   SQL (`sum(case when...)`) em vez de somar em JS sobre o array inteiro —
+   usada pelos cartões de KPI de Lançamentos.
+   - **Lançamentos** (prioridade #1 do achado): filtro De/Até (padrão mês
+     corrente, componente `PeriodFilter` novo) + os KPIs de 30 dias/
+     acumulado agora vêm de `getTransactionTotals`, não de `.length`/
+     `.reduce` sobre a lista inteira. A tabela em si já paginava
+     client-side (`TransactionTable`, 20/página) — mantido, agora sobre um
+     conjunto bounded pelo período em vez de "todos os lançamentos desde o
+     início dos tempos".
+   - **Contas a Pagar / Contas a Receber** (prioridade #2): mesmo
+     `PeriodFilter`, mas **sem filtro de período por padrão** — decisão
+     deliberada, diferente de Lançamentos: essas telas são organizadas por
+     aba de status (pendente/aprovado/.../cancelado), não cronologicamente,
+     e um payable "pendente" de vencimento antigo é exatamente o que mais
+     importa não desaparecer quando ninguém pediu filtro nenhum. O usuário
+     liga o filtro quando quiser; a query continua bounded por
+     `AGGREGATE_FETCH_LIMIT` (10.000) em vez de literalmente sem `limit`.
+     `filterSlot` (novo prop em `ContasPagarView`/`ReceivablesView`) deixa
+     o Server Component injetar o filtro sem duplicar o layout do
+     componente client.
+   - **Dashboard, Relatórios, Orçamento, Centros de Custo, Fluxo de Caixa**
+     (agregados, não listagens): passaram a chamar as mesmas funções com
+     `{ limit: AGGREGATE_FETCH_LIMIT }` explícito em vez de depender de um
+     default implícito — no volume de hoje (~150 usuários) nenhum desses
+     agregados chega perto do teto; fecha o risco real (nenhuma consulta
+     sem `limit`/`orderBy`) sem reescrever a aritmética de cada tela nesta
+     sessão (ficaria para uma soma agregada em SQL própria, como
+     `getTransactionTotals`, se o volume um dia justificar).
+   - `exportMonthlyReport` (`actions/reports.ts`) parou de buscar todas as
+     transações e filtrar o mês em JS — passa `{ from, to }` direto para
+     `getTransactions`.
+   - **Auditoria (Admin)**: `apps/admin/.../auditoria/page.tsx` trocou o
+     teto rígido `.limit(500)` por paginação keyset sobre `(created_at,
+id)` (par, não só `created_at`, porque a tabela é particionada por mês
+     e pode ter timestamps empatados — `id` desempata sem pular/repetir
+     linha). Cursor codificado como `"<ISO>_<id>"`; pilha de cursores
+     (`stack` no searchParams) guarda as páginas já visitadas para
+     "Anterior" funcionar sem reler do início. Filtros existentes
+     (`actor`/`action`/`entity`/`from`/`to`) preservados nos forms de
+     paginação via inputs hidden.
+2. **`[D2-002]` — 8 índices de FK levantados pela auditoria.**
+   `packages/db/src/migrations/0089_pacote8_financeiro_robustez.sql`: 7
+   `CREATE INDEX` novos (`transactions.category_id`, `payables.account_id`,
+   `receivables.account_id`, `receivables.category_id`,
+   `plataforma.progress.lesson_id`, `documentos.document_tags.tag_id`,
+   `radio.playlist_tracks.track_id`, `radio.listener_heartbeats.track_id`).
+   O 8º item do achado (`payables.payment_schedule_id`) já tinha índice
+   único implícito via `payables_payment_schedule_id_unique`
+   (`0030_financeiro_payables_bloqueio_columns.sql` — `UNIQUE` sempre cria
+   índice) — não duplicado, só documentado no comentário da migration.
+   Aplicada e verificada contra o banco de dev via `pg_indexes`.
+3. **`[D5-001]` — cron do lote semanal não reenviava e-mail no retry.**
+   `packages/jobs/src/crons/financeiro.ts`: `runWeeklyBatchCreation`
+   (antes um único `step.run` cobrindo criação + e-mail + audit) virou
+   `createWeeklyBatch` + `notifyWeeklyBatchRecipients`, cada um seu próprio
+   `step.run` em `weeklyBatchCreationCron`. Guarda de idempotência deslocada
+   de "existe lote?" (fazia o retry pular o e-mail inteiro se a criação já
+   tivesse terminado) para duas perguntas independentes: `createWeeklyBatch`
+   completa um lote encontrado sem itens (a "variante pior" do achado — um
+   INSERT de itens que falha não bloqueia mais tentativas futuras da
+   semana) em vez de tratá-lo como pronto; `notifyWeeklyBatchRecipients`
+   checa `batch_approvals.notified_at` (coluna nova, mesma migration acima)
+   e só marca depois que o laço de e-mail termina sem lançar. `logAudit`
+   (`financeiro.batch.created`) também moveu para dentro de
+   `notifyWeeklyBatchRecipients`, depois do `notified_at` — antes era
+   gravado mesmo se o e-mail nunca tivesse sido tentado com sucesso.
+   `runWeeklyBatchCreation` continua exportada como composição das duas
+   (create + notify em sequência) para os chamadores que esperam uma
+   chamada síncrona só (testes existentes).
+4. **`[D6-003]` — sugestão de conciliação usava só valor.**
+   `apps/financeiro/src/actions/conciliation.ts`: `autoMatchImport` sugeria
+   payable/receivable com `.find()` pelo primeiro pendente do mesmo valor —
+   o Financeiro tem recorrências de valor idêntico (BRAIN §6.9: conta de
+   consumo mensal, IPTU anual, convite mensal). Novo
+   `pickBestDateDescriptionMatch` reaplica a heurística que já existia no
+   mesmo arquivo para `txMatch` (transação já lançada): janela de data
+   (±5 dias entre `dueDate`/`expectedDate` e `row.date`) agora é exigida,
+   não só valor; entre os candidatos que sobram, desempata por
+   sobreposição de descrição (mesmo `includes` bidirecional de 10
+   caracteres do `txMatch`), e cai pro mais próximo por data se nenhum
+   tiver descrição parecida — ainda `confidence: "medium"`, um humano
+   confirma antes de aplicar.
+
+### Suposições registradas
+
+- **Contas a Pagar/Receber sem paginação por offset real** (só filtro de
+  período opcional + `AGGREGATE_FETCH_LIMIT`): as duas telas são
+  organizadas por aba de status, não por lista cronológica — paginar a
+  busca ANTES de dividir em abas divide as abas de forma inconsistente
+  (a aba "pendente" da página 2 não é a continuação da página 1). Resolvido
+  fechando o risco real (sem `limit` nenhum) sem inventar paginação por aba
+  nesta sessão; fica registrado como próximo passo se o volume um dia
+  justificar (ligado a `[D3-001]`, `DataTable` compartilhado, PACOTE 11).
+- **`AGGREGATE_FETCH_LIMIT = 10.000`** como teto explícito para os
+  callers agregados (dashboard, relatórios, orçamento, centros de custo,
+  fluxo de caixa) em vez de reescrever cada um como soma SQL: decisão de
+  escopo, documentada no comentário da constante em `queries.ts`.
+- **`briefing.test.ts` (packages/jobs) e `security-audit.test.ts` (admin,
+  caso `data_deletion_requests` TRUNCATE/REFERENCES/TRIGGER)**: falharam
+  na suíte completa rodada nesta sessão, ambos pré-existentes e não
+  relacionados a nenhum arquivo tocado por PACOTE 8 (confirmado por grep —
+  `briefing.ts` não importa nada de `crons/financeiro.ts`/`queries.ts`; o
+  segundo já está documentado em `project_data_deletion_requests_grants_drift`
+  desde S-241). Não corrigidos — fora do escopo deste pacote.
+
+### Verificação
+
+- `pnpm --filter @hebron/financeiro --filter @hebron/admin --filter @hebron/jobs --filter @hebron/db typecheck` — limpo.
+- `pnpm --filter @hebron/financeiro --filter @hebron/admin --filter @hebron/jobs lint` — limpo
+  (`@hebron/db#lint` falha por `check_locks.mjs`/`check_locks2.mjs`,
+  pré-existente e não relacionado, já documentado em sessões anteriores).
+- Migration `0089_pacote8_financeiro_robustez.sql` aplicada ao banco de dev
+  compartilhado; os 8 índices e a coluna `notified_at` confirmados via
+  `pg_indexes`/`information_schema.columns`.
+- Suíte completa de `apps/financeiro` (`pnpm test`): 15 arquivos, 74/74
+  passando — inclui os dois testes novos (conciliação D6-003; teste
+  novo dentro de `conciliation.test.ts` prova que, com dois payables do
+  mesmo valor, o de fora da janela de ±5 dias/sem relação de descrição
+  **inserido primeiro** — o que o `.find()` antigo teria escolhido — não é
+  sugerido; o dentro da janela e com descrição parecida é).
+- Suíte completa de `packages/jobs` (`pnpm test`): 10 arquivos, 24/25
+  passando (o 1 que falha é `briefing.test.ts`, pré-existente/não
+  relacionado — ver Suposições). Inclui o teste novo de
+  `notifyWeeklyBatchRecipients`: falha simulada no 2º de 3 destinatários
+  (via `createNotificationMock`) não marca `notified_at`; retry reenvia a
+  todos os 3 e completa — prova que a guarda antiga ("existe lote?") teria
+  pulado o laço inteiro nesse cenário.
+- Suíte completa de `apps/admin` (`pnpm test`): 12 arquivos, 122/123
+  passando (o 1 que falha é o caso pré-existente de `data_deletion_requests`
+  — ver Suposições). Página de auditoria verificada só por
+  typecheck/lint/leitura de código — sem clique manual no navegador nesta
+  sessão (não há harness de teste de Server Component para essa página no
+  repositório).
+- **Não verificado nesta sessão:** as 5 telas de agregado (dashboard,
+  relatórios, orçamento, centros de custo, fluxo de caixa) num navegador
+  real — cobertas por typecheck/lint/testes automatizados dos dados que
+  alimentam essas telas, não por clique manual.
+
+### Arquivos modificados
+
+- `apps/financeiro/src/lib/queries.ts` (paginação/filtro de período nas 4
+  funções + `getTransactionTotals` + `toPayable`/`PayableMappingContext`
+  extraídos + `AGGREGATE_FETCH_LIMIT`/`currentMonthRange`)
+- `apps/financeiro/src/lib/cashflow.ts` (assinatura ajustada ao novo
+  `{ items, total }`)
+- `apps/financeiro/src/actions/reports.ts` (`exportMonthlyReport` usa
+  `{ from, to }` em vez de filtrar em JS)
+- `apps/financeiro/src/actions/conciliation.ts`
+  (`pickBestDateDescriptionMatch`/`withinDays`/`descriptionOverlap`)
+- `apps/financeiro/src/components/period-filter.tsx` (novo)
+- `apps/financeiro/src/components/contas-pagar-view.tsx` (`filterSlot`)
+- `apps/financeiro/src/components/receivables-view.tsx` (`filterSlot`)
+- `apps/financeiro/src/app/(dashboard)/lancamentos/page.tsx`
+- `apps/financeiro/src/app/(dashboard)/contas-pagar/page.tsx`
+- `apps/financeiro/src/app/(dashboard)/contas-receber/page.tsx`
+- `apps/financeiro/src/app/(dashboard)/page.tsx`
+- `apps/financeiro/src/app/(dashboard)/relatorios/page.tsx`
+- `apps/financeiro/src/app/(dashboard)/orcamento/page.tsx`
+- `apps/financeiro/src/app/(dashboard)/centros-custo/page.tsx`
+- `apps/financeiro/src/app/(dashboard)/fluxo-caixa/page.tsx`
+- `apps/financeiro/src/__tests__/budgets.test.ts`,
+  `attachments.test.ts` (destructure `{ items }`)
+- `apps/financeiro/src/__tests__/conciliation.test.ts` (teste novo D6-003)
+- `apps/admin/src/app/(dashboard)/auditoria/page.tsx` (paginação keyset)
+- `packages/db/src/schema/financeiro.ts` (`batchApprovals.notifiedAt`)
+- `packages/db/src/migrations/0089_pacote8_financeiro_robustez.sql` (novo)
+- `packages/jobs/src/crons/financeiro.ts` (`createWeeklyBatch`/
+  `notifyWeeklyBatchRecipients` separados, `runWeeklyBatchCreation` como
+  composição)
+- `packages/jobs/src/__tests__/financeiro.test.ts` (teste novo D5-001)
 - `SESSIONS.md` (esta entrada)
