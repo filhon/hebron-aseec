@@ -12,6 +12,8 @@ import {
   withSystemRole,
 } from "@hebron/db/authenticated";
 import { invitations, roleAssignments } from "@hebron/db/schema";
+import { findRoleSetConflict } from "@hebron/db/conflict-of-interest";
+import type { Role } from "@hebron/types/roles";
 import { getEmailTemplateBySlug } from "@hebron/db/email-templates";
 import { createNotification, interpolateStoredTemplate } from "@hebron/email";
 import { WelcomeEmail } from "@hebron/email/templates/welcome";
@@ -102,6 +104,13 @@ export const acceptInvitation = publicAction
         "Convite sem papéis atribuídos — contate a administração.",
       );
     }
+
+    // D6-002 (PACOTE 9): segunda camada — sendInvitation já recusa a
+    // combinação na criação, mas um convite emitido antes dessa correção
+    // (ou gravado por outro caminho) não pode acabar criando a conta mesmo
+    // assim.
+    const conflict = findRoleSetConflict(roles as Role[]);
+    if (conflict) throw new BusinessError(conflict);
 
     // Cria a conta já confirmada — o convite em si é o vetting; não passa
     // signup_source, então public.users nasce com status default ('active').

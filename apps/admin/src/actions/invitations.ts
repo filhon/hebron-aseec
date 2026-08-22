@@ -7,6 +7,7 @@ import crypto from "node:crypto";
 import { db } from "@hebron/db/client";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { invitations, notifications, users } from "@hebron/db/schema";
+import { findRoleSetConflict } from "@hebron/db/conflict-of-interest";
 import { getEmailTemplateBySlug } from "@hebron/db/email-templates";
 import { createNotification, interpolateStoredTemplate } from "@hebron/email";
 import { InvitationEmail } from "@hebron/email/templates/invitation";
@@ -37,6 +38,12 @@ export const sendInvitation = adminAction
     }),
   )
   .action(async ({ parsedInput, ctx }) => {
+    // D6-002 (PACOTE 9): falha cedo, antes de gravar o convite — mesma regra
+    // de conflito de interesse de assignRole (BRAIN.md §6.1), aplicada aqui
+    // sobre o próprio conjunto de papéis do convite (não há userId ainda).
+    const conflict = findRoleSetConflict(parsedInput.roles);
+    if (conflict) throw new BusinessError(conflict);
+
     const token = crypto.randomBytes(32).toString("hex");
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + parsedInput.expiresInDays);

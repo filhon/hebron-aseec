@@ -65,7 +65,15 @@ const getMyAvatarReadUrlSchema = z.object({
 
 export const getMyAvatarReadUrl = staffAction
   .schema(getMyAvatarReadUrlSchema)
-  .action(async ({ parsedInput }) => {
+  .action(async ({ parsedInput, ctx }) => {
+    // D1-006 (PACOTE 9): a action só existe para o próprio avatar — path
+    // sempre nasce `{actorId}/{uuid}.{ext}` (getMyAvatarUploadUrl acima).
+    // Sem esta checagem, qualquer staffAction assinaria uma URL de leitura
+    // para o storagePath de QUALQUER usuário só de sabê-lo.
+    if (!parsedInput.storagePath.startsWith(`${ctx.actorId}/`)) {
+      throw new BusinessError("Avatar não encontrado ou acesso negado");
+    }
+
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase.storage
       .from("perfil-avatares")

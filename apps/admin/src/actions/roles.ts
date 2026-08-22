@@ -3,59 +3,13 @@
 import { z } from "zod";
 import { and, eq, isNull } from "drizzle-orm";
 import { BusinessError } from "@hebron/auth/safe-action-error";
-import {
-  withAuthenticatedContext,
-  type AuthenticatedTx,
-} from "@hebron/db/authenticated";
+import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { roleAssignments, designations } from "@hebron/db/schema";
+import { findUserRoleConflict } from "@hebron/db/conflict-of-interest";
 import type { Role } from "@hebron/types/roles";
 import { adminAction } from "../lib/safe-action";
 import { logAudit } from "../lib/audit";
 import { notifyRoleChanged } from "../lib/notifications";
-
-// ─── Conflict of interest ─────────────────────────────────────────────────────
-// Ref: BRAIN.md 6.1 — diretores/conselheiros NÃO podem ser submissores NEM hospedes.
-
-const GOVERNANCE_ROLES: Role[] = ["diretor", "conselheiro"];
-const RESTRICTED_ROLES: Role[] = ["submissor", "hospede"];
-
-async function checkConflictOfInterest(
-  tx: AuthenticatedTx,
-  userId: string,
-  newRole: Role,
-): Promise<void> {
-  const currentRows = await tx
-    .select({ role: roleAssignments.role })
-    .from(roleAssignments)
-    .where(
-      and(
-        eq(roleAssignments.userId, userId),
-        isNull(roleAssignments.revokedAt),
-      ),
-    );
-
-  const current = currentRows.map((r) => r.role as Role);
-
-  if (GOVERNANCE_ROLES.includes(newRole)) {
-    const conflicts = current.filter((r) => RESTRICTED_ROLES.includes(r));
-    if (conflicts.length > 0) {
-      throw new BusinessError(
-        `Conflito de interesse: o usuário já possui o(s) papel(éis) ${conflicts.join(", ")}. ` +
-          `Diretores e conselheiros não podem ser submissores nem hóspedes.`,
-      );
-    }
-  }
-
-  if (RESTRICTED_ROLES.includes(newRole)) {
-    const conflicts = current.filter((r) => GOVERNANCE_ROLES.includes(r));
-    if (conflicts.length > 0) {
-      throw new BusinessError(
-        `Conflito de interesse: o usuário já possui o(s) papel(éis) ${conflicts.join(", ")}. ` +
-          `Submissores e hóspedes não podem ser diretores nem conselheiros.`,
-      );
-    }
-  }
-}
 
 // ─── assignRole ───────────────────────────────────────────────────────────────
 
@@ -93,11 +47,12 @@ export const assignRole = adminAction
     const assignment = await withAuthenticatedContext(
       { actorId: ctx.actorId },
       async (tx) => {
-        await checkConflictOfInterest(
+        const conflict = await findUserRoleConflict(
           tx,
           parsedInput.userId,
           parsedInput.role as Role,
         );
+        if (conflict) throw new BusinessError(conflict);
 
         // Prevent duplicate assignment (ignora atribuições já revogadas — uma
         // revogação anterior não pode bloquear uma nova concessão do mesmo papel)

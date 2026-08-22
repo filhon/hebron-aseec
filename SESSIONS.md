@@ -290,6 +290,7 @@
 | S-267  | 2026-08-21 | P-6.20 — Upload de vídeo via Bunny.net Stream                                                                                    | concluido                                                                            |
 | S-268  | 2026-08-22 | P-7.13 — Assistência de IA no scoring de Flats                                                                                   | concluido                                                                            |
 | S-269  | 2026-08-22 | AUDIT PACOTE 8 — Robustez do Financeiro em escala (CORRETIVO)                                                                    | concluido                                                                            |
+| S-270  | 2026-08-22 | AUDIT PACOTE 9 — Gates e RLS residuais (CORRETIVO)                                                                               | concluido                                                                            |
 
 ---
 
@@ -25266,4 +25267,161 @@ id)` (par, não só `created_at`, porque a tabela é particionada por mês
   `notifyWeeklyBatchRecipients` separados, `runWeeklyBatchCreation` como
   composição)
 - `packages/jobs/src/__tests__/financeiro.test.ts` (teste novo D5-001)
+- `SESSIONS.md` (esta entrada)
+
+## S-270 — AUDIT PACOTE 9 — Gates e RLS residuais (CORRETIVO)
+
+**Prompt:** `AUDIT/04-BACKLOG-CORRECAO.md` § PACOTE 9
+**Data:** 2026-08-22
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+Corretivo de quatro achados (`D1-004`, `D6-002`, `D1-006`, Débito PATCH-016),
+todos pontos onde a defesa em profundidade estava reduzida a uma única
+camada sem decisão explícita.
+
+1. **`[D1-004]` — `createContestation` sem gate de papel.**
+   `apps/projetos/src/actions/projects.ts`: trocado `projetosAction` (só
+   autenticação) por `conselheiroDiretorAction`, já existente no mesmo
+   arquivo. BRAIN.md:308 — "7 dias para contestação por qualquer
+   diretor/conselheiro" — a RLS continua como segunda camada, agora com a
+   camada de aplicação na frente.
+2. **`[D6-002]` — conflito de interesse só em `assignRole`.**
+   `checkConflictOfInterest` (antes só em `apps/admin/src/actions/roles.ts`)
+   extraída para `packages/db/src/conflict-of-interest.ts` como duas
+   funções puras que **retornam** a mensagem de conflito em vez de lançar
+   (`findUserRoleConflict`, consulta DB por userId; `findRoleSetConflict`,
+   checa um array de papéis sem precisar de userId) — packages/db não pode
+   importar `@hebron/auth`/`BusinessError` porque `@hebron/auth` já
+   depende de `@hebron/db` (dependência circular). Cada call site envolve
+   o retorno em `throw new BusinessError(...)`. Aplicada nos três caminhos
+   que gravam `role_assignments`: `assignRole` (refatorado para o helper),
+   `sendInvitation` (`apps/admin/actions/invitations.ts` — checa o
+   conjunto de papéis do convite antes de gravar o token, "falha cedo"),
+   `acceptInvitation` (`apps/intranet/actions/invitations.ts` — segunda
+   camada: mesmo que `sendInvitation` já recuse na criação, um convite
+   emitido antes desta correção não pode criar a conta) e `approveSignup`
+   (`apps/admin/actions/users.ts` — terceiro caminho citado no achado;
+   aplicado por consistência, ainda que hoje só exista o papel fixo
+   "submissor" para conta recém-criada, sem risco real de conflito).
+3. **`[D1-006]` — leitura de avatar/capa sem checagem de posse.**
+   `getMyAvatarReadUrl` (`apps/intranet/actions/profile.ts`) e
+   `getCourseCoverReadUrl` (`apps/plataforma/actions/uploads.ts`) assinavam
+   URL de leitura para **qualquer** `storagePath` que o cliente enviasse.
+   `getMyAvatarReadUrl` agora exige prefixo `{actorId}/` (mesmo padrão que
+   `getMyAvatarUploadUrl`, no mesmo arquivo, já usava para construir o
+   path). `getCourseCoverReadUrl` é mais nuançado — Plataforma não tem
+   dono único de curso (`updateCourse` não restringe por `instructorId`;
+   qualquer staff edita qualquer curso) — então aceita dois casos: prefixo
+   `{actorId}/` (upload próprio, ainda não persistido, prévia imediata no
+   formulário) OU o path é o `cover_url` de um curso real já existente
+   (reabrir um curso existente para edição). Qualquer outro path é
+   recusado.
+4. **Débito PATCH-016 — `authorizeBatch` contornando RLS com
+   `withSystemRole`.** Investigação revelou que a policy
+   `batch_approvals_update_gestor` (0011, que de fato não cobria
+   autorizador — motivo original do `withSystemRole`) **já tinha sido
+   substituída** por `batch_approvals_update_dual_governance`
+   (`0019_financeiro_organization_budgets.sql`, sessão P-3.8b muito
+   anterior a esta), que já cobre diretor+designation `autorizador`. Só o
+   Server Action (`apps/financeiro/src/actions/approval.ts::authorizeBatch`)
+   nunca foi atualizado — o comentário e o `withSystemRole` ainda citavam a
+   policy de 0011 como se fosse a vigente. Nenhuma migration nova
+   necessária: só removido o bypass, o UPDATE agora roda como
+   `authenticated` sob a policy real.
+
+### Testes novos (um por ponto, RLS/gate real — não só unitário)
+
+- `apps/projetos/src/__tests__/flow.test.ts`: `createContestation` real —
+  submissor recusado (mensagem "diretor ou conselheiro", projeto permanece
+  em homologacao, nenhuma linha em `contestations`); diretor contesta com
+  sucesso (projeto volta para votacao).
+- `apps/admin/src/__tests__/roles-designations.test.ts`: `assignRole` nos
+  dois sentidos do conflito (diretor a quem já é hóspede; submissor a quem
+  já é diretor).
+- `apps/admin/src/__tests__/invitations.test.ts` (novo arquivo):
+  `sendInvitation` recusa diretor+submissor e conselheiro+hóspede, antes
+  de gravar o convite.
+- `apps/intranet/src/__tests__/invitations.test.ts`: `acceptInvitation`
+  recusa um convite com diretor+hóspede gravado **direto no banco**
+  (contornando `sendInvitation` de propósito, para isolar a segunda
+  camada) — sem criar a conta.
+- `apps/plataforma/src/__tests__/cover-read-access.test.ts` (novo
+  arquivo): upload próprio assina; `cover_url` de curso real assina
+  (mesmo para staff que não é o dono do upload); path não persistido em
+  curso algum é recusado.
+- `apps/intranet/src/__tests__/profile-avatar-access.test.ts` (novo
+  arquivo): próprio avatar assina; avatar de outro usuário é recusado
+  mesmo sabendo o path exato.
+- `apps/financeiro/src/__tests__/runtime-rls.test.ts`: teste novo "ghost
+  autorizador" (claim de designation `autorizador` só no `resolveSession`
+  mockado, sem linha real em `public.designations`) — prova que agora é a
+  RLS, não só o gate JS (`diretorWithDesignationAction`), quem barra;
+  mesmo padrão já usado para "ghost gestor" no describe de `approveBatch`
+  logo acima.
+
+### Achado fora de escopo, corrigido en passant
+
+Ao rodar `apps/intranet/src/__tests__/invitations.test.ts` isoladamente
+(antes de adicionar qualquer teste novo, para confirmar que a falha não
+era desta sessão), o `afterAll` de limpeza **já falhava** com violação de
+FK — pré-existente, não relacionado a PACOTE 9. Causa: ordem de deleção
+errada. `deleteTestAuthUser` só limpa `role_assignments` pelo próprio
+`userId`, não pelo `granted_by`; o convidado (criado depois do inviter no
+array `createdAuthUserIds`) tem uma linha de papel com
+`granted_by = inviterId`. Deletar o inviter primeiro deixava essa
+referência pendente (`role_assignments_granted_by_users_id_fk`). Depois
+de inverter a ordem, surgiram mais duas FKs nunca alcançadas antes porque
+o teste sempre abortava no primeiro erro: `invitations.invited_by` (nunca
+limpo) e `audit_log.actor_id` (a entrada de `invitation.accepted` do
+convidado, nunca limpa — `deleteTestAuthUser` documenta explicitamente
+que cleanup de outras tabelas é responsabilidade do chamador). Corrigido:
+`invitations` e `audit_log` limpos antes do loop de `deleteTestAuthUser`,
+que agora processa `createdAuthUserIds` em ordem reversa.
+
+### Verificação
+
+- `pnpm turbo typecheck --filter=@hebron/db --filter=@hebron/admin --filter=@hebron/projetos --filter=@hebron/financeiro --filter=@hebron/plataforma --filter=@hebron/intranet` — limpo, 15/15 tasks.
+- `pnpm turbo lint` nos mesmos filtros — limpo (`@hebron/db#lint` falha
+  por `check_locks.mjs`/`check_locks2.mjs`, pré-existente e não
+  relacionado, já documentado em sessões anteriores).
+- `apps/projetos` `flow.test.ts`: 26/26 (inclui os 2 testes novos).
+- `apps/admin` `roles-designations.test.ts` + `invitations.test.ts`: 9/9
+  (inclui os 4 testes novos).
+- `apps/intranet` `invitations.test.ts` + `profile-avatar-access.test.ts`:
+  6/6 (inclui os 2 testes novos + o fix de cleanup).
+- `apps/plataforma` `cover-read-access.test.ts` + `video-upload.test.ts`:
+  9/9 (inclui os 3 testes novos).
+- `apps/financeiro` `runtime-rls.test.ts` + `designation-governance.test.ts`
+  - `governance.test.ts`: 24/24 (inclui o teste novo "ghost autorizador";
+    `designation-governance.test.ts`/`governance.test.ts` inalterados,
+    rodados para confirmar que remover o `withSystemRole` não quebrou nada
+    já coberto).
+- Nenhuma migration nova — a RLS já estava correta (0019); só o código de
+  aplicação foi corrigido.
+
+### Arquivos modificados
+
+- `apps/projetos/src/actions/projects.ts` (`createContestation` →
+  `conselheiroDiretorAction`)
+- `apps/projetos/src/__tests__/flow.test.ts` (teste novo D1-004)
+- `packages/db/src/conflict-of-interest.ts` (novo)
+- `packages/db/package.json` (export `./conflict-of-interest`)
+- `apps/admin/src/actions/roles.ts` (`assignRole` usa o helper compartilhado)
+- `apps/admin/src/actions/invitations.ts` (`sendInvitation` falha cedo)
+- `apps/admin/src/actions/users.ts` (`approveSignup` — terceiro caminho)
+- `apps/admin/src/__tests__/roles-designations.test.ts` (teste novo D6-002)
+- `apps/admin/src/__tests__/invitations.test.ts` (novo)
+- `apps/intranet/src/actions/invitations.ts` (`acceptInvitation` — segunda camada)
+- `apps/intranet/src/actions/profile.ts` (`getMyAvatarReadUrl` — posse)
+- `apps/intranet/src/__tests__/invitations.test.ts` (teste novo D6-002 +
+  fix do `afterAll` pré-existente)
+- `apps/intranet/src/__tests__/profile-avatar-access.test.ts` (novo)
+- `apps/plataforma/src/actions/uploads.ts` (`getCourseCoverReadUrl` — posse)
+- `apps/plataforma/src/__tests__/cover-read-access.test.ts` (novo)
+- `apps/financeiro/src/actions/approval.ts` (`authorizeBatch` — sem `withSystemRole`)
+- `apps/financeiro/src/__tests__/runtime-rls.test.ts` (teste novo "ghost autorizador")
+- `AUDIT/04-BACKLOG-CORRECAO.md` (critérios de aceite do PACOTE 9)
 - `SESSIONS.md` (esta entrada)

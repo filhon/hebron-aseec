@@ -170,6 +170,52 @@ describe("revokeRole", () => {
   });
 });
 
+describe("assignRole — conflito de interesse (D6-002, BRAIN.md §6.1)", () => {
+  it("recusa atribuir 'diretor' a um usuário que já é submissor", async () => {
+    const { assignRole } = await getActions();
+
+    const first = await assignRole({
+      userId: TARGET_ID,
+      role: "hospede",
+      scope: "global",
+    });
+    expect(first?.serverError).toBeUndefined();
+
+    const result = await assignRole({
+      userId: TARGET_ID,
+      role: "diretor",
+      scope: "global",
+    });
+
+    expect(result?.serverError).toBeDefined();
+    expect(result?.serverError).toContain("Conflito de interesse");
+
+    const roles = await db
+      .select({ role: roleAssignments.role })
+      .from(roleAssignments)
+      .where(
+        and(
+          eq(roleAssignments.userId, TARGET_ID),
+          eq(roleAssignments.role, "diretor"),
+        ),
+      );
+    expect(roles).toHaveLength(0);
+  });
+
+  it("recusa atribuir 'submissor' a um usuário que já é diretor — sentido oposto", async () => {
+    const { assignRole } = await getActions();
+
+    const result = await assignRole({
+      userId: DIRECTOR_ID,
+      role: "submissor",
+      scope: "global",
+    });
+
+    expect(result?.serverError).toBeDefined();
+    expect(result?.serverError).toContain("Conflito de interesse");
+  });
+});
+
 describe("updateDesignation", () => {
   it("revogar designação marca revoked_at em vez de apagar a linha", async () => {
     const { updateDesignation } = await getActions();

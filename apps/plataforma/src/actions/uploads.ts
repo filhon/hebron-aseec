@@ -5,7 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 import crypto from "node:crypto";
 import { eq } from "drizzle-orm";
 import { withAuthenticatedContext } from "@hebron/db/authenticated";
-import { lessons } from "@hebron/db/schema";
+import { courses, lessons } from "@hebron/db/schema";
 import {
   createBunnyVideo,
   createBunnyTusUploadCredentials,
@@ -65,7 +65,30 @@ const getCourseCoverReadUrlSchema = z.object({
 
 export const getCourseCoverReadUrl = staffAction
   .schema(getCourseCoverReadUrlSchema)
-  .action(async ({ parsedInput }) => {
+  .action(async ({ parsedInput, ctx }) => {
+    // D1-006 (PACOTE 9): storagePath vem do cliente sem checagem de posse —
+    // dois usos legítimos: (a) prévia logo após o próprio upload, path
+    // sempre `{actorId}/{uuid}.{ext}` (getCourseCoverUploadUrl acima), ainda
+    // não persistido em nenhum curso; (b) reabrir um curso existente para
+    // edição, onde storagePath = courses.cover_url de uma linha real (staff
+    // pode editar qualquer curso, sem dono único — courses.ts::updateCourse
+    // não restringe por instructorId). Fora desses dois casos, recusa.
+    const ownsUpload = parsedInput.storagePath.startsWith(`${ctx.actorId}/`);
+    if (!ownsUpload) {
+      const matches = await withAuthenticatedContext(
+        { actorId: ctx.actorId },
+        (tx) =>
+          tx
+            .select({ id: courses.id })
+            .from(courses)
+            .where(eq(courses.coverUrl, parsedInput.storagePath))
+            .limit(1),
+      );
+      if (!matches[0]) {
+        throw new BusinessError("Capa não encontrada ou acesso negado");
+      }
+    }
+
     const supabase = getSupabaseAdmin();
     const { data, error } = await supabase.storage
       .from("plataforma-capas")

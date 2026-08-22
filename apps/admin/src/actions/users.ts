@@ -11,6 +11,7 @@ import {
   withSystemRole,
 } from "@hebron/db/authenticated";
 import { users, notifications, roleAssignments } from "@hebron/db/schema";
+import { findUserRoleConflict } from "@hebron/db/conflict-of-interest";
 import { getEmailTemplateBySlug } from "@hebron/db/email-templates";
 import { createNotification, interpolateStoredTemplate } from "@hebron/email";
 import { PasswordResetEmail } from "@hebron/email/templates/password-reset";
@@ -475,6 +476,16 @@ export const approveSignup = adminAction
     // já é coberto por "role_assignments_write_super_admin" (has_role) —
     // roda normalmente como authenticated, sem bypass.
     await withAuthenticatedContext({ actorId: ctx.actorId }, async (tx) => {
+      // D6-002 (PACOTE 9): terceiro caminho de concessão de papel — mesma
+      // regra de assignRole/sendInvitation, aplicada por consistência mesmo
+      // que hoje só exista um papel fixo ("submissor") para conta recém-criada.
+      const conflict = await findUserRoleConflict(
+        tx,
+        parsedInput.id,
+        "submissor",
+      );
+      if (conflict) throw new BusinessError(conflict);
+
       await withSystemRole(tx, (sysTx) =>
         sysTx
           .update(users)

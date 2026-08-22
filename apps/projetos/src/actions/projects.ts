@@ -68,6 +68,7 @@ import type {
 import {
   submissorAction,
   diretorAction,
+  conselheiroDiretorAction,
   projetosAction,
 } from "../lib/safe-action";
 import { logProjectAudit, computeDiff } from "../lib/audit";
@@ -1071,7 +1072,11 @@ export const transitionProjectStage = diretorAction
 // createContestation — max 2 per project, 1 per person; returns to votacao
 // ---------------------------------------------------------------------------
 
-export const createContestation = projetosAction
+// D1-004 (AUDIT/04-BACKLOG-CORRECAO.md PACOTE 9): contestação é privilégio
+// de diretor/conselheiro (BRAIN.md:308, "7 dias para contestação por
+// qualquer diretor/conselheiro") — projetosAction só exigia autenticação,
+// deixando a RLS como única barreira contra um submissor.
+export const createContestation = conselheiroDiretorAction
   .schema(createContestationSchema)
   .action(async ({ parsedInput, ctx }) => {
     const contestation = await withAuthenticatedContext(

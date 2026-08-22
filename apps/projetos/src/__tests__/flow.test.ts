@@ -42,6 +42,17 @@ vi.mock("@hebron/auth/server", () => ({
   resolveSession: (...args: unknown[]) => resolveSessionMock(...args),
 }));
 
+// createContestation (action real, teste do gate D1-004 abaixo) chama
+// notifyContestation best-effort — mockado para não disparar e-mail real via
+// Resend neste ambiente (mesmo raciocínio de isolamento de
+// duplicate-detection.test.ts).
+vi.mock("../lib/notifications", () => ({
+  notifyProjectSubmitted: vi.fn().mockResolvedValue(undefined),
+  notifyProjectInValidation: vi.fn().mockResolvedValue(undefined),
+  notifyVotingOpen: vi.fn().mockResolvedValue(undefined),
+  notifyContestation: vi.fn().mockResolvedValue(undefined),
+}));
+
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
 const IDS = {
@@ -65,6 +76,7 @@ const BUDGET_REPROVADO_ID = "cccc0000-0000-0000-0000-000000000003";
 const CONTEST_PROJECT_ID = "cccc0000-0000-0000-0000-000000000004";
 const DELETE_PROJECT_ID = "cccc0000-0000-0000-0000-000000000005";
 const DRAFT_EDIT_PROJECT_ID = "cccc0000-0000-0000-0000-000000000006";
+const CONTEST_GATE_PROJECT_ID = "cccc0000-0000-0000-0000-000000000007";
 
 // Budget uses year 2027 to avoid interference with the E2E flow project (2026)
 const BUDGET_YEAR = 2027;
@@ -171,6 +183,7 @@ afterAll(async () => {
     CONTEST_PROJECT_ID,
     DELETE_PROJECT_ID,
     DRAFT_EDIT_PROJECT_ID,
+    CONTEST_GATE_PROJECT_ID,
   ];
 
   // Cascade delete handles versions, votes, contestations, payment_schedules
@@ -669,6 +682,85 @@ describe("Contestação — Limites e restrições", () => {
       .from(projects)
       .where(eq(projects.id, CONTEST_PROJECT_ID));
 
+    expect(project?.stage).toBe("votacao");
+  });
+});
+
+// ── Contestação — gate de papel (D1-004, action real) ──────────────────────────
+//
+// PACOTE 9 (AUDIT/04-BACKLOG-CORRECAO.md): createContestation usava
+// projetosAction (só exige autenticação) em vez de conselheiroDiretorAction
+// — só a RLS impedia um submissor. Diferente do describe acima (que exercita
+// o guard de contagem/UNIQUE direto no banco), este chama a action real para
+// provar que a camada de aplicação recusa, com mensagem clara, antes mesmo
+// de a RLS entrar em jogo.
+
+describe("Contestação — gate de papel (createContestation, action real)", () => {
+  beforeAll(async () => {
+    await db
+      .insert(projects)
+      .values({
+        id: CONTEST_GATE_PROJECT_ID,
+        title: "Projeto Contestação Gate Test",
+        tipo: "anual",
+        stage: "homologacao",
+        organizationId: IDS.orgs.orgFlow,
+        submitterId: IDS.users.submissor1,
+        evaluationYear: 2026,
+        budgetTotal: "10000.00",
+        parcelas: 1,
+        meses: 1,
+      })
+      .onConflictDoNothing();
+  });
+
+  it("submissor é recusado pela action, com mensagem clara — projeto permanece em homologacao", async () => {
+    resolveSessionMock.mockResolvedValueOnce({
+      actorId: IDS.users.submissor1,
+      roles: ["submissor"],
+    });
+
+    const { createContestation } = await import("../actions/projects");
+    const result = await createContestation({
+      projectId: CONTEST_GATE_PROJECT_ID,
+      reason: "Tentativa de contestação por submissor",
+    });
+
+    expect(result?.serverError).toBeDefined();
+    expect(result?.serverError).toContain("diretor ou conselheiro");
+
+    const [project] = await db
+      .select({ stage: projects.stage })
+      .from(projects)
+      .where(eq(projects.id, CONTEST_GATE_PROJECT_ID));
+    expect(project?.stage).toBe("homologacao");
+
+    const [result2] = await db
+      .select({ total: count() })
+      .from(contestations)
+      .where(eq(contestations.projectId, CONTEST_GATE_PROJECT_ID));
+    expect(result2?.total ?? 0).toBe(0);
+  });
+
+  it("diretor contesta com sucesso: contestação gravada e projeto volta para votacao", async () => {
+    resolveSessionMock.mockResolvedValueOnce({
+      actorId: IDS.users.diretor1,
+      roles: ["diretor"],
+    });
+
+    const { createContestation } = await import("../actions/projects");
+    const result = await createContestation({
+      projectId: CONTEST_GATE_PROJECT_ID,
+      reason: "Documentação insuficiente — contestação de diretor",
+    });
+
+    expect(result?.serverError).toBeUndefined();
+    expect(result?.data?.stageReverted).toBe("votacao");
+
+    const [project] = await db
+      .select({ stage: projects.stage })
+      .from(projects)
+      .where(eq(projects.id, CONTEST_GATE_PROJECT_ID));
     expect(project?.stage).toBe("votacao");
   });
 });

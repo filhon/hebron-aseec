@@ -363,21 +363,18 @@ export const authorizeBatch = diretorWithDesignationAction("autorizador")
           );
         }
 
-        // financeiro.batch_approvals_update_gestor (0011_financeiro_rls.sql)
-        // só concede UPDATE a diretor com designation 'gestor' (+ super_admin)
-        // — não cobre o autorizador, que é o segundo papel da governança
-        // dual e nunca tem designation 'gestor'. Gate de aplicação já
-        // validou acima quem pode chegar aqui (diretorWithDesignationAction
-        // "autorizador" + approvedBy !== ctx.actorId); mesmo raciocínio do
-        // audit log (withSystemRole) — débito de RLS registrado em
-        // SESSIONS.md/PATCH-016, não corrigido aqui (fora de escopo alterar
-        // policy).
-        await withSystemRole(tx, (sysTx) =>
-          sysTx
-            .update(batchApprovals)
-            .set({ authorizedBy: ctx.actorId, authorizedAt: now })
-            .where(eq(batchApprovals.id, input.batchId)),
-        );
+        // Débito PATCH-016 fechado (PACOTE 9): "batch_approvals_update_gestor"
+        // (0011_financeiro_rls.sql) não cobria o autorizador, mas
+        // "batch_approvals_update_dual_governance" (0019_financeiro_
+        // organization_budgets.sql) já substituiu essa policy e passou a
+        // cobrir diretor+designation 'autorizador' — só o Server Action
+        // nunca foi atualizado para parar de contornar a RLS com
+        // withSystemRole. O UPDATE roda como authenticated: a policy é quem
+        // decide, não mais um bypass de superuser.
+        await tx
+          .update(batchApprovals)
+          .set({ authorizedBy: ctx.actorId, authorizedAt: now })
+          .where(eq(batchApprovals.id, input.batchId));
 
         // Move all batch payables to "autorizado"
         const batchItems = await tx

@@ -49,11 +49,28 @@ const createdAuthUserIds: string[] = [];
 const createdInvitationIds: string[] = [];
 
 afterAll(async () => {
-  for (const id of createdAuthUserIds) {
-    await deleteTestAuthUser(id);
-  }
+  // admin.invitations.invited_by referencia public.users — precisa ser
+  // limpo ANTES de deletar os usuários, ou o DELETE do inviter esbarra em
+  // "invitations_invited_by_fkey".
   for (const id of createdInvitationIds) {
     await db.delete(invitations).where(eq(invitations.id, id));
+  }
+  // logIntranetAudit grava actorId = userRow.id ("invitation.accepted") —
+  // deleteTestAuthUser não limpa admin.audit_log (documentado no próprio
+  // helper: cleanup de outras tabelas é responsabilidade do chamador).
+  for (const id of createdAuthUserIds) {
+    await db.delete(auditLog).where(eq(auditLog.actorId, id));
+  }
+  // Ordem reversa: cada convidado é empurrado para este array DEPOIS do seu
+  // próprio inviter (ver "convite válido..." abaixo), e a role_assignments
+  // do convidado grava grantedBy = inviterId. deleteTestAuthUser só limpa
+  // roleAssignments pelo userId, não pelo grantedBy — apagar o inviter
+  // primeiro deixa essa linha do convidado como referência pendente e
+  // "role_assignments_granted_by_users_id_fk" rejeita o DELETE em
+  // public.users do inviter. Processar o mais recente primeiro sempre
+  // remove o convidado (dono da linha) antes do seu inviter.
+  for (const id of [...createdAuthUserIds].reverse()) {
+    await deleteTestAuthUser(id);
   }
 });
 
@@ -198,5 +215,43 @@ describe("acceptInvitation — fluxo completo (sem mock)", () => {
     });
 
     expect(result?.serverError).toBeDefined();
+  });
+
+  // D6-002 (PACOTE 9): segunda camada de defesa — mesmo que sendInvitation
+  // (apps/admin) já recuse a combinação na criação, um convite gravado antes
+  // dessa correção (ou por qualquer outro caminho) não pode criar a conta.
+  // O convite é inserido direto no banco (não via sendInvitation) para isolar
+  // esta camada.
+  it("convite com combinação proibida (diretor + hospede) é recusado, sem criar conta", async () => {
+    const { createTestAuthUser } = await import("@hebron/auth/testing");
+    const inviterId = await createTestAuthUser(
+      `convite-inviter-conflito-${Date.now()}@test.hebron`,
+      "T3st-Convite-Inviter!",
+    );
+    createdAuthUserIds.push(inviterId);
+
+    const inviteeEmail = `convite-conflito-${Date.now()}@test.hebron`;
+    const invitation = await createInvitation({
+      email: inviteeEmail,
+      roles: ["diretor", "hospede"],
+      invitedBy: inviterId,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+    });
+
+    const { acceptInvitation } = await import("../actions/invitations");
+    const result = await acceptInvitation({
+      token: invitation.token,
+      name: "Tentativa Conflito",
+      password: "T3st-Tentativa-Conflito!",
+    });
+
+    expect(result?.serverError).toBeDefined();
+    expect(result?.serverError).toContain("Conflito de interesse");
+
+    const [userRow] = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, inviteeEmail));
+    expect(userRow).toBeUndefined();
   });
 });

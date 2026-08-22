@@ -9,14 +9,17 @@
  * diverge da verdade em `public.designations` — só a RLS barra esse ator, o
  * gate JS (`diretorWithDesignationAction`) confiaria nele.
  *
- * Cobre também a descoberta feita ao ativar RLS de verdade nesta sessão:
- * `financeiro.batch_approvals_update_gestor` (0011_financeiro_rls.sql) só
- * concede UPDATE a diretor com designation 'gestor' (+ super_admin) — não
- * cobre o autorizador (segundo papel da governança dual), então
- * `authorizeBatch` precisou de `withSystemRole` para o UPDATE de
- * `batch_approvals` especificamente (ver comentário em actions/approval.ts).
- * O teste "autorizador real autoriza" abaixo prova que esse caminho continua
- * funcionando fim-a-fim pela action real, não apenas que a policy existe.
+ * `financeiro.batch_approvals_update_gestor` (0011_financeiro_rls.sql) não
+ * cobria o autorizador (segundo papel da governança dual), e por isso
+ * `authorizeBatch` rodava o UPDATE via `withSystemRole` (bypass de RLS) —
+ * mas a policy foi substituída por `batch_approvals_update_dual_governance`
+ * (0019_financeiro_organization_budgets.sql), que já cobre diretor+
+ * designation 'autorizador'. PACOTE 9 (D1-006/Débito PATCH-016,
+ * AUDIT/04-BACKLOG-CORRECAO.md) removeu o `withSystemRole` agora
+ * desnecessário; o describe "authorizeBatch" abaixo prova os dois lados:
+ * autorizador real autoriza pela RLS de verdade, e um claim de autorizador
+ * sem designation real (só no mock de resolveSession) é barrado pela RLS —
+ * não mais mascarado pelo bypass de superuser.
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { eq, inArray } from "drizzle-orm";
@@ -71,6 +74,10 @@ const IDS = {
   ghostGestor: "f1000000-0000-0000-0000-000000000001",
   realGestor: "f1000000-0000-0000-0000-000000000002",
   realAutorizador: "f1000000-0000-0000-0000-000000000003",
+  // Mesmo padrão ghost* acima, agora para o autorizador: claim de
+  // designation 'autorizador' só no resolveSession mockado, sem linha real
+  // em public.designations — só a RLS pode barrar (PACOTE 9).
+  ghostAutorizador: "f1000000-0000-0000-0000-000000000008",
   // P-3.7b — mesmo padrão "claim vs. realidade": ghost* tem role reivindicada
   // só no resolveSession mockado (satisfaz o gate JS), sem nenhuma linha real
   // em public.role_assignments (só a RLS pode barrar).
@@ -228,7 +235,7 @@ describe("approveBatch — UPDATE em financeiro.batch_approvals roda sob RLS rea
   });
 });
 
-describe("authorizeBatch — batch_approvals_update_gestor não cobre autorizador; withSystemRole fecha o caminho", () => {
+describe("authorizeBatch — UPDATE em financeiro.batch_approvals roda sob RLS real (sem withSystemRole)", () => {
   const payableId = "f2000000-0000-0000-0000-000000000002";
   const batchId = "f3000000-0000-0000-0000-000000000002";
 
@@ -254,7 +261,22 @@ describe("authorizeBatch — batch_approvals_update_gestor não cobre autorizado
     await db.delete(payables).where(eq(payables.id, payableId));
   });
 
-  it("autorizador real (diferente do gestor) autoriza: lote e payables avançam, audit atômico via withSystemRole", async () => {
+  it("ator sem designation real de autorizador é barrado pela RLS mesmo com claim no gate JS", async () => {
+    await actingAs(IDS.ghostAutorizador, ["diretor"], ["autorizador"]);
+    const { authorizeBatch } = await import("../actions/approval");
+
+    const result = await authorizeBatch({ batchId });
+
+    expect(result?.serverError).toBeDefined();
+
+    const [batch] = await db
+      .select({ authorizedBy: batchApprovals.authorizedBy })
+      .from(batchApprovals)
+      .where(eq(batchApprovals.id, batchId));
+    expect(batch?.authorizedBy).toBeNull();
+  });
+
+  it("autorizador real (diferente do gestor) autoriza: lote e payables avançam, audit atômico", async () => {
     await actingAs(IDS.realAutorizador, ["diretor"], ["autorizador"]);
     const { authorizeBatch } = await import("../actions/approval");
 
