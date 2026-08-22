@@ -89,6 +89,10 @@ export const createLessonSchema = z
     title: z.string().min(2, "Título é obrigatório").max(200),
     type: lessonTypeEnum,
     order: z.number().int().min(0),
+    // guid do vídeo na Bunny Stream (P-6.20) — preenchido pelo upload em
+    // LessonVideoUpload. videoUrl segue como fallback de aulas antigas
+    // coladas à mão (aceito só quando não há videoId).
+    videoId: z.string().min(1).nullable().optional().default(null),
     videoUrl: z.string().url().nullable().optional().default(null),
     videoDurationSeconds: z
       .number()
@@ -112,10 +116,16 @@ export const createLessonSchema = z
       .default(null),
     requiresCompletion: z.boolean().optional().default(true),
   })
-  .refine((lesson) => lesson.type !== "video" || lesson.videoUrl !== null, {
-    message: "Informe a URL do vídeo",
-    path: ["videoUrl"],
-  })
+  .refine(
+    (lesson) =>
+      lesson.type !== "video" ||
+      lesson.videoId !== null ||
+      lesson.videoUrl !== null,
+    {
+      message: "Envie o vídeo da aula",
+      path: ["videoId"],
+    },
+  )
   .refine((lesson) => lesson.type !== "text" || lesson.textContent !== null, {
     message: "Informe o conteúdo do texto",
     path: ["textContent"],

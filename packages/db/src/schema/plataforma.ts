@@ -157,6 +157,12 @@ export const lessons = plataformaSchema.table(
     title: text("title").notNull(),
     type: lessonTypeEnum("type").notNull(),
     order: integer("order").notNull(),
+    // videoId: vídeo hospedado na library Bunny Stream (P-6.20), reproduzido
+    // via URL assinada por matrícula (getLessonVideoPlaybackUrl). videoUrl
+    // permanece como fallback de aulas antigas coladas à mão antes do
+    // upload real existir — migração de dados fora do escopo, decisão
+    // registrada em SESSIONS.md.
+    videoId: text("video_id"),
     videoUrl: text("video_url"),
     videoDurationSeconds: integer("video_duration_seconds"),
     content: text("content"),

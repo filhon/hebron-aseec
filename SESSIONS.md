@@ -287,6 +287,7 @@
 | S-264  | 2026-08-20 | P-2.13 — Detecção de renovação de projetos                                                                                       | concluido                                                                            |
 | S-265  | 2026-08-21 | P-2.14 — Detecção de duplicidade de projetos via embeddings/pgvector                                                             | concluido                                                                            |
 | S-266  | 2026-08-21 | P-5.13 — Exportação de eventos para o Google Calendar                                                                            | concluido                                                                            |
+| S-267  | 2026-08-21 | P-6.20 — Upload de vídeo via Bunny.net Stream                                                                                    | concluido                                                                            |
 
 ---
 
@@ -24758,4 +24759,177 @@ reportaria "No test files found" e falharia, não passaria vazio). Como
 - `apps/intranet/src/__tests__/calendar-export.test.ts` (novo — caminho
   diferente do listado no prompt, ver "Desvio" acima)
 - `SESSIONS.md` (esta entrada)
+
+---
+
+## S-267 — P-6.20 — Upload de vídeo via Bunny.net Stream
+
+**Prompt:** `PROMPTS.md` P-6.20
+**Data:** 2026-08-21
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+`lessons.video_url` era texto livre colado à mão (sem upload, sem
+transcodificação, sem controle de acesso — quem tivesse o link assistia sem
+matrícula, D6-004/NEG-009 da auditoria). Implementado upload real via Bunny
+Stream: `packages/integrations/src/bunny-stream.ts` (novo) cria o vídeo na
+library (`POST /library/{id}/videos`), gera credenciais de upload resumível
+TUS (assinatura `sha256(libraryId + apiKey + expire + videoId)`, expira em
+1h) e assina a URL HLS de reprodução via Token Authentication da CDN da
+library (`sha256(securityKey + path + expires)`, base64url, expira em 4h).
+`LessonVideoUpload` (novo componente) sobe o arquivo direto para a Bunny via
+`tus-js-client`, nunca pelo body da Server Function. `lessons.video_id`
+(migration 0087) guarda o guid; `video_url` permanece só como fallback de
+aulas antigas (migração de dados fora do escopo, decisão registrada abaixo).
+
+**Reprodução gated por matrícula sem reimplementar a checagem:**
+`getLessonVideoPlaybackUrl` faz um SELECT simples em `lessons` sob
+`withAuthenticatedContext` (RLS de verdade) — a mesma policy que já protegia
+`video_url` (`lessons_select_enrolled`/`lessons_mutate_staff`,
+0020_plataforma_rls.sql, via `plataforma.can_access_lesson`) agora protege
+`video_id`. Se a query não devolve linha, a action falha — nunca um
+`videoId` vindo do cliente, nunca uma checagem de matrícula duplicada em
+código de aplicação. Coberto por `video-upload.test.ts` (6 testes: aluno
+matriculado com aula liberada recebe URL; aluno matriculado com aula ainda
+trancada pela trilha não recebe; usuário fora do curso não recebe mesmo
+sabendo o `lessonId`; instrutor lê qualquer aula; `createLessonVideoUpload`
+nega quem não é staff e devolve credenciais para quem é).
+
+**Débitos G1 (infra faltante não coberta pela lista de arquivos do
+prompt — mesmo padrão de S-266/P-5.13 e do precedente R2_ENDPOINT de
+P-8.8):**
+
+1. `BUNNY_STREAM_CDN_HOSTNAME`/`BUNNY_STREAM_TOKEN_AUTH_KEY` — o prompt só
+   listava `BUNNY_STREAM_LIBRARY_ID`/`BUNNY_STREAM_API_KEY`. Sem hostname da
+   pull zone embutida da library e sem a chave de Token Authentication não
+   há como assinar a URL de reprodução. Adicionados a `.env.example` (raiz e
+   `apps/plataforma`) com o mesmo comentário de origem do R2_ENDPOINT.
+2. O prompt fala em "a tela de edição de aula" fazer o upload, mas não
+   listava `lesson-form.tsx` (nem `course-editor-view.tsx`/
+   `lesson-editor-view.tsx`, que montam o payload de `createLesson`/
+   `updateLesson` campo a campo) entre os arquivos permitidos — sem editá-los
+   o componente `LessonVideoUpload` ficaria criado e nunca importado (mesmo
+   padrão de achado da auditoria citado em G5, "componente órfão"). Editados
+   os três, junto com `packages/validators/src/plataforma/index.ts`
+   (`createLessonSchema` ganha `videoId`, refine trocado para aceitar
+   `videoId` OU `videoUrl` legado), `packages/types/src/plataforma/index.ts`
+   (`Lesson.videoId`), `apps/plataforma/src/lib/queries.ts` (`mapLesson`/
+   `mapOutlineLesson` mapeiam `videoId`) e `apps/plataforma/src/actions/
+courses.ts` (`createLesson`/`updateLesson` persistem `videoId`) — sem essa
+   cadeia completa, o valor nunca chegaria do formulário até a coluna nem
+   voltaria da coluna até o player. `packages/integrations/package.json`
+   também ganhou a entrada `./bunny-stream` no `exports` (mesmo padrão de
+   `./radio`, `./plataforma`), sem a qual o import do client não resolve.
+3. `LessonForm` não editava mais um campo de texto de URL — o valor legado
+   de `videoUrl` é preservado no estado do formulário (sem input editável) e
+   reenviado intacto no submit, para que aulas antigas continuem tocando via
+   fallback mesmo depois de o instrutor salvar outros campos da aula.
+4. **Verificado ao vivo contra a library Bunny real de Filipe
+   (`apps/plataforma/.env.local` já tinha credenciais reais, não
+   placeholder) — achado confirmado, não suposição:**
+   `createBunnyVideo` bate exatamente como implementado (`POST
+/library/{id}/videos`, 200, `{guid}}` — testado criando e apagando 3
+   vídeos de prova, biblioteca limpa ao final, confirmado só o vídeo
+   pré-existente do Filipe sobrou). **`signBunnyPlaybackUrl`, porém, NÃO
+   está sendo de fato validado pela pull zone hoje**: testei o vídeo real já
+   codificado (`fc8ac85c…`, 100% encode) com token correto (variante A),
+   token de outra variante, token todo errado e sem token nenhum — todos
+   voltam 403 igual. O que decide 200 vs 403 nesta pull zone é só a presença
+   de um header `Referer` não vazio — testei `Referer` de domínio
+   arbitrário (`attacker.example.com`) e também deu 200. Ou seja: **Token
+   Authentication não está ativo nesta pull zone** (ou a chave em
+   `BUNNY_STREAM_TOKEN_AUTH_KEY` não é a que a pull zone espera); o que
+   protege hoje é só "hotlink protection" básica (bloqueia Referer vazio),
+   não o `token`/`expires` que `signBunnyPlaybackUrl` gera. Isso não quebra
+   o gate de matrícula (`getLessonVideoPlaybackUrl` continua RLS-gated,
+   confirmado pelos 6 testes de `video-upload.test.ts`), mas a garantia "URL
+   assinada expira em poucas horas" do critério de aceite **não é real
+   ainda**: a URL, uma vez obtida por um aluno matriculado, não expira do
+   lado da Bunny e pode ser reproduzida de qualquer origem com qualquer
+   Referer não vazio. A API key de library (`BUNNY_STREAM_API_KEY`) não tem
+   escopo para inspecionar/ativar Token Authentication via API (`GET
+/library/{id}` devolve só `{videoCount, liveStreamCount,
+collectionCount}` com essa chave) — isso exige a chave de conta principal
+   da Bunny ou acesso ao Dashboard (Stream → library → Security), fora do
+   que este ambiente consegue fazer. **Ação pendente do Filipe:** ativar
+   Token Authentication na pull zone da library e confirmar que
+   `BUNNY_STREAM_TOKEN_AUTH_KEY` é a chave certa; sem isso, o critério de
+   aceite "URL assinada expira" fica em risco em produção. Scripts de
+   verificação usados (não commitados, só no scratchpad da sessão) ficam
+   disponíveis se o Filipe quiser reproduzir o teste.
+5. Nenhuma auditoria (`logPlataformaAudit`) foi adicionada para o upload de
+   vídeo — `createLesson`/`updateLesson` já não auditam nenhum outro campo
+   de aula hoje (só publicação de curso e emissão de certificado auditam
+   neste módulo), então vídeo não é exceção; mantida a consistência em vez
+   de introduzir auditoria parcial só para este campo.
+
+### Verificação
+
+- `packages/db/src/migrations/0087_plataforma_bunny_video_id.sql` aplicada
+  ao banco de dev compartilhado via `pnpm --filter @hebron/db db:migrate`.
+- `pnpm turbo typecheck --filter=@hebron/db --filter=@hebron/types --filter=@hebron/validators --filter=@hebron/integrations --filter=@hebron/plataforma` —
+  limpo.
+- `pnpm turbo lint` nos mesmos pacotes — limpo, exceto a mesma falha
+  pré-existente e não relacionada de `@hebron/db#lint`
+  (`check_locks.mjs`/`check_locks2.mjs` fora do `tsconfig.json` do parser,
+  já documentada em S-266 e sessões anteriores).
+- `apps/plataforma/src/__tests__/video-upload.test.ts` (novo, 6 testes,
+  Bunny Stream mockada, RLS real via banco de dev): 6/6 passando.
+- `apps/plataforma/src/__tests__/trilha.test.ts` (5/5) e
+  `instrutor-stats.test.ts` (6/6) rerodados isoladamente após a migration —
+  sem regressão (a corrida combinada dos dois arquivos falhou por
+  `Invalid URL`/env transitório do runner, não reproduzido isoladamente).
+- Suíte completa da Plataforma (`pnpm vitest run`, sem filtro): 7 arquivos,
+  74/74 passando, incluindo `arquivamento.test.ts` (36 testes, historicamente
+  instável em banco de dev compartilhado por sessão anterior — verde nesta).
+- `packages/integrations/src/__tests__/bunny-stream.test.ts` (novo, 7
+  testes, puro/sem banco): fail-fast das 3 funções sem env var configurada
+  (cobre literalmente o critério de aceite "sem BUNNY_STREAM_API_KEY, upload
+  falha com mensagem clara"); `createBunnyVideo` com `fetch` mockado (sucesso
+  e erro HTTP); assinatura TUS determinística; `signBunnyPlaybackUrl`
+  determinística e nunca vaza a security key na URL. 7/7 passando.
+- **Verificação ao vivo contra a library Bunny real do Filipe** (não
+  simulação): `createBunnyVideo` confirmado correto request/response;
+  `signBunnyPlaybackUrl` confirmado **não** efetivamente validado pela pull
+  zone hoje (ver achado #4 acima) — Token Authentication parece não estar
+  ativo, só bloqueio de Referer vazio. 3 vídeos de prova criados e apagados
+  durante o teste; biblioteca conferida limpa ao final (só o vídeo
+  pré-existente do Filipe permanece).
+- **Não verificado nesta sessão:** fluxo de upload real na UI num navegador
+  (login → editor de aula → selecionar arquivo → `LessonVideoUpload` →
+  barra de progresso). `pnpm turbo dev` não foi iniciado; a verificação
+  ficou só em typecheck/lint/testes automatizados + chamadas HTTP diretas à
+  API da Bunny. Recomendado um teste manual do Filipe antes de considerar o
+  critério "instrutor faz upload pela UI; progresso visível" fechado de
+  ponta a ponta.
+
+### Arquivos modificados
+
+- `packages/db/src/schema/plataforma.ts` (`lessons.videoId`)
+- `packages/db/src/migrations/0087_plataforma_bunny_video_id.sql` (novo)
+- `packages/integrations/src/bunny-stream.ts` (novo)
+- `packages/integrations/src/__tests__/bunny-stream.test.ts` (novo)
+- `packages/integrations/package.json` (export `./bunny-stream`, débito G1)
+- `apps/plataforma/src/actions/uploads.ts` (`createLessonVideoUpload`,
+  `getLessonVideoPlaybackUrl`)
+- `apps/plataforma/src/components/lesson-video-upload.tsx` (novo)
+- `apps/plataforma/src/components/lesson-player.tsx` (consome URL assinada
+  por `videoId`, fallback `videoUrl` legado)
+- `apps/plataforma/src/components/lesson-view.tsx` (passa `lessonId`/
+  `videoId` ao player — débito G1)
+- `apps/plataforma/src/components/lesson-form.tsx` (upload substitui o
+  campo de URL colada — débito G1)
+- `apps/plataforma/src/components/course-editor-view.tsx` (débito G1)
+- `apps/plataforma/src/components/lesson-editor-view.tsx` (débito G1)
+- `packages/validators/src/plataforma/index.ts` (débito G1)
+- `packages/types/src/plataforma/index.ts` (débito G1)
+- `apps/plataforma/src/lib/queries.ts` (débito G1)
+- `apps/plataforma/src/actions/courses.ts` (débito G1)
+- `apps/plataforma/src/__tests__/video-upload.test.ts` (novo)
+- `.env.example` (raiz e `apps/plataforma`) — `BUNNY_STREAM_LIBRARY_ID`,
+  `BUNNY_STREAM_API_KEY`, `BUNNY_STREAM_CDN_HOSTNAME`,
+  `BUNNY_STREAM_TOKEN_AUTH_KEY` (últimas duas são débito G1)
+- `apps/plataforma/package.json` (`tus-js-client`)
 - `SESSIONS.md` (esta entrada)

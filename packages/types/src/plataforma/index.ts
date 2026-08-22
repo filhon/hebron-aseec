@@ -76,6 +76,10 @@ export interface Lesson {
   title: string;
   type: LessonType;
   order: number;
+  /** guid do vídeo na Bunny Stream (P-6.20). Quando presente, a reprodução
+   * usa uma URL assinada por matrícula; videoUrl é fallback de aulas antigas
+   * coladas à mão. */
+  videoId: string | null;
   videoUrl: string | null;
   videoDurationSeconds: number | null;
   textContent: string | null;

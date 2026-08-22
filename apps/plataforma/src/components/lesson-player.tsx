@@ -3,7 +3,9 @@
 import * as React from "react";
 import type HlsType from "hls.js";
 import {
+  AlertTriangle,
   Gauge,
+  Loader2,
   Maximize,
   Minimize,
   Pause,
@@ -11,6 +13,7 @@ import {
   Volume2,
   VolumeX,
 } from "lucide-react";
+import { getLessonVideoPlaybackUrl } from "../actions/uploads";
 
 function cn(...cls: (string | false | null | undefined)[]): string {
   return cls.filter(Boolean).join(" ");
@@ -35,7 +38,14 @@ export interface LessonPlayerMarker {
 }
 
 export interface LessonPlayerProps {
-  videoUrl: string;
+  /** Identifica a aula para resolver a URL de reprodução assinada por
+   * matrícula (getLessonVideoPlaybackUrl) quando `videoId` está presente. */
+  lessonId: string;
+  /** guid do vídeo na Bunny Stream (P-6.20) — quando presente, a reprodução
+   * usa uma URL assinada resolvida sob demanda, nunca o guid cru. */
+  videoId: string | null;
+  /** Fallback de aulas antigas com URL colada à mão (sem `videoId`). */
+  videoUrl: string | null;
   /** Usada como fallback de duração antes do metadata do vídeo carregar. */
   durationSeconds?: number | null;
   /** Marcadores exibidos na barra de progresso (ex.: notas do aluno). */
@@ -52,6 +62,8 @@ export interface LessonPlayerProps {
  * marcadores na barra de progresso. Sem dependência de biblioteca de UI —
  * controles nativos construídos sobre o elemento `<video>`. */
 export function LessonPlayer({
+  lessonId,
+  videoId,
   videoUrl,
   durationSeconds,
   markers = [],
@@ -73,10 +85,42 @@ export function LessonPlayer({
   const [playbackRate, setPlaybackRate] = React.useState<number>(1);
   const [speedMenuOpen, setSpeedMenuOpen] = React.useState(false);
   const [fullscreen, setFullscreen] = React.useState(false);
+  const [src, setSrc] = React.useState<string | null>(
+    videoId ? null : videoUrl,
+  );
+  const [resolveError, setResolveError] = React.useState(false);
+
+  // videoId (Bunny Stream, P-6.20): resolve a URL de reprodução assinada por
+  // matrícula sob demanda — nunca reproduz a partir do guid cru. Sem
+  // videoId, cai no fallback de aulas antigas com videoUrl colado à mão.
+  React.useEffect(() => {
+    if (!videoId) {
+      setSrc(videoUrl);
+      return;
+    }
+    let cancelled = false;
+    setSrc(null);
+    setResolveError(false);
+    getLessonVideoPlaybackUrl({ lessonId })
+      .then((result) => {
+        if (cancelled) return;
+        if (result?.data?.url) {
+          setSrc(result.data.url);
+        } else {
+          setResolveError(true);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setResolveError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [lessonId, videoId, videoUrl]);
 
   React.useEffect(() => {
     const video = videoRef.current;
-    if (!video) return;
+    if (!video || !src) return;
 
     // hls.js (~150 KB) sai do bundle inicial: os controles do player pintam
     // de imediato e o parser é buscado em paralelo (P-9.3). `cancelled`
@@ -86,16 +130,16 @@ export function LessonPlayer({
 
     if (video.canPlayType("application/vnd.apple.mpegurl")) {
       // Safari/iOS reproduzem HLS nativamente — não baixa o hls.js.
-      video.src = videoUrl;
+      video.src = src;
     } else {
       void import("hls.js").then(({ default: Hls }) => {
         if (cancelled || !videoRef.current) return;
         if (Hls.isSupported()) {
           hls = new Hls();
-          hls.loadSource(videoUrl);
+          hls.loadSource(src);
           hls.attachMedia(videoRef.current);
         } else {
-          videoRef.current.src = videoUrl;
+          videoRef.current.src = src;
         }
       });
     }
@@ -108,7 +152,7 @@ export function LessonPlayer({
       cancelled = true;
       hls?.destroy();
     };
-  }, [videoUrl, startAtSeconds]);
+  }, [src, startAtSeconds]);
 
   React.useEffect(() => {
     if (!speedMenuOpen) return;
@@ -200,6 +244,23 @@ export function LessonPlayer({
           onEnded?.();
         }}
       />
+
+      {!src && (
+        <div className="absolute inset-0 flex aspect-video items-center justify-center bg-(--hb-ink) text-white/85">
+          {resolveError ? (
+            <div className="flex flex-col items-center gap-2 text-center text-sm">
+              <AlertTriangle className="h-5 w-5" aria-hidden="true" />
+              Não foi possível carregar o vídeo desta aula.
+            </div>
+          ) : (
+            <Loader2
+              className="h-6 w-6 animate-spin"
+              aria-hidden="true"
+              aria-label="Carregando vídeo"
+            />
+          )}
+        </div>
+      )}
 
       <div className="absolute inset-x-0 bottom-0 flex flex-col gap-1.5 bg-linear-to-t from-black/85 to-transparent px-3 pb-2.5 pt-8">
         {/* Barra de progresso + marcadores */}

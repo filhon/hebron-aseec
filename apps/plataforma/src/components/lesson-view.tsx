@@ -155,9 +155,11 @@ export function LessonView({
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_320px]">
         <div className="min-w-0 space-y-6">
-          {lesson.type === "video" && lesson.videoUrl && (
+          {lesson.type === "video" && (lesson.videoId || lesson.videoUrl) && (
             <>
               <LessonPlayer
+                lessonId={lesson.id}
+                videoId={lesson.videoId}
                 videoUrl={lesson.videoUrl}
                 durationSeconds={lesson.videoDurationSeconds}
                 markers={notes.map((note) => ({

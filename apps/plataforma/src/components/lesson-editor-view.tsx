@@ -27,6 +27,7 @@ export function LessonEditorView({ course, lesson }: LessonEditorViewProps) {
       title: values.title,
       type: values.type,
       order: lesson.order,
+      videoId: values.videoId,
       videoUrl: values.videoUrl,
       videoDurationSeconds: values.videoDurationSeconds,
       textContent: values.textContent,

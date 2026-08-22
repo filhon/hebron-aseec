@@ -3,7 +3,15 @@
 import { z } from "zod";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "node:crypto";
-import { staffAction } from "../lib/safe-action";
+import { eq } from "drizzle-orm";
+import { withAuthenticatedContext } from "@hebron/db/authenticated";
+import { lessons } from "@hebron/db/schema";
+import {
+  createBunnyVideo,
+  createBunnyTusUploadCredentials,
+  signBunnyPlaybackUrl,
+} from "@hebron/integrations/bunny-stream";
+import { plataformaAction, staffAction } from "../lib/safe-action";
 import { BusinessError } from "@hebron/auth/safe-action-error";
 
 function getSupabaseAdmin() {
@@ -108,3 +116,64 @@ export const getLessonAttachmentUploadUrl = staffAction
 // nome/tamanho), então o storagePath retornado por
 // getLessonAttachmentUploadUrl já é o valor final. A resolução para uma URL
 // baixável acontece em lib/queries.ts#getLessonPageData, sob demanda.
+
+// ---------------------------------------------------------------------------
+// Vídeo de aula via Bunny.net Stream (P-6.20). createLessonVideoUpload cria
+// o vídeo na library e devolve as credenciais do upload resumível TUS — o
+// client sobe o arquivo direto para a Bunny (packages/integrations/src/
+// bunny-stream.ts), nunca pelo body desta Server Function. Falha sem
+// BUNNY_STREAM_API_KEY/BUNNY_STREAM_LIBRARY_ID configuradas vira BusinessError
+// (mensagem chega ao usuário via handleServerError) — mesmo padrão de
+// requireEnv, fail-fast em vez de travar a tela.
+// ---------------------------------------------------------------------------
+
+const createLessonVideoUploadSchema = z.object({
+  title: z.string().min(1).max(255),
+});
+
+export const createLessonVideoUpload = staffAction
+  .schema(createLessonVideoUploadSchema)
+  .action(async ({ parsedInput }) => {
+    try {
+      const { videoId } = await createBunnyVideo(parsedInput.title);
+      const upload = createBunnyTusUploadCredentials(videoId);
+      return { videoId, upload };
+    } catch (error) {
+      throw new BusinessError(
+        error instanceof Error
+          ? `Falha ao iniciar upload na Bunny Stream: ${error.message}`
+          : "Falha ao iniciar upload na Bunny Stream",
+      );
+    }
+  });
+
+// getLessonVideoPlaybackUrl nunca aceita um videoId vindo do cliente — o
+// guid é lido da própria linha em `lessons`, sob a mesma RLS de SELECT que
+// já gate video_url (lessons_select_enrolled/lessons_mutate_staff,
+// 0020_plataforma_rls.sql): se a query não devolver linha, o usuário não
+// está matriculado (ou a aula ainda está trancada pela trilha sequencial) —
+// nunca uma checagem de matrícula reimplementada aqui.
+const getLessonVideoPlaybackUrlSchema = z.object({
+  lessonId: z.string().uuid(),
+});
+
+export const getLessonVideoPlaybackUrl = plataformaAction
+  .schema(getLessonVideoPlaybackUrlSchema)
+  .action(async ({ parsedInput, ctx }) => {
+    const rows = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      (tx) =>
+        tx
+          .select({ videoId: lessons.videoId })
+          .from(lessons)
+          .where(eq(lessons.id, parsedInput.lessonId))
+          .limit(1),
+    );
+
+    const row = rows[0];
+    if (!row?.videoId) {
+      throw new BusinessError("Vídeo não encontrado ou acesso negado");
+    }
+
+    return { url: signBunnyPlaybackUrl(row.videoId) };
+  });

@@ -17,6 +17,7 @@ import {
 } from "@hebron/ui";
 import { HelpCircle, Loader2, Paperclip, X } from "lucide-react";
 import { getLessonAttachmentUploadUrl } from "../actions/uploads";
+import { LessonVideoUpload } from "./lesson-video-upload";
 
 type LessonAttachmentMimeType =
   | "application/pdf"
@@ -92,6 +93,7 @@ function formatBytes(bytes: number): string {
 export interface LessonFormValues {
   title: string;
   type: LessonType;
+  videoId: string | null;
   videoUrl: string | null;
   videoDurationSeconds: number | null;
   textContent: string | null;
@@ -121,7 +123,12 @@ export function LessonForm({
 }: LessonFormProps) {
   const [title, setTitle] = React.useState(lesson?.title ?? "");
   const [type, setType] = React.useState<LessonType>(lesson?.type ?? "video");
-  const [videoUrl, setVideoUrl] = React.useState(lesson?.videoUrl ?? "");
+  const [videoId, setVideoId] = React.useState<string | null>(
+    lesson?.videoId ?? null,
+  );
+  // Preservado só como fallback de reprodução de aulas antigas — não há mais
+  // campo de texto para colar URL (P-6.20); nunca reeditado pelo instrutor.
+  const [videoUrl] = React.useState<string | null>(lesson?.videoUrl ?? null);
   const [videoDuration, setVideoDuration] = React.useState(
     lesson?.videoDurationSeconds ? String(lesson.videoDurationSeconds) : "",
   );
@@ -200,7 +207,8 @@ export function LessonForm({
       title,
       type,
       order: lesson?.order ?? 0,
-      videoUrl: type === "video" ? videoUrl || null : null,
+      videoId: type === "video" ? videoId : null,
+      videoUrl: type === "video" ? videoUrl : null,
       videoDurationSeconds:
         type === "video" && videoDuration ? Number(videoDuration) : null,
       textContent: type === "text" ? textContent || null : null,
@@ -219,6 +227,7 @@ export function LessonForm({
     onSubmit({
       title: result.data.title,
       type: result.data.type,
+      videoId: result.data.videoId,
       videoUrl: result.data.videoUrl,
       videoDurationSeconds: result.data.videoDurationSeconds,
       textContent: result.data.textContent,
@@ -256,12 +265,20 @@ export function LessonForm({
 
       {type === "video" && (
         <>
-          <FormField label="URL do vídeo" error={errors.videoUrl} required>
-            <Input
-              value={videoUrl}
-              onChange={(e) => setVideoUrl(e.target.value)}
-              placeholder="https://video.hebronaseec.com.br/…"
+          <FormField label="Vídeo da aula" error={errors.videoId} required>
+            <LessonVideoUpload
+              lessonTitle={title}
+              videoId={videoId}
+              onUploaded={setVideoId}
+              onRemove={() => setVideoId(null)}
             />
+            {!videoId && videoUrl && (
+              <p className="mt-2 text-xs text-(--fg-muted)">
+                Esta aula ainda usa uma URL de vídeo colada manualmente
+                (legado). Ela continua sendo exibida aos alunos até que um novo
+                vídeo seja enviado aqui.
+              </p>
+            )}
           </FormField>
           <FormField label="Duração (segundos)">
             <Input

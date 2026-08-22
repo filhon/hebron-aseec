@@ -344,6 +344,7 @@ export function CourseEditorView({
       title: values.title,
       type: values.type,
       order: moduleLessonsCount,
+      videoId: values.videoId,
       videoUrl: values.videoUrl,
       videoDurationSeconds: values.videoDurationSeconds,
       textContent: values.textContent,
