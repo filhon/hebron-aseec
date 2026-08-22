@@ -87,13 +87,44 @@ export const getMyAvatarReadUrl = staffAction
     return { url: data.signedUrl };
   });
 
+// D5-002 (PACOTE 11, AUDIT/04-BACKLOG-CORRECAO.md): o avatar antigo nunca era
+// removido do bucket ao ser substituído — acúmulo de arquivo órfão a cada
+// troca. Best-effort (não falha a mutação por causa de um erro de storage):
+// a linha em `users` já é a fonte da verdade, um objeto órfão remanescente
+// no bucket é um custo de armazenamento, nunca um dado incorreto.
+async function deleteOldAvatarIfReplaced(
+  oldAvatarUrl: string | null,
+  newAvatarUrl: string | null,
+) {
+  if (!oldAvatarUrl || oldAvatarUrl === newAvatarUrl) return;
+  try {
+    const supabase = getSupabaseAdmin();
+    await supabase.storage.from("perfil-avatares").remove([oldAvatarUrl]);
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        event: "storage_cleanup_failed",
+        bucket: "perfil-avatares",
+        path: oldAvatarUrl,
+        message: error instanceof Error ? error.message : String(error),
+      }),
+    );
+  }
+}
+
 export const updateMyProfile = staffAction
   .schema(updateMyProfileSchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    const [row] = await withAuthenticatedContext(
+    const { row, previousAvatarUrl } = await withAuthenticatedContext(
       { actorId: ctx.actorId },
-      (tx) =>
-        tx
+      async (tx) => {
+        const [existing] = await tx
+          .select({ avatarUrl: users.avatarUrl })
+          .from(users)
+          .where(eq(users.id, ctx.actorId))
+          .limit(1);
+
+        const [updated] = await tx
           .update(users)
           .set({
             bio: input.bio,
@@ -106,9 +137,14 @@ export const updateMyProfile = staffAction
             bio: users.bio,
             phone: users.phone,
             avatarUrl: users.avatarUrl,
-          }),
+          });
+
+        return { row: updated, previousAvatarUrl: existing?.avatarUrl ?? null };
+      },
     );
     if (!row) throw new BusinessError("Falha ao salvar perfil");
+
+    await deleteOldAvatarIfReplaced(previousAvatarUrl, row.avatarUrl);
 
     return { profile: row };
   });

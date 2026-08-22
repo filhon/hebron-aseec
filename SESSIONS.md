@@ -292,6 +292,7 @@
 | S-269  | 2026-08-22 | AUDIT PACOTE 8 — Robustez do Financeiro em escala (CORRETIVO)                                                                    | concluido                                                                            |
 | S-270  | 2026-08-22 | AUDIT PACOTE 9 — Gates e RLS residuais (CORRETIVO)                                                                               | concluido                                                                            |
 | S-271  | 2026-08-22 | AUDIT PACOTE 10 — Camada de IA (CORRETIVO)                                                                                       | concluido                                                                            |
+| S-272  | 2026-08-22 | AUDIT PACOTE 11 — Higiene, consistência e registro (CORRETIVO)                                                                   | concluido                                                                            |
 
 ---
 
@@ -25518,4 +25519,194 @@ defesa que o código de fato controla — isolamento estrutural da mensagem
 - `packages/ai/src/__tests__/ocr.test.ts` (teste novo de
   timeout/maxRetries)
 - `AUDIT/04-BACKLOG-CORRECAO.md` (critérios de aceite do PACOTE 10)
+- `SESSIONS.md` (esta entrada)
+
+## S-272 — AUDIT PACOTE 11 — Higiene, consistência e registro (CORRETIVO)
+
+**Prompt:** `AUDIT/04-BACKLOG-CORRECAO.md` § PACOTE 11
+**Data:** 2026-08-22
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+Nove achados mecânicos (P3) mais um resíduo de nomenclatura de migration,
+corrigidos em sequência — nenhum exigiu decisão de negócio, dois exigiram
+decisão de arquitetura/escopo (registradas abaixo, confirmadas com o
+Filipe antes de aplicar).
+
+1. **D6-004 — `ProjectStage` com 9 valores contra 8 no banco.**
+   `packages/types/src/projetos/index.ts` ainda declarava `"cancelado"` no
+   union type; `packages/db/src/schema/projetos.ts` (o enum real e
+   `PROJECT_STAGES`) sempre teve 8. Cancelamento é soft-delete
+   (`projects.deletedAt`, BRAIN §6.2), nunca um estágio — confirmado que
+   toda consulta do módulo já filtra por `isNull(projects.deletedAt)`,
+   então nenhum projeto jamais teria `stage = "cancelado"` na prática.
+   Removido de `packages/types`, `packages/validators/src/projetos/index.ts`
+   (o `z.enum` espelhava o mesmo erro) e dos 5 pontos de UI que traziam
+   `cancelado` como ramo morto: `stage-utils.ts`, `project-timeline.tsx`,
+   `project-kanban.tsx` (`CLOSED_STAGES`, `STAGE_CFG`) e
+   `pipeline/page.tsx` (dois filtros por array de string + o
+   `if (targetStage === "cancelado") return` defensivo, agora inatingível
+   por construção de tipos — removido).
+2. **D6-001 — `PROMPTS.md` afirmando "3 pendentes" que já foram fechados.**
+   P-0.4b fechou em S-172, P-7.1b em S-126, P-7.5b em S-127 — os três já
+   apareciam como "concluido" no índice de sessões, só a tabela de
+   corretivos (linhas 26/51/56/57) ainda dizia "pendente". Atualizado para
+   apontar a sessão real de cada um; cabeçalho da seção corrigido.
+3. **D3-001 — `CommandMenu` preso a `apps/tarefas`; decisão sobre
+   TanStack Table.** Movido (não copiado) para `packages/ui/src/components/
+command-menu.tsx`, generalizado de `tasks: Task[]` para
+   `items: CommandMenuItem[]` (`{ id, label, indicatorColor? }`) — mesmo
+   comportamento (Cmd/Ctrl+K, Esc, "criar" quando a busca não bate),
+   agora consumível por qualquer app. `apps/tarefas/src/app/(dashboard)/
+shell.tsx` passou a importar de `@hebron/ui` e mapear `Task[]` para
+   `CommandMenuItem[]` no callsite; o arquivo antigo
+   (`apps/tarefas/src/components/command-menu.tsx`) foi removido.
+   **Decisão sobre TanStack Table (confirmada com o Filipe):** manter na
+   stack declarada (BRAIN/CLAUDE.md) — é genuinamente a ferramenta certa
+   para Financeiro/Projetos/Tarefas (filtros, ordenação, paginação), só
+   ainda não foi extraída como `DataTable` compartilhado. Construir esse
+   componente e adotá-lo nos 3 apps é trabalho de feature real, fora do
+   escopo mecânico deste pacote — registrado aqui como débito para prompt
+   futuro, não construído nesta sessão.
+4. **D4-001 — heartbeat da Rádio mascarava qualquer falha como "trackId
+   inválido".** `apps/radio/src/app/api/heartbeat/route.ts`: o `catch`
+   único ao redor do `INSERT` devolvia 400 para qualquer erro, inclusive
+   banco fora do ar — o sintoma em produção seria "audiência caiu para
+   zero" sem nenhum rastro. Agora distingue pelo SQLSTATE do driver
+   `postgres`: `23503` (foreign_key_violation, trackId que não existe) →
+   400 sem log, é entrada do próprio cliente; qualquer outro erro → 500 +
+   `console.error` estruturado (`event: "radio_heartbeat_insert_failed"`).
+5. **D4-005 — duas consultas N+1 confirmadas.**
+   - `apps/plataforma/src/lib/queries.ts::getUserCertificates`: abria uma
+     transação nova por certificado só para chamar
+     `plataforma.verify_certificate(hash)`. Criada
+     `plataforma.verify_certificates(p_hashes text[])` (migration 0090,
+     mesmo SECURITY DEFINER STABLE, GRANT a `authenticated`) e a função
+     TS agora faz um único round-trip para todos os hashes do aluno.
+     **Pegadinha de driver:** interpolar o array JS direto em um `sql`
+     template do drizzle-orm o serializa como ROW/composite (Postgres
+     "record"), não como array — `function ... (record) does not exist` e
+     depois `cannot cast type record to text[]`. Corrigido montando
+     `ARRAY[...]::text[]` explicitamente via `sql.join` sobre cada hash —
+     o jeito real de montar um literal de array neste driver. Descoberto
+     rodando o teste de integração real (`arquivamento.test.ts`), não
+     pelo typecheck (que não pega isso).
+   - `apps/flats/src/lib/queries.ts::buildDocumentUrlByGuestId`: uma
+     chamada `createSignedUrl` por documento. Trocado por
+     `createSignedUrls` em lote (paths deduplicados), mesmo padrão de
+     `resolveAvatarReadUrls` (`apps/intranet/src/lib/queries.ts`, já
+     citado no achado como o padrão correto a copiar).
+6. **D5-002 — avatar e capa de curso nunca eram removidos do bucket ao
+   trocar.** Dois pontos, mesmo padrão (best-effort, não falha a mutação
+   por erro de storage — a linha no banco já é a fonte da verdade):
+   `apps/intranet/src/actions/profile.ts::updateMyProfile` (bucket
+   `perfil-avatares`) e `apps/plataforma/src/actions/courses.ts::updateCourse`
+   (bucket `plataforma-capas`). Ambos agora leem o path antigo antes do
+   `UPDATE` (dentro da mesma transação) e, só depois do commit, chamam
+   `storage.remove([oldPath])` se o path mudou — erro de storage vira
+   `console.error` estruturado (`event: "storage_cleanup_failed"`), nunca
+   `BusinessError`.
+7. **D1-003 — duas funções internas expostas como Server Action por
+   estarem em arquivo `"use server"`.** Mesmo padrão já usado no PACOTE 2
+   para `createReceiptSignedUrl` (D1-002): mover para um módulo `lib/`
+   sem `"use server"`, mantendo só a Server Action pública no arquivo
+   `actions/`. `createAidRequest` (recebia `tx: AuthenticatedTx`, nunca um
+   input de cliente) saiu de `apps/flats/src/actions/aid.ts` para
+   `apps/flats/src/lib/aid.ts`; `checkAndIssueCertificate` (mesma forma)
+   saiu de `apps/plataforma/src/actions/certificates.ts` para
+   `apps/plataforma/src/lib/certificates.ts`. Callers ajustados
+   (`reservations.ts`, `quizzes.ts`, `progress.ts`).
+8. **NEG-011 — portal de Documentos sem `sitemap.ts`/`robots.ts`.**
+   Criados `apps/documentos/src/app/sitemap.ts` (documentos + editais
+   públicos via `withAuthenticatedContext(null, ...)` — a RLS
+   `documents_select_public` já restringe a `visibility = 'public'`,
+   `published_at` preenchido e não excluído, sem repetir a regra em TS —
+   mais categorias e as duas rotas estáticas) e
+   `apps/documentos/src/app/robots.ts` (bloqueia `/editorial` — área
+   staff, atrás de sessão — e `/busca` — querystring, conteúdo
+   duplicado). Structured data (JSON-LD) mencionado no contexto do achado
+   mas fora dos critérios de aceite explícitos — não implementado.
+9. **NEG-005 — Flats e Rádio nunca receberam sessão de auditoria de
+   bloco.** Não é correção mecânica — é um levantamento de auditoria
+   completo por módulo, do mesmo porte das sessões que produziram
+   `AUDIT/02-DOMINIOS/*.md` para os outros 5 módulos, e não cabe dentro
+   desta sessão sem misturar prompts (princípio "uma sessão = um prompt").
+   **Decisão confirmada com o Filipe: risco aceito por escrito.** Flats e
+   Rádio seguem sem sessão de auditoria de bloco dedicada; fica como
+   corretivo pendente para sessão futura.
+10. **Resíduo — `0019_shocking_wrecking_crew.sql`.** Nome auto-gerado
+    pelo drizzle-kit que sobreviveu ao P-0.3c (hand-written SQL como fonte
+    de verdade), já aplicada em produção. Renomeado para
+    `0019_plataforma_schema.sql` (`git mv`, preserva histórico) e
+    registrada a troca em `ID_RENAMES` (`packages/db/src/migrate.ts`) —
+    mesmo mecanismo já usado para `0009_financeiro_rls` →
+    `0011_financeiro_rls`. Verificado rodando `pnpm db:migrate` duas
+    vezes: primeira vez teve `apply 0090...`; segunda vez (idempotência)
+    mostrou `skip 0019_plataforma_schema.sql` — a linha de bookkeeping foi
+    renomeada corretamente, sem tentar reaplicar a migration sob o nome
+    novo.
+
+### Verificação
+
+- `pnpm turbo typecheck --concurrency=3` — 19/19 pacotes limpos.
+- `pnpm turbo lint --concurrency=3 --continue` — limpo exceto os dois
+  achados pré-existentes e não relacionados: `@hebron/db#lint`
+  (`check_locks.mjs`/`check_locks2.mjs`, já registrado em sessões
+  anteriores) e `@hebron/intranet#lint` (`profile-avatar-access.test.ts`,
+  import `eq` não usado — arquivo não tocado nesta sessão).
+- `pnpm db:migrate` — migration 0090 aplicada; rename de 0019 verificado
+  idempotente (segunda execução faz `skip`, não tenta reaplicar).
+- `apps/projetos` — `state-machine.test.ts`: 28/28 (confirma que a
+  remoção de `"cancelado"` não quebrou transições nem consultas).
+- `apps/plataforma` — `certificates.test.ts`: 6/6;
+  `arquivamento.test.ts` (suíte completa, não filtrada — um filtro por
+  `-t` quebra a ordem sequencial entre testes do mesmo describe e produz
+  falsos negativos, como aconteceu numa rodada intermediária desta
+  sessão): 36/36, incluindo os dois testes de
+  `getUserCertificates`/`verify_certificates` em lote.
+- `apps/flats` — suíte completa: 4/4 arquivos, 64/64 testes (inclui
+  `reservations.test.ts`, que exercita `createAidRequest` movido e
+  `buildDocumentUrlByGuestId` em lote).
+- `apps/intranet` — `profile-avatar-access.test.ts`: 2/2.
+
+### Arquivos modificados
+
+- `packages/types/src/projetos/index.ts` — `ProjectStage` de 9 para 8
+  valores
+- `packages/validators/src/projetos/index.ts` — idem no `z.enum`
+- `apps/projetos/src/lib/stage-utils.ts`,
+  `apps/projetos/src/components/project-timeline.tsx`,
+  `apps/projetos/src/components/project-kanban.tsx`,
+  `apps/projetos/src/app/(diretoria)/pipeline/page.tsx` — remoção dos
+  ramos mortos de `"cancelado"`
+- `PROMPTS.md` — tabela de corretivos (P-0.4b/P-7.1b/P-7.5b) e cabeçalho
+  da seção
+- `packages/ui/src/components/command-menu.tsx` (novo, movido/generalizado
+  de `apps/tarefas`), `packages/ui/src/index.ts` (export)
+- `apps/tarefas/src/app/(dashboard)/shell.tsx` (consome `CommandMenu` de
+  `@hebron/ui`); `apps/tarefas/src/components/command-menu.tsx` (removido)
+- `apps/radio/src/app/api/heartbeat/route.ts` — distinção FK inválida
+  (400) vs falha de infraestrutura (500 + log)
+- `apps/plataforma/src/lib/queries.ts` (`getUserCertificates` em lote),
+  `packages/db/src/migrations/0090_pacote11_plataforma_verify_certificates_batch.sql`
+  (novo)
+- `apps/flats/src/lib/queries.ts` (`buildDocumentUrlByGuestId` em lote)
+- `apps/intranet/src/actions/profile.ts` (`deleteOldAvatarIfReplaced`)
+- `apps/plataforma/src/actions/courses.ts` (`deleteOldCoverIfReplaced`)
+- `apps/flats/src/lib/aid.ts` (novo, `createAidRequest` movido de
+  `actions/aid.ts`); `apps/flats/src/actions/aid.ts`,
+  `apps/flats/src/actions/reservations.ts` (import ajustado)
+- `apps/plataforma/src/lib/certificates.ts` (novo,
+  `checkAndIssueCertificate` movido de `actions/certificates.ts`);
+  `apps/plataforma/src/actions/certificates.ts`,
+  `apps/plataforma/src/actions/quizzes.ts`,
+  `apps/plataforma/src/actions/progress.ts` (import ajustado)
+- `apps/documentos/src/app/sitemap.ts`, `apps/documentos/src/app/robots.ts`
+  (novos)
+- `packages/db/src/migrations/0019_plataforma_schema.sql` (renomeado de
+  `0019_shocking_wrecking_crew.sql`), `packages/db/src/migrate.ts`
+  (`ID_RENAMES`)
+- `AUDIT/04-BACKLOG-CORRECAO.md` (critérios de aceite do PACOTE 11)
 - `SESSIONS.md` (esta entrada)

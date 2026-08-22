@@ -1,28 +1,57 @@
 "use client";
 
+import * as React from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Task } from "@hebron/types/tarefas";
 import { CornerDownLeft, Plus, Search } from "lucide-react";
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
 
-function cn(...cls: (string | false | null | undefined)[]): string {
-  return cls.filter(Boolean).join(" ");
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
 }
 
-type CommandItem =
-  | { type: "create"; label: string }
-  | { type: "task"; task: Task };
+// D3-001 (PACOTE 11, AUDIT/04-BACKLOG-CORRECAO.md): movido de
+// apps/tarefas/src/components/command-menu.tsx — funcionava, mas ficava
+// preso a `Task` de @hebron/types/tarefas, então nenhum outro app podia
+// usá-lo. Generalizado para `CommandMenuItem` (id/label/indicatorColor),
+// mesmo comportamento (Cmd/Ctrl+K abre, Esc fecha, "criar" quando a busca
+// não bate com nada).
+
+export interface CommandMenuItem {
+  id: string;
+  label: string;
+  /** Cor do indicador (bolinha) à esquerda do item — omitir para não mostrar. */
+  indicatorColor?: string;
+}
 
 export interface CommandMenuProps {
-  tasks: Task[];
-  onSelectTask?: (taskId: string) => void;
-  onCreateTask?: (title: string) => void;
+  items: CommandMenuItem[];
+  /** Rótulo acessível do diálogo (ex.: "Busca e criação rápida de tarefas"). */
+  ariaLabel: string;
+  onSelectItem?: (id: string) => void;
+  onCreateItem?: (query: string) => void;
+  renderCreateLabel?: (query: string) => React.ReactNode;
+  placeholder?: string;
+  emptyLabel?: string;
   className?: string;
 }
 
+type CommandEntry =
+  | { type: "create"; label: string }
+  | { type: "item"; item: CommandMenuItem };
+
 export function CommandMenu({
-  tasks,
-  onSelectTask,
-  onCreateTask,
+  items,
+  ariaLabel,
+  onSelectItem,
+  onCreateItem,
+  renderCreateLabel = (query) => (
+    <>
+      Criar <strong className="font-semibold">“{query}”</strong>
+    </>
+  ),
+  placeholder = "Buscar…",
+  emptyLabel = "Nenhum resultado encontrado.",
   className,
 }: CommandMenuProps) {
   const [open, setOpen] = useState(false);
@@ -51,33 +80,33 @@ export function CommandMenu({
     }
   }, [open]);
 
-  const filteredTasks = useMemo(() => {
+  const filteredItems = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return tasks.slice(0, 8);
-    return tasks.filter((t) => t.title.toLowerCase().includes(q)).slice(0, 8);
-  }, [tasks, query]);
+    if (!q) return items.slice(0, 8);
+    return items.filter((i) => i.label.toLowerCase().includes(q)).slice(0, 8);
+  }, [items, query]);
 
-  const items: CommandItem[] = useMemo(() => {
+  const entries: CommandEntry[] = useMemo(() => {
     const trimmed = query.trim();
-    const taskItems: CommandItem[] = filteredTasks.map((task) => ({
-      type: "task",
-      task,
+    const itemEntries: CommandEntry[] = filteredItems.map((item) => ({
+      type: "item",
+      item,
     }));
-    if (trimmed) {
-      return [{ type: "create", label: trimmed }, ...taskItems];
+    if (trimmed && onCreateItem) {
+      return [{ type: "create", label: trimmed }, ...itemEntries];
     }
-    return taskItems;
-  }, [filteredTasks, query]);
+    return itemEntries;
+  }, [filteredItems, query, onCreateItem]);
 
   useEffect(() => {
     setActiveIndex(0);
   }, [query]);
 
-  function runItem(item: CommandItem) {
-    if (item.type === "create") {
-      onCreateTask?.(item.label);
+  function runEntry(entry: CommandEntry) {
+    if (entry.type === "create") {
+      onCreateItem?.(entry.label);
     } else {
-      onSelectTask?.(item.task.id);
+      onSelectItem?.(entry.item.id);
     }
     setOpen(false);
   }
@@ -85,14 +114,14 @@ export function CommandMenu({
   function handleInputKeyDown(e: React.KeyboardEvent) {
     if (e.key === "ArrowDown") {
       e.preventDefault();
-      setActiveIndex((i) => Math.min(i + 1, items.length - 1));
+      setActiveIndex((i) => Math.min(i + 1, entries.length - 1));
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setActiveIndex((i) => Math.max(i - 1, 0));
     } else if (e.key === "Enter") {
       e.preventDefault();
-      const item = items[activeIndex];
-      if (item) runItem(item);
+      const entry = entries[activeIndex];
+      if (entry) runEntry(entry);
     }
   }
 
@@ -113,7 +142,7 @@ export function CommandMenu({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Busca e criação rápida de tarefas"
+        aria-label={ariaLabel}
         onClick={(e) => e.stopPropagation()}
         className="relative w-full max-w-lg overflow-hidden rounded-(--radius-lg) border border-(--border) bg-(--bg) shadow-(--shadow-xl)"
       >
@@ -124,7 +153,7 @@ export function CommandMenu({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={handleInputKeyDown}
-            placeholder="Buscar ou criar uma tarefa…"
+            placeholder={placeholder}
             className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-(--fg-muted)"
           />
           <kbd className="shrink-0 rounded border border-(--border) px-1.5 py-0.5 text-[10px] font-semibold text-(--fg-muted)">
@@ -133,20 +162,20 @@ export function CommandMenu({
         </div>
 
         <div className="max-h-80 overflow-y-auto py-1.5">
-          {items.length === 0 && (
+          {entries.length === 0 && (
             <p className="px-4 py-8 text-center text-sm text-(--fg-muted)">
-              Nenhuma tarefa encontrada.
+              {emptyLabel}
             </p>
           )}
 
-          {items.map((item, index) => {
+          {entries.map((entry, index) => {
             const active = index === activeIndex;
-            if (item.type === "create") {
+            if (entry.type === "create") {
               return (
                 <button
                   key="create"
                   onMouseEnter={() => setActiveIndex(index)}
-                  onClick={() => runItem(item)}
+                  onClick={() => runEntry(entry)}
                   className={cn(
                     "flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm transition-colors",
                     active ? "bg-(--surface-alt)" : "",
@@ -156,8 +185,7 @@ export function CommandMenu({
                     <Plus className="h-3.5 w-3.5" />
                   </span>
                   <span className="min-w-0 flex-1 truncate">
-                    Criar tarefa{" "}
-                    <strong className="font-semibold">“{item.label}”</strong>
+                    {renderCreateLabel(entry.label)}
                   </span>
                   {active && (
                     <CornerDownLeft className="h-3.5 w-3.5 shrink-0 text-(--fg-muted)" />
@@ -168,25 +196,23 @@ export function CommandMenu({
 
             return (
               <button
-                key={item.task.id}
+                key={entry.item.id}
                 onMouseEnter={() => setActiveIndex(index)}
-                onClick={() => runItem(item)}
+                onClick={() => runEntry(entry)}
                 className={cn(
                   "flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm transition-colors",
                   active ? "bg-(--surface-alt)" : "",
                 )}
               >
-                <span
-                  className={cn(
-                    "h-1.5 w-1.5 shrink-0 rounded-full",
-                    item.task.status === "concluido"
-                      ? "bg-(--hb-green)"
-                      : "bg-(--hb-blue)",
-                  )}
-                  aria-hidden="true"
-                />
+                {entry.item.indicatorColor && (
+                  <span
+                    className="h-1.5 w-1.5 shrink-0 rounded-full"
+                    style={{ backgroundColor: entry.item.indicatorColor }}
+                    aria-hidden="true"
+                  />
+                )}
                 <span className="min-w-0 flex-1 truncate text-(--fg)">
-                  {item.task.title}
+                  {entry.item.label}
                 </span>
                 {active && (
                   <CornerDownLeft className="h-3.5 w-3.5 shrink-0 text-(--fg-muted)" />

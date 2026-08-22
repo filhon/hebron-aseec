@@ -175,11 +175,11 @@ export default function DiretoriaPipelinePage() {
   });
 
   const activeCount = filtered.filter(
-    (p) => !["cancelado", "reprovado", "concluido"].includes(p.stage),
+    (p) => !["reprovado", "concluido"].includes(p.stage),
   ).length;
 
   const totalValue = filtered
-    .filter((p) => !["cancelado", "reprovado"].includes(p.stage))
+    .filter((p) => p.stage !== "reprovado")
     .reduce((sum, p) => sum + p.valorTotal, 0);
 
   const pendingVotes = filtered.filter((p) => p.stage === "votacao").length;
@@ -193,10 +193,6 @@ export default function DiretoriaPipelinePage() {
   }
 
   function handleMove(projectId: string, targetStage: ProjectStage) {
-    // "cancelado" existe no enum de @hebron/types para a coluna de
-    // encerrados, mas não é um estágio da state machine real (nem droppable
-    // — PIPELINE_STAGES não a lista) — nunca alcançado a partir do drag.
-    if (targetStage === "cancelado") return;
     moveProject({ projectId, toStage: targetStage });
   }
 

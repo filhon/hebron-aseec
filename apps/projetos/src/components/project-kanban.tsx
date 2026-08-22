@@ -15,7 +15,8 @@ const BRL = new Intl.NumberFormat("pt-BR", {
   maximumFractionDigits: 0,
 });
 
-// Active pipeline stages shown as columns (cancelado/reprovado are in a separate group)
+// Active pipeline stages shown as columns (reprovado fica em um grupo separado;
+// cancelamento é soft-delete, não estágio — nunca aparece aqui)
 const PIPELINE_STAGES: ProjectStage[] = [
   "rascunho",
   "validacao",
@@ -26,7 +27,7 @@ const PIPELINE_STAGES: ProjectStage[] = [
   "concluido",
 ];
 
-const CLOSED_STAGES: ProjectStage[] = ["reprovado", "cancelado"];
+const CLOSED_STAGES: ProjectStage[] = ["reprovado"];
 
 type StageConfig = {
   label: string;
@@ -83,12 +84,6 @@ const STAGE_CFG: Record<ProjectStage, StageConfig> = {
     color: "var(--hb-green-fg)",
     bg: "var(--hb-green-muted)",
     headerBg: "var(--hb-green-muted)",
-  },
-  cancelado: {
-    label: "Cancelado",
-    color: "var(--hb-red-deep)",
-    bg: "var(--color-destructive-muted)",
-    headerBg: "var(--color-destructive-muted)",
   },
 };
 

@@ -313,7 +313,10 @@ const DOCUMENT_URL_EXPIRES_IN_SECONDS = 60 * 60;
 async function buildDocumentUrlByGuestId(
   documentRows: DocumentFile[],
 ): Promise<Map<string, string>> {
-  if (documentRows.length === 0) return new Map();
+  const rowsWithGuest = documentRows.filter(
+    (row): row is DocumentFile & { guestId: string } => row.guestId !== null,
+  );
+  if (rowsWithGuest.length === 0) return new Map();
 
   const cookieStore = await cookies();
   const supabase = createSupabaseServerActionClient({
@@ -329,23 +332,26 @@ async function buildDocumentUrlByGuestId(
     },
   });
 
-  const entries = await Promise.all(
-    documentRows
-      .filter(
-        (row): row is DocumentFile & { guestId: string } =>
-          row.guestId !== null,
-      )
-      .map(async (row) => {
-        const { data } = await supabase.storage
-          .from("flats-documentos")
-          .createSignedUrl(row.storageKey, DOCUMENT_URL_EXPIRES_IN_SECONDS);
-        return data ? ([row.guestId, data.signedUrl] as const) : null;
-      }),
-  );
+  // createSignedUrls em lote (D4-005, PACOTE 11, AUDIT/04-BACKLOG-CORRECAO.md)
+  // em vez de um createSignedUrl por documento — mesmo padrão de
+  // resolveAvatarReadUrls (apps/intranet/src/lib/queries.ts).
+  const uniqueKeys = [...new Set(rowsWithGuest.map((row) => row.storageKey))];
+  const { data } = await supabase.storage
+    .from("flats-documentos")
+    .createSignedUrls(uniqueKeys, DOCUMENT_URL_EXPIRES_IN_SECONDS);
 
-  return new Map(
-    entries.filter((entry): entry is [string, string] => entry !== null),
-  );
+  const urlByStorageKey = new Map<string, string>();
+  for (const item of data ?? []) {
+    if (item.path && item.signedUrl)
+      urlByStorageKey.set(item.path, item.signedUrl);
+  }
+
+  const result = new Map<string, string>();
+  for (const row of rowsWithGuest) {
+    const url = urlByStorageKey.get(row.storageKey);
+    if (url) result.set(row.guestId, url);
+  }
+  return result;
 }
 
 export interface ReservationWithGuest {

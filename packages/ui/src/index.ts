@@ -90,6 +90,12 @@ export type { RichTextEditorProps } from "./components/rich-text-editor";
 export { RichText, sanitizeRichText } from "./components/rich-text";
 export type { RichTextProps } from "./components/rich-text";
 
+export { CommandMenu } from "./components/command-menu";
+export type {
+  CommandMenuProps,
+  CommandMenuItem,
+} from "./components/command-menu";
+
 // Layout
 export { AppShell } from "./components/app-shell";
 export type { AppShellProps } from "./components/app-shell";

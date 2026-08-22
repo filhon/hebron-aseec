@@ -2,6 +2,7 @@
 
 import { z } from "zod";
 import { and, asc, eq, ilike, isNull, or, type SQL } from "drizzle-orm";
+import { createClient } from "@supabase/supabase-js";
 import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   withAuthenticatedContext,
@@ -35,6 +36,39 @@ import {
 // (escopo P-6.8). CourseForm (P-6.4) envia coverImageUrl/isPublished — os
 // nomes divergem das colunas do banco (coverUrl/published), mapeados abaixo.
 // ---------------------------------------------------------------------------
+
+function getSupabaseAdmin() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key)
+    throw new BusinessError("Variáveis Supabase não configuradas");
+  return createClient(url, key, { auth: { persistSession: false } });
+}
+
+// D5-002 (PACOTE 11, AUDIT/04-BACKLOG-CORRECAO.md): a capa antiga nunca era
+// removida do bucket ao ser substituída — acúmulo de arquivo órfão a cada
+// troca. Best-effort (não falha a mutação por causa de um erro de storage):
+// a linha em `courses` já é a fonte da verdade, um objeto órfão remanescente
+// no bucket é um custo de armazenamento, nunca um dado incorreto.
+async function deleteOldCoverIfReplaced(
+  oldCoverUrl: string | null,
+  newCoverUrl: string | null,
+) {
+  if (!oldCoverUrl || oldCoverUrl === newCoverUrl) return;
+  try {
+    const supabase = getSupabaseAdmin();
+    await supabase.storage.from("plataforma-capas").remove([oldCoverUrl]);
+  } catch (error) {
+    console.error(
+      JSON.stringify({
+        event: "storage_cleanup_failed",
+        bucket: "plataforma-capas",
+        path: oldCoverUrl,
+        message: error instanceof Error ? error.message : String(error),
+      }),
+    );
+  }
+}
 
 export const createCourse = staffAction
   .schema(createCourseSchema)
@@ -88,11 +122,10 @@ export const createCourse = staffAction
 export const updateCourse = staffAction
   .schema(updateCourseSchema)
   .action(async ({ parsedInput: input, ctx }) => {
-    const { course, newlyPublished } = await withAuthenticatedContext(
-      { actorId: ctx.actorId },
-      async (tx) => {
+    const { course, newlyPublished, previousCoverUrl } =
+      await withAuthenticatedContext({ actorId: ctx.actorId }, async (tx) => {
         const [existing] = await tx
-          .select({ published: courses.published })
+          .select({ published: courses.published, coverUrl: courses.coverUrl })
           .from(courses)
           .where(eq(courses.id, input.courseId))
           .limit(1);
@@ -131,15 +164,20 @@ export const updateCourse = staffAction
           );
         }
 
-        return { course: row, newlyPublished };
-      },
-    );
+        return {
+          course: row,
+          newlyPublished,
+          previousCoverUrl: existing.coverUrl,
+        };
+      });
 
     // Notificação best-effort, fora da transação (P-6.10) — só quando o
     // curso passa de rascunho para publicado, não a cada edição.
     if (newlyPublished) {
       await notifyNewCoursePublished(course.id);
     }
+
+    await deleteOldCoverIfReplaced(previousCoverUrl, course.coverUrl);
 
     return { course };
   });

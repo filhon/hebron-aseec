@@ -6,6 +6,7 @@ import { useAction } from "next-safe-action/hooks";
 import type { Task } from "@hebron/types/tarefas";
 import {
   AppShell,
+  CommandMenu,
   ModuleLogo,
   NotificationBellContainer,
   getAppShortcuts,
@@ -32,8 +33,6 @@ import {
   markNotificationReadAction,
   markAllNotificationsReadAction,
 } from "../../actions/notifications";
-import { CommandMenu } from "../../components/command-menu";
-
 const SECTIONS: NavSection[] = [
   {
     title: "Visão geral",
@@ -170,9 +169,17 @@ export default function TarefasShell({
     >
       {children}
       <CommandMenu
-        tasks={tasks}
-        onSelectTask={(id) => router.push(`/tarefa/${id}`)}
-        onCreateTask={(title) =>
+        ariaLabel="Busca e criação rápida de tarefas"
+        placeholder="Buscar ou criar uma tarefa…"
+        emptyLabel="Nenhuma tarefa encontrada."
+        items={tasks.map((task) => ({
+          id: task.id,
+          label: task.title,
+          indicatorColor:
+            task.status === "concluido" ? "var(--hb-green)" : "var(--hb-blue)",
+        }))}
+        onSelectItem={(id) => router.push(`/tarefa/${id}`)}
+        onCreateItem={(title) =>
           quickCreateTask({
             title,
             description: null,
@@ -184,6 +191,11 @@ export default function TarefasShell({
             recurrenceRule: null,
           })
         }
+        renderCreateLabel={(title) => (
+          <>
+            Criar tarefa <strong className="font-semibold">“{title}”</strong>
+          </>
+        )}
       />
     </AppShell>
   );

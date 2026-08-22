@@ -24,7 +24,7 @@ import { flatsAction, hospedeAction } from "../lib/safe-action";
 import { logFlatsAudit } from "../lib/audit";
 import { notifyReservationSubmitted } from "../lib/notifications";
 import { computeScoringResponses } from "./scoring";
-import { createAidRequest } from "./aid";
+import { createAidRequest } from "../lib/aid";
 
 // ---------------------------------------------------------------------------
 // Ciclo de vida da reserva: criar, confirmar (aprovada → confirmada, dispara

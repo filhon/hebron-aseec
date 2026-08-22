@@ -14,7 +14,6 @@ export const STAGE_LABELS: Record<string, string> = {
   reprovado: "Reprovado",
   em_execucao: "Em Execução",
   concluido: "Concluído",
-  cancelado: "Cancelado",
 };
 
 export type StageBadge = { bg: string; text: string };
@@ -31,10 +30,6 @@ export const STAGE_BADGES: Record<string, StageBadge> = {
   },
   em_execucao: { bg: "var(--hb-cyan-muted)", text: "var(--hb-cyan-fg)" },
   concluido: { bg: "var(--hb-green-muted)", text: "var(--hb-green-fg)" },
-  cancelado: {
-    bg: "var(--color-destructive-muted)",
-    text: "var(--hb-red-deep)",
-  },
 };
 
 const FALLBACK_BADGE: StageBadge = {

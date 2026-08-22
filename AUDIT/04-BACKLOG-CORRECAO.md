@@ -381,11 +381,17 @@ Nove itens de baixo risco, agrupados por serem todos mecânicos.
 
 ### Critérios de aceite
 
-- [ ] `ProjectStage` tem 8 valores; nenhum ramo morto de `"cancelado"` sobra
-- [ ] `PROMPTS.md` reflete o estado real das correções
-- [ ] `CommandMenu` em `packages/ui`; decisão explícita sobre TanStack Table (adotar ou remover da stack declarada)
-- [ ] `/api/heartbeat` distingue falha de infraestrutura (500 + log) de FK inválida (400)
-- [ ] Nenhuma consulta abre conexão por linha
-- [ ] Arquivo substituído de avatar/capa é removido do bucket
-- [ ] `sitemap.ts` + `robots.ts` no portal de Documentos
-- [ ] Sessões de auditoria de bloco de Flats e Rádio executadas, ou risco aceito por escrito
+- [x] `ProjectStage` tem 8 valores; nenhum ramo morto de `"cancelado"` sobra — removido de `packages/types`, `packages/validators/src/projetos/index.ts` (z.enum espelhava o mesmo erro) e dos 5 pontos de UI (`stage-utils.ts`, `project-timeline.tsx`, `project-kanban.tsx`, `pipeline/page.tsx`); confirmado que cancelamento é soft-delete (`projects.deletedAt`, BRAIN §6.2), nunca estágio — nenhum projeto jamais teria `stage = "cancelado"` na prática, já que toda consulta filtra `isNull(deletedAt)`.
+- [x] `PROMPTS.md` reflete o estado real das correções — P-0.4b/P-7.1b/P-7.5b apontam para as sessões reais que os fecharam (S-172/S-126/S-127), não mais "pendente"; cabeçalho da seção corrigido.
+- [x] `CommandMenu` em `packages/ui`; decisão explícita sobre TanStack Table (adotar ou remover da stack declarada) — `CommandMenu` movido (não copiado) e generalizado (`CommandMenuItem[]` em vez de `Task[]`), consumido por `apps/tarefas` via `@hebron/ui`. TanStack Table: **decisão confirmada com o Filipe — manter na stack declarada**, é a ferramenta certa para Financeiro/Projetos/Tarefas; extrair um `DataTable` compartilhado e adotá-lo nos três apps é feature real, fora do escopo mecânico deste pacote — registrado como débito para prompt futuro.
+- [x] `/api/heartbeat` distingue falha de infraestrutura (500 + log) de FK inválida (400) — checagem do SQLSTATE `23503` (foreign_key_violation) do driver `postgres`; qualquer outro erro vira 500 + `console.error` estruturado.
+- [x] Nenhuma consulta abre conexão por linha — as duas instâncias confirmadas pelo achado corrigidas: `getUserCertificates` (nova RPC em lote `plataforma.verify_certificates`, migration 0090) e `buildDocumentUrlByGuestId` (`createSignedUrls` em lote, mesmo padrão de `resolveAvatarReadUrls`).
+- [x] Arquivo substituído de avatar/capa é removido do bucket — `updateMyProfile` (intranet, bucket `perfil-avatares`) e `updateCourse` (plataforma, bucket `plataforma-capas`) agora leem o path antigo antes do UPDATE e removem do storage após o commit, best-effort (erro de storage não falha a mutação).
+- [x] `sitemap.ts` + `robots.ts` no portal de Documentos — criados; sitemap lista documentos/editais públicos (via RLS `documents_select_public`, sem repetir a regra em TS) e categorias; robots bloqueia `/editorial` e `/busca`. Structured data (JSON-LD, mencionado no contexto do achado) fora dos critérios de aceite explícitos — não implementado.
+- [~] Sessões de auditoria de bloco de Flats e Rádio executadas, ou risco aceito por escrito — **risco aceito por escrito, confirmado com o Filipe.** É um levantamento de auditoria completo por módulo (mesmo porte das sessões que produziram `AUDIT/02-DOMINIOS/*.md`), não uma correção mecânica, e não cabe dentro desta sessão sem misturar prompts. Fica como corretivo pendente para sessão futura dedicada.
+
+**Achado fora do escopo dos critérios de aceite, corrigido por completude (contexto do pacote, D1-003):** `createAidRequest` (`apps/flats`) e `checkAndIssueCertificate` (`apps/plataforma`) — ambas exportadas de arquivo `"use server"` sem serem Server Actions de fato (recebem `tx: AuthenticatedTx`, nunca um input de cliente) — movidas para módulos `lib/` sem `"use server"`, mesmo padrão já usado para `createReceiptSignedUrl` no PACOTE 2 (D1-002).
+
+**Achado fora do escopo dos critérios de aceite, corrigido por completude:** `0019_shocking_wrecking_crew.sql` (nome auto-gerado pelo drizzle-kit, sobrevivente ao P-0.3c) renomeado para `0019_plataforma_schema.sql` via `ID_RENAMES` (`packages/db/src/migrate.ts`).
+
+**Ver S-272 em `SESSIONS.md` para o detalhamento completo da implementação e verificação.**

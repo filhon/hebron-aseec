@@ -5,7 +5,7 @@ import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { lessons, progress } from "@hebron/db/schema";
 import { markLessonCompleteSchema } from "@hebron/validators";
 import { plataformaAction } from "../lib/safe-action";
-import { checkAndIssueCertificate } from "./certificates";
+import { checkAndIssueCertificate } from "../lib/certificates";
 import { notifyCertificateIssued } from "../lib/notifications";
 import { BusinessError } from "@hebron/auth/safe-action-error";
 

@@ -1,6 +1,7 @@
 // ─── ProjectStage ─────────────────────────────────────────────────────────────
-// 9-state lifecycle: rascunho → validacao → votacao → homologacao (7d) →
-// aprovado/reprovado → em_execucao → concluido | cancelado (any stage)
+// 8-state lifecycle: rascunho → validacao → votacao → homologacao (7d) →
+// aprovado/reprovado → em_execucao → concluido
+// Cancelamento é soft-delete (projects.deletedAt), não um estágio — ver BRAIN §6.2.
 
 export type ProjectStage =
   | "rascunho"
@@ -10,8 +11,7 @@ export type ProjectStage =
   | "aprovado"
   | "reprovado"
   | "em_execucao"
-  | "concluido"
-  | "cancelado";
+  | "concluido";
 
 // ─── ProjectType ──────────────────────────────────────────────────────────────
 

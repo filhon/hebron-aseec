@@ -1,8 +1,6 @@
 "use server";
 
 import { eq } from "drizzle-orm";
-import type { z } from "zod";
-import type { AuthenticatedTx } from "@hebron/db/authenticated";
 import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   withAuthenticatedContext,
@@ -11,66 +9,16 @@ import {
 import { aidRequests, reservations } from "@hebron/db/schema";
 import { onFlatsAssistanceApproved } from "@hebron/integrations/financeiro";
 import { reviewAidRequestSchema } from "@hebron/validators/flats";
-import type { aidRequestSchema } from "@hebron/validators/flats";
 import { gestorAction } from "../lib/safe-action";
 import { logFlatsAudit } from "../lib/audit";
 
 // ---------------------------------------------------------------------------
 // Auxílio opcional (diária fixa + transporte), aprovado caso a caso (BRAIN
-// §6.8). createAidRequest é um helper interno chamado por
-// reservations.ts::createReservation dentro da mesma transação — não existe
-// fluxo de "solicitar auxílio" separado da criação da reserva (o wizard de
-// P-7.4 já coleta os dois juntos). reviewAidRequest (aprovar/rejeitar) é a
-// única Server Action pública deste arquivo.
+// §6.8). createAidRequest — o helper interno chamado por
+// reservations.ts::createReservation dentro da mesma transação — vive em
+// lib/aid.ts (sem "use server", D1-003 PACOTE 11). reviewAidRequest
+// (aprovar/rejeitar) é a única Server Action pública deste arquivo.
 // ---------------------------------------------------------------------------
-
-const AEREO_AMOUNT_PER_PASSENGER = 1000;
-
-type AidRequestInput = z.infer<typeof aidRequestSchema>;
-
-export async function createAidRequest(
-  tx: AuthenticatedTx,
-  actorId: string,
-  reservationId: string,
-  input: AidRequestInput,
-): Promise<void> {
-  const transportAmount =
-    input.transportMode === "aereo"
-      ? (input.transportPassengerCount ?? 0) * AEREO_AMOUNT_PER_PASSENGER
-      : null;
-
-  const [aidRequest] = await tx
-    .insert(aidRequests)
-    .values({
-      reservationId,
-      requestsDailyAllowance: input.requestsDailyAllowance,
-      transportMode: input.transportMode,
-      transportPassengerCount: input.transportPassengerCount,
-      transportAmount:
-        transportAmount !== null ? transportAmount.toFixed(2) : null,
-      status: "solicitado",
-    })
-    .returning();
-
-  if (!aidRequest)
-    throw new BusinessError("Falha ao criar solicitação de auxílio");
-
-  await withSystemRole(tx, (sysTx) =>
-    logFlatsAudit(
-      {
-        actorId,
-        action: "aid.requested",
-        entity: "aid_request",
-        entityId: aidRequest.id,
-        diff: {
-          requestsDailyAllowance: input.requestsDailyAllowance,
-          transportMode: input.transportMode,
-        },
-      },
-      sysTx,
-    ),
-  );
-}
 
 // ---------------------------------------------------------------------------
 // reviewAidRequest — diretor gestor aprova/rejeita (mesma designation de

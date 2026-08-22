@@ -19,7 +19,6 @@ const STAGE_LABELS: Record<ProjectStage, string> = {
   reprovado: "Reprovado",
   em_execucao: "Em Execução",
   concluido: "Concluído",
-  cancelado: "Cancelado",
 };
 
 const STAGE_COLORS: Record<ProjectStage, string> = {
@@ -31,7 +30,6 @@ const STAGE_COLORS: Record<ProjectStage, string> = {
   reprovado: "var(--color-destructive)",
   em_execucao: "var(--hb-cyan-deep)",
   concluido: "var(--hb-green-deep)",
-  cancelado: "var(--hb-red)",
 };
 
 interface TimelineEvent {

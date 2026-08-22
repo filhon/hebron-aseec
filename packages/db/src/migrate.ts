@@ -40,6 +40,10 @@ const STALE_IDS = ["0000_easy_alex_power"];
 // which created the tables it modifies — renamed to run after it).
 const ID_RENAMES: Record<string, string> = {
   "0009_financeiro_rls": "0011_financeiro_rls",
+  // 0019: nome auto-gerado pelo drizzle-kit sobreviveu ao P-0.3c (hand-written
+  // SQL como fonte de verdade) — já aplicada em produção sob o nome antigo
+  // (D6-004/Resíduo, PACOTE 11, AUDIT/04-BACKLOG-CORRECAO.md).
+  "0019_shocking_wrecking_crew": "0019_plataforma_schema",
 };
 
 // ALTER TYPE ... ADD VALUE cannot run inside a transaction block in PostgreSQL.

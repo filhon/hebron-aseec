@@ -918,29 +918,42 @@ export async function getUserCertificates(
       .orderBy(desc(certificates.issuedAt)),
   );
 
-  return Promise.all(
-    rows.map(async (certificate) => {
-      const verification = await withAuthenticatedContext({ actorId }, (tx) =>
-        tx.execute<{
-          course_title: string;
-          user_name: string | null;
-        }>(
-          sql`SELECT * FROM plataforma.verify_certificate(${certificate.verificationHash})`,
-        ),
-      );
-      const v = verification[0];
+  if (rows.length === 0) return [];
 
-      return {
-        id: certificate.id,
-        courseId: certificate.courseId,
-        courseName: v?.course_title ?? "",
-        userId: certificate.userId,
-        userName: v?.user_name ?? "Aluno",
-        issuedAt: certificate.issuedAt,
-        hash: certificate.verificationHash,
-      };
-    }),
+  // Lote em vez de um plataforma.verify_certificate(hash) por certificado —
+  // um único round-trip para todos os hashes do aluno (D4-005, PACOTE 11,
+  // AUDIT/04-BACKLOG-CORRECAO.md; RPC em 0090_pacote11_...). Um array JS
+  // interpolado direto em sql`` vira um ROW/composite (Postgres "record"),
+  // não um array — ARRAY[...] explícito via sql.join é o jeito de montar o
+  // literal de array que drizzle-orm entende aqui.
+  const hashes = rows.map((c) => c.verificationHash);
+  const hashesArrayLiteral = sql.join(
+    hashes.map((h) => sql`${h}`),
+    sql`, `,
   );
+  const verifications = await withAuthenticatedContext({ actorId }, (tx) =>
+    tx.execute<{
+      verification_hash: string;
+      course_title: string;
+      user_name: string | null;
+    }>(
+      sql`SELECT * FROM plataforma.verify_certificates(ARRAY[${hashesArrayLiteral}]::text[])`,
+    ),
+  );
+  const byHash = new Map(verifications.map((v) => [v.verification_hash, v]));
+
+  return rows.map((certificate) => {
+    const v = byHash.get(certificate.verificationHash);
+    return {
+      id: certificate.id,
+      courseId: certificate.courseId,
+      courseName: v?.course_title ?? "",
+      userId: certificate.userId,
+      userName: v?.user_name ?? "Aluno",
+      issuedAt: certificate.issuedAt,
+      hash: certificate.verificationHash,
+    };
+  });
 }
 
 export interface CertificateVerification {

@@ -55,8 +55,26 @@ export async function POST(request: NextRequest) {
       sessionId: parsed.data.sessionId,
       trackId: parsed.data.trackId,
     });
-  } catch {
-    return NextResponse.json({ error: "trackId inválido" }, { status: 400 });
+  } catch (error) {
+    // 23503 = foreign_key_violation (Postgres SQLSTATE): trackId não existe,
+    // entrada do próprio cliente — 400 sem log. Qualquer outro erro é falha
+    // de infraestrutura (banco fora do ar, etc.) — 500 com log estruturado,
+    // nunca mascarado como entrada inválida (o sintoma em produção seria
+    // "a audiência caiu para zero" sem nenhum rastro).
+    if (error instanceof Object && "code" in error && error.code === "23503") {
+      return NextResponse.json({ error: "trackId inválido" }, { status: 400 });
+    }
+
+    console.error(
+      JSON.stringify({
+        event: "radio_heartbeat_insert_failed",
+        message: error instanceof Error ? error.message : String(error),
+      }),
+    );
+    return NextResponse.json(
+      { error: "Erro interno. Tente novamente." },
+      { status: 500 },
+    );
   }
 
   return NextResponse.json({ ok: true });

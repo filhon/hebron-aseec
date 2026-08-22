@@ -13,7 +13,7 @@ import {
 } from "@hebron/db/schema";
 import { createQuizSchema, submitQuizAttemptSchema } from "@hebron/validators";
 import { plataformaAction, staffAction } from "../lib/safe-action";
-import { checkAndIssueCertificate } from "./certificates";
+import { checkAndIssueCertificate } from "../lib/certificates";
 import { notifyCertificateIssued } from "../lib/notifications";
 
 // ---------------------------------------------------------------------------

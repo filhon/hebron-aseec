@@ -11,7 +11,6 @@ const projectStageEnum = z.enum([
   "reprovado",
   "em_execucao",
   "concluido",
-  "cancelado",
 ]);
 
 const projectCategoryEnum = z.enum(
