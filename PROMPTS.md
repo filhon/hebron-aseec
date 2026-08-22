@@ -1,7 +1,7 @@
 # PROMPTS.md — Sequência de Desenvolvimento SDD
 
 > **Referência:** BRAIN.md (fonte da verdade) | SDD-STRUCTURE.md (formato)
-> **Total:** 119 prompts + 41 correções (ver tabela "Correções" abaixo) | Fases 0-9
+> **Total:** 125 prompts (119 originais + P-2.13, P-2.14, P-5.13, P-6.20, P-7.13, P-9.0 — escopo v1 nunca antes escrito, ver AUDIT/04-BACKLOG-CORRECAO.md § PACOTE 7 / PATCH-027) + 41 correções (ver tabela "Correções" abaixo) | Fases 0-9
 > **Metodologia:** Bloco A (UI com mocks) → Pausa (validar com diretoria) → Bloco B (Backend + integração)
 > **⚠️ Antes de tudo:** ler a seção **Instruções Globais** (logo abaixo do Sumário). Prompts corretivos `P-0.2b` (design system), `P-0.3b` (migrations), `P-1.12b` (Admin) e `P-2.9b` (usuário real no header de Projetos) devem ser executados na ordem indicada; as demais correções (Ondas 0–2, ver tabela) são as executadas na retomada pós-auditoria de 2026-07.
 
@@ -4225,6 +4225,80 @@ Ref: princípio "defense in depth" — um teste que não toca o código de produ
 
 ---
 
+### P-2.13 — Detecção de renovação de projetos
+
+**Fase:** 2
+**Módulo:** projetos
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-2.13-projetos-renovacao`
+- Dependências: P-2.12b concluído
+- Env vars: nenhuma
+
+**Escopo:**
+`parent_project_id` existe no schema (`0007_projetos.sql:118`) e no schema Zod (`packages/validators/src/projetos/index.ts:123,208`) desde o início, mas nada preenche. Requisito 5 do PRD ("formulário inteligente"): ao começar um projeto **anual**, o wizard detecta projetos anteriores da mesma organização em estágio final (`concluido`/`aprovado`/`em_execucao`) e oferece usar como base. Server Action `findRenewalCandidate(organizationId)` busca o candidato mais recente (`orderBy(desc(createdAt))`, `limit(1)`) dentre os da mesma `organizationId` e mesmo `type = 'anual'`. Na etapa de Instituição do wizard (`step-institution.tsx`), ao selecionar/confirmar a organização, se houver candidato: banner "Encontramos um projeto anterior desta organização — usar como base?" com resumo (título, ano, categoria) e duas ações: "Usar como base" (auto-preenche proposta/orçamento/cronograma a partir do candidato e grava `parentProjectId` no rascunho) ou "Começar do zero" (dispensa, sem gravar vínculo). Vínculo é sempre opt-in do submissor — nunca automático.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/projetos/src/actions/projects.ts` (`findRenewalCandidate`, exportada sob `submissorAction`)
+- `apps/projetos/src/components/project-wizard-steps/step-institution.tsx` (banner + ações)
+- `apps/projetos/src/components/renewal-banner.tsx` (criar)
+- `apps/projetos/src/lib/queries.ts` (query do candidato, se não couber na action)
+- `apps/projetos/src/actions/__tests__/renewal.test.ts` (criar)
+
+**Critérios de aceite:**
+
+- [x] Selecionar organização com projeto anual anterior em estágio final mostra o banner; sem candidato, wizard segue normal sem UI extra
+- [x] "Usar como base" preenche proposta/orçamento/cronograma do candidato e grava `parentProjectId` no rascunho criado
+- [x] "Começar do zero" não grava `parentProjectId`, mesmo havendo candidato
+- [x] Candidato é sempre o mais recente da mesma organização — projeto de outra organização nunca aparece (teste de RLS/filtro)
+- [x] Projeto pontual nunca oferece renovação (só anual, por especificação do §6.2)
+- [x] Lint passa · Types passam
+- [x] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: BRAIN.md §6.2 ("Renovação/continuação: nova entrada vinculada via `parent_project_id`") e §8 (P-2.13, PATCH-012) — decisão confirmada em PATCH-027 (PACOTE 7 da auditoria). PRD requisito 5.
+
+---
+
+### P-2.14 — Detecção de duplicidade de projetos via embeddings/pgvector
+
+**Fase:** 2
+**Módulo:** projetos
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-2.14-projetos-duplicidade`
+- Dependências: P-2.13 concluído (mesma etapa do wizard, evitar dois banners concorrentes)
+- Env vars: `OPENAI_API_KEY` (já configurada — `packages/ai`)
+
+**Escopo:**
+Zero ocorrências de `pgvector`/`embedding` no repositório hoje — nunca implementado, apesar de BRAIN.md §2/§6.2/§8 declararem v1 (PATCH-012). Ao submeter um projeto (`submitProject`, não a cada keystroke), gerar embedding do texto livre (`title` + `objectives` + `justification`, mesmos campos de `scoring.ts`) via `text-embedding-3-small` e comparar por similaridade de cosseno (pgvector `<=>`) contra embeddings de projetos já submetidos (qualquer organização — duplicidade é sobre o **conteúdo** da proposta, não sobre quem propõe). Acima de um limiar configurável (Admin, default sugerido 0.92), sinalizar para a diretoria (não bloqueia o submissor — decisão é da diretoria em `validacao`/`votacao`, nunca automática): badge "Possível duplicata" no card do kanban + lista dos candidatos similares no detalhe do projeto, visível a partir de `diretor`/`conselheiro`/`super_admin` (mesma visibilidade do score, nunca ao submissor — §6.2 "Score visível apenas para...").
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/db/src/migrations/NNNN_projetos_embeddings.sql` (criar) — extensão `vector`, coluna `projetos.projects.embedding vector(1536)`, índice `ivfflat`/`hnsw`
+- `packages/db/src/schema/projetos.ts` (coluna `embedding`)
+- `packages/ai/src/projects/duplicate-detection.ts` (criar) — gera embedding + busca por similaridade, segue o padrão de mensagem separada de `ocr.ts:119` (nunca concatena texto do submissor em instrução)
+- `apps/projetos/src/actions/projects.ts` (`submitProject` — chamada não-bloqueante, mesmo padrão `try/catch` de `scoring.ts:581-583`, nunca impede a submissão em caso de falha da IA)
+- `apps/projetos/src/components/duplicate-badge.tsx` (criar)
+- `apps/admin/src/actions/settings.ts` (limiar configurável, se módulo de config já existir; senão novo campo em `packages/db/src/settings.ts`)
+
+**Critérios de aceite:**
+
+- [x] Submeter projeto gera embedding e grava na coluna; falha da IA não impede a submissão (não-bloqueante, mesmo padrão de `scoring.ts`)
+- [x] Projeto com texto muito similar a um já submetido aparece marcado para diretor/conselheiro/super_admin; submissor nunca vê o badge nem o motivo
+- [x] Limiar configurável no Admin; mudar o valor não recalcula retroativamente sem ação explícita
+- [x] Teste com dois textos quase idênticos gera similaridade acima do limiar; dois textos claramente distintos, abaixo
+- [x] Lint passa · Types passam
+- [x] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: BRAIN.md §2 ("Embeddings — v1 para detecção de duplicidade de projetos"), §6.2 e §8 (P-2.14, PATCH-012) — decisão confirmada em PATCH-027 (PACOTE 7 da auditoria). Não confundir com busca semântica de Plataforma/Documentos (v2+, PATCH-012). Injeção de prompt: seguir o mesmo cuidado de PACOTE 10 (texto do submissor em mensagem separada, nunca concatenado à instrução do sistema).
+
+---
+
 # Fase 3 — Financeiro
 
 ---
@@ -7643,6 +7717,40 @@ Ref: contrato de busca de P-5.8 (que este prompt preserva inteiro — RLS filtra
 
 ---
 
+### P-5.13 — Exportação de eventos para o Google Calendar
+
+**Fase:** 5
+**Módulo:** intranet
+**Tipo:** ui
+
+**Escopo reduzido (decisão de Filipe, PATCH-027):** BRAIN.md:428 declarava "Calendário compartilhado (integração Google Calendar)" — lido originalmente como sincronização bidirecional via OAuth2. Reduzido a **exportação unidirecional, sem OAuth**: cada reunião (`meeting_sessions`, a mesma fonte de `/calendario` e `CalendarWidget`) ganha um botão "Adicionar ao Google Calendar" que abre a URL de criação de evento do Google (`https://calendar.google.com/calendar/render?action=TEMPLATE&...`, sem credenciais, sem app registrado no Google Cloud) e um botão "Baixar .ics" (arquivo estático, compatível com Google/Outlook/Apple Calendar). Não há sincronização — se a reunião mudar de data depois, o evento já adicionado ao calendário do usuário não atualiza sozinho.
+
+**Pré-condições:**
+
+- Branch: `feat/P-5.13-intranet-google-calendar-export`
+- Dependências: P-5.9d concluído (fonte de dados de `/calendario`)
+- Env vars: nenhuma (sem OAuth, sem chave de API)
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/intranet/src/lib/calendar-export.ts` (criar) — `buildGoogleCalendarUrl(session)` e `buildIcsFile(session)` (RFC 5545 mínimo: `VEVENT` com `DTSTART`/`DTEND`/`SUMMARY`/`LOCATION` se houver)
+- `apps/intranet/src/components/calendar-widget.tsx` (botões por evento)
+- `apps/intranet/src/app/(dashboard)/calendario/page.tsx` (botões na lista de "Próximas reuniões")
+- `apps/intranet/src/lib/__tests__/calendar-export.test.ts` (criar)
+
+**Critérios de aceite:**
+
+- [x] "Adicionar ao Google Calendar" abre a URL correta (data/hora/título da reunião) em nova aba, sem exigir login adicional além do Google já logado do usuário
+- [x] "Baixar .ics" gera arquivo válido (parseável por um leitor ICS) com os mesmos dados
+- [x] Nenhuma env var nova, nenhuma dependência OAuth
+- [x] Lint passa · Types passam
+- [x] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: BRAIN.md:428, escopo reduzido registrado em PATCH-027 (PACOTE 7 da auditoria) — troca sincronização bidirecional por exportação unidirecional sem custo de integração/manutenção de OAuth.
+
+---
+
 # Fase 6 — Plataforma (LMS)
 
 ---
@@ -8664,6 +8772,44 @@ Ref: P-6.13 é o precedente direto (mesma anatomia de gap, mesma solução de te
 
 ---
 
+### P-6.20 — Upload de vídeo via Bunny.net Stream
+
+**Fase:** 6
+**Módulo:** plataforma
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-6.20-plataforma-bunny-stream`
+- Dependências: P-6.15 concluído (mesmo padrão de upload de mídia)
+- Env vars: `BUNNY_STREAM_LIBRARY_ID`, `BUNNY_STREAM_API_KEY` (Bunny.net Dashboard → Stream → sua library → API)
+
+**Escopo:**
+`lessons.videoUrl` (`packages/db/src/schema/plataforma.ts:160`) é hoje um campo de texto livre — o instrutor cola a URL à mão, sem upload, sem transcodificação, sem controle de acesso (quem tiver o link assiste sem estar matriculado). Substituir por upload real via Bunny Stream API: o instrutor faz upload do arquivo de vídeo na tela de edição de aula; o backend cria o vídeo na library da Bunny (`POST /library/{id}/videos`), obtém uma URL de upload assinada (TUS resumable upload, recomendado pela Bunny para arquivos grandes) e o client sobe direto para a Bunny (nunca passa pelo Server Function — evita timeout/limite de payload do Next.js). `videoUrl` passa a guardar o `videoId` da Bunny, não uma URL; a reprodução usa uma **URL assinada por matrícula** (token signing da Bunny, expira em poucas horas), seguindo o mesmo padrão de `getMyAvatarUploadUrl`/`getCourseCoverReadUrl` (`apps/plataforma/src/actions/uploads.ts`) — path/recurso construído a partir de `ctx.actorId` + verificação de matrícula, nunca aceitando `videoId` arbitrário do cliente sem checar propriedade.
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/db/src/migrations/NNNN_plataforma_bunny_video_id.sql` (criar) — `lessons.video_id` (novo, substitui o uso de `video_url` como link direto; `video_url` pode ser mantido como fallback de aulas antigas coladas à mão, migração de dados fora do escopo, decisão registrada)
+- `packages/db/src/schema/plataforma.ts` (`videoId`)
+- `packages/integrations/src/bunny-stream.ts` (criar) — client Bunny Stream (criar vídeo, gerar upload TUS, assinar URL de reprodução)
+- `apps/plataforma/src/actions/uploads.ts` (`createLessonVideoUpload`, `getLessonVideoPlaybackUrl` — matrícula verificada antes de assinar)
+- `apps/plataforma/src/components/lesson-video-upload.tsx` (criar) — client TUS upload com progresso
+- `apps/plataforma/src/components/lesson-player.tsx` (consumir URL assinada em vez de `videoUrl` cru)
+- `.env.example` (`BUNNY_STREAM_LIBRARY_ID`, `BUNNY_STREAM_API_KEY`)
+
+**Critérios de aceite:**
+
+- [x] Instrutor faz upload de vídeo pela UI (sem colar URL); progresso visível
+- [x] Vídeo só reproduz para aluno matriculado no curso — URL assinada expira, `videoId` cru não reproduz nada sem passar pela action
+- [x] Aulas antigas com `video_url` colado continuam reproduzindo (fallback preservado, sem quebrar conteúdo existente)
+- [x] Sem `BUNNY_STREAM_API_KEY`, upload falha com mensagem clara (fail-fast, mesmo padrão de `requireEnv`) — não trava a tela nem finge sucesso
+- [x] Lint passa · Types passam
+- [x] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: BRAIN.md §2 ("Vídeos (Plataforma): Bunny.net Stream") e `.docs/Claude.md` §4.3 ("Upload de vídeo com transcodificação automática via Bunny Stream") — decisão confirmada em PATCH-027 (PACOTE 7 da auditoria). Fecha o gap de acesso não controlado (D6-004/NEG-009 na auditoria): hoje quem tem o link colado assiste sem matrícula.
+
+---
+
 # Fase 7 — Flats
 
 ---
@@ -9348,6 +9494,41 @@ Escopo mínimo de "fechar o loop" do upload já existente — sem novos buckets 
 
 ---
 
+### P-7.13 — Assistência de IA no scoring de Flats
+
+**Fase:** 7
+**Módulo:** flats
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-7.13-flats-scoring-ia`
+- Dependências: P-7.9c concluído
+- Env vars: `OPENAI_API_KEY` (já configurada)
+
+**Escopo:**
+`apps/flats/src/actions/scoring.ts` tem 10 critérios (`a_tempo_ministerio` … `j_participacao_projetos`), 100% determinísticos por tabela (BRAIN §6.8) — isso **não muda**. Dois critérios são subjetivos e hoje dependem de leitura humana de texto livre: `d_saude` (saúde autodeclarada) e `g_intensidade_ministerial`. Para esses dois, ao abrir a tela de scoring, o sistema sugere uma pontuação a partir do texto livre do formulário (mesma fonte que o gestor já lê), exibida como sugestão distinta (ex.: badge "Sugestão IA: 3 pontos" ao lado do campo) — o gestor sempre confirma ou ajusta manualmente antes de salvar; a pontuação gravada é sempre a que o gestor confirmou, nunca a sugestão direto. Segue o padrão de `ocr.ts:119` (contexto do requerente em mensagem `user` separada, `system` instruindo que é dado a avaliar, não instrução a seguir) — texto de terceiro nunca concatenado à instrução.
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/ai/src/flats/scoring-assistance.ts` (criar) — sugestão para `d_saude`/`g_intensidade_ministerial`, `timeout`/`maxRetries` explícitos (mesmo padrão exigido em PACOTE 10)
+- `apps/flats/src/actions/scoring.ts` (chamada não-bloqueante — falha da IA não impede o scoring manual)
+- `apps/flats/src/components/scoring-form.tsx` (badge de sugestão nos dois critérios, sempre editável)
+- `apps/flats/src/actions/__tests__/scoring-assistance.test.ts` (criar)
+
+**Critérios de aceite:**
+
+- [x] Sugestão aparece só em `d_saude`/`g_intensidade_ministerial`; os outros 8 critérios continuam 100% manuais, sem IA
+- [x] Pontuação final gravada é sempre a confirmada pelo gestor — teste que sugestão ≠ valor salvo quando o gestor ajusta
+- [x] Falha da IA (timeout, erro de API) não bloqueia o scoring manual — gestor pontua normalmente, sem sugestão visível
+- [x] Teste com payload de injeção conhecido no texto do requerente não altera o comportamento do `system prompt`
+- [x] Lint passa · Types passam
+- [x] Registrar em SESSIONS.md
+
+**Notas:**
+Ref: BRAIN.md §6.8 (tabela de pontos, 100% determinística — não alterada) e §8 ("assistência de sugestão de pontuação... nunca decide sozinha", P-7.13, PATCH-012) — decisão confirmada em PATCH-027 (PACOTE 7 da auditoria).
+
+---
+
 # Fase 8 — Rádio
 
 ---
@@ -9911,6 +10092,51 @@ Este é o elo que faltava para o feature de audiência de P-8.11 funcionar de po
 ---
 
 # Fase 9 — Polimento
+
+---
+
+### P-9.0 — Migração de usuários do legado
+
+**Fase:** 9
+**Módulo:** fundacao
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `feat/P-9.0-migracao-legado`
+- Dependências: nenhuma (roda antes de P-9.1–9.5; P-9.5 declara este prompt pré-condição desde `PROMPTS.md:10531` — nunca tinha sido escrito, achado da auditoria, AUDIT/04-BACKLOG-CORRECAO.md § PACOTE 7)
+- Env vars: `LEGACY_SUPABASE_URL`, `LEGACY_SUPABASE_SERVICE_ROLE_KEY` (projeto Supabase do sistema legado, construído por terceirizada — só Auth, sem garantia de dado de papel/perfil), `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` (destino, já configuradas), `RESEND_API_KEY`, `NEXT_PUBLIC_APP_URL`
+
+**Escopo:**
+Extrair as ~150 contas do projeto Supabase legado via Admin API (`auth.admin.listUsers`, paginado) e criar a conta equivalente neste projeto (`auth.admin.createUser`, sem senha — `email_confirm: true`), pulando por idempotência quem já existe em `public.users` (comparação por e-mail). Cada conta migrada recebe um **magic link** (`auth.admin.generateLink({ type: "magiclink" })`) por e-mail institucional (`LegacyAccessEmail`, novo em `packages/email`), levando direto a `/post-login` — reaproveita o fluxo de login já existente, **nenhuma tela nova**. Dry-run por padrão (`pnpm --filter @hebron/db migrate:legacy-users`); só grava com `--execute`. Gera relatório CSV local (nunca commitado — `migration-reports/`, `.gitignore` já cobre) com o resultado linha a linha (migrado/pulado/falhou).
+
+**Deliberadamente fora do escopo deste prompt — decisão registrada, não esquecimento:**
+
+- **Atribuição de papel** (`role_assignments`): o legado é só identidade (e-mail/nome via Admin API), sem garantia de que os papéis de lá batam com os 8 papéis do RBAC daqui (múltiplos por usuário, designações). Cada conta migrada nasce **sem papel** — super_admin atribui manualmente pela tela de usuários do Admin já existente (`apps/admin/src/actions/roles.ts`) depois da migração. Ver runbook.
+- **Disparo real contra produção**: este prompt entrega o script pronto, testado (`typecheck`/`lint` verdes) e documentado; a execução `--execute` contra as credenciais reais do legado e do projeto de produção é ação manual do Filipe, fora desta sessão (ele não tinha as credenciais do projeto legado disponíveis no momento da decisão — AUDIT/04-BACKLOG-CORRECAO.md § PACOTE 7).
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/db/src/scripts/migrate-legacy-users.ts` (criar)
+- `packages/db/package.json` (script `migrate:legacy-users`, dependências `react`/`@types/react`)
+- `packages/db/tsconfig.json` (`jsx: "react-jsx"` — necessário para o typecheck alcançar o template JSX importado)
+- `packages/email/src/templates/legacy-access.tsx` (criar) — mesmo padrão visual de `password-reset.tsx`, copy adaptada para magic link (sem menção a "criar senha")
+- `.env.example` (`LEGACY_SUPABASE_URL`, `LEGACY_SUPABASE_SERVICE_ROLE_KEY`)
+- `.gitignore` (`migration-reports/`)
+- `AUDIT/PACOTE-7-P9.0-RUNBOOK.md` (criar) — passos manuais: obter credenciais do legado, dry-run, revisão do relatório, `--execute`, atribuição de papel pós-migração, verificação
+
+**Critérios de aceite:**
+
+- [x] Script lista todos os usuários do legado (paginação real, não só a primeira página) — `listAllLegacyUsers` em `migrate-legacy-users.ts`
+- [x] Idempotente: rodar duas vezes não duplica conta — checagem por e-mail em `public.users` antes de criar
+- [x] Dry-run é o padrão; só grava com `--execute` explícito
+- [x] Cada conta criada recebe magic link por e-mail com identidade visual Hebron (`LegacyAccessEmail`), sem necessidade de nova tela (redireciona para `/post-login`, já existente)
+- [x] Relatório CSV por execução, nunca commitado
+- [ ] Execução real (`--execute`) contra o projeto legado e o projeto de produção — **pendente do Filipe** (credenciais do legado), fora do alcance desta sessão; ver runbook
+- [ ] Papéis atribuídos aos usuários migrados — ação manual pós-`--execute`, ver runbook
+- [x] `pnpm --filter @hebron/db typecheck lint` verdes
+
+**Notas:**
+Ref: BRAIN.md §8 "Migração de usuários do sistema legado (P-9.0)" — mantido na v1, decisão confirmada em PATCH-027 (PACOTE 7 da auditoria). P-9.5 continua bloqueado até a execução real acontecer (ver runbook).
 
 ---
 
