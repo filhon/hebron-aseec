@@ -17,6 +17,21 @@ import { createNotification } from "@hebron/email/types";
  */
 
 /**
+ * Handle de banco aceito pelas funções de aprovação — o `db` singleton do
+ * package ou uma `tx` de `db.transaction(...)`. Mesmo padrão (e mesma razão)
+ * do `AuditDbHandle` de `./audit.ts`: passando a `tx` do chamador, as escritas
+ * do provisionamento financeiro entram na MESMA transação da transição de
+ * estágio que as originou, e um erro no meio desfaz tudo junto — não deixa um
+ * projeto marcado "aprovado" sem centro de custo e sem payables (P-0.14b).
+ *
+ * Omitir o argumento preserva o comportamento anterior byte a byte.
+ */
+export interface ApprovalDbHandle {
+  insert: (typeof db)["insert"];
+  select: (typeof db)["select"];
+}
+
+/**
  * Emite uma linha de `payment_schedules` por parcela do projeto.
  *
  * P-2.6c corrigiu dois defeitos aqui:
@@ -42,6 +57,7 @@ export async function generatePaymentSchedule(
     typeof projects.$inferSelect,
     "id" | "parcelas" | "budgetTotal" | "evaluationYear" | "meses"
   > & { mesesPagamento?: number[] | null },
+  dbHandle: ApprovalDbHandle = db,
 ): Promise<void> {
   if (!project.parcelas || !project.budgetTotal || !project.evaluationYear)
     return;
@@ -80,7 +96,7 @@ export async function generatePaymentSchedule(
     };
   });
 
-  await db.insert(paymentSchedules).values(paymentRows);
+  await dbHandle.insert(paymentSchedules).values(paymentRows);
 }
 
 // ---------------------------------------------------------------------------
@@ -97,12 +113,20 @@ export async function generatePaymentSchedule(
 // Idempotente: onConflictDoNothing evita duplicatas em retentativas — tanto
 // o centro de custo (UNIQUE project_id) quanto o payable (UNIQUE
 // payment_schedule_id) toleram reexecução sem duplicar dados.
-// Falha silenciosa para o chamador: não bloqueia a transição do projeto
-// (ver comentário nos call-sites em apps/projetos e packages/jobs).
+//
+// P-0.14b: a falha NÃO é mais silenciosa para o chamador. Passando `dbHandle`
+// (a `tx` da transição de estágio), as escritas daqui são atômicas com ela e o
+// erro propaga — o projeto não fica "aprovado" sem provisionamento. Sem
+// `dbHandle`, mantém a transação local de antes, comportamento idêntico.
 // ---------------------------------------------------------------------------
 
-export async function onProjectApproved(projectId: string): Promise<void> {
-  const [project] = await db
+export async function onProjectApproved(
+  projectId: string,
+  dbHandle?: ApprovalDbHandle,
+): Promise<void> {
+  const reader: ApprovalDbHandle = dbHandle ?? db;
+
+  const [project] = await reader
     .select({
       title: projects.title,
       budgetTotal: projects.budgetTotal,
@@ -125,84 +149,120 @@ export async function onProjectApproved(projectId: string): Promise<void> {
 
   const actorId = await getSystemActorId();
 
-  await db.transaction(async (tx) => {
-    const inserted = await tx
-      .insert(costCenters)
+  const params = {
+    projectId,
+    code,
+    projectTitle,
+    projectBudgetTotal,
+    actorId,
+  };
+
+  // Já existe transação do chamador: reusa. Abrir outra aqui faria o
+  // provisionamento commitar por conta própria, exatamente o que P-0.14b
+  // veio impedir.
+  if (dbHandle) {
+    await provisionApprovedProject(dbHandle, params);
+    return;
+  }
+
+  await db.transaction((tx) => provisionApprovedProject(tx, params));
+}
+
+async function provisionApprovedProject(
+  handle: ApprovalDbHandle,
+  params: {
+    projectId: string;
+    code: string;
+    projectTitle: string;
+    projectBudgetTotal: string;
+    actorId: string;
+  },
+): Promise<void> {
+  const { projectId, code, projectTitle, projectBudgetTotal, actorId } = params;
+
+  const inserted = await handle
+    .insert(costCenters)
+    .values({
+      projectId,
+      code,
+      name: projectTitle,
+      budgetTotal: projectBudgetTotal,
+      status: "ativo",
+    })
+    .onConflictDoNothing()
+    .returning();
+
+  const costCenter =
+    inserted[0] ??
+    (
+      await handle
+        .select()
+        .from(costCenters)
+        .where(eq(costCenters.projectId, projectId))
+        .limit(1)
+    )[0];
+
+  if (!costCenter) throw new Error("Falha ao criar/obter centro de custo");
+
+  const schedules = await handle
+    .select()
+    .from(paymentSchedules)
+    .where(eq(paymentSchedules.projectId, projectId));
+
+  for (const schedule of schedules) {
+    const payableRows = await handle
+      .insert(payables)
       .values({
-        projectId,
-        code,
-        name: projectTitle,
-        budgetTotal: projectBudgetTotal,
-        status: "ativo",
+        description: `Parcela ${schedule.month} — ${projectTitle}`,
+        amount: schedule.amount,
+        dueDate: schedule.dueDate,
+        costCenterId: costCenter.id,
+        paymentScheduleId: schedule.id,
+        status: "pendente",
+        createdBy: actorId,
       })
       .onConflictDoNothing()
       .returning();
 
-    const costCenter =
-      inserted[0] ??
-      (
-        await tx
-          .select()
-          .from(costCenters)
-          .where(eq(costCenters.projectId, projectId))
-          .limit(1)
-      )[0];
+    const payable = payableRows[0];
+    if (!payable) continue; // já existia (retentativa) — nada novo a auditar
 
-    if (!costCenter) throw new Error("Falha ao criar/obter centro de custo");
-
-    const schedules = await tx
-      .select()
-      .from(paymentSchedules)
-      .where(eq(paymentSchedules.projectId, projectId));
-
-    for (const schedule of schedules) {
-      const payableRows = await tx
-        .insert(payables)
-        .values({
-          description: `Parcela ${schedule.month} — ${projectTitle}`,
-          amount: schedule.amount,
-          dueDate: schedule.dueDate,
-          costCenterId: costCenter.id,
+    await logAudit(
+      {
+        actorId,
+        action: "financeiro.payable.created",
+        entity: "payable",
+        entityId: payable.id,
+        diff: {
+          source: "project-approval",
+          projectId,
           paymentScheduleId: schedule.id,
-          status: "pendente",
-          createdBy: actorId,
-        })
-        .onConflictDoNothing()
-        .returning();
-
-      const payable = payableRows[0];
-      if (!payable) continue; // já existia (retentativa) — nada novo a auditar
-
-      await logAudit(
-        {
-          actorId,
-          action: "financeiro.payable.created",
-          entity: "payable",
-          entityId: payable.id,
-          diff: {
-            source: "project-approval",
-            projectId,
-            paymentScheduleId: schedule.id,
-            amount: payable.amount,
-            dueDate: payable.dueDate,
-          },
+          amount: payable.amount,
+          dueDate: payable.dueDate,
         },
-        tx,
-      );
-    }
-  });
+      },
+      handle,
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
-// notifyProjectApprovalFailure — chamada pelos dois call sites de
-// onProjectApproved (apps/projetos/src/actions/projects.ts e
-// packages/jobs/src/crons/projetos.ts, PACOTE 2 / FLX-001) quando a
-// integração falha. Um projeto aprovado sem centro de custo/payables é
-// intervenção humana obrigatória — a transição de estágio já foi commitada
-// e não é revertida por isso, mas ninguém pode ficar sem saber que o
-// dinheiro do projeto não foi provisionado. Best-effort (Promise.allSettled
-// + audit "best_effort"): a notificação da falha não pode ela mesma travar
-// o chamador nem mascarar o erro original.
+// notifyProjectApprovalFailure — chamada pelo cron de homologação
+// (packages/jobs/src/crons/projetos.ts, PACOTE 2 / FLX-001) quando a
+// aprovação automática de um projeto falha.
+//
+// P-0.14b mudou o que essa falha significa: a transição e o provisionamento
+// financeiro agora vivem na MESMA transação, então a falha reverte tudo — o
+// projeto permanece em `homologacao` e volta a ser candidato na execução
+// seguinte. Não há mais projeto aprovado sem centro de custo. O que continua
+// exigindo olho humano é a falha se repetir: um projeto que nunca conclui a
+// homologação fica parado indefinidamente sem que ninguém perceba.
+//
+// O caminho manual (`transitionProjectStage`) não chama mais esta função: lá
+// o erro sobe para o diretor que apertou o botão, na hora.
+//
+// Best-effort (Promise.allSettled + audit "best_effort"): a notificação da
+// falha não pode ela mesma travar o chamador nem mascarar o erro original.
 // ---------------------------------------------------------------------------
 
 export async function notifyProjectApprovalFailure(
@@ -235,9 +295,9 @@ export async function notifyProjectApprovalFailure(
       ),
     );
 
-  const title = "Integração financeira falhou";
+  const title = "Homologação automática falhou";
   const body =
-    "Um projeto foi aprovado, mas o centro de custo e os pagamentos não foram criados automaticamente. Verifique e crie manualmente se necessário.";
+    "A resolução automática de um projeto em homologação falhou e foi revertida por inteiro — o projeto continua em homologação e será tentado de novo. Se a falha se repetir, verifique o projeto manualmente.";
   const href = `/pipeline/${projectId}`;
 
   await Promise.allSettled(

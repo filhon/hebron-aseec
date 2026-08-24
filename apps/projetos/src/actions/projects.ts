@@ -19,6 +19,7 @@ import { BusinessError } from "@hebron/auth/safe-action-error";
 import { enforceRateLimit, getRateLimiter } from "@hebron/auth/rate-limit";
 import {
   withAuthenticatedContext,
+  withSystemRole,
   type AuthenticatedTx,
 } from "@hebron/db/authenticated";
 import {
@@ -75,7 +76,6 @@ import { logProjectAudit, computeDiff } from "../lib/audit";
 import {
   generatePaymentSchedule,
   onProjectApproved,
-  notifyProjectApprovalFailure,
 } from "@hebron/db/projetos-approval";
 import { onProjectSubmitted } from "@hebron/integrations/projetos-tarefas";
 import { checkOrganizationBudget } from "@hebron/integrations/projetos";
@@ -968,7 +968,7 @@ const transitionStageSchema = z.object({
 export const transitionProjectStage = diretorAction
   .schema(transitionStageSchema)
   .action(async ({ parsedInput, ctx }) => {
-    const { fromStage, afterProject } = await withAuthenticatedContext(
+    const { afterProject } = await withAuthenticatedContext(
       { actorId: ctx.actorId },
       async (tx) => {
         const project = await getProjectOrThrow(tx, parsedInput.projectId);
@@ -1019,40 +1019,54 @@ export const transitionProjectStage = diretorAction
           ctx.actorId,
         );
 
-        return { fromStage: project.stage, afterProject };
+        // P-0.14b — provisionamento financeiro DENTRO da mesma transação da
+        // transição, para que a aprovação manual tenha a mesma garantia que a
+        // automática (packages/jobs/src/crons/projetos.ts): ou o projeto fica
+        // aprovado COM schedule, centro de custo e payables, ou não fica
+        // aprovado. Antes isto rodava depois do commit e um erro deixava o
+        // projeto aprovado sem nada disso.
+        //
+        // `withSystemRole` porque as escritas de destino não são abertas ao
+        // papel `authenticated` desta sessão — `financeiro.payables` só aceita
+        // INSERT de super_admin|colaborador (0010_financeiro.sql) e esta é uma
+        // `diretorAction`; o audit_log só aceita `service_role`. Mesma
+        // transação (atômico), privilégio equivalente ao do `db` module-level
+        // que estas funções usavam antes.
+        if (
+          parsedInput.toStage === "aprovado" &&
+          afterProject.parcelas &&
+          afterProject.meses &&
+          afterProject.budgetTotal
+        ) {
+          await withSystemRole(tx, async (sysTx) => {
+            await generatePaymentSchedule(afterProject, sysTx);
+            await onProjectApproved(parsedInput.projectId, sysTx);
+          });
+        }
+
+        // Audit também na transação (governança, F3-Q4): uma transição sem
+        // trilha durável não pode sobreviver ao commit.
+        await withSystemRole(tx, (sysTx) =>
+          logProjectAudit(
+            {
+              actorId: ctx.actorId,
+              action: "project.stage_transition",
+              entity: "project",
+              entityId: parsedInput.projectId,
+              diff: {
+                from: project.stage,
+                to: parsedInput.toStage,
+                notes: parsedInput.notes,
+                transitionedAt: afterProject.updatedAt.toISOString(),
+              },
+            },
+            sysTx,
+          ),
+        );
+
+        return { afterProject };
       },
     );
-
-    // When approved: generate payment schedule + cross-app financeiro integration
-    if (
-      parsedInput.toStage === "aprovado" &&
-      afterProject.parcelas &&
-      afterProject.meses &&
-      afterProject.budgetTotal
-    ) {
-      await generatePaymentSchedule(afterProject);
-
-      // Cross-app: criar centro de custo no módulo financeiro. Aguardada
-      // (nunca fire-and-forget, BRAIN.md:559-563) — a transição de estágio
-      // já foi commitada acima e não é revertida por esta falha, mas o
-      // super_admin precisa ser avisado: projeto aprovado sem payables
-      // exige intervenção humana (PACOTE 2 / FLX-001).
-      try {
-        await onProjectApproved(parsedInput.projectId);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        console.error(
-          JSON.stringify({
-            event: "cross_app_integration_failure",
-            integration: "financeiro.onProjectApproved",
-            caller: "projetos/actions/projects.ts::transitionProjectStage",
-            projectId: parsedInput.projectId,
-            message,
-          }),
-        );
-        await notifyProjectApprovalFailure(parsedInput.projectId, message);
-      }
-    }
 
     // When entering homologacao: notify submissor (7-day window)
     if (parsedInput.toStage === "homologacao") {
@@ -1072,19 +1086,6 @@ export const transitionProjectStage = diretorAction
         console.error("[projetos/transition] notifyVotingOpen failed:", err);
       }
     }
-
-    await logProjectAudit({
-      actorId: ctx.actorId,
-      action: "project.stage_transition",
-      entity: "project",
-      entityId: parsedInput.projectId,
-      diff: {
-        from: fromStage,
-        to: parsedInput.toStage,
-        notes: parsedInput.notes,
-        transitionedAt: afterProject.updatedAt.toISOString(),
-      },
-    });
 
     return { project: afterProject };
   });

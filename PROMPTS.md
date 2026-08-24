@@ -11164,13 +11164,13 @@ débito original pediu.
 
 **Critérios de aceite:**
 
-- [ ] Uma falha simulada em `onProjectApproved` deixa o projeto em `homologacao`, sem linha nova em `project_versions` e sem `payables` (teste)
-- [ ] O mesmo projeto volta a ser processado na execução seguinte do cron (teste)
-- [ ] Falha em um projeto não impede o processamento dos demais do mesmo lote (teste)
-- [ ] Caminho de aprovação manual (`transitionProjectStage`) com a mesma garantia
-- [ ] `generatePaymentSchedule`/`onProjectApproved` chamados sem `tx` continuam funcionando idênticos (regressão)
-- [ ] Falha registrada em log estruturado, não engolida
-- [ ] Lint passa · Types passam · suítes de `packages/jobs` e `apps/projetos` verdes
+- [x] Uma falha simulada em `onProjectApproved` deixa o projeto em `homologacao`, sem linha nova em `project_versions` e sem `payables` (teste)
+- [x] O mesmo projeto volta a ser processado na execução seguinte do cron (teste)
+- [x] Falha em um projeto não impede o processamento dos demais do mesmo lote (teste)
+- [x] Caminho de aprovação manual (`transitionProjectStage`) com a mesma garantia
+- [x] `generatePaymentSchedule`/`onProjectApproved` chamados sem `tx` continuam funcionando idênticos (regressão)
+- [x] Falha registrada em log estruturado, não engolida
+- [x] Lint passa · Types passam · suítes de `packages/jobs` e `apps/projetos` verdes (jobs 28/28; projetos 160/161 — a única falha é `notifications.test.ts > submitProject`, pré-existente e confirmada no baseline, ver S-277/S-278)
 
 **Notas:**
 

@@ -12,6 +12,7 @@ import {
   generatePaymentSchedule,
   onProjectApproved,
   notifyProjectApprovalFailure,
+  type ApprovalDbHandle,
 } from "@hebron/db/projetos-approval";
 import { getSystemActorId } from "@hebron/db/system-actor";
 import { logAudit } from "@hebron/db/audit";
@@ -158,8 +159,13 @@ export const evaluationRemindersCron = inngest.createFunction(
 // de aprovação automática.
 // ---------------------------------------------------------------------------
 
-async function getNextVersionNumber(projectId: string): Promise<number> {
-  const rows = await db
+type HomologacaoOutcome = "approved" | "rejected";
+
+async function getNextVersionNumber(
+  handle: ApprovalDbHandle,
+  projectId: string,
+): Promise<number> {
+  const rows = await handle
     .select({ versionNumber: projectVersions.versionNumber })
     .from(projectVersions)
     .where(eq(projectVersions.projectId, projectId));
@@ -214,105 +220,105 @@ export async function runHomologacaoAutoApprove(): Promise<{
     const snapshotData = latestHomologVersion.data as {
       voteApproved?: boolean;
     };
+    const decision: HomologacaoOutcome =
+      snapshotData.voteApproved === false ? "rejected" : "approved";
 
-    if (snapshotData.voteApproved === false) {
-      const [updated] = await db
-        .update(projects)
-        .set({ stage: "reprovado", updatedAt: now })
-        .where(eq(projects.id, project.id))
-        .returning();
-      if (!updated) continue;
-
-      const versionNumber = await getNextVersionNumber(project.id);
-      await db.insert(projectVersions).values({
-        projectId: project.id,
-        versionNumber,
-        stage: "reprovado",
-        data: {
-          ...updated,
-          _source: "homologacao-auto-resolve-cron",
-          transitionedAt: now.toISOString(),
-          transitionedBy: actorId,
-        },
-        createdBy: actorId,
-      });
-
-      await logAudit({
-        actorId,
-        action: "project.stage_transition",
-        entity: "project",
-        entityId: project.id,
-        diff: {
-          from: "homologacao",
-          to: "reprovado",
-          notes: `Reprovação confirmada automaticamente após ${HOMOLOGACAO_WINDOW_DAYS} dias sem contestação.`,
-          transitionedAt: now.toISOString(),
-        },
-      });
-
-      await notifyProjectDecision(project.id, false);
-      rejected.push(project.id);
-      continue;
-    }
-
-    const [updated] = await db
-      .update(projects)
-      .set({ stage: "aprovado", approvedAt: now, updatedAt: now })
-      .where(eq(projects.id, project.id))
-      .returning();
-    if (!updated) continue;
-
-    const versionNumber = await getNextVersionNumber(project.id);
-    await db.insert(projectVersions).values({
-      projectId: project.id,
-      versionNumber,
-      stage: "aprovado",
-      data: {
-        ...updated,
-        _source: "homologacao-auto-approve-cron",
-        transitionedAt: now.toISOString(),
-        transitionedBy: actorId,
-      },
-      createdBy: actorId,
-    });
-
-    if (updated.parcelas && updated.meses && updated.budgetTotal) {
-      await generatePaymentSchedule(updated);
-    }
-    // Aguardada (nunca fire-and-forget, BRAIN.md:559-563) — mesmo tratamento
-    // do call site manual em apps/projetos/src/actions/projects.ts
-    // (PACOTE 2 / FLX-001).
+    // P-0.14b: uma transação POR PROJETO. Tudo que decide o destino do
+    // projeto — UPDATE de stage, snapshot de versão, audit e, na aprovação,
+    // o provisionamento financeiro — commita junto ou não commita. Antes
+    // eram escritas independentes: uma falha no meio deixava o projeto
+    // "aprovado" sem snapshot, sem centro de custo e sem payables, e o cron
+    // nunca reprocessava (o projeto já não estava mais em `homologacao`).
+    // O lote inteiro numa só transação seria pior: a falha de um projeto
+    // desfaria os outros. Cada projeto responde por si.
+    let resolved = false;
     try {
-      await onProjectApproved(project.id);
+      resolved = await db.transaction(async (tx) => {
+        const [updated] = await tx
+          .update(projects)
+          .set(
+            decision === "rejected"
+              ? { stage: "reprovado", updatedAt: now }
+              : { stage: "aprovado", approvedAt: now, updatedAt: now },
+          )
+          .where(eq(projects.id, project.id))
+          .returning();
+        if (!updated) return false;
+
+        const versionNumber = await getNextVersionNumber(tx, project.id);
+        await tx.insert(projectVersions).values({
+          projectId: project.id,
+          versionNumber,
+          stage: decision === "rejected" ? "reprovado" : "aprovado",
+          data: {
+            ...updated,
+            _source:
+              decision === "rejected"
+                ? "homologacao-auto-resolve-cron"
+                : "homologacao-auto-approve-cron",
+            transitionedAt: now.toISOString(),
+            transitionedBy: actorId,
+          },
+          createdBy: actorId,
+        });
+
+        if (decision === "approved") {
+          if (updated.parcelas && updated.meses && updated.budgetTotal) {
+            await generatePaymentSchedule(updated, tx);
+          }
+          // Aguardada (nunca fire-and-forget, BRAIN.md:559-563) e agora na
+          // mesma `tx`: se o Financeiro falhar, a aprovação inteira volta
+          // atrás em vez de ficar pela metade.
+          await onProjectApproved(project.id, tx);
+        }
+
+        await logAudit(
+          {
+            actorId,
+            action: "project.stage_transition",
+            entity: "project",
+            entityId: project.id,
+            diff: {
+              from: "homologacao",
+              to: decision === "rejected" ? "reprovado" : "aprovado",
+              notes:
+                decision === "rejected"
+                  ? `Reprovação confirmada automaticamente após ${HOMOLOGACAO_WINDOW_DAYS} dias sem contestação.`
+                  : `Aprovação automática após ${HOMOLOGACAO_WINDOW_DAYS} dias sem contestação.`,
+              transitionedAt: now.toISOString(),
+            },
+          },
+          tx,
+        );
+
+        return true;
+      });
     } catch (err) {
+      // Transação revertida: o projeto continua em `homologacao` e volta a
+      // ser candidato na próxima execução. Registrar e seguir para o
+      // próximo — a falha de um projeto não interrompe o lote.
       const message = err instanceof Error ? err.message : String(err);
       console.error(
         JSON.stringify({
-          event: "cross_app_integration_failure",
-          integration: "financeiro.onProjectApproved",
+          event: "homologacao_auto_resolve_failed",
           caller: "jobs/crons/projetos.ts::homologacaoAutoApproveCron",
           projectId: project.id,
+          decision,
           message,
         }),
       );
       await notifyProjectApprovalFailure(project.id, message);
+      continue;
     }
 
-    await logAudit({
-      actorId,
-      action: "project.stage_transition",
-      entity: "project",
-      entityId: project.id,
-      diff: {
-        from: "homologacao",
-        to: "aprovado",
-        notes: `Aprovação automática após ${HOMOLOGACAO_WINDOW_DAYS} dias sem contestação.`,
-        transitionedAt: now.toISOString(),
-      },
-    });
+    if (!resolved) continue;
 
-    await notifyProjectDecision(project.id, true);
-    approved.push(project.id);
+    if (decision === "rejected") rejected.push(project.id);
+    else approved.push(project.id);
+
+    // Fora da transação, de propósito: e-mail/notificação não é rollbackável
+    // e não pode desfazer uma decisão já commitada.
+    await notifyProjectDecision(project.id, decision === "approved");
   }
 
   return { approved, rejected };

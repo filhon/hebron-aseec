@@ -298,6 +298,7 @@
 | S-275  | 2026-08-24 | P-1.19c — Documentos: o conselheiro que ainda alcança a escrita (CORRETIVO)                                                      | concluido                                                                            |
 | S-276  | 2026-08-24 | P-2.4c — Projetos: o filtro de ano que não acompanha o ano de referência (CORRETIVO)                                             | concluido                                                                            |
 | S-277  | 2026-08-24 | P-2.6c — Projetos: parcelas nos meses errados e um centavo que some (CORRETIVO)                                                  | concluido                                                                            |
+| S-278  | 2026-08-24 | P-0.14b — Jobs: a homologação que aprova pela metade (CORRETIVO)                                                                 | concluido                                                                            |
 
 ---
 
@@ -26463,4 +26464,148 @@ próprio, sem relação com meses de pagamento ou centavos.
 - `apps/projetos/src/__tests__/renewal.test.ts` (2 testes novos + fixtures da
   Org C: coluna e snapshot com meses divergentes, e um segundo membro)
 - `packages/db/check_locks.mjs`, `packages/db/check_locks2.mjs` (removidos)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+## S-278 — P-0.14b — Jobs: a homologação que aprova pela metade (CORRETIVO)
+
+**Prompt:** `PROMPTS.md` § P-0.14b
+**Data:** 2026-08-24
+**Modelo:** claude-opus-5
+**Status:** concluido
+
+### Resumo
+
+`runHomologacaoAutoApprove` executava, por projeto elegível, uma sequência de
+escritas independentes contra o `db` module-level: `UPDATE projects.stage`,
+`INSERT project_versions`, `logAudit` e — no ramo de aprovação —
+`onProjectApproved` (centro de custo + um payable por parcela). Nenhuma
+transação envolvia isso, e `onProjectApproved` ainda rodava dentro de um
+`try/catch` que engolia a falha. Uma falha no meio deixava o projeto marcado
+`aprovado` **sem** snapshot de versão, sem centro de custo e sem payables — e o
+cron nunca reprocessava, porque o projeto já não estava mais em `homologacao`.
+O caminho manual (`transitionProjectStage`) tinha exatamente o mesmo desenho.
+
+Agora os dois caminhos são atômicos: ou o projeto fica aprovado **com**
+schedule, centro de custo, payables e audit, ou não fica aprovado.
+
+1. **`generatePaymentSchedule` e `onProjectApproved` aceitam handle opcional.**
+   Novo tipo exportado `ApprovalDbHandle` (`{ insert, select }`), mesmo padrão
+   e mesma razão do `AuditDbHandle` de `packages/db/src/audit.ts`. Sem
+   argumento, comportamento idêntico ao anterior.
+2. **`runHomologacaoAutoApprove`: uma transação por projeto.** `UPDATE`,
+   snapshot, `generatePaymentSchedule`, `onProjectApproved` e `logAudit` na
+   mesma `tx`. Não uma transação para o lote — a falha de um projeto não pode
+   desfazer os outros.
+3. **Falha registrada, não engolida.** `console.error` estruturado
+   (`{"event":"homologacao_auto_resolve_failed", caller, projectId, decision,
+message}`, mesmo padrão do `radio_heartbeat_insert_failed` de S-272) mais
+   `notifyProjectApprovalFailure`; o laço segue para o próximo projeto e o que
+   falhou permanece em `homologacao`, voltando a ser candidato na execução
+   seguinte.
+4. **`transitionProjectStage` com a mesma garantia.** O provisionamento
+   financeiro e o audit da transição passaram para dentro da `tx` que
+   `withAuthenticatedContext` já abria — não uma segunda transação, como o
+   escopo pedia.
+
+### Decisões
+
+- **`onProjectApproved` não abre transação aninhada quando recebe handle.** Com
+  `dbHandle`, escreve direto nele; sem, mantém o `db.transaction` de antes. Um
+  savepoint aninhado funcionaria, mas seria uma segunda fronteira de rollback
+  sem nenhum ganho — o corpo virou a função privada `provisionApprovedProject`,
+  chamada dos dois jeitos.
+- **No caminho manual, `withSystemRole(tx, …)` — não a `tx` crua.** As escritas
+  de destino não são abertas ao papel `authenticated` desta sessão:
+  `financeiro.payables` só aceita INSERT de `super_admin|colaborador`
+  (`0010_financeiro.sql:514`) e `transitionProjectStage` é uma `diretorAction`;
+  `admin.audit_log` só aceita `service_role`. Passar a `tx` crua trocaria o bug
+  de atomicidade por um bug de RLS — toda aprovação manual passaria a falhar.
+  `withSystemRole` mantém a MESMA transação (atômico) com o privilégio
+  equivalente ao do `db` module-level que essas funções usavam antes. Mesmo
+  padrão já estabelecido em `actions/voting.ts`.
+- **O audit da transição manual também entrou na transação.** Estava depois do
+  commit: uma falha ao gravar deixava transição sem trilha durável, contra
+  F3-Q4. O escopo pedia "passando a `tx` a todas as escritas, inclusive
+  `logAudit`" para o cron; aplicado igual aos dois. Como efeito, `fromStage`
+  deixou de ser devolvido pelo callback (é lido de `project.stage` dentro dele).
+- **`notifyProjectDecision` fica FORA da transação**, depois do commit: e-mail e
+  notificação não são rollbackáveis e não podem desfazer uma decisão já
+  gravada. Se a notificação falhar, o comportamento anterior é preservado (o
+  erro sobe) — não foi silenciada, para não mudar nada que o prompt não pediu.
+- **Copy de `notifyProjectApprovalFailure` corrigida.** Dizia "Um projeto foi
+  aprovado, mas o centro de custo e os pagamentos não foram criados" — premissa
+  que a transação torna impossível. Passou a descrever o que de fato acontece:
+  reversão integral, projeto ainda em homologação, nova tentativa na próxima
+  execução. O texto não é asserido por nenhum teste; a função e o audit
+  `financeiro.integration.failed` seguem iguais.
+- **`transitionProjectStage` não chama mais `notifyProjectApprovalFailure`.** Lá
+  o erro sobe para o diretor que apertou o botão, na hora — notificar
+  assincronamente um super_admin sobre uma falha que já apareceu na tela seria
+  ruído. A função continua com um call site (o cron) e teste próprio.
+
+### Verificação
+
+- `pnpm turbo typecheck lint --filter=@hebron/db --filter=@hebron/jobs --filter=@hebron/projetos`:
+  22/22 verdes.
+- `packages/jobs` (suíte completa): 28/28 verdes, 10 arquivos — inclui os 3
+  testes novos de `projetos-homologacao.test.ts` e `briefing.test.ts`, que a
+  memória listava como instável no banco de dev compartilhado (verde nesta
+  execução).
+- `packages/db/src/__tests__/projetos-approval.test.ts`: 3/3 verdes — o
+  parâmetro opcional preservou os chamadores sem handle.
+- `apps/projetos` (suíte completa): 160/161. A única falha é
+  `notifications.test.ts > submitProject não retorna erro` (timeout de 30s), a
+  mesma já documentada em S-277 como pré-existente. Confirmada de novo por
+  `git stash`: no baseline limpo o arquivo falha **2 de 3** testes, um a mais do
+  que com o diff aplicado. `submitProject` não passa por nenhuma função tocada
+  aqui.
+
+### Testes novos (`packages/jobs/src/__tests__/projetos-homologacao.test.ts`)
+
+`onProjectApproved` é mockada com passagem para a implementação real, exceto
+para os ids em `approvalFailures` — assim o caminho feliz continua sendo
+exercitado de ponta a ponta e só o projeto marcado explode. As fixtures do bloco
+novo nascem no `beforeAll` do próprio `describe` (não no do arquivo) para não
+entrarem no lote dos testes que já existiam, que rodam antes.
+
+1. **Falha reverte tudo e não contamina o lote** — projeto continua em
+   `homologacao` com `approved_at` nulo, `project_versions` ainda com só o
+   snapshot de entrada (nenhuma linha `aprovado`), zero `payment_schedules`,
+   zero `cost_centers`, nenhum audit `project.stage_transition`; e o projeto
+   vizinho do mesmo lote é aprovado normalmente, com schedule e centro de custo.
+   `notifyProjectApprovalFailure` chamada com o id e a mensagem do erro.
+2. **Volta a ser processado na execução seguinte** — removido o gatilho, a
+   rodada seguinte aprova: stage `aprovado`, 3 schedules, centro de custo, 3
+   payables e snapshot `aprovado`.
+3. **Regressão sem handle** — `generatePaymentSchedule(project)` e
+   `onProjectApproved(id)` chamados com a assinatura antiga produzem o mesmo
+   resultado, com a soma dos centavos exata (P-2.6c preservado).
+
+### Débitos fechados
+
+- ✅ **S-66** — "considerar transação numa futura revisão de ambos os caminhos
+  juntos". Os dois caminhos (cron e manual) foram revistos juntos, como o débito
+  original pedia.
+
+### Débitos novos
+
+Nenhum.
+
+### Arquivos modificados
+
+- `packages/db/src/projetos-approval.ts` (tipo `ApprovalDbHandle`; handle
+  opcional em `generatePaymentSchedule` e `onProjectApproved`; corpo do
+  provisionamento extraído para `provisionApprovedProject`; copy de
+  `notifyProjectApprovalFailure`)
+- `packages/jobs/src/crons/projetos.ts` (`runHomologacaoAutoApprove`: uma
+  transação por projeto, ramos de aprovação/reprovação unificados sob
+  `decision`, log estruturado + `continue` na falha, notificação fora da
+  transação; `getNextVersionNumber` recebe o handle)
+- `apps/projetos/src/actions/projects.ts` (`transitionProjectStage`:
+  provisionamento financeiro e audit dentro da `tx` existente, via
+  `withSystemRole`; `try/catch` de `onProjectApproved` removido)
+- `packages/jobs/src/__tests__/projetos-homologacao.test.ts` (3 testes novos +
+  mock seletivo de `onProjectApproved` + helper de limpeza)
 - `SESSIONS.md` (esta entrada + linha no índice)
