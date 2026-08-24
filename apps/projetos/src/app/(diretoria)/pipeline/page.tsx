@@ -30,12 +30,28 @@ const TYPE_OPTIONS = [
   { value: "pontual", label: "Pontual" },
 ];
 
-const YEAR_OPTIONS = [
-  { value: "", label: "Todos os anos" },
-  { value: "2024", label: "2024" },
-  { value: "2025", label: "2025" },
-  { value: "2026", label: "2026" },
-];
+/** Opções do filtro de ano (P-2.4c). Antes era uma lista literal de 2024–2026,
+ * que congelava a cada virada de ano e deixava fora do filtro justamente os
+ * projetos novos — o wizard sugere `ano de referência = ano atual + 1`. Aqui os
+ * anos vêm dos projetos que de fato existem (o kanban já traz todos os não
+ * soft-deleted visíveis pela RLS), unidos ao ano corrente e ao seguinte para
+ * que ambos constem mesmo sem projeto algum naquele ano. */
+function buildYearOptions(
+  projects: CompactProjectView[],
+): { value: string; label: string }[] {
+  const currentYear = new Date().getFullYear();
+  const years = new Set<number>([currentYear, currentYear + 1]);
+  for (const p of projects) {
+    if (p.anoReferencia !== null) years.add(p.anoReferencia);
+  }
+
+  return [
+    { value: "", label: "Todos os anos" },
+    ...[...years]
+      .sort((a, b) => b - a)
+      .map((y) => ({ value: String(y), label: String(y) })),
+  ];
+}
 
 function EmptyPipelineNoFilters() {
   return (
@@ -186,6 +202,8 @@ export default function DiretoriaPipelinePage() {
 
   const hasActiveFilters = Boolean(categoria || tipo || ano);
 
+  const yearOptions = buildYearOptions(allProjects);
+
   function clearFilters() {
     setCategoria("");
     setTipo("");
@@ -273,7 +291,7 @@ export default function DiretoriaPipelinePage() {
           className="rounded-(--radius) border border-(--border) bg-(--surface) px-3 py-1.5 text-sm text-(--fg) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--brand)"
           aria-label="Ano"
         >
-          {YEAR_OPTIONS.map((o) => (
+          {yearOptions.map((o) => (
             <option key={o.value} value={o.value}>
               {o.label}
             </option>

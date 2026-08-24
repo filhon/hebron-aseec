@@ -296,6 +296,7 @@
 | S-273  | 2026-08-22 | Varredura dos débitos declarados em SESSIONS.md (AUDITORIA)                                                                      | concluido (gera P-0.1d, P-1.18c, P-1.19c, P-2.4c, P-2.6c, P-0.14b, P-1.26b, P-2.8d)  |
 | S-274  | 2026-08-24 | P-1.18c — Documentos: os dois campos que a reabertura de edição joga fora (CORRETIVO)                                            | concluido                                                                            |
 | S-275  | 2026-08-24 | P-1.19c — Documentos: o conselheiro que ainda alcança a escrita (CORRETIVO)                                                      | concluido                                                                            |
+| S-276  | 2026-08-24 | P-2.4c — Projetos: o filtro de ano que não acompanha o ano de referência (CORRETIVO)                                             | concluido                                                                            |
 
 ---
 
@@ -26199,4 +26200,94 @@ nome...`, `diff.before.name` vem `{redacted: true}`) é pré-existente e não
   default `true`, repassada ao `CategoryRow`; ações de linha, "Nova
   categoria" e CTA do estado vazio condicionados — fora da lista permitida)
 - `apps/documentos/src/__tests__/session-gate.test.ts` (9 testes novos)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+## S-276 — P-2.4c — Projetos: o filtro de ano que não acompanha o ano de referência (CORRETIVO)
+
+**Prompt:** `PROMPTS.md` § P-2.4c
+**Data:** 2026-08-24
+**Modelo:** claude-opus-5
+**Status:** concluido
+
+### Resumo
+
+Fecha o débito de S-196 (`YEAR_OPTIONS`), item 5 da varredura de S-273. O
+`<select>` de ano do pipeline da diretoria listava 2024, 2025 e 2026 como
+literais (`(diretoria)/pipeline/page.tsx:33-38`), enquanto
+`project-wizard.tsx:124` sugere `ano de referência = ano atual + 1`. Desde
+janeiro de 2026 todo projeto novo nasce com `evaluationYear = 2027` e não era
+filtrável — o filtro simplesmente não oferecia o ano, e a lista congelaria de
+novo a cada virada.
+
+As opções agora são derivadas: `buildYearOptions(projects)` monta um `Set` com
+o ano corrente e o ano corrente + 1 (para que ambos constem mesmo sem projeto
+algum), acrescenta todo `anoReferencia` não nulo dos projetos existentes,
+ordena desc e prefixa "Todos os anos". Nada mais mudou: mesmo `<select>`,
+mesmas classes, mesmo estado `ano`, mesmo predicado de filtragem.
+
+### Divergência do escopo do prompt (suposição registrada — G1)
+
+O prompt pede "`SELECT DISTINCT` em `projects.evaluation_year`, ignorando
+soft-deleted" e diz "a consulta é do Server Component da página". A página
+**não é** um Server Component: `pipeline/page.tsx:1` é `"use client"` e busca
+os dados por `getKanbanProjects()`. E `lib/queries.ts:1` é `"use server"` —
+qualquer função nova exportada de lá seria exatamente a Server Action que o
+mesmo escopo (item 2) proíbe criar.
+
+Optei pela leitura mais simples que satisfaz os dois itens: derivar os anos do
+conjunto que a página já carrega. `getKanbanProjects()` seleciona
+`projects.evaluationYear` `WHERE deleted_at IS NULL` sem `limit`, dentro de
+`withAuthenticatedContext` (`queries.ts:788-813`) — o `Set` construído em
+memória é, linha a linha, o mesmo resultado que o `SELECT DISTINCT` daria sob a
+mesma RLS, sem round-trip adicional e sem risco de o filtro divergir do kanban
+que ele filtra. `lib/queries.ts` estava na lista de arquivos permitidos mas não
+precisou ser tocado.
+
+### Decisões
+
+- **`new Date().getFullYear()` (local), não UTC.** É a mesma base do wizard
+  (`project-wizard.tsx:124`), que é quem produz o ano de referência sugerido.
+  Usar UTC aqui faria o filtro discordar do wizard em 21h por ano no fuso de
+  Brasília.
+- **Cálculo inline, sem `useMemo`.** Segue o estilo dos outros derivados do
+  mesmo componente (`filtered`, `activeCount`, `totalValue`, `pendingVotes`,
+  todos recalculados a cada render). Um `Set` sobre a lista de projetos do
+  portfólio não justifica memo, e uniformidade vale mais que a micro-otimização.
+- **Projetos com `anoReferencia === null` continuam passando por qualquer
+  filtro de ano** (`page.tsx:172`, comportamento pré-existente). O prompt veda
+  mudança de comportamento do filtro; não toquei nisso.
+- **Sem query param.** O escopo fala em "nenhuma mudança no formato do query
+  param (`?ano=`)" — o filtro nunca usou query param, é estado React
+  (`useState`). Nada a preservar; nada mudou.
+
+### Verificação
+
+- `pnpm turbo lint typecheck --filter=@hebron/projetos --concurrency=3`:
+  `@hebron/projetos#typecheck` verde. `@hebron/projetos#lint` rodado isolado
+  (`pnpm --filter=@hebron/projetos lint`): limpo, zero avisos.
+- O run com `turbo` arrasta `@hebron/db#lint`, que falha por `check_locks.mjs`
+  e `check_locks2.mjs` (fora do `parserOptions.project`). Pré-existente — os
+  dois arquivos foram commitados em `f0484f8`, e este diff não toca
+  `packages/db`. Mesma falha registrada em S-275.
+- Sem verificação no navegador: o repositório não tem harness de render para
+  `app/**/*.tsx` (limitação já registrada em S-274/S-275). A derivação foi
+  conferida por leitura da fonte dos dados (`getKanbanProjects`) até o
+  `<option>`.
+- Nenhuma mudança visual: o `<select>`, suas classes, o `aria-label` e o rótulo
+  "Todos os anos" estão idênticos; só o conteúdo das `<option>` passou a ser
+  calculado.
+
+### Débito de S-196 fechado
+
+- ✅ `YEAR_OPTIONS` congelado em 2024–2026 no pipeline da diretoria.
+
+**Nenhum débito novo declarado nesta sessão.**
+
+### Arquivos modificados
+
+- `apps/projetos/src/app/(diretoria)/pipeline/page.tsx` (`YEAR_OPTIONS`
+  substituído por `buildYearOptions()`; `yearOptions` calculado no componente e
+  consumido pelo `<select>` de ano)
 - `SESSIONS.md` (esta entrada + linha no índice)

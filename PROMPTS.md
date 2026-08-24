@@ -11010,12 +11010,12 @@ próximo toque em `pipeline/page.tsx`").
 
 **Critérios de aceite:**
 
-- [ ] Um projeto com `evaluation_year = 2027` aparece no filtro e é filtrável
-- [ ] O ano corrente e o ano corrente + 1 sempre constam, mesmo sem projeto naquele ano
-- [ ] Anos com projetos anteriores (2024, 2025…) continuam listados
-- [ ] Ordem decrescente, "Todos os anos" no topo
-- [ ] Nenhuma mudança visual além do conteúdo do `<select>`
-- [ ] Lint passa · Types passam
+- [x] Um projeto com `evaluation_year = 2027` aparece no filtro e é filtrável
+- [x] O ano corrente e o ano corrente + 1 sempre constam, mesmo sem projeto naquele ano
+- [x] Anos com projetos anteriores (2024, 2025…) continuam listados
+- [x] Ordem decrescente, "Todos os anos" no topo
+- [x] Nenhuma mudança visual além do conteúdo do `<select>`
+- [x] Lint passa · Types passam
 
 **Notas:**
 
