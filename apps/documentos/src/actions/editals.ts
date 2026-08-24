@@ -1,14 +1,19 @@
 "use server";
 
 import { z } from "zod";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import crypto from "node:crypto";
 import { BusinessError } from "@hebron/auth/safe-action-error";
 import {
   withAuthenticatedContext,
   withSystemRole,
 } from "@hebron/db/authenticated";
-import { documents, documentTags, editals } from "@hebron/db/schema";
+import {
+  documents,
+  documentTags,
+  documentVersions,
+  editals,
+} from "@hebron/db/schema";
 import { projectCategoryEnum } from "@hebron/validators/projetos";
 import { adminDocAction } from "../lib/safe-action";
 import { logDocumentAudit } from "../lib/audit";
@@ -40,6 +45,8 @@ export const createEdital = adminDocAction
         title: z.string().min(3).max(200),
         contentMd: z.string().optional(),
         storagePath: z.string().optional(),
+        fileSizeBytes: z.number().int().nonnegative().optional(),
+        mimeType: z.string().optional(),
         visibility: visibilityEnum.default("public"),
         categoryId: z.string().uuid().optional(),
         cycleType: z.enum(["pontual", "anual"]),
@@ -127,6 +134,18 @@ export const createEdital = adminDocAction
 
         if (!edital) throw new BusinessError("Falha ao criar edital");
 
+        if (parsedInput.storagePath) {
+          await tx.insert(documentVersions).values({
+            documentId: document.id,
+            contentMd: parsedInput.contentMd ?? null,
+            fileUrl: parsedInput.storagePath,
+            fileSizeBytes: parsedInput.fileSizeBytes ?? null,
+            mimeType: parsedInput.mimeType ?? null,
+            versionNumber: 1,
+            createdBy: ctx.actorId,
+          });
+        }
+
         if (parsedInput.tagIds?.length) {
           await tx.insert(documentTags).values(
             parsedInput.tagIds.map((tagId) => ({
@@ -172,6 +191,8 @@ export const updateEdital = adminDocAction
       title: z.string().min(3).max(200).optional(),
       contentMd: z.string().optional(),
       storagePath: z.string().optional(),
+      fileSizeBytes: z.number().int().nonnegative().optional(),
+      mimeType: z.string().optional(),
       visibility: visibilityEnum.optional(),
       categoryId: z.string().uuid().nullable().optional(),
       opensAt: z.string().datetime().nullable().optional(),
@@ -207,6 +228,14 @@ export const updateEdital = adminDocAction
 
         if (!existingDoc) throw new BusinessError("Edital não encontrado");
 
+        const [existingEdital] = await tx
+          .select()
+          .from(editals)
+          .where(eq(editals.id, id))
+          .limit(1);
+
+        if (!existingEdital) throw new BusinessError("Edital não encontrado");
+
         const docUpdate: Partial<typeof documents.$inferInsert> = {
           updatedAt: new Date(),
         };
@@ -237,11 +266,35 @@ export const updateEdital = adminDocAction
           editalUpdate.projectCategorySlug = projectCategorySlug ?? null;
         if (faq !== undefined) editalUpdate.faq = faq;
 
-        const [updatedEdital] = await tx
-          .update(editals)
-          .set(editalUpdate)
-          .where(eq(editals.id, id))
-          .returning();
+        let updatedEdital: typeof editals.$inferSelect | undefined =
+          existingEdital;
+        if (Object.keys(editalUpdate).length > 0) {
+          [updatedEdital] = await tx
+            .update(editals)
+            .set(editalUpdate)
+            .where(eq(editals.id, id))
+            .returning();
+        }
+
+        if (docFields.storagePath !== undefined) {
+          const [latestVersion] = await tx
+            .select()
+            .from(documentVersions)
+            .where(eq(documentVersions.documentId, id))
+            .orderBy(desc(documentVersions.versionNumber))
+            .limit(1);
+
+          await tx.insert(documentVersions).values({
+            documentId: id,
+            contentMd: docFields.contentMd ?? existingDoc.contentMd,
+            fileUrl: docFields.storagePath,
+            fileSizeBytes:
+              docFields.fileSizeBytes ?? latestVersion?.fileSizeBytes ?? null,
+            mimeType: docFields.mimeType ?? latestVersion?.mimeType ?? null,
+            versionNumber: (latestVersion?.versionNumber ?? 0) + 1,
+            createdBy: ctx.actorId,
+          });
+        }
 
         if (tagIds !== undefined) {
           await tx.delete(documentTags).where(eq(documentTags.documentId, id));

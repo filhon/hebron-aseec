@@ -294,6 +294,7 @@
 | S-271  | 2026-08-22 | AUDIT PACOTE 10 — Camada de IA (CORRETIVO)                                                                                       | concluido                                                                            |
 | S-272  | 2026-08-22 | AUDIT PACOTE 11 — Higiene, consistência e registro (CORRETIVO)                                                                   | concluido                                                                            |
 | S-273  | 2026-08-22 | Varredura dos débitos declarados em SESSIONS.md (AUDITORIA)                                                                      | concluido (gera P-0.1d, P-1.18c, P-1.19c, P-2.4c, P-2.6c, P-0.14b, P-1.26b, P-2.8d)  |
+| S-274  | 2026-08-24 | P-1.18c — Documentos: os dois campos que a reabertura de edição joga fora (CORRETIVO)                                            | concluido                                                                            |
 
 ---
 
@@ -25778,7 +25779,7 @@ Cada linha traz o arquivo onde a resolução foi confirmada nesta varredura.
 - **`projectCategoryId` de edital nunca preenchido** (S-61) — a coluna virou
   `editals.project_category_slug`, é gravada por `createEdital`/`updateEdital` e
   volta pelo prefill (`packages/integrations/src/documentos-projetos.ts:59`).
-  *Ressalva:* a **reabertura para edição** ainda não a lê — ver P-1.18c abaixo.
+  _Ressalva:_ a **reabertura para edição** ainda não a lê — ver P-1.18c abaixo.
 - **`budget.name` como workaround em `notes`** (S-53) — coluna
   `budgets.name text not null` existe (`schema/financeiro.ts:184`).
 - **Parser CSV só com vírgula** (S-53) — fechado em P-3.8b (confirmado em S-214).
@@ -25926,4 +25927,109 @@ sessões posteriores que dissessem tê-los fechado.
 
 - `PROMPTS.md` — nova seção "Varredura de débitos de SESSIONS.md (2026-08-22)"
   com 8 prompts corretivos, mais as linhas na tabela "Correções"
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+## S-274 — P-1.18c — Documentos: os dois campos que a reabertura de edição joga fora (CORRETIVO)
+
+**Prompt:** `PROMPTS.md` § P-1.18c
+**Data:** 2026-08-24
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+Fecha três defeitos independentes na edição de documento/edital, todos
+registrados como débito sem prompt até agora (S-188, S-195, ressalva de S-61
+confirmada em S-273):
+
+1. **`type` e `project_category_slug` eram descartados ao reabrir edição.**
+   `editorial/[id]/editar/page.tsx` passou a selecionar `documents.type` e
+   `editals.projectCategorySlug` e a repassá-los ao client como `type` e
+   `editalProjectCategory`. `_client.tsx`: os dois campos de `InitialDocData`
+   deixaram de ser opcionais (eram `?:` com um comentário cada, documentando a
+   lacuna só para o typecheck passar) e passaram a `required` — os dois
+   comentários saíram do arquivo. Antes, `DocumentForm`
+   (`components/document-form.tsx:197`) recebia `initialValues?.type ??
+"other"` com `type` sempre `undefined`, pré-selecionava "Outro" e
+   **gravava "Outro"** em qualquer salvamento, mesmo sem tocar no campo; o
+   mesmo valia para a categoria de projeto de um edital, que voltava a vazio.
+2. **`updateEdital` quebrava quando nada de edital mudava.**
+   `actions/editals.ts`: `editalUpdate` nascia `{}` e o
+   `tx.update(editals).set(editalUpdate)` rodava incondicionalmente — o
+   drizzle-orm rejeita um `set` vazio. Passou a ler `existingEdital` antes
+   (mesmo padrão que `existingDoc` já usava) e só chama `update(editals)` se
+   `Object.keys(editalUpdate).length > 0`; quando vazio, reusa a linha já
+   lida (`existingEdital`) como `updatedEdital`. `update(documents)` não
+   precisou do mesmo tratamento — `docUpdate` sempre tem `updatedAt`, então
+   `Object.keys(docUpdate).length` nunca é 0 (confirmado por leitura, não
+   alterado).
+3. **Editais nunca ganhavam linha em `document_versions`.** `createEdital`
+   e `updateEdital` não escreviam nessa tabela — só o fluxo de documento
+   comum escrevia (`actions/documents.ts`, usado como referência de formato).
+   `createEdital` agora insere a versão 1 quando `storagePath` está presente
+   no input (edital sem arquivo não cria versão); `updateEdital` insere uma
+   nova versão só quando `storagePath` muda, seguindo o mesmo padrão de
+   `updateDocument` (lê a última versão, incrementa `versionNumber`, herda
+   `fileSizeBytes`/`mimeType` da versão anterior quando o input não os
+   informa). Os dois schemas Zod ganharam `fileSizeBytes`/`mimeType`
+   opcionais, espelhando `createDocument`/`updateDocument`. `_client.tsx`
+   (editar) passou a enviar `fileSizeBytes`/`mimeType` junto de `storagePath`
+   no `updateEdital` — já calculados por `uploadFile()`, só não eram
+   repassados. `editorial/novo/_client.tsx` (fluxo de **criação** de edital)
+   segue sem enviar esses dois campos: não está nos arquivos permitidos deste
+   prompt; `createEdital` insere a versão com `fileSizeBytes`/`mimeType`
+   nulos até esse caller ser tocado — registrado como débito abaixo.
+
+### Suposições registradas
+
+- **`editorial/novo/_client.tsx` não envia `fileSizeBytes`/`mimeType` ao
+  `createEdital`** — fora dos arquivos permitidos deste prompt (só
+  `editar/page.tsx`, `editar/_client.tsx`, `actions/editals.ts`,
+  `__tests__/actions.test.ts`). A versão inicial de um edital criado com
+  arquivo grava `fileSizeBytes`/`mimeType` como `null` até esse caller passar
+  a enviá-los. Débito novo — sem prompt ainda.
+- Os dois critérios de aceite sobre "reabrir pré-seleciona o valor salvo" não
+  têm regressão automatizada: o repositório não tem harness de render de
+  Server/Client Component (nenhum teste hoje importa um `.tsx` de `app/`;
+  `vitest.config.ts` do app não tem plugin de JSX e não está nos arquivos
+  permitidos para adicionar um). Cobertos por leitura de código (a cadeia
+  `page.tsx` → `_client.tsx` → `DocumentForm`/`EditalForm` foi lida ponta a
+  ponta) e por testes de regressão na camada de actions/DB (abaixo) — não por
+  clique manual no navegador nesta sessão.
+
+### Verificação
+
+- `pnpm --filter documentos typecheck` — limpo.
+- `pnpm --filter documentos lint` — limpo.
+- `pnpm --filter documentos test -- --run src/__tests__/actions.test.ts`:
+  37 testes, 36 passando — inclui 5 testes novos: `updateEdital` só com
+  `title` (sem tocar em nenhum campo de edital) conclui sem erro e preserva
+  os campos não tocados; `createEdital` com arquivo cria a versão 1 em
+  `document_versions` (com `fileSizeBytes`/`mimeType`); `createEdital` sem
+  arquivo não cria versão nenhuma; `updateEdital` trocando `storagePath`
+  cria a versão 2. O 1 teste que falha (`categorias — hierarquia >
+updateCategory altera o nome...`, `diff.before.name` vem `{redacted: true}`
+  em vez do nome) é pré-existente e não relacionado — mesma causa já
+  documentada em `project_sensitive_audit_fields_name_overredaction`
+  (`SENSITIVE_AUDIT_FIELDS` redige por chave, não por entidade, e atinge
+  `name` de categorias/templates que não é PII; achado de S-260, ainda sem
+  prompt). `actions/categories.ts` não foi tocado nesta sessão.
+- Nenhuma mudança visual — confirmado por leitura: `_client.tsx` só ganhou
+  campos de dados (`type`, `editalProjectCategory`, `fileSizeBytes`,
+  `mimeType`) passados adiante para os forms já existentes, nenhum JSX
+  alterado.
+
+### Arquivos modificados
+
+- `apps/documentos/src/app/editorial/[id]/editar/page.tsx` (select +
+  `type`/`editalProjectCategory` no `doc` passado ao client)
+- `apps/documentos/src/app/editorial/[id]/editar/_client.tsx`
+  (`InitialDocData.type`/`editalProjectCategory` obrigatórios, comentários de
+  lacuna removidos; `updateEdital` passa a enviar `fileSizeBytes`/`mimeType`)
+- `apps/documentos/src/actions/editals.ts` (`createEdital`/`updateEdital`:
+  `fileSizeBytes`/`mimeType` no schema, insert condicional em
+  `documentVersions`, `update(editals)` condicional reusando `existingEdital`)
+- `apps/documentos/src/__tests__/actions.test.ts` (5 testes novos no describe
+  "editais — createEdital / updateEdital"; removido o comentário que
+  documentava o bug de `updateEdital` como aceito)
 - `SESSIONS.md` (esta entrada + linha no índice)

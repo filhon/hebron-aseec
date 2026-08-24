@@ -8,7 +8,7 @@ import {
   editals,
   tags,
 } from "@hebron/db/schema";
-import type { Category } from "@hebron/types/documentos";
+import type { Category, DocumentType } from "@hebron/types/documentos";
 import { EditDocumentClient } from "./_client";
 import { requireEditorSession } from "../../../../lib/session";
 
@@ -74,11 +74,13 @@ export default async function EditarDocumentoPage({ params }: PageProps) {
           contentMd: documents.contentMd,
           fileUrl: documents.fileUrl,
           visibility: documents.visibility,
+          type: documents.type,
           categoryId: documents.categoryId,
           isEdital: editals.id,
           editalOpensAt: editals.opensAt,
           editalClosesAt: editals.closesAt,
           editalProjectType: editals.projectType,
+          editalProjectCategorySlug: editals.projectCategorySlug,
           editalFaq: editals.faq,
         })
         .from(documents)
@@ -133,12 +135,14 @@ export default async function EditarDocumentoPage({ params }: PageProps) {
         contentMd: row.contentMd,
         fileUrl: row.fileUrl,
         visibility: row.visibility as "public" | "internal" | "restricted",
+        type: row.type as Exclude<DocumentType, "edital">,
         categoryId: row.categoryId,
         tagIds: docTagRows.map((t) => t.tagId),
         isEdital: row.isEdital !== null,
         editalOpensAt: row.editalOpensAt ?? null,
         editalClosesAt: row.editalClosesAt ?? null,
         editalProjectType: row.editalProjectType ?? null,
+        editalProjectCategory: row.editalProjectCategorySlug ?? null,
         editalFaq: row.editalFaq ?? [],
       }}
       categories={buildTree(catRows)}

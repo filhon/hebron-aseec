@@ -776,11 +776,6 @@ describe("editais — createEdital / updateEdital", () => {
       roles: ["super_admin"],
       designations: [],
     });
-    // Inclui um campo próprio de editals (projectType), não só de documents:
-    // com editalUpdate vazio, `tx.update(editals).set({})` lança "No values
-    // to set" e a action inteira falha (bug pré-existente fora do escopo
-    // deste prompt — actions/editals.ts não está nos arquivos permitidos de
-    // P-1.24b; registrado como débito em SESSIONS.md).
     const updated = await updateEdital({
       id: doc.id,
       title: "Edital Atualizado",
@@ -793,6 +788,138 @@ describe("editais — createEdital / updateEdital", () => {
       action: "edital.updated",
       entity: "edital",
     });
+  });
+
+  // P-1.18c: updateEdital nascia com editalUpdate = {} quando nada de edital
+  // mudava e chamava tx.update(editals).set({}) incondicionalmente — o
+  // drizzle-orm rejeita um set vazio e a action inteira falhava (S-195).
+  it("updateEdital só com title (nada de edital muda) conclui sem erro e altera só o título", async () => {
+    const { resolveSession } = await import("@hebron/auth/server");
+    const { createEdital, updateEdital } = await import("../actions/editals");
+
+    vi.mocked(resolveSession).mockResolvedValueOnce({
+      actorId: ACTOR_ID,
+      roles: ["super_admin"],
+      designations: [],
+    });
+    const created = await createEdital({
+      title: "Edital Só Título",
+      visibility: "public",
+      cycleType: "pontual",
+      projectType: "capacitacao",
+    });
+    const doc = requireDefined(created?.data?.document, "document");
+
+    vi.mocked(resolveSession).mockResolvedValueOnce({
+      actorId: ACTOR_ID,
+      roles: ["super_admin"],
+      designations: [],
+    });
+    const updated = await updateEdital({
+      id: doc.id,
+      title: "Edital Só Título Renomeado",
+    });
+
+    expect(updated?.serverError).toBeUndefined();
+    expect(updated?.data?.document?.title).toBe("Edital Só Título Renomeado");
+    expect(updated?.data?.edital?.projectType).toBe("capacitacao");
+  });
+
+  // P-1.18c: createEdital/updateEdital não escreviam em document_versions —
+  // edital.currentVersion ficava sempre null (S-188).
+  it("createEdital com arquivo cria linha em document_versions", async () => {
+    const { resolveSession } = await import("@hebron/auth/server");
+    const { createEdital } = await import("../actions/editals");
+
+    vi.mocked(resolveSession).mockResolvedValueOnce({
+      actorId: ACTOR_ID,
+      roles: ["super_admin"],
+      designations: [],
+    });
+    const created = await createEdital({
+      title: "Edital Com Arquivo",
+      visibility: "public",
+      cycleType: "pontual",
+      storagePath: "documents/actor/edital.pdf",
+      fileSizeBytes: 999,
+      mimeType: "application/pdf",
+    });
+    const doc = requireDefined(created?.data?.document, "document");
+
+    const versions = await db
+      .select()
+      .from(documentVersions)
+      .where(eq(documentVersions.documentId, doc.id));
+    expect(versions).toHaveLength(1);
+    expect(versions[0]?.versionNumber).toBe(1);
+    expect(versions[0]?.fileUrl).toBe("documents/actor/edital.pdf");
+    expect(versions[0]?.fileSizeBytes).toBe(999);
+    expect(versions[0]?.mimeType).toBe("application/pdf");
+  });
+
+  it("createEdital sem arquivo não cria linha em document_versions", async () => {
+    const { resolveSession } = await import("@hebron/auth/server");
+    const { createEdital } = await import("../actions/editals");
+
+    vi.mocked(resolveSession).mockResolvedValueOnce({
+      actorId: ACTOR_ID,
+      roles: ["super_admin"],
+      designations: [],
+    });
+    const created = await createEdital({
+      title: "Edital Sem Arquivo",
+      visibility: "public",
+      cycleType: "pontual",
+    });
+    const doc = requireDefined(created?.data?.document, "document");
+
+    const versions = await db
+      .select()
+      .from(documentVersions)
+      .where(eq(documentVersions.documentId, doc.id));
+    expect(versions).toHaveLength(0);
+  });
+
+  it("updateEdital trocando storagePath cria nova versão em document_versions", async () => {
+    const { resolveSession } = await import("@hebron/auth/server");
+    const { createEdital, updateEdital } = await import("../actions/editals");
+
+    vi.mocked(resolveSession).mockResolvedValueOnce({
+      actorId: ACTOR_ID,
+      roles: ["super_admin"],
+      designations: [],
+    });
+    const created = await createEdital({
+      title: "Edital Para Trocar Arquivo",
+      visibility: "public",
+      cycleType: "pontual",
+      storagePath: "documents/actor/original.pdf",
+      fileSizeBytes: 100,
+      mimeType: "application/pdf",
+    });
+    const doc = requireDefined(created?.data?.document, "document");
+
+    vi.mocked(resolveSession).mockResolvedValueOnce({
+      actorId: ACTOR_ID,
+      roles: ["super_admin"],
+      designations: [],
+    });
+    await updateEdital({
+      id: doc.id,
+      storagePath: "documents/actor/revisado.pdf",
+      fileSizeBytes: 200,
+      mimeType: "application/pdf",
+    });
+
+    const versions = await db
+      .select()
+      .from(documentVersions)
+      .where(eq(documentVersions.documentId, doc.id))
+      .orderBy(desc(documentVersions.versionNumber));
+    expect(versions).toHaveLength(2);
+    expect(versions[0]?.versionNumber).toBe(2);
+    expect(versions[0]?.fileUrl).toBe("documents/actor/revisado.pdf");
+    expect(versions[0]?.fileSizeBytes).toBe(200);
   });
 });
 

@@ -20,21 +20,14 @@ interface InitialDocData {
   contentMd: string | null;
   fileUrl: string | null;
   visibility: Visibility;
-  /** Ausente na leitura atual de editorial/[id]/editar/page.tsx (fora do
-   * escopo de P-1.18b — não está entre os arquivos permitidos). O formulário
-   * cai para o default "other" do DocumentForm até essa lacuna ser fechada. */
-  type?: Exclude<DocumentType, "edital">;
+  type: Exclude<DocumentType, "edital">;
   categoryId: string | null;
   tagIds: string[];
   isEdital: boolean;
   editalOpensAt: Date | null;
   editalClosesAt: Date | null;
   editalProjectType: string | null;
-  /** Ausente na leitura atual de editorial/[id]/editar/page.tsx (fora do
-   * escopo de P-1.23b — não está entre os arquivos permitidos, mesma lacuna
-   * já documentada acima para `type`). O formulário cai para "" até essa
-   * leitura ser adicionada em um prompt futuro. */
-  editalProjectCategory?: string | null;
+  editalProjectCategory: string | null;
   editalFaq: { q: string; a: string }[];
 }
 
@@ -158,6 +151,8 @@ export function EditDocumentClient({
         contentMd:
           values.contentMode === "markdown" ? values.content : undefined,
         storagePath: uploaded?.storagePath,
+        fileSizeBytes: uploaded?.fileSizeBytes,
+        mimeType: uploaded?.mimeType,
         visibility: values.visibility,
         categoryId: values.categoryId || null,
         tagIds,
