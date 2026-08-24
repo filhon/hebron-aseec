@@ -242,6 +242,7 @@ export const findRenewalCandidate = submissorAction
             ministryArea: projects.ministryArea,
             budgetTotal: projects.budgetTotal,
             parcelas: projects.parcelas,
+            mesesPagamento: projects.mesesPagamento,
             evaluationYear: projects.evaluationYear,
             categorySlug: projectCategories.slug,
           })
@@ -265,8 +266,8 @@ export const findRenewalCandidate = submissorAction
         if (!project) return null;
 
         // Campos sem coluna própria (metodologia, contexto ministerial,
-        // tempo de ministério, beneficiários, cofinanciamento, meses de
-        // pagamento) só existem no snapshot da versão 1 — mesmo padrão de
+        // tempo de ministério, beneficiários, cofinanciamento) só existem no
+        // snapshot da versão 1 — mesmo padrão de
         // getSubmissorProjectDetail/getDirectorProjectDetail (lib/queries.ts).
         // RLS "project_versions_select" só libera o próprio submissor (mais
         // estrito que "projects_select_own_or_org"): se o candidato foi
@@ -285,9 +286,17 @@ export const findRenewalCandidate = submissorAction
           unknown
         >;
 
-        const mesesSelecionados = Array.isArray(snapshot.mesesPagamento)
-          ? (snapshot.mesesPagamento as number[])
-          : [];
+        // Meses de pagamento saíram da lista acima em P-2.6c: têm coluna
+        // própria (`meses_pagamento`), que vem de `projects` e portanto
+        // sobrevive à RLS mais estrita de project_versions — é justamente o
+        // caso de renovação por outro membro da organização. O snapshot fica
+        // como fallback para candidato anterior à migration 0091.
+        const mesesSelecionados =
+          project.mesesPagamento && project.mesesPagamento.length > 0
+            ? project.mesesPagamento
+            : Array.isArray(snapshot.mesesPagamento)
+              ? (snapshot.mesesPagamento as number[])
+              : [];
 
         return {
           id: project.id,
@@ -376,6 +385,12 @@ export const createAnnualDraft = submissorAction
             budgetTotal: parsedInput.valorTotal.toString(),
             parcelas: parsedInput.numeroParcelas,
             meses: parsedInput.mesesPagamento.length,
+            // A lista, não só a contagem — é ela que define o vencimento de
+            // cada parcela em generatePaymentSchedule (P-2.6c). Gravada em
+            // ordem crescente para que a coluna seja canônica.
+            mesesPagamento: [...parsedInput.mesesPagamento].sort(
+              (a, b) => a - b,
+            ),
             evaluationYear: year,
           })
           .returning();
@@ -598,9 +613,15 @@ export const updateDraftProject = submissorAction
         if (parsedInput.parcelas !== undefined)
           patch.parcelas = parsedInput.parcelas;
         // meses acompanha mesesPagamento.length — nunca gravado sozinho,
-        // mesma invariante de createAnnualDraft (meses === parcelas).
-        if (parsedInput.mesesPagamento !== undefined)
+        // mesma invariante de createAnnualDraft (meses === parcelas). Desde
+        // P-2.6c a lista também é gravada (meses_pagamento), porque é ela que
+        // define o vencimento de cada parcela no cronograma.
+        if (parsedInput.mesesPagamento !== undefined) {
           patch.meses = parsedInput.mesesPagamento.length;
+          patch.mesesPagamento = [...parsedInput.mesesPagamento].sort(
+            (a, b) => a - b,
+          );
+        }
 
         const updated = await tx
           .update(projects)

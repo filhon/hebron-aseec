@@ -297,6 +297,7 @@
 | S-274  | 2026-08-24 | P-1.18c — Documentos: os dois campos que a reabertura de edição joga fora (CORRETIVO)                                            | concluido                                                                            |
 | S-275  | 2026-08-24 | P-1.19c — Documentos: o conselheiro que ainda alcança a escrita (CORRETIVO)                                                      | concluido                                                                            |
 | S-276  | 2026-08-24 | P-2.4c — Projetos: o filtro de ano que não acompanha o ano de referência (CORRETIVO)                                             | concluido                                                                            |
+| S-277  | 2026-08-24 | P-2.6c — Projetos: parcelas nos meses errados e um centavo que some (CORRETIVO)                                                  | concluido                                                                            |
 
 ---
 
@@ -26290,4 +26291,176 @@ precisou ser tocado.
 - `apps/projetos/src/app/(diretoria)/pipeline/page.tsx` (`YEAR_OPTIONS`
   substituído por `buildYearOptions()`; `yearOptions` calculado no componente e
   consumido pelo `<select>` de ano)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+## S-277 — P-2.6c — Projetos: parcelas nos meses errados e um centavo que some (CORRETIVO)
+
+**Prompt:** `PROMPTS.md` § P-2.6c
+**Data:** 2026-08-24
+**Modelo:** claude-opus-5
+**Status:** concluido
+
+### Resumo
+
+Fecha o item 6 da varredura de S-273 — os dois defeitos de
+`packages/db/src/projetos-approval.ts::generatePaymentSchedule`:
+
+1. **Meses ignorados.** O wizard coletava `mesesPagamento` e o validador exigia
+   `mesesPagamento.length === numeroParcelas`, mas `projetos.projects` só
+   guardava a contagem (`meses`). O gerador montava o mês de cada parcela como
+   `(i % 12) + 1` — jan/fev/mar. Projeto aprovado para pagar em ago/set/out
+   gerava `payment_schedules` (e, via `onProjectApproved`,
+   `financeiro.payables`) com vencimento em janeiro.
+2. **Um centavo por projeto (S-203).** `amountPerInstallment.toFixed(2)` em
+   toda parcela: R$ 10.000,00 ÷ 3 = três de R$ 3.333,33 = R$ 9.999,99.
+
+Agora: migration `0091` adiciona `projetos.projects.meses_pagamento integer[]`
+(nullable); `createAnnualDraft` e `updateDraftProject` gravam a lista (em ordem
+crescente, para que a coluna seja canônica); o gerador emite uma parcela por mês
+da lista e calcula em centavos inteiros — `base = floor(totalCents / n)`,
+`resto = totalCents − base × n`, as primeiras `resto` parcelas recebem
+`base + 1`. A soma passa a ser exatamente `budget_total`.
+
+### Decisões
+
+- **`mesesPagamento` fora do `Pick`, como `& { mesesPagamento?: number[] | null }`.**
+  Os dois call sites reais (`transitionProjectStage` e o cron de homologação)
+  passam a linha inteira de `projects`, então a coluna chega sozinha. Deixá-la
+  opcional mantém válidos os chamadores que montam o objeto à mão —
+  `packages/db/src/__tests__/projetos-approval.test.ts:78` é um, e não está na
+  lista de arquivos permitidos deste prompt. Sem isso o corretivo quebraria o
+  typecheck de um arquivo que não podia tocar.
+- **O divisor dos centavos é o número de linhas emitidas, não `parcelas`.** Sob
+  a invariante `parcelas === meses === mesesPagamento.length` (mantida desde
+  P-2.8c) os dois são o mesmo número. Numa linha antiga em que os dois
+  divergissem, dividir pelo número de linhas é o que garante soma exata — que é
+  o critério de aceite. Documentado no próprio arquivo.
+- **Data de vencimento montada como string, não via `new Date`.** O código
+  anterior fazia `new Date(evalYear, month - 1, 1).toISOString().split("T")[0]`:
+  meia-noite local convertida para UTC. Em qualquer fuso a leste de Greenwich
+  isso devolve o dia — e às vezes o mês — anterior, o que anularia justamente a
+  correção dos meses. Passou a ser `` `${evalYear}-${String(month).padStart(2, "0")}-01` ``,
+  determinístico e independente do fuso do processo. Mudança dentro da mesma
+  função e do mesmo defeito ("vencimento correto" é critério de aceite), não
+  escopo novo.
+- **`createPunctualDraft` não grava a coluna.** Projeto pontual é pagamento
+  único e o schema pontual não coleta `mesesPagamento` (BRAIN §6.2). Fica `null`
+  e cai no fallback — comportamento idêntico ao de hoje. O escopo diz "o caminho
+  de criação/edição que já recebe `mesesPagamento` do wizard"; o pontual não
+  recebe.
+- **O fallback preserva os meses, não os centavos — e isso é deliberado.** O
+  critério de aceite 2 diz "mantém exatamente o comportamento atual". Vale para
+  os meses (Jan–N, que é o que o item 2 do escopo descreve), não para os
+  valores: o item 3 do escopo não abre exceção para linha antiga, e o critério 3
+  exige soma igual ao `budget_total`. Para um projeto anterior à 0091 com
+  divisão inexata (10.000,00 ÷ 3), o gerador antigo emitia três de 3.333,33
+  (soma 9.999,99) e o novo emite 3.333,34 + 3.333,33 + 3.333,33. O primeiro
+  fixture de fallback usava 9.000,00 ÷ 3, divisão exata, que não distingue as
+  duas leituras — acrescentei um segundo fixture com divisão inexata para fixar
+  a distinção em teste em vez de deixá-la só na prosa. Nada já emitido muda: o
+  gerador só roda na aprovação, e nenhum projeto é reaprovado.
+- **Nenhum backfill, nenhum UPDATE retroativo.** Imutabilidade (BRAIN):
+  `payment_schedules`/`payables` já emitidos ficam como estão. Projeto anterior
+  à `0091` tem `meses_pagamento` nulo e o gerador cai no fallback Jan–N —
+  explícito e testado, para não mudar o resultado de nada já aprovado.
+- **`packages/validators` e `packages/types` não precisaram de mudança.** Ambos
+  já expõem `mesesPagamento` (`annualProjectFields`, `AnnualProject`); o campo
+  já era coletado e validado, só não era gravado. Estavam na lista de permitidos
+  com a ressalva "só se o campo precisar chegar à camada de persistência" — não
+  precisou.
+
+### Verificação
+
+- `pnpm db:migrate`: `0091_projetos_meses_pagamento.sql` aplicada. Segunda
+  execução: "Nothing to apply — database is up to date" (idempotente por
+  bookkeeping do runner e por `ADD COLUMN IF NOT EXISTS`).
+- `pnpm turbo typecheck --filter=@hebron/db --filter=@hebron/projetos --filter=@hebron/jobs`:
+  11/11 verdes.
+- `apps/projetos/src/__tests__/flow.test.ts`: 30/30 verdes, incluindo os 4
+  novos (meses escolhidos, soma exata em centavos, fallback Jan–N, vencimento
+  herdado pelos payables).
+- `packages/db/src/__tests__/projetos-approval.test.ts`: 3/3 verdes — a
+  assinatura opcional preservou o chamador que monta o projeto à mão.
+- Suíte completa de `apps/projetos`: 156/157. A única falha é
+  `notifications.test.ts > submitProject não retorna erro` (timeout de 30s).
+  Confirmada pré-existente: com este diff em `git stash`, o mesmo arquivo falha
+  no baseline (2 de 3 testes, um a mais que com o diff aplicado). Não tem
+  relação com o escopo — `submitProject` não passa por nenhuma das funções
+  tocadas aqui, e a IA já está mockada no arquivo.
+
+### Débitos fechados
+
+- ✅ **S-203** — `generatePaymentSchedule` com `toFixed(2)` por parcela.
+- ✅ **S-273 item 6** — mês da parcela como `(i % 12) + 1` em vez dos meses
+  escolhidos pelo submissor.
+
+### Ampliação de escopo autorizada pelo Filipe
+
+Fechada a entrada com **zero débito novo declarado**. Dois débitos que este
+prompt tinha inicialmente registrado para depois foram tratados aqui, com
+autorização explícita ("não quero nenhum débito novo; trate os débitos
+encontrados, você tem minha autorização"). Ambos saem fora da lista de arquivos
+permitidos de P-2.6c — divergência de G1 registrada aqui.
+
+**1. Segunda fonte dos meses de pagamento (era o débito novo).**
+`lib/queries.ts::getDraftProjectForEdit` e
+`actions/projects.ts::findRenewalCandidate` liam os meses do snapshot de
+`project_versions`, agora uma segunda fonte da mesma informação — e a mais
+frágil das duas: a RLS `project_versions_select` só libera o próprio submissor,
+então para outro membro da organização a leitura voltava vazia. As duas passam a
+ler `projects.meses_pagamento`, com o snapshot mantido só como fallback para
+projeto anterior à migration 0091 (sem ele, abrir a edição de um rascunho antigo
+devolveria zero meses e o submissor teria de reescolher tudo).
+
+Coberto por três testes novos, um deles exatamente no caso que motivava o
+débito: um colega de organização pede renovação de projeto submetido por outra
+pessoa e recebe `metodologia: ""` (o snapshot é de fato invisível para ele) mas
+recebe os meses corretos, porque vêm da coluna. O fixture da Org C tem coluna
+`[2,5,8,11]` e snapshot `[1,2,3,4]` de propósito: se a leitura voltar para o
+snapshot, o teste acusa.
+
+**2. `check_locks.mjs` / `check_locks2.mjs` removidos.** Dois scripts de
+diagnóstico ad-hoc (dump de `pg_stat_activity` e de `pg_locks`) commitados por
+engano em `f0484f8`, um commit sobre embeddings. Quebravam `@hebron/db#lint`
+desde então — falha registrada em S-275 e S-276 como "pré-existente" e nunca
+tratada. Não são referenciados por nenhum `package.json`, `import` ou script, e
+são os dois únicos arquivos desse tipo no repositório. Removidos com `git rm`; o
+conteúdo continua recuperável no histórico. `@hebron/db#lint` passa agora.
+
+### Achado NÃO tratado (pré-existente, fora de qualquer débito desta sessão)
+
+`notifications.test.ts > submitProject não retorna erro` falha por timeout de
+30s. **Não é hang e não é regressão** — com `--testTimeout=180000` o arquivo
+passa 3/3, com o teste levando 31s. Medi o banco por sondagem direta: conexão
+2.1s, cada consulta 220–450ms, inclusive a busca de duplicidade por similaridade
+de cosseno (446ms, sem sequential scan patológico). O tempo é latência de
+round-trip acumulada: `submitProject` abre ~6 `withAuthenticatedContext`
+sequenciais (cada um BEGIN + `SET LOCAL ROLE` + `set_config` + COMMIT ≈ 4
+round-trips) e ainda faz o fan-out de notificações e audit linha a linha, contra
+um Postgres remoto.
+
+Deixei intocado de propósito, e **não** subi o timeout do teste — mascarar um
+vermelho de 31s numa ação que o usuário dispara pela UI seria esconder o sinal.
+Reduzir a conversa de `submitProject` com o banco é trabalho de um corretivo
+próprio, sem relação com meses de pagamento ou centavos.
+
+### Arquivos modificados
+
+- `packages/db/src/migrations/0091_projetos_meses_pagamento.sql` (novo —
+  `ADD COLUMN IF NOT EXISTS meses_pagamento integer[]` + `COMMENT ON COLUMN`)
+- `packages/db/src/schema/projetos.ts` (`mesesPagamento: integer("meses_pagamento").array()`)
+- `packages/db/src/projetos-approval.ts` (`generatePaymentSchedule`: meses reais
+  com fallback Jan–N, distribuição de centavos, data de vencimento sem `Date`)
+- `apps/projetos/src/actions/projects.ts` (`createAnnualDraft` e
+  `updateDraftProject` gravam `mesesPagamento` ordenado; `findRenewalCandidate`
+  lê os meses da coluna, com o snapshot só como fallback)
+- `apps/projetos/src/lib/queries.ts` (`getDraftProjectForEdit` lê os meses da
+  coluna; a consulta ao snapshot só roda quando a coluna está vazia)
+- `apps/projetos/src/__tests__/flow.test.ts` (6 testes novos + limpeza de
+  `cost_centers`/`payables` no `afterAll`, exigida pelo `ON DELETE RESTRICT`)
+- `apps/projetos/src/__tests__/renewal.test.ts` (2 testes novos + fixtures da
+  Org C: coluna e snapshot com meses divergentes, e um segundo membro)
+- `packages/db/check_locks.mjs`, `packages/db/check_locks2.mjs` (removidos)
 - `SESSIONS.md` (esta entrada + linha no índice)

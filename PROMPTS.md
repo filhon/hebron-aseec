@@ -11090,13 +11090,13 @@ floor(totalCentavos / n)`, `resto = totalCentavos − base × n`; as primeiras
 
 **Critérios de aceite:**
 
-- [ ] Projeto com `mesesPagamento = [8, 9, 10]` gera `payment_schedules` com `month` 8, 9 e 10 (teste)
-- [ ] Projeto sem `meses_pagamento` (linha antiga) mantém exatamente o comportamento atual (teste do fallback)
-- [ ] R$ 10.000,00 em 3 parcelas soma R$ 10.000,00 — duas de 3.333,34 e uma de 3.333,32, ou a distribuição equivalente do algoritmo (teste)
-- [ ] `payables` criados por `onProjectApproved` herdam o vencimento correto
-- [ ] Migration aplicada com `pnpm db:migrate` e idempotente na segunda execução
-- [ ] Nenhum `payment_schedules`/`payables` pré-existente alterado
-- [ ] Lint passa · Types passam · suíte de `apps/projetos` verde
+- [x] Projeto com `mesesPagamento = [8, 9, 10]` gera `payment_schedules` com `month` 8, 9 e 10 (teste)
+- [x] Projeto sem `meses_pagamento` (linha antiga) mantém exatamente o comportamento atual (teste do fallback)
+- [x] R$ 10.000,00 em 3 parcelas soma R$ 10.000,00 — duas de 3.333,34 e uma de 3.333,32, ou a distribuição equivalente do algoritmo (teste)
+- [x] `payables` criados por `onProjectApproved` herdam o vencimento correto
+- [x] Migration aplicada com `pnpm db:migrate` e idempotente na segunda execução
+- [x] Nenhum `payment_schedules`/`payables` pré-existente alterado
+- [x] Lint passa · Types passam · suíte de `apps/projetos` verde
 
 **Notas:**
 

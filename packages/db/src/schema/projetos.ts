@@ -220,6 +220,11 @@ export const projects = projetosSchema.table(
     budgetTotal: numeric("budget_total", { precision: 12, scale: 2 }),
     parcelas: integer("parcelas"),
     meses: integer("meses"),
+    // Meses (1–12) escolhidos pelo submissor no wizard. `meses` guarda só a
+    // contagem; esta coluna guarda QUAIS meses — é ela que
+    // generatePaymentSchedule usa para o vencimento de cada parcela (P-2.6c).
+    // NULL em projetos anteriores à migration 0091 (fallback Jan–N no gerador).
+    mesesPagamento: integer("meses_pagamento").array(),
     evaluationYear: integer("evaluation_year"),
 
     // AI scoring

@@ -732,6 +732,7 @@ export async function getDraftProjectForEdit(
         ministryArea: projects.ministryArea,
         budgetTotal: projects.budgetTotal,
         parcelas: projects.parcelas,
+        mesesPagamento: projects.mesesPagamento,
         submitterId: projects.submitterId,
       })
       .from(projects)
@@ -747,18 +748,26 @@ export async function getDraftProjectForEdit(
       return null;
     }
 
-    // DB só guarda a contagem em `meses` — os meses selecionados
-    // (mesesPagamento) só existem na versão mais recente do snapshot.
-    const versionRows = await tx
-      .select({ data: projectVersions.data })
-      .from(projectVersions)
-      .where(eq(projectVersions.projectId, projectId))
-      .orderBy(desc(projectVersions.versionNumber))
-      .limit(1);
+    // Fonte dos meses selecionados: a coluna `meses_pagamento` (P-2.6c). Antes
+    // da migration 0091 o banco só guardava a contagem (`meses`) e a lista
+    // vivia apenas no snapshot da versão mais recente — daí o fallback, que só
+    // dispara para rascunho criado antes da migration. Sem ele, abrir a edição
+    // de um rascunho antigo devolveria zero meses selecionados e o submissor
+    // teria de reescolher tudo.
+    let mesesSelecionados = project.mesesPagamento ?? [];
+    if (mesesSelecionados.length === 0) {
+      const versionRows = await tx
+        .select({ data: projectVersions.data })
+        .from(projectVersions)
+        .where(eq(projectVersions.projectId, projectId))
+        .orderBy(desc(projectVersions.versionNumber))
+        .limit(1);
 
-    const snapshot = versionRows[0]?.data as
-      | { mesesPagamento?: number[] }
-      | undefined;
+      const snapshot = versionRows[0]?.data as
+        | { mesesPagamento?: number[] }
+        | undefined;
+      mesesSelecionados = snapshot?.mesesPagamento ?? [];
+    }
 
     return {
       id: project.id,
@@ -772,7 +781,7 @@ export async function getDraftProjectForEdit(
       ministryArea: project.ministryArea,
       budgetTotal: parseFloat(project.budgetTotal ?? "0"),
       parcelas: project.parcelas,
-      mesesSelecionados: snapshot?.mesesPagamento ?? [],
+      mesesSelecionados,
     };
   });
 }

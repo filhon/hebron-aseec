@@ -13,7 +13,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
-import { eq, inArray } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import { db } from "@hebron/db/client";
 import {
   users,
@@ -38,11 +38,15 @@ const IDS = {
   users: {
     submissor: "cdaa0000-0000-0000-0000-000000000001",
     outsider: "cdaa0000-0000-0000-0000-000000000002",
+    // Segundo membro da Org C — renova um projeto que NÃO foi ele quem
+    // submeteu (P-2.6c).
+    colega: "cdaa0000-0000-0000-0000-000000000003",
   },
   orgs: {
     a: "cdbb0000-0000-0000-0000-000000000001",
     b: "cdbb0000-0000-0000-0000-000000000002",
     empty: "cdbb0000-0000-0000-0000-000000000003",
+    c: "cdbb0000-0000-0000-0000-000000000004",
   },
 } as const;
 
@@ -59,6 +63,9 @@ const PROJECT_IDS = {
   // Org B: candidato válido, mas de outra organização — nunca deve
   // aparecer para a Org A.
   otherOrg: "cdcc0000-0000-0000-0000-000000000005",
+  // Org C: candidato com `meses_pagamento` gravado na coluna (P-2.6c) e um
+  // snapshot com meses DIFERENTES — para provar qual das duas fontes vence.
+  colunaMeses: "cdcc0000-0000-0000-0000-000000000006",
 } as const;
 
 beforeAll(async () => {
@@ -75,6 +82,11 @@ beforeAll(async () => {
         email: "renewal-outsider@test.hebron",
         fullName: "Renewal Outsider",
       },
+      {
+        id: IDS.users.colega,
+        email: "renewal-colega@test.hebron",
+        fullName: "Renewal Colega",
+      },
     ])
     .onConflictDoNothing();
 
@@ -90,6 +102,11 @@ beforeAll(async () => {
         userId: IDS.users.outsider,
         role: "submissor" as const,
         grantedBy: IDS.users.outsider,
+      },
+      {
+        userId: IDS.users.colega,
+        role: "submissor" as const,
+        grantedBy: IDS.users.colega,
       },
     ])
     .onConflictDoNothing();
@@ -112,6 +129,11 @@ beforeAll(async () => {
         nome: "Org Renovação Sem Histórico",
         createdBy: IDS.users.submissor,
       },
+      {
+        id: IDS.orgs.c,
+        nome: "Org Renovação C",
+        createdBy: IDS.users.submissor,
+      },
     ])
     .onConflictDoNothing();
 
@@ -121,6 +143,8 @@ beforeAll(async () => {
       { organizationId: IDS.orgs.a, userId: IDS.users.submissor },
       { organizationId: IDS.orgs.empty, userId: IDS.users.submissor },
       { organizationId: IDS.orgs.b, userId: IDS.users.outsider },
+      { organizationId: IDS.orgs.c, userId: IDS.users.submissor },
+      { organizationId: IDS.orgs.c, userId: IDS.users.colega },
     ])
     .onConflictDoNothing();
 
@@ -201,6 +225,20 @@ beforeAll(async () => {
         meses: 2,
         createdAt: new Date("2025-01-01T00:00:00Z"),
       },
+      {
+        id: PROJECT_IDS.colunaMeses,
+        organizationId: IDS.orgs.c,
+        submitterId: IDS.users.submissor,
+        tipo: "anual" as const,
+        title: "Projeto com Meses na Coluna",
+        stage: "concluido" as const,
+        evaluationYear: 2025,
+        budgetTotal: "16000.00",
+        parcelas: 4,
+        meses: 4,
+        mesesPagamento: [2, 5, 8, 11],
+        createdAt: new Date("2025-03-01T00:00:00Z"),
+      },
     ])
     .onConflictDoNothing();
 
@@ -226,12 +264,37 @@ beforeAll(async () => {
       createdBy: IDS.users.submissor,
     })
     .onConflictDoNothing();
+
+  // Snapshot do candidato da Org C com meses DELIBERADAMENTE diferentes da
+  // coluna ([1,2,3,4] vs. [2,5,8,11]): se o pré-preenchimento voltar a ler do
+  // snapshot, o teste abaixo acusa. Criado pelo submissor original — a RLS de
+  // project_versions só libera para ele, então para o colega esta linha é
+  // invisível e só a coluna resta.
+  await db
+    .insert(projectVersions)
+    .values({
+      projectId: PROJECT_IDS.colunaMeses,
+      versionNumber: 1,
+      stage: "rascunho",
+      data: {
+        _source: "test:createAnnualDraft",
+        metodologia: "Metodologia da Org C",
+        mesesPagamento: [1, 2, 3, 4],
+      },
+      createdBy: IDS.users.submissor,
+    })
+    .onConflictDoNothing();
 });
 
 afterAll(async () => {
   await db
     .delete(projectVersions)
-    .where(eq(projectVersions.projectId, PROJECT_IDS.newer));
+    .where(
+      inArray(projectVersions.projectId, [
+        PROJECT_IDS.newer,
+        PROJECT_IDS.colunaMeses,
+      ]),
+    );
   await db
     .delete(projects)
     .where(inArray(projects.id, Object.values(PROJECT_IDS)));
@@ -281,7 +344,43 @@ describe("findRenewalCandidate — P-2.13", () => {
     expect(prefill?.numeroParcelas).toBe("6");
     expect(prefill?.metodologia).toBe("Metodologia do candidato");
     expect(prefill?.beneficiariosQuantidade).toBe("300");
+    // Candidato anterior à migration 0091: `meses_pagamento` é null e os meses
+    // vêm do snapshot (fallback documentado em P-2.6c).
     expect(prefill?.mesesSelecionados).toEqual([2, 4, 6, 8, 10, 12]);
+  });
+
+  // ── P-2.6c — meses de pagamento vêm da coluna, não do snapshot ─────────────
+
+  it("meses de pagamento vêm da coluna quando ela existe, não do snapshot", async () => {
+    resolveSessionMock.mockResolvedValueOnce({
+      actorId: IDS.users.submissor,
+      roles: ["submissor"],
+    });
+
+    const { findRenewalCandidate } = await import("../actions/projects");
+    const result = await findRenewalCandidate({ organizationId: IDS.orgs.c });
+    const prefill = result?.data?.candidate?.prefill;
+
+    // Coluna [2,5,8,11] vs. snapshot [1,2,3,4] — a coluna vence
+    expect(prefill?.mesesSelecionados).toEqual([2, 5, 8, 11]);
+  });
+
+  it("outro membro da organização renova e ainda recebe os meses, apesar da RLS de project_versions", async () => {
+    resolveSessionMock.mockResolvedValueOnce({
+      actorId: IDS.users.colega,
+      roles: ["submissor"],
+    });
+
+    const { findRenewalCandidate } = await import("../actions/projects");
+    const result = await findRenewalCandidate({ organizationId: IDS.orgs.c });
+    const candidate = result?.data?.candidate;
+
+    expect(candidate?.id).toBe(PROJECT_IDS.colunaMeses);
+    // "project_versions_select" só libera o próprio submissor: para o colega o
+    // snapshot volta vazio — era exatamente por isso que ler os meses de lá era
+    // frágil. A coluna vem de `projects` ("projects_select_own_or_org") e chega.
+    expect(candidate?.prefill.metodologia).toBe("");
+    expect(candidate?.prefill.mesesSelecionados).toEqual([2, 5, 8, 11]);
   });
 
   it("projeto de outra organização nunca aparece (RLS + filtro por organizationId)", async () => {

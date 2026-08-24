@@ -28,8 +28,13 @@ import {
   organizationBudgets,
   votes,
   auditLog,
+  costCenters,
+  payables,
 } from "@hebron/db/schema";
-import { generatePaymentSchedule } from "@hebron/db/projetos-approval";
+import {
+  generatePaymentSchedule,
+  onProjectApproved,
+} from "@hebron/db/projetos-approval";
 
 // updateDraftProject roda pelo pipeline real de Server Action
 // (submissorAction) — precisa de sessão mockada, mesmo padrão de
@@ -77,6 +82,12 @@ const CONTEST_PROJECT_ID = "cccc0000-0000-0000-0000-000000000004";
 const DELETE_PROJECT_ID = "cccc0000-0000-0000-0000-000000000005";
 const DRAFT_EDIT_PROJECT_ID = "cccc0000-0000-0000-0000-000000000006";
 const CONTEST_GATE_PROJECT_ID = "cccc0000-0000-0000-0000-000000000007";
+// P-2.6c — cronograma com meses escolhidos vs. projeto anterior à migration
+const SCHEDULE_MONTHS_PROJECT_ID = "cccc0000-0000-0000-0000-000000000008";
+const SCHEDULE_LEGACY_PROJECT_ID = "cccc0000-0000-0000-0000-000000000009";
+// Linha antiga cujo orçamento NÃO divide exato — separa o que o fallback
+// preserva (os meses) do que ele deliberadamente muda (os centavos).
+const SCHEDULE_LEGACY_ODD_PROJECT_ID = "cccc0000-0000-0000-0000-000000000010";
 
 // Budget uses year 2027 to avoid interference with the E2E flow project (2026)
 const BUDGET_YEAR = 2027;
@@ -184,7 +195,33 @@ afterAll(async () => {
     DELETE_PROJECT_ID,
     DRAFT_EDIT_PROJECT_ID,
     CONTEST_GATE_PROJECT_ID,
+    SCHEDULE_MONTHS_PROJECT_ID,
+    SCHEDULE_LEGACY_PROJECT_ID,
+    SCHEDULE_LEGACY_ODD_PROJECT_ID,
   ];
+
+  // financeiro.cost_centers.project_id é ON DELETE RESTRICT — o que
+  // onProjectApproved criou precisa sair antes do projeto (mesma ordem de
+  // packages/db/src/__tests__/projetos-approval.test.ts). O audit dos
+  // payables tem actorId do ator de sistema, não dos usuários deste arquivo:
+  // limpo por entityId.
+  for (const pid of allProjectIds) {
+    const [costCenter] = await db
+      .select({ id: costCenters.id })
+      .from(costCenters)
+      .where(eq(costCenters.projectId, pid));
+    if (!costCenter) continue;
+
+    const created = await db
+      .select({ id: payables.id })
+      .from(payables)
+      .where(eq(payables.costCenterId, costCenter.id));
+    for (const p of created) {
+      await db.delete(auditLog).where(eq(auditLog.entityId, p.id));
+    }
+    await db.delete(payables).where(eq(payables.costCenterId, costCenter.id));
+    await db.delete(costCenters).where(eq(costCenters.id, costCenter.id));
+  }
 
   // Cascade delete handles versions, votes, contestations, payment_schedules
   for (const pid of allProjectIds) {
@@ -929,5 +966,216 @@ describe("Edição de rascunho — updateDraftProject altera parcelas (action re
     );
     expect(schedule).toHaveLength(6);
     expect(total).toBeCloseTo(12000, 2);
+  });
+
+  it("a tela de edição relê os meses da coluna gravada pela action (round-trip)", async () => {
+    // Fecha o ciclo do P-2.6c: updateDraftProject grava `meses_pagamento` e
+    // getDraftProjectForEdit lê da mesma coluna — não mais do snapshot de
+    // project_versions, que era a segunda fonte da mesma informação.
+    const { getDraftProjectForEdit } = await import("../lib/queries");
+    const draft = await getDraftProjectForEdit(
+      DRAFT_EDIT_PROJECT_ID,
+      IDS.users.submissor1,
+    );
+
+    expect(draft?.parcelas).toBe(6);
+    expect(draft?.mesesSelecionados).toEqual([1, 2, 3, 4, 5, 6]);
+  });
+});
+
+// ── Cronograma: meses escolhidos e centavos (P-2.6c) ──────────────────────────
+// Dois defeitos de generatePaymentSchedule corrigidos aqui:
+//  1. o mês de cada parcela era `(i % 12) + 1` — um projeto aprovado para
+//     pagar em ago/set/out gerava vencimento em jan/fev/mar, e os
+//     financeiro.payables criados por onProjectApproved herdavam o erro;
+//  2. `toFixed(2)` por parcela perdia centavos (R$ 10.000,00 em 3 parcelas
+//     somava R$ 9.999,99).
+
+describe("Cronograma de pagamento — meses escolhidos e centavos (P-2.6c)", () => {
+  beforeAll(async () => {
+    await db
+      .insert(projects)
+      .values([
+        {
+          id: SCHEDULE_MONTHS_PROJECT_ID,
+          title: "Projeto Cronograma Ago-Set-Out",
+          tipo: "anual",
+          stage: "aprovado",
+          organizationId: IDS.orgs.orgFlow,
+          submitterId: IDS.users.submissor1,
+          evaluationYear: 2026,
+          budgetTotal: "10000.00",
+          parcelas: 3,
+          meses: 3,
+          mesesPagamento: [8, 9, 10],
+        },
+        {
+          // Linha "antiga": criada antes da migration 0091, sem a lista de
+          // meses. Precisa manter exatamente o comportamento anterior.
+          id: SCHEDULE_LEGACY_PROJECT_ID,
+          title: "Projeto Cronograma Legado",
+          tipo: "anual",
+          stage: "aprovado",
+          organizationId: IDS.orgs.orgFlow,
+          submitterId: IDS.users.submissor1,
+          evaluationYear: 2026,
+          budgetTotal: "9000.00",
+          parcelas: 3,
+          meses: 3,
+        },
+        {
+          id: SCHEDULE_LEGACY_ODD_PROJECT_ID,
+          title: "Projeto Cronograma Legado (divisão inexata)",
+          tipo: "anual",
+          stage: "aprovado",
+          organizationId: IDS.orgs.orgFlow,
+          submitterId: IDS.users.submissor1,
+          evaluationYear: 2026,
+          budgetTotal: "10000.00",
+          parcelas: 3,
+          meses: 3,
+        },
+      ])
+      .onConflictDoNothing();
+  });
+
+  it("usa os meses escolhidos pelo submissor: [8, 9, 10] vence em ago/set/out", async () => {
+    const [project] = await db
+      .select()
+      .from(projects)
+      .where(eq(projects.id, SCHEDULE_MONTHS_PROJECT_ID));
+    if (!project) throw new Error("Projeto de teste não encontrado");
+    expect(project.mesesPagamento).toEqual([8, 9, 10]);
+
+    await generatePaymentSchedule(project);
+
+    const schedule = await db
+      .select()
+      .from(paymentSchedules)
+      .where(eq(paymentSchedules.projectId, SCHEDULE_MONTHS_PROJECT_ID))
+      .orderBy(paymentSchedules.month);
+
+    expect(schedule.map((row) => row.month)).toEqual([8, 9, 10]);
+    expect(schedule.map((row) => row.dueDate)).toEqual([
+      "2026-08-01",
+      "2026-09-01",
+      "2026-10-01",
+    ]);
+  });
+
+  it("as parcelas somam exatamente o orçamento — nenhum centavo some", async () => {
+    const schedule = await db
+      .select()
+      .from(paymentSchedules)
+      .where(eq(paymentSchedules.projectId, SCHEDULE_MONTHS_PROJECT_ID));
+
+    expect(schedule).toHaveLength(3);
+    // Soma em centavos inteiros: 3.333,34 + 3.333,33 + 3.333,33 = 10.000,00.
+    // Comparar em float esconderia justamente o centavo perdido.
+    const totalCents = schedule.reduce(
+      (sum, row) => sum + Math.round(parseFloat(row.amount) * 100),
+      0,
+    );
+    expect(totalCents).toBe(1_000_000);
+    expect([...schedule.map((r) => r.amount)].sort()).toEqual([
+      "3333.33",
+      "3333.33",
+      "3333.34",
+    ]);
+  });
+
+  it("projeto sem meses_pagamento (anterior à migration) mantém o fallback Jan–N", async () => {
+    const [project] = await db
+      .select()
+      .from(projects)
+      .where(eq(projects.id, SCHEDULE_LEGACY_PROJECT_ID));
+    if (!project) throw new Error("Projeto legado de teste não encontrado");
+    expect(project.mesesPagamento).toBeNull();
+
+    await generatePaymentSchedule(project);
+
+    const schedule = await db
+      .select()
+      .from(paymentSchedules)
+      .where(eq(paymentSchedules.projectId, SCHEDULE_LEGACY_PROJECT_ID))
+      .orderBy(paymentSchedules.month);
+
+    expect(schedule.map((row) => row.month)).toEqual([1, 2, 3]);
+    expect(schedule.map((row) => row.dueDate)).toEqual([
+      "2026-01-01",
+      "2026-02-01",
+      "2026-03-01",
+    ]);
+    // Mesmo valor que o gerador antigo produzia para 9.000,00 ÷ 3
+    expect(schedule.map((row) => row.amount)).toEqual([
+      "3000.00",
+      "3000.00",
+      "3000.00",
+    ]);
+  });
+
+  it("no fallback, o mês é preservado mas o centavo NÃO — a correção do arredondamento vale para linha antiga também", async () => {
+    // Divisão inexata separa as duas metades do fallback, que o fixture de
+    // 9.000,00 ÷ 3 (exato) não conseguia distinguir:
+    //  - meses: idênticos ao gerador antigo (Jan–N) — é o que o escopo do
+    //    P-2.6c manda preservar;
+    //  - centavos: o gerador antigo emitia três de 3.333,33 (soma 9.999,99);
+    //    agora distribui o resto e soma exato. Mudança deliberada — o item 3
+    //    do escopo não abre exceção para linha antiga, e o critério de aceite
+    //    exige soma igual ao budget_total.
+    const [project] = await db
+      .select()
+      .from(projects)
+      .where(eq(projects.id, SCHEDULE_LEGACY_ODD_PROJECT_ID));
+    if (!project) throw new Error("Projeto legado (inexato) não encontrado");
+    expect(project.mesesPagamento).toBeNull();
+
+    await generatePaymentSchedule(project);
+
+    const schedule = await db
+      .select()
+      .from(paymentSchedules)
+      .where(eq(paymentSchedules.projectId, SCHEDULE_LEGACY_ODD_PROJECT_ID))
+      .orderBy(paymentSchedules.month);
+
+    expect(schedule.map((row) => row.month)).toEqual([1, 2, 3]);
+    expect(schedule.map((row) => row.amount)).toEqual([
+      "3333.34",
+      "3333.33",
+      "3333.33",
+    ]);
+    const totalCents = schedule.reduce(
+      (sum, row) => sum + Math.round(parseFloat(row.amount) * 100),
+      0,
+    );
+    expect(totalCents).toBe(1_000_000);
+  });
+
+  it("os payables criados por onProjectApproved herdam o vencimento correto", async () => {
+    await onProjectApproved(SCHEDULE_MONTHS_PROJECT_ID);
+
+    const [costCenter] = await db
+      .select({ id: costCenters.id })
+      .from(costCenters)
+      .where(eq(costCenters.projectId, SCHEDULE_MONTHS_PROJECT_ID));
+    expect(costCenter).toBeTruthy();
+    if (!costCenter) throw new Error("Centro de custo não criado");
+
+    const created = await db
+      .select()
+      .from(payables)
+      .where(eq(payables.costCenterId, costCenter.id));
+
+    expect(created).toHaveLength(3);
+    expect([...created.map((p) => p.dueDate)].sort()).toEqual([
+      "2026-08-01",
+      "2026-09-01",
+      "2026-10-01",
+    ]);
+    const totalCents = created.reduce(
+      (sum, p) => sum + Math.round(parseFloat(p.amount) * 100),
+      0,
+    );
+    expect(totalCents).toBe(1_000_000);
   });
 });

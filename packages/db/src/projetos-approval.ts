@@ -16,43 +16,64 @@ import { createNotification } from "@hebron/email/types";
  * de duas cópias divergentes.
  */
 
+/**
+ * Emite uma linha de `payment_schedules` por parcela do projeto.
+ *
+ * P-2.6c corrigiu dois defeitos aqui:
+ *
+ * 1. **Meses reais.** Antes, o mês de cada parcela era `(i % 12) + 1` —
+ *    jan/fev/mar — porque o banco só guardava a CONTAGEM (`meses`). Agora
+ *    `projects.meses_pagamento` guarda a lista escolhida no wizard e é ela
+ *    que define o vencimento. Projetos anteriores à migration 0091 têm a
+ *    coluna `null`: para eles o fallback mantém exatamente o comportamento
+ *    antigo (Jan–N), para não mudar o resultado de nada já aprovado.
+ * 2. **Centavos.** `toFixed(2)` em toda parcela perdia até n−1 centavos por
+ *    projeto (R$ 10.000,00 ÷ 3 = três de 3.333,33 = R$ 9.999,99). O cálculo
+ *    passa a ser em centavos inteiros, com o resto distribuído nas primeiras
+ *    parcelas — a soma é exatamente `budget_total`.
+ *
+ * `mesesPagamento` é opcional na assinatura (e não parte do `Pick`) para que
+ * chamadores que montam o projeto à mão continuem válidos; os dois call sites
+ * reais (`transitionProjectStage` e o cron de homologação) passam a linha
+ * inteira de `projects`, então a coluna chega sozinha.
+ */
 export async function generatePaymentSchedule(
   project: Pick<
     typeof projects.$inferSelect,
     "id" | "parcelas" | "budgetTotal" | "evaluationYear" | "meses"
-  >,
+  > & { mesesPagamento?: number[] | null },
 ): Promise<void> {
   if (!project.parcelas || !project.budgetTotal || !project.evaluationYear)
     return;
 
-  const amountPerInstallment =
-    parseFloat(project.budgetTotal) / project.parcelas;
+  const evalYear = project.evaluationYear;
 
-  // Create one payment per month in the `meses` count (evenly distributed Jan–meses)
-  // Full months list is in version snapshot; DB stores only count so we distribute evenly
-  const monthCount = project.meses ?? project.parcelas;
-  const paymentRows = Array.from({ length: monthCount }, (_, i) => {
-    const month = ((i % 12) + 1) as
-      | 1
-      | 2
-      | 3
-      | 4
-      | 5
-      | 6
-      | 7
-      | 8
-      | 9
-      | 10
-      | 11
-      | 12;
-    const evalYear = project.evaluationYear;
-    if (!evalYear) throw new Error("Ano de avaliação ausente");
-    const dueDate = new Date(evalYear, month - 1, 1);
-    const dueDateStr = dueDate.toISOString().split("T")[0];
-    if (!dueDateStr) throw new Error("Invalid due date");
+  // Meses escolhidos (ordem crescente) ou, para projeto anterior a 0091,
+  // o fallback histórico Jan–N.
+  const chosen = project.mesesPagamento;
+  const months =
+    chosen && chosen.length > 0
+      ? [...chosen].sort((a, b) => a - b)
+      : Array.from(
+          { length: project.meses ?? project.parcelas },
+          (_, i) => (i % 12) + 1,
+        );
+
+  // Divisão em centavos inteiros: `resto` parcelas recebem um centavo a mais.
+  // O divisor é o número de linhas emitidas (não `parcelas`), que é o que
+  // garante soma exata mesmo numa linha antiga em que meses ≠ parcelas.
+  const totalCents = Math.round(parseFloat(project.budgetTotal) * 100);
+  const base = Math.floor(totalCents / months.length);
+  const resto = totalCents - base * months.length;
+
+  const paymentRows = months.map((month, i) => {
+    const cents = base + (i < resto ? 1 : 0);
+    // String de data montada diretamente — `new Date(y, m-1, 1).toISOString()`
+    // desloca o dia (e às vezes o mês) conforme o fuso do processo.
+    const dueDateStr = `${evalYear}-${String(month).padStart(2, "0")}-01`;
     return {
       projectId: project.id,
-      amount: amountPerInstallment.toFixed(2),
+      amount: (cents / 100).toFixed(2),
       month,
       dueDate: dueDateStr,
       status: "pendente" as const,
