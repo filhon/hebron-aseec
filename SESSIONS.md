@@ -293,6 +293,7 @@
 | S-270  | 2026-08-22 | AUDIT PACOTE 9 — Gates e RLS residuais (CORRETIVO)                                                                               | concluido                                                                            |
 | S-271  | 2026-08-22 | AUDIT PACOTE 10 — Camada de IA (CORRETIVO)                                                                                       | concluido                                                                            |
 | S-272  | 2026-08-22 | AUDIT PACOTE 11 — Higiene, consistência e registro (CORRETIVO)                                                                   | concluido                                                                            |
+| S-273  | 2026-08-22 | Varredura dos débitos declarados em SESSIONS.md (AUDITORIA)                                                                      | concluido (gera P-0.1d, P-1.18c, P-1.19c, P-2.4c, P-2.6c, P-0.14b, P-1.26b, P-2.8d)  |
 
 ---
 
@@ -25710,3 +25711,219 @@ shell.tsx` passou a importar de `@hebron/ui` e mapear `Task[]` para
   (`ID_RENAMES`)
 - `AUDIT/04-BACKLOG-CORRECAO.md` (critérios de aceite do PACOTE 11)
 - `SESSIONS.md` (esta entrada)
+
+---
+
+## S-273 — Varredura dos débitos declarados em SESSIONS.md (AUDITORIA)
+
+**Prompt:** pedido direto do Filipe — ler `SESSIONS.md` inteiro, confrontar cada
+débito declarado com o código atual, marcar como resolvido o que outra sessão já
+fechou e escrever o prompt necessário para o que sobrar
+**Data:** 2026-08-22
+**Modelo:** claude-opus-5
+**Status:** concluido
+
+### Método
+
+Extraídos das 25.712 linhas do arquivo os 82 blocos `**Débitos técnicos…**` /
+`**Débitos técnicos / pendências…**` / `**Suposições/débitos…**` e as 11 seções
+`### Débitos…`, cobrindo S-1 a S-272. Cada item foi confrontado com o arquivo
+real citado no próprio débito — não com a afirmação de uma sessão posterior de
+tê-lo fechado. Débitos de ambiente ("sem navegador nesta sessão", "sem Docker
+aqui") e os declarados "Nenhum" foram descartados da conferência por não serem
+dívida de código.
+
+### Débitos verificados como RESOLVIDOS (nenhuma ação necessária)
+
+Cada linha traz o arquivo onde a resolução foi confirmada nesta varredura.
+
+- **Drawer/Tooltip ausentes em `packages/ui`** (S-3) — ambos existem
+  (`packages/ui/src/components/drawer.tsx`, `tooltip.tsx`).
+- **`packages/auth` sem subpath `./mfa`** (S-5) — resolvido por desenho:
+  `src/index.ts:21` faz `export * from "./mfa"` e nenhum arquivo do monorepo
+  importa `@hebron/auth/mfa`. O subpath nunca foi necessário.
+- **UI de enrollment de MFA inexistente** (S-5) — `apps/intranet/src/app/(auth)/mfa/enroll/page.tsx` (P-1.26/S-60).
+- **`drizzle.config.ts` apontando só para `public.ts`** (S-7, S-13) — o pipeline
+  drizzle-kit foi removido inteiro em P-0.3c/S-171; SQL hand-written é o único
+  caminho.
+- **Partições de `admin.audit_log` a partir de ago/2026** (S-13) — a data
+  chegou e o débito já estava fechado: `0013_audit_log_partitions.sql` cria
+  2026-08 a 2027-12, a partição `DEFAULT` e um job pg_cron mensal que garante 3
+  meses de antecedência.
+- **`audit_log_insert_service` com `WITH CHECK (true)`** (S-14) — endurecida em
+  `0014_grants_authenticated.sql:118-124` (achado F3-15), hoje restrita a
+  `service_role`.
+- **Template de convite inline em vez de React Email** (S-15, S-16, S-17) —
+  `buildInvitationEmail` não existe mais em lugar nenhum;
+  `packages/email/src/templates/invitation.tsx` é o template real.
+- **`sidebar-nav` sem link para `/templates-email`** (S-17) — o editor foi
+  movido para `configuracoes/page.tsx` em P-1.10b/S-181.
+- **`notifyInvitationAccepted`/`notifyUserSuspended`/`notifyRoleChanged` nunca
+  chamadas** (S-17) — as três estão fiadas (`admin/actions/roles.ts:107,169`,
+  `admin/actions/users.ts:244`, `intranet/actions/invitations.ts:205`).
+- **RLS de `document_versions` sem checar visibilidade do pai** (S-28) —
+  `0005_documentos_rls.sql:138-153` já herda a visibilidade do documento pai.
+- **Busca de documentos por `ILIKE` sem índice** (S-29) —
+  `apps/documentos/src/lib/search-query.ts` usa a coluna gerada
+  `documents.search_text` e o índice GIN trgm (`0063_documentos_busca.sql`).
+- **FAQ de edital hardcoded** (S-29) — coluna `editals.faq jsonb`
+  (`packages/db/src/schema/documentos.ts:189`), lida em `editais/[slug]`.
+- **`categories` sem `sort_order`** (S-26, S-29) — resolvido por decisão, não por
+  coluna: P-1.16c/S-186 escolheu a saída (b), removeu a alça de arrastar e
+  fixou ordem alfabética entre irmãs.
+- **Funções de notificação de Documentos não chamadas pelas actions** (S-30) —
+  `actions/documents.ts:367-369` chama `notifyEditalOpen`/`notifyNewDocument`.
+- **Wizard de Projetos sem `getEditalPrefill`** (S-31, S-43, S-62) —
+  `project-wizard.tsx:420` chama `getEditalPrefillForWizard`.
+- **`projectCategoryId` de edital nunca preenchido** (S-61) — a coluna virou
+  `editals.project_category_slug`, é gravada por `createEdital`/`updateEdital` e
+  volta pelo prefill (`packages/integrations/src/documentos-projetos.ts:59`).
+  *Ressalva:* a **reabertura para edição** ainda não a lê — ver P-1.18c abaixo.
+- **`budget.name` como workaround em `notes`** (S-53) — coluna
+  `budgets.name text not null` existe (`schema/financeiro.ts:184`).
+- **Parser CSV só com vírgula** (S-53) — fechado em P-3.8b (confirmado em S-214).
+- **Escopo fantasma no `DesignationForm` e revogação por hard delete** (S-59) —
+  `designations.scope`/`scope_id` existem (`schema/public.ts:112-113`) e
+  `revokeRole` faz `update(...).set({ revokedAt })`, não `delete` (PATCH-021).
+- **`apps/intranet` sem página em `/`** (S-60) —
+  `apps/intranet/src/app/(dashboard)/page.tsx`.
+- **`expense-form.tsx` sem upload real para `financeiro-recibos`** (S-64) —
+  `uploadAttachmentToBucket` (`expense-form.tsx:254-269`).
+- **`packages/integrations` sem suíte própria** (S-67) — 3 arquivos em
+  `packages/integrations/src/__tests__/` desde S-133.
+- **Progresso agregado de subtarefas sem leitura** (S-80) — `subtaskProgress`
+  em `apps/tarefas/src/lib/queries.ts:373,469`.
+- **Anexos de tarefa sem persistência e templates sem edição** (S-81) — fechados
+  em P-4.9/P-4.9c (confirmado em S-221).
+- **`apps/intranet` sem `rls.test.ts`** (S-91) — existe, junto de mais 10 suítes.
+- **Actions ainda usando `db` superuser** (S-95, terceiro item) — as 5 de
+  financeiro migraram para `withAuthenticatedContext`;
+  `intranet/actions/onboarding.ts` e `search.ts` usam `getSessionSupabaseClient`
+  (RLS ativa).
+- **`batch_approvals` contornado com `withSystemRole`** (S-95) — removido em
+  PACOTE 9/S-270 (a policy correta já existia desde `0019`).
+- **`DirectorySkeleton` órfão** (S-89) — fiado em `diretorio/page.tsx:31` sob
+  `Suspense`.
+- **`player.tsx` sem heartbeat de audiência** (S-150, S-151) — fechado em
+  P-8.11b/S-153.
+- **Wiring de `logPiiAccess` e UI admin de tickets de exclusão** (S-164) —
+  `admin/app/(dashboard)/usuarios/[id]/page.tsx:188`,
+  `flats/src/lib/queries.ts:517`, e a tela
+  `admin/app/(dashboard)/lgpd/page.tsx` com `actions/lgpd.ts` (PACOTE 1/S-257).
+- **Área editorial de Documentos lendo como superusuário** (S-189, terceiro
+  item) — `editorial/documentos/page.tsx:40` usa `withAuthenticatedContext`
+  (P-1.21b).
+- **Referência ao prompt inexistente "P-3.9b" em `lib/queries.ts`** (S-214) —
+  não há mais ocorrência no arquivo.
+- **`EvaluationForm` sem o terceiro valor de recomendação** (S-62) — o enum foi
+  reduzido a dois valores em P-2.1b (migration 0065), como já registrado em
+  S-203.
+- **Job `test` do CI sem cobrir 5 apps e sem Docker** (S-56) —
+  `.github/workflows/ci.yml` sobe `supabase start`, aplica migrations e roda
+  `pnpm turbo test` no workspace inteiro.
+
+### Débitos confirmados ABERTOS (evidência no código, prompt escrito)
+
+Cada um recebeu prompt corretivo em `PROMPTS.md` § "Varredura de débitos de
+SESSIONS.md (2026-08-22)".
+
+1. **Reabertura de edição de documento/edital descarta dois campos** (S-188, e
+   a ressalva de S-61). `editorial/[id]/editar/page.tsx` não seleciona
+   `documents.type` nem `editals.project_category_slug`; o próprio
+   `_client.tsx:23-26,32-37` documenta as duas lacunas em comentário e declara
+   os campos opcionais para o typecheck passar. O formulário reabre com
+   `type = "other"` e categoria de projeto vazia — **e salva esses defaults por
+   cima do valor real** no submit. → **P-1.18c**
+2. **`updateEdital` quebra quando nada de edital mudou** (S-195).
+   `actions/editals.ts:230-243`: `editalUpdate` começa `{}` e só recebe chave se
+   o campo veio no input; o `tx.update(editals).set(editalUpdate)` é
+   incondicional. Editar só o título de um edital chama `set({})`. → **P-1.18c**
+3. **Editais nunca ganham linha em `document_versions`** (S-188).
+   `actions/editals.ts` não menciona `documentVersions` — `currentVersion` é
+   sempre `null` para edital, e o chip de tamanho/mimeType do viewer nunca
+   aparece. → **P-1.18c**
+4. **Conselheiro ainda vê e alcança a escrita na área editorial** (S-189).
+   `editorial/editais/page.tsx:164` renderiza `DocumentRowActions` sem
+   `canWrite` (default `true` em `document-row-actions.tsx:20`), enquanto
+   `editorial/documentos/page.tsx:259` já passa `canWrite`. E `editorial/novo` e
+   `editorial/[id]/editar` usam `requireEditorSession`, que inclui
+   `conselheiro` (`lib/session.ts:7-12`), não `DOCUMENT_WRITE_ROLES`. →
+   **P-1.19c**
+5. **Filtro de ano do pipeline para em 2026** (S-196).
+   `(diretoria)/pipeline/page.tsx:33-38` lista 2024/2025/2026 fixos, enquanto
+   `project-wizard.tsx:124` sugere `ano atual + 1` — hoje 2027. Projeto criado
+   para 2027 não é filtrável. → **P-2.4c**
+6. **`generatePaymentSchedule` perde centavos e ignora os meses escolhidos**
+   (S-203). `packages/db/src/projetos-approval.ts:55` usa
+   `amountPerInstallment.toFixed(2)` em toda parcela (R$ 10.000 em 3 somam
+   R$ 9.999,99). Achado adicional desta varredura, mais grave que o registrado:
+   `:33-34` gera o mês da parcela como `(i % 12) + 1` — Jan, Fev, Mar… — em vez
+   dos meses que o submissor escolheu em `mesesPagamento` (validados em
+   `packages/validators/src/projetos/index.ts:38-53` e preservados só no
+   snapshot de `project_versions`). Um projeto aprovado para pagar em ago/set/out
+   gera payables com vencimento em jan/fev/mar. → **P-2.6c**
+7. **`runHomologacaoAutoApprove` sem transação** (S-66).
+   `packages/jobs/src/crons/projetos.ts:169` em diante: cada `await db…` é uma
+   operação solta. Uma falha no meio deixa o projeto `aprovado` sem
+   `project_versions`, sem centro de custo e sem payables. → **P-0.14b**
+8. **`/mfa/enroll` não verifica fator TOTP já verificado** (S-60).
+   `mfa/enroll/page.tsx` só checa `anyRoleRequiresMfa`; quem já tem fator
+   verificado e navega direto para a URL enrola um segundo em vez de ser levado
+   a `/mfa/challenge`. → **P-1.26b**
+9. **Higiene dos contratos compartilhados** (S-8, S-214).
+   `packages/types/src/index.ts` re-exporta 3 dos 10 subdiretórios (faltam
+   `admin`, `flats`, `intranet`, `plataforma`, `radio`, `tarefas`, `roles`) — e
+   o barrel **é** importado (`apps/projetos` usa `@hebron/types` em 9 arquivos).
+   `roleEnum`/`scopeEnum` seguem `const` sem `export` em
+   `packages/validators/src/admin/index.ts:5,16`. `approvePayableSchema`,
+   `authorizePayableSchema` e `bankImportSchema`
+   (`packages/validators/src/financeiro/index.ts:84,95,263`) seguem com zero
+   importadores. → **P-0.1d**
+10. **Segundo voto silencioso** (S-203). `actions/voting.ts:130-137` usa
+    `onConflictDoNothing()` e devolve `ok: true` sem ter mudado nada. Fechar
+    exige decidir antes se mudar de voto é permitido — o BRAIN não diz. →
+    **P-2.8d**, escrito mas **bloqueado** até o Filipe responder a pergunta que
+    abre o prompt.
+
+### Débitos aceitos ou dependentes de terceiros (sem prompt)
+
+- **Token Authentication da Bunny não ativo na pull zone** (S-267) — ação do
+  Filipe no Dashboard da Bunny (Stream → library → Security); a API key de
+  library não tem escopo para ativar. Enquanto isso a URL de reprodução não
+  expira de verdade.
+- **Desarquivamento na UI da Plataforma e `deleteCourse` sem despublicar**
+  (S-252) — decisão de produto pendente do Filipe.
+- **`DataTable` compartilhado em `packages/ui`** (S-272) — TanStack Table segue
+  na stack e só é usado em `apps/admin/src/components/user-table.tsx`; extrair
+  o componente e adotá-lo em Financeiro/Projetos/Tarefas é feature, não
+  higiene, como a própria S-272 registrou.
+- **Flats e Rádio sem sessão de auditoria de bloco** (NEG-005, S-272) — risco
+  aceito por escrito.
+- **Atomicidade mutação+audit fora das 5 mutações de governança** (S-55) —
+  aceito; `criticality: "critical"` aborta a action, o wrapping transacional
+  segue restrito à governança.
+- **Sem alarme para a partição `DEFAULT` de `admin.audit_log`** (S-54) — o
+  pg_cron de 0013 tornou o cenário improvável; observabilidade é P-9.5.
+- **Redação retroativa de PII no audit histórico** (S-65) — aceito na fundação
+  do P-0.13.
+- **Corpo integral dos corretivos de Onda 0–2 fora de `PROMPTS.md`** (S-68) —
+  seguem em `AUDIT/04-prompts-pendentes.md` §4, convenção em uso desde S-54.
+
+### Achado de documentação (fora do escopo desta varredura)
+
+`PROMPTS.md` § G2 ainda manda invocar `/frontend-design` em todo prompt de UI,
+enquanto `CLAUDE.md` ("Skill `/impeccable` obrigatória") e as sessões desde
+2026-07-13 usam `/impeccable`. Mesma classe do drift que o PACOTE 11 corrigiu na
+tabela de corretivos; não corrigido aqui para não misturar prompts.
+
+### Verificação
+
+Auditoria de leitura — nenhum arquivo de aplicação foi tocado. As afirmações de
+"resolvido" acima vieram de `grep`/leitura direta dos arquivos citados, não de
+sessões posteriores que dissessem tê-los fechado.
+
+### Arquivos modificados
+
+- `PROMPTS.md` — nova seção "Varredura de débitos de SESSIONS.md (2026-08-22)"
+  com 8 prompts corretivos, mais as linhas na tabela "Correções"
+- `SESSIONS.md` (esta entrada + linha no índice)

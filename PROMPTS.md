@@ -1,7 +1,7 @@
 # PROMPTS.md — Sequência de Desenvolvimento SDD
 
 > **Referência:** BRAIN.md (fonte da verdade) | SDD-STRUCTURE.md (formato)
-> **Total:** 125 prompts (119 originais + P-2.13, P-2.14, P-5.13, P-6.20, P-7.13, P-9.0 — escopo v1 nunca antes escrito, ver AUDIT/04-BACKLOG-CORRECAO.md § PACOTE 7 / PATCH-027) + 41 correções (ver tabela "Correções" abaixo) | Fases 0-9
+> **Total:** 125 prompts (119 originais + P-2.13, P-2.14, P-5.13, P-6.20, P-7.13, P-9.0 — escopo v1 nunca antes escrito, ver AUDIT/04-BACKLOG-CORRECAO.md § PACOTE 7 / PATCH-027) + 49 correções (41 fechadas + 8 escritas em S-273, pendentes — ver tabela "Correções" abaixo) | Fases 0-9
 > **Metodologia:** Bloco A (UI com mocks) → Pausa (validar com diretoria) → Bloco B (Backend + integração)
 > **⚠️ Antes de tudo:** ler a seção **Instruções Globais** (logo abaixo do Sumário). Prompts corretivos `P-0.2b` (design system), `P-0.3b` (migrations), `P-1.12b` (Admin) e `P-2.9b` (usuário real no header de Projetos) devem ser executados na ordem indicada; as demais correções (Ondas 0–2, ver tabela) são as executadas na retomada pós-auditoria de 2026-07.
 
@@ -23,7 +23,7 @@
 | 8    | Rádio      | P-8.1 a P-8.12  | P-8.1–8.5   | P-8.6–8.12  |
 | 9    | Polimento  | P-9.1 a P-9.5   | —           | —           |
 
-### Correções (S1-26 — cabeçalho antigo dizia "3 correções"; eram 4; hoje são 41 no total — o bloco B de Documentos aberto na auditoria de 2026-07-25 (P-1.18b a P-1.24b) fechou em 2026-07-27; nenhum corretivo segue pendente: P-0.4b fechou em S-172, P-7.1b em S-126, P-7.5b em S-127)
+### Correções (S1-26 — cabeçalho antigo dizia "3 correções"; eram 4; hoje são 49 no total — o bloco B de Documentos aberto na auditoria de 2026-07-25 (P-1.18b a P-1.24b) fechou em 2026-07-27; os 41 primeiros estão todos fechados, os 8 últimos foram escritos em S-273 a partir da varredura de débitos de SESSIONS.md e seguem pendentes de execução)
 
 Corpo integral no próprio arquivo (as 4 originais) ou em `AUDIT/04-prompts-pendentes.md` §4 (as 15 da auditoria de 2026-07 — convenção registrada em cada sessão de SESSIONS.md a partir de S-54; transcrever o texto para dentro deste arquivo é trabalho mecânico à parte, não feito em P-0.16 para não misturar prompts na mesma sessão).
 
@@ -70,8 +70,18 @@ Corpo integral no próprio arquivo (as 4 originais) ou em `AUDIT/04-prompts-pend
 | P-1.22b   | Documentos: alerta de "novas versões" que nunca chega         | neste arquivo                    | S-193  |
 | P-1.23b   | Documentos: botão "submeter projeto" que o wizard ignora      | neste arquivo                    | S-194  |
 | P-1.24b   | Documentos: audit mockado e escrita sem cobertura de teste    | neste arquivo                    | S-195  |
+| P-1.18c   | Documentos: os dois campos que a reabertura de edição descarta | neste arquivo²                   | —      |
+| P-1.19c   | Documentos: o conselheiro que ainda alcança a escrita         | neste arquivo²                   | —      |
+| P-2.4c    | Projetos: filtro de ano que não acompanha o ano de referência | neste arquivo²                   | —      |
+| P-2.6c    | Projetos: parcelas nos meses errados e um centavo que some    | neste arquivo²                   | —      |
+| P-0.14b   | Jobs: a homologação que aprova pela metade (sem transação)    | neste arquivo²                   | —      |
+| P-1.26b   | Auth: `/mfa/enroll` com fator TOTP já verificado              | neste arquivo²                   | —      |
+| P-0.1d    | Higiene dos contratos compartilhados (types/validators)       | neste arquivo²                   | —      |
+| P-2.8d    | Projetos: o segundo voto que se dá por registrado (BLOQUEADO) | neste arquivo²                   | —      |
 
 ¹ Sessão referenciada retroativamente como S-22b em SESSIONS.md S-68 (ponto 2 da entrada retificadora) — o bloco original nunca recebeu número.
+
+² Seção "Varredura de débitos de SESSIONS.md (2026-08-22)", no fim deste arquivo. Escritos em S-273; nenhum executado ainda. P-2.8d depende de decisão do Filipe registrada em `PATCHES/` antes de poder rodar.
 
 ---
 
@@ -10783,6 +10793,583 @@ Configurar deploy de produção. Vercel: 9 projetos separados (1 por app) com do
 - [ ] Todos os testes passam
 - [ ] Lint passa
 - [ ] Types passam
+
+---
+
+## Varredura de débitos de SESSIONS.md (2026-08-22)
+
+> Origem: **S-273** — varredura dos 93 blocos de débito declarados em
+> `SESSIONS.md` (S-1 a S-272) confrontados um a um com o código atual. Os oito
+> prompts abaixo são o que sobrou de **aberto e acionável**; o que já estava
+> fechado, o que foi aceito e o que depende de terceiros está listado na
+> entrada S-273. Ordem sugerida de execução: P-1.18c, P-1.19c (Documentos, o
+> mesmo módulo), P-2.6c, P-2.4c (Projetos), P-0.14b, P-1.26b, P-0.1d.
+> **P-2.8d está bloqueado** até o Filipe responder a pergunta que abre o prompt.
+
+---
+
+### P-1.18c — Documentos: os dois campos que a reabertura de edição joga fora (CORRETIVO)
+
+**Fase:** 1
+**Módulo:** documentos
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `fix/P-1.18c-documentos-edicao-campos-perdidos`
+- Dependências: P-1.18b (S-188), P-1.23b (S-194) e P-1.24b (S-195) concluídos
+- Env vars: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`
+- Skill `/impeccable`: **não se aplica** — nenhuma mudança de markup visível; se
+  o executor concluir que precisa tocar em JSX visível, pare e reavalie o escopo
+
+**Problema que este prompt resolve (contexto):**
+
+Três defeitos independentes na edição de documento/edital, todos registrados
+como débito e nenhum fechado até hoje:
+
+1. **`type` e `project_category_slug` são silenciosamente redefinidos ao
+   editar.** `apps/documentos/src/app/editorial/[id]/editar/page.tsx` seleciona
+   título, conteúdo, arquivo, visibilidade, categoria, tags, datas do edital,
+   `projectType` e FAQ — mas **não** `documents.type` nem
+   `editals.project_category_slug`. O client já espera os dois
+   (`_client.tsx:302` lê `doc.type`, `:287` lê `doc.editalProjectCategory`) e o
+   próprio arquivo documenta a lacuna em dois comentários, declarando os campos
+   como opcionais só para o typecheck passar. Consequência concreta: quem abre
+   um documento do tipo "ata" para corrigir uma vírgula reabre o formulário com
+   "Outro" pré-selecionado e **grava "Outro"** no submit; o mesmo vale para a
+   categoria de projeto de um edital, que volta a vazio. O débito de `type`
+   está em S-188; o de `project_category_slug` é a ressalva de S-61 confirmada
+   em S-273.
+2. **`updateEdital` quebra quando nada de edital mudou.**
+   `apps/documentos/src/actions/editals.ts`: `editalUpdate` nasce `{}` e só
+   ganha chave para campo presente no input, mas o
+   `tx.update(editals).set(editalUpdate)` roda incondicionalmente. Editar só o
+   título de um edital chama `set({})` — o drizzle-orm rejeita. Débito
+   registrado em S-195 como "corretivo dedicado".
+3. **Editais nunca ganham linha em `document_versions`.** `createEdital` e
+   `updateEdital` não escrevem nessa tabela (só o fluxo de documento comum
+   escreve), então `edital.currentVersion` é sempre `null` e o chip de tamanho
+   de arquivo e o mimeType real do viewer nunca aparecem para edital. Débito
+   registrado em S-188.
+
+**Escopo:**
+
+1. `editorial/[id]/editar/page.tsx`: acrescentar `type: documents.type` e
+   `editalProjectCategorySlug: editals.projectCategorySlug` ao `select`, e
+   repassá-los ao `EditDocumentClient` como `type` e `editalProjectCategory`.
+2. `_client.tsx`: tornar `type` e `editalProjectCategory` **obrigatórios** na
+   interface `InitialDocData` e remover os dois comentários que documentam a
+   lacuna — não deixar o campo opcional depois de a leitura existir, senão a
+   próxima regressão volta a passar despercebida.
+3. `actions/editals.ts` (`updateEdital`): só executar o `update(editals)` se
+   `Object.keys(editalUpdate).length > 0`; quando não houver nada a atualizar,
+   reusar a linha já lida em vez de esperar `returning()`. Mesmo tratamento
+   para o `update(documents)` se ele puder ficar vazio (hoje sempre tem
+   `updatedAt`, então não precisa mudar — confirmar antes).
+4. `actions/editals.ts`: inserir em `documentVersions` no mesmo ponto e com o
+   mesmo formato que o fluxo de documento comum usa (`actions/documents.ts` é a
+   referência — copiar o padrão, não inventar outro), tanto em `createEdital`
+   quanto em `updateEdital` quando `storagePath` mudar. Se o edital não tiver
+   arquivo, não criar versão.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/documentos/src/app/editorial/[id]/editar/page.tsx`
+- `apps/documentos/src/app/editorial/[id]/editar/_client.tsx`
+- `apps/documentos/src/actions/editals.ts`
+- `apps/documentos/src/__tests__/actions.test.ts`
+
+**Critérios de aceite:**
+
+- [ ] Abrir um documento com `type = "ata"` para edição pré-seleciona "Ata"; salvar sem tocar no campo mantém `documents.type = 'ata'` (teste de regressão)
+- [ ] Abrir um edital com `project_category_slug` preenchido pré-seleciona a categoria; salvar sem tocar no campo preserva o valor (teste)
+- [ ] `InitialDocData.type` e `InitialDocData.editalProjectCategory` deixam de ser opcionais; os dois comentários de lacuna saem do arquivo
+- [ ] `updateEdital` com apenas `{ id, title }` conclui sem erro e altera só o título (teste)
+- [ ] `createEdital` com arquivo cria linha em `document_versions`; `edital.currentVersion` deixa de ser `null` (teste)
+- [ ] Nenhuma mudança visual nos formulários
+- [ ] Lint passa · Types passam · suíte de `apps/documentos` verde
+
+**Notas:**
+
+Não estender o escopo para outros campos ou para o fluxo de documento comum,
+que já funciona. Fechar em `SESSIONS.md` os débitos de S-188 (dois itens),
+S-195 e a ressalva de S-61.
+
+---
+
+### P-1.19c — Documentos: o conselheiro que ainda alcança a escrita (CORRETIVO)
+
+**Fase:** 1
+**Módulo:** documentos
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `fix/P-1.19c-documentos-conselheiro-leitura`
+- Dependências: P-1.19b (S-189) concluído
+- Env vars: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`
+- Skill `/impeccable` obrigatória: a correção esconde ações de escrita em telas
+  existentes (G2 + CLAUDE.md)
+
+**Problema que este prompt resolve (contexto):**
+
+P-1.19b (S-189) estabeleceu que `conselheiro` navega a área editorial mas **só
+lê** — `DOCUMENT_WRITE_ROLES` (`apps/documentos/src/lib/session.ts`) exclui o
+papel e nenhuma policy de escrita de `documentos.*` jamais o incluiu. A
+listagem de documentos aplicou o padrão (`editorial/documentos/page.tsx:35`
+calcula `canWrite` e o repassa ao `DocumentRowActions`), mas três telas ficaram
+de fora da lista de arquivos permitidos daquele prompt e o próprio S-189
+registrou as três como débito:
+
+- `editorial/editais/page.tsx:164` renderiza `DocumentRowActions` **sem**
+  `canWrite`, e o componente tem `canWrite = true` por default
+  (`document-row-actions.tsx:20`) — o conselheiro vê editar/publicar/remover e
+  só descobre que não pode no clique, com "Acesso negado" de `editorAction`.
+- `editorial/novo/page.tsx` e `editorial/[id]/editar/page.tsx` usam
+  `requireEditorSession`, que permite `conselheiro` — quem digitar a URL direto
+  vê o formulário inteiro e só falha no submit.
+
+**Escopo:**
+
+1. `editorial/editais/page.tsx`: calcular `canWrite` com
+   `hasDocumentWriteRole(session.roles)` e repassá-lo ao `DocumentRowActions`,
+   além de esconder o botão de criar edital — exatamente o padrão já aplicado em
+   `editorial/documentos/page.tsx` (copiar, não reinventar).
+2. `editorial/novo/page.tsx`: trocar o gate por um que exija
+   `DOCUMENT_WRITE_ROLES`. Criar o gate em `lib/session.ts` ao lado de
+   `requireEditorSession` (ex.: `requireDocumentWriterSession`, mesmo
+   `createRoleGate`), para que a definição do conjunto continue em um único
+   lugar.
+3. `editorial/[id]/editar/page.tsx`: mesmo gate.
+4. Onde o gate recusar, o comportamento é o mesmo de qualquer outra recusa de
+   papel no monorepo (redirect do `createRoleGate`) — não inventar tela de erro
+   nova.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/documentos/src/lib/session.ts`
+- `apps/documentos/src/app/editorial/editais/page.tsx`
+- `apps/documentos/src/app/editorial/novo/page.tsx`
+- `apps/documentos/src/app/editorial/[id]/editar/page.tsx`
+- `apps/documentos/src/__tests__/rls.test.ts`
+
+**Critérios de aceite:**
+
+- [ ] Conselheiro em `/editorial/editais` não vê ações de escrita nem o botão de criar edital
+- [ ] Conselheiro navegando direto para `/editorial/novo` é redirecionado, não vê o formulário
+- [ ] Conselheiro navegando direto para `/editorial/[id]/editar` é redirecionado
+- [ ] Colaborador/diretor/super_admin continuam com acesso idêntico ao de hoje (teste com os dois papéis)
+- [ ] O conjunto de papéis com escrita continua definido em um único lugar (`DOCUMENT_WRITE_ROLES`)
+- [ ] Lint passa · Types passam · suíte de `apps/documentos` verde
+
+**Notas:**
+
+Correção de camada 1 e de honestidade de UI — a RLS e o `editorAction` já
+barravam a escrita; o problema é oferecer o que não se pode fazer. Fechar em
+`SESSIONS.md` os dois primeiros débitos de S-189 (o terceiro, "área editorial lê
+como superusuário", já foi fechado por P-1.21b).
+
+---
+
+### P-2.4c — Projetos: o filtro de ano que não acompanha o ano de referência (CORRETIVO)
+
+**Fase:** 2
+**Módulo:** projetos
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `fix/P-2.4c-projetos-filtro-ano`
+- Dependências: P-2.4b (S-201) concluído
+- Env vars: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`
+- Skill `/impeccable` obrigatória: edita um controle visível do pipeline (G2)
+
+**Problema que este prompt resolve (contexto):**
+
+`apps/projetos/src/app/(diretoria)/pipeline/page.tsx:33-38` define
+`YEAR_OPTIONS` como uma lista literal de 2024, 2025 e 2026, enquanto
+`project-wizard.tsx:124` sugere `ano de referência = ano atual + 1`. Em agosto
+de 2026 todo projeto novo nasce com `evaluationYear = 2027` e **não é filtrável
+no pipeline** — o filtro simplesmente não oferece o ano. A lista congela de novo
+a cada virada de ano. Débito registrado em S-196 ("item pequeno; anexar ao
+próximo toque em `pipeline/page.tsx`").
+
+**Escopo:**
+
+1. Derivar as opções de ano em vez de listá-las: os anos que **de fato existem**
+   em `projects.evaluation_year` (`SELECT DISTINCT`, ignorando soft-deleted),
+   unidos ao ano corrente e ao ano corrente + 1, ordenados desc, com "Todos os
+   anos" à frente. Assim o filtro nunca fica atrás do wizard nem oferece um ano
+   vazio de projetos futuros.
+2. A consulta é do Server Component da página — não criar Server Action nova.
+   Se `lib/queries.ts` for o lugar natural para a função, é permitido editá-lo.
+3. Nenhuma mudança no formato do query param (`?ano=`), no comportamento do
+   filtro ou no layout do `<select>`.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/projetos/src/app/(diretoria)/pipeline/page.tsx`
+- `apps/projetos/src/lib/queries.ts`
+
+**Critérios de aceite:**
+
+- [ ] Um projeto com `evaluation_year = 2027` aparece no filtro e é filtrável
+- [ ] O ano corrente e o ano corrente + 1 sempre constam, mesmo sem projeto naquele ano
+- [ ] Anos com projetos anteriores (2024, 2025…) continuam listados
+- [ ] Ordem decrescente, "Todos os anos" no topo
+- [ ] Nenhuma mudança visual além do conteúdo do `<select>`
+- [ ] Lint passa · Types passam
+
+**Notas:**
+
+Fechar em `SESSIONS.md` o débito de S-196 (`YEAR_OPTIONS`).
+
+---
+
+### P-2.6c — Projetos: parcelas nos meses errados e um centavo que some (CORRETIVO)
+
+**Fase:** 2
+**Módulo:** projetos
+**Tipo:** schema
+**Pré-condições:**
+
+- Branch: `fix/P-2.6c-projetos-parcelas-meses-e-centavos`
+- Dependências: P-2.6, P-3.11 e P-0.14 concluídos
+- Env vars: `DATABASE_URL`
+- Skill `/impeccable`: não se aplica (sem UI)
+
+**Problema que este prompt resolve (contexto):**
+
+`packages/db/src/projetos-approval.ts::generatePaymentSchedule` tem dois
+defeitos, o segundo descoberto na varredura S-273 e mais grave que o registrado:
+
+1. **Os meses de pagamento escolhidos pelo submissor são ignorados.** O wizard
+   coleta `mesesPagamento` (array de meses) e o validador exige
+   `mesesPagamento.length === numeroParcelas`
+   (`packages/validators/src/projetos/index.ts:38-53`). Mas
+   `projetos.projects` só guarda a **contagem** (`meses`), e o gerador monta o
+   mês de cada parcela como `(i % 12) + 1` — janeiro, fevereiro, março… O
+   comentário no próprio arquivo admite ("evenly distributed Jan–meses; Full
+   months list is in version snapshot"). Consequência: um projeto aprovado para
+   pagar em ago/set/out gera `payment_schedules` — e, por `onProjectApproved`,
+   `financeiro.payables` — com vencimento em jan/fev/mar. O calendário de
+   desembolso da ONG fica errado desde a aprovação.
+2. **Um centavo some por projeto.** `amountPerInstallment.toFixed(2)` é aplicado
+   a toda parcela: R$ 10.000,00 em 3 parcelas viram três de R$ 3.333,33, que
+   somam R$ 9.999,99. Débito registrado em S-203 ("um centavo por projeto, mas
+   em um módulo cuja cultura é estorno e imutabilidade").
+
+**Escopo:**
+
+1. **Persistir os meses escolhidos.** Nova migration hand-written
+   (`packages/db/src/migrations/NNNN_projetos_meses_pagamento.sql`, número
+   sequencial ao último arquivo existente) adicionando
+   `projetos.projects.meses_pagamento integer[]` (nullable — projetos antigos
+   não têm o dado). Espelhar em `packages/db/src/schema/projetos.ts`. Gravar a
+   coluna no caminho de criação/edição de projeto que já recebe
+   `mesesPagamento` do wizard.
+2. **Usar os meses reais no gerador.** `generatePaymentSchedule` passa a emitir
+   uma parcela por mês de `meses_pagamento`, na ordem crescente. Fallback
+   explícito e documentado quando a coluna for `null` (projeto anterior a esta
+   migration): manter o comportamento atual de Jan–N, para não mudar o
+   resultado de nada já aprovado.
+3. **Distribuir os centavos.** Calcular em centavos inteiros: `base =
+   floor(totalCentavos / n)`, `resto = totalCentavos − base × n`; as primeiras
+   `resto` parcelas recebem `base + 1`. A soma das parcelas passa a ser
+   **exatamente** o `budget_total`.
+4. **Não reescrever nada já gerado.** Imutabilidade (BRAIN): projetos já
+   aprovados mantêm seus `payment_schedules` e `payables` como estão. Nenhum
+   backfill, nenhum UPDATE retroativo.
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/db/src/migrations/NNNN_projetos_meses_pagamento.sql` (novo)
+- `packages/db/src/schema/projetos.ts`
+- `packages/db/src/projetos-approval.ts`
+- `packages/validators/src/projetos/index.ts` (só se o campo precisar chegar à camada de persistência)
+- `packages/types/src/projetos/index.ts` (idem)
+- `apps/projetos/src/actions/projects.ts` (gravar `mesesPagamento` na criação/edição)
+- `apps/projetos/src/__tests__/flow.test.ts`
+
+**Critérios de aceite:**
+
+- [ ] Projeto com `mesesPagamento = [8, 9, 10]` gera `payment_schedules` com `month` 8, 9 e 10 (teste)
+- [ ] Projeto sem `meses_pagamento` (linha antiga) mantém exatamente o comportamento atual (teste do fallback)
+- [ ] R$ 10.000,00 em 3 parcelas soma R$ 10.000,00 — duas de 3.333,34 e uma de 3.333,32, ou a distribuição equivalente do algoritmo (teste)
+- [ ] `payables` criados por `onProjectApproved` herdam o vencimento correto
+- [ ] Migration aplicada com `pnpm db:migrate` e idempotente na segunda execução
+- [ ] Nenhum `payment_schedules`/`payables` pré-existente alterado
+- [ ] Lint passa · Types passam · suíte de `apps/projetos` verde
+
+**Notas:**
+
+Fechar em `SESSIONS.md` o débito de S-203 (`toFixed(2)`) e registrar o achado
+dos meses como fechado por este prompt. Se durante a execução ficar claro que o
+wizard **não** envia `mesesPagamento` até a camada de persistência hoje, isso é
+parte do escopo — o campo já é coletado e validado, só não é gravado.
+
+---
+
+### P-0.14b — Jobs: a homologação que aprova pela metade (CORRETIVO)
+
+**Fase:** 0
+**Módulo:** fundação (packages/jobs, packages/db)
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `fix/P-0.14b-homologacao-transacional`
+- Dependências: P-0.14 (S-66) e P-2.6c concluídos
+- Env vars: `DATABASE_URL`
+- Skill `/impeccable`: não se aplica (sem UI)
+
+**Problema que este prompt resolve (contexto):**
+
+`packages/jobs/src/crons/projetos.ts::runHomologacaoAutoApprove` executa, por
+projeto elegível, uma sequência de operações independentes contra o `db`
+module-level: `UPDATE projects.stage`, `INSERT project_versions`, `logAudit` e —
+no caminho de aprovação — `onProjectApproved`, que por sua vez cria o centro de
+custo no Financeiro e um `payable` por parcela. Nenhuma transação envolve isso.
+Uma falha no meio (dado inconsistente, indisponibilidade momentânea) deixa o
+projeto marcado `aprovado` **sem** snapshot de versão, sem centro de custo e sem
+payables — e o cron nunca reprocessa, porque o projeto já saiu de
+`homologacao`. Débito registrado em S-66 ("considerar transação numa futura
+revisão de ambos os caminhos juntos"); o caminho manual
+(`transitionProjectStage`) tem o mesmo desenho e deve ser revisto junto, como o
+débito original pediu.
+
+**Escopo:**
+
+1. `generatePaymentSchedule` e `onProjectApproved`
+   (`packages/db/src/projetos-approval.ts`) passam a aceitar um handle de
+   transação opcional, com default no `db` module-level — mesmo padrão que
+   `logAudit` já usa (`packages/db/src/audit.ts:54-57`, parâmetro `dbHandle`).
+   Nenhuma mudança de comportamento para quem chamar sem argumento.
+2. `runHomologacaoAutoApprove`: envolver o corpo **de cada projeto** em
+   `db.transaction`, passando a `tx` a todas as escritas, inclusive `logAudit` e
+   `onProjectApproved`. Uma transação por projeto, não uma para o lote — a falha
+   de um projeto não pode desfazer os outros. Registrar a falha (`console.error`
+   estruturado, mesmo padrão do `radio_heartbeat_insert_failed` de S-272) e
+   seguir para o próximo projeto; o projeto que falhou permanece em
+   `homologacao` e volta a ser candidato na próxima execução.
+3. `transitionProjectStage` (`apps/projetos/src/actions/projects.ts`): aplicar o
+   mesmo envelope transacional ao caminho manual de aprovação, para que os dois
+   caminhos tenham a mesma garantia. Se ele já rodar dentro de
+   `withAuthenticatedContext`, usar a `tx` existente em vez de abrir outra.
+4. Nenhuma mudança na regra de elegibilidade, na janela de contestação nem no
+   conteúdo do snapshot.
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/db/src/projetos-approval.ts`
+- `packages/jobs/src/crons/projetos.ts`
+- `apps/projetos/src/actions/projects.ts`
+- `packages/jobs/src/__tests__/projetos-homologacao.test.ts`
+
+**Critérios de aceite:**
+
+- [ ] Uma falha simulada em `onProjectApproved` deixa o projeto em `homologacao`, sem linha nova em `project_versions` e sem `payables` (teste)
+- [ ] O mesmo projeto volta a ser processado na execução seguinte do cron (teste)
+- [ ] Falha em um projeto não impede o processamento dos demais do mesmo lote (teste)
+- [ ] Caminho de aprovação manual (`transitionProjectStage`) com a mesma garantia
+- [ ] `generatePaymentSchedule`/`onProjectApproved` chamados sem `tx` continuam funcionando idênticos (regressão)
+- [ ] Falha registrada em log estruturado, não engolida
+- [ ] Lint passa · Types passam · suítes de `packages/jobs` e `apps/projetos` verdes
+
+**Notas:**
+
+Fechar em `SESSIONS.md` o débito de S-66. Não ampliar para os demais crons —
+cada um tem forma própria e este é o que move dinheiro.
+
+---
+
+### P-1.26b — Auth: enrolar um segundo fator quando já existe um verificado (CORRETIVO)
+
+**Fase:** 1
+**Módulo:** intranet (auth)
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `fix/P-1.26b-mfa-enroll-fator-existente`
+- Dependências: P-1.26 (S-60) concluído
+- Env vars: `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+- Skill `/impeccable`: não se aplica — a correção é um redirect antes de
+  renderizar, sem mudança de markup
+
+**Problema que este prompt resolve (contexto):**
+
+`apps/intranet/src/app/(auth)/mfa/enroll/page.tsx` só verifica se o papel do
+usuário exige MFA (`anyRoleRequiresMfa`). Não verifica se ele **já tem um fator
+TOTP verificado**. Quem já enrolou e navega direto para `/mfa/enroll` (link
+salvo, histórico do navegador, botão "voltar") recebe um segundo enrollment em
+vez de ser levado a `/mfa/challenge`. O Supabase permite múltiplos fatores, e o
+gate de `/post-login`/`middleware.ts` continua correto em qualquer outra rota —
+por isso não é falha de segurança, e sim a lacuna de defesa em profundidade
+registrada como débito em S-60.
+
+**Escopo:**
+
+1. Na página, depois de resolver a sessão e antes de renderizar o `AuthCard`,
+   consultar os fatores do usuário e redirecionar para
+   `/mfa/challenge?return_to=…` quando já houver um fator TOTP com status
+   `verified`. Usar o helper que já existir em `packages/auth/src/mfa.ts`; se
+   não houver um que liste fatores, adicioná-lo lá (é o módulo canônico de MFA),
+   nunca instanciar um client Supabase avulso na página (G6.1).
+2. Fator apenas `unverified` (enrollment interrompido no meio) **não** redireciona
+   — a pessoa precisa poder concluir.
+3. Nenhuma mudança em `/mfa/challenge`, no `middleware.ts` ou no fluxo de
+   `/post-login`.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/intranet/src/app/(auth)/mfa/enroll/page.tsx`
+- `packages/auth/src/mfa.ts`
+- `packages/auth/src/__tests__/mfa.test.ts`
+
+**Critérios de aceite:**
+
+- [ ] Usuário com fator TOTP `verified` que abre `/mfa/enroll` é redirecionado a `/mfa/challenge`, preservando `return_to`
+- [ ] Usuário sem fator algum vê o formulário de enrollment, como hoje
+- [ ] Usuário com fator apenas `unverified` vê o formulário e consegue concluir
+- [ ] Papel que não exige MFA continua redirecionado para `/` (comportamento atual, sem regressão)
+- [ ] Nenhum client Supabase criado fora de `@hebron/auth`
+- [ ] Lint passa · Types passam
+
+**Notas:**
+
+Fechar em `SESSIONS.md` o primeiro débito de S-60.
+
+---
+
+### P-0.1d — Higiene dos contratos compartilhados (CORRETIVO)
+
+**Fase:** 0
+**Módulo:** fundação (packages/types, packages/validators)
+**Tipo:** schema
+**Pré-condições:**
+
+- Branch: `fix/P-0.1d-contratos-compartilhados`
+- Dependências: nenhuma
+- Env vars: nenhuma
+- Skill `/impeccable`: não se aplica (sem UI)
+
+**Problema que este prompt resolve (contexto):**
+
+Três resíduos de contrato compartilhado, todos registrados e nenhum fechado:
+
+1. **`packages/types/src/index.ts` re-exporta 3 dos 10 subdiretórios** —
+   `documentos`, `financeiro`, `projetos`. Faltam `admin`, `flats`, `intranet`,
+   `plataforma`, `radio`, `tarefas` e `roles`. O barrel **é** consumido de
+   verdade (`apps/projetos` importa de `@hebron/types` em 9 arquivos), então a
+   assimetria é uma armadilha: importar `Course` ou `Role` do mesmo caminho
+   falha sem motivo aparente. Débito de S-8.
+2. **`roleEnum` e `scopeEnum` são `const` sem `export`**
+   (`packages/validators/src/admin/index.ts:5,16`) — qualquer outro schema que
+   precise do mesmo vocabulário de papéis tem de redeclará-lo. Débito de S-8.
+3. **Três schemas Zod órfãos no Financeiro** — `approvePayableSchema`,
+   `authorizePayableSchema` e `bankImportSchema`
+   (`packages/validators/src/financeiro/index.ts:84,95,263`), com zero
+   importadores no monorepo. São sobras do desenho por payable individual que o
+   Bloco B substituiu por aprovação em lote. Débito de S-214, que os deixou para
+   "a limpeza que P-3.9c já faz" — P-3.9c não os removeu.
+
+**Escopo:**
+
+1. `packages/types/src/index.ts`: re-exportar todos os subdiretórios existentes
+   mais `roles`. Se dois módulos exportarem o mesmo nome de tipo, **pare e
+   reporte o conflito** em vez de renomear por conta própria — colisão de nome
+   entre domínios é decisão de contrato, não de higiene.
+2. `packages/validators/src/admin/index.ts`: exportar `roleEnum` e `scopeEnum`.
+   Não mudar os valores nem a forma dos schemas que os usam.
+3. Remover `approvePayableSchema`, `authorizePayableSchema`, `bankImportSchema`
+   e os `type` inferidos correspondentes. Antes de remover, confirmar com `grep`
+   em todo o monorepo (incluindo testes) que continuam com zero importadores.
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/types/src/index.ts`
+- `packages/validators/src/admin/index.ts`
+- `packages/validators/src/financeiro/index.ts`
+
+**Critérios de aceite:**
+
+- [ ] `import type { Course } from "@hebron/types"` e `import type { Role } from "@hebron/types"` resolvem
+- [ ] Nenhuma colisão de nome introduzida (typecheck do workspace inteiro verde)
+- [ ] `roleEnum`/`scopeEnum` exportados de `@hebron/validators/admin`
+- [ ] Os 3 schemas órfãos removidos; `grep` no monorepo confirma zero referências antes e depois
+- [ ] `pnpm turbo typecheck --concurrency=3` verde nos 19 pacotes
+- [ ] Lint passa
+
+**Notas:**
+
+Puramente mecânico — nenhum comportamento de runtime muda. Fechar em
+`SESSIONS.md` os débitos de S-8 (dois itens) e o item "validators órfãos" de
+S-214. Rodar o typecheck do workspace **inteiro**, não só dos pacotes tocados: o
+ponto do prompt é justamente descobrir se o barrel completo quebra alguém.
+
+---
+
+### P-2.8d — Projetos: o segundo voto que se dá por registrado (CORRETIVO — BLOQUEADO)
+
+**Fase:** 2
+**Módulo:** projetos
+**Tipo:** integration
+
+> **⚠️ BLOQUEADO — não executar antes da resposta do Filipe.**
+>
+> **Pergunta:** um conselheiro ou diretor pode **mudar o voto** já dado,
+> enquanto a votação está aberta? O BRAIN não diz. As três saídas possíveis:
+>
+> - **(a) Não pode.** O segundo voto passa a devolver erro de negócio
+>   ("Você já votou neste projeto"), em vez do `ok: true` silencioso de hoje.
+> - **(b) Pode, até a votação fechar.** O segundo voto atualiza a linha
+>   (`onConflictDoUpdate`), com registro em `audit_log` da mudança (valor
+>   anterior → novo) e recontagem do resultado.
+> - **(c) Pode, mas só até o quórum ser atingido.** Mistura das duas: atualiza
+>   enquanto a votação está aberta e sem quórum; recusa depois.
+>
+> Sem essa resposta o prompt não pode ser escrito por inteiro — a diferença
+> entre (a) e (b) é a diferença entre uma mensagem de erro e uma mudança de
+> governança auditável.
+
+**Pré-condições:**
+
+- Branch: `fix/P-2.8d-projetos-segundo-voto`
+- Dependências: P-2.8c concluído; **decisão acima registrada em `PATCHES/`**
+- Env vars: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`
+
+**Problema que este prompt resolve (contexto):**
+
+`apps/projetos/src/actions/voting.ts:130-137`: `castVote` insere o voto com
+`.onConflictDoNothing()` e segue para recontar o resultado. A constraint única
+`(project_id, user_id)` impede a linha duplicada — correto como proteção contra
+duplo clique —, mas a action devolve `ok: true` sem ter alterado nada. Quem
+clicou "Não sinto paz" depois de ter votado "Sinto paz" recebe confirmação de um
+voto que não mudou. Débito registrado em S-203: "correto como proteção contra
+duplo clique, silencioso demais como resposta a uma tentativa real de mudar de
+voto. Decidir se mudar de voto é permitido (o BRAIN não diz) antes de mexer."
+
+**Escopo (a preencher conforme a decisão):**
+
+Comum às três saídas:
+
+1. Distinguir, dentro de `castVote`, o **duplo clique com o mesmo valor** (que
+   deve continuar idempotente e silencioso) da **tentativa de mudar o valor**
+   (que precisa de resposta explícita). Hoje os dois caminhos são o mesmo.
+2. A UI (`vote-panel.tsx`/`vote-panel-wrapper.tsx`) deve refletir a resposta —
+   nada de confirmar visualmente um voto que o servidor não gravou. Este ponto
+   ativa a skill `/impeccable`.
+3. Teste cobrindo os dois caminhos (mesmo valor / valor diferente) e a
+   recontagem de quórum resultante.
+
+**Arquivos permitidos para criação/edição:** a definir com a decisão — no
+mínimo `apps/projetos/src/actions/voting.ts`,
+`apps/projetos/src/components/vote-panel.tsx` e
+`apps/projetos/src/__tests__/voting.test.ts`; a saída (b) ou (c) acrescenta um
+valor novo em `admin.audit_action` (migration hand-written) para a mudança de
+voto.
+
+**Notas:**
+
+Registrar a decisão em `PATCHES/` antes de executar — é regra de negócio de
+governança, exatamente o caso que o BRAIN §6.2 governa. Fechar em `SESSIONS.md`
+o débito de S-203 (`castVote`).
 
 ---
 
