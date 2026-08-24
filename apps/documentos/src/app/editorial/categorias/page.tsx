@@ -5,7 +5,10 @@ import { withAuthenticatedContext } from "@hebron/db/authenticated";
 import { categories, documents } from "@hebron/db/schema";
 import { CategoriesManager } from "../../../components/categories-manager";
 import type { Category } from "@hebron/types/documentos";
-import { requireEditorSession } from "../../../lib/session";
+import {
+  requireEditorSession,
+  hasDocumentWriteRole,
+} from "../../../lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -65,6 +68,7 @@ function buildTree(
 
 export default async function CategoriasPage() {
   const session = await requireEditorSession();
+  const canWrite = hasDocumentWriteRole(session.roles);
 
   const rows = await withAuthenticatedContext(
     { actorId: session.actorId },
@@ -122,11 +126,13 @@ export default async function CategoriasPage() {
           Categorias
         </h1>
         <p style={{ margin: 0, fontSize: 13, color: "var(--fg-muted)" }}>
-          Organize os documentos em categorias hierárquicas.
+          {canWrite
+            ? "Organize os documentos em categorias hierárquicas."
+            : "As categorias hierárquicas que organizam os documentos."}
         </p>
       </div>
 
-      <CategoriesManager initialTree={tree} />
+      <CategoriesManager initialTree={tree} canWrite={canWrite} />
     </div>
   );
 }

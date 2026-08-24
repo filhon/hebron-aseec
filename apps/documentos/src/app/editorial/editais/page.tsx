@@ -8,7 +8,10 @@ import {
   EditalStatusPill,
   resolveEditalStatus,
 } from "../../../components/edital-status-pill";
-import { requireEditorSession } from "../../../lib/session";
+import {
+  requireEditorSession,
+  hasDocumentWriteRole,
+} from "../../../lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +26,7 @@ function formatDate(date: Date | null): string {
 
 export default async function EditorialEditaisPage() {
   const session = await requireEditorSession();
+  const canWrite = hasDocumentWriteRole(session.roles);
 
   const rows = await withAuthenticatedContext(
     { actorId: session.actorId },
@@ -88,10 +92,12 @@ export default async function EditorialEditaisPage() {
           </p>
         </div>
 
-        <Link href="/editorial/novo" className="hb-btn hb-btn-primary">
-          <Plus size={15} aria-hidden="true" />
-          Novo edital
-        </Link>
+        {canWrite && (
+          <Link href="/editorial/novo" className="hb-btn hb-btn-primary">
+            <Plus size={15} aria-hidden="true" />
+            Novo edital
+          </Link>
+        )}
       </div>
 
       {rows.length === 0 ? (
@@ -100,7 +106,11 @@ export default async function EditorialEditaisPage() {
             <Scroll size={24} aria-hidden="true" />
           </div>
           <b>Nenhum edital ainda</b>
-          <p className="hb-empty-body">Crie o primeiro edital.</p>
+          <p className="hb-empty-body">
+            {canWrite
+              ? "Crie o primeiro edital."
+              : "Os editais cadastrados pela equipe editorial aparecem aqui."}
+          </p>
         </div>
       ) : (
         <div className="hb-card hb-card-overflow">
@@ -165,6 +175,7 @@ export default async function EditorialEditaisPage() {
                         id={row.id}
                         isPublished={!!row.publishedAt}
                         isEdital={true}
+                        canWrite={canWrite}
                       />
                     </td>
                   </tr>

@@ -21,10 +21,14 @@ export const EDITOR_ROLES: Role[] = [
  * (safe-action.ts) e pela UI (esconder ações de escrita em vez de deixá-las
  * falhar no clique).
  */
-export const DOCUMENT_WRITE_ROLES = ["super_admin", "diretor", "colaborador"];
+export const DOCUMENT_WRITE_ROLES: Role[] = [
+  "super_admin",
+  "diretor",
+  "colaborador",
+];
 
 export function hasDocumentWriteRole(roles: string[]): boolean {
-  return roles.some((r) => DOCUMENT_WRITE_ROLES.includes(r));
+  return DOCUMENT_WRITE_ROLES.some((writer) => roles.includes(writer));
 }
 
 /**
@@ -51,4 +55,17 @@ export async function getOptionalActorId(): Promise<string | null> {
  */
 export const requireEditorSession = createRoleGate({
   allowedRoles: EDITOR_ROLES,
+});
+
+/**
+ * Gate das telas de escrita da área editorial (`/editorial/novo`,
+ * `/editorial/[id]/editar`): exige `DOCUMENT_WRITE_ROLES`, não apenas
+ * `EDITOR_ROLES`. Sem ele o conselheiro que digitasse a URL direto via
+ * `requireEditorSession` recebia o formulário inteiro e só descobria a
+ * recusa no submit, pelo "Acesso negado" do `editorAction` (P-1.19c).
+ * A recusa é o redirect padrão do `createRoleGate`, como em qualquer
+ * outro gate de papel do monorepo.
+ */
+export const requireDocumentWriterSession = createRoleGate({
+  allowedRoles: DOCUMENT_WRITE_ROLES,
 });

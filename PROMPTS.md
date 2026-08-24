@@ -10953,12 +10953,12 @@ registrou as três como débito:
 
 **Critérios de aceite:**
 
-- [ ] Conselheiro em `/editorial/editais` não vê ações de escrita nem o botão de criar edital
-- [ ] Conselheiro navegando direto para `/editorial/novo` é redirecionado, não vê o formulário
-- [ ] Conselheiro navegando direto para `/editorial/[id]/editar` é redirecionado
-- [ ] Colaborador/diretor/super_admin continuam com acesso idêntico ao de hoje (teste com os dois papéis)
-- [ ] O conjunto de papéis com escrita continua definido em um único lugar (`DOCUMENT_WRITE_ROLES`)
-- [ ] Lint passa · Types passam · suíte de `apps/documentos` verde
+- [x] Conselheiro em `/editorial/editais` não vê ações de escrita nem o botão de criar edital
+- [x] Conselheiro navegando direto para `/editorial/novo` é redirecionado, não vê o formulário
+- [x] Conselheiro navegando direto para `/editorial/[id]/editar` é redirecionado
+- [x] Colaborador/diretor/super_admin continuam com acesso idêntico ao de hoje (teste com os dois papéis)
+- [x] O conjunto de papéis com escrita continua definido em um único lugar (`DOCUMENT_WRITE_ROLES`)
+- [x] Lint passa · Types passam · suíte de `apps/documentos` verde
 
 **Notas:**
 

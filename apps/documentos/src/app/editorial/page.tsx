@@ -36,7 +36,7 @@ import {
   EditalStatusPill,
   resolveEditalStatus,
 } from "../../components/edital-status-pill";
-import { requireEditorSession } from "../../lib/session";
+import { requireEditorSession, hasDocumentWriteRole } from "../../lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +50,7 @@ function formatDate(date: Date): string {
 
 export default async function EditorialDashboardPage() {
   const session = await requireEditorSession();
+  const canWrite = hasDocumentWriteRole(session.roles);
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
   const {
@@ -301,16 +302,18 @@ export default async function EditorialDashboardPage() {
           </p>
         </div>
 
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button type="button" className="hb-btn hb-btn-ghost hb-btn-sm">
-            <Upload size={14} aria-hidden="true" />
-            Importar PDF
-          </button>
-          <Link href="/editorial/novo" className="hb-btn hb-btn-primary">
-            <Plus size={15} aria-hidden="true" />
-            Novo documento
-          </Link>
-        </div>
+        {canWrite && (
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <button type="button" className="hb-btn hb-btn-ghost hb-btn-sm">
+              <Upload size={14} aria-hidden="true" />
+              Importar PDF
+            </button>
+            <Link href="/editorial/novo" className="hb-btn hb-btn-primary">
+              <Plus size={15} aria-hidden="true" />
+              Novo documento
+            </Link>
+          </div>
+        )}
       </div>
 
       {/* KPI grid */}
@@ -357,16 +360,20 @@ export default async function EditorialDashboardPage() {
               <div className="hb-empty" style={{ padding: "32px 20px" }}>
                 <b>Nenhum documento ainda</b>
                 <p className="hb-empty-body">
-                  Crie o primeiro documento da área editorial.
+                  {canWrite
+                    ? "Crie o primeiro documento da área editorial."
+                    : "Os documentos da área editorial aparecem aqui."}
                 </p>
-                <Link
-                  href="/editorial/novo"
-                  className="hb-btn hb-btn-primary"
-                  style={{ marginTop: 12 }}
-                >
-                  <Plus size={13} aria-hidden="true" />
-                  Criar documento
-                </Link>
+                {canWrite && (
+                  <Link
+                    href="/editorial/novo"
+                    className="hb-btn hb-btn-primary"
+                    style={{ marginTop: 12 }}
+                  >
+                    <Plus size={13} aria-hidden="true" />
+                    Criar documento
+                  </Link>
+                )}
               </div>
             ) : (
               <table className="hb-tbl">
@@ -439,15 +446,17 @@ export default async function EditorialDashboardPage() {
                         {formatDate(doc.updatedAt)}
                       </td>
                       <td>
-                        <div style={{ display: "flex", gap: 4 }}>
-                          <Link
-                            href={`/editorial/${doc.id}/editar`}
-                            className="hb-btn hb-btn-ghost hb-btn-xs"
-                            title="Editar"
-                          >
-                            <Edit size={13} aria-hidden="true" />
-                          </Link>
-                        </div>
+                        {canWrite && (
+                          <div style={{ display: "flex", gap: 4 }}>
+                            <Link
+                              href={`/editorial/${doc.id}/editar`}
+                              className="hb-btn hb-btn-ghost hb-btn-xs"
+                              title="Editar"
+                            >
+                              <Edit size={13} aria-hidden="true" />
+                            </Link>
+                          </div>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -591,13 +600,15 @@ export default async function EditorialDashboardPage() {
                       Rascunho · {item.categoryName ?? "sem categoria"}
                     </div>
                   </div>
-                  <Link
-                    href={`/editorial/${item.id}/editar`}
-                    className="hb-btn hb-btn-ghost hb-btn-xs"
-                  >
-                    <Scroll size={12} aria-hidden="true" />
-                    Abrir
-                  </Link>
+                  {canWrite && (
+                    <Link
+                      href={`/editorial/${item.id}/editar`}
+                      className="hb-btn hb-btn-ghost hb-btn-xs"
+                    >
+                      <Scroll size={12} aria-hidden="true" />
+                      Abrir
+                    </Link>
+                  )}
                 </div>
               ))
             )}

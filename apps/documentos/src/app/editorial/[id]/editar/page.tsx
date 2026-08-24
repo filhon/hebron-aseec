@@ -10,7 +10,7 @@ import {
 } from "@hebron/db/schema";
 import type { Category, DocumentType } from "@hebron/types/documentos";
 import { EditDocumentClient } from "./_client";
-import { requireEditorSession } from "../../../../lib/session";
+import { requireDocumentWriterSession } from "../../../../lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -62,7 +62,7 @@ function buildTree(
 
 export default async function EditarDocumentoPage({ params }: PageProps) {
   const { id } = await params;
-  const session = await requireEditorSession();
+  const session = await requireDocumentWriterSession();
 
   const { row, catRows, tagRows, docTagRows } = await withAuthenticatedContext(
     { actorId: session.actorId },

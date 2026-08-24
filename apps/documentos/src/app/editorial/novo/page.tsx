@@ -3,7 +3,7 @@ import { categories, documents, tags } from "@hebron/db/schema";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import type { Category } from "@hebron/types/documentos";
 import { NovoDocumentoClient } from "./_client";
-import { requireEditorSession } from "../../../lib/session";
+import { requireDocumentWriterSession } from "../../../lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -50,7 +50,7 @@ function buildTree(
 }
 
 export default async function NovoDocumentoPage() {
-  const session = await requireEditorSession();
+  const session = await requireDocumentWriterSession();
 
   const [catRows, tagRows] = await withAuthenticatedContext(
     { actorId: session.actorId },

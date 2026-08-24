@@ -35,6 +35,7 @@ function CategoryRow({
   depth,
   confirmDeleteId,
   deleting,
+  canWrite,
   onEdit,
   onMove,
   onDeleteRequest,
@@ -45,6 +46,7 @@ function CategoryRow({
   depth: number;
   confirmDeleteId: string | null;
   deleting: boolean;
+  canWrite: boolean;
   onEdit: (cat: Category) => void;
   onMove: (cat: Category) => void;
   onDeleteRequest: (id: string) => void;
@@ -108,7 +110,11 @@ function CategoryRow({
           {category.documentCount !== 1 ? "s" : ""}
         </span>
 
-        {isConfirming ? (
+        {/* Conselheiro navega a área editorial mas é somente-leitura
+            (P-1.19b/P-1.19c): sem escrita, a linha não oferece editar /
+            mover / remover — todas as actions de categoria passam pelo
+            `editorAction`, que recusaria no clique. */}
+        {!canWrite ? null : isConfirming ? (
           <div
             style={{
               display: "flex",
@@ -193,6 +199,7 @@ function CategoryRow({
           depth={depth + 1}
           confirmDeleteId={confirmDeleteId}
           deleting={deleting}
+          canWrite={canWrite}
           onEdit={onEdit}
           onMove={onMove}
           onDeleteRequest={onDeleteRequest}
@@ -214,8 +221,10 @@ function countAll(cats: Category[]): number {
 
 export function CategoriesManager({
   initialTree,
+  canWrite = true,
 }: {
   initialTree: Category[];
+  canWrite?: boolean;
 }) {
   const router = useRouter();
 
@@ -611,7 +620,7 @@ export function CategoriesManager({
             </span>
           </div>
 
-          {panelMode === "none" && (
+          {canWrite && panelMode === "none" && (
             <button
               type="button"
               onClick={openCreate}
@@ -659,17 +668,21 @@ export function CategoriesManager({
               >
                 Nenhuma categoria ainda
               </p>
-              <p style={{ fontSize: 13, margin: "0 0 20px" }}>
-                Crie a primeira categoria para organizar os documentos.
+              <p style={{ fontSize: 13, margin: canWrite ? "0 0 20px" : 0 }}>
+                {canWrite
+                  ? "Crie a primeira categoria para organizar os documentos."
+                  : "As categorias criadas pela equipe editorial aparecem aqui."}
               </p>
-              <button
-                type="button"
-                onClick={openCreate}
-                className="hb-btn hb-btn-primary hb-btn-sm"
-              >
-                <Plus size={14} aria-hidden="true" />
-                Criar primeira categoria
-              </button>
+              {canWrite && (
+                <button
+                  type="button"
+                  onClick={openCreate}
+                  className="hb-btn hb-btn-primary hb-btn-sm"
+                >
+                  <Plus size={14} aria-hidden="true" />
+                  Criar primeira categoria
+                </button>
+              )}
             </div>
           ) : (
             initialTree.map((cat) => (
@@ -679,6 +692,7 @@ export function CategoriesManager({
                 depth={0}
                 confirmDeleteId={confirmDeleteId}
                 deleting={deleting}
+                canWrite={canWrite}
                 onEdit={openEdit}
                 onMove={openMove}
                 onDeleteRequest={(id) => setConfirmDeleteId(id)}

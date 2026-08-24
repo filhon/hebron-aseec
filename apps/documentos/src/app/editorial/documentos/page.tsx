@@ -196,7 +196,9 @@ export default async function EditorialDocumentosPage({
           <p className="hb-empty-body">
             {showRemovidos
               ? "Documentos removidos aparecem aqui e podem ser restaurados."
-              : "Crie o primeiro documento da área editorial."}
+              : canWrite
+                ? "Crie o primeiro documento da área editorial."
+                : "Os documentos da área editorial aparecem aqui."}
           </p>
         </div>
       ) : (

@@ -295,6 +295,7 @@
 | S-272  | 2026-08-22 | AUDIT PACOTE 11 — Higiene, consistência e registro (CORRETIVO)                                                                   | concluido                                                                            |
 | S-273  | 2026-08-22 | Varredura dos débitos declarados em SESSIONS.md (AUDITORIA)                                                                      | concluido (gera P-0.1d, P-1.18c, P-1.19c, P-2.4c, P-2.6c, P-0.14b, P-1.26b, P-2.8d)  |
 | S-274  | 2026-08-24 | P-1.18c — Documentos: os dois campos que a reabertura de edição joga fora (CORRETIVO)                                            | concluido                                                                            |
+| S-275  | 2026-08-24 | P-1.19c — Documentos: o conselheiro que ainda alcança a escrita (CORRETIVO)                                                      | concluido                                                                            |
 
 ---
 
@@ -26032,4 +26033,170 @@ updateCategory altera o nome...`, `diff.before.name` vem `{redacted: true}`
 - `apps/documentos/src/__tests__/actions.test.ts` (5 testes novos no describe
   "editais — createEdital / updateEdital"; removido o comentário que
   documentava o bug de `updateEdital` como aceito)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+## S-275 — P-1.19c — Documentos: o conselheiro que ainda alcança a escrita (CORRETIVO)
+
+**Prompt:** `PROMPTS.md` § P-1.19c
+**Data:** 2026-08-24
+**Modelo:** claude-opus-5
+**Status:** concluido
+
+### Resumo
+
+Fecha os dois primeiros débitos de S-189: as três telas da área editorial que
+ficaram fora dos arquivos permitidos de P-1.19b e continuavam oferecendo
+escrita ao `conselheiro`, que é somente-leitura desde aquela decisão (o
+conjunto `DOCUMENT_WRITE_ROLES` nunca o incluiu, nem nenhuma policy de escrita
+de `documentos.*` em `0005_documentos_rls.sql`).
+
+1. **`editorial/editais/page.tsx` renderizava `DocumentRowActions` sem
+   `canWrite`** — e o componente tem `canWrite = true` por default
+   (`document-row-actions.tsx:20`), então o conselheiro via editar / publicar /
+   remover em toda linha e só descobria a recusa no clique, pelo "Acesso
+   negado" do `editorAction`. A tela passou a calcular
+   `canWrite = hasDocumentWriteRole(session.roles)`, repassá-lo ao
+   `DocumentRowActions` e condicionar o botão "Novo edital" — exatamente o
+   padrão já aplicado em `editorial/documentos/page.tsx:35`, copiado, não
+   reinventado.
+2. **`editorial/novo/page.tsx` e `editorial/[id]/editar/page.tsx` usavam
+   `requireEditorSession`**, que aceita `conselheiro` (é o gate de _navegação_
+   da área, `EDITOR_ROLES`): quem digitasse a URL direto recebia o formulário
+   inteiro e só falhava no submit. As duas passaram a
+   `requireDocumentWriterSession`, gate novo em `lib/session.ts` ao lado do
+   existente, construído com o mesmo `createRoleGate` sobre
+   `DOCUMENT_WRITE_ROLES`. A recusa é o redirect padrão do `createRoleGate`
+   (login canônico) — nenhuma tela de erro nova foi inventada.
+
+**Extensão de escopo autorizada pelo Filipe durante a sessão** ("não quero
+débitos novos"): a varredura das demais telas de `/editorial` achou mais duas
+com o mesmo defeito, fora dos arquivos permitidos do prompt. Foram fechadas
+aqui em vez de viram débito.
+
+3. **Estado vazio pedindo ação a quem não pode agir.** As duas listagens
+   diziam "Crie o primeiro edital." / "Crie o primeiro documento da área
+   editorial." mesmo em modo leitura. Passaram a variar por `canWrite` ("Os
+   editais cadastrados pela equipe editorial aparecem aqui.").
+   `editorial/documentos/page.tsx` entrou aqui só por isso — o resto da tela
+   já estava correto desde P-1.19b. A aba "Removidos" já era condicional a
+   `canWrite`, então o texto de lixeira não precisou de variante.
+4. **Painel editorial (`editorial/page.tsx`) e categorias
+   (`editorial/categorias/page.tsx` → `CategoriesManager`).** O painel
+   oferecia "Importar PDF", "Novo documento", o CTA "Criar documento" do
+   estado vazio e dois links de editar (linha da tabela "Últimas
+   atualizações" e item da fila de rascunhos) — os dois últimos apontando
+   para `/editorial/[id]/editar`, que a partir do item 2 redireciona o
+   conselheiro, ou seja, seriam links mortos. Em categorias, as quatro
+   mutações (`createCategory`, `updateCategory`, `deleteCategory`,
+   `moveCategoryInTree`) passam por `editorAction`, e o gerenciador mostrava
+   editar / mover / remover em cada linha mais "Nova categoria". O
+   `CategoriesManager` ganhou prop `canWrite` (default `true`, mesma
+   convenção de `DocumentRowActions`), repassada recursivamente ao
+   `CategoryRow`. `listCategories` também é `editorAction`, mas o componente
+   nunca o chama do cliente — a árvore vem da query server-side, e os três
+   `router.refresh()` vivem dentro de handlers de mutação, inalcançáveis em
+   modo leitura.
+
+O conjunto de papéis com escrita continua definido em um único lugar:
+`DOCUMENT_WRITE_ROLES` (`lib/session.ts`) alimenta agora três consumidores —
+`editorAction` (`safe-action.ts:32`, camada 2), `requireDocumentWriterSession`
+(camada 1) e `hasDocumentWriteRole` (UI). A constante ganhou o tipo explícito
+`Role[]` (era `string[]` inferido) para poder ser passada a
+`createRoleGate({ allowedRoles })`; `hasDocumentWriteRole` foi reescrito como
+`DOCUMENT_WRITE_ROLES.some((w) => roles.includes(w))` para manter a assinatura
+`string[]` sem cast. `safe-action.ts` não precisou de mudança: `ctx.roles` já é
+`Role[]`.
+
+### Suposições registradas
+
+- **Testes foram para `session-gate.test.ts`, não para `rls.test.ts`.** O
+  prompt lista `apps/documentos/src/__tests__/rls.test.ts` como o arquivo de
+  teste permitido, mas o que este prompt muda é um gate de Server Component,
+  que se testa com `next/headers` / `next/navigation` / `resolveSession`
+  mockados — `rls.test.ts` é um teste de integração com o banco real, sem
+  mock nenhum, e receber `vi.mock("next/headers")` ali quebraria o arquivo
+  inteiro. `session-gate.test.ts` já monta exatamente esses mocks e já é a
+  casa de `requireEditorSession`. A camada RLS correspondente, aliás, já está
+  coberta em `rls.test.ts` desde P-1.19b ("conselheiro NÃO pode inserir
+  documento (é somente-leitura)", "conselheiro NÃO atualiza nenhum
+  documento") — não havia o que acrescentar lá. Divergência da lista de
+  arquivos permitidos, registrada aqui conforme G1.
+- **Quatro arquivos além da lista permitida**, pela extensão de escopo do
+  item 3/4 acima: `editorial/documentos/page.tsx`, `editorial/page.tsx`,
+  `editorial/categorias/page.tsx` e `components/categories-manager.tsx`.
+  Autorizado explicitamente pelo Filipe nesta sessão.
+- A coluna vazia de ações (`<th style={{ width: 120 }}>`) permanece na tabela
+  mesmo em modo leitura, igual a `editorial/documentos/page.tsx`. Consistência
+  entre as duas telas venceu a economia de uma coluna.
+- O texto do cabeçalho do painel ("Apenas super_admins e editores designados
+  acessam esta área") está desatualizado desde S-189 — `EDITOR_ROLES` é
+  `super_admin | diretor | conselheiro | colaborador`, não há papel "editor".
+  É cópia decorativa, não affordance de escrita; não foi tocado. **Não é
+  débito de comportamento**, só de precisão de microcopy.
+
+### Verificação
+
+- `pnpm --filter @hebron/documentos lint` — limpo.
+- `pnpm --filter @hebron/documentos typecheck` — limpo.
+- `pnpm --filter @hebron/documentos test`: 114 testes, 113 passando.
+  `session-gate.test.ts` foi de 4 para 13 testes: `requireEditorSession` com
+  `conselheiro` continua **passando** (ele navega a área), e o novo describe
+  de `requireDocumentWriterSession` cobre anônimo → redirect, `conselheiro` →
+  redirect, `hospede` → redirect, `colaborador` / `diretor` / `super_admin` →
+  sessão retornada sem redirect (via `it.each`, os três papéis do critério de
+  aceite), e `conselheiro` + `colaborador` no mesmo usuário → passa (um papel
+  basta, BRAIN §3 permite múltiplos papéis). Mais um describe para
+  `hasDocumentWriteRole` / `DOCUMENT_WRITE_ROLES`, que é o que a UI consulta.
+  O 1 teste que falha (`categorias — hierarquia > updateCategory altera o
+nome...`, `diff.before.name` vem `{redacted: true}`) é pré-existente e não
+  relacionado — mesma causa de S-260/S-274, `SENSITIVE_AUDIT_FIELDS` redige
+  `name` por chave e não por entidade; `actions/categories.ts` não foi tocado
+  nesta sessão.
+- `pnpm turbo lint --filter=@hebron/documentos` arrasta `@hebron/db#lint`, que
+  falha por dois arquivos soltos e ignorados pelo git em `packages/db`
+  (`check_locks.mjs`, `check_locks2.mjs`, fora do `parserOptions.project`).
+  Pré-existente, sem relação com este diff.
+- `npx next build` em `apps/documentos` — 15 rotas compiladas, limpo. Rodado
+  porque a extensão de escopo mexeu num Client Component (`CategoriesManager`)
+  e em Server Components que agora ramificam JSX.
+- Sem verificação no navegador: as telas tocadas são Server Components (mais
+  um Client Component que só recebeu prop) e o repositório não tem harness de
+  render para `app/**/*.tsx` (mesma limitação registrada em S-274). A cadeia
+  foi conferida por leitura ponta a ponta, incluindo a varredura por grep de
+  `<Link` / `<button` / `hb-btn-primary` em todo `app/editorial/**` para achar
+  affordances de escrita restantes — sobrou apenas o que está nos itens 1 a 4.
+
+### Débitos de S-189 fechados
+
+- ✅ `editorial/editais` oferecia ações de escrita ao conselheiro.
+- ✅ `editorial/novo` e `editorial/[id]/editar` gateados só por
+  `requireEditorSession`.
+- (o terceiro, "área editorial lê como superusuário", já havia sido fechado
+  por P-1.21b.)
+
+**Nenhum débito novo declarado nesta sessão.**
+
+### Arquivos modificados
+
+- `apps/documentos/src/lib/session.ts` (`DOCUMENT_WRITE_ROLES` tipado `Role[]`,
+  `hasDocumentWriteRole` reescrito sem cast, novo
+  `requireDocumentWriterSession`)
+- `apps/documentos/src/app/editorial/editais/page.tsx` (`canWrite` calculado,
+  repassado ao `DocumentRowActions`, botão "Novo edital" e cópia do estado
+  vazio condicionados)
+- `apps/documentos/src/app/editorial/novo/page.tsx` (gate trocado)
+- `apps/documentos/src/app/editorial/[id]/editar/page.tsx` (gate trocado)
+- `apps/documentos/src/app/editorial/documentos/page.tsx` (cópia do estado
+  vazio por `canWrite` — fora da lista permitida, item 3)
+- `apps/documentos/src/app/editorial/page.tsx` (`canWrite`; barra de ações do
+  header, CTA do estado vazio, link de editar da tabela e "Abrir" da fila de
+  rascunhos condicionados — fora da lista permitida, item 4)
+- `apps/documentos/src/app/editorial/categorias/page.tsx` (`canWrite` passado
+  ao `CategoriesManager`, subtítulo variando — fora da lista permitida)
+- `apps/documentos/src/components/categories-manager.tsx` (prop `canWrite`
+  default `true`, repassada ao `CategoryRow`; ações de linha, "Nova
+  categoria" e CTA do estado vazio condicionados — fora da lista permitida)
+- `apps/documentos/src/__tests__/session-gate.test.ts` (9 testes novos)
 - `SESSIONS.md` (esta entrada + linha no índice)
