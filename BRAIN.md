@@ -293,6 +293,33 @@ Todo o estilo visual compartilhado vive em **`packages/ui`**. O arquivo **`packa
 **Ciclo de vida (mesmo para ambos):**
 `rascunho → validação → votação → homologação (7 dias) → aprovado/reprovado → em execução → concluído`
 
+**Validação:**
+
+- Só super_admins podem alterar o projeto nesta fase, e podem alterar **todas** as informações — o avaliador designado só tem acesso ao material do projeto quando ele entra em votação (Q23, Q38)
+- Toda alteração feita pelo super_admin durante a validação é comunicada ao submissor por email (PRD item 8)
+- A votação pode **retornar à validação** para recalibrar o valor, quando há discordância entre o valor votado e o proposto (Q9)
+
+**Valor aprovado:**
+
+- A diretoria informa o valor aprovado no ato da aprovação; ele pode ser **parcial** (Q9, PRD)
+- No pontual, a diretoria pode **dividir** o valor em parcelas na aprovação, mesmo o pontual sendo pagamento único por padrão (Q54)
+- O email de aprovação leva o valor aprovado e o período da parceria (PRD item 9)
+
+**Anexos do formulário anual:**
+
+- Vídeo de apresentação de até 3 minutos, planilha de orçamento por etapas e carta de recomendação — os três **obrigatórios no anual** (Q47), **opcionais no pontual**, mas com os campos sempre presentes "em caso de exigência" (Q54)
+
+**Responsável do projeto:**
+
+- O nome do responsável do projeto é um campo distinto do submissor — um executivo de agência missionária submete vários projetos, cada um com o seu responsável (Q47, Q56)
+
+**Contestação do submissor:**
+
+- Existe, é distinta da contestação de diretor/conselheiro na homologação
+- Ocorre durante a validação, quando o valor (ou outra informação) é alterado pelo super_admin
+- Notifica os super_admins, que devem responder
+- Fecha 7 dias antes da reunião de planejamento — depois de fechado para votação, o submissor não pode mais contestar (Q11, Q32, Q33, Q75)
+
 **Votação (projetos anuais):**
 
 - Participantes: diretores + conselheiros
@@ -351,6 +378,14 @@ Todo o estilo visual compartilhado vive em **`packages/ui`**. O arquivo **`packa
 **Renovação/continuação:** nova entrada vinculada via `parent_project_id`, preserva histórico, estágios resetam
 
 **Exclusão:** soft-delete com justificativa obrigatória em qualquer estágio, gera eventos para todos os módulos
+
+**Decisões pendentes:**
+
+Três perguntas que o Filipe devolveu e nunca fechou. Nenhum prompt deve resolvê-las por conta própria — ver `AUDIT/06-CONFORMIDADE-REQUISITOS.md` §13.
+
+- **Formato da contestação do submissor** (Q32) — thread de mensagens ou formulário estruturado? → bloqueia `P-2.17`
+- **Formato do "local de execução"** (Q55) — endereço livre validado por API, ou campos estruturados? → bloqueia `P-2.21`
+- **Pontual passa ou não por homologação?** (Q1 diz que sim; o código diverge) → bloqueia `P-2.18`
 
 ### 6.3. Plataforma (LMS)
 

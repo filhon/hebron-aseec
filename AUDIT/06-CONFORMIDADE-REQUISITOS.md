@@ -55,7 +55,7 @@ Junto com isso caem, por dependência, a comunicação de alteração ao submiss
 | Módulo       | ✅  | ⚠️  | ❌  | Veredito                                                     |
 | ------------ | --- | --- | --- | ------------------------------------------------------------ |
 | **Projetos** | 14  | 6   | 9   | Fluxo do submissor e da votação sólidos; **validação é oca** |
-| Admin        | 9   | 2   | 1   | Bom; banner de impersonação só existe no próprio Admin       |
+| Admin        | 10  | 2   | 0   | Bom; achado do banner de impersonação (§2.1) era incorreto   |
 | Documentos   | 8   | 1   | 0   | Conforme                                                     |
 | Financeiro   | 12  | 1   | 1   | Governança dual exemplar                                     |
 | Tarefas      | 9   | 0   | 0   | Conforme, inclusive a visão árvore estilo Xmind              |

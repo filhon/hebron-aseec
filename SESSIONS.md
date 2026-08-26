@@ -302,6 +302,7 @@
 | S-279  | 2026-08-26 | P-1.26b — Auth: enrolar um segundo fator quando já existe um verificado (CORRETIVO)                                              | concluido                                                                            |
 | S-280  | 2026-08-26 | P-0.1d — Higiene dos contratos compartilhados (CORRETIVO)                                                                        | concluido                                                                            |
 | S-281  | 2026-08-26 | P-2.8d — Projetos: o segundo voto que se dá por registrado (CORRETIVO)                                                           | concluido                                                                            |
+| S-282  | 2026-08-26 | P-2.14b — Projetos: as regras que ficaram fora do BRAIN (CORRETIVO)                                                              | concluido                                                                            |
 
 ---
 
@@ -26972,4 +26973,92 @@ Nenhum.
 - `packages/db/src/migrations/0092_projetos_vote_changed_audit_action.sql` (novo)
 - `BRAIN.md` (§6.2)
 - `PATCHES/028-votacao-mudanca-de-voto-ate-encerrar.md` (novo)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+## S-282 — P-2.14b — Projetos: as regras que ficaram fora do BRAIN (CORRETIVO)
+
+**Prompt:** `PROMPTS.md` § P-2.14b
+**Data:** 2026-08-26
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Contexto
+
+`AUDIT/06-CONFORMIDADE-REQUISITOS.md` §13 identificou que seis regras de
+negócio que o Filipe respondeu em `.docs/Respostas*.md` nunca subiram para o
+`BRAIN.md` §6.2 — e por isso nunca foram implementadas, já que o agente
+implementador lê o BRAIN, não os `.docs`. Prompt documental, sem código:
+fecha a lacuna antes da Onda A do backlog (`P-2.15`…`P-2.18`).
+
+### Implementação
+
+`BRAIN.md` §6.2 ganhou cinco subseções novas, inseridas entre "Ciclo de
+vida" e "Votação (projetos anuais)", cada uma citando a fonte original entre
+parênteses:
+
+- **Validação:** só super_admins alteram o projeto nesta fase (todas as
+  informações); o avaliador só acessa o projeto em votação; toda alteração é
+  comunicada ao submissor por email; a votação pode retornar à validação
+  para recalibrar o valor (Q9, Q23, Q38, PRD item 8).
+- **Valor aprovado:** informado pela diretoria no ato da aprovação, pode ser
+  parcial; no pontual, pode ser dividido em parcelas mesmo sendo pagamento
+  único por padrão; o email de aprovação leva valor e período (Q9, Q54, PRD
+  item 9).
+- **Anexos do formulário anual:** vídeo (até 3 min), planilha de orçamento
+  por etapas e carta de recomendação — obrigatórios no anual, opcionais no
+  pontual mas sempre presentes como campo (Q47, Q54).
+- **Responsável do projeto:** campo distinto do submissor — uma agência
+  missionária submete vários projetos, cada um com seu responsável (Q47,
+  Q56).
+- **Contestação do submissor:** existe, distinta da contestação de
+  diretor/conselheiro na homologação; ocorre durante a validação; notifica
+  os super_admins; fecha 7 dias antes da reunião de planejamento (Q11, Q32,
+  Q33, Q75).
+
+Um bloco **"Decisões pendentes"** foi acrescentado ao final de §6.2 com as
+três perguntas que o Filipe devolveu e nunca fechou, cada uma marcada com o
+prompt que bloqueia: formato da contestação (Q32 → `P-2.17`), formato do
+local de execução (Q55 → `P-2.21`), pontual × homologação (Q1 vs. código →
+`P-2.18`).
+
+O que já constava corretamente em §6.2 (janela de submissão anual,
+periodicidade de relatório configurável, prestação de contas informal,
+sugestão de avaliador por afinidade) **não foi duplicado** — confirmado por
+leitura da seção antes de editar.
+
+`AUDIT/06-CONFORMIDADE-REQUISITOS.md`: a tabela "Placar por módulo" trazia
+Admin em `9 ✅ / 2 ⚠️ / 1 ❌`, refletindo o achado original de §2.1 (banner
+de impersonação só no Admin). Esse achado já estava marcado no corpo do
+documento como **incorreto** (verificação em código: o banner vive em
+`packages/ui`, o `AppShell` o renderiza, os 9 apps passam a prop). O placar
+não tinha sido ajustado para refletir a correção — atualizado para
+`10 ✅ / 2 ⚠️ / 0 ❌`.
+
+### Verificação
+
+- `grep -c "valor aprovado" BRAIN.md` = 2 (dois fatos distintos, não
+  duplicados); idem "responsável do projeto" = 1, "carta de recomendação" =
+  1, "contestação do submissor" = 1.
+- `git diff --stat`: só `BRAIN.md` e `AUDIT/06-CONFORMIDADE-REQUISITOS.md`
+  (+ esta entrada em `SESSIONS.md`) — nenhum arquivo de código tocado.
+- Conferido contra `PATCHES/001`…`028`: nenhuma das seis regras conflita com
+  decisão registrada em PATCH; nenhuma reescrita foi necessária.
+
+### Débitos fechados
+
+Nenhum item de código — este prompt fecha uma lacuna documental. Os débitos
+de implementação (valor aprovado ausente no schema, `updateDraftProject`
+travado em `rascunho`, etc.) permanecem abertos e são o escopo de
+`P-2.15`…`P-2.24`.
+
+### Débitos novos
+
+Nenhum.
+
+### Arquivos modificados
+
+- `BRAIN.md` (§6.2)
+- `AUDIT/06-CONFORMIDADE-REQUISITOS.md` (placar por módulo)
 - `SESSIONS.md` (esta entrada + linha no índice)

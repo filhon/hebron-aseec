@@ -11487,12 +11487,12 @@ código faltante. É o primeiro da leva por isso.
 
 **Critérios de aceite:**
 
-- [ ] `grep -c "valor aprovado" BRAIN.md` > 0, idem "responsável do projeto",
+- [x] `grep -c "valor aprovado" BRAIN.md` > 0, idem "responsável do projeto",
       "carta de recomendação", "contestação do submissor"
-- [ ] Bloco "Decisões pendentes" em §6.2 lista as três perguntas abertas com o
+- [x] Bloco "Decisões pendentes" em §6.2 lista as três perguntas abertas com o
       prompt bloqueado por cada uma
-- [ ] Nenhum arquivo de código alterado (`git diff --stat` só toca `.md`)
-- [ ] Nenhuma regra duplicada: cada afirmação nova aparece uma vez só em §6.2
+- [x] Nenhum arquivo de código alterado (`git diff --stat` só toca `.md`)
+- [x] Nenhuma regra duplicada: cada afirmação nova aparece uma vez só em §6.2
 
 **Notas:**
 
