@@ -15,6 +15,7 @@ export type ProjectAuditAction =
   | "project.deleted"
   | "vote.cast"
   | "vote.panic"
+  | "vote.changed"
   | "evaluation.assigned"
   | "evaluation.submitted"
   | "contestation.created"

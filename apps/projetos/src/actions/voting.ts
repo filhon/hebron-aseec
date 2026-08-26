@@ -112,6 +112,20 @@ async function getNextVersionNumber(
 // estágio e as entradas de audit correspondentes são atômicos — se o audit
 // falhar, nada do voto é persistido. withSystemRole escapa a RLS só para o
 // INSERT em admin.audit_log (policy é TO service_role), dentro da mesma tx.
+//
+// Mudar de voto (P-2.8d, decisão b, PATCH-028): permitido livremente
+// enquanto o projeto está em `votacao` — "até a votação fechar" já é
+// garantido pelo próprio ciclo de vida, já que getVotingProject rejeita
+// qualquer voto assim que o projeto sai desse estágio. Duplo clique com o
+// MESMO valor continua idempotente e silencioso (nenhuma escrita, nenhum
+// audit novo); valor DIFERENTE atualiza a linha e grava `vote.changed`. O
+// UPDATE roda via withSystemRole, não via `tx` — RLS de UPDATE precisa
+// primeiro "enxergar" a linha, e a policy de SELECT de votes (cédula
+// secreta) nega isso até ao próprio votante (nem uma policy de UPDATE
+// dedicada resolveria: a checagem de visibilidade do UPDATE herda a mesma
+// negação). A escrita fica escopada pelo WHERE explícito em
+// (projectId, ctx.actorId), não por RLS — mesmo raciocínio já aplicado ao
+// INSERT em admin.audit_log e à leitura agregada de getVoteResult.
 // ---------------------------------------------------------------------------
 
 export const castVote = conselheiroDiretorAction
@@ -126,17 +140,56 @@ export const castVote = conselheiroDiretorAction
     return withAuthenticatedContext({ actorId: ctx.actorId }, async (tx) => {
       const project = await getVotingProject(tx, parsedInput.projectId);
 
-      // Insert — unique constraint (project_id, user_id) blocks double voting
-      await tx
-        .insert(votes)
-        .values({
-          projectId: parsedInput.projectId,
-          userId: ctx.actorId,
-          value: parsedInput.value,
-        })
-        .onConflictDoNothing();
+      // SELECT em votes é restrito por RLS a super_admin (cédula secreta) —
+      // mas o próprio votante pode saber o próprio voto anterior.
+      // withSystemRole eleva só esta leitura pontual, dentro da mesma
+      // transação, só para decidir se é voto novo / duplo clique / mudança.
+      const existingVoteRows = await withSystemRole(tx, (sysTx) =>
+        sysTx
+          .select({ value: votes.value })
+          .from(votes)
+          .where(
+            and(
+              eq(votes.projectId, parsedInput.projectId),
+              eq(votes.userId, ctx.actorId),
+            ),
+          )
+          .limit(1),
+      );
+      const previousValue = existingVoteRows[0]?.value ?? null;
+      const isNewVote = previousValue === null;
+      const valueChanged = !isNewVote && previousValue !== parsedInput.value;
 
-      // After every vote, re-check if quorum is now met and all eligible have voted
+      if (isNewVote) {
+        // Insert normal via `tx` — RLS (votes_insert_own) continua sendo a
+        // segunda camada de defesa aqui, como sempre foi. onConflictDoNothing
+        // permanece como rede de segurança contra corrida entre duplo clique
+        // concorrente (dois cliques quase simultâneos com o MESMO valor
+        // novo, entre a leitura acima e este insert).
+        await tx
+          .insert(votes)
+          .values({
+            projectId: parsedInput.projectId,
+            userId: ctx.actorId,
+            value: parsedInput.value,
+          })
+          .onConflictDoNothing();
+      } else if (valueChanged) {
+        await withSystemRole(tx, (sysTx) =>
+          sysTx
+            .update(votes)
+            .set({ value: parsedInput.value })
+            .where(
+              and(
+                eq(votes.projectId, parsedInput.projectId),
+                eq(votes.userId, ctx.actorId),
+              ),
+            ),
+        );
+      }
+      // Duplo clique com o mesmo valor: nenhuma escrita, nenhum audit novo.
+
+      // After every vote/change, re-check if quorum is now met and all eligible have voted
       const result = await getVoteResult(tx, parsedInput.projectId);
 
       let stageTransitioned = false;
@@ -211,26 +264,52 @@ export const castVote = conselheiroDiretorAction
         }
       }
 
-      // Audit the vote itself (no user ID in diff — secret ballot)
-      await withSystemRole(tx, (sysTx) =>
-        logProjectAudit(
-          {
-            actorId: ctx.actorId,
-            action: "vote.cast",
-            entity: "vote",
-            entityId: parsedInput.projectId,
-            diff: {
-              projectId: parsedInput.projectId,
-              value: parsedInput.value,
-              resultAfterVote: {
-                totalVoted: result.totalVoted,
-                quorumMet: result.quorumMet,
+      // Audit the vote itself — só quando algo foi de fato escrito. Duplo
+      // clique com o mesmo valor não gera entrada nova (idempotente e
+      // silencioso); mudança de valor grava `vote.changed` com o valor
+      // anterior, não `vote.cast` de novo.
+      if (isNewVote) {
+        await withSystemRole(tx, (sysTx) =>
+          logProjectAudit(
+            {
+              actorId: ctx.actorId,
+              action: "vote.cast",
+              entity: "vote",
+              entityId: parsedInput.projectId,
+              diff: {
+                projectId: parsedInput.projectId,
+                value: parsedInput.value,
+                resultAfterVote: {
+                  totalVoted: result.totalVoted,
+                  quorumMet: result.quorumMet,
+                },
               },
             },
-          },
-          sysTx,
-        ),
-      );
+            sysTx,
+          ),
+        );
+      } else if (valueChanged) {
+        await withSystemRole(tx, (sysTx) =>
+          logProjectAudit(
+            {
+              actorId: ctx.actorId,
+              action: "vote.changed",
+              entity: "vote",
+              entityId: parsedInput.projectId,
+              diff: {
+                projectId: parsedInput.projectId,
+                previousValue,
+                value: parsedInput.value,
+                resultAfterVote: {
+                  totalVoted: result.totalVoted,
+                  quorumMet: result.quorumMet,
+                },
+              },
+            },
+            sysTx,
+          ),
+        );
+      }
 
       return { ok: true, result, stageTransitioned };
     });

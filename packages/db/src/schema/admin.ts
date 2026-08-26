@@ -49,6 +49,9 @@ export const auditActionEnum = adminSchema.enum("audit_action", [
   "project.deleted",
   "vote.cast",
   "vote.panic",
+  // Mudar de voto enquanto a votação está aberta (P-2.8d, PATCH-028), added
+  // via ALTER TYPE in 0092_projetos_vote_changed_audit_action.sql
+  "vote.changed",
   "evaluation.assigned",
   "evaluation.submitted",
   "contestation.created",

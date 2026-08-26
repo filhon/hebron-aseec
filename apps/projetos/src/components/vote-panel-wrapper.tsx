@@ -47,11 +47,13 @@ export function VotePanelWrapper({
   const router = useRouter();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [confirmedValue, setConfirmedValue] = useState<boolean | null>(null);
+  const [isChangingVote, setIsChangingVote] = useState(false);
 
   const { execute, isPending } = useAction(castVote, {
     onSuccess({ input }) {
       setErrorMessage(null);
       setConfirmedValue(input.value);
+      setIsChangingVote(false);
       // Quórum e contagem exibidos vêm do servidor — nunca de um incremento
       // otimista no cliente.
       router.refresh();
@@ -76,11 +78,17 @@ export function VotePanelWrapper({
       confirmedValue={confirmedValue}
       status={status}
       errorMessage={errorMessage}
+      isChangingVote={isChangingVote}
       onVote={(inFavor) => {
         setErrorMessage(null);
         execute({ projectId, value: inFavor });
       }}
       onRetry={() => setErrorMessage(null)}
+      onRequestChangeVote={() => setIsChangingVote(true)}
+      onCancelChangeVote={() => {
+        setErrorMessage(null);
+        setIsChangingVote(false);
+      }}
     />
   );
 }

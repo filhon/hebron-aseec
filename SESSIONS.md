@@ -301,6 +301,7 @@
 | S-278  | 2026-08-24 | P-0.14b — Jobs: a homologação que aprova pela metade (CORRETIVO)                                                                 | concluido                                                                            |
 | S-279  | 2026-08-26 | P-1.26b — Auth: enrolar um segundo fator quando já existe um verificado (CORRETIVO)                                              | concluido                                                                            |
 | S-280  | 2026-08-26 | P-0.1d — Higiene dos contratos compartilhados (CORRETIVO)                                                                        | concluido                                                                            |
+| S-281  | 2026-08-26 | P-2.8d — Projetos: o segundo voto que se dá por registrado (CORRETIVO)                                                           | concluido                                                                            |
 
 ---
 
@@ -26862,4 +26863,113 @@ débito pendente.
 - `packages/types/src/index.ts`
 - `packages/validators/src/admin/index.ts`
 - `packages/validators/src/financeiro/index.ts`
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+## S-281 — P-2.8d — Projetos: o segundo voto que se dá por registrado (CORRETIVO)
+
+**Prompt:** `PROMPTS.md` § P-2.8d
+**Data:** 2026-08-26
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Contexto
+
+Prompt bloqueado desde sua redação (S-203): `castVote`
+(`apps/projetos/src/actions/voting.ts`) inseria o voto com
+`.onConflictDoNothing()` e sempre devolvia `ok: true`, mesmo quando o segundo
+voto (com valor diferente do primeiro) não alterava nada — a constraint única
+`(project_id, user_id)` protegia contra duplo clique, mas o BRAIN não dizia
+se mudar de voto era permitido, então a diferença entre "erro de negócio" e
+"mudança de governança auditável" não podia ser decidida sem perguntar.
+
+### Decisão de negócio (Filipe, 2026-08-26)
+
+Pergunta feita: um conselheiro/diretor pode mudar o voto já dado enquanto a
+votação está aberta? Três saídas possíveis apresentadas (a: não pode: erro;
+b: pode até fechar: upsert + audit; c: híbrido até o quórum). **Filipe
+escolheu (b)** — decisão registrada em `PATCHES/028-votacao-mudanca-de-voto-ate-encerrar.md`
+antes de qualquer código, como a regra exige para governança (BRAIN §6.2).
+"Até a votação fechar" não exigiu nenhum controle de prazo extra: o próprio
+ciclo de vida já cobre isso — assim que o projeto sai do estágio `votacao`
+(auto-close, `closeVoting` ou `triggerPanicButton`), `getVotingProject`
+recusa qualquer novo `castVote`.
+
+### Implementação
+
+- `castVote` agora faz uma leitura prévia (via `withSystemRole`, já que o
+  SELECT de `votes` é `super_admin`-only por RLS) para decidir entre três
+  caminhos: voto novo (`INSERT ... ON CONFLICT DO NOTHING`, inalterado),
+  duplo clique com o mesmo valor (nenhuma escrita, nenhum audit — idempotente
+  e silencioso como já era) e mudança de valor (`UPDATE` escopado por
+  `WHERE project_id = ... AND user_id = ctx.actorId`, audit `vote.changed`
+  com `previousValue` → `value`).
+- Novo valor de enum `vote.changed` em `admin.audit_action`
+  (`packages/db/src/migrations/0092_projetos_vote_changed_audit_action.sql`)
+  e em `apps/projetos/src/lib/audit.ts` (`ProjectAuditAction`).
+- `apps/projetos/src/components/vote-panel.tsx` ganha a affordance "Alterar
+  meu voto" no estado de confirmação (reabre Sim/Não, com "Cancelar e manter
+  o voto atual"); a ordem de renderização passa a checar `status === "error"`
+  **antes** de `hasVoted`, corrigindo um bug latente: uma tentativa de mudar
+  de voto que falhasse ficava escondida atrás da confirmação antiga (o
+  próprio item G2/`/impeccable` do prompt — invocado antes de tocar o JSX).
+  `vote-panel-wrapper.tsx` ganha o estado `isChangingVote`, resetado no
+  `onSuccess` de `useAction`.
+- `BRAIN.md` §6.2 e `PATCHES/028-votacao-mudanca-de-voto-ate-encerrar.md`
+  documentam a decisão.
+
+### Tentativa descartada (achado de arquitetura)
+
+A primeira implementação escreveu a mudança de voto como upsert
+(`INSERT ... ON CONFLICT (project_id, user_id) DO UPDATE`) rodando como
+`authenticated` (RLS ativa), com uma nova policy `votes_update_own`
+espelhando `votes_insert_own`. **Não funciona**: no Postgres, RLS para
+`UPDATE`/`ON CONFLICT DO UPDATE` exige que a linha seja "visível" antes de
+aplicar a policy específica do comando — e a policy de SELECT de `votes`
+(`votes_select_admin_only`, cédula secreta, migration `0009`) nega isso a
+qualquer papel que não seja `super_admin`, **inclusive ao próprio votante**,
+de propósito. Confirmado empiricamente com um script isolado: `UPDATE`/`SELECT`
+sob o papel `authenticated` devolviam 0 linhas mesmo com `USING`/`WITH CHECK`
+da nova policy corretos — a checagem de visibilidade herdada da ausência de
+SELECT já filtrava a linha antes de a policy de UPDATE ser sequer avaliada.
+A migration `0093` (policy + `GRANT UPDATE`) chegou a ser aplicada e foi
+revertida manualmente (`DROP POLICY`, `REVOKE`, remoção da linha em
+`public._migrations`) antes do commit — nenhum rastro dela ficou no branch.
+A correção real usa `withSystemRole` para o `UPDATE`, escopado pelo `WHERE`
+explícito em vez de por RLS — mesmo padrão já usado por `getVoteResult`
+(leitura agregada) e pelo INSERT em `admin.audit_log`.
+
+### Verificação
+
+- `pnpm --filter @hebron/db typecheck/lint`: verde.
+- `pnpm --filter projetos typecheck/lint`: verde.
+- `pnpm --filter projetos test -- voting.test.ts`: **37/37 verdes**, incluindo
+  os 2 testes novos (duplo clique idempotente sem audit duplicado; valor
+  diferente atualiza a linha, grava `vote.changed` com `previousValue` e
+  recalcula `inFavor`/`against`).
+- `pnpm --filter projetos test` (suíte completa do app): **163/163 verdes**
+  em 15 arquivos, incluindo `audit-abort.test.ts` (governança dual/rollback
+  atômico continua intacta) e `close-voting.test.ts`.
+- `pnpm --filter @hebron/db db:migrate`: migration `0092` aplicada
+  (`0093` criada, aplicada, revertida e removida do branch — ver acima).
+
+### Débitos fechados
+
+- ✅ **S-203** — `castVote` devolvia `ok: true` silencioso para um segundo
+  voto com valor diferente do primeiro.
+
+### Débitos novos
+
+Nenhum.
+
+### Arquivos modificados
+
+- `apps/projetos/src/actions/voting.ts`
+- `apps/projetos/src/components/vote-panel.tsx`
+- `apps/projetos/src/components/vote-panel-wrapper.tsx`
+- `apps/projetos/src/__tests__/voting.test.ts`
+- `apps/projetos/src/lib/audit.ts`
+- `packages/db/src/schema/admin.ts`
+- `packages/db/src/migrations/0092_projetos_vote_changed_audit_action.sql` (novo)
+- `BRAIN.md` (§6.2)
+- `PATCHES/028-votacao-mudanca-de-voto-ate-encerrar.md` (novo)
 - `SESSIONS.md` (esta entrada + linha no índice)

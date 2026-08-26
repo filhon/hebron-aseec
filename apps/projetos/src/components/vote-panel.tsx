@@ -110,8 +110,14 @@ export interface VotePanelProps {
   errorMessage?: string | null;
   /** Sentido do voto confirmado nesta sessão (só para colorir o próprio ícone de confirmação — nunca exposto a terceiros). */
   confirmedValue?: boolean | null;
+  /** Painel reaberto para escolher um novo voto (BRAIN §6.2: mudar de voto é permitido até a votação fechar — PATCH-028). */
+  isChangingVote?: boolean;
   onVote?: (inFavor: boolean) => void;
   onRetry?: () => void;
+  /** Reabre os botões Sim/Não a partir da confirmação já registrada. */
+  onRequestChangeVote?: () => void;
+  /** Volta à confirmação sem enviar nada. */
+  onCancelChangeVote?: () => void;
   className?: string;
 }
 
@@ -122,14 +128,18 @@ export function VotePanel({
   status = "idle",
   errorMessage = null,
   confirmedValue = null,
+  isChangingVote = false,
   onVote,
   onRetry,
+  onRequestChangeVote,
+  onCancelChangeVote,
   className,
 }: VotePanelProps) {
   const pending = status === "pending";
 
   function handleVote(inFavor: boolean) {
-    if (hasVoted || pending) return;
+    if (pending) return;
+    if (hasVoted && !isChangingVote) return;
     onVote?.(inFavor);
   }
 
@@ -174,43 +184,7 @@ export function VotePanel({
 
       {/* Vote buttons */}
       <div className="px-6 pt-10 pb-6 flex flex-col items-center gap-6">
-        {hasVoted ? (
-          <div className="flex flex-col items-center gap-2 py-2">
-            <div
-              className="w-14 h-14 rounded-full flex items-center justify-center"
-              style={{
-                backgroundColor:
-                  confirmedValue === false
-                    ? "var(--color-destructive-muted)"
-                    : "var(--hb-green-muted)",
-              }}
-            >
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                aria-hidden
-              >
-                <path
-                  d="M5 12l5 5L20 7"
-                  stroke={
-                    confirmedValue === false
-                      ? "var(--color-destructive)"
-                      : "var(--hb-green-fg)"
-                  }
-                  strokeWidth="2.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </div>
-            <p className="text-sm font-semibold text-(--fg)">Voto registrado</p>
-            <p className="text-xs text-(--fg-muted)">
-              Seu voto é secreto e não será revelado.
-            </p>
-          </div>
-        ) : status === "error" ? (
+        {status === "error" ? (
           <div
             className="flex flex-col items-center gap-3 py-2 w-full max-w-xs"
             role="alert"
@@ -246,8 +220,56 @@ export function VotePanel({
               Tentar novamente
             </button>
           </div>
+        ) : hasVoted && !isChangingVote ? (
+          <div className="flex flex-col items-center gap-2 py-2">
+            <div
+              className="w-14 h-14 rounded-full flex items-center justify-center"
+              style={{
+                backgroundColor:
+                  confirmedValue === false
+                    ? "var(--color-destructive-muted)"
+                    : "var(--hb-green-muted)",
+              }}
+            >
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                aria-hidden
+              >
+                <path
+                  d="M5 12l5 5L20 7"
+                  stroke={
+                    confirmedValue === false
+                      ? "var(--color-destructive)"
+                      : "var(--hb-green-fg)"
+                  }
+                  strokeWidth="2.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </div>
+            <p className="text-sm font-semibold text-(--fg)">Voto registrado</p>
+            <p className="text-xs text-(--fg-muted)">
+              Seu voto é secreto e não será revelado.
+            </p>
+            <button
+              type="button"
+              onClick={onRequestChangeVote}
+              className="mt-2 text-xs font-medium text-(--fg-muted) underline underline-offset-2 decoration-(--border) transition-colors duration-(--dur-fast) hover:text-(--hb-blue) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 rounded-sm"
+            >
+              Alterar meu voto
+            </button>
+          </div>
         ) : (
           <div className="flex flex-col items-center gap-3 w-full max-w-xs">
+            {isChangingVote && (
+              <p className="text-xs text-(--fg-muted) text-center">
+                Escolha o novo voto.
+              </p>
+            )}
             <div className="flex gap-4 w-full">
               <button
                 type="button"
@@ -329,6 +351,15 @@ export function VotePanel({
               <p className="text-xs text-(--fg-muted)" role="status">
                 Registrando…
               </p>
+            )}
+            {isChangingVote && !pending && (
+              <button
+                type="button"
+                onClick={onCancelChangeVote}
+                className="text-xs font-medium text-(--fg-muted) underline underline-offset-2 decoration-(--border) transition-colors duration-(--dur-fast) hover:text-(--fg) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 rounded-sm"
+              >
+                Cancelar e manter o voto atual
+              </button>
             )}
           </div>
         )}

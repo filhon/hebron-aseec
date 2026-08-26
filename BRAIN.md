@@ -300,6 +300,7 @@ Todo o estilo visual compartilhado vive em **`packages/ui`**. O arquivo **`packa
 - Voto **SECRETO** (ninguém vê quem votou o quê)
 - Quórum: ≥50% dos diretores + conselheiros (contagem por **pessoa distinta**, não por atribuição — PATCH-007)
 - Aprovação: maioria simples
+- Voto pode ser alterado livremente enquanto o projeto está em votação — mesmo valor: idempotente e silencioso; valor diferente: atualiza e audita (vote.changed) — permitido até a votação encerrar, não depois (PATCH-028)
 - Sem quórum: votação estendida; super_admin pode acionar "botão de pânico" (maioria simples entre os votos existentes; empate resolve para reprovado — PATCH-026)
 - Encerramento manual: super_admin pode encerrar a votação a qualquer momento, aplicando o resultado apurado até então — mecanismo geral, distinto do "botão de pânico" acima, que só se aplica à falta de quórum (PATCH-007)
 

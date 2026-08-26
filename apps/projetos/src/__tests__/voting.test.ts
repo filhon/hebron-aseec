@@ -9,6 +9,8 @@
  *  - Restrição DB: 1 voto por pessoa por projeto (UNIQUE constraint)
  *  - RLS: cédula secreta — apenas super_admin pode SELECT votos
  *  - Contrato de falha de `castVote` no cliente (VotePanelWrapper) — P-2.2b
+ *  - Mudar de voto enquanto a votação está aberta: duplo clique idempotente
+ *    vs. valor diferente (upsert + audit `vote.changed` + recontagem) — P-2.8d
  */
 
 import {
@@ -64,6 +66,7 @@ const IDS = {
     projectVoting: "bbcc0000-0000-0000-0000-000000000001",
     projectPanic: "bbcc0000-0000-0000-0000-000000000002",
     projectCastReject: "bbcc0000-0000-0000-0000-000000000003",
+    projectVoteChange: "bbcc0000-0000-0000-0000-000000000004",
   },
 } as const;
 
@@ -213,6 +216,18 @@ beforeAll(async () => {
         budgetTotal: "5000.00",
         parcelas: 1,
         meses: 1,
+      },
+      {
+        id: IDS.projects.projectVoteChange,
+        title: "Projeto Mudança de Voto Test",
+        tipo: "anual",
+        stage: "votacao",
+        organizationId: IDS.orgs.orgVoting,
+        submitterId: IDS.users.submissor1,
+        evaluationYear: 2026,
+        budgetTotal: "8000.00",
+        parcelas: 2,
+        meses: 2,
       },
     ])
     .onConflictDoNothing();
@@ -417,6 +432,132 @@ describe("Votação — castVote: reprovação decisiva não fica presa em vota�
   });
 });
 
+// ── castVote: mudar de voto (P-2.8d, decisão b, PATCH-028) ─────────────────
+
+describe("Votação — castVote: mudar de voto enquanto a votação está aberta (P-2.8d)", () => {
+  it("duplo clique com o mesmo valor é idempotente: não altera o voto nem grava novo audit", async () => {
+    const { castVote } = await import("../actions/voting");
+
+    resolveSessionMock.mockResolvedValueOnce({
+      actorId: IDS.users.diretor1,
+      roles: ["diretor"],
+    });
+    const first = await castVote({
+      projectId: IDS.projects.projectVoteChange,
+      value: true,
+    });
+    expect(first?.serverError).toBeUndefined();
+
+    resolveSessionMock.mockResolvedValueOnce({
+      actorId: IDS.users.diretor1,
+      roles: ["diretor"],
+    });
+    const second = await castVote({
+      projectId: IDS.projects.projectVoteChange,
+      value: true,
+    });
+    expect(second?.serverError).toBeUndefined();
+
+    const voteRows = await db
+      .select()
+      .from(votes)
+      .where(
+        and(
+          eq(votes.projectId, IDS.projects.projectVoteChange),
+          eq(votes.userId, IDS.users.diretor1),
+        ),
+      );
+    expect(voteRows).toHaveLength(1);
+    expect(voteRows.at(0)?.value).toBe(true);
+
+    const castAuditRows = await db
+      .select()
+      .from(auditLog)
+      .where(
+        and(
+          eq(auditLog.entityId, IDS.projects.projectVoteChange),
+          eq(auditLog.actorId, IDS.users.diretor1),
+          eq(auditLog.action, "vote.cast"),
+        ),
+      );
+    expect(castAuditRows).toHaveLength(1); // segundo clique não duplica o audit
+
+    const changedAuditRows = await db
+      .select()
+      .from(auditLog)
+      .where(
+        and(
+          eq(auditLog.entityId, IDS.projects.projectVoteChange),
+          eq(auditLog.actorId, IDS.users.diretor1),
+          eq(auditLog.action, "vote.changed"),
+        ),
+      );
+    expect(changedAuditRows).toHaveLength(0);
+  });
+
+  it("valor diferente atualiza o voto (upsert), grava vote.changed com o valor anterior e recalcula o resultado", async () => {
+    const { castVote } = await import("../actions/voting");
+
+    resolveSessionMock.mockResolvedValueOnce({
+      actorId: IDS.users.diretor2,
+      roles: ["diretor"],
+    });
+    const before = await castVote({
+      projectId: IDS.projects.projectVoteChange,
+      value: true,
+    });
+    expect(before?.serverError).toBeUndefined();
+    const beforeResult = before?.data?.result;
+    if (!beforeResult) throw new Error("castVote não retornou resultado");
+
+    resolveSessionMock.mockResolvedValueOnce({
+      actorId: IDS.users.diretor2,
+      roles: ["diretor"],
+    });
+    const after = await castVote({
+      projectId: IDS.projects.projectVoteChange,
+      value: false,
+    });
+    expect(after?.serverError).toBeUndefined();
+    const afterResult = after?.data?.result;
+    if (!afterResult) throw new Error("castVote não retornou resultado");
+
+    // Mesma pessoa mudando de ideia — não é um novo votante
+    expect(afterResult.totalVoted).toBe(beforeResult.totalVoted);
+    expect(afterResult.inFavor).toBe(beforeResult.inFavor - 1);
+    expect(afterResult.against).toBe(beforeResult.against + 1);
+
+    const voteRows = await db
+      .select()
+      .from(votes)
+      .where(
+        and(
+          eq(votes.projectId, IDS.projects.projectVoteChange),
+          eq(votes.userId, IDS.users.diretor2),
+        ),
+      );
+    expect(voteRows).toHaveLength(1); // UPDATE, não uma segunda linha
+    expect(voteRows.at(0)?.value).toBe(false);
+
+    const changedAuditRows = await db
+      .select({ diff: auditLog.diff })
+      .from(auditLog)
+      .where(
+        and(
+          eq(auditLog.entityId, IDS.projects.projectVoteChange),
+          eq(auditLog.actorId, IDS.users.diretor2),
+          eq(auditLog.action, "vote.changed"),
+        ),
+      );
+    expect(changedAuditRows).toHaveLength(1);
+    const diff = changedAuditRows.at(0)?.diff as
+      | { previousValue?: boolean; value?: boolean }
+      | undefined;
+    expect(diff?.previousValue).toBe(true);
+    expect(diff?.value).toBe(false);
+  });
+});
+
 // ── Cliente: caminho de falha de castVote (VotePanelWrapper) ───────────────────
 
 describe("Votação — VotePanelWrapper: castVote falhando nunca mostra 'Voto registrado'", () => {
@@ -477,6 +618,11 @@ describe("Votação — VotePanelWrapper: castVote falhando nunca mostra 'Voto r
 });
 
 // ── DB: restrição de voto único ───────────────────────────────────────────────
+//
+// Exercita a constraint diretamente via `db.insert(...).onConflictDoNothing()`
+// — mecânica genérica da UNIQUE (project_id, user_id), não o comportamento de
+// `castVote`. `castVote` faz upsert (onConflictDoUpdate) desde P-2.8d; ver
+// "mudar de voto" acima para o caminho de aplicação real.
 
 describe("Votação — DB: 1 voto por pessoa por projeto (UNIQUE constraint)", () => {
   afterEach(async () => {
