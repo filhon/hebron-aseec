@@ -11373,6 +11373,1469 @@ o débito de S-203 (`castVote`).
 
 ---
 
+## Conformidade requisitos × implementação (2026-08-26)
+
+> Origem: **`AUDIT/06-CONFORMIDADE-REQUISITOS.md`** — comparação item a item
+> entre os documentos embrionários (PRD, `Respostas*.md` a `Respostas10.md`,
+> edital dos Flats) e o código atual. Os prompts abaixo são o backlog §12 da
+> auditoria **depois de conferido contra o código**, com quatro ajustes:
+>
+> 1. **`P-1.28` (banner de impersonação) não existe — o achado §2.1 é falso.**
+>    O componente vive em `packages/ui/src/components/impersonation-banner.tsx`,
+>    o `AppShell` o renderiza (`packages/ui/src/components/app-shell.tsx:329`) e
+>    **os 9 apps passam a prop** em todos os layouts com shell (12 layouts,
+>    conferidos um a um: admin, projetos ×2, plataforma ×2, radio, financeiro,
+>    intranet, documentos, flats ×2, tarefas — todos chamam
+>    `getActiveImpersonation`). Nada a fazer. O achado provavelmente é anterior
+>    ao PACOTE 6 (S-262).
+> 2. **`P-2.21` foi dividido.** O "responsável do projeto" (§1.8) tem fonte
+>    fechada e é executável hoje; o "local de execução" (§1.9) depende da Q55,
+>    que nunca foi respondida. Virou `P-2.26`, bloqueado — nenhum prompt fica
+>    metade executável e metade travado.
+> 3. **`P-2.14b` criado** (recomendação §13 da auditoria), com uma correção: o
+>    diagnóstico "o que ficou só nas Respostas não foi implementado" é
+>    **parcialmente falso**. Janela de submissão anual, periodicidade de
+>    relatório por projeto, prestação de contas informal, sugestão de avaliador
+>    por afinidade e o ciclo de vida único para pontual e anual **já estão no
+>    `BRAIN.md` §6.2** — e mesmo assim não foram implementados. O que de fato
+>    falta ao BRAIN é: valor aprovado, edição em validação, contestação do
+>    submissor, os três anexos e o nome do responsável.
+> 4. **`P-1.29`/`P-1.30`, `P-5.14`, `P-0.17`, `P-7.14`** mantêm a numeração da
+>    auditoria, para que as referências cruzadas do documento continuem válidas.
+>
+> **Ordem sugerida:** `P-2.14b` → `P-2.15` → `P-2.16` → `P-2.19` → `P-2.20` →
+> `P-2.21` → `P-2.22` → `P-2.23` → `P-2.24` → `P-2.25` → `P-1.29` → `P-1.30` →
+> `P-5.14` → `P-0.17` → `P-7.14`.
+>
+> **Bloqueados até o Filipe responder:** `P-2.17` (Q32 — formato da contestação
+> do submissor), `P-2.18` (Q1 — pontual passa por homologação?), `P-2.26` (Q55
+> — formato do local de execução).
+>
+> **Migrations:** todas hand-written, no próximo número livre (hoje `0093`) —
+> conferir `ls packages/db/src/migrations | tail -1` antes de nomear, porque
+> outra sessão pode ter consumido o número. `ALTER TYPE ... ADD VALUE` vai em
+> **arquivo próprio** (não é transacional; padrão de `0088` e `0092`).
+
+---
+
+### P-2.14b — Projetos: as regras que ficaram fora do BRAIN (CORRETIVO)
+
+**Fase:** 2
+**Módulo:** projetos (documentação)
+**Tipo:** config
+**Pré-condições:**
+
+- Branch: `fix/P-2.14b-brain-regras-projetos`
+- Dependências: nenhuma
+- Env vars: nenhuma
+- Skill `/impeccable`: não se aplica (sem código)
+
+**Problema que este prompt resolve (contexto):**
+
+`AUDIT/06-CONFORMIDADE-REQUISITOS.md` §13: o agente implementador lê o
+`BRAIN.md`, não os `.docs/Respostas*.md`. Seis regras que o Filipe respondeu no
+levantamento nunca subiram para o BRAIN e, previsivelmente, nunca foram
+implementadas. Enquanto o BRAIN não as tiver, qualquer prompt desta leva será
+reescrito pelo próximo agente que "consultar a fonte da verdade" e não as
+encontrar.
+
+Este prompt **não escreve código** — ele fecha a lacuna documental que produz o
+código faltante. É o primeiro da leva por isso.
+
+**Escopo:**
+
+1. `BRAIN.md` §6.2, acrescentar (com o texto das respostas originais como base,
+   citando a fonte entre parênteses):
+   - **Validação:** só super_admins alteram projeto nesta fase, e podem alterar
+     **todas** as informações (Q23, Q38). Toda alteração é comunicada ao
+     submissor por email (PRD item 8). A votação pode **retornar à validação**
+     para recalibrar o valor (Q9).
+   - **Valor aprovado:** a diretoria informa o valor no ato da aprovação; ele
+     pode ser parcial (Q9, PRD). No pontual, a diretoria pode **dividir** o
+     valor em parcelas na aprovação, mesmo o pontual sendo pagamento único por
+     padrão (Q54). O email de aprovação leva o valor aprovado e o período da
+     parceria (PRD item 9).
+   - **Anexos do formulário anual:** vídeo de apresentação de até 3 minutos,
+     planilha de orçamento por etapas e carta de recomendação — os três
+     obrigatórios no anual (Q47), opcionais no pontual, mas com os campos
+     sempre presentes "em caso de exigência" (Q54).
+   - **Responsável do projeto:** campo distinto do submissor — um executivo de
+     agência missionária submete vários projetos, cada um com seu responsável
+     (Q47, Q56).
+   - **Contestação do submissor:** existe, é distinta da contestação de
+     diretor/conselheiro na homologação, ocorre durante a validação, notifica
+     os super_admins e fecha 7 dias antes da reunião de planejamento (Q11, Q32,
+     Q33, Q75).
+2. Acrescentar ao final de §6.2 um bloco **"Decisões pendentes"** com as três
+   perguntas que o Filipe devolveu e nunca fechou (Q55 local de execução, Q32
+   formato da contestação, Q1 pontual × homologação), cada uma marcada com o
+   prompt que ela bloqueia. Serve de trava explícita contra o próximo agente
+   escolher sozinho.
+3. **Não** reescrever o que já está correto no BRAIN — janela de submissão
+   anual, periodicidade de relatório configurável por projeto, prestação de
+   contas informal e sugestão de avaliador por afinidade **já constam** de
+   §6.2. Duplicar cria duas fontes.
+4. `AUDIT/06-CONFORMIDADE-REQUISITOS.md`: marcar §2.1 como verificado e
+   incorreto (o banner de impersonação está nos 9 apps) e ajustar o placar do
+   Admin.
+
+**Arquivos permitidos para criação/edição:**
+
+- `BRAIN.md`
+- `AUDIT/06-CONFORMIDADE-REQUISITOS.md`
+- `SESSIONS.md`
+
+**Critérios de aceite:**
+
+- [ ] `grep -c "valor aprovado" BRAIN.md` > 0, idem "responsável do projeto",
+      "carta de recomendação", "contestação do submissor"
+- [ ] Bloco "Decisões pendentes" em §6.2 lista as três perguntas abertas com o
+      prompt bloqueado por cada uma
+- [ ] Nenhum arquivo de código alterado (`git diff --stat` só toca `.md`)
+- [ ] Nenhuma regra duplicada: cada afirmação nova aparece uma vez só em §6.2
+
+**Notas:**
+
+Se, ao redigir, aparecer conflito entre uma resposta antiga e uma decisão já
+registrada em `PATCHES/`, **o PATCH vence** e a regra antiga não sobe — registre
+a divergência em `SESSIONS.md` em vez de resolvê-la por conta própria.
+
+---
+
+### P-2.15 — Projetos: o valor aprovado que o sistema nunca soube registrar (CORRETIVO)
+
+**Fase:** 2
+**Módulo:** projetos
+**Tipo:** schema
+**Pré-condições:**
+
+- Branch: `fix/P-2.15-projetos-valor-aprovado`
+- Dependências: P-2.14b, P-2.6c e P-3.11 concluídos
+- Env vars: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`
+- Skill `/impeccable`: **aplica-se** — o painel de aprovação ganha campos novos
+
+**Problema que este prompt resolve (contexto):**
+
+`AUDIT/06 §1.1`. O mecanismo central de decisão da associação não existe no
+modelo de dados. `projetos.projects` guarda apenas `budget_total`
+(`packages/db/src/schema/projetos.ts:220`) — o valor **pedido** pelo submissor
+no wizard. `grep -r "approvedAmount|approved_amount|valorAprovado"` no monorepo
+retorna zero ocorrências.
+
+Consequências reais, todas em cadeia:
+
+1. `generatePaymentSchedule` (`packages/db/src/projetos-approval.ts:55`) monta
+   as parcelas a partir de `budget_total`. Aprovar R$ 30 mil de um pedido de
+   R$ 50 mil produz `financeiro.payables` somando R$ 50 mil, e não há caminho
+   no módulo Projetos para corrigir.
+2. `getCommittedBudget` (`packages/integrations/src/projetos.ts:38-55`) soma
+   `budget_total` para calcular quanto do orçamento da instituição está
+   comprometido — o teto da instituição é consumido pelo valor pedido, não pelo
+   concedido.
+3. O email de aprovação não tem valor para informar (§1.13, PRD item 9).
+4. Q54: no pontual, "na aprovação da diretoria, o valor pode ser dividido se
+   houver o desejo de ajudar e não houver a possibilidade um pagamento único" —
+   hoje o pontual não tem onde registrar parcelas decididas na aprovação.
+
+**Escopo:**
+
+1. **Migration** (próximo número livre, ex.: `0093_projetos_approved_amount.sql`):
+   em `projetos.projects`, `approved_amount numeric(12,2)`,
+   `approved_parcelas integer`, `approved_meses_pagamento integer[]`,
+   `approved_notes text`, `approved_by uuid REFERENCES public.users(id)`,
+   `approved_decision_at timestamptz`. Todas nullable — projetos já aprovados
+   ficam com `NULL` e continuam lendo `budget_total` pelo fallback.
+2. **Migration separada** para `ALTER TYPE "admin"."audit_action" ADD VALUE IF
+NOT EXISTS 'project.decision_registered'`.
+3. **RLS:** conferir a policy de UPDATE de `projetos.projects` antes de assumir
+   que o diretor escreve. Se a policy filtrar por coluna que este UPDATE altera,
+   vale a armadilha já conhecida do repositório (UPDATE aceito no `WITH CHECK` e
+   invisível ao `USING`) — testar a escrita **pela action**, não só pelo SQL.
+4. **Schema Drizzle** correspondente em `packages/db/src/schema/projetos.ts`.
+5. **Action `registerProjectDecision`** em `apps/projetos/src/actions/projects.ts`:
+   - Gate: `diretorAction` — **o mesmo de `transitionProjectStage`**. A
+     auditoria sugeriu restringir à designação "diretor gestor"; isso **não está
+     no escopo**, porque nenhuma resposta do Filipe diz isso para Projetos (a
+     designação gestor governa Flats, Q123, e payables, Q133). Registrar a
+     dúvida em `SESSIONS.md`, não implementar.
+   - Input (Zod em `packages/validators/src/projetos/index.ts`): `projectId`,
+     `decision: "aprovado" | "reprovado"`, `approvedAmount` (obrigatório e > 0
+     quando `aprovado`), `approvedParcelas` + `approvedMesesPagamento`
+     (opcionais, exigidos **juntos**, com a mesma coerência de
+     `checkMesesPagamentoCoherence`), `notes`.
+   - Sem teto rígido em `budget_total`: Q7 prevê orçamento aumentado. Mas
+     **rodar `checkOrganizationBudget` com o valor aprovado** antes de gravar —
+     o teto da instituição continua valendo.
+   - Grava a decisão, transiciona o estágio na **mesma transação** de
+     `transitionProjectStage` (reusar o caminho existente, incluindo
+     `withSystemRole` para `generatePaymentSchedule` + `onProjectApproved`,
+     `createVersionSnapshot` e `logProjectAudit`), com a action nova
+     `project.decision_registered`.
+6. **`transitionProjectStage` passa a recusar `→ aprovado` sem decisão
+   registrada** (`BusinessError` explicando que a aprovação se faz pelo painel
+   de decisão). Sem isso o caminho velho contorna o novo em silêncio.
+7. **`generatePaymentSchedule`** lê `approvedAmount ?? budgetTotal`,
+   `approvedParcelas ?? parcelas`, `approvedMesesPagamento ?? mesesPagamento` —
+   o fallback preserva bit a bit o comportamento de projetos anteriores.
+8. **`getCommittedBudget`** passa a somar `COALESCE(approved_amount,
+budget_total)`.
+9. **Cron de homologação** (`packages/jobs/src/crons/projetos.ts:267`): a
+   aprovação automática após 7 dias precisa do mesmo fallback — um projeto
+   aprovado pelo cron sem decisão registrada continua usando `budget_total`.
+   **Não** bloquear o cron (ele é a regra da Q16), só garantir coerência.
+10. **UI** (`/impeccable`): painel de decisão em
+    `apps/projetos/src/app/(diretoria)/pipeline/[id]/page.tsx` com valor
+    aprovado (pré-preenchido com o solicitado), parcelas/meses quando a
+    diretoria divide um pontual, e observação. No detalhe do projeto — dos dois
+    lados, diretoria e submissor — mostrar "solicitado × aprovado" quando
+    diferirem, sem alarde visual.
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/db/src/migrations/00NN_projetos_approved_amount.sql` _(criar)_
+- `packages/db/src/migrations/00NN_projetos_decision_audit_action.sql` _(criar)_
+- `packages/db/src/schema/projetos.ts`
+- `packages/db/src/projetos-approval.ts`
+- `packages/integrations/src/projetos.ts`
+- `packages/validators/src/projetos/index.ts`
+- `apps/projetos/src/actions/projects.ts`
+- `apps/projetos/src/app/(diretoria)/pipeline/[id]/page.tsx`
+- `apps/projetos/src/components/` _(componente do painel de decisão)_
+- `apps/projetos/src/app/(submissor)/[id]/page.tsx`
+- `apps/projetos/src/lib/queries.ts`
+- `packages/jobs/src/crons/projetos.ts`
+- `apps/projetos/src/__tests__/`
+
+**Critérios de aceite:**
+
+- [ ] Aprovar um pontual de R$ 50.000 com valor aprovado de R$ 30.000 gera
+      `payment_schedules` **e** `financeiro.payables` somando exatamente
+      R$ 30.000 (teste de integração, não unitário)
+- [ ] Aprovar dividindo em 3 parcelas um pontual sem parcelas gera 3 linhas nos
+      meses escolhidos, somando o valor aprovado ao centavo
+- [ ] `transitionProjectStage(projectId, "aprovado")` sem decisão registrada
+      falha com mensagem de negócio
+- [ ] Projeto aprovado **antes** desta migration continua com cronograma
+      inalterado (fallback para `budget_total`)
+- [ ] `getCommittedBudget` considera o valor aprovado quando existe
+- [ ] Entrada `project.decision_registered` no `admin.audit_log` com o diff
+      solicitado → aprovado
+- [ ] RLS: diretor grava a decisão pela action; submissor não
+- [ ] Lint passa · Types passam
+
+**Notas:**
+
+Este é o prompt que destrava `P-2.16` e a parte (a) de `P-2.24`. É também o
+único desta leva com efeito direto em dinheiro — rodar a suíte de `projetos` e
+de `financeiro` isoladamente (não `pnpm turbo test` inteiro; a suíte completa
+esgota conexões no banco de dev compartilhado).
+
+---
+
+### P-2.16 — Projetos: a validação que só sabia mudar de nome (CORRETIVO)
+
+**Fase:** 2
+**Módulo:** projetos
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `fix/P-2.16-projetos-validacao-editavel`
+- Dependências: **P-2.15 concluído**
+- Env vars: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `RESEND_API_KEY`
+- Skill `/impeccable`: **aplica-se** — tela de edição em validação
+
+**Problema que este prompt resolve (contexto):**
+
+`AUDIT/06 §1.2 e §1.3`. O estágio "validação" hoje significa apenas "o projeto
+ficou visível para a diretoria e é possível designar avaliadores". Nenhuma das
+capacidades que o definem existe:
+
+```ts
+// apps/projetos/src/actions/projects.ts:581
+if (project.stage !== "rascunho") {
+  throw new BusinessError(
+    "Apenas projetos em rascunho podem ser editados. Solicite nova revisão se necessário.",
+  );
+}
+```
+
+`updateDraftProject` é a **única** ação de escrita sobre `projetos.projects` no
+monorepo — `apps/admin/src/actions/` não tem sequer um arquivo de projetos.
+Contra:
+
+- Q23: _"Na fase da validação só poderão alterar os projetos os super_admins."_
+- Q38: _"os super_admins poderão vasculhar os projetos e modificar todas as
+  informações."_
+- Q9: _"Caso haja alguma discordância, o projeto deve retornar para o stage de
+  validação para o valor ser alterado"_ — e `VALID_STAGE_TRANSITIONS`
+  (`packages/db/src/schema/projetos.ts:80`) não permite `votacao → validacao`.
+- PRD item 8: _"Qualquer alteração no projeto durante as etapas de validação
+  devem ser comunicadas ao submissor por e-mail."_
+
+**Escopo:**
+
+1. **Action nova `updateProjectInValidation = superAdminAction`** em
+   `apps/projetos/src/actions/projects.ts` — **não** afrouxar
+   `updateDraftProject`, que continua sendo o caminho do submissor no rascunho.
+   Aceita o mesmo conjunto de campos do wizard (o `patch` builder existente é
+   reusável) mais `budgetTotal`, `parcelas` e `mesesPagamento`. Exige
+   `stage === "validacao"`.
+2. **Diff explícito:** computar antes/depois campo a campo, gravar em
+   `createVersionSnapshot` (já existe) e no `admin.audit_log` sob a action nova
+   `project.updated_in_validation` (migration `ALTER TYPE` própria).
+3. **`VALID_STAGE_TRANSITIONS`:** `votacao: ["homologacao", "validacao"]`. O
+   retorno `votacao → validacao` fica restrito a super_admin — `diretorAction`
+   não basta; adicionar a checagem dentro de `transitionProjectStage`.
+4. **Votos existentes ao retornar para validação: preservados.** Segue o
+   precedente de `createContestation`, que devolve `homologacao → votacao` sem
+   tocar em `projetos.votes`, e o PATCH-028, que permite mudar o voto enquanto a
+   votação está aberta — quem discordar do novo valor revota. **Ponto a
+   confirmar com o Filipe, sem bloquear:** registrar em `SESSIONS.md` como
+   decisão tomada por precedente.
+5. **Email ao submissor a cada alteração:** template novo
+   `packages/email/src/templates/project-updated.tsx` (slug
+   `projetos-project-updated`), listando os campos alterados com valor anterior
+   e novo — valores financeiros formatados em BRL. Semear em
+   `packages/db/src/seed.ts` e registrar o slug na tela de templates do Admin
+   (`apps/admin/src/app/(dashboard)/configuracoes/page.tsx`). Disparo via
+   `apps/projetos/src/lib/notifications.ts` (respeitando o override de template
+   em banco, como os demais).
+6. **UI** (`/impeccable`): reaproveitar `(submissor)/[id]/editar` como base para
+   uma edição de super_admin dentro de `(diretoria)/pipeline/[id]`, deixando
+   claro na tela que **cada salvamento notifica o submissor** — a consequência
+   precisa estar visível antes do clique, não depois.
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/db/src/migrations/00NN_projetos_updated_in_validation_audit_action.sql` _(criar)_
+- `packages/db/src/schema/projetos.ts`
+- `packages/db/src/seed.ts`
+- `packages/email/src/templates/project-updated.tsx` _(criar)_
+- `packages/email/src/index.ts`
+- `packages/validators/src/projetos/index.ts`
+- `apps/projetos/src/actions/projects.ts`
+- `apps/projetos/src/lib/notifications.ts`
+- `apps/projetos/src/app/(diretoria)/pipeline/[id]/` _(tela de edição)_
+- `apps/projetos/src/components/`
+- `apps/admin/src/app/(dashboard)/configuracoes/page.tsx`
+- `apps/projetos/src/__tests__/`
+
+**Critérios de aceite:**
+
+- [ ] super_admin altera qualquer campo de um projeto em `validacao`; diretor e
+      submissor recebem erro de negócio
+- [ ] Cada alteração gera um email ao submissor com a lista de campos alterados
+      (antes → depois) e uma entrada `project.updated_in_validation` no audit
+- [ ] `votacao → validacao` funciona para super_admin e é recusada para diretor
+- [ ] Voltar para validação e depois para votação preserva os votos já dados
+- [ ] Alterar o valor em validação e reaprovar gera payables com o novo valor
+      (integra com P-2.15)
+- [ ] Lint passa · Types passam
+
+**Notas:**
+
+O email de alteração é o item 8 do PRD e a peça que falta para a contestação do
+submissor (`P-2.17`) fazer sentido: hoje não existe evento de alteração para
+contestar.
+
+---
+
+### P-2.17 — Projetos: a contestação que só o outro lado podia fazer (CORRETIVO — BLOQUEADO)
+
+**Fase:** 2
+**Módulo:** projetos
+**Tipo:** integration
+
+> **⚠️ BLOQUEADO — não executar antes da resposta do Filipe.**
+>
+> **Pergunta (Q32, devolvida em 2026 e nunca fechada — _"Não tenho isso fechado
+> ainda. Qual é a sua sugestão?"_):** qual o formato da contestação do submissor
+> durante a validação?
+>
+> - **(a) Formulário estruturado, uma vez por alteração.** O submissor
+>   responde a um evento de alteração específico com uma justificativa; o
+>   super_admin resolve (aceita/rejeita) e o ciclo fecha. Simples, auditável,
+>   sem canal de conversa.
+> - **(b) Thread de mensagens por projeto.** Submissor e super_admins trocam
+>   mensagens enquanto o projeto está em validação. Mais próximo do "enviar uma
+>   mensagem através do sistema" da Q11, mais caro (leitura, não lidas, ordem,
+>   moderação).
+> - **(c) Reuso de `projetos.contestations` com uma coluna `kind`.** Uma
+>   tabela para os dois tipos de contestação. Barato, mas mistura duas regras
+>   de negócio diferentes (a do diretor devolve o projeto à votação; a do
+>   submissor, não) numa constraint só — a UNIQUE `(project_id, user_id)` e o
+>   trigger de máximo 2 teriam de virar condicionais.
+>
+> **Recomendação de quem escreve o prompt:** (a). A Q33 dá prazo
+> ("até 7 dias antes da reunião"), a Q32 pede notificação aos super_admins para
+> que **respondam** — as duas descrevem um ciclo com começo e fim, não uma
+> conversa aberta. E (c) contamina a tabela que hoje governa a homologação.
+
+**Pré-condições:**
+
+- Branch: `fix/P-2.17-projetos-contestacao-submissor`
+- Dependências: **P-2.16 concluído** + **decisão acima registrada em `PATCHES/`**
+- Env vars: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `RESEND_API_KEY`
+- Skill `/impeccable`: **aplica-se**
+
+**Problema que este prompt resolve (contexto):**
+
+`AUDIT/06 §1.4`. `projetos.contestations` existe, mas é **exclusivamente** a
+contestação de diretor/conselheiro sobre o resultado da votação:
+
+```ts
+// apps/projetos/src/actions/projects.ts:1101
+export const createContestation = conselheiroDiretorAction…
+  if (project.stage !== "homologacao") { throw new BusinessError(…) }
+```
+
+O submissor não tem canal nenhum. As fontes:
+
+- Q11: _"O submissor pode contestar as alterações via sistema… o responsável
+  poderá enviar uma mensagem através do sistema."_
+- Q32: _"Só preciso que esse evento gere notificações para os super-admins para
+  que eles respondam a contestação."_
+- Q33: _"Quando o valor for alterado, o submissor será notificado e terá até o
+  prazo de fechamento para a reunião de planejamento (7 dias antes). Uma vez
+  fechado para votação, o submissor não poderá mais contestar."_
+- Q75 lista "Contestação do submissor → super_admins" entre as notificações que
+  o Filipe validou como lista completa.
+
+**Escopo (comum às três saídas):**
+
+1. Canal de contestação disponível **apenas** enquanto `stage === "validacao"`
+   e até 7 dias antes da próxima reunião (`admin.meeting_sessions` — a mesma
+   fonte que `runEvaluationReminders` usa em
+   `packages/jobs/src/crons/projetos.ts:90`).
+2. Notificação in_app + email aos super_admins na abertura, e ao submissor na
+   resposta.
+3. RLS: submissor lê e escreve só o que é do próprio projeto; super_admin lê
+   tudo. Grants para `authenticated`, DENY por padrão.
+4. UI do submissor no detalhe do projeto, com o prazo visível e o estado
+   ("aguardando resposta" / "respondida") — e a UI da fila para o super_admin.
+5. Teste do prazo: contestar com 8 dias de folga funciona; com 6, não.
+
+**Arquivos permitidos para criação/edição:** a definir com a decisão — no
+mínimo migration nova, `packages/db/src/schema/projetos.ts`,
+`packages/validators/src/projetos/index.ts`,
+`apps/projetos/src/actions/`, `apps/projetos/src/lib/notifications.ts`,
+`packages/email/src/templates/`, telas de `(submissor)` e `(diretoria)`.
+
+**Notas:**
+
+Registrar a decisão em `PATCHES/` **antes** de executar. Enquanto a Q32 estiver
+aberta, este prompt não pode ser escrito por inteiro: a diferença entre (a) e
+(b) é a diferença entre uma tabela e um subsistema de mensageria.
+
+---
+
+### P-2.18 — Projetos: o pontual que pula a homologação (CORRETIVO — BLOQUEADO)
+
+**Fase:** 2
+**Módulo:** projetos
+**Tipo:** schema
+
+> **⚠️ BLOQUEADO — não executar antes da resposta do Filipe.**
+>
+> **Pergunta (Q1 × código):** projeto pontual passa por homologação?
+>
+> - **(a) Sim — corrigir o código.** `VALID_STAGE_TRANSITIONS` passa a levar o
+>   pontual de `validacao` a `homologacao`, e a decisão do pontual passa a ter
+>   os mesmos 7 dias de contestação do anual.
+> - **(b) Não — registrar um PATCH revogando a Q1.** Se na prática o pontual é
+>   emergencial e esperar 7 dias derrota o propósito, a resposta antiga morre
+>   por decisão registrada, não por silêncio do código.
+>
+> A Q1 é literal: _"O pontual também deve passar pela homologação. Isso visa
+> garantir que os diretores e avaliadores saibam do resultado antes dos
+> responsáveis pelo projeto, caso seja necessário uma contestação do resultado
+> ou valor aprovado."_ O `BRAIN.md` §6.2 concorda ("Ciclo de vida (mesmo para
+> ambos)"). O código diz o contrário há muitas sessões, e **nenhum PATCH
+> revoga**. As duas saídas são legítimas; deixar código e spec discordando em
+> silêncio não é.
+
+**Pré-condições:**
+
+- Branch: `fix/P-2.18-projetos-pontual-homologacao`
+- Dependências: P-2.15 concluído; **decisão acima registrada em `PATCHES/`**
+- Env vars: `DATABASE_URL`
+- Skill `/impeccable`: só na saída (a), e apenas se a UI de pipeline exibir o
+  estágio de forma diferente por tipo
+
+**Problema que este prompt resolve (contexto):**
+
+`AUDIT/06 §1.5`:
+
+```ts
+// packages/db/src/schema/projetos.ts:78-84
+// pontual: validacao → aprovado | reprovado (skip votacao/homologacao)
+validacao: ["votacao", "aprovado", "reprovado"],
+```
+
+Como `createContestation` exige `stage === "homologacao"`, **uma decisão sobre
+projeto pontual nunca pode ser contestada** — exatamente o risco que a Q1
+nomeia.
+
+**Escopo — saída (a):**
+
+1. Transições por **tipo de projeto**: hoje `VALID_STAGE_TRANSITIONS` é um mapa
+   único e o tipo (`pontual`/`anual`) não participa da validação. Passar a
+   validar em função do tipo, sem duplicar o mapa inteiro.
+2. Pontual: `validacao → homologacao → aprovado | reprovado`. O cron de
+   homologação automática (`packages/jobs/src/crons/projetos.ts:142`) já
+   funciona por prazo e passa a cobrir o pontual — verificar que ele não
+   depende de haver votos.
+3. Contestação de pontual: `createContestation` devolve o projeto para
+   `validacao` (não para `votacao`, que o pontual nunca teve).
+
+**Escopo — saída (b):**
+
+1. `PATCHES/029-pontual-sem-homologacao.md` com o motivo operacional.
+2. Atualizar `BRAIN.md` §6.2 ("Ciclo de vida"), que hoje afirma o contrário.
+3. Comentário em `packages/db/src/schema/projetos.ts:78` citando o PATCH — o
+   comentário atual descreve o comportamento sem apontar a decisão que o
+   autoriza.
+
+**Arquivos permitidos para criação/edição:** a definir com a decisão.
+
+**Critérios de aceite (saída a):**
+
+- [ ] Pontual aprovado passa por `homologacao` e só vira `aprovado` após o
+      prazo ou confirmação
+- [ ] Contestação de pontual devolve o projeto a `validacao`
+- [ ] Transição `validacao → aprovado` para pontual passa a ser recusada
+- [ ] Lint passa · Types passam
+
+---
+
+### P-2.19 — Projetos: a janela de submissão que nunca fechou (CORRETIVO)
+
+**Fase:** 2
+**Módulo:** projetos + admin
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `fix/P-2.19-projetos-janela-submissao`
+- Dependências: P-0.15 (contrato de settings) concluído
+- Env vars: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`
+- Skill `/impeccable`: **aplica-se** — aba nova no Admin e aviso ao submissor
+
+**Problema que este prompt resolve (contexto):**
+
+`AUDIT/06 §1.6`. PRD item 2: _"O projeto anual só poderá ser enviado num
+intervalo de tempo pré-determinado, definido no módulo admin (aberto/fechado)."_
+Q51: _"será uma data de abertura e fechamento definida pelo super_admin no
+módulo admin."_ `BRAIN.md` §6.2 já registra a regra ("submissão em janela
+definida (datas no Admin)").
+
+Nada disso existe. `createAnnualDraft`
+(`apps/projetos/src/actions/projects.ts:358`) e `submitProject` (:671) não
+consultam data nenhuma; as únicas chaves de `admin.system_settings` lidas pelo
+módulo são `projetos_scoring_criteria`, `projetos_compact_template` e
+`projetos_duplicate_threshold` (:151-179). A tela de Configurações do Admin
+promete uma aba _"Janelas & calendário"_ que não existe — o texto está lá
+(`apps/admin/src/app/(dashboard)/configuracoes/page.tsx:726`), a aba não
+(`TABS`, :58-70).
+
+**Escopo:**
+
+1. Chave `admin.system_settings["projetos_janela_anual"]`, valor JSON
+   `{ "abertura": "YYYY-MM-DD", "fechamento": "YYYY-MM-DD" }`. Constante
+   exportada + função `ensure…` no padrão de
+   `PROJETOS_DUPLICATE_THRESHOLD_SETTING_KEY` (`packages/db/src/seed.ts:229-277`).
+2. Leitura em `apps/projetos/src/lib/` (junto das outras leituras de settings) e
+   bloqueio em `createAnnualDraft` **e** `submitProject`: fora da janela,
+   `BusinessError` informando o próximo período. Sem janela configurada =
+   **aberto** (não quebrar o que funciona hoje).
+3. **super_admin escapa da janela**, com a exceção registrada no audit —
+   coerente com `submissorAction` aceitar super_admin e com a Q80 (super_admin
+   submete em nome de terceiros). Registrar como decisão em `SESSIONS.md`.
+4. Projeto **pontual não tem janela** (Q91/Q54: emergencial, avaliado
+   mensalmente) — o bloqueio vale só para o anual.
+5. Admin: aba **"Janelas & calendário"** em `configuracoes/page.tsx` com as duas
+   datas, validação de coerência (`fechamento > abertura`) e audit da mudança
+   via `updateSystemSetting` (`apps/admin/src/actions/settings.ts:82`).
+6. Submissor (`/impeccable`): estado claro na tela `/novo` e no dashboard —
+   janela aberta com prazo, ou fechada com a data de reabertura. Estado vazio
+   com o tom do módulo (sem exclamação genérica).
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/db/src/seed.ts`
+- `apps/projetos/src/actions/projects.ts`
+- `apps/projetos/src/lib/queries.ts`
+- `apps/projetos/src/app/(submissor)/novo/page.tsx`
+- `apps/projetos/src/app/(submissor)/page.tsx`
+- `apps/projetos/src/components/`
+- `apps/admin/src/app/(dashboard)/configuracoes/page.tsx`
+- `apps/admin/src/actions/settings.ts`
+- `apps/projetos/src/__tests__/`, `apps/admin/src/__tests__/`
+
+**Critérios de aceite:**
+
+- [ ] Fora da janela, `createAnnualDraft` e `submitProject` recusam com a data
+      do próximo período; dentro, funcionam
+- [ ] Sem a chave configurada, nada é bloqueado
+- [ ] Pontual submete em qualquer data
+- [ ] super_admin submete fora da janela e o audit registra a exceção
+- [ ] Alterar as datas no Admin grava audit e reflete na tela do submissor
+- [ ] Lint passa · Types passam
+
+---
+
+### P-2.20 — Projetos: os três anexos que a diretoria pediu e o formulário não aceita (CORRETIVO)
+
+**Fase:** 2
+**Módulo:** projetos
+**Tipo:** schema
+**Pré-condições:**
+
+- Branch: `fix/P-2.20-projetos-anexos-obrigatorios`
+- Dependências: P-0.12 (buckets) e P-6.20 (Bunny Stream) concluídos
+- Env vars: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, credenciais
+  Bunny (`packages/integrations/src/bunny-stream.ts`) se a rota de vídeo for a
+  do Stream
+- Skill `/impeccable`: **aplica-se** — etapa de anexos do wizard
+
+**Problema que este prompt resolve (contexto):**
+
+`AUDIT/06 §1.7`. Q47 lista o que "não pode deixar de ter", incluindo _"anexo
+(vídeo de apresentação de até 3 minutos, orçamento completo por etapas
+(planilha) e carta de recomendação)"_. Q54 confirma que no pontual os três viram
+opcionais, _"porém, é bom que hajam os campos em caso de exigência"_.
+
+O wizard coleta dois PDFs genéricos e um **checkbox de autodeclaração**:
+
+```ts
+// apps/projetos/src/components/project-wizard-steps/step-attachments.tsx:14
+const REQUIRED_DOCS = [
+  { id: "projeto", label: "Documento do Projeto", accept: "application/pdf" },
+  {
+    id: "estatuto",
+    label: "Estatuto ou CNPJ",
+    accept: "application/pdf,image/jpeg,image/png",
+  },
+];
+```
+
+```tsx
+// :115-119 — carta de recomendação é um toggle, não um arquivo
+"Confirmo que possuo carta de recomendação assinada por liderança";
+```
+
+O próprio arquivo registra a omissão (:8-13): o bucket `project-attachments`
+aceita só `application/pdf, image/jpeg, image/png` com teto de 10 MB
+(`packages/db/src/migrations/0020_storage_buckets.sql:99`) — foi contorno
+técnico, não decisão de negócio. O vídeo de 3 minutos é, pela narrativa do PRD,
+o principal insumo de avaliação da diretoria, e hoje não há onde enviá-lo.
+
+**Escopo:**
+
+1. **Tipar o anexo:** enum `projetos.project_attachment_kind`
+   (`projeto | estatuto | video | planilha | carta | outro`) e coluna `kind` em
+   `projetos.project_attachments` (`packages/db/src/schema/projetos.ts:508`),
+   default `outro` para as linhas existentes.
+2. **Planilha e carta:** ampliar `allowed_mime_types` do bucket
+   `project-attachments` (XLSX, XLS, CSV, ODS) e o `file_size_limit` conforme o
+   necessário — migration nova com o mesmo `ON CONFLICT DO UPDATE` de 0020, sem
+   reescrever as policies existentes.
+3. **Vídeo:** rota pelo **Bunny Stream** (`createBunnyVideo` /
+   `createBunnyTusUploadCredentials` / `signBunnyPlaybackUrl` já existem em
+   `packages/integrations/src/bunny-stream.ts`, P-6.20) — vídeo em bucket do
+   Supabase é caro e não faz streaming. Guardar o `bunny_video_id` no anexo e
+   avisar o limite de 3 minutos **antes** do upload, não depois.
+4. **Obrigatoriedade:** os três exigidos no anual (validação no schema Zod do
+   wizard e reconferida em `submitProject` — nunca só no cliente), opcionais no
+   pontual mas com os campos presentes.
+5. **Substituir o checkbox** de carta de recomendação por upload real; remover
+   `cartaRecomendacao: z.boolean()`
+   (`packages/validators/src/projetos/index.ts`) e migrar o significado — quem
+   já marcou o checkbox não tem arquivo, então **não** invalidar projetos
+   antigos.
+6. **UI** (`/impeccable`): a etapa de anexos passa a ter três destinos
+   distintos, cada um com formato, limite e razão de existir explicados em uma
+   linha. Progresso de upload de vídeo visível (é o arquivo grande).
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/db/src/migrations/00NN_projetos_attachment_kinds.sql` _(criar)_
+- `packages/db/src/schema/projetos.ts`
+- `packages/validators/src/projetos/index.ts`
+- `packages/integrations/src/bunny-stream.ts` _(só se faltar algo à API atual)_
+- `apps/projetos/src/actions/projects.ts`
+- `apps/projetos/src/actions/` _(action de credencial de upload de vídeo)_
+- `apps/projetos/src/components/project-wizard-steps/step-attachments.tsx`
+- `apps/projetos/src/components/project-wizard.tsx`
+- `apps/projetos/src/app/(diretoria)/pipeline/[id]/page.tsx` _(reprodução do vídeo)_
+- `apps/projetos/src/__tests__/`
+
+**Critérios de aceite:**
+
+- [ ] Submeter projeto anual sem vídeo, planilha ou carta é recusado **no
+      servidor** (teste chamando a action, não a UI)
+- [ ] Pontual submete sem nenhum dos três
+- [ ] Upload de XLSX no bucket funciona; upload de tipo não permitido falha com
+      mensagem legível
+- [ ] Vídeo enviado aparece reproduzível na tela da diretoria
+- [ ] Projetos anteriores continuam válidos (anexos com `kind = outro`)
+- [ ] Lint passa · Types passam
+
+**Notas:**
+
+Se as credenciais do Bunny não estiverem disponíveis na sessão, **pare e
+reporte** em vez de cair para o bucket do Supabase por conta própria — a escolha
+do destino do vídeo tem custo recorrente e é decisão do Filipe.
+
+---
+
+### P-2.21 — Projetos: o responsável que não é o submissor (CORRETIVO)
+
+**Fase:** 2
+**Módulo:** projetos
+**Tipo:** schema
+**Pré-condições:**
+
+- Branch: `fix/P-2.21-projetos-responsavel`
+- Dependências: P-2.14b concluído
+- Env vars: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`
+- Skill `/impeccable`: **aplica-se** — campo novo no wizard e no detalhe
+
+**Problema que este prompt resolve (contexto):**
+
+`AUDIT/06 §1.8`. Q47 lista "nome do responsável" entre os campos que "não podem
+deixar de ter", e a Q56 explica por que ele é distinto do submissor: _"um
+executivo de uma agência missionária pode submeter vários projetos, cada um com
+o seu responsável."_
+
+`projetos.projects` tem apenas `submitterId`
+(`packages/db/src/schema/projetos.ts:202`) e `annualProjectFields`
+(`packages/validators/src/projetos/index.ts:66`) não coleta nada equivalente. No
+cenário da agência missionária, todos os projetos ficam atribuídos ao executivo
+e o responsável real não é registrável — inclusive na pauta da reunião e na
+versão compacta que a diretoria lê.
+
+**Escopo:**
+
+1. Migration: `responsible_name text`, `responsible_email text`,
+   `responsible_phone text` em `projetos.projects`. Nullable (projetos
+   anteriores não têm), obrigatórios daqui em diante pela validação de
+   submissão.
+2. Schema Drizzle + `annualProjectFields` e `createPunctualProjectSchema`
+   (obrigatório nos dois — a Q47 não distingue; o e-mail com formato validado, o
+   telefone opcional).
+3. `createAnnualDraft`, `createPunctualDraft`, `updateDraftProject` e a action
+   de validação de P-2.16 passam a persistir os campos; `submitProject` recusa
+   sem nome de responsável.
+4. Exibir o responsável no detalhe (submissor e diretoria), na pauta da reunião
+   (`apps/projetos/src/app/(diretoria)/reuniao/page.tsx`) e na versão compacta
+   (`packages/ai/src/projects/compact-version.ts` — passar o campo ao contexto,
+   sem mudar o template).
+5. **Fora de escopo:** o responsável **não** vira destinatário de notificação
+   nesta leva — ele não é necessariamente um usuário do sistema. Registrar como
+   pergunta em `SESSIONS.md` (deve o responsável receber os emails de relatório
+   e pagamento, ou só o submissor?).
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/db/src/migrations/00NN_projetos_responsavel.sql` _(criar)_
+- `packages/db/src/schema/projetos.ts`
+- `packages/validators/src/projetos/index.ts`
+- `apps/projetos/src/actions/projects.ts`
+- `apps/projetos/src/components/project-wizard-steps/`
+- `apps/projetos/src/app/(submissor)/[id]/page.tsx`
+- `apps/projetos/src/app/(diretoria)/pipeline/[id]/page.tsx`
+- `apps/projetos/src/app/(diretoria)/reuniao/page.tsx`
+- `packages/ai/src/projects/compact-version.ts`
+- `apps/projetos/src/__tests__/`
+
+**Critérios de aceite:**
+
+- [ ] Submeter sem responsável é recusado no servidor
+- [ ] Dois projetos do mesmo submissor com responsáveis diferentes coexistem e
+      aparecem corretamente na pauta
+- [ ] Projetos anteriores à migration continuam abrindo (campo vazio, sem erro)
+- [ ] Lint passa · Types passam
+
+---
+
+### P-2.22 — Projetos: o cronograma de relatórios que ninguém gera (CORRETIVO)
+
+**Fase:** 2
+**Módulo:** projetos
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `fix/P-2.22-projetos-cronograma-relatorios`
+- Dependências: P-2.15 concluído (a entrada em `em_execucao` é o gatilho)
+- Env vars: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`
+- Skill `/impeccable`: **aplica-se** — seletor de periodicidade e lista gerada
+
+**Problema que este prompt resolve (contexto):**
+
+`AUDIT/06 §1.10`. Q26: _"O padrão geral é trimestral, mas deve haver a
+possibilidade de configurar por projeto. Por exemplo, projetos de construção
+solicitamos relatórios mensais."_ `BRAIN.md` §6.2 registra a mesma regra.
+Claude.md §4.2 pede _"cronograma de relatórios automático — gerado a partir do
+prazo de execução"_.
+
+Existe: disparo manual (`createReport = diretorAction`,
+`apps/projetos/src/actions/reports.ts:95`), lembretes automáticos
+(`packages/jobs/src/crons/projetos.ts`) e bloqueio de pagamento por
+inadimplência (`packages/jobs/src/crons/projetos-inadimplencia.ts:83`).
+
+Não existe: coluna de periodicidade — "trimestral" aparece só num comentário
+(`packages/db/src/schema/projetos.ts:420`) — nem geração de cronograma
+(`grep "generateReportSchedule"` → zero). Cada relatório é criado à mão, um a
+um, que é exatamente o trabalho humano recorrente que a Q65 pede para eliminar.
+
+**Escopo:**
+
+1. Enum `projetos.report_frequency` (`mensal | trimestral | semestral`) e
+   coluna `report_frequency` em `projetos.projects`, default `trimestral`.
+2. `generateReportSchedule(project, dbHandle)` em
+   `packages/db/src/projetos-approval.ts` (mesmo lugar de
+   `generatePaymentSchedule`, mesma assinatura com `dbHandle`): gera as linhas
+   de `projetos.reports` em `pendente` com `due_date`, `period_start` e
+   `period_end` derivados da periodicidade e do intervalo de execução
+   (primeiro → último mês de `meses_pagamento`, com fallback ao ano de
+   referência).
+3. Chamada na transição `aprovado → em_execucao`
+   (`transitionProjectStage`), dentro da transação — mesmo padrão de
+   `generatePaymentSchedule` (P-0.14b: ou entra em execução com cronograma, ou
+   não entra).
+4. Idempotência: reentrar em `em_execucao` não duplica relatórios (a suíte roda
+   contra banco de dev compartilhado; um gerador não idempotente vira ruído
+   permanente).
+5. Periodicidade editável por projeto pelo diretor, antes e durante a execução;
+   alterar depois de gerado **não** apaga relatórios já enviados — regera só os
+   futuros ainda `pendente`.
+6. UI (`/impeccable`): periodicidade no painel do projeto e o cronograma
+   visível ao submissor em `(submissor)/relatorios` — hoje a tela só lista o
+   que já existe, sem horizonte.
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/db/src/migrations/00NN_projetos_report_frequency.sql` _(criar)_
+- `packages/db/src/schema/projetos.ts`
+- `packages/db/src/projetos-approval.ts`
+- `packages/validators/src/projetos/index.ts`
+- `apps/projetos/src/actions/projects.ts`
+- `apps/projetos/src/actions/reports.ts`
+- `apps/projetos/src/app/(submissor)/relatorios/page.tsx`
+- `apps/projetos/src/app/(diretoria)/pipeline/[id]/page.tsx`
+- `apps/projetos/src/components/`
+- `apps/projetos/src/__tests__/`
+
+**Critérios de aceite:**
+
+- [ ] Projeto anual com pagamentos de mar a dez e periodicidade trimestral gera
+      4 relatórios com datas coerentes ao entrar em execução
+- [ ] Periodicidade mensal gera um por mês do período
+- [ ] Reentrar em `em_execucao` não duplica linhas
+- [ ] Trocar a periodicidade regera só os pendentes futuros
+- [ ] Os lembretes automáticos existentes disparam sobre as linhas geradas
+- [ ] Lint passa · Types passam
+
+---
+
+### P-2.23 — Projetos: a prestação de contas que virou subtítulo (CORRETIVO)
+
+**Fase:** 2
+**Módulo:** projetos
+**Tipo:** schema
+**Pré-condições:**
+
+- Branch: `fix/P-2.23-projetos-prestacao-de-contas`
+- Dependências: P-2.20 concluído (tipagem de anexo e limites de bucket)
+- Env vars: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`
+- Skill `/impeccable`: **aplica-se** — tela de envio nova
+
+**Problema que este prompt resolve (contexto):**
+
+`AUDIT/06 §1.11`. Q28, com o Filipe confirmando a distinção: _"Relatório é mais
+formal e estruturado, já a prestação de contas é uma foto, vídeo de alguma
+atividade específica, nota fiscal de uma compra, etc."_ Q5: _"a prestação de
+contas é algo voluntário e estará sempre disponível para quem quiser
+fazer/enviar."_ `BRAIN.md` §6.2 já separa os dois conceitos.
+
+No código, a expressão aparece uma única vez — como _eyebrow_ decorativo acima
+do título "Relatórios":
+
+```tsx
+// apps/projetos/src/app/(submissor)/relatorios/page.tsx:21
+<p className="hb-eyebrow">Prestação de contas</p>
+<h1>Relatórios</h1>
+```
+
+A tela lista apenas relatórios pendentes e obrigatórios. Não há envio
+voluntário, nem canal para foto/vídeo/NF avulsos.
+
+**Escopo:**
+
+1. Tabela `projetos.accountability_items`: `project_id`, `kind`
+   (`foto | video | nota_fiscal | recibo | outro`), `description`, `file_url`,
+   `file_name`, `file_size`, `submitted_by`, `created_at`, `deleted_at`
+   (soft-delete, imutabilidade). **Sem prazo e sem status** — é voluntária.
+2. RLS: submissor insere e lê itens dos próprios projetos; diretoria e
+   super_admin leem tudo; ninguém apaga de verdade. Grants para `authenticated`,
+   DENY por padrão.
+3. Disponível enquanto o projeto estiver em `em_execucao` ou `concluido`
+   (Q5: "sempre disponível") — não amarrar a relatório nenhum.
+4. Tela do submissor (`/impeccable`): envio com descrição curta e o arquivo,
+   linha do tempo do que já foi enviado. O tom importa: é contribuição
+   voluntária, não cobrança. Estado vazio com citação bíblica pertinente, como
+   os demais.
+5. Listagem no detalhe do projeto para a diretoria, junto dos relatórios mas
+   visivelmente distinta deles.
+6. Corrigir o _eyebrow_ de `(submissor)/relatorios/page.tsx:21`, que hoje
+   nomeia a tela errada.
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/db/src/migrations/00NN_projetos_accountability_items.sql` _(criar)_
+- `packages/db/src/schema/projetos.ts`
+- `packages/validators/src/projetos/index.ts`
+- `apps/projetos/src/actions/accountability.ts` _(criar)_
+- `apps/projetos/src/app/(submissor)/prestacao-contas/page.tsx` _(criar)_
+- `apps/projetos/src/app/(submissor)/relatorios/page.tsx`
+- `apps/projetos/src/app/(submissor)/layout.tsx` _(item de menu)_
+- `apps/projetos/src/app/(diretoria)/pipeline/[id]/page.tsx`
+- `apps/projetos/src/components/`
+- `apps/projetos/src/__tests__/`
+
+**Critérios de aceite:**
+
+- [ ] Submissor envia foto/NF a um projeto em execução sem que exista relatório
+      pendente
+- [ ] Submissor de outro projeto não vê nem escreve nos itens deste (teste de
+      RLS, não só de gate)
+- [ ] Diretoria vê os itens no detalhe do projeto
+- [ ] Nada expira, nada cobra, nada bloqueia pagamento
+- [ ] Lint passa · Types passam
+
+---
+
+### P-2.24 — Projetos: três notificações prometidas que nunca saem (CORRETIVO)
+
+**Fase:** 2
+**Módulo:** projetos + financeiro
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `fix/P-2.24-projetos-notificacoes-faltantes`
+- Dependências: **P-2.15 concluído** (a parte (a) depende do valor aprovado)
+- Env vars: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `RESEND_API_KEY`
+- Skill `/impeccable`: não se aplica (sem tela nova; só emails e propagação)
+
+**Problema que este prompt resolve (contexto):**
+
+Três promessas explícitas, nenhuma cumprida — `AUDIT/06 §1.13, §1.16, §1.14`.
+
+**(a) Email de aprovação sem valor nem período** (PRD item 9: _"o projeto
+aprovado, o valor aprovado e o período da parceria"_):
+
+> _"Temos uma boa notícia: o projeto "{título}" foi aprovado pela diretoria da
+> Hebron Aseec após o período de homologação. Os pagamentos serão processados
+> conforme o cronograma aprovado."_
+> — `packages/email/src/templates/project-status-change.tsx:65-70`
+
+**(b) Alteração de orçamento não notifica o submissor.** Q7: _"Caso o orçamento
+seja alterado (aumentado), isso pode gerar mais demandas para o submissor,
+então, ele deve ser informado dessa alteração por e-mail."_ Q31 diz o mesmo para
+redução. Q75 lista "Orçamento alterado → submissor" na lista que o Filipe
+validou como completa. `grep "notifyBudget"` → zero; a edição em
+`apps/financeiro/src/actions/organization-budgets.ts` não dispara nada.
+
+**(c) Comprovante não chega ao submissor.** Q66: _"Sim, deverá ver. Inclusive
+com o comprovante de pagamento que deverá ser anexado à transação."_ A função
+**tem** o parâmetro (`packages/integrations/src/financeiro.ts:227-230`,
+`receiptUrl`, usado em :303) e o único chamador nunca o passa
+(`apps/financeiro/src/actions/approval.ts:539`).
+
+**Escopo:**
+
+1. **(a)** `project-status-change.tsx`, variante `aprovado`: valor aprovado
+   formatado em BRL e período da parceria (primeiro → último vencimento de
+   `payment_schedules`). O template recebe os dados de
+   `apps/projetos/src/lib/notifications.ts`; nada de consultar banco dentro do
+   componente de email.
+2. **(b)** Notificação de orçamento alterado: a direção correta é
+   Financeiro → Projetos via `packages/integrations` (app nunca importa de app).
+   Notificar os submissores vinculados à instituição (`organization_members`,
+   `packages/db/src/schema/projetos.ts:150`), dizendo o valor anterior, o novo e
+   o efeito sobre projetos já submetidos. Template novo + seed + registro do
+   slug no Admin.
+3. **(c)** Em `markPayableAsPaid` (`apps/financeiro/src/actions/approval.ts`),
+   resolver o comprovante já anexado ao payable (o caminho de
+   `apps/financeiro/src/actions/attachments.ts:20` faz exatamente isso) e passar
+   a URL assinada a `notifyProjectPaymentMade`. Se não houver comprovante,
+   notificar sem ele — nunca falhar o pagamento por causa do anexo.
+4. **Fora de escopo:** o envio de NF/recibo **pelo submissor** (segunda metade
+   da Q66) é `P-2.23` — não duplicar aqui.
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/email/src/templates/project-status-change.tsx`
+- `packages/email/src/templates/organization-budget-changed.tsx` _(criar)_
+- `packages/email/src/index.ts`
+- `packages/db/src/seed.ts`
+- `packages/integrations/src/projetos.ts`
+- `packages/integrations/src/financeiro.ts`
+- `apps/projetos/src/lib/notifications.ts`
+- `apps/financeiro/src/actions/organization-budgets.ts`
+- `apps/financeiro/src/actions/approval.ts`
+- `apps/admin/src/app/(dashboard)/configuracoes/page.tsx`
+- `apps/projetos/src/__tests__/`, `apps/financeiro/src/__tests__/`
+
+**Critérios de aceite:**
+
+- [ ] Email de aprovação mostra "R$ 30.000,00" e "março a dezembro de 2026" para
+      um projeto aprovado com esse valor e cronograma
+- [ ] Alterar o orçamento de uma instituição dispara email aos submissores
+      vinculados, com valor anterior e novo
+- [ ] Pagar um payable com comprovante anexado leva o link ao email do
+      submissor; sem comprovante, o email sai mesmo assim
+- [ ] Nenhuma falha de email desfaz pagamento ou aprovação (todas best-effort,
+      fora da transação)
+- [ ] Lint passa · Types passam
+
+---
+
+### P-2.25 — Projetos: a sugestão de avaliador por afinidade (CORRETIVO)
+
+**Fase:** 2
+**Módulo:** projetos
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `fix/P-2.25-projetos-sugestao-avaliador`
+- Dependências: P-2.21 concluído (opcional — melhora o sinal de afinidade)
+- Env vars: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`
+- Skill `/impeccable`: **aplica-se** — painel de designação
+
+**Problema que este prompt resolve (contexto):**
+
+`AUDIT/06 §1.12`. Q3: _"Acredito que o ideal seja um misto entre sugestão do
+sistema e designação manual do admin."_ Q24 define os critérios de afinidade:
+região, categoria, histórico de avaliações. `BRAIN.md` §6.2 registra a regra.
+
+`assignEvaluator` (`apps/projetos/src/actions/evaluations.ts:31`) recebe um
+`evaluatorId` e grava. Não existe função de sugestão em lugar nenhum. O lembrete
+por email 7 dias antes da reunião já existe (`runEvaluationReminders`,
+`packages/jobs/src/crons/projetos.ts:90`).
+
+**Escopo:**
+
+1. `suggestEvaluators(projectId)` — **função determinística, sem IA**: pontua
+   cada diretor/conselheiro elegível por (i) região do projeto × regiões que já
+   avaliou, (ii) categoria × categorias que já avaliou, (iii) carga atual
+   (avaliações pendentes) como penalidade. Devolve os candidatos ordenados com o
+   **motivo** de cada um ("já avaliou 3 projetos nesta categoria").
+2. Excluir quem tem conflito de interesse
+   (`@hebron/db/conflict-of-interest`, já usado no Admin) e quem já está
+   designado para o projeto.
+3. UI (`/impeccable`): no painel de designação, os sugeridos aparecem primeiro,
+   com o motivo em texto curto, e **a lista completa continua acessível** — a
+   atribuição permanece manual e o admin nunca fica preso à sugestão.
+4. Sem alteração em `assignEvaluator` além do que a tela precisar: a designação
+   continua exigindo `stage === "validacao"`.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/projetos/src/lib/evaluator-suggestion.ts` _(criar)_
+- `apps/projetos/src/lib/queries.ts`
+- `apps/projetos/src/actions/evaluations.ts`
+- `apps/projetos/src/app/(diretoria)/pipeline/[id]/page.tsx`
+- `apps/projetos/src/components/`
+- `apps/projetos/src/__tests__/`
+
+**Critérios de aceite:**
+
+- [ ] Avaliador que já avaliou 3 projetos da mesma categoria e região aparece
+      acima de um sem histórico
+- [ ] Quem tem conflito de interesse não é sugerido
+- [ ] Designar um avaliador fora da sugestão continua funcionando em um clique
+- [ ] Função pura testada sem banco (fixtures), como `breakTie` em Flats
+- [ ] Lint passa · Types passam
+
+---
+
+### P-2.26 — Projetos: o local de execução "com precisão" (CORRETIVO — BLOQUEADO)
+
+**Fase:** 2
+**Módulo:** projetos
+**Tipo:** schema
+
+> **⚠️ BLOQUEADO — não executar antes da resposta do Filipe.**
+>
+> **Pergunta (Q55, devolvida pelo Filipe e nunca fechada — _"qual seria a melhor
+> forma? Ele digitar um texto livre e ser validado por uma API de endereços
+> globais no backend?"_):** qual o formato do "local de execução"?
+>
+> - **(a) Endereço estruturado com CEP validado no Brasil, texto livre fora
+>   dele.** CEP + logradouro + número + cidade/UF + país; ViaCEP preenche o
+>   resto quando o país é Brasil. Cobre bem os projetos nacionais e degrada com
+>   elegância nos internacionais. **Recomendação.**
+> - **(b) Texto livre + geocodificação por API global** (Google Places /
+>   Nominatim), guardando `lat`/`lng`. Precisão máxima, dependência externa
+>   nova, custo por chamada e mais um segredo para operar.
+> - **(c) Manter texto livre, só tornando região e país obrigatórios também no
+>   pontual.** Fecha o buraco da Q54 sem prometer precisão que o sistema não
+>   tem.
+>
+> A escolha muda o modelo de dados, não só a validação — por isso o prompt não
+> pode ser escrito antes.
+
+**Pré-condições:**
+
+- Branch: `fix/P-2.26-projetos-local-execucao`
+- Dependências: P-2.21 concluído; **decisão acima registrada em `PATCHES/`**
+- Env vars: `DATABASE_URL` (+ credencial de geocodificação na saída (b))
+- Skill `/impeccable`: **aplica-se**
+
+**Problema que este prompt resolve (contexto):**
+
+`AUDIT/06 §1.9`. Q47 pede o local _"com precisão"_ (_"precisamos saber com
+precisão"_). O que existe é `regiao` (mínimo 2 caracteres) + `pais`
+(`packages/validators/src/projetos/index.ts:96-97`), gravados em
+`ministry_region` / `ministry_area`, sem validação de endereço, CEP ou
+geocodificação.
+
+**Agravante independente da decisão:** Q54 diz que no formulário pontual o
+básico é _"nome do projeto, endereço e valor"_ — e em
+`createPunctualProjectSchema` `regiao` e `pais` são **opcionais**
+(`packages/validators/src/projetos/index.ts:204-205`). Um dos três campos
+essenciais do pontual pode ficar vazio hoje. Essa parte pode ser corrigida em
+qualquer das três saídas.
+
+**Escopo:** a definir com a decisão. Em todas elas:
+
+1. Tornar o local obrigatório também no pontual.
+2. Preservar os projetos existentes (migração de dados, não invalidação).
+3. Exibir o local na pauta da reunião e na versão compacta.
+
+---
+
+### P-1.29 — Admin: os 26 templates de email que o Admin não alcança (CORRETIVO)
+
+**Fase:** 1
+**Módulo:** admin + fundação
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `fix/P-1.29-admin-templates-db-driven`
+- Dependências: P-1.10c concluído
+- Env vars: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `RESEND_API_KEY`
+- Skill `/impeccable`: **aplica-se** — a tela de templates cresce muito
+
+**Problema que este prompt resolve (contexto):**
+
+`AUDIT/06 §2.2`. Q10 é categórica: _"Nada deve ser hardcoded. Todos os templates
+de e-mail devem ser definidos no módulo admin."_
+
+A infraestrutura está correta e funciona — `admin.email_templates`
+(`packages/db/src/schema/admin.ts:253`), `interpolateStoredTemplate`
+(`packages/email/src/lib/interpolate.ts:50`) e precedência do registro em banco
+sobre o componente React. Mas só **4 slugs** têm chamador: `invitation`
+(`apps/admin/src/actions/invitations.ts:88`), `password-reset` e `welcome`
+(`apps/admin/src/actions/users.ts:356,517`; também
+`apps/intranet/src/actions/invitations.ts:174`) e `projetos-payment-made`
+(`packages/integrations/src/financeiro.ts:257`).
+
+Os outros ~26 templates de `packages/email/src/templates/` são componentes React
+fixos — inclusive `project-status-change`, que o PRD item 9 chama de "texto
+padrão" e que a Q10 usava como exemplo.
+
+**Escopo:**
+
+1. **Consolidar o resolvedor de override.** Hoje a mesma consulta a
+   `admin.email_templates` está triplicada
+   (`apps/financeiro/src/lib/notifications.ts:34`,
+   `apps/intranet/src/lib/notifications.ts:29`,
+   `apps/projetos/src/lib/notifications.ts:31`). Uma implementação em
+   `packages/email`, consumida pelos três — mesmo movimento que P-0.8 fez com
+   `makeNotificationInserter`.
+2. **Estender a precedência a todos os slugs**: quem envia email passa
+   obrigatoriamente pelo resolvedor; sem registro em banco, o componente React
+   continua sendo o fallback (nunca falhar por template ausente).
+3. **Semear** `admin.email_templates` a partir do HTML renderizado dos
+   componentes atuais, com as variáveis já como `{{placeholders}}` — o
+   super_admin abre a tela e encontra o texto que o sistema já enviava, não uma
+   caixa vazia.
+4. **Tela do Admin** (`/impeccable`): a lista salta de 4 para ~30 slugs. Agrupar
+   por módulo (os grupos `Geral | Projetos | Financeiro | Intranet` já existem
+   em `configuracoes/page.tsx`), mostrar quais estão sobrescritos e permitir
+   voltar ao padrão. Preview por slug com as variáveis disponíveis listadas.
+5. **Escape e segurança:** `interpolateStoredTemplate` já escapa — cobrir com
+   teste os slugs novos que recebem conteúdo de usuário (título de projeto,
+   justificativa).
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/email/src/lib/` _(resolvedor consolidado)_
+- `packages/email/src/index.ts`
+- `packages/db/src/seed.ts`
+- `apps/projetos/src/lib/notifications.ts`
+- `apps/financeiro/src/lib/notifications.ts`
+- `apps/intranet/src/lib/notifications.ts`
+- `apps/admin/src/app/(dashboard)/configuracoes/page.tsx`
+- `apps/admin/src/components/email-template-preview.tsx`
+- `apps/admin/src/actions/settings.ts`
+- `apps/admin/src/__tests__/`, `packages/email/src/__tests__/`
+
+**Critérios de aceite:**
+
+- [ ] Editar `project-status-change` no Admin muda o email realmente enviado
+- [ ] Slug sem registro em banco continua enviando o componente React
+- [ ] Nenhuma consulta duplicada de `email_templates` fora de `packages/email`
+      (`grep` confirma)
+- [ ] Variáveis de usuário escapadas (teste com `<script>` no título)
+- [ ] Lint passa · Types passam
+
+---
+
+### P-1.30 — Admin: geração de template de email por IA (CORRETIVO)
+
+**Fase:** 1
+**Módulo:** admin + IA
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `fix/P-1.30-admin-template-ia`
+- Dependências: **P-1.29 concluído**
+- Env vars: `OPENAI_API_KEY`, `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`
+- Skill `/impeccable`: **aplica-se**
+
+**Problema que este prompt resolve (contexto):**
+
+`AUDIT/06 §2.3`. Q52: _"o super_admin pode descrever os aspectos do texto do
+e-mail para que a IA aplique num template em HTML/React Email."_ `BRAIN.md` §8
+lista "Templates de email editáveis com IA" como **mantido na v1**.
+
+`packages/ai/src/` tem `projects/`, `flats/` e `financeiro/` — nada de email.
+
+**Escopo:**
+
+1. `packages/ai/src/admin/email-template.ts`: recebe a descrição em prosa, o
+   slug de destino e a lista de variáveis disponíveis; devolve `subject` +
+   `bodyHtml` **dentro do design system de email** (cores de
+   `emailColors`, tipografia Titillium — `packages/email/src/components/layout.tsx:18-29`).
+   Prompt do sistema ancorado nos princípios do BRAIN §5 e no microcopy do
+   projeto (sem "vamos lá!", sem exclamação genérica).
+2. Validação da saída: HTML seguro (sem `<script>`, sem estilo externo), todas
+   as `{{variáveis}}` usadas existentes no slug, nenhuma inventada. Recusar e
+   pedir de novo em vez de gravar HTML inválido.
+3. Action no Admin (`superAdminAction`), com audit do prompt e do resultado.
+4. UI (`/impeccable`): gerar → **pré-visualizar** → editar à mão → salvar. A IA
+   nunca grava direto no template ativo.
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/ai/src/admin/email-template.ts` _(criar)_
+- `packages/ai/src/index.ts`
+- `apps/admin/src/actions/settings.ts`
+- `apps/admin/src/app/(dashboard)/configuracoes/page.tsx`
+- `apps/admin/src/components/email-template-preview.tsx`
+- `packages/ai/src/__tests__/`
+
+**Critérios de aceite:**
+
+- [ ] Descrição em prosa gera assunto + HTML usando a paleta e a tipografia
+      Hebron
+- [ ] Saída com variável inexistente é recusada, não salva
+- [ ] Nada é gravado sem confirmação humana na pré-visualização
+- [ ] Prompt e resultado registrados no audit
+- [ ] Lint passa · Types passam
+
+---
+
+### P-5.14 — Intranet: a ata que virou lista (CORRETIVO)
+
+**Fase:** 5
+**Módulo:** intranet
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `fix/P-5.14-intranet-ata-documento`
+- Dependências: P-5.4, PATCH-017 e P-0.12 (buckets) concluídos
+- Env vars: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`
+- Skill `/impeccable`: **aplica-se**
+
+**Problema que este prompt resolve (contexto):**
+
+`AUDIT/06 §6.1`. Q83: _"A ata da reunião é registrada no sistema… acredito que a
+intranet, que é onde os diretores/conselheiros consumirão as informações, faz
+mais sentido."_
+
+O que existe é `intranet.meeting_decisions` — decisões estruturadas registradas
+pelo presidente da sessão (`apps/intranet/src/actions/decisions.ts:59`,
+PATCH-017), cada uma com descrição, responsável, prazo e status. Útil, mas não é
+ata: não há documento, texto corrido nem anexo. A transcrição por Whisper é
+legitimamente v2+ (`BRAIN.md` §8) — o **registro da ata** foi pedido para a v1.
+
+**Escopo:**
+
+1. Tabela `intranet.meeting_minutes`: `meeting_session_id` (1:1 com
+   `admin.meeting_sessions`), `content` (HTML do editor), `published_at`,
+   `published_by`, `updated_at`. Rascunho enquanto não publicada; publicada,
+   vira imutável exceto por nova versão.
+2. Anexos da ata (documento assinado, lista de presença) no bucket já existente,
+   com policy espelhando a visibilidade da sessão.
+3. Editor: `RichTextEditor` de `packages/ui/src/components/rich-text-editor.tsx`
+   (PATCH-014, D-1) — não introduzir um segundo editor.
+4. Gate: escreve o presidente da sessão (`meeting_sessions.chair_user_id`,
+   `packages/db/src/schema/admin.ts:271`) ou super_admin; leem
+   diretores/conselheiros. RLS como segunda camada.
+5. Coexistência: na tela da reunião, ata e decisões estruturadas lado a lado —
+   as decisões continuam sendo a fonte das tarefas geradas
+   (`packages/integrations/src/tarefas.ts`). A ata **não** substitui nem
+   duplica as decisões.
+
+**Arquivos permitidos para criação/edição:**
+
+- `packages/db/src/migrations/00NN_intranet_meeting_minutes.sql` _(criar)_
+- `packages/db/src/schema/intranet.ts`
+- `packages/validators/src/intranet/index.ts`
+- `apps/intranet/src/actions/minutes.ts` _(criar)_
+- `apps/intranet/src/app/(dashboard)/` _(tela da reunião)_
+- `apps/intranet/src/components/`
+- `apps/intranet/src/__tests__/`
+
+**Critérios de aceite:**
+
+- [ ] Presidente da sessão escreve, salva rascunho e publica a ata
+- [ ] Conselheiro lê a ata publicada e não consegue editá-la (gate + RLS)
+- [ ] Anexar documento à ata funciona e respeita a visibilidade da sessão
+- [ ] Decisões estruturadas continuam gerando tarefas como antes
+- [ ] Lint passa · Types passam
+
+---
+
+### P-0.17 — Fundação: higiene final de tokens (CORRETIVO)
+
+**Fase:** 0
+**Módulo:** fundação (admin + email)
+**Tipo:** ui
+**Pré-condições:**
+
+- Branch: `fix/P-0.17-higiene-tokens`
+- Dependências: P-0.2b, P-1.12b e P-0.6e concluídos
+- Env vars: nenhuma
+- Skill `/impeccable`: **aplica-se** (mudança visível, ainda que pequena)
+
+**Problema que este prompt resolve (contexto):**
+
+`AUDIT/06 §9.2` — violações residuais da regra inviolável do `BRAIN.md` §5
+("nunca hex no código de app"), todas cosméticas, nenhuma bloqueante:
+
+- `#4a6009` repetido em 4 telas do Admin —
+  `convites/page.tsx:208`, `lgpd/page.tsx:150`, `usuarios/page.tsx:223`,
+  `usuarios/[id]/page.tsx:220`. Não é token; parece um verde derivado à mão de
+  `--hb-green`. O token correto para texto sobre fundo verde é
+  `--hb-green-fg` (`#1d2800`), e `--hb-green-deep` (`#82a317`) para o traço.
+- `#ffffff` / `#e5e7eb` em `apps/admin/src/components/audit-log-filters.tsx:75-76`
+  — cinza genérico do Tailwind em vez de `--surface` / `--border`.
+- **`Inter` ainda presente** em
+  `apps/admin/src/components/email-template-preview.tsx:51` — fonte
+  explicitamente proibida pelo PATCH-001. O P-0.6e removeu do `EmailLayout`, o
+  preview do Admin ficou para trás.
+- Emails de status usam `#16A34A` / `#DC2626` (verde e vermelho do Tailwind) em
+  `packages/email/src/templates/project-status-change.tsx:67,75`. Em email o
+  literal é inevitável — CSS variables não resolvem —, mas o valor deve vir da
+  paleta Hebron: `#82a317` (`--hb-green-deep`) e `#b8331a` (`--hb-red`),
+  acrescentados a `colors` em `packages/email/src/components/layout.tsx:18-26`
+  como `success` e `danger`, para que o próximo template não invente de novo.
+
+**Escopo:** exatamente os quatro itens acima. **Nada além disso.**
+
+Não tocar nos literais legítimos: geradores de PDF (`@react-pdf/renderer`),
+`app/manifest.ts` e o HTML dos templates-semente em `configuracoes/page.tsx`.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/admin/src/app/(dashboard)/convites/page.tsx`
+- `apps/admin/src/app/(dashboard)/lgpd/page.tsx`
+- `apps/admin/src/app/(dashboard)/usuarios/page.tsx`
+- `apps/admin/src/app/(dashboard)/usuarios/[id]/page.tsx`
+- `apps/admin/src/components/audit-log-filters.tsx`
+- `apps/admin/src/components/email-template-preview.tsx`
+- `packages/email/src/components/layout.tsx`
+- `packages/email/src/templates/project-status-change.tsx`
+
+**Critérios de aceite:**
+
+- [ ] `grep -rn "#4a6009\|#ffffff\|#e5e7eb" apps/admin/src` → zero
+- [ ] `grep -rn "Inter" apps/admin/src packages/email/src` → zero
+- [ ] `emailColors` ganha `success` e `danger` da paleta Hebron; nenhum template
+      usa verde/vermelho do Tailwind
+- [ ] Contraste conferido nos quatro badges alterados (AA)
+- [ ] Lint passa · Types passam
+
+---
+
+### P-7.14 — Flats: o desempate que existe em dois lugares (CORRETIVO)
+
+**Fase:** 7
+**Módulo:** flats
+**Tipo:** integration
+**Pré-condições:**
+
+- Branch: `fix/P-7.14-flats-desempate-servidor`
+- Dependências: P-7.8, P-7.9 concluídos
+- Env vars: `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`
+- Skill `/impeccable`: **aplica-se** — a fila de aprovação muda de fonte
+
+**Problema que este prompt resolve (contexto):**
+
+`AUDIT/06 §4` (nota). `breakTie()` (`apps/flats/src/lib/tie-break.ts:34`) é
+função pura, testada (`apps/flats/src/__tests__/scoring.test.ts:517`) — e **não
+é chamada em lugar nenhum do servidor**. A fila de aprovação
+(`apps/flats/src/components/approval-queue.tsx:44-77`) reimplementa a mesma
+ordem de desempate em `compareItems`/`tieBreakReason`, só para exibição. O
+próprio `tie-break.ts:15-18` documenta a duplicação.
+
+Duas implementações da mesma regra do edital (§5: idade → tempo sem descanso →
+nunca usou → sorteio) que podem divergir a qualquer alteração. Impacto baixo
+hoje (o gestor decide manualmente), mas é dívida de regra de negócio duplicada —
+o tipo que morde quando o edital muda.
+
+**Escopo:**
+
+1. Ordenar a fila **no servidor** (`apps/flats/src/lib/queries.ts` ou a action
+   que alimenta a tela), usando `breakTie` como único critério de desempate após
+   a pontuação.
+2. O motivo do desempate ("decidido pela idade", etc.) passa a vir junto do
+   dado — o componente exibe, não calcula.
+3. Remover `compareItems`, `REST_RANK` e `tieBreakReason` de
+   `approval-queue.tsx`.
+4. Ajustar `breakTie` se necessário para devolver a **ordem completa** (hoje
+   devolve só o vencedor) — mantendo a assinatura atual como caso particular,
+   para não invalidar os testes existentes.
+5. O sorteio (critério 4 do edital) precisa ser **estável**: duas leituras da
+   mesma fila não podem trocar a ordem. Semear pelo `reservationId`, nunca por
+   `Math.random()` a cada render.
+
+**Arquivos permitidos para criação/edição:**
+
+- `apps/flats/src/lib/tie-break.ts`
+- `apps/flats/src/lib/queries.ts`
+- `apps/flats/src/components/approval-queue.tsx`
+- `apps/flats/src/actions/approval.ts`
+- `apps/flats/src/__tests__/scoring.test.ts`
+
+**Critérios de aceite:**
+
+- [ ] A fila exibida vem ordenada do servidor; o cliente não reordena
+- [ ] Nenhuma reimplementação da ordem de desempate fora de `tie-break.ts`
+      (`grep` por `REST_RANK` → uma ocorrência)
+- [ ] Duas leituras seguidas da mesma fila produzem a mesma ordem, inclusive no
+      empate total
+- [ ] Os testes existentes de `breakTie` continuam passando sem alteração de
+      expectativa
+- [ ] Lint passa · Types passam
+
+---
+
 ## Legenda
 
 | Tipo          | Descrição                                              |
