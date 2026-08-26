@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { resolveSession } from "@hebron/auth/server";
 import { CANONICAL_LOGIN_URL, anyRoleRequiresMfa } from "@hebron/auth";
+import { resolveReturnToDestination } from "@hebron/auth/app-middleware";
 import { AuthCard, SupportFooter } from "../../../../components/auth-card";
 import { MfaChallengeForm } from "./components/mfa-challenge-form";
 
@@ -18,6 +19,9 @@ export default async function MfaChallengePage({
   searchParams,
 }: MfaChallengePageProps) {
   const { return_to } = await searchParams;
+  // Mesmo saneamento de `/post-login` e de `/mfa/enroll` — as três páginas do
+  // fluxo de autenticação tratam `return_to` da mesma forma.
+  const destination = resolveReturnToDestination(return_to);
   const cookieStore = await cookies();
 
   let session;
@@ -35,7 +39,7 @@ export default async function MfaChallengePage({
       subtitle="Confirme com seu aplicativo autenticador"
       footer={<SupportFooter />}
     >
-      <MfaChallengeForm returnTo={return_to ?? "/"} />
+      <MfaChallengeForm returnTo={destination} />
     </AuthCard>
   );
 }

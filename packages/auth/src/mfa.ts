@@ -146,6 +146,11 @@ export async function verifyTotpChallenge(
  * enrollment, not to a challenge — `getAuthenticatorAssuranceLevel()` alone
  * cannot tell these two cases apart (its `nextLevel` only reports "aal2" when
  * a verified factor already exists).
+ *
+ * Também é o gate inverso da página de enrollment: `true` significa que a
+ * pessoa já enrolou e deve ir para o desafio, não para um segundo enrollment.
+ * Um fator apenas `unverified` (enrollment interrompido no meio) devolve
+ * `false` de propósito — ela precisa poder concluir o que começou.
  */
 export async function hasVerifiedTotpFactor(
   supabase: SupabaseClient,

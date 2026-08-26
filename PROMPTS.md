@@ -11224,12 +11224,12 @@ registrada como débito em S-60.
 
 **Critérios de aceite:**
 
-- [ ] Usuário com fator TOTP `verified` que abre `/mfa/enroll` é redirecionado a `/mfa/challenge`, preservando `return_to`
-- [ ] Usuário sem fator algum vê o formulário de enrollment, como hoje
-- [ ] Usuário com fator apenas `unverified` vê o formulário e consegue concluir
-- [ ] Papel que não exige MFA continua redirecionado para `/` (comportamento atual, sem regressão)
-- [ ] Nenhum client Supabase criado fora de `@hebron/auth`
-- [ ] Lint passa · Types passam
+- [x] Usuário com fator TOTP `verified` que abre `/mfa/enroll` é redirecionado a `/mfa/challenge`, preservando `return_to`
+- [x] Usuário sem fator algum vê o formulário de enrollment, como hoje
+- [x] Usuário com fator apenas `unverified` vê o formulário e consegue concluir
+- [x] Papel que não exige MFA continua redirecionado para `/` (comportamento atual, sem regressão)
+- [x] Nenhum client Supabase criado fora de `@hebron/auth`
+- [x] Lint passa · Types passam
 
 **Notas:**
 

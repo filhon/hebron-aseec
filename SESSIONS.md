@@ -299,6 +299,7 @@
 | S-276  | 2026-08-24 | P-2.4c — Projetos: o filtro de ano que não acompanha o ano de referência (CORRETIVO)                                             | concluido                                                                            |
 | S-277  | 2026-08-24 | P-2.6c — Projetos: parcelas nos meses errados e um centavo que some (CORRETIVO)                                                  | concluido                                                                            |
 | S-278  | 2026-08-24 | P-0.14b — Jobs: a homologação que aprova pela metade (CORRETIVO)                                                                 | concluido                                                                            |
+| S-279  | 2026-08-26 | P-1.26b — Auth: enrolar um segundo fator quando já existe um verificado (CORRETIVO)                                              | concluido                                                                            |
 
 ---
 
@@ -26608,4 +26609,165 @@ Nenhum.
   `withSystemRole`; `try/catch` de `onProjectApproved` removido)
 - `packages/jobs/src/__tests__/projetos-homologacao.test.ts` (3 testes novos +
   mock seletivo de `onProjectApproved` + helper de limpeza)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+## S-279 — P-1.26b — Auth: enrolar um segundo fator quando já existe um verificado (CORRETIVO)
+
+**Prompt:** `PROMPTS.md` § P-1.26b
+**Data:** 2026-08-26
+**Modelo:** claude-opus-5
+**Status:** concluido
+
+### Resumo
+
+`/mfa/enroll` só checava se o papel do usuário exige MFA. Quem já tinha
+concluído o enrollment e chegava à página por link salvo, histórico ou botão
+"voltar" recebia um formulário para enrolar um **segundo** fator em vez de ser
+levado ao desafio. A página é `gateExemptPaths` no `middleware.ts` da intranet
+(visitá-la é justamente como se resolve o gate), então o middleware não cobre
+esse caso — por desenho. A correção tinha que ser na própria página.
+
+Depois de resolver a sessão e de checar o papel, a página consulta os fatores e
+redireciona para `/mfa/challenge?return_to=…` quando já existe um TOTP
+`verified`. Fator apenas `unverified` (enrollment interrompido no meio) **não**
+redireciona.
+
+O helper que a decisão exige já existia: `hasVerifiedTotpFactor` em
+`packages/auth/src/mfa.ts` (criado em S-60, usado por `/post-login` e pelo
+middleware). Nada novo foi adicionado lá — e nenhum client Supabase foi
+instanciado na página: ela usa `getSessionSupabaseClient()`
+(`apps/intranet/src/lib/session-client.ts`), o mesmo caminho de `/post-login`,
+que por baixo é o `createSupabaseServerActionClient` de `@hebron/auth/server`
+(G6.1).
+
+Junto disso, `/mfa/enroll` e `/mfa/challenge` passaram a sanear `return_to` com
+`resolveReturnToDestination`, o mesmo que `/post-login` já aplicava — as três
+páginas do fluxo de autenticação agora tratam o parâmetro do mesmo jeito.
+
+### Decisões
+
+- **`return_to` sanitizado por `resolveReturnToDestination` nas duas páginas de
+  MFA.** A primeira versão desta sessão repassava o parâmetro cru
+  (`return_to ?? "/"`), como as páginas já faziam, e registrava a divergência
+  como débito novo. Filipe pediu que não ficasse débito: as duas páginas
+  passaram a sanear o valor uma única vez, no topo, e a usar o resultado tanto
+  no redirect novo quanto na prop do formulário. `/mfa/challenge` entrou junto
+  porque o débito era das duas — deixar só uma saneada seria trocar um
+  tratamento inconsistente por outro. O saneamento continua existindo em
+  `/post-login` (quem monta esses links); agora é o mesmo nas três páginas do
+  fluxo, e um link montado à mão não atravessa mais a página até o formulário.
+- **Nenhum helper novo em `mfa.ts`.** O escopo previa adicionar um "que liste
+  fatores" caso não houvesse; `hasVerifiedTotpFactor` já responde exatamente a
+  pergunta que a página faz. Só o comentário da função foi ampliado para citar
+  o segundo chamador e o porquê de `unverified` devolver `false`.
+
+### Verificação
+
+**Ao vivo, contra o servidor de dev real (`next dev`, porta 3005) e o Supabase
+de dev**, com super_admin real, fator TOTP real (código RFC 6238 calculado do
+secret) e cookie de sessão real gerado pelo mesmo `createServerClient` que a
+app usa — `GET /mfa/enroll?return_to=%2Freunioes`:
+
+| Caso                  | Antes (S-60) | Agora                                            |
+| --------------------- | ------------ | ------------------------------------------------ |
+| Fator `verified`      | 200 (form)   | **307 → `/mfa/challenge?return_to=%2Freunioes`** |
+| Nenhum fator          | 200 (form)   | 200 (form)                                       |
+| Fator só `unverified` | 200 (form)   | 200 (form)                                       |
+
+E o saneamento de `return_to`, com fator `verified` e a mesma sessão real:
+
+| Requisição                                             | Resultado                             |
+| ------------------------------------------------------ | ------------------------------------- |
+| `/mfa/enroll?return_to=https://evil.example.com/phish` | 307 → `/mfa/challenge?return_to=%2F`  |
+| `/mfa/enroll?return_to=//evil.example.com/phish`       | 307 → `/mfa/challenge?return_to=%2F`  |
+| `/mfa/challenge?return_to=https://evil.example.com/…`  | 200 com `returnTo:"/"` no payload RSC |
+
+No último caso o host hostil ainda aparece no corpo, mas só nos dois campos que
+o próprio Next monta a partir da URL da requisição (`canonicalUrl` do router e
+a chave `__PAGE__` do cache) — a prop que chega ao formulário é `"/"`,
+verificada por inspeção do payload.
+
+E o papel que não exige MFA (usuário real só com `colaborador`, sem regressão):
+`/mfa/enroll` → 307 para `/`, `/mfa/challenge` → 307 para `/` — o gate de papel
+segue sendo a primeira coisa avaliada, antes da consulta de fatores.
+
+Nenhum client Supabase novo: o diff não instancia nenhum. A página usa
+`getSessionSupabaseClient()`, que é `createSupabaseServerActionClient` de
+`@hebron/auth/server`. Os três `createClient` diretos que existem em
+`apps/intranet` (`lib/queries.ts`, `actions/invitations.ts`, `actions/profile.ts`)
+são anteriores a esta sessão, usam a service role key — que o package não
+expõe — e não foram tocados.
+
+Os 6 usuários de teste criados para tudo isso foram removidos ao final
+(`auth.users`, `public.users` e `role_assignments`), conferido por listagem.
+
+- `packages/auth` (suíte completa): 52/52 verdes, 8 arquivos — inclui os 9
+  testes de `mfa.test.ts` (novo).
+- `pnpm turbo lint typecheck`: 38/38 verdes.
+- `pnpm turbo build --filter=@hebron/intranet`: verde; `/mfa/enroll` continua
+  rota dinâmica (`ƒ`).
+
+### Testes novos (`packages/auth/src/__tests__/mfa.test.ts`)
+
+Arquivo novo — `mfa.ts` não tinha teste próprio.
+
+1. **Unidade, com duplo do client** (5 testes): `verified` → `true`;
+   `unverified` sozinho → `false`; nenhum fator → `false`; `unverified` +
+   `verified` → `true`; erro de `listFactors` → `false` (não bloqueia o
+   enrollment).
+2. **Integração contra o Supabase Auth real** (1 teste): ciclo de vida do fator
+   numa sessão real — sem fator → `false`; após `enrollTotp` (ainda não
+   confirmado) → `false`; após `verifytotpEnrollment` com código RFC 6238
+   calculado do secret → `true`.
+3. **Papéis** (3 testes): `super_admin`/`diretor` exigem MFA, demais não, e
+   basta um papel que exija.
+
+**Achado dos testes:** o `listFactors()` do `@supabase/auth-js` instalado já
+filtra `status === "verified"` ao montar `data.totp` (só `data.all` traz
+todos) — ou seja, um fator `unverified` nunca aparece em `data.totp`. O filtro
+próprio de `hasVerifiedTotpFactor` é, hoje, um segundo cinto. Os testes de
+unidade alimentam `data.totp` com `unverified` de propósito para fixar esse
+filtro caso a implementação da lib mude; está anotado no cabeçalho do arquivo
+para não passar por engano de leitura.
+
+### Débitos fechados
+
+- ✅ **S-60, primeiro débito** — "`/mfa/enroll` não verifica se o usuário já tem
+  um fator TOTP verificado antes de renderizar".
+
+### Débitos novos
+
+Nenhum. O único candidato — `return_to` cru nas páginas de MFA — foi resolvido
+dentro desta sessão, a pedido de Filipe (ver Decisões).
+
+### Desvios da lista de arquivos permitidos
+
+- `apps/intranet/src/app/(auth)/mfa/challenge/page.tsx` — a outra metade do
+  saneamento de `return_to`. O prompt dizia "nenhuma mudança em
+  `/mfa/challenge`" pensando no fluxo de desafio, que segue intocado (nem o
+  `createTotpChallenge`, nem o formulário, nem o gate de papel); o que mudou é
+  só como o `return_to` da query é lido. Sem isso, resolver o débito pela
+  metade deixaria as duas páginas irmãs com tratamentos diferentes do mesmo
+  parâmetro — exatamente o que motivou o registro do débito.
+- `apps/intranet/src/__tests__/profile-avatar-access.test.ts` — import `eq`
+  não usado quebrava `pnpm turbo lint` no baseline da branch (introduzido em
+  `4944455`, antes desta sessão; nada aqui toca esse arquivo). Removido o
+  import, sem outra mudança, porque G1 exige fechar o prompt com lint verde.
+
+### Arquivos criados
+
+- `packages/auth/src/__tests__/mfa.test.ts`
+
+### Arquivos modificados
+
+- `apps/intranet/src/app/(auth)/mfa/enroll/page.tsx` (redirect para
+  `/mfa/challenge` quando já há fator verificado; `return_to` saneado por
+  `resolveReturnToDestination`)
+- `apps/intranet/src/app/(auth)/mfa/challenge/page.tsx` (`return_to` saneado —
+  ver desvio acima)
+- `packages/auth/src/mfa.ts` (só o comentário de `hasVerifiedTotpFactor`)
+- `apps/intranet/src/__tests__/profile-avatar-access.test.ts` (import não usado
+  — ver desvio acima)
 - `SESSIONS.md` (esta entrada + linha no índice)

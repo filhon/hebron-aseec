@@ -15,7 +15,7 @@
  * não participa deste teste, só a checagem de posse antes de chamá-lo.
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
-import { eq, inArray } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import { db } from "@hebron/db/client";
 import { users, roleAssignments } from "@hebron/db/schema";
 
