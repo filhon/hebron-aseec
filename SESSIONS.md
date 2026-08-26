@@ -300,6 +300,7 @@
 | S-277  | 2026-08-24 | P-2.6c — Projetos: parcelas nos meses errados e um centavo que some (CORRETIVO)                                                  | concluido                                                                            |
 | S-278  | 2026-08-24 | P-0.14b — Jobs: a homologação que aprova pela metade (CORRETIVO)                                                                 | concluido                                                                            |
 | S-279  | 2026-08-26 | P-1.26b — Auth: enrolar um segundo fator quando já existe um verificado (CORRETIVO)                                              | concluido                                                                            |
+| S-280  | 2026-08-26 | P-0.1d — Higiene dos contratos compartilhados (CORRETIVO)                                                                        | concluido                                                                            |
 
 ---
 
@@ -26770,4 +26771,95 @@ dentro desta sessão, a pedido de Filipe (ver Decisões).
 - `packages/auth/src/mfa.ts` (só o comentário de `hasVerifiedTotpFactor`)
 - `apps/intranet/src/__tests__/profile-avatar-access.test.ts` (import não usado
   — ver desvio acima)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+## S-280 — P-0.1d — Higiene dos contratos compartilhados (CORRETIVO)
+
+**Prompt:** `PROMPTS.md` § P-0.1d
+**Data:** 2026-08-26
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Resumo
+
+Três resíduos de contrato compartilhado, fechados:
+
+1. `packages/types/src/index.ts` re-exportava só `documentos`, `financeiro` e
+   `projetos` (3 de 10 subdiretórios). Agora re-exporta os 10 (`admin`,
+   `documentos`, `financeiro`, `flats`, `intranet`, `plataforma`, `projetos`,
+   `radio`, `roles`, `tarefas`).
+2. `roleEnum` e `scopeEnum` em `packages/validators/src/admin/index.ts`
+   passaram de `const` local para `export const`.
+3. Os 3 schemas órfãos do Financeiro (`approvePayableSchema`,
+   `authorizePayableSchema`, `bankImportSchema`, com os `type` inferidos
+   correspondentes) foram removidos — `grep` no monorepo (incluindo testes)
+   confirmou zero importadores antes e depois.
+
+### Decisões
+
+- **4 colisões de nome real entre domínios, reportadas a Filipe em vez de
+  resolvidas por conta própria** (G1 + instrução explícita do prompt: "colisão
+  de nome entre domínios é decisão de contrato, não de higiene"). Ao tentar
+  `export type * from` para os 10 subdiretórios, o `tsc` acusou `TS2308` em 4
+  nomes que existem em dois módulos com formas diferentes:
+  - `Tag` — `documentos` (`{id,name,slug,color}`) vs `tarefas`
+    (`{id,name,color:TagColor}`)
+  - `Attachment` e `AttachmentParentType` — `financeiro`
+    (`payable|receivable|transaction|bank_import`) vs `tarefas`
+    (`task|comment`)
+  - `Series` — `plataforma` (série de curso) vs `radio` (série de áudio)
+
+  Filipe escolheu, para os 3 casos, **excluir ambos os lados da barrel** (opção
+  recomendada) em vez de renomear: nenhum dos dois nomes colidentes é
+  re-exportado por `@hebron/types`; cada um continua acessível pelo caminho
+  próprio (`@hebron/types/documentos`, `@hebron/types/tarefas`,
+  `@hebron/types/financeiro`, `@hebron/types/plataforma`,
+  `@hebron/types/radio`). `packages/types/src/index.ts` usa `export type *`
+  para os 6 módulos sem colisão e listas nomeadas explícitas (excluindo os 4
+  nomes) para `documentos`, `financeiro`, `plataforma`, `radio` e `tarefas`,
+  com comentário em cada bloco apontando a colisão e o caminho alternativo.
+
+- **`export type *` de `./roles` não traz `ROLES`/`SCOPES`/`DESIGNATION_TYPES`**
+  (só os tipos `Role`/`Scope`/`DesignationType`) — consistente com o resto do
+  barrel, que é só-tipo, e com o fato de que nenhum consumidor hoje importa
+  esses arrays pela raiz (todos usam `@hebron/types/roles` direto).
+
+### Verificação
+
+- `pnpm --filter @hebron/types typecheck`: verde (confirmado antes e depois do
+  ajuste das 4 colisões — a primeira tentativa com `export type *` puro para
+  os 10 módulos falhou com 4x `TS2308`, resolvido pelas listas nomeadas
+  acima).
+- `import type { Course } from "@hebron/types"` e
+  `import type { Role } from "@hebron/types"` resolvem — verificado com um
+  arquivo `.ts` temporário compilado dentro do pacote e removido em seguida.
+- `pnpm turbo typecheck --concurrency=3`: **19/19 pacotes verdes** (21 no
+  escopo, 2 sem script de typecheck).
+- `pnpm turbo lint --concurrency=3`: **19/19 pacotes verdes**.
+- `grep` dos 3 nomes de schema removidos (e dos `type` inferidos) em
+  `packages`/`apps`, extensões `.ts`/`.tsx`: zero ocorrências (o único achado
+  foi em `apps/admin/.next/**`, cache de build gitignorado, não código-fonte).
+
+### Débitos fechados
+
+- ✅ **S-8, primeiro item** — barrel de `@hebron/types` assimétrico (3 de 10
+  subdiretórios re-exportados).
+- ✅ **S-8, segundo item** — `roleEnum`/`scopeEnum` sem `export` em
+  `packages/validators/src/admin/index.ts`.
+- ✅ **S-214, item "validators órfãos"** — `approvePayableSchema`,
+  `authorizePayableSchema`, `bankImportSchema` removidos.
+
+### Débitos novos
+
+Nenhum. `Tag`, `Attachment`, `AttachmentParentType` e `Series` ficarem de fora
+da raiz de `@hebron/types` é a decisão de contrato registrada acima, não um
+débito pendente.
+
+### Arquivos modificados
+
+- `packages/types/src/index.ts`
+- `packages/validators/src/admin/index.ts`
+- `packages/validators/src/financeiro/index.ts`
 - `SESSIONS.md` (esta entrada + linha no índice)

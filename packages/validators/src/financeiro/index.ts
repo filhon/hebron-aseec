@@ -78,27 +78,6 @@ export const createPayableSchema = z.object({
 
 export type CreatePayableInput = z.infer<typeof createPayableSchema>;
 
-// ─── approvePayableSchema ─────────────────────────────────────────────────────
-// Used by the diretor gestor action (1st approval layer).
-
-export const approvePayableSchema = z.object({
-  payableId: z.string().uuid(),
-  notes: z.string().max(500).nullable().optional().default(null),
-});
-
-export type ApprovePayableInput = z.infer<typeof approvePayableSchema>;
-
-// ─── authorizePayableSchema ───────────────────────────────────────────────────
-// Used by the diretor autorizador action (2nd layer).
-// Guard: authorizedBy must differ from approvedBy — enforced in the action handler.
-
-export const authorizePayableSchema = z.object({
-  payableId: z.string().uuid(),
-  notes: z.string().max(500).nullable().optional().default(null),
-});
-
-export type AuthorizePayableInput = z.infer<typeof authorizePayableSchema>;
-
 // ─── cancelPayableSchema ──────────────────────────────────────────────────────
 
 export const cancelPayableSchema = z.object({
@@ -257,16 +236,6 @@ export const updateOrganizationBudgetSchema = z.object({
 export type UpdateOrganizationBudgetInput = z.infer<
   typeof updateOrganizationBudgetSchema
 >;
-
-// ─── bankImportSchema ─────────────────────────────────────────────────────────
-
-export const bankImportSchema = z.object({
-  bankAccountId: z.string().uuid("Selecione uma conta bancária"),
-  format: z.enum(["ofx", "csv"]),
-  fileName: z.string().min(1).max(255),
-});
-
-export type BankImportInput = z.infer<typeof bankImportSchema>;
 
 // ─── reconcileItemSchema ──────────────────────────────────────────────────────
 // Manual reconciliation: link an import item to an existing payable/receivable.

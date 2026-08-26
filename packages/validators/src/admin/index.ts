@@ -2,7 +2,7 @@ import { z } from "zod";
 
 // ─── Shared enums ─────────────────────────────────────────────────────────────
 
-const roleEnum = z.enum([
+export const roleEnum = z.enum([
   "super_admin",
   "diretor",
   "conselheiro",
@@ -13,7 +13,7 @@ const roleEnum = z.enum([
   "ouvinte",
 ]);
 
-const scopeEnum = z.enum([
+export const scopeEnum = z.enum([
   "global",
   "admin",
   "projetos",

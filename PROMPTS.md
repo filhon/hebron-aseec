@@ -11289,12 +11289,12 @@ Três resíduos de contrato compartilhado, todos registrados e nenhum fechado:
 
 **Critérios de aceite:**
 
-- [ ] `import type { Course } from "@hebron/types"` e `import type { Role } from "@hebron/types"` resolvem
-- [ ] Nenhuma colisão de nome introduzida (typecheck do workspace inteiro verde)
-- [ ] `roleEnum`/`scopeEnum` exportados de `@hebron/validators/admin`
-- [ ] Os 3 schemas órfãos removidos; `grep` no monorepo confirma zero referências antes e depois
-- [ ] `pnpm turbo typecheck --concurrency=3` verde nos 19 pacotes
-- [ ] Lint passa
+- [x] `import type { Course } from "@hebron/types"` e `import type { Role } from "@hebron/types"` resolvem
+- [~] Nenhuma colisão de nome introduzida (typecheck do workspace inteiro verde)
+- [x] `roleEnum`/`scopeEnum` exportados de `@hebron/validators/admin`
+- [x] Os 3 schemas órfãos removidos; `grep` no monorepo confirma zero referências antes e depois
+- [x] `pnpm turbo typecheck --concurrency=3` verde nos 19 pacotes
+- [x] Lint passa
 
 **Notas:**
 
