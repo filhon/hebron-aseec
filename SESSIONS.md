@@ -304,6 +304,7 @@
 | S-281  | 2026-08-26 | P-2.8d — Projetos: o segundo voto que se dá por registrado (CORRETIVO)                                                           | concluido                                                                            |
 | S-282  | 2026-08-26 | P-2.14b — Projetos: as regras que ficaram fora do BRAIN (CORRETIVO)                                                              | concluido                                                                            |
 | S-283  | 2026-08-27 | P-2.15 — Projetos: o valor aprovado que o sistema nunca soube registrar (CORRETIVO)                                              | concluido                                                                            |
+| S-284  | 2026-08-27 | P-2.16 — Projetos: a validação que só sabia mudar de nome (CORRETIVO)                                                            | concluido                                                                            |
 
 ---
 
@@ -27280,4 +27281,200 @@ concluido)` — **não** `validacao`. Como todo projeto pontual decide em
 - `packages/jobs/src/crons/projetos.ts` (comentário, sem mudança funcional)
 - `apps/projetos/src/__tests__/approved-amount.test.ts` (novo)
 - `SESSIONS.md` (esta entrada + linha no índice)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+## S-284 — P-2.16 — Projetos: a validação que só sabia mudar de nome (CORRETIVO)
+
+**Prompt:** `PROMPTS.md` § P-2.16
+**Branch:** `fix/P-2.16-projetos-validacao-editavel`
+**Data:** 2026-08-27
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Contexto
+
+`AUDIT/06 §1.2/§1.3`: `updateDraftProject` era a única action de escrita
+sobre `projetos.projects` no monorepo, e recusava qualquer `stage` diferente
+de `rascunho` — na prática, o estágio "validação" só significava "visível
+para a diretoria", sem nenhuma das capacidades que Q23/Q38/Q9/PRD item 8
+descrevem (só super_admin altera, pode alterar qualquer campo, notifica o
+submissor por email, permite retorno de votação para recalibrar o valor).
+
+### Implementação
+
+1. **Migration** `0095_projetos_updated_in_validation_audit_action.sql`
+   (`ALTER TYPE admin.audit_action ADD VALUE
+'project.updated_in_validation'`). Aplicada com sucesso no banco de dev
+   compartilhado.
+2. **`VALID_STAGE_TRANSITIONS`** (`packages/db/src/schema/projetos.ts`):
+   `votacao: ["homologacao", "validacao"]` (Q9 — "a votação pode retornar à
+   validação para recalibrar o valor").
+3. **`updateProjectFieldsSchema`** (`packages/validators/src/projetos/index.ts`,
+   novo, exportado): schema único movido de dentro de
+   `actions/projects.ts` (onde vivia como `updateDraftSchema`, privado) —
+   mesmo conjunto de campos (`title`, `objectives`, `justification`,
+   `targetAudience`, `expectedResults`, `ministryRegion`, `ministryArea`,
+   `budgetTotal`, `parcelas`, `mesesPagamento`, `extendedData`), mesma regra
+   `checkMesesPagamentoCoherence`. Compartilhado agora por
+   `updateDraftProject` (submissor, rascunho) e `updateProjectInValidation`
+   (novo, abaixo) — nenhuma das duas actions reimplementa o schema nem o
+   patch builder.
+4. **`buildProjectFieldsPatch`** (`apps/projetos/src/actions/projects.ts`,
+   novo helper privado): extraído do corpo de `updateDraftProject` para ser
+   reusado por `updateProjectInValidation` — "o patch builder existente é
+   reusável" do escopo do prompt, literalmente.
+5. **`updateProjectInValidation`** (mesmo arquivo, novo): gate
+   `superAdminAction` (já existia em `lib/safe-action.ts`, sem chamador até
+   agora). Exige `project.stage === "validacao"`; calcula o diff campo a
+   campo via `buildFieldChanges` (só os campos rastreados, nunca
+   `updatedAt`); grava `createVersionSnapshot` com `_source:
+"updateProjectInValidation"`; audita com a action nova
+   `project.updated_in_validation` (diff completo via `computeDiff`, mesmo
+   padrão de `updateDraftProject`); dispara `notifyProjectUpdated`
+   (best-effort, try/catch — a escrita já foi commitada, uma falha de email
+   não deve propagar).
+6. **`transitionProjectStage`** (mesmo arquivo): novo guard — `votacao →
+validacao` só é aceita para `super_admin`, mesmo `VALID_STAGE_TRANSITIONS`
+   marcando a transição como topologicamente válida para `diretorAction` em
+   geral. Sem isso, um diretor comum poderia devolver o projeto para
+   validação sem poder editá-lo lá (Q23 restringe a edição a super_admin, o
+   retorno acompanha a mesma restrição por consequência direta).
+7. **`ProjectAuditAction`** (`apps/projetos/src/lib/audit.ts`) e
+   `auditActionEnum` (`packages/db/src/schema/admin.ts`): ambos ganham
+   `"project.updated_in_validation"` — ver seção "Extensões fora dos itens
+   numerados" abaixo.
+8. **Email** `packages/email/src/templates/project-updated.tsx` (novo,
+   `ProjectUpdatedEmail`) — lista os campos alterados (antes → depois) numa
+   tabela, valor em BRL, meses de pagamento traduzidos para nome do mês.
+   Slug `projetos-project-updated` semeado em `packages/db/src/seed.ts`
+   (`{{alteracoes}}` é HTML pré-renderizado, mesmo padrão de
+   `{{kpis}}`/`{{eventos}}` em `intranet-briefing`) e registrado em
+   `apps/admin/src/app/(dashboard)/configuracoes/page.tsx`
+   (`TEMPLATE_META`/`DEFAULT_EMAIL_TEMPLATES`/`EmailTemplateSlug`).
+   `seedEmailTemplates()` rodado isoladamente contra o banco de dev
+   compartilhado (`onConflictDoNothing`, idempotente) — inseriu 5 templates
+   que ainda faltavam, incluindo o novo.
+9. **`notifyProjectUpdated`** (`apps/projetos/src/lib/notifications.ts`,
+   novo): formata cada campo alterado (`FIELD_CHANGE_LABELS`, `BRL` de
+   `lib/stage-utils.ts`, nomes de mês locais — não importados de
+   `field-controls.tsx`, que é `"use client"`) e dispara in_app + email ao
+   submissor, respeitando override de template em banco como as demais
+   funções do arquivo.
+10. **UI** (`/impeccable` invocado — register `product`, sem `DESIGN.md`;
+    "consistência sobre surpresa" do register `product` confirmou a
+    abordagem de reusar a linguagem visual já estabelecida em vez de
+    inventar): `(diretoria)/pipeline/[id]/editar/` (novo, `page.tsx` Server
+    Component + `_client.tsx`) — reaproveita a estrutura de
+    `(submissor)/[id]/editar` campo a campo, mas grava via
+    `updateProjectInValidation`. Aviso de consequência ("cada alteração
+    salva envia email ao submissor") em componente `EmailNotice` com tokens
+    `--color-info*`, mostrado duas vezes — no topo do formulário e
+    imediatamente acima do botão salvar — para que a consequência esteja
+    visível antes do clique, não só depois (item 6 do escopo). Entrada
+    "Editar projeto" adicionada em `(diretoria)/pipeline/[id]/page.tsx`
+    (visível só quando `isSuperAdmin && project.stage === "validacao"`).
+    Gate de página: `requireDiretorSession()` + checagem explícita de
+    `super_admin` (redireciona diretor/conselheiro de volta ao detalhe) —
+    autenticar ≠ autorizar, a action é a barreira real.
+
+### Extensões fora dos itens numerados (arquivos não listados em "Arquivos permitidos")
+
+G1: "se faltar um arquivo de infraestrutura óbvio, crie-o e registre como
+débito/decisão". Três arquivos fora da lista foram necessários — o mesmo
+padrão já registrado em S-283 (P-2.15) para os dois primeiros, que se repete
+aqui porque toda nova `ProjectAuditAction`/valor de enum precisa dos dois:
+
+- `packages/db/src/schema/admin.ts` — `auditActionEnum` precisa listar
+  `'project.updated_in_validation'`.
+- `apps/projetos/src/lib/audit.ts` — `ProjectAuditAction` (union type usado
+  por `logProjectAudit`) precisa do mesmo valor, senão o typecheck falha.
+- `apps/projetos/src/lib/queries.ts` — nova função
+  `getProjectForValidationEdit(projectId, actorId)`, mesmo padrão de
+  `getDraftProjectForEdit` (retorna `null` se o projeto não existir ou não
+  estiver em `validacao` — a mesma condição que a action exige, para a tela
+  nunca abrir fora do guard real). Necessária para a UI do item 10; não
+  havia como buscar os dados da tela de edição sem ela.
+
+### Decisão tomada por precedente (registrada, sem bloquear — como o prompt pediu)
+
+- **Votos preservados ao ir e voltar de validação**: nem
+  `transitionProjectStage` nem `createContestation` tocam `projetos.votes`
+  — o precedente citado no prompt (`createContestation` devolve
+  `homologacao → votacao` sem mexer em votos; PATCH-028 permite revotar
+  enquanto a votação está aberta). Confirmado por teste dedicado
+  (`update-in-validation.test.ts`): um voto inserido antes do retorno
+  continua presente, inalterado, depois do ciclo `votacao → validacao →
+votacao`.
+
+### RLS pré-existente reencontrada (mesma lacuna de S-283, não deste escopo)
+
+`projects_select_reviewer` (`0007_projetos_rls.sql`) só cobre `stage IN
+(votacao, homologacao, aprovado, reprovado, em_execucao, concluido)` — não
+`validacao`. Isso não afeta `updateProjectInValidation` (gate
+`superAdminAction`, que tem SELECT irrestrito via `projects_select_admin`),
+mas o teste de "`validacao → votacao` de volta" precisou usar `super_admin`
+como ator em vez de `diretor` pelo mesmo motivo já registrado em S-283 —
+achado repetido, não novo, continua fora da lista de arquivos permitidos
+deste corretivo (só duas migrations específicas).
+
+### Verificação
+
+- `pnpm --filter @hebron/db --filter @hebron/validators --filter @hebron/email
+--filter @hebron/projetos --filter @hebron/admin typecheck` e `lint`:
+  verdes.
+- `pnpm exec next build` (direto) em `apps/projetos` e `apps/admin`: verdes
+  — `/pipeline/[id]/editar` gerada (4.75 kB) em `apps/projetos`.
+- Suíte nova `apps/projetos/src/__tests__/update-in-validation.test.ts` (7
+  testes, isolada via `pnpm exec vitest run`): verde. Cobre todos os
+  critérios de aceite: super_admin altera qualquer campo (título, valor,
+  parcelas, meses) com diff explícito no audit e notificação in_app criada;
+  diretor e submissor recebem erro de negócio pelo gate de
+  `superAdminAction`; `votacao → validacao` funciona para super_admin e é
+  recusado para diretor; voto preservado no ciclo completo
+  `votacao → validacao → votacao`; e o critério de integração com P-2.15 —
+  editar o valor pedido em validação e depois aprovar
+  (`registerProjectDecision`) gera `payment_schedules`/`financeiro.payables`
+  somando exatamente o novo valor, não o original.
+- `apps/projetos` suíte completa isolada (`pnpm exec vitest run`, não
+  `pnpm turbo test`): 17 arquivos, 179 testes, verde — nenhuma regressão em
+  nenhum fluxo existente.
+- `state-machine.test.ts` atualizado (o teste que fixava
+  `votacao: ["homologacao"]` como única transição) e revalidado: 28 testes,
+  verde.
+- `approved-amount.test.ts`, `renewal.test.ts`, `flow.test.ts` (isolados,
+  cobrem `updateDraftProject` e o restante do ciclo de vida): 49 testes,
+  verde — o refactor do patch builder compartilhado não regrediu o caminho
+  do submissor em rascunho.
+- `packages/db/src/__tests__/seed.test.ts`: verde.
+
+### Débitos fechados
+
+- Estágio "validação" sem nenhuma capacidade real (`AUDIT/06 §1.2/§1.3`) —
+  fechado por esta sessão.
+
+### Débitos novos
+
+- Nenhum novo — a lacuna de RLS `projects_select_reviewer`/`validacao` já
+  estava registrada desde P-2.12b/S-283, apenas reencontrada aqui.
+
+### Arquivos modificados
+
+- `packages/db/src/migrations/0095_projetos_updated_in_validation_audit_action.sql` (novo)
+- `packages/db/src/schema/projetos.ts`
+- `packages/db/src/schema/admin.ts` (fora da lista original — G1)
+- `packages/db/src/seed.ts`
+- `packages/email/src/templates/project-updated.tsx` (novo)
+- `packages/validators/src/projetos/index.ts`
+- `apps/projetos/src/actions/projects.ts`
+- `apps/projetos/src/lib/notifications.ts`
+- `apps/projetos/src/lib/audit.ts` (fora da lista original — G1)
+- `apps/projetos/src/lib/queries.ts` (fora da lista original — G1)
+- `apps/projetos/src/app/(diretoria)/pipeline/[id]/page.tsx`
+- `apps/projetos/src/app/(diretoria)/pipeline/[id]/editar/page.tsx` (novo)
+- `apps/projetos/src/app/(diretoria)/pipeline/[id]/editar/_client.tsx` (novo)
+- `apps/admin/src/app/(dashboard)/configuracoes/page.tsx`
+- `apps/projetos/src/__tests__/update-in-validation.test.ts` (novo)
+- `apps/projetos/src/__tests__/state-machine.test.ts`
 - `SESSIONS.md` (esta entrada + linha no índice)

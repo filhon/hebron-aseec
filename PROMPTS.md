@@ -11722,15 +11722,15 @@ Contra:
 
 **Critérios de aceite:**
 
-- [ ] super_admin altera qualquer campo de um projeto em `validacao`; diretor e
+- [x] super_admin altera qualquer campo de um projeto em `validacao`; diretor e
       submissor recebem erro de negócio
-- [ ] Cada alteração gera um email ao submissor com a lista de campos alterados
+- [x] Cada alteração gera um email ao submissor com a lista de campos alterados
       (antes → depois) e uma entrada `project.updated_in_validation` no audit
-- [ ] `votacao → validacao` funciona para super_admin e é recusada para diretor
-- [ ] Voltar para validação e depois para votação preserva os votos já dados
-- [ ] Alterar o valor em validação e reaprovar gera payables com o novo valor
+- [x] `votacao → validacao` funciona para super_admin e é recusada para diretor
+- [x] Voltar para validação e depois para votação preserva os votos já dados
+- [x] Alterar o valor em validação e reaprovar gera payables com o novo valor
       (integra com P-2.15)
-- [ ] Lint passa · Types passam
+- [x] Lint passa · Types passam
 
 **Notas:**
 

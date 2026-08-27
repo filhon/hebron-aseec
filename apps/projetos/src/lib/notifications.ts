@@ -13,6 +13,9 @@ import {
 import { ProjectSubmittedEmail } from "@hebron/email/templates/project-submitted";
 import { ProjectStatusChangeEmail } from "@hebron/email/templates/project-status-change";
 import type { ProjectStatusEvent } from "@hebron/email/templates/project-status-change";
+import { ProjectUpdatedEmail } from "@hebron/email/templates/project-updated";
+import type { ProjectFieldChangeDisplay } from "@hebron/email/templates/project-updated";
+import { BRL } from "./stage-utils";
 
 // ---------------------------------------------------------------------------
 // Template override helpers
@@ -539,6 +542,153 @@ export async function notifyEvaluatorDesignated(
               recipientName: displayName,
               projectTitle: projectTitleForEmail,
               statusEvent: "designado" satisfies ProjectStatusEvent,
+              projectUrl: url,
+            }),
+          },
+    }),
+  ]);
+}
+
+// ---------------------------------------------------------------------------
+// Project updated in validation → submissor (in_app + email) — P-2.16
+// CORRETIVO, PRD item 8: "Qualquer alteração no projeto durante as etapas de
+// validação devem ser comunicadas ao submissor por e-mail."
+// ---------------------------------------------------------------------------
+
+const FIELD_CHANGE_LABELS: Record<string, string> = {
+  title: "Título",
+  objectives: "Objetivos",
+  justification: "Justificativa",
+  targetAudience: "Beneficiários (descrição)",
+  expectedResults: "Resultados Esperados",
+  ministryRegion: "Região",
+  ministryArea: "País",
+  budgetTotal: "Valor Total (R$)",
+  parcelas: "Número de Parcelas",
+  mesesPagamento: "Meses de Pagamento",
+};
+
+const MONTH_NAMES = [
+  "Janeiro",
+  "Fevereiro",
+  "Março",
+  "Abril",
+  "Maio",
+  "Junho",
+  "Julho",
+  "Agosto",
+  "Setembro",
+  "Outubro",
+  "Novembro",
+  "Dezembro",
+];
+
+function formatChangeValue(field: string, value: unknown): string {
+  if (value === null || value === undefined) return "—";
+  if (field === "budgetTotal") {
+    const n = typeof value === "string" ? parseFloat(value) : Number(value);
+    return Number.isNaN(n) ? "—" : BRL.format(n);
+  }
+  if (field === "mesesPagamento" && Array.isArray(value)) {
+    return value.length
+      ? (value as number[])
+          .map((m) => MONTH_NAMES[m - 1] ?? String(m))
+          .join(", ")
+      : "—";
+  }
+  return String(value);
+}
+
+export interface ProjectFieldChangeRaw {
+  field: string;
+  before: unknown;
+  after: unknown;
+}
+
+export async function notifyProjectUpdated(
+  projectId: string,
+  changes: ProjectFieldChangeRaw[],
+): Promise<void> {
+  if (!changes.length) return;
+
+  const [project] = await db
+    .select({
+      title: projects.title,
+      submitterId: projects.submitterId,
+      submitterName: users.fullName,
+      submitterEmail: users.email,
+    })
+    .from(projects)
+    .innerJoin(users, eq(users.id, projects.submitterId))
+    .where(eq(projects.id, projectId))
+    .limit(1);
+
+  if (!project) return;
+
+  const url = buildSubmissorProjectUrl(projectId);
+  const href = submissorHref(projectId);
+  const resendApiKey = process.env.RESEND_API_KEY;
+  const displayName = project.submitterName ?? project.submitterEmail;
+
+  const rows: ProjectFieldChangeDisplay[] = changes.map((c) => ({
+    label: FIELD_CHANGE_LABELS[c.field] ?? c.field,
+    before: formatChangeValue(c.field, c.before),
+    after: formatChangeValue(c.field, c.after),
+  }));
+
+  const changesHtml = rows
+    .map(
+      (r) =>
+        `<tr><td style="font-size:12px;color:#6B7280;padding:6px 8px 6px 0;vertical-align:top;">${r.label}</td><td style="font-size:13px;color:#6B7280;text-decoration:line-through;padding:6px 8px;vertical-align:top;">${r.before}</td><td style="font-size:13px;font-weight:700;padding:6px 0;vertical-align:top;">${r.after}</td></tr>`,
+    )
+    .join("");
+
+  const tpl = await getDbTemplate("projetos-project-updated");
+  const emailOpts = tpl
+    ? applyVars(tpl, {
+        nome: displayName,
+        titulo: project.title,
+        alteracoes: changesHtml,
+        link: url,
+      })
+    : null;
+
+  const bodySummary = `${rows.length} campo${rows.length > 1 ? "s" : ""} alterado${
+    rows.length > 1 ? "s" : ""
+  } pela diretoria: ${rows.map((r) => r.label).join(", ")}.`;
+
+  await Promise.allSettled([
+    createNotification({
+      insert: makeInsert(),
+      data: {
+        userId: project.submitterId,
+        channel: "in_app",
+        type: "project.updated_in_validation",
+        title: `Projeto atualizado: ${project.title}`,
+        body: bodySummary,
+        payload: { module: "projetos", projectId, href },
+      },
+    }),
+    createNotification({
+      insert: makeInsert(),
+      resendApiKey,
+      data: {
+        userId: project.submitterId,
+        channel: "email",
+        type: "project.updated_in_validation",
+        title: `Projeto atualizado: ${project.title}`,
+        body: bodySummary,
+        payload: { module: "projetos", projectId, href },
+      },
+      email: emailOpts
+        ? { to: project.submitterEmail, ...emailOpts }
+        : {
+            to: project.submitterEmail,
+            subject: `Alterações no seu projeto: ${project.title}`,
+            template: React.createElement(ProjectUpdatedEmail, {
+              recipientName: displayName,
+              projectTitle: project.title,
+              changes: rows,
               projectUrl: url,
             }),
           },

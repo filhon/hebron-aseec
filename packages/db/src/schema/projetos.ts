@@ -77,10 +77,16 @@ export type ProjectStage = (typeof PROJECT_STAGES)[number];
 
 // pontual: validacao → aprovado | reprovado (skip votacao/homologacao)
 // anual:   validacao → votacao → homologacao → aprovado | reprovado
+//
+// votacao → validacao (P-2.16 CORRETIVO, AUDIT/06 §1.3, Q9): permite à
+// diretoria devolver o projeto para validação quando o valor pedido precisa
+// ser corrigido antes da votação. Restrito a super_admin dentro de
+// transitionProjectStage (Q23) — este mapa só define a transição como
+// topologicamente válida, não quem pode executá-la.
 export const VALID_STAGE_TRANSITIONS: Record<ProjectStage, ProjectStage[]> = {
   rascunho: ["validacao"],
   validacao: ["votacao", "aprovado", "reprovado"],
-  votacao: ["homologacao"],
+  votacao: ["homologacao", "validacao"],
   homologacao: ["aprovado", "reprovado"],
   aprovado: ["em_execucao"],
   reprovado: [],

@@ -458,6 +458,24 @@ const EMAIL_TEMPLATE_DEFAULTS: EmailTemplateSeedEntry[] = [
     bodyText: `Olá, {{nome}},\n\nPagamento processado para o projeto "{{titulo}}".\nValor: {{valor}}\nData: {{data}}\n\nAcesse: {{link}}`,
   },
   {
+    // P-2.16 CORRETIVO — PRD item 8: enviado ao submissor a cada alteração
+    // feita pelo super_admin num projeto em validação. `{{alteracoes}}` é
+    // HTML pré-renderizado (linhas de tabela), mesmo padrão de
+    // `{{kpis}}`/`{{eventos}}` em "intranet-briefing" abaixo.
+    slug: "projetos-project-updated",
+    variables: ["nome", "titulo", "alteracoes", "link"],
+    subject: "Alterações no seu projeto: {{titulo}}",
+    bodyHtml: `<p>Olá, <strong>{{nome}}</strong>,</p>
+<p>A diretoria da Hebron Aseec alterou informações do projeto <strong>{{titulo}}</strong>, atualmente em validação. Confira o que mudou abaixo.</p>
+<table style="width:100%;border-collapse:collapse;margin:16px 0;background:#F9FAFB;border-radius:8px;padding:16px;">
+{{alteracoes}}
+</table>
+<p style="margin-top:20px;">
+  <a href="{{link}}" style="background:#202C85;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;display:inline-block;">Ver projeto</a>
+</p>`,
+    bodyText: `Olá, {{nome}},\n\nA diretoria alterou informações do projeto "{{titulo}}", atualmente em validação.\n\nAcesse: {{link}}`,
+  },
+  {
     slug: "report-reminder-7d-before",
     variables: ["nome", "titulo", "prazo", "link"],
     subject: "Relatório vence em 7 dias: {{titulo}}",

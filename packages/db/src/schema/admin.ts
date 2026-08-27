@@ -56,6 +56,10 @@ export const auditActionEnum = adminSchema.enum("audit_action", [
   // transição de estágio (P-2.15 CORRETIVO), added via ALTER TYPE in
   // 0094_projetos_decision_audit_action.sql
   "project.decision_registered",
+  // super_admin edita um projeto em validação — a única action que altera
+  // qualquer campo nesse estágio (P-2.16 CORRETIVO), added via ALTER TYPE in
+  // 0095_projetos_updated_in_validation_audit_action.sql
+  "project.updated_in_validation",
   "evaluation.assigned",
   "evaluation.submitted",
   "contestation.created",

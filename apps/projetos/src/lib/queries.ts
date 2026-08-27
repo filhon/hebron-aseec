@@ -792,6 +792,76 @@ export async function getDraftProjectForEdit(
   });
 }
 
+export type ProjectForValidationEdit = {
+  id: string;
+  tipo: "anual" | "pontual";
+  title: string;
+  objectives: string | null;
+  justification: string | null;
+  targetAudience: string | null;
+  expectedResults: string | null;
+  ministryRegion: string | null;
+  ministryArea: string | null;
+  budgetTotal: number;
+  parcelas: number | null;
+  mesesSelecionados: number[];
+  submitterName: string | null;
+};
+
+/** Retorna null se o projeto não existir ou não estiver em `validacao` — a
+ * mesma condição que updateProjectInValidation exige (actions/projects.ts),
+ * para que a tela de edição nunca abra fora do guard real da action
+ * (P-2.16 CORRETIVO). Sem checagem de submitterId (diferente de
+ * getDraftProjectForEdit): aqui qualquer projeto em validação é elegível —
+ * quem chama já passou pelo gate de papel super_admin na própria página. */
+export async function getProjectForValidationEdit(
+  projectId: string,
+  actorId: string,
+): Promise<ProjectForValidationEdit | null> {
+  return withAuthenticatedContext({ actorId }, async (tx) => {
+    const rows = await tx
+      .select({
+        id: projects.id,
+        tipo: projects.tipo,
+        stage: projects.stage,
+        title: projects.title,
+        objectives: projects.objectives,
+        justification: projects.justification,
+        targetAudience: projects.targetAudience,
+        expectedResults: projects.expectedResults,
+        ministryRegion: projects.ministryRegion,
+        ministryArea: projects.ministryArea,
+        budgetTotal: projects.budgetTotal,
+        parcelas: projects.parcelas,
+        mesesPagamento: projects.mesesPagamento,
+        submitterName: users.fullName,
+      })
+      .from(projects)
+      .leftJoin(users, eq(projects.submitterId, users.id))
+      .where(and(eq(projects.id, projectId), isNull(projects.deletedAt)))
+      .limit(1);
+
+    const project = rows[0];
+    if (!project || project.stage !== "validacao") return null;
+
+    return {
+      id: project.id,
+      tipo: project.tipo,
+      title: project.title,
+      objectives: project.objectives,
+      justification: project.justification,
+      targetAudience: project.targetAudience,
+      expectedResults: project.expectedResults,
+      ministryRegion: project.ministryRegion,
+      ministryArea: project.ministryArea,
+      budgetTotal: parseFloat(project.budgetTotal ?? "0"),
+      parcelas: project.parcelas,
+      mesesSelecionados: project.mesesPagamento ?? [],
+      submitterName: project.submitterName,
+    };
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Kanban (director pipeline)
 // ---------------------------------------------------------------------------

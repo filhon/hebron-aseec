@@ -291,6 +291,52 @@ export const createContestationSchema = z.object({
 
 export type CreateContestationInput = z.infer<typeof createContestationSchema>;
 
+// ─── updateProjectFieldsSchema ────────────────────────────────────────────────
+// Campos editáveis de um projeto já existente — compartilhado por
+// updateDraftProject (submissor, stage rascunho) e updateProjectInValidation
+// (super_admin, stage validacao — P-2.16 CORRETIVO, AUDIT/06 §1.2/§1.3, Q23,
+// Q38). Um único schema/patch-builder para os dois: nenhuma das duas actions
+// reimplementa a regra de coerência parcelas×mesesPagamento — ambas chamam
+// checkMesesPagamentoCoherence, a mesma do wizard (P-2.4b).
+
+export const updateProjectFieldsSchema = z
+  .object({
+    projectId: z.string().uuid("Projeto inválido"),
+    title: z.string().min(5).max(200).optional(),
+    objectives: z.string().min(50).max(5000).optional(),
+    justification: z.string().min(50).max(5000).optional(),
+    targetAudience: z.string().max(2000).optional().nullable(),
+    expectedResults: z.string().min(50).max(5000).optional(),
+    ministryRegion: z.string().max(200).optional().nullable(),
+    ministryArea: z.string().max(100).optional().nullable(),
+    budgetTotal: z.number().positive().optional(),
+    parcelas: z.number().int().min(1).max(12).optional(),
+    mesesPagamento: z
+      .array(z.number().int().min(1).max(12))
+      .min(1, "Selecione pelo menos um mês de pagamento")
+      .optional(),
+    extendedData: z.record(z.unknown()).optional(),
+  })
+  .superRefine((data, ctx) => {
+    const { parcelas, mesesPagamento } = data;
+    if ((parcelas === undefined) !== (mesesPagamento === undefined)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: [parcelas === undefined ? "parcelas" : "mesesPagamento"],
+        message:
+          "Parcelas e meses de pagamento devem ser alterados juntos — informe os dois.",
+      });
+      return;
+    }
+    if (parcelas !== undefined && mesesPagamento !== undefined) {
+      checkMesesPagamentoCoherence(mesesPagamento, parcelas, ctx);
+    }
+  });
+
+export type UpdateProjectFieldsInput = z.infer<
+  typeof updateProjectFieldsSchema
+>;
+
 // ─── deleteProjectSchema ──────────────────────────────────────────────────────
 // Soft-delete with mandatory justification at any stage (BRAIN.md §6.2).
 

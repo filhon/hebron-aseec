@@ -134,8 +134,11 @@ describe("State Machine — VALID_STAGE_TRANSITIONS: cobertura", () => {
     expect(valid).toContain("reprovado");
   });
 
-  it("votacao → [homologacao] — única transição de saída", () => {
-    expect(VALID_STAGE_TRANSITIONS.votacao).toEqual(["homologacao"]);
+  it("votacao → [homologacao, validacao] — inclui o retorno para correção (P-2.16 CORRETIVO)", () => {
+    const valid = VALID_STAGE_TRANSITIONS.votacao;
+    expect(valid).toContain("homologacao");
+    expect(valid).toContain("validacao");
+    expect(valid).toHaveLength(2);
   });
 
   it("homologacao → [aprovado, reprovado]", () => {

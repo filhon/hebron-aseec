@@ -13,6 +13,7 @@ export type ProjectAuditAction =
   | "project.submitted"
   | "project.stage_transition"
   | "project.decision_registered"
+  | "project.updated_in_validation"
   | "project.deleted"
   | "vote.cast"
   | "vote.panic"

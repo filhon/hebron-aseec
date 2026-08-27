@@ -43,9 +43,10 @@ import {
   createPunctualProjectSchema,
   createContestationSchema,
   deleteProjectSchema,
-  checkMesesPagamentoCoherence,
   registerProjectDecisionSchema,
+  updateProjectFieldsSchema,
 } from "@hebron/validators/projetos";
+import type { UpdateProjectFieldsInput } from "@hebron/validators/projetos";
 import {
   scoreProject,
   DEFAULT_SCORING_CRITERIA,
@@ -72,6 +73,7 @@ import {
   diretorAction,
   conselheiroDiretorAction,
   projetosAction,
+  superAdminAction,
 } from "../lib/safe-action";
 import { logProjectAudit, computeDiff } from "../lib/audit";
 import {
@@ -85,6 +87,8 @@ import {
   notifyProjectInValidation,
   notifyVotingOpen,
   notifyContestation,
+  notifyProjectUpdated,
+  type ProjectFieldChangeRaw,
 } from "../lib/notifications";
 
 // ---------------------------------------------------------------------------
@@ -528,51 +532,81 @@ export const createPunctualDraft = submissorAction
 
 // ---------------------------------------------------------------------------
 // updateDraftProject — edit a project while it is still a rascunho
+// updateProjectInValidation — super_admin edits a project in validacao
+// (P-2.16 CORRETIVO, AUDIT/06 §1.2/§1.3)
 // ---------------------------------------------------------------------------
 
-// `parcelas` e `mesesPagamento` só podem mudar juntos: a mesma
-// checkMesesPagamentoCoherence usada em createAnnualProjectSchema (P-2.4b),
-// não uma segunda cópia da regra. Sem isso, um update que altere só
-// `parcelas` desfaz a igualdade parcelas===meses mantida desde a criação,
-// e generatePaymentSchedule (packages/db/projetos-approval.ts) divide o
-// orçamento por `parcelas` mas emite uma linha por `meses` — a causa raiz
-// do defeito registrado em P-2.8c.
-const updateDraftSchema = z
-  .object({
-    projectId: z.string().uuid("Projeto inválido"),
-    title: z.string().min(5).max(200).optional(),
-    objectives: z.string().min(50).max(5000).optional(),
-    justification: z.string().min(50).max(5000).optional(),
-    targetAudience: z.string().max(2000).optional().nullable(),
-    expectedResults: z.string().min(50).max(5000).optional(),
-    ministryRegion: z.string().max(200).optional().nullable(),
-    ministryArea: z.string().max(100).optional().nullable(),
-    budgetTotal: z.number().positive().optional(),
-    parcelas: z.number().int().min(1).max(12).optional(),
-    mesesPagamento: z
-      .array(z.number().int().min(1).max(12))
-      .min(1, "Selecione pelo menos um mês de pagamento")
-      .optional(),
-    extendedData: z.record(z.unknown()).optional(),
-  })
-  .superRefine((data, ctx) => {
-    const { parcelas, mesesPagamento } = data;
-    if ((parcelas === undefined) !== (mesesPagamento === undefined)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        path: [parcelas === undefined ? "parcelas" : "mesesPagamento"],
-        message:
-          "Parcelas e meses de pagamento devem ser alterados juntos — informe os dois.",
-      });
-      return;
+// Patch builder compartilhado pelas duas actions abaixo — nenhuma reimplementa
+// o mapeamento campo a campo (updateProjectFieldsSchema, @hebron/validators).
+function buildProjectFieldsPatch(
+  parsedInput: UpdateProjectFieldsInput,
+): Partial<typeof projects.$inferInsert> {
+  const patch: Partial<typeof projects.$inferInsert> = {
+    updatedAt: new Date(),
+  };
+  if (parsedInput.title !== undefined) patch.title = parsedInput.title;
+  if (parsedInput.objectives !== undefined)
+    patch.objectives = parsedInput.objectives;
+  if (parsedInput.justification !== undefined)
+    patch.justification = parsedInput.justification;
+  if (parsedInput.targetAudience !== undefined)
+    patch.targetAudience = parsedInput.targetAudience ?? null;
+  if (parsedInput.expectedResults !== undefined)
+    patch.expectedResults = parsedInput.expectedResults;
+  if (parsedInput.ministryRegion !== undefined)
+    patch.ministryRegion = parsedInput.ministryRegion ?? null;
+  if (parsedInput.ministryArea !== undefined)
+    patch.ministryArea = parsedInput.ministryArea ?? null;
+  if (parsedInput.budgetTotal !== undefined)
+    patch.budgetTotal = parsedInput.budgetTotal.toString();
+  if (parsedInput.parcelas !== undefined) patch.parcelas = parsedInput.parcelas;
+  // meses acompanha mesesPagamento.length — nunca gravado sozinho, mesma
+  // invariante de createAnnualDraft (meses === parcelas). Desde P-2.6c a
+  // lista também é gravada (meses_pagamento), porque é ela que define o
+  // vencimento de cada parcela no cronograma.
+  if (parsedInput.mesesPagamento !== undefined) {
+    patch.meses = parsedInput.mesesPagamento.length;
+    patch.mesesPagamento = [...parsedInput.mesesPagamento].sort(
+      (a, b) => a - b,
+    );
+  }
+  return patch;
+}
+
+// Campos rastreados para o email "o que mudou" ao submissor
+// (notifyProjectUpdated) — só os que updateProjectFieldsSchema aceita, nunca
+// `updatedAt` (ruído presente em todo patch).
+const TRACKED_CHANGE_FIELDS = [
+  "title",
+  "objectives",
+  "justification",
+  "targetAudience",
+  "expectedResults",
+  "ministryRegion",
+  "ministryArea",
+  "budgetTotal",
+  "parcelas",
+  "mesesPagamento",
+] as const;
+
+function buildFieldChanges(
+  before: typeof projects.$inferSelect,
+  patch: Partial<typeof projects.$inferInsert>,
+): ProjectFieldChangeRaw[] {
+  const changes: ProjectFieldChangeRaw[] = [];
+  for (const field of TRACKED_CHANGE_FIELDS) {
+    if (!(field in patch)) continue;
+    const beforeVal = before[field];
+    const afterVal = (patch as Record<string, unknown>)[field];
+    if (JSON.stringify(beforeVal) !== JSON.stringify(afterVal)) {
+      changes.push({ field, before: beforeVal, after: afterVal });
     }
-    if (parcelas !== undefined && mesesPagamento !== undefined) {
-      checkMesesPagamentoCoherence(mesesPagamento, parcelas, ctx);
-    }
-  });
+  }
+  return changes;
+}
 
 export const updateDraftProject = submissorAction
-  .schema(updateDraftSchema)
+  .schema(updateProjectFieldsSchema)
   .action(async ({ parsedInput, ctx }) => {
     const { before, after } = await withAuthenticatedContext(
       { actorId: ctx.actorId },
@@ -593,36 +627,7 @@ export const updateDraftProject = submissorAction
           );
         }
 
-        const patch: Partial<typeof projects.$inferInsert> = {
-          updatedAt: new Date(),
-        };
-        if (parsedInput.title !== undefined) patch.title = parsedInput.title;
-        if (parsedInput.objectives !== undefined)
-          patch.objectives = parsedInput.objectives;
-        if (parsedInput.justification !== undefined)
-          patch.justification = parsedInput.justification;
-        if (parsedInput.targetAudience !== undefined)
-          patch.targetAudience = parsedInput.targetAudience ?? null;
-        if (parsedInput.expectedResults !== undefined)
-          patch.expectedResults = parsedInput.expectedResults;
-        if (parsedInput.ministryRegion !== undefined)
-          patch.ministryRegion = parsedInput.ministryRegion ?? null;
-        if (parsedInput.ministryArea !== undefined)
-          patch.ministryArea = parsedInput.ministryArea ?? null;
-        if (parsedInput.budgetTotal !== undefined)
-          patch.budgetTotal = parsedInput.budgetTotal.toString();
-        if (parsedInput.parcelas !== undefined)
-          patch.parcelas = parsedInput.parcelas;
-        // meses acompanha mesesPagamento.length — nunca gravado sozinho,
-        // mesma invariante de createAnnualDraft (meses === parcelas). Desde
-        // P-2.6c a lista também é gravada (meses_pagamento), porque é ela que
-        // define o vencimento de cada parcela no cronograma.
-        if (parsedInput.mesesPagamento !== undefined) {
-          patch.meses = parsedInput.mesesPagamento.length;
-          patch.mesesPagamento = [...parsedInput.mesesPagamento].sort(
-            (a, b) => a - b,
-          );
-        }
+        const patch = buildProjectFieldsPatch(parsedInput);
 
         const updated = await tx
           .update(projects)
@@ -660,6 +665,84 @@ export const updateDraftProject = submissorAction
         after as Record<string, unknown>,
       ),
     });
+
+    return { project: after };
+  });
+
+// AUDIT/06 §1.2/§1.3: em validação, a única action de escrita era
+// updateDraftProject, que recusa qualquer stage diferente de "rascunho" — na
+// prática, "editar em validação" só sabia mudar o nome do projeto no banco
+// (nada realmente editável chegava lá). Q23/Q38: só super_admin altera um
+// projeto em validação, e pode alterar qualquer campo (mesmo conjunto de
+// updateDraftProject, reusando o patch builder acima). Cada alteração:
+// (1) grava snapshot de versão, (2) audita com diff explícito, (3) notifica
+// o submissor por email com a lista de campos alterados — PRD item 8.
+export const updateProjectInValidation = superAdminAction
+  .schema(updateProjectFieldsSchema)
+  .action(async ({ parsedInput, ctx }) => {
+    const { before, after, changes } = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const project = await getProjectOrThrow(tx, parsedInput.projectId);
+
+        if (project.stage !== "validacao") {
+          throw new BusinessError(
+            "Apenas projetos em validação podem ser editados por este painel.",
+          );
+        }
+
+        const patch = buildProjectFieldsPatch(parsedInput);
+        const changes = buildFieldChanges(project, patch);
+
+        const updated = await tx
+          .update(projects)
+          .set(patch)
+          .where(eq(projects.id, parsedInput.projectId))
+          .returning();
+
+        const after = updated[0];
+        if (!after) throw new BusinessError("Falha ao atualizar projeto");
+
+        await createVersionSnapshot(
+          tx,
+          parsedInput.projectId,
+          "validacao",
+          {
+            ...patch,
+            extendedData: parsedInput.extendedData,
+            _source: "updateProjectInValidation",
+          },
+          ctx.actorId,
+        );
+
+        return { before: project, after, changes };
+      },
+    );
+
+    await logProjectAudit({
+      actorId: ctx.actorId,
+      action: "project.updated_in_validation",
+      entity: "project",
+      entityId: parsedInput.projectId,
+      diff: computeDiff(
+        before as Record<string, unknown>,
+        after as Record<string, unknown>,
+      ),
+    });
+
+    // Notificação (PRD item 8) — best-effort: a alteração já foi commitada
+    // acima, uma falha de email não deve propagar erro ao super_admin nem
+    // reverter a escrita, mesmo padrão dos demais notify* deste arquivo.
+    if (changes.length > 0) {
+      try {
+        await notifyProjectUpdated(parsedInput.projectId, changes);
+      } catch (err) {
+        console.error(
+          "[projetos/update-validation] notifyProjectUpdated failed:",
+          err,
+        );
+      }
+    }
 
     return { project: after };
   });
@@ -994,6 +1077,21 @@ export const transitionProjectStage = diretorAction
         ) {
           throw new BusinessError(
             "A aprovação deve ser feita pelo painel de decisão, que registra o valor aprovado.",
+          );
+        }
+
+        // P-2.16 CORRETIVO: votacao → validacao é topologicamente válida
+        // (VALID_STAGE_TRANSITIONS) para permitir corrigir o valor pedido
+        // antes da votação, mas só super_admin pode editar um projeto em
+        // validação (Q23) — diretorAction (que também permite diretor) não
+        // basta para este retorno específico.
+        if (
+          project.stage === "votacao" &&
+          parsedInput.toStage === "validacao" &&
+          !ctx.roles.includes("super_admin")
+        ) {
+          throw new BusinessError(
+            "Apenas super_admin pode retornar o projeto para validação.",
           );
         }
 

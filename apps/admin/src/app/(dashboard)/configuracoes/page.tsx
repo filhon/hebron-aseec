@@ -84,6 +84,7 @@ type EmailTemplateSlug =
   | "projetos-contested"
   | "projetos-evaluator-designated"
   | "projetos-payment-made"
+  | "projetos-project-updated"
   | "report-reminder-7d-before"
   | "report-reminder-due-today"
   | "report-reminder-expiry"
@@ -184,6 +185,14 @@ const TEMPLATE_META: EmailTemplateMeta[] = [
     label: "Pagamento realizado",
     description: "Enviado ao submissor quando um pagamento é processado",
     variables: ["nome", "titulo", "valor", "data", "link"],
+    group: "Projetos",
+  },
+  {
+    slug: "projetos-project-updated",
+    label: "Projeto alterado em validação",
+    description:
+      "Enviado ao submissor a cada alteração feita pelo super_admin num projeto em validação",
+    variables: ["nome", "titulo", "alteracoes", "link"],
     group: "Projetos",
   },
   {
@@ -415,6 +424,18 @@ const DEFAULT_EMAIL_TEMPLATES: Record<
   <a href="{{link}}" style="background:#202C85;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;display:inline-block;">Ver extrato do projeto</a>
 </p>`,
     bodyText: `Olá, {{nome}},\n\nPagamento processado para o projeto "{{titulo}}".\nValor: {{valor}}\nData: {{data}}\n\nAcesse: {{link}}`,
+  },
+  "projetos-project-updated": {
+    subject: "Alterações no seu projeto: {{titulo}}",
+    bodyHtml: `<p>Olá, <strong>{{nome}}</strong>,</p>
+<p>A diretoria da Hebron Aseec alterou informações do projeto <strong>{{titulo}}</strong>, atualmente em validação. Confira o que mudou abaixo.</p>
+<table style="width:100%;border-collapse:collapse;margin:16px 0;background:#F9FAFB;border-radius:8px;padding:16px;">
+{{alteracoes}}
+</table>
+<p style="margin-top:20px;">
+  <a href="{{link}}" style="background:#202C85;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;display:inline-block;">Ver projeto</a>
+</p>`,
+    bodyText: `Olá, {{nome}},\n\nA diretoria alterou informações do projeto "{{titulo}}", atualmente em validação.\n\nAcesse: {{link}}`,
   },
   "report-reminder-7d-before": {
     subject: "Relatório vence em 7 dias: {{titulo}}",

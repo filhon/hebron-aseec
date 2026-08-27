@@ -13,6 +13,7 @@ import {
   XCircle,
   Building2,
   FileText,
+  Pencil,
 } from "lucide-react";
 import {
   getAuthUser,
@@ -126,13 +127,29 @@ export default async function DirectorProjectDetailPage({
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 flex flex-col gap-8">
       {/* Breadcrumb */}
-      <Link
-        href="/pipeline"
-        className="inline-flex items-center gap-1.5 text-sm text-(--fg-muted) hover:text-(--fg) transition-colors"
-      >
-        <ChevronLeft className="w-4 h-4" aria-hidden />
-        Pipeline
-      </Link>
+      <div className="flex items-center justify-between gap-3">
+        <Link
+          href="/pipeline"
+          className="inline-flex items-center gap-1.5 text-sm text-(--fg-muted) hover:text-(--fg) transition-colors"
+        >
+          <ChevronLeft className="w-4 h-4" aria-hidden />
+          Pipeline
+        </Link>
+
+        {/* Editar em validação — só super_admin (Q23, Q38, P-2.16
+            CORRETIVO): updateProjectInValidation é a única action de
+            escrita que aceita stage validacao, e só ela avisa o submissor
+            por email a cada alteração. */}
+        {isSuperAdmin && project.stage === "validacao" && (
+          <Link
+            href={`/pipeline/${project.id}/editar`}
+            className="inline-flex items-center gap-1.5 rounded-md border border-(--border) px-3 py-1.5 text-xs font-semibold text-(--fg-muted) hover:border-(--brand) hover:text-(--brand) transition-colors"
+          >
+            <Pencil className="w-3.5 h-3.5" aria-hidden />
+            Editar projeto
+          </Link>
+        )}
+      </div>
 
       {/* Main content — 3 column layout on large screens */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
