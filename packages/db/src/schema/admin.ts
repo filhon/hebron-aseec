@@ -52,6 +52,10 @@ export const auditActionEnum = adminSchema.enum("audit_action", [
   // Mudar de voto enquanto a votação está aberta (P-2.8d, PATCH-028), added
   // via ALTER TYPE in 0092_projetos_vote_changed_audit_action.sql
   "vote.changed",
+  // Painel de decisão da diretoria grava valor aprovado, distinto da simples
+  // transição de estágio (P-2.15 CORRETIVO), added via ALTER TYPE in
+  // 0094_projetos_decision_audit_action.sql
+  "project.decision_registered",
   "evaluation.assigned",
   "evaluation.submitted",
   "contestation.created",

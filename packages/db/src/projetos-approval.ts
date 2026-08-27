@@ -50,35 +50,50 @@ export interface ApprovalDbHandle {
  * `mesesPagamento` é opcional na assinatura (e não parte do `Pick`) para que
  * chamadores que montam o projeto à mão continuem válidos; os dois call sites
  * reais (`transitionProjectStage` e o cron de homologação) passam a linha
- * inteira de `projects`, então a coluna chega sozinha.
+ * inteira de `projects`, então a coluna chega sozinha. Mesmo raciocínio para
+ * `approvedAmount`/`approvedParcelas`/`approvedMesesPagamento` (P-2.15
+ * CORRETIVO): quando o painel de decisão da diretoria grava um valor
+ * aprovado diferente do pedido (ou divide o pontual em parcelas), estas
+ * colunas têm prioridade; ausentes (projeto aprovado antes da migration 0093,
+ * ou decisão sem alterar o valor pedido), o fallback é bit a bit o
+ * comportamento anterior — `budgetTotal`/`parcelas`/`mesesPagamento`.
  */
 export async function generatePaymentSchedule(
   project: Pick<
     typeof projects.$inferSelect,
     "id" | "parcelas" | "budgetTotal" | "evaluationYear" | "meses"
-  > & { mesesPagamento?: number[] | null },
+  > & {
+    mesesPagamento?: number[] | null;
+    approvedAmount?: string | null;
+    approvedParcelas?: number | null;
+    approvedMesesPagamento?: number[] | null;
+  },
   dbHandle: ApprovalDbHandle = db,
 ): Promise<void> {
-  if (!project.parcelas || !project.budgetTotal || !project.evaluationYear)
-    return;
+  const effectiveAmount = project.approvedAmount ?? project.budgetTotal;
+  const effectiveParcelas = project.approvedParcelas ?? project.parcelas;
+  const effectiveMesesPagamento =
+    project.approvedMesesPagamento ?? project.mesesPagamento;
+
+  if (!effectiveParcelas || !effectiveAmount || !project.evaluationYear) return;
 
   const evalYear = project.evaluationYear;
 
-  // Meses escolhidos (ordem crescente) ou, para projeto anterior a 0091,
-  // o fallback histórico Jan–N.
-  const chosen = project.mesesPagamento;
+  // Meses escolhidos (ordem crescente) ou, para projeto anterior a 0091 (ou
+  // decisão que não dividiu o valor aprovado), o fallback histórico Jan–N.
+  const chosen = effectiveMesesPagamento;
   const months =
     chosen && chosen.length > 0
       ? [...chosen].sort((a, b) => a - b)
       : Array.from(
-          { length: project.meses ?? project.parcelas },
+          { length: project.meses ?? effectiveParcelas },
           (_, i) => (i % 12) + 1,
         );
 
   // Divisão em centavos inteiros: `resto` parcelas recebem um centavo a mais.
   // O divisor é o número de linhas emitidas (não `parcelas`), que é o que
   // garante soma exata mesmo numa linha antiga em que meses ≠ parcelas.
-  const totalCents = Math.round(parseFloat(project.budgetTotal) * 100);
+  const totalCents = Math.round(parseFloat(effectiveAmount) * 100);
   const base = Math.floor(totalCents / months.length);
   const resto = totalCents - base * months.length;
 
@@ -130,22 +145,31 @@ export async function onProjectApproved(
     .select({
       title: projects.title,
       budgetTotal: projects.budgetTotal,
+      approvedAmount: projects.approvedAmount,
       evaluationYear: projects.evaluationYear,
     })
     .from(projects)
     .where(eq(projects.id, projectId))
     .limit(1);
 
-  if (!project?.budgetTotal) return;
+  if (!project) return;
+
+  // P-2.15 CORRETIVO: o centro de custo nasce com o valor APROVADO — sem
+  // isso, aprovar R$ 30 mil de um pedido de R$ 50 mil deixava o teto do
+  // centro de custo (e todo "executado vs. orçado" que depende dele) em
+  // R$ 50 mil. Fallback para budgetTotal preserva byte a byte o
+  // provisionamento de projetos aprovados antes da migration 0093.
+  const effectiveBudget = project.approvedAmount ?? project.budgetTotal;
+  if (!effectiveBudget) return;
 
   const year = project.evaluationYear ?? new Date().getFullYear();
   // Code format: PROJ-{year}-{last 8 chars of UUID} — legível e único
   const suffix = projectId.replace(/-/g, "").slice(-8).toUpperCase();
   const code = `PROJ-${year}-${suffix}`;
-  // Aliased para o closure abaixo — o estreitamento de `project?.budgetTotal`
+  // Aliased para o closure abaixo — o estreitamento de `effectiveBudget`
   // não atravessa a fronteira de função do callback de db.transaction.
   const projectTitle = project.title;
-  const projectBudgetTotal = project.budgetTotal;
+  const projectBudgetTotal = effectiveBudget;
 
   const actorId = await getSystemActorId();
 

@@ -263,6 +263,11 @@ export async function runHomologacaoAutoApprove(): Promise<{
         });
 
         if (decision === "approved") {
+          // P-2.15 CORRETIVO: aprovação automática nunca passa pelo painel
+          // de decisão, então `updated.approvedAmount` é sempre NULL aqui —
+          // generatePaymentSchedule/onProjectApproved já caem sozinhos no
+          // fallback `approvedAmount ?? budgetTotal` (mesma coerência da
+          // aprovação manual, sem precisar bloquear o cron pela Q16).
           if (updated.parcelas && updated.meses && updated.budgetTotal) {
             await generatePaymentSchedule(updated, tx);
           }

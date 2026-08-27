@@ -512,6 +512,7 @@ export type SubmissorProjectDetail = {
   stage: string;
   tipo: "anual" | "pontual";
   budgetTotal: number;
+  approvedAmount: number | null;
   parcelas: number | null;
   evaluationYear: number | null;
   orgNome: string;
@@ -572,6 +573,7 @@ export async function getSubmissorProjectDetail(
         stage: projects.stage,
         tipo: projects.tipo,
         budgetTotal: projects.budgetTotal,
+        approvedAmount: projects.approvedAmount,
         parcelas: projects.parcelas,
         evaluationYear: projects.evaluationYear,
         objectives: projects.objectives,
@@ -673,6 +675,10 @@ export async function getSubmissorProjectDetail(
       stage: project.stage,
       tipo: project.tipo,
       budgetTotal: parseFloat(project.budgetTotal ?? "0"),
+      approvedAmount:
+        project.approvedAmount !== null
+          ? parseFloat(project.approvedAmount)
+          : null,
       parcelas: project.parcelas,
       evaluationYear: project.evaluationYear,
       orgNome: project.orgNome ?? "Instituição",
@@ -905,6 +911,11 @@ export type DirectorProjectDetail = {
   stage: string;
   tipo: "anual" | "pontual";
   budgetTotal: number;
+  approvedAmount: number | null;
+  approvedParcelas: number | null;
+  approvedMesesPagamento: number[] | null;
+  approvedNotes: string | null;
+  approvedDecisionAt: Date | null;
   parcelas: number | null;
   scoreAi: number | null;
   duplicateCandidates: DuplicateCandidateSnapshot[];
@@ -948,6 +959,11 @@ export async function getDirectorProjectDetail(
         stage: projects.stage,
         tipo: projects.tipo,
         budgetTotal: projects.budgetTotal,
+        approvedAmount: projects.approvedAmount,
+        approvedParcelas: projects.approvedParcelas,
+        approvedMesesPagamento: projects.approvedMesesPagamento,
+        approvedNotes: projects.approvedNotes,
+        approvedDecisionAt: projects.approvedDecisionAt,
         parcelas: projects.parcelas,
         scoreAi: projects.scoreAi,
         duplicateCandidates: projects.duplicateCandidates,
@@ -1150,6 +1166,14 @@ export async function getDirectorProjectDetail(
       stage: project.stage,
       tipo: project.tipo,
       budgetTotal: parseFloat(project.budgetTotal ?? "0"),
+      approvedAmount:
+        project.approvedAmount !== null
+          ? parseFloat(project.approvedAmount)
+          : null,
+      approvedParcelas: project.approvedParcelas,
+      approvedMesesPagamento: project.approvedMesesPagamento,
+      approvedNotes: project.approvedNotes,
+      approvedDecisionAt: project.approvedDecisionAt,
       parcelas: project.parcelas,
       scoreAi: project.scoreAi !== null ? parseFloat(project.scoreAi) : null,
       duplicateCandidates: project.duplicateCandidates ?? [],

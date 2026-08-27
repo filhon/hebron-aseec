@@ -304,6 +304,62 @@ export const deleteProjectSchema = z.object({
 
 export type DeleteProjectInput = z.infer<typeof deleteProjectSchema>;
 
+// ─── registerProjectDecisionSchema ─────────────────────────────────────────
+// Painel de decisão da diretoria (P-2.15 CORRETIVO) — grava o valor
+// EFETIVAMENTE aprovado, distinto de valorTotal/budgetTotal (o valor
+// pedido pelo submissor). BRAIN §6.2 "Valor aprovado": informado pela
+// diretoria no ato da aprovação, pode ser parcial; no pontual, pode ser
+// dividido em parcelas mesmo sendo pagamento único por padrão (Q9, Q54).
+//
+// approvedParcelas/approvedMesesPagamento são opcionais, mas exigidos JUNTOS
+// — e, quando presentes, obedecem a mesma checkMesesPagamentoCoherence do
+// wizard (P-2.4b), sem reimplementar a regra.
+
+export const registerProjectDecisionSchema = z
+  .object({
+    projectId: z.string().uuid("Projeto inválido"),
+    decision: z.enum(["aprovado", "reprovado"], {
+      required_error: "Selecione uma decisão",
+    }),
+    approvedAmount: z.number().positive("Valor deve ser positivo").optional(),
+    approvedParcelas: z.number().int().min(1).max(12).optional(),
+    approvedMesesPagamento: z.array(z.number().int().min(1).max(12)).optional(),
+    notes: z.string().max(1000).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (
+      data.decision === "aprovado" &&
+      (data.approvedAmount === undefined || data.approvedAmount <= 0)
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["approvedAmount"],
+        message: "Valor aprovado é obrigatório e deve ser maior que zero",
+      });
+    }
+
+    const hasParcelas = data.approvedParcelas !== undefined;
+    const hasMeses = data.approvedMesesPagamento !== undefined;
+    if (hasParcelas !== hasMeses) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["approvedMesesPagamento"],
+        message: "Parcelas e meses de pagamento devem ser informados juntos",
+      });
+    }
+    if (data.approvedParcelas !== undefined && data.approvedMesesPagamento) {
+      checkMesesPagamentoCoherence(
+        data.approvedMesesPagamento,
+        data.approvedParcelas,
+        ctx,
+      );
+    }
+  });
+
+export type RegisterProjectDecisionInput = z.infer<
+  typeof registerProjectDecisionSchema
+>;
+
 // ─── Re-export stage enum for runtime use ─────────────────────────────────────
 
 export { projectStageEnum, projectCategoryEnum };

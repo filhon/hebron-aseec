@@ -227,6 +227,22 @@ export const projects = projetosSchema.table(
     mesesPagamento: integer("meses_pagamento").array(),
     evaluationYear: integer("evaluation_year"),
 
+    // Valor efetivamente aprovado pela diretoria no ato da decisão —
+    // distinto de budgetTotal (o valor PEDIDO). Todas nullable: projetos
+    // aprovados antes da migration 0093 ficam com NULL e o código lê
+    // `approvedAmount ?? budgetTotal` (P-2.15 CORRETIVO — AUDIT/06 §1.1,
+    // BRAIN §6.2 "Valor aprovado"). approvedParcelas/approvedMesesPagamento
+    // só fazem sentido juntos (Q54 — pontual pode ser dividido em parcelas
+    // mesmo sendo pagamento único por padrão).
+    approvedAmount: numeric("approved_amount", { precision: 12, scale: 2 }),
+    approvedParcelas: integer("approved_parcelas"),
+    approvedMesesPagamento: integer("approved_meses_pagamento").array(),
+    approvedNotes: text("approved_notes"),
+    approvedBy: uuid("approved_by").references(() => users.id),
+    approvedDecisionAt: timestamp("approved_decision_at", {
+      withTimezone: true,
+    }),
+
     // AI scoring
     scoreAi: numeric("score_ai", { precision: 5, scale: 2 }),
     scoreAiBreakdown:

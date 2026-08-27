@@ -31,6 +31,7 @@ import { DeleteProjectButton } from "../../../../components/delete-project-butto
 import { ReportRequestForm } from "../../../../components/report-request-form";
 import { ReportReviewActions } from "../../../../components/report-review-actions";
 import { VotePanelWrapper } from "../../../../components/vote-panel-wrapper";
+import { DecisionPanel } from "../../../../components/decision-panel";
 import { ProjectTimeline } from "../../../../components/project-timeline";
 import {
   DuplicateBadge,
@@ -325,6 +326,12 @@ export default async function DirectorProjectDetailPage({
                   <p className="font-bold text-(--fg) tabular-nums">
                     {BRL.format(project.budgetTotal)}
                   </p>
+                  {project.approvedAmount !== null &&
+                    project.approvedAmount !== project.budgetTotal && (
+                      <p className="text-(--fg-muted) tabular-nums">
+                        Aprovado: {BRL.format(project.approvedAmount)}
+                      </p>
+                    )}
                 </div>
                 <div>
                   <p className="text-(--fg-muted) mb-0.5 flex items-center gap-1">
@@ -487,6 +494,20 @@ export default async function DirectorProjectDetailPage({
             <VotingAdminActions
               projectId={project.id}
               quorumMet={voteSummary.quorumMet}
+            />
+          )}
+
+          {/* Decisão da diretoria — validacao (pontual) ou homologacao
+              (anual), os únicos estágios que admitem "aprovado" no mapa de
+              transições (VALID_STAGE_TRANSITIONS). Único caminho para
+              aprovar: transitionProjectStage recusa "→ aprovado" sem
+              decisão registrada (P-2.15 CORRETIVO). */}
+          {(project.stage === "validacao" ||
+            project.stage === "homologacao") && (
+            <DecisionPanel
+              projectId={project.id}
+              requestedAmount={project.budgetTotal}
+              isPontual={!isAnnual}
             />
           )}
 

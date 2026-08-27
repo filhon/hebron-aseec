@@ -1,4 +1,4 @@
-import { and, eq, isNull, not, sum } from "drizzle-orm";
+import { and, eq, isNull, ne, not, sql, sum } from "drizzle-orm";
 import { db } from "@hebron/db/client";
 import { organizationBudgets, projects } from "@hebron/db/schema";
 
@@ -35,13 +35,27 @@ async function getBudgetLimit(
   return limit || null;
 }
 
+// P-2.15 CORRETIVO: comprometido soma o valor APROVADO quando existe — sem
+// isso, aprovar R$ 30 mil de um pedido de R$ 50 mil deixava o teto da
+// instituição consumido pelos R$ 50 mil pedidos, não pelos R$ 30 mil
+// concedidos. Fallback para budgetTotal preserva o cálculo de projetos ainda
+// não decididos (e de projetos aprovados antes da migration 0093).
+//
+// `excludeProjectId` existe só para o painel de decisão (registerProjectDecision):
+// o projeto sendo decidido já está em `projects` (stage validacao/homologacao,
+// portanto contado por este SELECT via budgetTotal) — sem excluí-lo, checar o
+// novo `approvedAmount` somaria o mesmo projeto duas vezes.
 async function getCommittedBudget(
   organizationId: string,
   year: number,
+  excludeProjectId?: string,
 ): Promise<number> {
-  // Sum budgets of all non-deleted, non-reprovado projects for this org+year
   const existingResult = await db
-    .select({ total: sum(projects.budgetTotal) })
+    .select({
+      total: sum(
+        sql`coalesce(${projects.approvedAmount}, ${projects.budgetTotal})`,
+      ),
+    })
     .from(projects)
     .where(
       and(
@@ -49,6 +63,7 @@ async function getCommittedBudget(
         eq(projects.evaluationYear, year),
         isNull(projects.deletedAt),
         not(eq(projects.stage, "reprovado")),
+        excludeProjectId ? ne(projects.id, excludeProjectId) : undefined,
       ),
     );
 
@@ -59,11 +74,16 @@ export async function checkOrganizationBudget(
   organizationId: string,
   year: number,
   newProjectBudget: number,
+  excludeProjectId?: string,
 ): Promise<void> {
   const limit = await getBudgetLimit(organizationId, year);
   if (limit === null) return;
 
-  const totalExisting = await getCommittedBudget(organizationId, year);
+  const totalExisting = await getCommittedBudget(
+    organizationId,
+    year,
+    excludeProjectId,
+  );
 
   if (totalExisting + newProjectBudget > limit) {
     throw new Error(

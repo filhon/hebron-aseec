@@ -44,6 +44,7 @@ import {
   createContestationSchema,
   deleteProjectSchema,
   checkMesesPagamentoCoherence,
+  registerProjectDecisionSchema,
 } from "@hebron/validators/projetos";
 import {
   scoreProject,
@@ -983,6 +984,19 @@ export const transitionProjectStage = diretorAction
           );
         }
 
+        // P-2.15 CORRETIVO: "→ aprovado" sem decisão registrada contornava o
+        // painel de decisão em silêncio (arrasto no kanban, por exemplo) — o
+        // sistema nunca aprendia o valor efetivamente aprovado, só o pedido.
+        // registerProjectDecision (abaixo) é o único caminho para aprovar.
+        if (
+          parsedInput.toStage === "aprovado" &&
+          project.approvedDecisionAt === null
+        ) {
+          throw new BusinessError(
+            "A aprovação deve ser feita pelo painel de decisão, que registra o valor aprovado.",
+          );
+        }
+
         const now = new Date();
         const patch: Partial<typeof projects.$inferInsert> = {
           stage: parsedInput.toStage as ProjectStage,
@@ -1086,6 +1100,146 @@ export const transitionProjectStage = diretorAction
         console.error("[projetos/transition] notifyVotingOpen failed:", err);
       }
     }
+
+    return { project: afterProject };
+  });
+
+// ---------------------------------------------------------------------------
+// registerProjectDecision — o painel de decisão da diretoria (P-2.15
+// CORRETIVO). Único caminho para validacao/homologacao → aprovado: grava o
+// valor EFETIVAMENTE aprovado (distinto do pedido em budgetTotal), podendo
+// ser parcial e, no pontual, dividido em parcelas (Q9, Q54, BRAIN §6.2
+// "Valor aprovado"). transitionProjectStage recusa "→ aprovado" sem essa
+// decisão registrada.
+//
+// Gate: diretorAction — o mesmo de transitionProjectStage. A auditoria
+// (AUDIT/06 §1.1) sugeriu restringir à designação "diretor gestor"; isso NÃO
+// está no escopo deste corretivo — nenhuma resposta do Filipe determina isso
+// para Projetos (a designação gestor governa Flats/Q123/payables). Registrado
+// como dúvida aberta em SESSIONS.md, não implementado aqui.
+// ---------------------------------------------------------------------------
+
+export const registerProjectDecision = diretorAction
+  .schema(registerProjectDecisionSchema)
+  .action(async ({ parsedInput, ctx }) => {
+    const { afterProject } = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const project = await getProjectOrThrow(tx, parsedInput.projectId);
+
+        const validNext =
+          VALID_STAGE_TRANSITIONS[project.stage as ProjectStage];
+        if (!(validNext as string[]).includes(parsedInput.decision)) {
+          throw new BusinessError(
+            `Transição inválida: ${project.stage} → ${parsedInput.decision}. ` +
+              `Próximos estágios válidos: ${validNext.join(", ")}`,
+          );
+        }
+
+        const now = new Date();
+        const patch: Partial<typeof projects.$inferInsert> = {
+          stage: parsedInput.decision as ProjectStage,
+          updatedAt: now,
+          approvedBy: ctx.actorId,
+          approvedDecisionAt: now,
+          approvedNotes: parsedInput.notes ?? null,
+        };
+
+        if (parsedInput.decision === "aprovado") {
+          // Zod (registerProjectDecisionSchema) já exige approvedAmount > 0
+          // quando decision é "aprovado" — checagem redundante aqui só
+          // estreita o tipo sem non-null assertion.
+          if (parsedInput.approvedAmount === undefined) {
+            throw new BusinessError("Valor aprovado é obrigatório");
+          }
+
+          // Sem teto rígido em budget_total (Q7 prevê orçamento aumentado),
+          // mas o teto da instituição continua valendo para o valor
+          // aprovado. excludeProjectId evita contar este projeto duas vezes
+          // — ele já está em `projects` (stage validacao/homologacao) e
+          // entraria no comprometido existente via budgetTotal.
+          if (project.organizationId && project.evaluationYear) {
+            await checkOrganizationBudget(
+              project.organizationId,
+              project.evaluationYear,
+              parsedInput.approvedAmount,
+              parsedInput.projectId,
+            );
+          }
+
+          patch.approvedAt = now;
+          patch.approvedAmount = parsedInput.approvedAmount.toFixed(2);
+          patch.approvedParcelas = parsedInput.approvedParcelas ?? null;
+          patch.approvedMesesPagamento =
+            parsedInput.approvedMesesPagamento ?? null;
+        }
+
+        const updated = await tx
+          .update(projects)
+          .set(patch)
+          .where(eq(projects.id, parsedInput.projectId))
+          .returning();
+
+        const afterProject = updated[0];
+        if (!afterProject)
+          throw new BusinessError("Falha ao registrar decisão");
+
+        // Version snapshot — mesmo caminho de transitionProjectStage.
+        await createVersionSnapshot(
+          tx,
+          parsedInput.projectId,
+          parsedInput.decision as ProjectStage,
+          {
+            ...afterProject,
+            _source: "registerProjectDecision",
+            notes: parsedInput.notes,
+            transitionedAt: now.toISOString(),
+            transitionedBy: ctx.actorId,
+          },
+          ctx.actorId,
+        );
+
+        // Provisionamento financeiro na MESMA transação (P-0.14b) — reusa
+        // generatePaymentSchedule/onProjectApproved, que agora leem
+        // approvedAmount/approvedParcelas/approvedMesesPagamento com
+        // fallback para os campos pedidos.
+        if (
+          parsedInput.decision === "aprovado" &&
+          afterProject.parcelas &&
+          afterProject.meses &&
+          afterProject.budgetTotal
+        ) {
+          await withSystemRole(tx, async (sysTx) => {
+            await generatePaymentSchedule(afterProject, sysTx);
+            await onProjectApproved(parsedInput.projectId, sysTx);
+          });
+        }
+
+        await withSystemRole(tx, (sysTx) =>
+          logProjectAudit(
+            {
+              actorId: ctx.actorId,
+              action: "project.decision_registered",
+              entity: "project",
+              entityId: parsedInput.projectId,
+              diff: {
+                from: project.stage,
+                to: parsedInput.decision,
+                requestedAmount: project.budgetTotal,
+                approvedAmount: afterProject.approvedAmount,
+                approvedParcelas: afterProject.approvedParcelas,
+                approvedMesesPagamento: afterProject.approvedMesesPagamento,
+                notes: parsedInput.notes,
+                transitionedAt: afterProject.updatedAt.toISOString(),
+              },
+            },
+            sysTx,
+          ),
+        );
+
+        return { afterProject };
+      },
+    );
 
     return { project: afterProject };
   });

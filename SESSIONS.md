@@ -303,6 +303,7 @@
 | S-280  | 2026-08-26 | P-0.1d — Higiene dos contratos compartilhados (CORRETIVO)                                                                        | concluido                                                                            |
 | S-281  | 2026-08-26 | P-2.8d — Projetos: o segundo voto que se dá por registrado (CORRETIVO)                                                           | concluido                                                                            |
 | S-282  | 2026-08-26 | P-2.14b — Projetos: as regras que ficaram fora do BRAIN (CORRETIVO)                                                              | concluido                                                                            |
+| S-283  | 2026-08-27 | P-2.15 — Projetos: o valor aprovado que o sistema nunca soube registrar (CORRETIVO)                                              | concluido                                                                            |
 
 ---
 
@@ -27061,4 +27062,222 @@ Nenhum.
 
 - `BRAIN.md` (§6.2)
 - `AUDIT/06-CONFORMIDADE-REQUISITOS.md` (placar por módulo)
+
+## S-283 — P-2.15 — Projetos: o valor aprovado que o sistema nunca soube registrar (CORRETIVO)
+
+**Prompt:** `PROMPTS.md` § P-2.15
+**Branch:** `fix/P-2.15-projetos-valor-aprovado`
+**Data:** 2026-08-27
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Contexto
+
+`AUDIT/06 §1.1`: `projetos.projects` só guardava `budget_total` (o valor
+PEDIDO pelo submissor). Aprovar R$ 30 mil de um pedido de R$ 50 mil gerava
+`payment_schedules`/`financeiro.payables` de R$ 50 mil — o sistema nunca
+aprendia o valor efetivamente concedido pela diretoria.
+
+### Implementação
+
+1. **Migrations** `0093_projetos_approved_amount.sql` (colunas
+   `approved_amount numeric(12,2)`, `approved_parcelas integer`,
+   `approved_meses_pagamento integer[]`, `approved_notes text`,
+   `approved_by uuid REFERENCES public.users`, `approved_decision_at
+timestamptz` em `projetos.projects`, todas nullable) e
+   `0094_projetos_decision_audit_action.sql` (`ALTER TYPE
+admin.audit_action ADD VALUE 'project.decision_registered'`). Aplicadas
+   com sucesso no banco de dev compartilhado.
+2. **Schema Drizzle** (`packages/db/src/schema/projetos.ts`) espelha as
+   colunas novas.
+3. **`generatePaymentSchedule`** (`packages/db/src/projetos-approval.ts`)
+   passa a ler `approvedAmount ?? budgetTotal`, `approvedParcelas ??
+parcelas`, `approvedMesesPagamento ?? mesesPagamento` — fallback
+   preserva byte a byte o cronograma de projetos aprovados antes da
+   migration (coberto por teste dedicado).
+4. **`onProjectApproved`** (mesmo arquivo) — decisão de engenharia além do
+   texto literal do prompt, mas dentro do arquivo permitido e do espírito
+   do corretivo: o centro de custo (`financeiro.cost_centers.budget_total`)
+   agora nasce com `approvedAmount ?? budgetTotal`, não mais só
+   `budgetTotal`. Sem isso, "executado vs. orçado" (`getProjectBudgetExecution`)
+   continuaria comparando contra o valor pedido mesmo após uma aprovação
+   parcial. Registrado aqui por não constar nos 10 itens numerados do
+   escopo.
+5. **`checkOrganizationBudget`/`getCommittedBudget`**
+   (`packages/integrations/src/projetos.ts`) somam
+   `COALESCE(approved_amount, budget_total)`. Ganharam parâmetro opcional
+   `excludeProjectId`: sem ele, checar o valor aprovado de um projeto que
+   já existe em `projects` (stage validacao/homologacao) o contaria duas
+   vezes — uma via o `budgetTotal` já computado no comprometido existente,
+   outra via `newProjectBudget`. Não estava no texto do prompt; é a
+   consequência direta de reusar `checkOrganizationBudget` num momento em
+   que o projeto já está na tabela (submissão é diferente — o projeto
+   ainda não existe quando a função roda).
+6. **`registerProjectDecisionSchema`** (`packages/validators/src/projetos/index.ts`):
+   `projectId`, `decision` (aprovado/reprovado), `approvedAmount`
+   (obrigatório e > 0 quando aprovado), `approvedParcelas` +
+   `approvedMesesPagamento` (opcionais, exigidos juntos, reusando
+   `checkMesesPagamentoCoherence` sem duplicar a regra), `notes` (opcional,
+   sem mínimo de caracteres — o prompt não especificou um, ao contrário de
+   `createEvaluationSchema`/`createContestationSchema`; suposição registrada
+   aqui, não no código).
+7. **`registerProjectDecision`** (`apps/projetos/src/actions/projects.ts`):
+   gate `diretorAction` (mesmo de `transitionProjectStage` — a restrição a
+   "diretor gestor" sugerida pela auditoria não está implementada, ver
+   Decisões pendentes). Valida a transição pelo mesmo
+   `VALID_STAGE_TRANSITIONS`, roda `checkOrganizationBudget` com o valor
+   aprovado (excluindo o próprio projeto) antes de gravar, grava a decisão
+   e transiciona o estágio na mesma transação de
+   `transitionProjectStage` — reusando `withSystemRole` para
+   `generatePaymentSchedule`/`onProjectApproved`, `createVersionSnapshot` e
+   `logProjectAudit` com a action nova `project.decision_registered`. Em
+   reprovação, `approvedAmount`/`approvedParcelas`/`approvedMesesPagamento`
+   ficam `NULL`; `approvedBy`/`approvedDecisionAt`/`approvedNotes` são
+   gravados de qualquer forma — as três últimas descrevem "quem decidiu,
+   quando, com qual observação", não só a aprovação.
+8. **`transitionProjectStage`** recusa `→ aprovado` quando
+   `project.approvedDecisionAt === null`, com `BusinessError` explicando
+   que a aprovação passa pelo painel de decisão. Sem isso, o arrasto no
+   kanban (que já chama esta action para qualquer estágio) contornaria o
+   painel em silêncio — regressão que um teste dedicado cobre.
+9. **Cron de homologação** (`packages/jobs/src/crons/projetos.ts`) não
+   precisou de mudança funcional: a aprovação automática nunca passa por
+   `registerProjectDecision`, então `approvedAmount` chega sempre `NULL` a
+   `generatePaymentSchedule`/`onProjectApproved`, que já caem sozinhos no
+   fallback `budgetTotal`. Adicionado só um comentário documentando essa
+   coerência (item 9 do escopo pedia "garantir coerência", não bloquear o
+   cron).
+10. **UI** (`/impeccable` não invocado explicitamente como skill separada
+    nesta sessão — o painel seguiu fielmente o padrão visual já
+    estabelecido pelos componentes irmãos do mesmo diretório
+    `contestation-form.tsx`/`voting-admin-actions.tsx`/`evaluation-form.tsx`,
+    todos HTML+tokens `--hb-*`/`--brand`/`--fg-*`, sem `@hebron/ui`
+    Button/Input — G3 permite seguir a linguagem visual já presente quando
+    não há `design-refs/projetos/`, que não existe): novo componente
+    `apps/projetos/src/components/decision-panel.tsx` — Aprovar/Reprovar,
+    valor aprovado pré-preenchido com o solicitado, divisão em parcelas
+    (só para pontual, por ser o caso citado em Q54/BRAIN §6.2) e
+    observação. Montado em `(diretoria)/pipeline/[id]/page.tsx` quando o
+    estágio atual admite "aprovado" no mapa (`validacao` ou
+    `homologacao`). "Solicitado × aprovado" exibido sem alarde visual (uma
+    linha muted abaixo do valor) tanto no detalhe da diretoria quanto no
+    do submissor, só quando os dois valores diferem.
+
+### Extensões fora dos 10 itens numerados (arquivos não listados em "Arquivos permitidos")
+
+G1: "se faltar um arquivo de infraestrutura óbvio, crie-o e registre como
+débito/decisão". Dois arquivos fora da lista foram necessários e editados:
+
+- `packages/db/src/schema/admin.ts` — o enum `auditActionEnum` (Drizzle)
+  precisa listar `'project.decision_registered'` para o tipo `AuditAction`
+  aceitar o valor; todo prompt anterior que adicionou audit action
+  (0088/0092/etc.) também tocou este arquivo, mesmo sem estar listado nos
+  seus próprios "Arquivos permitidos".
+- `apps/projetos/src/lib/audit.ts` — o union type `ProjectAuditAction`
+  (usado por `logProjectAudit`, que `registerProjectDecision`/
+  `transitionProjectStage` já usavam) precisa do mesmo valor novo, senão o
+  typecheck falha.
+
+### Verificação
+
+- `pnpm turbo lint typecheck` nos pacotes tocados (`@hebron/db`,
+  `@hebron/integrations`, `@hebron/validators`, `@hebron/jobs`,
+  `@hebron/projetos`): verde.
+- `pnpm exec next build` (direto, não via turbo) em `apps/projetos`: verde,
+  14 rotas geradas, `/pipeline/[id]` inclui o novo painel (8.24 kB vs.
+  6.85 kB antes). Uma execução via `turbo build` no meio da sessão
+  crashou com `TypeError: The "data" argument must be of type string...`
+  — reproduzido 2x via turbo, mas o build direto (`next build`) e um
+  `git stash` de todo o diff (build limpo na base) isolaram a causa como
+  ambiental/turbo (cache ou concorrência), não uma regressão do código;
+  registrado para quem revisar não se assustar se vir o mesmo em `turbo
+build` isolado — `next build` direto é a fonte de verdade aqui.
+- Suíte nova `apps/projetos/src/__tests__/approved-amount.test.ts` (10
+  testes, isolada — `pnpm exec vitest run` no app, não `pnpm turbo test`
+  no monorepo inteiro, per nota de rodapé do prompt): verde. Cobre os 8
+  critérios de aceite, incluindo o `COALESCE`/`excludeProjectId` de
+  `checkOrganizationBudget` com um cenário que discrimina o comportamento
+  antigo do novo (comprometido de 30.000, não 90.000, quando um projeto já
+  tem `approvedAmount` menor que `budgetTotal`).
+- `apps/projetos` suíte completa isolada (`pnpm exec vitest run`, não
+  `pnpm turbo test`): 16 arquivos, 173 testes, verde — nenhuma regressão
+  nos fluxos existentes (inclui `flow.test.ts` que aprova via `db.update`
+  direto, fora da action, então não passa pelo novo gate de
+  `transitionProjectStage`).
+- `packages/db/src/__tests__/projetos-approval.test.ts` e
+  `packages/jobs/src/__tests__/projetos-homologacao.test.ts` isolados:
+  verdes — confirmam que o fallback não alterou o comportamento do cron
+  nem da chamada direta de `onProjectApproved`/`generatePaymentSchedule`
+  sem os campos novos.
+- `apps/financeiro` suíte completa isolada: 1 falha pré-existente, sem
+  relação com este diff (nenhum arquivo de `apps/financeiro` foi tocado) —
+  `governance.test.ts > createWeeklyBatch usa o texto salvo em
+admin.email_templates`: espera "1 conta(s)", recebe "2 conta(s))"
+  (reproduzido isolado 2x, consistente). Padrão já documentado em memória
+  de sessões anteriores (drift de fixture em banco de dev compartilhado);
+  novo achado, registrado aqui pela primeira vez.
+
+### Decisões pendentes (não implementadas, registradas para não serem redescobertas)
+
+- **Designação "diretor gestor"**: `AUDIT/06 §1.1` sugeriu restringir
+  `registerProjectDecision` a essa designação (que hoje governa Flats,
+  payables — Q123/Q133). Nenhuma resposta do Filipe determina isso para
+  Projetos; o gate ficou `diretorAction` (qualquer diretor/super_admin),
+  igual a `transitionProjectStage`. Pergunta em aberto para o Filipe.
+- **RLS pré-existente bloqueia diretor comum em projeto `validacao`**: a
+  policy `projects_select_reviewer` (`0007_projetos_rls.sql`) só cobre
+  `stage IN (votacao, homologacao, aprovado, reprovado, em_execucao,
+concluido)` — **não** `validacao`. Como todo projeto pontual decide em
+  `validacao` (pula votação/homologação), um diretor comum (não
+  super_admin) não consegue sequer LER — muito menos aprovar — um pontual
+  via `registerProjectDecision`; só `super_admin` tem SELECT irrestrito
+  (`projects_select_admin`). Achado já registrado por uma sessão anterior
+  (P-2.12b, `state-machine.test.ts`) como "fora do escopo de arquivo" —
+  continua fora do escopo aqui: a lista de arquivos permitidos deste
+  corretivo não inclui uma migration de RLS além das duas específicas
+  (`approved_amount`/`decision_audit_action`). Os testes de aprovação
+  pontual usam `super_admin` como ator para exercitar a action real sem
+  tropeçar nesta lacuna. **Bloqueia o uso real do recurso por um diretor
+  comum em projetos pontuais** — candidato a corretivo próprio.
+- **Email de aprovação sem valor aprovado**: `AUDIT/06 §1.1`/PRD item 9
+  pedem o valor no email de aprovação. `notifyProjectDecision`
+  (`packages/jobs/src/notify/projetos.ts`) já existe mas não tem NENHUM
+  caller na app (achado de sessão anterior, P-0.14) — `registerProjectDecision`
+  não passou a chamá-la porque o arquivo não está entre os permitidos
+  deste corretivo e o e-mail em si não consta dos 10 itens numerados do
+  escopo. Continua sem valor a informar.
+
+### Débitos fechados
+
+- Valor aprovado ausente no schema (`AUDIT/06 §1.1`) — fechado por esta
+  sessão.
+
+### Débitos novos
+
+- RLS `validacao` para diretor comum (acima) — bloqueia aprovação de
+  pontual por um diretor que não seja super_admin.
+- `governance.test.ts` (`apps/financeiro`) — drift de fixture no banco de
+  dev compartilhado, não relacionado a este diff (acima).
+- Email de aprovação/reprovação continua sem `registerProjectDecision`
+  como caller de `notifyProjectDecision` — sem valor aprovado, sem
+  notificação alguma no caminho manual.
+
+### Arquivos modificados
+
+- `packages/db/src/migrations/0093_projetos_approved_amount.sql` (novo)
+- `packages/db/src/migrations/0094_projetos_decision_audit_action.sql` (novo)
+- `packages/db/src/schema/projetos.ts`
+- `packages/db/src/schema/admin.ts` (fora da lista original — G1)
+- `packages/db/src/projetos-approval.ts`
+- `packages/integrations/src/projetos.ts`
+- `packages/validators/src/projetos/index.ts`
+- `apps/projetos/src/actions/projects.ts`
+- `apps/projetos/src/lib/audit.ts` (fora da lista original — G1)
+- `apps/projetos/src/lib/queries.ts`
+- `apps/projetos/src/app/(diretoria)/pipeline/[id]/page.tsx`
+- `apps/projetos/src/app/(submissor)/[id]/page.tsx`
+- `apps/projetos/src/components/decision-panel.tsx` (novo)
+- `packages/jobs/src/crons/projetos.ts` (comentário, sem mudança funcional)
+- `apps/projetos/src/__tests__/approved-amount.test.ts` (novo)
+- `SESSIONS.md` (esta entrada + linha no índice)
 - `SESSIONS.md` (esta entrada + linha no índice)

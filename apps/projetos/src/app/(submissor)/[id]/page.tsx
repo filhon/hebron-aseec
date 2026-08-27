@@ -164,6 +164,12 @@ export default async function ProjectDetailPage({
               <p className="text-sm font-bold text-(--fg) tabular-nums">
                 {BRL.format(project.budgetTotal)}
               </p>
+              {project.approvedAmount !== null &&
+                project.approvedAmount !== project.budgetTotal && (
+                  <p className="text-xs text-(--fg-muted) tabular-nums">
+                    Aprovado: {BRL.format(project.approvedAmount)}
+                  </p>
+                )}
             </div>
 
             <div>

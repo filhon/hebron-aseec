@@ -11608,20 +11608,20 @@ budget_total)`.
 
 **Critérios de aceite:**
 
-- [ ] Aprovar um pontual de R$ 50.000 com valor aprovado de R$ 30.000 gera
+- [x] Aprovar um pontual de R$ 50.000 com valor aprovado de R$ 30.000 gera
       `payment_schedules` **e** `financeiro.payables` somando exatamente
       R$ 30.000 (teste de integração, não unitário)
-- [ ] Aprovar dividindo em 3 parcelas um pontual sem parcelas gera 3 linhas nos
+- [x] Aprovar dividindo em 3 parcelas um pontual sem parcelas gera 3 linhas nos
       meses escolhidos, somando o valor aprovado ao centavo
-- [ ] `transitionProjectStage(projectId, "aprovado")` sem decisão registrada
+- [x] `transitionProjectStage(projectId, "aprovado")` sem decisão registrada
       falha com mensagem de negócio
-- [ ] Projeto aprovado **antes** desta migration continua com cronograma
+- [x] Projeto aprovado **antes** desta migration continua com cronograma
       inalterado (fallback para `budget_total`)
-- [ ] `getCommittedBudget` considera o valor aprovado quando existe
-- [ ] Entrada `project.decision_registered` no `admin.audit_log` com o diff
+- [x] `getCommittedBudget` considera o valor aprovado quando existe
+- [x] Entrada `project.decision_registered` no `admin.audit_log` com o diff
       solicitado → aprovado
-- [ ] RLS: diretor grava a decisão pela action; submissor não
-- [ ] Lint passa · Types passam
+- [x] RLS: diretor grava a decisão pela action; submissor não
+- [x] Lint passa · Types passam
 
 **Notas:**
 
