@@ -28,6 +28,7 @@ import {
   projectCategories,
   compactVersions,
   contestations,
+  submitterContestations,
   projectAttachments,
   notifications,
   organizations,
@@ -42,6 +43,8 @@ import {
   createAnnualProjectSchema,
   createPunctualProjectSchema,
   createContestationSchema,
+  createSubmitterContestationSchema,
+  resolveSubmitterContestationSchema,
   deleteProjectSchema,
   registerProjectDecisionSchema,
   updateProjectFieldsSchema,
@@ -88,8 +91,12 @@ import {
   notifyVotingOpen,
   notifyContestation,
   notifyProjectUpdated,
+  notifySubmitterContestationOpened,
+  notifySubmitterContestationResolved,
   type ProjectFieldChangeRaw,
 } from "../lib/notifications";
+import { getSubmitterContestationDeadline } from "../lib/contestation-deadline";
+import { getLatestContestableVersion } from "../lib/contestable-version";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1439,6 +1446,163 @@ export const createContestation = conselheiroDiretorAction
     }
 
     return { contestation, stageReverted: "votacao" };
+  });
+
+// ---------------------------------------------------------------------------
+// createSubmitterContestation — P-2.17 CORRETIVO, PATCH-029. Distinta de
+// createContestation acima (contestação de diretor/conselheiro na
+// homologação, devolve o projeto a votacao). Esta NÃO muda estágio nenhum
+// — "uma vez por alteração": o evento contestado é o mais recente ainda sem
+// contestação (getLatestContestableVersion), nunca escolhido pelo cliente.
+// ---------------------------------------------------------------------------
+
+export const createSubmitterContestation = submissorAction
+  .schema(createSubmitterContestationSchema)
+  .action(async ({ parsedInput, ctx }) => {
+    const contestation = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const project = await getProjectOrThrow(tx, parsedInput.projectId);
+
+        const isSuperAdmin = ctx.roles.includes("super_admin");
+        if (!isSuperAdmin && project.submitterId !== ctx.actorId) {
+          throw new BusinessError(
+            "Apenas o submissor pode contestar o próprio projeto",
+          );
+        }
+
+        if (project.stage !== "validacao") {
+          throw new BusinessError(
+            "Contestações do submissor só podem ser feitas durante a validação",
+          );
+        }
+
+        const deadline = await getSubmitterContestationDeadline(tx);
+        if (deadline && new Date() > deadline) {
+          throw new BusinessError(
+            "Prazo para contestação encerrado — o projeto está a menos de 7 dias da próxima reunião",
+          );
+        }
+
+        const contestable = await getLatestContestableVersion(
+          tx,
+          parsedInput.projectId,
+        );
+        if (!contestable) {
+          throw new BusinessError(
+            "Nenhuma alteração da diretoria disponível para contestação",
+          );
+        }
+
+        const inserted = await tx
+          .insert(submitterContestations)
+          .values({
+            projectId: parsedInput.projectId,
+            projectVersionId: contestable.id,
+            submitterId: project.submitterId,
+            reason: parsedInput.reason,
+            status: "pending",
+          })
+          .returning();
+
+        const contestation = inserted[0];
+        if (!contestation)
+          throw new BusinessError("Falha ao registrar contestação");
+
+        return contestation;
+      },
+    );
+
+    await logProjectAudit({
+      actorId: ctx.actorId,
+      action: "submitter_contestation.created",
+      entity: "submitter_contestation",
+      entityId: contestation.id,
+      diff: {
+        projectId: parsedInput.projectId,
+        projectVersionId: contestation.projectVersionId,
+      },
+    });
+
+    // Notificação (Q32) — best-effort: a contestação já foi commitada acima.
+    try {
+      await notifySubmitterContestationOpened(contestation.id);
+    } catch (err) {
+      console.error(
+        "[projetos/submitter-contestation] notifySubmitterContestationOpened failed:",
+        err,
+      );
+    }
+
+    return { contestation };
+  });
+
+// ---------------------------------------------------------------------------
+// resolveSubmitterContestation — super_admin aceita/rejeita com resposta
+// textual obrigatória (P-2.17 CORRETIVO, PATCH-029: "o ciclo fecha"). Não
+// reverte o campo alterado nem muda o estágio do projeto.
+// ---------------------------------------------------------------------------
+
+export const resolveSubmitterContestation = superAdminAction
+  .schema(resolveSubmitterContestationSchema)
+  .action(async ({ parsedInput, ctx }) => {
+    const contestation = await withAuthenticatedContext(
+      { actorId: ctx.actorId },
+      async (tx) => {
+        const rows = await tx
+          .select()
+          .from(submitterContestations)
+          .where(eq(submitterContestations.id, parsedInput.contestationId))
+          .limit(1);
+
+        const existing = rows[0];
+        if (!existing) throw new BusinessError("Contestação não encontrada");
+        if (existing.status !== "pending") {
+          throw new BusinessError("Esta contestação já foi resolvida");
+        }
+
+        const now = new Date();
+        const updated = await tx
+          .update(submitterContestations)
+          .set({
+            status: parsedInput.decision,
+            response: parsedInput.response,
+            resolvedBy: ctx.actorId,
+            resolvedAt: now,
+          })
+          .where(eq(submitterContestations.id, parsedInput.contestationId))
+          .returning();
+
+        const contestation = updated[0];
+        if (!contestation)
+          throw new BusinessError("Falha ao resolver contestação");
+
+        return contestation;
+      },
+    );
+
+    await logProjectAudit({
+      actorId: ctx.actorId,
+      action: "submitter_contestation.resolved",
+      entity: "submitter_contestation",
+      entityId: contestation.id,
+      diff: {
+        projectId: contestation.projectId,
+        status: contestation.status,
+        response: contestation.response,
+      },
+    });
+
+    try {
+      await notifySubmitterContestationResolved(contestation.id);
+    } catch (err) {
+      console.error(
+        "[projetos/submitter-contestation] notifySubmitterContestationResolved failed:",
+        err,
+      );
+    }
+
+    return { contestation };
   });
 
 // ---------------------------------------------------------------------------

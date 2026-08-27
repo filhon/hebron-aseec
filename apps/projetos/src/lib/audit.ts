@@ -21,6 +21,8 @@ export type ProjectAuditAction =
   | "evaluation.assigned"
   | "evaluation.submitted"
   | "contestation.created"
+  | "submitter_contestation.created"
+  | "submitter_contestation.resolved"
   | "report.created"
   | "report.submitted"
   | "report.reviewed"

@@ -291,6 +291,35 @@ export const createContestationSchema = z.object({
 
 export type CreateContestationInput = z.infer<typeof createContestationSchema>;
 
+// ─── createSubmitterContestationSchema / resolveSubmitterContestationSchema ──
+// Contestação do submissor durante a validação (P-2.17 CORRETIVO, PATCH-029,
+// Q11/Q32/Q33/Q75) — distinta de createContestationSchema acima (essa é a
+// contestação de diretor/conselheiro na homologação). O evento de alteração
+// contestado é resolvido pelo servidor (o mais recente ainda sem
+// contestação), não escolhido pelo cliente — "uma vez por alteração" sem
+// expor project_version_id na superfície da action.
+
+export const createSubmitterContestationSchema = z.object({
+  projectId: z.string().uuid("Projeto inválido"),
+  reason: z.string().min(30, "Descreva o motivo da contestação").max(2000),
+});
+
+export type CreateSubmitterContestationInput = z.infer<
+  typeof createSubmitterContestationSchema
+>;
+
+export const resolveSubmitterContestationSchema = z.object({
+  contestationId: z.string().uuid("Contestação inválida"),
+  decision: z.enum(["accepted", "rejected"], {
+    required_error: "Selecione uma decisão",
+  }),
+  response: z.string().min(10, "Descreva a resposta").max(2000),
+});
+
+export type ResolveSubmitterContestationInput = z.infer<
+  typeof resolveSubmitterContestationSchema
+>;
+
 // ─── updateProjectFieldsSchema ────────────────────────────────────────────────
 // Campos editáveis de um projeto já existente — compartilhado por
 // updateDraftProject (submissor, stage rascunho) e updateProjectInValidation

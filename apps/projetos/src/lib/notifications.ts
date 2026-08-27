@@ -9,6 +9,7 @@ import {
   projects,
   organizations,
   emailTemplates,
+  submitterContestations,
 } from "@hebron/db/schema";
 import { ProjectSubmittedEmail } from "@hebron/email/templates/project-submitted";
 import { ProjectStatusChangeEmail } from "@hebron/email/templates/project-status-change";
@@ -692,6 +693,161 @@ export async function notifyProjectUpdated(
               projectUrl: url,
             }),
           },
+    }),
+  ]);
+}
+
+// ---------------------------------------------------------------------------
+// Submitter contestation opened → super_admins (in_app + email) — P-2.17
+// CORRETIVO, PATCH-029. Distinta de notifyContestation acima (contestação
+// de diretor/conselheiro na homologação, notifica diretores/conselheiros).
+// ---------------------------------------------------------------------------
+
+const CONTESTATION_REASON_PREVIEW_LENGTH = 140;
+
+export async function notifySubmitterContestationOpened(
+  contestationId: string,
+): Promise<void> {
+  const [row] = await db
+    .select({
+      projectId: submitterContestations.projectId,
+      reason: submitterContestations.reason,
+      projectTitle: projects.title,
+      submitterName: users.fullName,
+    })
+    .from(submitterContestations)
+    .innerJoin(projects, eq(projects.id, submitterContestations.projectId))
+    .innerJoin(users, eq(users.id, submitterContestations.submitterId))
+    .where(eq(submitterContestations.id, contestationId))
+    .limit(1);
+
+  if (!row) return;
+
+  const admins = await getUsersByRoles(["super_admin"]);
+  if (!admins.length) return;
+
+  const url = buildDiretoriaProjectUrl(row.projectId);
+  const href = diretoriaHref(row.projectId);
+  const resendApiKey = process.env.RESEND_API_KEY;
+  const title = `Contestação do submissor: ${row.projectTitle}`;
+  const body = `${row.submitterName ?? "O submissor"} contestou uma alteração feita durante a validação.`;
+  const reasonPreview =
+    row.reason.length > CONTESTATION_REASON_PREVIEW_LENGTH
+      ? `${row.reason.slice(0, CONTESTATION_REASON_PREVIEW_LENGTH)}…`
+      : row.reason;
+
+  await Promise.allSettled(
+    admins.flatMap((admin) => [
+      createNotification({
+        insert: makeInsert(),
+        data: {
+          userId: admin.id,
+          channel: "in_app",
+          type: "submitter_contestation.created",
+          title,
+          body,
+          payload: { module: "projetos", projectId: row.projectId, href },
+        },
+      }),
+      createNotification({
+        insert: makeInsert(),
+        resendApiKey,
+        data: {
+          userId: admin.id,
+          channel: "email",
+          type: "submitter_contestation.created",
+          title,
+          body,
+          payload: { module: "projetos", projectId: row.projectId, href },
+        },
+        email: {
+          to: admin.email,
+          subject: title,
+          template: React.createElement(ProjectStatusChangeEmail, {
+            recipientName: admin.fullName ?? admin.email,
+            projectTitle: row.projectTitle,
+            statusEvent:
+              "submitter_contestation_opened" satisfies ProjectStatusEvent,
+            extra: reasonPreview,
+            projectUrl: url,
+          }),
+        },
+      }),
+    ]),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Submitter contestation resolved → submissor (in_app + email) — P-2.17
+// CORRETIVO, PATCH-029.
+// ---------------------------------------------------------------------------
+
+export async function notifySubmitterContestationResolved(
+  contestationId: string,
+): Promise<void> {
+  const [row] = await db
+    .select({
+      projectId: submitterContestations.projectId,
+      status: submitterContestations.status,
+      response: submitterContestations.response,
+      submitterId: submitterContestations.submitterId,
+      projectTitle: projects.title,
+      submitterName: users.fullName,
+      submitterEmail: users.email,
+    })
+    .from(submitterContestations)
+    .innerJoin(projects, eq(projects.id, submitterContestations.projectId))
+    .innerJoin(users, eq(users.id, submitterContestations.submitterId))
+    .where(eq(submitterContestations.id, contestationId))
+    .limit(1);
+
+  if (!row || row.status === "pending") return;
+
+  const url = buildSubmissorProjectUrl(row.projectId);
+  const href = submissorHref(row.projectId);
+  const resendApiKey = process.env.RESEND_API_KEY;
+  const accepted = row.status === "accepted";
+  const statusEvent: ProjectStatusEvent = accepted
+    ? "submitter_contestation_accepted"
+    : "submitter_contestation_rejected";
+  const title = `Contestação ${accepted ? "aceita" : "respondida"}: ${row.projectTitle}`;
+  const body = row.response ?? "A diretoria respondeu sua contestação.";
+  const displayName = row.submitterName ?? row.submitterEmail;
+
+  await Promise.allSettled([
+    createNotification({
+      insert: makeInsert(),
+      data: {
+        userId: row.submitterId,
+        channel: "in_app",
+        type: "submitter_contestation.resolved",
+        title,
+        body,
+        payload: { module: "projetos", projectId: row.projectId, href },
+      },
+    }),
+    createNotification({
+      insert: makeInsert(),
+      resendApiKey,
+      data: {
+        userId: row.submitterId,
+        channel: "email",
+        type: "submitter_contestation.resolved",
+        title,
+        body,
+        payload: { module: "projetos", projectId: row.projectId, href },
+      },
+      email: {
+        to: row.submitterEmail,
+        subject: title,
+        template: React.createElement(ProjectStatusChangeEmail, {
+          recipientName: displayName,
+          projectTitle: row.projectTitle,
+          statusEvent,
+          extra: row.response,
+          projectUrl: url,
+        }),
+      },
     }),
   ]);
 }

@@ -27,6 +27,7 @@ import { EvaluationCard } from "../../../../components/evaluation-card";
 import { EvaluatorPanel } from "../../../../components/evaluator-panel";
 import { EvaluationForm } from "../../../../components/evaluation-form";
 import { ContestationForm } from "../../../../components/contestation-form";
+import { SubmitterContestationPanel } from "../../../../components/submitter-contestation-panel";
 import { VotingAdminActions } from "../../../../components/voting-admin-actions";
 import { DeleteProjectButton } from "../../../../components/delete-project-button";
 import { ReportRequestForm } from "../../../../components/report-request-form";
@@ -272,7 +273,16 @@ export default async function DirectorProjectDetailPage({
           {/* Duplicate detection (P-2.14) */}
           <DuplicateCandidatesPanel candidates={project.duplicateCandidates} />
 
-          {/* Contestations */}
+          {/* Contestação do submissor (P-2.17 CORRETIVO, PATCH-029) —
+              resolução é super_admin-only; a fila é a notificação (leva
+              direto ao projeto) + este painel embutido no detalhe. */}
+          {isSuperAdmin && (
+            <SubmitterContestationPanel
+              contestations={project.submitterContestations}
+            />
+          )}
+
+          {/* Contestations (diretor/conselheiro, homologação) */}
           {project.contestations.length > 0 && (
             <div className="rounded-md border border-(--hb-orange) bg-(--hb-orange-muted) px-4 py-4">
               <p className="text-xs font-bold uppercase tracking-wider text-(--hb-orange-deep) mb-2">

@@ -305,6 +305,7 @@
 | S-282  | 2026-08-26 | P-2.14b — Projetos: as regras que ficaram fora do BRAIN (CORRETIVO)                                                              | concluido                                                                            |
 | S-283  | 2026-08-27 | P-2.15 — Projetos: o valor aprovado que o sistema nunca soube registrar (CORRETIVO)                                              | concluido                                                                            |
 | S-284  | 2026-08-27 | P-2.16 — Projetos: a validação que só sabia mudar de nome (CORRETIVO)                                                            | concluido                                                                            |
+| S-285  | 2026-08-27 | P-2.17 — Projetos: a contestação que só o outro lado podia fazer (CORRETIVO)                                                     | concluido                                                                            |
 
 ---
 
@@ -27477,4 +27478,153 @@ deste corretivo (só duas migrations específicas).
 - `apps/admin/src/app/(dashboard)/configuracoes/page.tsx`
 - `apps/projetos/src/__tests__/update-in-validation.test.ts` (novo)
 - `apps/projetos/src/__tests__/state-machine.test.ts`
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+## S-285 — P-2.17 — Projetos: a contestação que só o outro lado podia fazer (CORRETIVO)
+
+**Prompt:** `PROMPTS.md` § P-2.17
+**Branch:** `fix/P-2.17-projetos-contestacao-submissor`
+**Data:** 2026-08-27
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Contexto
+
+`AUDIT/06 §1.4`: `projetos.contestations` só cobre a contestação de
+diretor/conselheiro sobre o resultado da votação, na homologação. O
+submissor não tinha canal nenhum durante a validação, apesar de
+Q11/Q32/Q33/Q75 descreverem um. Prompt marcado BLOQUEADO — Q32 nunca foi
+fechada ("Não tenho isso fechado ainda. Qual é a sua sugestão?") e não podia
+ser resolvida por conta própria (G1).
+
+### Decisão registrada antes da execução
+
+Pergunta feita ao Filipe via `AskUserQuestion`: qual o formato da
+contestação do submissor — (a) formulário estruturado uma vez por
+alteração, (b) thread de mensagens por projeto, ou (c) reuso de
+`projetos.contestations` com coluna `kind`. Resposta: **(a)**. Registrada em
+`PATCHES/029-projetos-contestacao-submissor-formulario-estruturado.md`
+**antes** de qualquer implementação, e refletida em `BRAIN.md` §6.2
+("Contestação do submissor") — a entrada Q32 saiu da lista de "Decisões
+pendentes" do mesmo arquivo.
+
+### Implementação
+
+1. **Migrations** `0096_projetos_submitter_contestations.sql` (tabela nova
+   `projetos.submitter_contestations` + RLS DENY-by-default + grants),
+   `0097`/`0098_projetos_submitter_contestation_*_audit_action.sql`
+   (`ALTER TYPE admin.audit_action ADD VALUE`, um por arquivo — convenção do
+   monorepo, PATCH-028). Aplicadas com sucesso no banco de dev compartilhado.
+2. **Tabela distinta de `projetos.contestations`** (decisão (a) rejeitou
+   (c) explicitamente): `project_version_id` referencia a versão específica
+   criada por `updateProjectInValidation` (P-2.16) — "uma vez por
+   alteração" é literal via UNIQUE nessa coluna, resolvido pelo servidor
+   (`getLatestContestableVersion`, `apps/projetos/src/lib/
+contestable-version.ts`, novo), nunca escolhido pelo cliente. Reusa
+   `contestationStatusEnum` (pending/accepted/rejected) — sem tipo Postgres
+   novo.
+3. **RLS**: `submitter_contestations_select_own_or_admin` (submissor vê a
+   própria, super*admin vê tudo — sem diretor/conselheiro, ao contrário de
+   `contestations`), `submitter_contestations_insert_own` (submissor|
+   super_admin, `submitter_id = auth.uid()`), `submitter_contestations*
+   update_admin` (só super_admin resolve).
+4. **`getSubmitterContestationDeadline`**
+   (`apps/projetos/src/lib/contestation-deadline.ts`, novo): 7 dias antes da
+   próxima reunião mensal agendada, mesma fonte que `runEvaluationReminders`
+   (`packages/jobs/src/crons/projetos.ts`). `admin.meeting_sessions` só
+   concede SELECT via RLS a diretor+ (`meeting_sessions_select_board`,
+   0002_admin.sql) — a leitura roda via `withSystemRole` para valer também
+   quando quem chama é o submissor. `null` = nenhuma reunião agendada, canal
+   aberto (achado, não estava no escopo original do prompt: sem isso o
+   canal ficaria bloqueado por padrão em qualquer banco sem reunião
+   cadastrada).
+5. **`createSubmitterContestation`** / **`resolveSubmitterContestation`**
+   (`apps/projetos/src/actions/projects.ts`, novas): a primeira, gate
+   `submissorAction` + checagem de propriedade (mesmo padrão de
+   `updateDraftProject`), `stage === "validacao"`, prazo, e evento
+   contestável — nessa ordem; audita `submitter_contestation.created`;
+   notifica super_admins (Q32). A segunda, gate `superAdminAction`, exige
+   `status === "pending"`, grava `status`/`response`/`resolvedBy`/
+   `resolvedAt`; audita `submitter_contestation.resolved`; notifica o
+   submissor. Nenhuma das duas altera `projects.stage` — distinto de
+   `createContestation` (diretor/conselheiro), que devolve o projeto a
+   `votacao`.
+6. **`ProjectStatusChangeEmail`** (`packages/email/src/templates/
+project-status-change.tsx`): três `ProjectStatusEvent` novos
+   (`submitter_contestation_opened/accepted/rejected`) — reuso do template
+   existente em vez de três arquivos novos, mesmo padrão já usado para
+   `contestacao`/`designado`. Sem seed de template DB override para estes
+   três (decisão de escopo: só o fallback React, os 6 slugs existentes em
+   `packages/db/src/seed.ts` não foram tocados).
+7. **UI**: `SubmitterContestationCard` (`(submissor)/[id]/page.tsx`) —
+   formulário quando há alteração contestável dentro do prazo, aviso quando
+   o prazo passou, ou o histórico (mais recente primeiro) com a resposta da
+   diretoria. `SubmitterContestationPanel` (`(diretoria)/pipeline/[id]/
+page.tsx`, só `isSuperAdmin`) — aceitar/rejeitar com resposta obrigatória.
+
+### Simplificação de escopo registrada (G1 — ambiguidade resolvida pela opção mais simples)
+
+O prompt pede "a UI da fila para o super_admin". Não há tela de fila
+dedicada — a notificação (Q32) já leva o super_admin direto ao projeto, e o
+painel embutido no detalhe cobre a resolução, mesmo padrão que
+`createContestation`/`ContestationForm` (diretor/conselheiro) já usa sem
+fila própria. Criar uma rota nova só para listar pendências duplicaria
+`(diretoria)/pipeline` (que já lista todo projeto) sem um requisito de
+negócio específico pedindo isso.
+
+### Verificação
+
+- `pnpm --filter @hebron/db --filter @hebron/validators --filter @hebron/email
+--filter projetos typecheck` e `lint`: verdes.
+- Suíte nova `apps/projetos/src/__tests__/submitter-contestation.test.ts` (6
+  testes, isolada via `pnpm --filter projetos test`): verde. Cobre o
+  critério de aceite do prazo (contestar com 8 dias de folga até a reunião
+  funciona; com 6, recusado), o gate de propriedade (outro submissor
+  recusado), "sem alteração pendente" recusado, fora de `validacao`
+  recusado, e o fluxo completo — criar → super_admin resolve (aceita) com
+  resposta → notificação ao submissor → segunda contestação sobre o mesmo
+  evento recusada ("uma vez por alteração") → resolver de novo recusado
+  (ciclo já fechou) → diretor não pode resolver.
+- `update-in-validation.test.ts` (7 testes) e `rls.test.ts` (19 testes),
+  isolados: verdes — nenhuma regressão nas actions/RLS de P-2.16 nem no
+  restante do módulo.
+- `flow.test.ts` (32 testes), isolado: verde — ciclo de vida completo,
+  contestação de diretor/conselheiro (`createContestation`, tabela
+  original) e orçamento não regrediram com a tabela/enum novos.
+
+### Débitos fechados
+
+- Submissor sem canal de contestação durante a validação (`AUDIT/06 §1.4`)
+  — fechado por esta sessão.
+- Q32 (`BRAIN.md` §6.2 "Decisões pendentes") — fechada via PATCH-029.
+
+### Débitos novos
+
+- Nenhum novo.
+
+### Arquivos modificados
+
+- `PATCHES/029-projetos-contestacao-submissor-formulario-estruturado.md` (novo)
+- `BRAIN.md`
+- `packages/db/src/migrations/0096_projetos_submitter_contestations.sql` (novo)
+- `packages/db/src/migrations/0097_projetos_submitter_contestation_created_audit_action.sql` (novo)
+- `packages/db/src/migrations/0098_projetos_submitter_contestation_resolved_audit_action.sql` (novo)
+- `packages/db/src/schema/projetos.ts`
+- `packages/db/src/schema/index.ts`
+- `packages/db/src/schema/admin.ts`
+- `packages/validators/src/projetos/index.ts`
+- `packages/email/src/templates/project-status-change.tsx`
+- `apps/projetos/src/lib/contestation-deadline.ts` (novo)
+- `apps/projetos/src/lib/contestable-version.ts` (novo)
+- `apps/projetos/src/lib/notifications.ts`
+- `apps/projetos/src/lib/audit.ts`
+- `apps/projetos/src/lib/queries.ts`
+- `apps/projetos/src/actions/projects.ts`
+- `apps/projetos/src/components/submitter-contestation-card.tsx` (novo)
+- `apps/projetos/src/components/submitter-contestation-panel.tsx` (novo)
+- `apps/projetos/src/app/(submissor)/[id]/page.tsx`
+- `apps/projetos/src/app/(diretoria)/pipeline/[id]/page.tsx`
+- `apps/projetos/src/__tests__/submitter-contestation.test.ts` (novo)
 - `SESSIONS.md` (esta entrada + linha no índice)

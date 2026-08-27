@@ -29,7 +29,10 @@ export type ProjectStatusEvent =
   | "reprovado"
   | "bloqueado"
   | "contestacao"
-  | "designado";
+  | "designado"
+  | "submitter_contestation_opened"
+  | "submitter_contestation_accepted"
+  | "submitter_contestation_rejected";
 
 const STATUS_CONFIG: Record<
   ProjectStatusEvent,
@@ -104,6 +107,36 @@ const STATUS_CONFIG: Record<
       `Você foi designado para avaliar o projeto "${title}". A reunião de votação ocorrerá em 7 dias. Acesse o portal para revisar os projetos designados com antecedência.`,
     ctaLabel: "Ver projetos designados",
     accentColor: emailColors.primary,
+  },
+  // P-2.17 CORRETIVO (PATCH-029) — contestação do submissor durante a
+  // validação, distinta de "contestacao" acima (contestação de
+  // diretor/conselheiro na homologação).
+  submitter_contestation_opened: {
+    preview: "O submissor contestou uma alteração",
+    heading: "Contestação do submissor",
+    headingColor: emailColors.accent,
+    body: (title, extra) =>
+      `O submissor do projeto "${title}" contestou uma alteração feita durante a validação${extra ? `: "${extra}"` : ""}. Responda à contestação no portal.`,
+    ctaLabel: "Responder contestação",
+    accentColor: emailColors.accent,
+  },
+  submitter_contestation_accepted: {
+    preview: "Sua contestação foi aceita",
+    heading: "Contestação aceita",
+    headingColor: "#16A34A",
+    body: (title, extra) =>
+      `Sua contestação sobre o projeto "${title}" foi aceita pela diretoria${extra ? `: "${extra}"` : ""}.`,
+    ctaLabel: "Ver projeto",
+    accentColor: "#16A34A",
+  },
+  submitter_contestation_rejected: {
+    preview: "Sua contestação foi respondida",
+    heading: "Contestação respondida",
+    headingColor: "#DC2626",
+    body: (title, extra) =>
+      `Sua contestação sobre o projeto "${title}" foi analisada e não foi aceita pela diretoria${extra ? `: "${extra}"` : ""}.`,
+    ctaLabel: "Ver projeto",
+    accentColor: "#DC2626",
   },
 };
 

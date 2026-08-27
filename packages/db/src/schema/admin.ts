@@ -63,6 +63,12 @@ export const auditActionEnum = adminSchema.enum("audit_action", [
   "evaluation.assigned",
   "evaluation.submitted",
   "contestation.created",
+  // Contestação do submissor durante a validação (P-2.17 CORRETIVO,
+  // PATCH-029) — distinta de "contestation.created" acima (essa é a
+  // contestação de diretor/conselheiro na homologação), added via ALTER
+  // TYPE in 0097/0098_projetos_submitter_contestation_*_audit_action.sql
+  "submitter_contestation.created",
+  "submitter_contestation.resolved",
   "report.created",
   "report.submitted",
   // report.reviewed — decisão do diretor (aprovação/rejeição) separada do

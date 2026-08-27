@@ -18,6 +18,7 @@ import {
 import {
   compactVersions,
   contestations,
+  submitterContestations,
   evaluations,
   meetingSessions,
   organizationMembers,
@@ -43,6 +44,8 @@ import { getEditalPrefill as getEditalPrefillRaw } from "@hebron/integrations/do
 import type { EditalPrefill } from "@hebron/integrations/documentos-projetos";
 import { getOrganizationBudgetStatus } from "@hebron/integrations/projetos";
 import { BRL } from "./stage-utils";
+import { getSubmitterContestationDeadline } from "./contestation-deadline";
+import { getLatestContestableVersion } from "./contestable-version";
 
 // ---------------------------------------------------------------------------
 // Auth
@@ -526,6 +529,23 @@ export type SubmissorProjectDetail = {
   submitterName: string | null;
   reports: SubmissorReport[];
   versions: SubmissorVersion[];
+  // Contestação do submissor (P-2.17 CORRETIVO, PATCH-029) — canal
+  // disponível apenas em `stage === "validacao"`. `contestationDeadline`
+  // null = nenhuma reunião mensal agendada (canal aberto, sem prazo
+  // iminente). `contestableVersionId` não-null = há uma alteração da
+  // diretoria ainda sem contestação ("uma vez por alteração").
+  contestationDeadline: Date | null;
+  contestableVersionId: string | null;
+  contestations: SubmissorContestation[];
+};
+
+export type SubmissorContestation = {
+  id: string;
+  reason: string;
+  status: "pending" | "accepted" | "rejected";
+  response: string | null;
+  createdAt: Date;
+  resolvedAt: Date | null;
 };
 
 export type SubmissorReport = {
@@ -669,6 +689,32 @@ export async function getSubmissorProjectDetail(
       };
     });
 
+    // Contestação do submissor (P-2.17 CORRETIVO, PATCH-029) — só é
+    // relevante enquanto o projeto está em validação; fora dela nem prazo
+    // nem evento contestável fazem sentido (getSubmitterContestationDeadline
+    // ainda roda para não deixar a UI com estado inconsistente, mas o
+    // formulário só aparece com stage === "validacao", cliente decide).
+    const [contestationDeadline, contestable, contestationRows] =
+      await Promise.all([
+        getSubmitterContestationDeadline(tx),
+        getLatestContestableVersion(tx, projectId),
+        tx
+          .select()
+          .from(submitterContestations)
+          .where(eq(submitterContestations.projectId, projectId))
+          .orderBy(desc(submitterContestations.createdAt)),
+      ]);
+
+    const submissorContestations: SubmissorContestation[] =
+      contestationRows.map((c) => ({
+        id: c.id,
+        reason: c.reason,
+        status: c.status,
+        response: c.response,
+        createdAt: c.createdAt,
+        resolvedAt: c.resolvedAt,
+      }));
+
     return {
       id: project.id,
       titulo: project.title,
@@ -692,6 +738,9 @@ export async function getSubmissorProjectDetail(
       submitterName: project.submitterName,
       reports: submissorReports,
       versions: submissorVersions,
+      contestationDeadline,
+      contestableVersionId: contestable?.id ?? null,
+      contestations: submissorContestations,
     };
   });
 }
@@ -1015,6 +1064,11 @@ export type DirectorProjectDetail = {
   reports: DirectorReport[];
   versions: SubmissorVersion[];
   pendingReports: number;
+  // Contestação do submissor (P-2.17 CORRETIVO, PATCH-029) — resolução é
+  // super_admin-only; a UI decide se mostra o painel conforme o papel do
+  // viewer, a query traz para qualquer chamador (mesmo padrão de
+  // `contestations` acima).
+  submitterContestations: SubmissorContestation[];
 };
 
 export async function getDirectorProjectDetail(
@@ -1143,6 +1197,24 @@ export async function getDirectorProjectDetail(
       resolvedAt: c.reviewedAt,
     }));
 
+    // Contestação do submissor (P-2.17 CORRETIVO, PATCH-029)
+    const scRows = await tx
+      .select()
+      .from(submitterContestations)
+      .where(eq(submitterContestations.projectId, projectId))
+      .orderBy(desc(submitterContestations.createdAt));
+
+    const mappedSubmitterContestations: SubmissorContestation[] = scRows.map(
+      (c) => ({
+        id: c.id,
+        reason: c.reason,
+        status: c.status,
+        response: c.response,
+        createdAt: c.createdAt,
+        resolvedAt: c.resolvedAt,
+      }),
+    );
+
     // Reports
     const reportRows = await tx
       .select({
@@ -1265,6 +1337,7 @@ export async function getDirectorProjectDetail(
       reports: mappedReports,
       versions,
       pendingReports: pendingReportCount[0]?.cnt ?? 0,
+      submitterContestations: mappedSubmitterContestations,
     };
   });
 }

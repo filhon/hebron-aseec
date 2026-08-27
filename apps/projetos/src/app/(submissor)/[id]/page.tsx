@@ -15,6 +15,7 @@ import { ProjectTimeline } from "../../../components/project-timeline";
 import { SubmitProjectButton } from "../../../components/submit-project-button";
 import { SubmitReportForm } from "../../../components/submit-report-form";
 import { DeleteProjectButton } from "../../../components/delete-project-button";
+import { SubmitterContestationCard } from "../../../components/submitter-contestation-card";
 import { BRL, STAGE_LABELS, getStageBadge } from "../../../lib/stage-utils";
 import type { ProjectVersion, ProjectStage } from "@hebron/types";
 
@@ -360,6 +361,17 @@ export default async function ProjectDetailPage({
 
         {/* Right: timeline */}
         <div className="lg:col-span-2 flex flex-col gap-6">
+          <SubmitterContestationCard
+            projectId={project.id}
+            contestableVersionId={
+              project.stage === "validacao"
+                ? project.contestableVersionId
+                : null
+            }
+            deadline={project.contestationDeadline}
+            contestations={project.contestations}
+          />
+
           <section>
             <h2 className="text-xs font-bold text-(--fg-muted) uppercase tracking-wider mb-3">
               Histórico

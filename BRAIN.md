@@ -315,9 +315,9 @@ Todo o estilo visual compartilhado vive em **`packages/ui`**. O arquivo **`packa
 
 **Contestação do submissor:**
 
-- Existe, é distinta da contestação de diretor/conselheiro na homologação
-- Ocorre durante a validação, quando o valor (ou outra informação) é alterado pelo super_admin
-- Notifica os super_admins, que devem responder
+- Existe, é distinta da contestação de diretor/conselheiro na homologação — tabela própria (`projetos.submitter_contestations`), não reusa `projetos.contestations`
+- Ocorre durante a validação, quando o valor (ou outra informação) é alterado pelo super_admin — formulário estruturado, uma vez por alteração: uma contestação por evento de alteração, super_admin aceita/rejeita com resposta textual, sem thread de mensagens (PATCH-029)
+- Notifica os super_admins na abertura (in_app + email), e o submissor na resposta
 - Fecha 7 dias antes da reunião de planejamento — depois de fechado para votação, o submissor não pode mais contestar (Q11, Q32, Q33, Q75)
 
 **Votação (projetos anuais):**
@@ -381,9 +381,8 @@ Todo o estilo visual compartilhado vive em **`packages/ui`**. O arquivo **`packa
 
 **Decisões pendentes:**
 
-Três perguntas que o Filipe devolveu e nunca fechou. Nenhum prompt deve resolvê-las por conta própria — ver `AUDIT/06-CONFORMIDADE-REQUISITOS.md` §13.
+Duas perguntas que o Filipe devolveu e nunca fechou. Nenhum prompt deve resolvê-las por conta própria — ver `AUDIT/06-CONFORMIDADE-REQUISITOS.md` §13.
 
-- **Formato da contestação do submissor** (Q32) — thread de mensagens ou formulário estruturado? → bloqueia `P-2.17`
 - **Formato do "local de execução"** (Q55) — endereço livre validado por API, ou campos estruturados? → bloqueia `P-2.21`
 - **Pontual passa ou não por homologação?** (Q1 diz que sim; o código diverge) → bloqueia `P-2.18`
 

@@ -439,6 +439,49 @@ export const contestations = projetosSchema.table(
 );
 
 // ---------------------------------------------------------------------------
+// projetos.submitter_contestations — contestação do submissor durante a
+// validação (P-2.17 CORRETIVO, PATCH-029, Q11/Q32/Q33/Q75). Distinta de
+// `contestations` acima (essa é exclusiva da contestação de
+// diretor/conselheiro na homologação, e devolve o projeto a `votacao` — a
+// regra daqui não muda estágio nenhum). Formulário estruturado, uma vez por
+// alteração: cada linha referencia o `project_version_id` específico criado
+// por `updateProjectInValidation` (P-2.16) — o "evento de alteração" da
+// Q32 — e a UNIQUE nessa coluna impede uma segunda contestação sobre o
+// mesmo evento. Uma nova edição do super_admin abre um novo evento
+// contestável.
+// ---------------------------------------------------------------------------
+export const submitterContestations = projetosSchema.table(
+  "submitter_contestations",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    projectId: uuid("project_id")
+      .notNull()
+      .references(() => projects.id, { onDelete: "cascade" }),
+    projectVersionId: uuid("project_version_id")
+      .notNull()
+      .references(() => projectVersions.id, { onDelete: "cascade" }),
+    submitterId: uuid("submitter_id")
+      .notNull()
+      .references(() => users.id),
+    reason: text("reason").notNull(),
+    // Reusa contestation_status (pending/accepted/rejected) — mesmo domínio
+    // de valores da contestação de diretor/conselheiro, sem criar um
+    // segundo tipo Postgres equivalente.
+    status: contestationStatusEnum("status").notNull().default("pending"),
+    response: text("response"),
+    resolvedBy: uuid("resolved_by").references(() => users.id),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("submitter_contestations_project_id_idx").on(table.projectId),
+    unique("submitter_contestations_version_uniq").on(table.projectVersionId),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // projetos.reports — relatórios periódicos de execução (padrão trimestral)
 // ---------------------------------------------------------------------------
 export const reports = projetosSchema.table(
@@ -570,6 +613,9 @@ export type Vote = typeof votes.$inferSelect;
 export type NewVote = typeof votes.$inferInsert;
 export type Contestation = typeof contestations.$inferSelect;
 export type NewContestation = typeof contestations.$inferInsert;
+export type SubmitterContestation = typeof submitterContestations.$inferSelect;
+export type NewSubmitterContestation =
+  typeof submitterContestations.$inferInsert;
 export type Report = typeof reports.$inferSelect;
 export type NewReport = typeof reports.$inferInsert;
 export type ReportAttachment = typeof reportAttachments.$inferSelect;
