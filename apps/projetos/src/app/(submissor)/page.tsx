@@ -5,6 +5,7 @@ import { CANONICAL_LOGIN_URL } from "@hebron/auth";
 import {
   getAuthUser,
   getSubmissorDashboard,
+  getAnnualSubmissionWindowStatus,
   type DashboardProject,
   type DashboardPayment,
   type DashboardReport,
@@ -17,6 +18,11 @@ import { BRL, STAGE_LABELS, getStageBadge } from "../../lib/stage-utils";
 function fmtMil(n: number) {
   if (n >= 1000) return `R$ ${Math.round(n / 1000)} mil`;
   return BRL.format(n);
+}
+
+function formatBR(iso: string): string {
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
 }
 
 function executionProgress(p: DashboardProject): number | null {
@@ -32,6 +38,7 @@ export default async function SubmissorDashboard() {
   if (!authUser) redirect(CANONICAL_LOGIN_URL);
 
   const data = await getSubmissorDashboard(authUser.id);
+  const windowStatus = await getAnnualSubmissionWindowStatus();
 
   const activeProjects = data.projects.filter((p) =>
     ["em_execucao", "aprovado", "homologacao", "votacao", "validacao"].includes(
@@ -82,6 +89,17 @@ export default async function SubmissorDashboard() {
 
   return (
     <div className="hb-page">
+      {windowStatus.configured && !windowStatus.open && (
+        <div className="hb-warn-banner">
+          <span>
+            {windowStatus.phase === "before"
+              ? `Janela de submissão do projeto anual ainda fechada — abre em ${formatBR(windowStatus.abertura)}.`
+              : `Janela de submissão do projeto anual encerrada em ${formatBR(windowStatus.fechamento)} — aguarde o próximo período definido pela diretoria.`}{" "}
+            Projeto pontual pode ser enviado a qualquer momento.
+          </span>
+        </div>
+      )}
+
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div
         style={{

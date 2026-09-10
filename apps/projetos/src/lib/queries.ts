@@ -30,10 +30,13 @@ import {
   reportAttachments,
   reports,
   roleAssignments,
+  systemSettings,
   users,
   votes,
 } from "@hebron/db/schema";
 import type { DuplicateCandidateSnapshot } from "@hebron/db/schema";
+import { PROJETOS_JANELA_ANUAL_SETTING_KEY } from "@hebron/db/seed";
+import type { ProjetosJanelaAnual } from "@hebron/db/seed";
 import type {
   CompactProjectView,
   MeetingAgenda,
@@ -221,6 +224,55 @@ export async function getAllOrganizationsForDiretoria(): Promise<
     );
 
     return rows.map((r) => ({ ...r, memberCount: countMap.get(r.id) ?? 0 }));
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Janela de submissão do projeto anual (P-2.19 CORRETIVO, AUDIT/06 §1.6)
+// ---------------------------------------------------------------------------
+
+export type AnnualSubmissionWindowStatus =
+  | { configured: false }
+  | { configured: true; open: true; fechamento: string }
+  | { configured: true; open: false; phase: "before"; abertura: string }
+  | { configured: true; open: false; phase: "after"; fechamento: string };
+
+/** Estado da janela do projeto anual para exibição ao submissor (tela /novo
+ * e dashboard) — mesma regra de "sem janela configurada = aberto" e mesmo
+ * corte before/after usados no bloqueio real (actions/projects.ts,
+ * checkAnnualSubmissionWindow). Não se aplica ao pontual (sem janela). */
+export async function getAnnualSubmissionWindowStatus(): Promise<AnnualSubmissionWindowStatus> {
+  const authUser = await getAuthUser();
+  if (!authUser) return { configured: false };
+
+  return withAuthenticatedContext({ actorId: authUser.id }, async (tx) => {
+    const rows = await tx
+      .select({ value: systemSettings.value })
+      .from(systemSettings)
+      .where(eq(systemSettings.key, PROJETOS_JANELA_ANUAL_SETTING_KEY))
+      .limit(1);
+
+    const value = rows[0]?.value as ProjetosJanelaAnual | null | undefined;
+    if (!value?.abertura || !value.fechamento) return { configured: false };
+
+    const today = new Date().toISOString().slice(0, 10);
+    if (today < value.abertura) {
+      return {
+        configured: true,
+        open: false,
+        phase: "before",
+        abertura: value.abertura,
+      };
+    }
+    if (today > value.fechamento) {
+      return {
+        configured: true,
+        open: false,
+        phase: "after",
+        fechamento: value.fechamento,
+      };
+    }
+    return { configured: true, open: true, fechamento: value.fechamento };
   });
 }
 

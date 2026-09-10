@@ -280,6 +280,71 @@ export async function seedProjetosDuplicateThreshold(): Promise<SeedProjetosDupl
 }
 
 // ---------------------------------------------------------------------------
+// seedProjetosJanelaAnual — P-2.19 (CORRETIVO).
+//
+// AUDIT/06 §1.6: nada consultava data nenhuma antes de aceitar a submissão
+// do projeto anual, apesar do PRD/Q51/BRAIN §6.2 exigirem uma janela
+// aberto/fechado definida pelo super_admin. Mesmo motivo estrutural de
+// seedProjetosDuplicateThreshold acima: sem esta linha, updateSystemSetting
+// (genérica, apps/admin/src/actions/settings.ts) não tem o que atualizar.
+// `isPublic: true` é deliberado — createAnnualDraft/submitProject leem esta
+// chave dentro de `withAuthenticatedContext` (ator = submissor, RLS ativa,
+// G6.2); sem is_public a leitura do submissor voltaria sempre vazia e a
+// janela configurada pelo Admin nunca chegaria a valer para quem submete.
+// Datas vazias = sem janela configurada = aberto (não quebra o que já
+// funciona hoje).
+// ---------------------------------------------------------------------------
+
+export const PROJETOS_JANELA_ANUAL_SETTING_KEY = "projetos_janela_anual";
+
+export interface ProjetosJanelaAnual {
+  abertura: string;
+  fechamento: string;
+}
+
+export interface SeedProjetosJanelaAnualResult {
+  /** false quando a chave já existia e nada mudou. */
+  created: boolean;
+}
+
+export async function seedProjetosJanelaAnual(): Promise<SeedProjetosJanelaAnualResult> {
+  await ensureEnvLoaded();
+  const [
+    { db },
+    { systemSettings },
+    { getSystemActorId },
+    { getSystemSetting },
+  ] = await Promise.all([
+    import("./client"),
+    import("./schema/admin"),
+    import("./system-actor"),
+    import("./settings"),
+  ]);
+
+  const existing = await getSystemSetting<ProjetosJanelaAnual>(
+    PROJETOS_JANELA_ANUAL_SETTING_KEY,
+  );
+  if (existing !== null) return { created: false };
+
+  const systemActorId = await getSystemActorId();
+
+  await db
+    .insert(systemSettings)
+    .values({
+      key: PROJETOS_JANELA_ANUAL_SETTING_KEY,
+      value: { abertura: "", fechamento: "" } satisfies ProjetosJanelaAnual,
+      label: "Janela de submissão do projeto anual",
+      description:
+        "Intervalo de datas em que o projeto anual pode ser submetido (BRAIN §6.2, PRD item 2). Vazio = sem restrição, aberto o ano todo. Projeto pontual não usa esta janela (Q91/Q54).",
+      isPublic: true,
+      updatedBy: systemActorId,
+    })
+    .onConflictDoNothing({ target: systemSettings.key });
+
+  return { created: true };
+}
+
+// ---------------------------------------------------------------------------
 // seedEmailTemplates — P-1.10b.
 //
 // `admin.email_templates` nunca foi semeada: num banco novo, a aba
@@ -674,6 +739,13 @@ async function main() {
     duplicateThresholdResult.created
       ? `Criada configuração "${PROJETOS_DUPLICATE_THRESHOLD_SETTING_KEY}" (padrão 0.92) em admin.system_settings.`
       : `Limiar de duplicidade de projetos já configurado — nada a fazer.`,
+  );
+
+  const janelaAnualResult = await seedProjetosJanelaAnual();
+  console.log(
+    janelaAnualResult.created
+      ? `Criada configuração "${PROJETOS_JANELA_ANUAL_SETTING_KEY}" (sem datas — aberto) em admin.system_settings.`
+      : `Janela de submissão do projeto anual já configurada — nada a fazer.`,
   );
 
   const emailTemplatesResult = await seedEmailTemplates();

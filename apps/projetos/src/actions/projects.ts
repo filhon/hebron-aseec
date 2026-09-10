@@ -64,6 +64,8 @@ import {
   DEFAULT_DUPLICATE_THRESHOLD,
 } from "@hebron/ai/projects/duplicate-detection";
 import { PROJETOS_DUPLICATE_THRESHOLD_SETTING_KEY } from "@hebron/db/seed";
+import { PROJETOS_JANELA_ANUAL_SETTING_KEY } from "@hebron/db/seed";
+import type { ProjetosJanelaAnual } from "@hebron/db/seed";
 import type {
   ScoringCriteria,
   ProjectScoringInput,
@@ -194,6 +196,60 @@ async function loadDuplicateThreshold(tx: AuthenticatedTx): Promise<number> {
 
   const value = rows[0]?.value;
   return typeof value === "number" ? value : DEFAULT_DUPLICATE_THRESHOLD;
+}
+
+// ---------------------------------------------------------------------------
+// checkAnnualSubmissionWindow — P-2.19 (CORRETIVO, AUDIT/06 §1.6).
+//
+// Só se aplica ao projeto anual (Q91/Q54: pontual é emergencial, avaliado
+// mensalmente, nunca teve janela). Datas vazias/ausentes = sem janela
+// configurada = aberto, para não quebrar o que já funciona hoje. super_admin
+// atravessa a janela fechada (submissorAction já aceita super_admin, Q80:
+// super_admin submete em nome de terceiros) — a exceção é sinalizada no
+// retorno para o chamador incluir no audit já gravado por createAnnualDraft/
+// submitProject, sem precisar de um novo valor no enum admin.audit_action.
+// ---------------------------------------------------------------------------
+
+function formatISODateBR(iso: string): string {
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
+}
+
+async function loadAnnualSubmissionWindow(
+  tx: AuthenticatedTx,
+): Promise<ProjetosJanelaAnual | null> {
+  const rows = await tx
+    .select({ value: systemSettings.value })
+    .from(systemSettings)
+    .where(eq(systemSettings.key, PROJETOS_JANELA_ANUAL_SETTING_KEY))
+    .limit(1);
+
+  const value = rows[0]?.value as ProjetosJanelaAnual | null | undefined;
+  if (!value?.abertura || !value.fechamento) return null;
+  return value;
+}
+
+async function checkAnnualSubmissionWindow(
+  tx: AuthenticatedTx,
+  actorRoles: readonly string[],
+): Promise<{ bypassedBySuperAdmin: boolean }> {
+  const window = await loadAnnualSubmissionWindow(tx);
+  if (!window) return { bypassedBySuperAdmin: false };
+
+  const today = new Date().toISOString().slice(0, 10);
+  if (today >= window.abertura && today <= window.fechamento) {
+    return { bypassedBySuperAdmin: false };
+  }
+
+  if (actorRoles.includes("super_admin")) {
+    return { bypassedBySuperAdmin: true };
+  }
+
+  const message =
+    today < window.abertura
+      ? `A submissão do projeto anual ainda não abriu. Abre em ${formatISODateBR(window.abertura)}.`
+      : `A janela de submissão do projeto anual encerrou em ${formatISODateBR(window.fechamento)}. Aguarde o próximo período definido pela diretoria.`;
+  throw new BusinessError(message);
 }
 
 // ---------------------------------------------------------------------------
@@ -373,9 +429,14 @@ export const createAnnualDraft = submissorAction
   .action(async ({ parsedInput, ctx }) => {
     const year = parsedInput.anoReferencia;
 
-    const project = await withAuthenticatedContext(
+    const { project, bypassedBySuperAdmin } = await withAuthenticatedContext(
       { actorId: ctx.actorId },
       async (tx) => {
+        const { bypassedBySuperAdmin } = await checkAnnualSubmissionWindow(
+          tx,
+          ctx.roles,
+        );
+
         const categoryId = await lookupCategoryId(tx, parsedInput.categoria);
 
         const inserted = await tx
@@ -432,7 +493,7 @@ export const createAnnualDraft = submissorAction
           );
         }
 
-        return project;
+        return { project, bypassedBySuperAdmin };
       },
     );
 
@@ -450,6 +511,12 @@ export const createAnnualDraft = submissorAction
           organizationId: project.organizationId,
           attachmentsCount: parsedInput.attachments?.length ?? 0,
         },
+        ...(bypassedBySuperAdmin
+          ? {
+              submissionWindowException:
+                "super_admin criou rascunho anual fora da janela de submissão configurada",
+            }
+          : {}),
       },
     });
 
@@ -794,6 +861,17 @@ export const submitProject = submissorAction
       );
     }
 
+    // Janela de submissão (P-2.19 CORRETIVO) — só o anual tem janela; pontual
+    // (Q91/Q54) submete em qualquer data.
+    let submissionWindowBypassed = false;
+    if (project.tipo === "anual") {
+      const windowCheck = await withAuthenticatedContext(
+        { actorId: ctx.actorId },
+        (tx) => checkAnnualSubmissionWindow(tx, ctx.roles),
+      );
+      submissionWindowBypassed = windowCheck.bypassedBySuperAdmin;
+    }
+
     // Budget check
     if (
       project.budgetTotal &&
@@ -997,6 +1075,12 @@ export const submitProject = submissorAction
         from: "rascunho",
         to: "validacao",
         submittedAt: now.toISOString(),
+        ...(submissionWindowBypassed
+          ? {
+              submissionWindowException:
+                "super_admin submeteu projeto anual fora da janela de submissão configurada",
+            }
+          : {}),
       },
     });
 

@@ -11973,13 +11973,13 @@ promete uma aba _"Janelas & calendário"_ que não existe — o texto está lá
 
 **Critérios de aceite:**
 
-- [ ] Fora da janela, `createAnnualDraft` e `submitProject` recusam com a data
+- [x] Fora da janela, `createAnnualDraft` e `submitProject` recusam com a data
       do próximo período; dentro, funcionam
-- [ ] Sem a chave configurada, nada é bloqueado
-- [ ] Pontual submete em qualquer data
-- [ ] super_admin submete fora da janela e o audit registra a exceção
-- [ ] Alterar as datas no Admin grava audit e reflete na tela do submissor
-- [ ] Lint passa · Types passam
+- [x] Sem a chave configurada, nada é bloqueado
+- [x] Pontual submete em qualquer data
+- [x] super_admin submete fora da janela e o audit registra a exceção
+- [x] Alterar as datas no Admin grava audit e reflete na tela do submissor
+- [x] Lint passa · Types passam
 
 ---
 

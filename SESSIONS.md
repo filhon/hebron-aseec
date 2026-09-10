@@ -307,6 +307,7 @@
 | S-284  | 2026-08-27 | P-2.16 — Projetos: a validação que só sabia mudar de nome (CORRETIVO)                                                            | concluido                                                                            |
 | S-285  | 2026-08-27 | P-2.17 — Projetos: a contestação que só o outro lado podia fazer (CORRETIVO)                                                     | concluido                                                                            |
 | S-286  | 2026-09-09 | P-2.18 — Projetos: o pontual que pula a homologação (CORRETIVO)                                                                  | concluido                                                                            |
+| S-287  | 2026-09-10 | P-2.19 — Projetos: a janela de submissão que nunca fechou (CORRETIVO)                                                            | concluido                                                                            |
 
 ---
 
@@ -27761,4 +27762,122 @@ project-status-change.tsx`). O seed usa `onConflictDoNothing` — uma linha
 - `apps/projetos/src/__tests__/approved-amount.test.ts`
 - `apps/projetos/src/__tests__/update-in-validation.test.ts`
 - `packages/jobs/src/__tests__/projetos-homologacao.test.ts`
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+## S-287 — P-2.19 — Projetos: a janela de submissão que nunca fechou (CORRETIVO)
+
+**Prompt:** `PROMPTS.md` § P-2.19
+**Branch:** `fix/P-2.19-projetos-janela-submissao`
+**Data:** 2026-09-10
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Contexto
+
+`AUDIT/06 §1.6`: PRD item 2 e Q51 exigem uma janela aberto/fechado para o
+projeto anual, definida pelo super_admin no Admin; BRAIN §6.2 já registrava
+a regra. `createAnnualDraft`/`submitProject` nunca liam data nenhuma, e a
+aba "Janelas & calendário" prometida em Configurações não existia (só o
+texto, em `FeatureFlagsPanel`).
+
+### Implementação
+
+1. **Chave nova** `admin.system_settings["projetos_janela_anual"]`
+   (`packages/db/src/seed.ts`, `seedProjetosJanelaAnual`, mesmo padrão de
+   `seedProjetosDuplicateThreshold`) — valor `{abertura, fechamento}`,
+   datas vazias = sem janela = aberto. **`isPublic: true`** é a decisão que
+   faz o resto funcionar: `createAnnualDraft`/`submitProject` leem a chave
+   de dentro de `withAuthenticatedContext` (ator = submissor, RLS ativa,
+   G6.2) — sem `is_public`, a policy `system_settings_select_public` nunca
+   libera a leitura para quem não é diretor/super_admin, e a janela
+   configurada pelo Admin nunca chegaria a valer para quem submete (mesmo
+   problema estrutural, não corrigido aqui por estar fora do escopo, afeta
+   `projetos_duplicate_threshold`: `seedProjetosDuplicateThreshold` não seta
+   `isPublic`, então o limiar real do submissor sempre cai no default
+   hardcoded — registrado como débito novo abaixo).
+2. **Bloqueio** em `createAnnualDraft` e `submitProject`
+   (`apps/projetos/src/actions/projects.ts`, `checkAnnualSubmissionWindow`)
+   — só se aplica a `tipo === "anual"` (pontual nunca checado, Q91/Q54).
+   super_admin atravessa a janela fechada; a exceção **não gerou um valor
+   novo no enum `admin.audit_action`** — `lib/audit.ts`/`schema/admin.ts`/
+   uma migration `ALTER TYPE` não estavam na lista de arquivos permitidos
+   do prompt, e criar os três só para uma flag de contexto seria
+   desproporcional (G1: não inventar arquivo fora da lista sem necessidade
+   de infraestrutura óbvia). Em vez disso, a exceção vira um campo extra
+   (`submissionWindowException`) no `diff` dos audits já existentes
+   `project.created`/`project.submitted` — mesmo evento, contexto extra.
+3. **Leitura para a UI** (`apps/projetos/src/lib/queries.ts`,
+   `getAnnualSubmissionWindowStatus`) — duplica o mesmo corte de datas
+   (before/after) da action por estarem em módulos "use server" distintos
+   sem um arquivo compartilhado na lista permitida; ~15 linhas, aceito
+   (ponytail: três linhas parecidas valem mais que abstração prematura).
+   Consumida em `(submissor)/novo/page.tsx` (aberta com prazo ou fechada
+   com a data de reabertura/encerramento, sempre lembrando que pontual não
+   tem restrição) e em `(submissor)/page.tsx` (só o aviso de fechada, para
+   não poluir o dashboard quando está tudo aberto).
+4. **Admin** (`configuracoes/page.tsx`): aba nova `janelas` ("Janelas &
+   calendário", a mesma que `FeatureFlagsPanel` já citava). Validação de
+   coerência (`fechamento > abertura`) na Server Action da própria página
+   (`handleSetJanelaAnual`, mesmo padrão de `handleSetDuplicateThreshold`),
+   que delega a escrita+audit para a `updateSystemSetting` genérica já
+   existente (`apps/admin/src/actions/settings.ts`) — nenhuma action nova
+   nesse arquivo, o prompt já apontava para reusar a genérica. A chave saiu
+   da listagem solta da aba "Sistema" (teria virado `[object Object]` via
+   `String(setting.value)`) e passou a ter sua própria seção.
+5. **Testes** (`apps/projetos/src/__tests__/submission-window.test.ts`, 8
+   casos): sem config = aberto; antes/depois da janela recusam com a data;
+   dentro da janela funciona; super_admin atravessa e o audit carrega
+   `submissionWindowException`; pontual ignora a janela mesmo fechada.
+   Achado no meio do caminho: o primeiro teste de `submitProject` como
+   submissor comum bateu na lacuna de RLS já documentada em S-207/P-2.10b
+   (`projects_update_rascunho_owner` exige `stage='rascunho'` no
+   `WITH CHECK`, então um submissor nunca passa no RLS real ao transicionar
+   o próprio projeto) — trocado para ator super_admin nesse caso específico,
+   comentado no teste, sem tentar corrigir a lacuna (fora de escopo).
+   Segundo achado: `setJanela()` do teste inicialmente gravava
+   `updated_by` = usuário de fixture do próprio arquivo, que o `afterAll`
+   apaga — violava a FK `system_settings_updated_by_fkey` porque a chave é
+   global (visível a outros arquivos de teste rodando no mesmo `singleFork`
+   antes da minha própria remoção). Corrigido usando `getSystemActorId()`
+   (mesmo ator que o seed real usa) como `updated_by`, e uma linha órfã
+   deixada por uma execução anterior interrompida foi reparada direto no
+   banco de dev compartilhado antes de reexecutar.
+
+### Verificação
+
+- `pnpm turbo lint typecheck --filter=@hebron/db --filter=@hebron/projetos
+--filter=@hebron/admin`: verdes.
+- `submission-window.test.ts` (novo, 8 testes): verdes.
+- `duplicate-detection.test.ts` + `flow.test.ts` (37 testes): verdes — sem
+  regressão no caminho de submissão por causa do novo gate.
+
+### Débitos novos
+
+- `projetos_duplicate_threshold` (P-2.14) nunca foi semeado com
+  `isPublic: true` — o limiar configurado pelo Admin nunca chega ao
+  submissor real via `loadDuplicateThreshold` (RLS bloqueia, cai sempre no
+  `DEFAULT_DUPLICATE_THRESHOLD` hardcoded). Mesmo bug estrutural que este
+  prompt evitou para `projetos_janela_anual`; não corrigido aqui por não
+  estar na lista de arquivos permitidos de P-2.19 nem no escopo do
+  problema descrito.
+- `getAnnualSubmissionWindowStatus` (leitura usada por `/novo` e pelo
+  dashboard) não tem teste automatizado próprio — depende de `getAuthUser`
+  (fluxo Supabase Auth via cookie, não `resolveSession` mockável como as
+  actions) e nenhum teste existente no módulo mocka esse caminho. A lógica
+  de corte de datas é idêntica à já coberta em `checkAnnualSubmissionWindow`
+  (`submission-window.test.ts`); risco residual é só de exibição, não de
+  bloqueio real.
+
+### Arquivos modificados
+
+- `packages/db/src/seed.ts`
+- `apps/projetos/src/actions/projects.ts`
+- `apps/projetos/src/lib/queries.ts`
+- `apps/projetos/src/app/(submissor)/novo/page.tsx`
+- `apps/projetos/src/app/(submissor)/page.tsx`
+- `apps/admin/src/app/(dashboard)/configuracoes/page.tsx`
+- `apps/projetos/src/__tests__/submission-window.test.ts`
+- `PROMPTS.md` (critérios de P-2.19 marcados `[x]`)
 - `SESSIONS.md` (esta entrada + linha no índice)

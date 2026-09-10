@@ -14,7 +14,9 @@ import {
 import {
   PROJETOS_CHECKLIST_TEMPLATE_SETTING_KEY,
   PROJETOS_DUPLICATE_THRESHOLD_SETTING_KEY,
+  PROJETOS_JANELA_ANUAL_SETTING_KEY,
 } from "@hebron/db/seed";
+import type { ProjetosJanelaAnual } from "@hebron/db/seed";
 import { resolveSession } from "@hebron/auth/server";
 import {
   Shield,
@@ -27,6 +29,7 @@ import {
   Eye,
   Check,
   Users,
+  Calendar,
 } from "lucide-react";
 import {
   toggleFeatureFlag,
@@ -53,6 +56,7 @@ type TabId =
   | "roles"
   | "feature-flags"
   | "email-templates"
+  | "janelas"
   | "sistema";
 
 const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
@@ -63,6 +67,11 @@ const TABS: { id: TabId; label: string; icon: React.ReactNode }[] = [
     id: "email-templates",
     label: "Templates de email",
     icon: <Mail size={14} />,
+  },
+  {
+    id: "janelas",
+    label: "Janelas & calendário",
+    icon: <Calendar size={14} />,
   },
   { id: "sistema", label: "Sistema", icon: <Settings2 size={14} /> },
 ];
@@ -572,6 +581,28 @@ async function handleSetDuplicateThreshold(formData: FormData) {
   redirect("/configuracoes?tab=sistema");
 }
 
+// P-2.19 (CORRETIVO) — janela de submissão do projeto anual. Só o anual usa
+// esta janela (pontual é emergencial, sem restrição de data). Coerência
+// (fechamento > abertura) validada aqui, antes de chamar a action genérica
+// updateSystemSetting — que já grava o audit "setting.updated".
+async function handleSetJanelaAnual(formData: FormData) {
+  "use server";
+  const abertura = formData.get("abertura") as string;
+  const fechamento = formData.get("fechamento") as string;
+  if (!abertura || !fechamento) {
+    throw new Error("Informe as duas datas da janela");
+  }
+  if (fechamento <= abertura) {
+    throw new Error("A data de fechamento deve ser depois da abertura");
+  }
+  await updateSystemSetting({
+    key: PROJETOS_JANELA_ANUAL_SETTING_KEY,
+    value: { abertura, fechamento } satisfies ProjetosJanelaAnual,
+  });
+  revalidatePath("/configuracoes");
+  redirect("/configuracoes?tab=janelas");
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatDate(date: Date): string {
@@ -937,6 +968,85 @@ function EmailTemplatesPanel({
   );
 }
 
+function JanelasPanel({
+  janela,
+}: {
+  janela: { abertura: string; fechamento: string } | null;
+}) {
+  const configured = !!janela?.abertura && !!janela.fechamento;
+  const today = new Date().toISOString().slice(0, 10);
+  const open =
+    configured && janela !== null
+      ? today >= janela.abertura && today <= janela.fechamento
+      : true;
+
+  return (
+    <div>
+      <div className="hb-note-banner">
+        Define quando o projeto <b>anual</b> pode ser submetido (BRAIN §6.2).
+        Sem datas, a submissão fica aberta o ano todo — projeto <b>pontual</b>{" "}
+        nunca usa esta janela. Enquanto fechada, super_admin ainda pode submeter
+        em nome de terceiros; a exceção fica registrada no log de auditoria.
+      </div>
+
+      <div className="hb-card" style={{ padding: 20 }}>
+        <div style={{ marginBottom: 16 }}>
+          {configured && janela ? (
+            <span
+              className="hb-setting-value-badge"
+              style={{
+                color: open ? "var(--hb-green)" : "var(--hb-orange-deep)",
+              }}
+            >
+              {open ? "Janela aberta agora" : "Janela fechada agora"} —{" "}
+              {formatDate(new Date(`${janela.abertura}T12:00:00`))} a{" "}
+              {formatDate(new Date(`${janela.fechamento}T12:00:00`))}
+            </span>
+          ) : (
+            <span className="hb-setting-desc">
+              Nenhuma data configurada — submissão do anual está aberta.
+            </span>
+          )}
+        </div>
+
+        <form
+          action={handleSetJanelaAnual}
+          style={{
+            display: "flex",
+            gap: 16,
+            alignItems: "flex-end",
+            flexWrap: "wrap",
+          }}
+        >
+          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span className="hb-setting-desc">Abertura</span>
+            <input
+              type="date"
+              name="abertura"
+              defaultValue={janela?.abertura ?? ""}
+              required
+              className="hb-form-input"
+            />
+          </label>
+          <label style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            <span className="hb-setting-desc">Fechamento</span>
+            <input
+              type="date"
+              name="fechamento"
+              defaultValue={janela?.fechamento ?? ""}
+              required
+              className="hb-form-input"
+            />
+          </label>
+          <button type="submit" className="hb-btn hb-btn-secondary hb-btn-sm">
+            Salvar
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function SistemaPanel({
   settings,
   checklistTemplates,
@@ -1248,6 +1358,17 @@ export default async function ConfiguracoesPage({
   const revokedDesignationCount =
     designationRows.length - activeDesignationRows.length;
 
+  // Janela do anual ganhou aba própria (P-2.19 CORRETIVO) — não duplicar na
+  // listagem genérica da aba Sistema.
+  const janelaAnualSetting = settingRows.find(
+    (s) => s.key === PROJETOS_JANELA_ANUAL_SETTING_KEY,
+  );
+  const janelaAnualValue =
+    (janelaAnualSetting?.value as ProjetosJanelaAnual | undefined) ?? null;
+  const sistemaSettingRows = settingRows.filter(
+    (s) => s.key !== PROJETOS_JANELA_ANUAL_SETTING_KEY,
+  );
+
   return (
     <div className="hb-page">
       <div className="hb-page-header">
@@ -1315,9 +1436,10 @@ export default async function ConfiguracoesPage({
             onSave={saveEmailTemplate}
           />
         )}
+        {activeTab === "janelas" && <JanelasPanel janela={janelaAnualValue} />}
         {activeTab === "sistema" && (
           <SistemaPanel
-            settings={settingRows}
+            settings={sistemaSettingRows}
             checklistTemplates={checklistTemplateRows}
           />
         )}
