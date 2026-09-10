@@ -420,15 +420,17 @@ const EMAIL_TEMPLATE_DEFAULTS: EmailTemplateSeedEntry[] = [
   },
   {
     slug: "projetos-contested",
-    variables: ["nome", "titulo", "contestador", "link"],
+    // estagio (P-2.18 CORRETIVO): pontual retorna para "validação", anual
+    // para "votação" — createContestation decide, notifyContestation informa.
+    variables: ["nome", "titulo", "contestador", "link", "estagio"],
     subject: "Contestação de projeto: {{titulo}}",
     bodyHtml: `<p>Olá, <strong>{{nome}}</strong>,</p>
 <p>Uma contestação foi registrada para o projeto <strong>{{titulo}}</strong> por <strong>{{contestador}}</strong>.</p>
-<p>O projeto retorna para votação. Acesse o portal para participar.</p>
+<p>O projeto retorna para {{estagio}}. Acesse o portal para participar.</p>
 <p style="margin-top:20px;">
   <a href="{{link}}" style="background:#EA5A06;color:#fff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;display:inline-block;">Ver contestação</a>
 </p>`,
-    bodyText: `Olá, {{nome}},\n\n{{contestador}} registrou uma contestação no projeto "{{titulo}}".\n\nAcesse: {{link}}`,
+    bodyText: `Olá, {{nome}},\n\n{{contestador}} registrou uma contestação no projeto "{{titulo}}". O projeto retorna para {{estagio}}.\n\nAcesse: {{link}}`,
   },
   {
     slug: "projetos-evaluator-designated",

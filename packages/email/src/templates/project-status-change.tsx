@@ -29,6 +29,7 @@ export type ProjectStatusEvent =
   | "reprovado"
   | "bloqueado"
   | "contestacao"
+  | "contestacao_pontual"
   | "designado"
   | "submitter_contestation_opened"
   | "submitter_contestation_accepted"
@@ -96,6 +97,17 @@ const STATUS_CONFIG: Record<
     headingColor: emailColors.accent,
     body: (title, extra) =>
       `Uma contestação foi registrada para o projeto "${title}"${extra ? ` por ${extra}` : ""}. O projeto retorna para votação. Acesse o portal para participar.`,
+    ctaLabel: "Ver contestação",
+    accentColor: emailColors.accent,
+  },
+  // P-2.18 CORRETIVO: pontual nunca teve votacao — sua contestação devolve
+  // o projeto para validacao, não votação (distinto de "contestacao" acima).
+  contestacao_pontual: {
+    preview: "Contestação registrada em projeto homologado",
+    heading: "Contestação de projeto",
+    headingColor: emailColors.accent,
+    body: (title, extra) =>
+      `Uma contestação foi registrada para o projeto "${title}"${extra ? ` por ${extra}` : ""}. O projeto retorna para validação. Acesse o portal para participar.`,
     ctaLabel: "Ver contestação",
     accentColor: emailColors.accent,
   },

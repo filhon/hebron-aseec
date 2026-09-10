@@ -178,7 +178,9 @@ export {
   contestationStatusEnum,
   evaluationRecommendationEnum,
   PROJECT_STAGES,
+  PROJECT_TYPES,
   VALID_STAGE_TRANSITIONS,
+  getValidStageTransitions,
   projectCategories,
   organizations,
   organizationMembers,
@@ -197,6 +199,7 @@ export {
 
 export type {
   ProjectStage,
+  ProjectType,
   ProjectCategory,
   DuplicateCandidateSnapshot,
   NewProjectCategory,

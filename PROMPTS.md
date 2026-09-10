@@ -11900,11 +11900,11 @@ nomeia.
 
 **Critérios de aceite (saída a):**
 
-- [ ] Pontual aprovado passa por `homologacao` e só vira `aprovado` após o
+- [x] Pontual aprovado passa por `homologacao` e só vira `aprovado` após o
       prazo ou confirmação
-- [ ] Contestação de pontual devolve o projeto a `validacao`
-- [ ] Transição `validacao → aprovado` para pontual passa a ser recusada
-- [ ] Lint passa · Types passam
+- [x] Contestação de pontual devolve o projeto a `validacao`
+- [x] Transição `validacao → aprovado` para pontual passa a ser recusada
+- [x] Lint passa · Types passam
 
 ---
 

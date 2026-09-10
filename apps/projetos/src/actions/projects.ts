@@ -34,9 +34,10 @@ import {
   organizations,
   systemSettings,
 } from "@hebron/db/schema";
-import { VALID_STAGE_TRANSITIONS } from "@hebron/db/schema";
+import { getValidStageTransitions } from "@hebron/db/schema";
 import type {
   ProjectStage,
+  ProjectType,
   DuplicateCandidateSnapshot,
 } from "@hebron/db/schema";
 import {
@@ -1065,8 +1066,10 @@ export const transitionProjectStage = diretorAction
         const project = await getProjectOrThrow(tx, parsedInput.projectId);
 
         // Validate transition
-        const validNext =
-          VALID_STAGE_TRANSITIONS[project.stage as ProjectStage];
+        const validNext = getValidStageTransitions(
+          project.tipo as ProjectType,
+          project.stage as ProjectStage,
+        );
         if (!(validNext as string[]).includes(parsedInput.toStage)) {
           throw new BusinessError(
             `Transição inválida: ${project.stage} → ${parsedInput.toStage}. ` +
@@ -1232,8 +1235,10 @@ export const registerProjectDecision = diretorAction
       async (tx) => {
         const project = await getProjectOrThrow(tx, parsedInput.projectId);
 
-        const validNext =
-          VALID_STAGE_TRANSITIONS[project.stage as ProjectStage];
+        const validNext = getValidStageTransitions(
+          project.tipo as ProjectType,
+          project.stage as ProjectStage,
+        );
         if (!(validNext as string[]).includes(parsedInput.decision)) {
           throw new BusinessError(
             `Transição inválida: ${project.stage} → ${parsedInput.decision}. ` +
@@ -1350,7 +1355,9 @@ export const registerProjectDecision = diretorAction
   });
 
 // ---------------------------------------------------------------------------
-// createContestation — max 2 per project, 1 per person; returns to votacao
+// createContestation — max 2 per project, 1 per person; returns anual to
+// votacao, pontual to validacao (P-2.18 CORRETIVO — pontual nunca teve
+// votacao)
 // ---------------------------------------------------------------------------
 
 // D1-004 (AUDIT/04-BACKLOG-CORRECAO.md PACOTE 9): contestação é privilégio
@@ -1360,7 +1367,7 @@ export const registerProjectDecision = diretorAction
 export const createContestation = conselheiroDiretorAction
   .schema(createContestationSchema)
   .action(async ({ parsedInput, ctx }) => {
-    const contestation = await withAuthenticatedContext(
+    const { contestation, returnStage } = await withAuthenticatedContext(
       { actorId: ctx.actorId },
       async (tx) => {
         const project = await getProjectOrThrow(tx, parsedInput.projectId);
@@ -1370,6 +1377,12 @@ export const createContestation = conselheiroDiretorAction
             "Contestações só podem ser feitas durante a homologação",
           );
         }
+
+        // P-2.18 CORRETIVO: pontual nunca passou por votacao, então sua
+        // contestação devolve para validacao (onde o pontual entra em
+        // homologação diretamente); anual continua voltando para votacao.
+        const returnStage: ProjectStage =
+          project.tipo === "pontual" ? "validacao" : "votacao";
 
         // Check max 2 contestations per project
         const countResult = await tx
@@ -1398,28 +1411,38 @@ export const createContestation = conselheiroDiretorAction
         if (!contestation)
           throw new BusinessError("Falha ao registrar contestação");
 
-        // Return project to votacao
+        // Return project to votacao (anual) or validacao (pontual). Sob
+        // `authenticated`, o UPDATE checa a linha nova contra as políticas
+        // de SELECT mesmo sem `.returning()` — `projects_select_reviewer`
+        // não cobre stage=validacao (P-2.15/Q23: diretor/conselheiro só
+        // acessam o projeto a partir de votacao), então um diretor/
+        // conselheiro (não super_admin) contestando um pontual seria
+        // barrado pela RLS. `withSystemRole` é o mesmo escape hatch já
+        // usado acima para financeiro/audit — a autorização real já
+        // aconteceu em conselheiroDiretorAction + no gate de stage acima.
         const now = new Date();
-        await tx
-          .update(projects)
-          .set({ stage: "votacao", updatedAt: now })
-          .where(eq(projects.id, parsedInput.projectId));
+        await withSystemRole(tx, async (sysTx) => {
+          await sysTx
+            .update(projects)
+            .set({ stage: returnStage, updatedAt: now })
+            .where(eq(projects.id, parsedInput.projectId));
 
-        await createVersionSnapshot(
-          tx,
-          parsedInput.projectId,
-          "votacao",
-          {
-            _source: "createContestation",
-            contestationId: contestation.id,
-            returnedBy: ctx.actorId,
-            reason: parsedInput.reason,
-            returnedAt: now.toISOString(),
-          },
-          ctx.actorId,
-        );
+          await createVersionSnapshot(
+            sysTx,
+            parsedInput.projectId,
+            returnStage,
+            {
+              _source: "createContestation",
+              contestationId: contestation.id,
+              returnedBy: ctx.actorId,
+              reason: parsedInput.reason,
+              returnedAt: now.toISOString(),
+            },
+            ctx.actorId,
+          );
+        });
 
-        return contestation;
+        return { contestation, returnStage };
       },
     );
 
@@ -1430,22 +1453,22 @@ export const createContestation = conselheiroDiretorAction
       entityId: contestation.id,
       diff: {
         projectId: parsedInput.projectId,
-        stageReverted: { from: "homologacao", to: "votacao" },
+        stageReverted: { from: "homologacao", to: returnStage },
       },
     });
 
     // Notificação (P-2.10b) — best-effort: a contestação já foi commitada
     // acima. Só notifica "contestação registrada" (não também
-    // notifyVotingOpen) — o corpo do email já informa que o projeto volta
-    // para votação; um segundo email duplicaria o aviso para o mesmo
-    // evento (decisão registrada em SESSIONS.md).
+    // notifyVotingOpen) — o corpo do email já informa para onde o projeto
+    // volta; um segundo email duplicaria o aviso para o mesmo evento
+    // (decisão registrada em SESSIONS.md).
     try {
       await notifyContestation(parsedInput.projectId, ctx.actorId);
     } catch (err) {
       console.error("[projetos/contestation] notifyContestation failed:", err);
     }
 
-    return { contestation, stageReverted: "votacao" };
+    return { contestation, stageReverted: returnStage };
   });
 
 // ---------------------------------------------------------------------------

@@ -77,6 +77,11 @@ const IDS = {
   failingProject: "facc0000-0000-0000-0000-000000000005",
   siblingProject: "facc0000-0000-0000-0000-000000000006",
   directCallProject: "facc0000-0000-0000-0000-000000000007",
+  // P-2.18 CORRETIVO: pontual passa a entrar em homologacao (manualmente,
+  // via transitionProjectStage — nunca por votação), então o snapshot de
+  // entrada nunca tem `voteApproved`. Prova que o cron não depende de haver
+  // votos para resolver um pontual.
+  pontualEligibleProject: "facc0000-0000-0000-0000-000000000008",
   contester: "faaa0000-0000-0000-0000-000000000002",
 };
 
@@ -197,11 +202,26 @@ beforeAll(async () => {
       submitterId: IDS.submitter,
       organizationId: IDS.org,
     },
+    {
+      id: IDS.pontualEligibleProject,
+      title: "Pontual elegível para aprovação automática (P-2.18 CORRETIVO)",
+      tipo: "pontual",
+      stage: "homologacao",
+      submitterId: IDS.submitter,
+      organizationId: IDS.org,
+      parcelas: 1,
+      meses: 1,
+      budgetTotal: "3000.00",
+      evaluationYear: new Date().getFullYear(),
+    },
   ]);
 
   await insertHomologVersion(IDS.eligibleProject, eightDaysAgo);
   await insertHomologVersion(IDS.contestedProject, eightDaysAgo);
   await insertHomologVersion(IDS.recentProject, twoDaysAgo);
+  // Snapshot igual ao gravado por transitionProjectStage (entrada manual,
+  // sem voteApproved) — é o caminho real do pontual, que nunca vota.
+  await insertHomologVersion(IDS.pontualEligibleProject, eightDaysAgo);
   // Snapshot como o gravado por castVote/closeVoting/triggerPanicButton
   // (apps/projetos/src/actions/voting.ts) quando a votação REPROVA — sem o
   // fix de P-2.8b, este cron aprovaria por omissão após 7 dias.
@@ -221,26 +241,28 @@ afterAll(async () => {
   // P-3.11: onProjectApproved agora também cria financeiro.payables (FK
   // RESTRICT para payment_schedules e cost_centers) — precisam ser
   // removidos antes das linhas que referenciam, na ordem inversa da criação.
-  const [costCenter] = await db
-    .select({ id: costCenters.id })
-    .from(costCenters)
-    .where(eq(costCenters.projectId, IDS.eligibleProject));
-  if (costCenter) {
-    const createdPayables = await db
-      .select({ id: payables.id })
-      .from(payables)
-      .where(eq(payables.costCenterId, costCenter.id));
-    for (const p of createdPayables) {
-      await db.delete(auditLog).where(eq(auditLog.entityId, p.id));
+  // eligibleProject (anual) e pontualEligibleProject (P-2.18 CORRETIVO)
+  // passam ambos pelo provisionamento financeiro.
+  for (const projectId of [IDS.eligibleProject, IDS.pontualEligibleProject]) {
+    const [costCenter] = await db
+      .select({ id: costCenters.id })
+      .from(costCenters)
+      .where(eq(costCenters.projectId, projectId));
+    if (costCenter) {
+      const createdPayables = await db
+        .select({ id: payables.id })
+        .from(payables)
+        .where(eq(payables.costCenterId, costCenter.id));
+      for (const p of createdPayables) {
+        await db.delete(auditLog).where(eq(auditLog.entityId, p.id));
+      }
+      await db.delete(payables).where(eq(payables.costCenterId, costCenter.id));
     }
-    await db.delete(payables).where(eq(payables.costCenterId, costCenter.id));
+    await db
+      .delete(paymentSchedules)
+      .where(eq(paymentSchedules.projectId, projectId));
+    await db.delete(costCenters).where(eq(costCenters.projectId, projectId));
   }
-  await db
-    .delete(paymentSchedules)
-    .where(eq(paymentSchedules.projectId, IDS.eligibleProject));
-  await db
-    .delete(costCenters)
-    .where(eq(costCenters.projectId, IDS.eligibleProject));
   await db
     .delete(contestations)
     .where(eq(contestations.projectId, IDS.contestedProject));
@@ -256,16 +278,23 @@ afterAll(async () => {
   await db
     .delete(projectVersions)
     .where(eq(projectVersions.projectId, IDS.rejectedProject));
+  await db
+    .delete(projectVersions)
+    .where(eq(projectVersions.projectId, IDS.pontualEligibleProject));
   await db.delete(projects).where(eq(projects.id, IDS.eligibleProject));
   await db.delete(projects).where(eq(projects.id, IDS.contestedProject));
   await db.delete(projects).where(eq(projects.id, IDS.recentProject));
   await db.delete(projects).where(eq(projects.id, IDS.rejectedProject));
+  await db.delete(projects).where(eq(projects.id, IDS.pontualEligibleProject));
   await db
     .delete(organizationMembers)
     .where(eq(organizationMembers.organizationId, IDS.org));
   await db.delete(organizations).where(eq(organizations.id, IDS.org));
   await db.delete(auditLog).where(eq(auditLog.entityId, IDS.eligibleProject));
   await db.delete(auditLog).where(eq(auditLog.entityId, IDS.rejectedProject));
+  await db
+    .delete(auditLog)
+    .where(eq(auditLog.entityId, IDS.pontualEligibleProject));
   await db
     .delete(roleAssignments)
     .where(eq(roleAssignments.userId, IDS.submitter));
@@ -281,6 +310,16 @@ describe("runHomologacaoAutoApprove", () => {
     expect(approved).not.toContain(IDS.recentProject);
     expect(approved).not.toContain(IDS.rejectedProject);
     expect(rejected).toContain(IDS.rejectedProject);
+
+    // P-2.18 CORRETIVO: pontual sem voteApproved no snapshot (nunca votou)
+    // ainda assim resolve para aprovado — o cron não depende de haver votos.
+    expect(approved).toContain(IDS.pontualEligibleProject);
+    const [pontual] = await db
+      .select()
+      .from(projects)
+      .where(eq(projects.id, IDS.pontualEligibleProject));
+    expect(pontual?.stage).toBe("aprovado");
+    expect(pontual?.approvedAt).toBeTruthy();
 
     const [project] = await db
       .select()

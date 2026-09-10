@@ -13,6 +13,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@hebron/db/client";
 import {
   VALID_STAGE_TRANSITIONS,
+  getValidStageTransitions,
   PROJECT_STAGES,
   projects,
   projectVersions,
@@ -40,6 +41,11 @@ vi.mock("@hebron/auth/server", () => ({
 const SM_IDS = {
   submissor: "ddaa0000-0000-0000-0000-000000000001",
   diretor: "ddaa0000-0000-0000-0000-000000000002",
+  // P-2.18 CORRETIVO: um projeto em `validacao` é invisível a diretor via
+  // RLS (mesmo achado do comentário abaixo, describe "transitionProjectStage
+  // (action real)") — o teste de recusa pontual validacao→aprovado precisa
+  // de um ator que enxergue a linha, daí super_admin aqui.
+  superAdmin: "ddaa0000-0000-0000-0000-000000000003",
   org: "ddbb0000-0000-0000-0000-000000000001",
 } as const;
 
@@ -57,6 +63,11 @@ beforeAll(async () => {
         email: "sm-dir@test.hebron",
         fullName: "SM Diretor",
       },
+      {
+        id: SM_IDS.superAdmin,
+        email: "sm-adm@test.hebron",
+        fullName: "SM Admin",
+      },
     ])
     .onConflictDoNothing();
 
@@ -71,6 +82,11 @@ beforeAll(async () => {
       {
         userId: SM_IDS.diretor,
         role: "diretor",
+        grantedBy: SM_IDS.submissor,
+      },
+      {
+        userId: SM_IDS.superAdmin,
+        role: "super_admin",
         grantedBy: SM_IDS.submissor,
       },
     ])
@@ -101,14 +117,19 @@ afterAll(async () => {
   // transitionProjectStage (P-2.12b) grava audit_log com actorId = diretor —
   // precisa ser limpo antes de deletar o usuário (audit_log_actor_id_fkey).
   await db.delete(auditLog).where(eq(auditLog.actorId, SM_IDS.diretor));
+  await db.delete(auditLog).where(eq(auditLog.actorId, SM_IDS.superAdmin));
   await db
     .delete(roleAssignments)
     .where(eq(roleAssignments.userId, SM_IDS.submissor));
   await db
     .delete(roleAssignments)
     .where(eq(roleAssignments.userId, SM_IDS.diretor));
+  await db
+    .delete(roleAssignments)
+    .where(eq(roleAssignments.userId, SM_IDS.superAdmin));
   await db.delete(users).where(eq(users.id, SM_IDS.submissor));
   await db.delete(users).where(eq(users.id, SM_IDS.diretor));
+  await db.delete(users).where(eq(users.id, SM_IDS.superAdmin));
 });
 
 // ── Cobertura do mapa ─────────────────────────────────────────────────────────
@@ -127,7 +148,7 @@ describe("State Machine — VALID_STAGE_TRANSITIONS: cobertura", () => {
     expect(VALID_STAGE_TRANSITIONS.rascunho).toEqual(["validacao"]);
   });
 
-  it("validacao → [votacao, aprovado, reprovado] — caminhos anual e pontual", () => {
+  it("validacao → [votacao, aprovado, reprovado] — mapa base (anual); pontual é sobrescrito por getValidStageTransitions", () => {
     const valid = VALID_STAGE_TRANSITIONS.validacao;
     expect(valid).toContain("votacao");
     expect(valid).toContain("aprovado");
@@ -258,18 +279,41 @@ describe("State Machine — caminhos de aprovação válidos", () => {
     }
   });
 
-  it("caminho pontual aprovado: validacao → aprovado (skip votacao/homologacao)", () => {
-    expect(isValidTransition("validacao", "aprovado")).toBe(true);
-  });
-
-  it("caminho pontual reprovado: validacao → reprovado", () => {
-    expect(isValidTransition("validacao", "reprovado")).toBe(true);
-  });
-
   it("contestação usa update direto (não consta em VALID_STAGE_TRANSITIONS)", () => {
-    // createContestation faz db.update({ stage: 'votacao' }) direto, sem passar
-    // pelo mapa de transições — portanto homologacao→votacao NÃO está no mapa.
+    // createContestation faz db.update({ stage: ... }) direto, sem passar
+    // pelo mapa de transições — portanto homologacao→votacao/validacao NÃO
+    // consta no mapa.
     expect(isValidTransition("homologacao", "votacao")).toBe(false);
+    expect(isValidTransition("homologacao", "validacao")).toBe(false);
+  });
+});
+
+// ── getValidStageTransitions — mapa por tipo de projeto (P-2.18 CORRETIVO) ─────
+
+describe("State Machine — getValidStageTransitions: pontual pula votacao mas passa por homologacao", () => {
+  it("pontual em validacao: só pode ir para homologacao (aprovado/reprovado direto foi removido)", () => {
+    const valid = getValidStageTransitions("pontual", "validacao");
+    expect(valid).toEqual(["homologacao"]);
+  });
+
+  it("anual em validacao: mantém votacao/aprovado/reprovado (comportamento pré-existente, fora do escopo deste corretivo)", () => {
+    const valid = getValidStageTransitions("anual", "validacao");
+    expect(valid).toEqual(VALID_STAGE_TRANSITIONS.validacao);
+  });
+
+  it("pontual em homologacao: aprovado/reprovado — mesmo mapa do anual", () => {
+    expect(getValidStageTransitions("pontual", "homologacao")).toEqual(
+      VALID_STAGE_TRANSITIONS.homologacao,
+    );
+  });
+
+  it("pontual em qualquer outro estágio: cai no mapa base (sem override)", () => {
+    for (const stage of PROJECT_STAGES) {
+      if (stage === "validacao") continue;
+      expect(getValidStageTransitions("pontual", stage)).toEqual(
+        VALID_STAGE_TRANSITIONS[stage],
+      );
+    }
   });
 });
 
@@ -515,6 +559,80 @@ describe("State Machine — transitionProjectStage (action real) aplica e recusa
     expect(row?.stage).toBe("homologacao");
 
     await db.delete(projects).where(eq(projects.id, proj.id));
+  });
+
+  // P-2.18 CORRETIVO: critério de aceite "Transição validacao → aprovado
+  // para pontual passa a ser recusada" — verificado aqui na action real,
+  // não só no mapa puro (describe "getValidStageTransitions" acima). Ator
+  // super_admin porque diretor não enxerga um projeto em `validacao` via
+  // RLS (`projects_select_reviewer` só cobre votacao+, comentário no topo
+  // deste describe) — usar diretor testaria "Projeto não encontrado", não
+  // a recusa da transição.
+  it("pontual validacao → aprovado: action recusa (pontual passou a exigir homologacao)", async () => {
+    const [proj] = await db
+      .insert(projects)
+      .values({
+        title: "SM Test — Pontual Validacao Recusa Aprovado",
+        tipo: "pontual",
+        stage: "validacao",
+        organizationId: SM_IDS.org,
+        submitterId: SM_IDS.submissor,
+        evaluationYear: 2026,
+        budgetTotal: "3000.00",
+        parcelas: 1,
+        meses: 1,
+      })
+      .returning();
+    if (!proj) throw new Error("Falha ao inserir projeto");
+
+    resolveSessionMock.mockResolvedValueOnce({
+      actorId: SM_IDS.superAdmin,
+      roles: ["super_admin"],
+    });
+    const { transitionProjectStage } = await import("../actions/projects");
+    const result = await transitionProjectStage({
+      projectId: proj.id,
+      toStage: "aprovado",
+    });
+
+    expect(result?.serverError).toBeDefined();
+
+    const [row] = await db
+      .select({ stage: projects.stage })
+      .from(projects)
+      .where(eq(projects.id, proj.id));
+    expect(row?.stage).toBe("validacao");
+
+    // Controle positivo: a mesma transição segue aberta para o anual —
+    // prova que a recusa acima é por tipo, não por um bug geral no mapa.
+    const [projAnual] = await db
+      .insert(projects)
+      .values({
+        title: "SM Test — Anual Validacao Aprovado Continua Valido (controle)",
+        tipo: "anual",
+        stage: "validacao",
+        organizationId: SM_IDS.org,
+        submitterId: SM_IDS.submissor,
+        evaluationYear: 2026,
+        budgetTotal: "3000.00",
+        parcelas: 1,
+        meses: 1,
+      })
+      .returning();
+    if (!projAnual) throw new Error("Falha ao inserir projeto de controle");
+
+    resolveSessionMock.mockResolvedValueOnce({
+      actorId: SM_IDS.superAdmin,
+      roles: ["super_admin"],
+    });
+    const controlResult = await transitionProjectStage({
+      projectId: projAnual.id,
+      toStage: "votacao",
+    });
+    expect(controlResult?.serverError).toBeUndefined();
+
+    await db.delete(projects).where(eq(projects.id, proj.id));
+    await db.delete(projects).where(eq(projects.id, projAnual.id));
   });
 
   it("reprovado → qualquer estágio: action recusa (terminal), mesmo para super_admin", async () => {

@@ -524,13 +524,16 @@ export default async function DirectorProjectDetailPage({
             />
           )}
 
-          {/* Decisão da diretoria — validacao (pontual) ou homologacao
-              (anual), os únicos estágios que admitem "aprovado" no mapa de
-              transições (VALID_STAGE_TRANSITIONS). Único caminho para
-              aprovar: transitionProjectStage recusa "→ aprovado" sem
-              decisão registrada (P-2.15 CORRETIVO). */}
-          {(project.stage === "validacao" ||
-            project.stage === "homologacao") && (
+          {/* Decisão da diretoria — só em homologacao para os dois tipos
+              (P-2.18 CORRETIVO: pontual passou a exigir homologação antes
+              de aprovado/reprovado, como o anual). anual também admite
+              validacao no mapa de transições (getValidStageTransitions,
+              @hebron/db/schema) — preservado para não regredir esse fluxo,
+              fora do escopo deste corretivo. Único caminho para aprovar:
+              transitionProjectStage recusa "→ aprovado" sem decisão
+              registrada (P-2.15 CORRETIVO). */}
+          {(project.stage === "homologacao" ||
+            (isAnnual && project.stage === "validacao")) && (
             <DecisionPanel
               projectId={project.id}
               requestedAmount={project.budgetTotal}

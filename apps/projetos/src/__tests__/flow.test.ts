@@ -82,6 +82,8 @@ const CONTEST_PROJECT_ID = "cccc0000-0000-0000-0000-000000000004";
 const DELETE_PROJECT_ID = "cccc0000-0000-0000-0000-000000000005";
 const DRAFT_EDIT_PROJECT_ID = "cccc0000-0000-0000-0000-000000000006";
 const CONTEST_GATE_PROJECT_ID = "cccc0000-0000-0000-0000-000000000007";
+// P-2.18 CORRETIVO — contestação de pontual devolve para validacao, não votacao
+const CONTEST_GATE_PONTUAL_PROJECT_ID = "cccc0000-0000-0000-0000-000000000011";
 // P-2.6c — cronograma com meses escolhidos vs. projeto anterior à migration
 const SCHEDULE_MONTHS_PROJECT_ID = "cccc0000-0000-0000-0000-000000000008";
 const SCHEDULE_LEGACY_PROJECT_ID = "cccc0000-0000-0000-0000-000000000009";
@@ -195,6 +197,7 @@ afterAll(async () => {
     DELETE_PROJECT_ID,
     DRAFT_EDIT_PROJECT_ID,
     CONTEST_GATE_PROJECT_ID,
+    CONTEST_GATE_PONTUAL_PROJECT_ID,
     SCHEDULE_MONTHS_PROJECT_ID,
     SCHEDULE_LEGACY_PROJECT_ID,
     SCHEDULE_LEGACY_ODD_PROJECT_ID,
@@ -736,18 +739,32 @@ describe("Contestação — gate de papel (createContestation, action real)", ()
   beforeAll(async () => {
     await db
       .insert(projects)
-      .values({
-        id: CONTEST_GATE_PROJECT_ID,
-        title: "Projeto Contestação Gate Test",
-        tipo: "anual",
-        stage: "homologacao",
-        organizationId: IDS.orgs.orgFlow,
-        submitterId: IDS.users.submissor1,
-        evaluationYear: 2026,
-        budgetTotal: "10000.00",
-        parcelas: 1,
-        meses: 1,
-      })
+      .values([
+        {
+          id: CONTEST_GATE_PROJECT_ID,
+          title: "Projeto Contestação Gate Test",
+          tipo: "anual",
+          stage: "homologacao",
+          organizationId: IDS.orgs.orgFlow,
+          submitterId: IDS.users.submissor1,
+          evaluationYear: 2026,
+          budgetTotal: "10000.00",
+          parcelas: 1,
+          meses: 1,
+        },
+        {
+          id: CONTEST_GATE_PONTUAL_PROJECT_ID,
+          title: "Projeto Pontual Contestação Test",
+          tipo: "pontual",
+          stage: "homologacao",
+          organizationId: IDS.orgs.orgFlow,
+          submitterId: IDS.users.submissor1,
+          evaluationYear: 2026,
+          budgetTotal: "10000.00",
+          parcelas: 1,
+          meses: 1,
+        },
+      ])
       .onConflictDoNothing();
   });
 
@@ -799,6 +816,30 @@ describe("Contestação — gate de papel (createContestation, action real)", ()
       .from(projects)
       .where(eq(projects.id, CONTEST_GATE_PROJECT_ID));
     expect(project?.stage).toBe("votacao");
+  });
+
+  // P-2.18 CORRETIVO: pontual nunca teve votacao — sua contestação devolve
+  // para validacao (onde o pontual reentra em homologacao diretamente).
+  it("diretor contesta pontual: contestação gravada e projeto volta para validacao (não votacao)", async () => {
+    resolveSessionMock.mockResolvedValueOnce({
+      actorId: IDS.users.diretor1,
+      roles: ["diretor"],
+    });
+
+    const { createContestation } = await import("../actions/projects");
+    const result = await createContestation({
+      projectId: CONTEST_GATE_PONTUAL_PROJECT_ID,
+      reason: "Valor aprovado divergente — contestação de diretor",
+    });
+
+    expect(result?.serverError).toBeUndefined();
+    expect(result?.data?.stageReverted).toBe("validacao");
+
+    const [project] = await db
+      .select({ stage: projects.stage })
+      .from(projects)
+      .where(eq(projects.id, CONTEST_GATE_PONTUAL_PROJECT_ID));
+    expect(project?.stage).toBe("validacao");
   });
 });
 

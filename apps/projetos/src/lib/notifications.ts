@@ -371,7 +371,7 @@ export async function notifyContestation(
   contestorId: string,
 ): Promise<void> {
   const [project] = await db
-    .select({ title: projects.title })
+    .select({ title: projects.title, tipo: projects.tipo })
     .from(projects)
     .where(eq(projects.id, projectId))
     .limit(1);
@@ -392,7 +392,10 @@ export async function notifyContestation(
   const href = diretoriaHref(projectId);
   const resendApiKey = process.env.RESEND_API_KEY;
   const title = `Contestação registrada: ${project.title}`;
-  const body = `${contestorName} registrou uma contestação. O projeto retorna para votação.`;
+  // P-2.18 CORRETIVO: pontual nunca teve votacao — sua contestação devolve
+  // para validacao, não para votação (createContestation).
+  const returnStageLabel = project.tipo === "pontual" ? "validação" : "votação";
+  const body = `${contestorName} registrou uma contestação. O projeto retorna para ${returnStageLabel}.`;
   const dbTpl = await getDbTemplate("projetos-contested");
 
   await Promise.allSettled(
@@ -403,6 +406,7 @@ export async function notifyContestation(
             titulo: project.title,
             contestador: contestorName,
             link: url,
+            estagio: returnStageLabel,
           })
         : null;
       return [
@@ -444,7 +448,9 @@ export async function notifyContestation(
                 template: React.createElement(ProjectStatusChangeEmail, {
                   recipientName: voter.fullName ?? voter.email,
                   projectTitle: project.title,
-                  statusEvent: "contestacao" satisfies ProjectStatusEvent,
+                  statusEvent: (project.tipo === "pontual"
+                    ? "contestacao_pontual"
+                    : "contestacao") satisfies ProjectStatusEvent,
                   extra: contestorName,
                   projectUrl: url,
                 }),

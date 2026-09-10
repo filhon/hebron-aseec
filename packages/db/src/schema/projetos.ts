@@ -75,8 +75,10 @@ export const PROJECT_STAGES = [
 
 export type ProjectStage = (typeof PROJECT_STAGES)[number];
 
-// pontual: validacao → aprovado | reprovado (skip votacao/homologacao)
-// anual:   validacao → votacao → homologacao → aprovado | reprovado
+export const PROJECT_TYPES = ["pontual", "anual"] as const;
+export type ProjectType = (typeof PROJECT_TYPES)[number];
+
+// anual: validacao → votacao → homologacao → aprovado | reprovado
 //
 // votacao → validacao (P-2.16 CORRETIVO, AUDIT/06 §1.3, Q9): permite à
 // diretoria devolver o projeto para validação quando o valor pedido precisa
@@ -93,6 +95,26 @@ export const VALID_STAGE_TRANSITIONS: Record<ProjectStage, ProjectStage[]> = {
   em_execucao: ["concluido"],
   concluido: [],
 };
+
+// pontual: validacao → homologacao → aprovado | reprovado (pula votacao —
+// consenso presencial já a substitui, BRAIN §6.2 "Dois tipos de projeto" —
+// mas passa por homologação como o anual: Q1/BRAIN §6.2 "Ciclo de vida"
+// exige que diretores/avaliadores vejam o resultado antes do responsável,
+// para permitir contestação. P-2.18 CORRETIVO — decisão (a) registrada.
+const PONTUAL_STAGE_OVERRIDES: Partial<Record<ProjectStage, ProjectStage[]>> = {
+  validacao: ["homologacao"],
+};
+
+export function getValidStageTransitions(
+  tipo: ProjectType,
+  stage: ProjectStage,
+): ProjectStage[] {
+  if (tipo === "pontual") {
+    const override = PONTUAL_STAGE_OVERRIDES[stage];
+    if (override) return override;
+  }
+  return VALID_STAGE_TRANSITIONS[stage];
+}
 
 // ---------------------------------------------------------------------------
 // projetos.categories — árvore hierárquica de categorias de projeto

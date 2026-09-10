@@ -290,8 +290,10 @@ Todo o estilo visual compartilhado vive em **`packages/ui`**. O arquivo **`packa
 - **Pontual:** emergencial, avaliado mensalmente, formulário simplificado (6 campos obrigatórios), consenso presencial, sem parcelas (pagamento único, mas diretores podem dividir na aprovação)
 - **Anual:** submissão em janela definida (datas no Admin), formulário estruturado completo, workflow de avaliação → votação → homologação
 
-**Ciclo de vida (mesmo para ambos):**
-`rascunho → validação → votação → homologação (7 dias) → aprovado/reprovado → em execução → concluído`
+**Ciclo de vida:**
+
+- **Anual:** `rascunho → validação → votação → homologação (7 dias) → aprovado/reprovado → em execução → concluído`
+- **Pontual:** `rascunho → validação → homologação (7 dias) → aprovado/reprovado → em execução → concluído` — pula votação (consenso presencial já a substitui), mas passa por homologação como o anual: Q1 pede que diretores/avaliadores saibam do resultado antes do responsável pelo projeto, para permitir contestação (P-2.18 CORRETIVO, decisão (a))
 
 **Validação:**
 
@@ -335,8 +337,8 @@ Todo o estilo visual compartilhado vive em **`packages/ui`**. O arquivo **`packa
 
 - 7 dias para contestação por qualquer diretor/conselheiro
 - Máximo 2 contestações por projeto, cada pessoa pode contestar 1 vez
-- Contestação retorna projeto para votação
-- Sem contestação em 7 dias: resultado apurado na votação se confirma automaticamente — aprovado ou reprovado, conforme o voto (mapa de estágios não permite votação decidir "reprovado" fora da homologação — PATCH-026)
+- Contestação retorna projeto para votação (anual) ou validação (pontual — nunca teve votação, P-2.18 CORRETIVO)
+- Sem contestação em 7 dias: resultado apurado na votação se confirma automaticamente — aprovado ou reprovado, conforme o voto (mapa de estágios não permite votação decidir "reprovado" fora da homologação — PATCH-026); no pontual (sem votação), sem contestação em 7 dias a entrada em homologação se confirma como aprovado
 
 **Avaliação:**
 
@@ -381,10 +383,11 @@ Todo o estilo visual compartilhado vive em **`packages/ui`**. O arquivo **`packa
 
 **Decisões pendentes:**
 
-Duas perguntas que o Filipe devolveu e nunca fechou. Nenhum prompt deve resolvê-las por conta própria — ver `AUDIT/06-CONFORMIDADE-REQUISITOS.md` §13.
+Uma pergunta que o Filipe devolveu e nunca fechou. Nenhum prompt deve resolvê-la por conta própria — ver `AUDIT/06-CONFORMIDADE-REQUISITOS.md` §13.
 
 - **Formato do "local de execução"** (Q55) — endereço livre validado por API, ou campos estruturados? → bloqueia `P-2.21`
-- **Pontual passa ou não por homologação?** (Q1 diz que sim; o código diverge) → bloqueia `P-2.18`
+
+Q1 (pontual passa por homologação?) foi fechada em P-2.18 CORRETIVO — decisão (a), código corrigido para bater com a resposta original.
 
 ### 6.3. Plataforma (LMS)
 

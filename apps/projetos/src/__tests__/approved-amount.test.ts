@@ -50,12 +50,11 @@ const IDS = {
 
 const YEAR = 2033; // ano isolado, sem colisão com outras suítes
 
-// Projeto pontual — pré-decisão sempre em `stage: "validacao"`, invisível a
-// um diretor comum via RLS (`projects_select_reviewer` só cobre votacao+ —
-// achado já registrado em SESSIONS.md, fora do escopo de arquivo deste
-// corretivo). Os testes de aprovação pontual usam o ator super_admin, que
-// tem SELECT irrestrito (`projects_select_admin`) — ainda assim exercitam a
-// action real (`registerProjectDecision`), não uma chamada direta ao banco.
+// Projeto pontual — pré-decisão em `stage: "homologacao"` (P-2.18
+// CORRETIVO: pontual passou a exigir homologação antes de aprovado/
+// reprovado, como o anual — validacao só avança para homologacao agora).
+// Ator super_admin por convenção deste arquivo, não por necessidade de RLS
+// (homologacao já é visível a diretor comum via `projects_select_reviewer`).
 const PONTUAL_PARTIAL_ID = "f9cc0000-0000-0000-0000-000000000001";
 const PONTUAL_SPLIT_ID = "f9cc0000-0000-0000-0000-000000000002";
 const HOMOLOG_NO_DECISION_ID = "f9cc0000-0000-0000-0000-000000000003";
@@ -99,7 +98,7 @@ beforeAll(async () => {
       id: PONTUAL_PARTIAL_ID,
       title: "Pontual — aprovação parcial",
       tipo: "pontual",
-      stage: "validacao",
+      stage: "homologacao",
       organizationId: IDS.org,
       submitterId: IDS.submitter,
       evaluationYear: YEAR,
@@ -111,7 +110,7 @@ beforeAll(async () => {
       id: PONTUAL_SPLIT_ID,
       title: "Pontual — dividido em parcelas na aprovação",
       tipo: "pontual",
-      stage: "validacao",
+      stage: "homologacao",
       organizationId: IDS.org,
       submitterId: IDS.submitter,
       evaluationYear: YEAR,

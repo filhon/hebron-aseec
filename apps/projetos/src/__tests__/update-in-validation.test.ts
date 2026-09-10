@@ -155,7 +155,8 @@ beforeAll(async () => {
     },
     {
       id: EDIT_THEN_APPROVE_ID,
-      title: "Pontual — editar valor em validação e reaprovar (P-2.15)",
+      title:
+        "Pontual — editar valor em validação, avançar e aprovar (P-2.15/P-2.18)",
       tipo: "pontual",
       stage: "validacao",
       organizationId: IDS.org,
@@ -353,6 +354,20 @@ describe("updateProjectInValidation — super_admin altera qualquer campo em val
       budgetTotal: 4200,
     });
     expect(editResult?.serverError).toBeUndefined();
+
+    // P-2.18 CORRETIVO: pontual não aprova mais direto de validacao — passa
+    // por homologacao como o anual (o mesmo teste antes chamava
+    // registerProjectDecision direto daqui).
+    resolveSessionMock.mockResolvedValueOnce({
+      actorId: IDS.superAdmin,
+      roles: ["super_admin"],
+    });
+    const { transitionProjectStage } = await import("../actions/projects");
+    const advanceResult = await transitionProjectStage({
+      projectId: EDIT_THEN_APPROVE_ID,
+      toStage: "homologacao",
+    });
+    expect(advanceResult?.serverError).toBeUndefined();
 
     resolveSessionMock.mockResolvedValueOnce({
       actorId: IDS.superAdmin,

@@ -306,6 +306,7 @@
 | S-283  | 2026-08-27 | P-2.15 — Projetos: o valor aprovado que o sistema nunca soube registrar (CORRETIVO)                                              | concluido                                                                            |
 | S-284  | 2026-08-27 | P-2.16 — Projetos: a validação que só sabia mudar de nome (CORRETIVO)                                                            | concluido                                                                            |
 | S-285  | 2026-08-27 | P-2.17 — Projetos: a contestação que só o outro lado podia fazer (CORRETIVO)                                                     | concluido                                                                            |
+| S-286  | 2026-09-09 | P-2.18 — Projetos: o pontual que pula a homologação (CORRETIVO)                                                                  | concluido                                                                            |
 
 ---
 
@@ -27627,4 +27628,137 @@ negócio específico pedindo isso.
 - `apps/projetos/src/app/(submissor)/[id]/page.tsx`
 - `apps/projetos/src/app/(diretoria)/pipeline/[id]/page.tsx`
 - `apps/projetos/src/__tests__/submitter-contestation.test.ts` (novo)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+---
+
+## S-286 — P-2.18 — Projetos: o pontual que pula a homologação (CORRETIVO)
+
+**Prompt:** `PROMPTS.md` § P-2.18
+**Branch:** `fix/P-2.18-projetos-pontual-homologacao`
+**Data:** 2026-09-09
+**Modelo:** claude-sonnet-5
+**Status:** concluido
+
+### Contexto
+
+`AUDIT/06 §1.5`: `VALID_STAGE_TRANSITIONS` levava o pontual de `validacao`
+direto a `aprovado`/`reprovado`, pulando `homologacao`. Como
+`createContestation` exige `stage === "homologacao"`, uma decisão sobre
+projeto pontual nunca podia ser contestada — exatamente o risco que a Q1
+nomeia (_"O pontual também deve passar pela homologação... caso seja
+necessário uma contestação do resultado ou valor aprovado"_). BRAIN.md
+§6.2 já dizia "mesmo para ambos"; o código divergia há muitas sessões sem
+PATCH revogando. Prompt marcado BLOQUEADO.
+
+### Decisão registrada antes da execução
+
+Pergunta feita ao Filipe via `AskUserQuestion`: (a) corrigir o código para
+o pontual passar por homologação, ou (b) revogar a Q1 via PATCH (pontual é
+emergencial, 7 dias derrotaria o propósito). Resposta: **(a)**. Como (a)
+apenas faz o código bater com a resposta original (Q1) e com BRAIN.md — não
+muda nenhuma decisão registrada — não gerou PATCH novo, só a atualização de
+BRAIN.md §6.2 e a remoção de Q1 da lista de "Decisões pendentes".
+
+### Implementação
+
+1. **`VALID_STAGE_TRANSITIONS` por tipo, sem duplicar o mapa**
+   (`packages/db/src/schema/projetos.ts`): o mapa-base (efetivamente o do
+   anual) permanece intacto; `PONTUAL_STAGE_OVERRIDES` sobrescreve só
+   `validacao` (`["homologacao"]`) e `getValidStageTransitions(tipo, stage)`
+   é o novo ponto único de leitura. `transitionProjectStage` e
+   `registerProjectDecision` (`apps/projetos/src/actions/projects.ts`)
+   passam a chamar essa função com `project.tipo` em vez de indexar
+   `VALID_STAGE_TRANSITIONS` direto — pontual em `validacao → aprovado`
+   agora é recusado com "Transição inválida", igual qualquer outra
+   transição fora do mapa.
+2. **Cron de homologação automática** (`packages/jobs/src/crons/
+projetos.ts`) **não precisou de mudança**: já resolve por ausência de
+   `voteApproved` no snapshot (`snapshotData.voteApproved === false ?
+   "rejected" : "approved"`), e a entrada manual do pontual em homologação
+   (via `transitionProjectStage`) nunca grava esse campo — só
+   `voting.ts` grava, e pontual nunca vota. Verificado com um teste novo
+   (fixture pontual sem `voteApproved`, resolve para aprovado).
+3. **`createContestation` devolve pontual para `validacao`, não `votacao`**
+   (que o pontual nunca teve): `returnStage` calculado a partir de
+   `project.tipo`, propagado ao UPDATE, ao snapshot de versão, ao audit
+   diff e ao retorno da action. Achado no meio do caminho: sob o role
+   `authenticated`, um UPDATE que muda `stage` é checado contra as
+   políticas de SELECT mesmo sem `.returning()` —
+   `projects_select_reviewer` não cobre `validacao` para diretor/
+   conselheiro (só a partir de `votacao`), então um diretor comum (não
+   super_admin) contestando um pontual batia em "new row violates
+   row-level security policy". Envolvido em `withSystemRole` (mesmo
+   padrão já usado nesta função para financeiro/audit) — a autorização real
+   já aconteceu em `conselheiroDiretorAction` + no gate de stage acima; a
+   votação (anual) segue no mesmo caminho, sem mudança de comportamento.
+4. **UI do pipeline** (`(diretoria)/pipeline/[id]/page.tsx`): `DecisionPanel`
+   aparecia em `validacao` OU `homologacao` para qualquer tipo; como
+   `validacao` do pontual não admite mais decisão direta, passou a só
+   aparecer em `homologacao` para o pontual (anual manteve `validacao` OU
+   `homologacao`, comportamento pré-existente fora do escopo deste
+   corretivo). Mudança de UI condicionada a tipo — skill `/impeccable`
+   invocada antes, por exigência da pré-condição do prompt.
+5. **Copy das notificações**: `notifyContestation`
+   (`apps/projetos/src/lib/notifications.ts`) dizia sempre "o projeto
+   retorna para votação" — agora escolhe "validação"/"votação" por tipo, e
+   propaga para o template DB-seed (`projetos-contested`, novo placeholder
+   `{{estagio}}` em `packages/db/src/seed.ts`) e para o fallback React
+   (`ProjectStatusChangeEmail`, `contestacao_pontual` novo ao lado de
+   `contestacao`, `packages/email/src/templates/
+project-status-change.tsx`). O seed usa `onConflictDoNothing` — uma linha
+   já existente em produção não é sobrescrita automaticamente; documentado
+   aqui, não corrigido por script (fora do escopo de um corretivo de
+   schema/estado).
+
+### Verificação
+
+- `pnpm turbo typecheck lint --filter=@hebron/db --filter=@hebron/email
+--filter=@hebron/jobs --filter=@hebron/projetos`: verdes.
+- `apps/projetos` suíte completa (`pnpm --filter projetos test`, singleFork,
+  19 arquivos): **190/190 verdes** — nenhuma regressão no módulo.
+- `state-machine.test.ts`: cobertura nova de `getValidStageTransitions`
+  (pontual em `validacao` só permite `homologacao`; anual inalterado;
+  pontual em qualquer outro estágio cai no mapa base) **e** da action real
+  — `transitionProjectStage` recusa pontual `validacao → aprovado` (ator
+  super_admin, já que diretor não enxerga um projeto em `validacao` via
+  RLS), com controle positivo confirmando que o anual continua podendo
+  avançar de `validacao`. Fecha o critério de aceite no nível de action, não
+  só no mapa puro.
+- `flow.test.ts`: teste novo — diretor contesta pontual em homologação,
+  projeto volta para `validacao` (não `votacao`); achou e validou o fix de
+  `withSystemRole` acima (o teste falhava com o erro de RLS antes do fix).
+- `approved-amount.test.ts` / `update-in-validation.test.ts`: fixtures
+  pontuais que decidiam direto de `validacao` corrigidas para o novo fluxo
+  (`validacao → homologacao → decisão`) — sem isso, os 2 testes de
+  aprovação parcial/split e o de "editar e reaprovar" quebrariam pelo
+  próprio corretivo.
+- `packages/jobs` `projetos-homologacao.test.ts` (isolado, 5 testes):
+  fixture pontual nova prova que o cron aprova sem depender de voto
+  (snapshot sem `voteApproved`).
+
+### Débitos fechados
+
+- Q1 (`BRAIN.md` §6.2 "Decisões pendentes") — pontual passa por
+  homologação, código e spec batem.
+
+### Débitos novos
+
+- Nenhum novo.
+
+### Arquivos modificados
+
+- `BRAIN.md`
+- `packages/db/src/schema/projetos.ts`
+- `packages/db/src/schema/index.ts`
+- `packages/db/src/seed.ts`
+- `packages/email/src/templates/project-status-change.tsx`
+- `apps/projetos/src/actions/projects.ts`
+- `apps/projetos/src/lib/notifications.ts`
+- `apps/projetos/src/app/(diretoria)/pipeline/[id]/page.tsx`
+- `apps/projetos/src/__tests__/state-machine.test.ts`
+- `apps/projetos/src/__tests__/flow.test.ts`
+- `apps/projetos/src/__tests__/approved-amount.test.ts`
+- `apps/projetos/src/__tests__/update-in-validation.test.ts`
+- `packages/jobs/src/__tests__/projetos-homologacao.test.ts`
 - `SESSIONS.md` (esta entrada + linha no índice)
