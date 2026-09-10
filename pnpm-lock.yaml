@@ -666,6 +666,9 @@ importers:
       drizzle-orm:
         specifier: "catalog:"
         version: 0.36.4(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)(@types/react@19.2.15)(postgres@3.4.9)(react@19.2.6)
+      hls.js:
+        specifier: ^1.6.16
+        version: 1.6.16
       lucide-react:
         specifier: ^0.460.0
         version: 0.460.0(react@19.2.6)
@@ -684,6 +687,9 @@ importers:
       react-dom:
         specifier: ^19.0.0
         version: 19.2.6(react@19.2.6)
+      tus-js-client:
+        specifier: ^4.3.1
+        version: 4.3.1
       zod:
         specifier: "catalog:"
         version: 3.25.76

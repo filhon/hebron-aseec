@@ -22,6 +22,7 @@ import {
   organizationMembers,
   projects,
   projectVersions,
+  projectAttachments,
   notifications,
   auditLog,
 } from "@hebron/db/schema";
@@ -140,6 +141,23 @@ beforeAll(async () => {
       parcelas: 1,
       meses: 1,
     })
+    .onConflictDoNothing();
+
+  // P-2.20 CORRETIVO: submitProject reconfere os 3 anexos obrigatórios do
+  // anual — o rascunho acima é inserido direto (sem passar pelo wizard/
+  // createAnnualDraft), então precisa dos anexos aqui.
+  await db
+    .insert(projectAttachments)
+    .values(
+      (["video", "planilha", "carta"] as const).map((kind) => ({
+        projectId: IDS.project,
+        kind,
+        fileUrl: kind === "video" ? null : `https://example.test/${kind}.bin`,
+        fileName: `${kind}.bin`,
+        bunnyVideoId: kind === "video" ? "test-video-id" : null,
+        uploadedBy: IDS.users.submissor,
+      })),
+    )
     .onConflictDoNothing();
 });
 

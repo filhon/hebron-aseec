@@ -49,6 +49,8 @@ import {
   deleteProjectSchema,
   registerProjectDecisionSchema,
   updateProjectFieldsSchema,
+  REQUIRED_ANNUAL_ATTACHMENT_KINDS,
+  ATTACHMENT_KIND_LABEL,
 } from "@hebron/validators/projetos";
 import type { UpdateProjectFieldsInput } from "@hebron/validators/projetos";
 import {
@@ -485,9 +487,11 @@ export const createAnnualDraft = submissorAction
           await tx.insert(projectAttachments).values(
             parsedInput.attachments.map((a) => ({
               projectId: project.id,
-              fileUrl: a.fileUrl,
+              kind: a.kind,
+              fileUrl: a.fileUrl ?? null,
               fileName: a.fileName,
               fileSize: a.fileSize ?? null,
+              bunnyVideoId: a.bunnyVideoId ?? null,
               uploadedBy: ctx.actorId,
             })),
           );
@@ -574,9 +578,11 @@ export const createPunctualDraft = submissorAction
           await tx.insert(projectAttachments).values(
             parsedInput.attachments.map((a) => ({
               projectId: project.id,
-              fileUrl: a.fileUrl,
+              kind: a.kind,
+              fileUrl: a.fileUrl ?? null,
               fileName: a.fileName,
               fileSize: a.fileSize ?? null,
+              bunnyVideoId: a.bunnyVideoId ?? null,
               uploadedBy: ctx.actorId,
             })),
           );
@@ -861,15 +867,40 @@ export const submitProject = submissorAction
       );
     }
 
-    // Janela de submissão (P-2.19 CORRETIVO) — só o anual tem janela; pontual
-    // (Q91/Q54) submete em qualquer data.
+    // Checagens exclusivas do anual — janela de submissão (P-2.19 CORRETIVO)
+    // e anexos obrigatórios (P-2.20 CORRETIVO, Q47/Q54: vídeo/planilha/carta,
+    // reconferidos aqui além do schema Zod do wizard — defense in depth,
+    // nunca só no cliente). Uma única transação para as duas: este fluxo já
+    // fecha perto do limiar de latência de notifications.test.ts (que não
+    // mocka o envio real de email) — outra viagem de rede sequencial aqui
+    // bastou para estourar o timeout do teste na prática.
     let submissionWindowBypassed = false;
     if (project.tipo === "anual") {
-      const windowCheck = await withAuthenticatedContext(
-        { actorId: ctx.actorId },
-        (tx) => checkAnnualSubmissionWindow(tx, ctx.roles),
+      const { bypassedBySuperAdmin, attachmentKinds } =
+        await withAuthenticatedContext({ actorId: ctx.actorId }, async (tx) => {
+          const windowCheck = await checkAnnualSubmissionWindow(tx, ctx.roles);
+          const attachmentRows = await tx
+            .selectDistinct({ kind: projectAttachments.kind })
+            .from(projectAttachments)
+            .where(eq(projectAttachments.projectId, parsedInput.projectId));
+          return {
+            ...windowCheck,
+            attachmentKinds: attachmentRows.map((a) => a.kind),
+          };
+        });
+      submissionWindowBypassed = bypassedBySuperAdmin;
+
+      const presentKinds = new Set(attachmentKinds);
+      const missingKinds = REQUIRED_ANNUAL_ATTACHMENT_KINDS.filter(
+        (kind) => !presentKinds.has(kind),
       );
-      submissionWindowBypassed = windowCheck.bypassedBySuperAdmin;
+      if (missingKinds.length > 0) {
+        throw new BusinessError(
+          `Anexos obrigatórios ausentes: ${missingKinds
+            .map((kind) => ATTACHMENT_KIND_LABEL[kind])
+            .join(", ")}`,
+        );
+      }
     }
 
     // Budget check

@@ -29,6 +29,82 @@ const projectCategoryEnum = z.enum(
   { errorMap: () => ({ message: "Selecione uma categoria" }) },
 );
 
+// ─── Anexos (P-2.20 CORRETIVO) ─────────────────────────────────────────────────
+// AUDIT/06 §1.7, Q47: vídeo de apresentação (até 3 min), planilha de
+// orçamento por etapas e carta de recomendação viram anexos tipados, exigidos
+// no anual e opcionais (mas com os campos presentes) no pontual — Q54.
+// Compartilhado entre annualProjectFields e createPunctualProjectSchema:
+// nenhum dos dois reimplementa a forma do item.
+
+export const projectAttachmentKindEnum = z.enum([
+  "projeto",
+  "estatuto",
+  "video",
+  "planilha",
+  "carta",
+  "outro",
+]);
+
+export const REQUIRED_ANNUAL_ATTACHMENT_KINDS = [
+  "video",
+  "planilha",
+  "carta",
+] as const;
+
+export const ATTACHMENT_KIND_LABEL: Record<
+  z.infer<typeof projectAttachmentKindEnum>,
+  string
+> = {
+  projeto: "Documento do Projeto",
+  estatuto: "Estatuto ou CNPJ",
+  video: "Vídeo de apresentação",
+  planilha: "Planilha de orçamento",
+  carta: "Carta de recomendação",
+  outro: "Anexo",
+};
+
+const attachmentItemSchema = z
+  .object({
+    kind: projectAttachmentKindEnum,
+    // kind='video' não sobe para o Supabase Storage (Bunny Stream em vez
+    // disso, P-6.20) — os demais kinds continuam exigindo fileUrl.
+    fileUrl: z.string().min(1).nullable().optional(),
+    bunnyVideoId: z.string().min(1).nullable().optional(),
+    fileName: z.string().min(1),
+    fileSize: z.number().int().positive().optional(),
+  })
+  .superRefine((item, ctx) => {
+    const hasFile =
+      item.kind === "video" ? !!item.bunnyVideoId : !!item.fileUrl;
+    if (!hasFile) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          item.kind === "video"
+            ? "Vídeo sem upload concluído (bunnyVideoId ausente)"
+            : "Anexo sem arquivo enviado",
+      });
+    }
+  });
+
+export const attachmentsArraySchema = z.array(attachmentItemSchema).optional();
+
+export function checkRequiredAnnualAttachments(
+  attachments: { kind: string }[] | undefined,
+  ctx: z.RefinementCtx,
+): void {
+  const kinds = new Set((attachments ?? []).map((a) => a.kind));
+  for (const required of REQUIRED_ANNUAL_ATTACHMENT_KINDS) {
+    if (!kinds.has(required)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["attachments"],
+        message: `Anexo obrigatório ausente: ${ATTACHMENT_KIND_LABEL[required]}`,
+      });
+    }
+  }
+}
+
 // ─── Regra cruzada meses × parcelas ───────────────────────────────────────────
 // Compartilhada entre o schema completo (superRefine abaixo) e o schema da
 // etapa 4 do wizard (annualStep4Schema) — nenhum dos dois reimplementa a
@@ -107,7 +183,6 @@ export const annualProjectFields = z.object({
     .string()
     .min(50, "Descreva os resultados esperados")
     .max(5000),
-  cartaRecomendacao: z.boolean(),
   valorTotal: z.number().positive("Valor deve ser positivo"),
   numeroParcelas: z
     .number()
@@ -124,20 +199,14 @@ export const annualProjectFields = z.object({
   parcerias: z.string().max(2000).nullable().optional(),
   riscos: z.string().max(2000).nullable().optional(),
   indicadoresExito: z.string().max(2000).nullable().optional(),
-  attachments: z
-    .array(
-      z.object({
-        fileUrl: z.string().min(1),
-        fileName: z.string().min(1),
-        fileSize: z.number().int().positive().optional(),
-      }),
-    )
-    .optional(),
+  attachments: attachmentsArraySchema,
 });
 
 export const createAnnualProjectSchema = annualProjectFields.superRefine(
-  (data, ctx) =>
-    checkMesesPagamentoCoherence(data.mesesPagamento, data.numeroParcelas, ctx),
+  (data, ctx) => {
+    checkMesesPagamentoCoherence(data.mesesPagamento, data.numeroParcelas, ctx);
+    checkRequiredAnnualAttachments(data.attachments, ctx);
+  },
 );
 
 export type CreateAnnualProjectInput = z.infer<
@@ -205,15 +274,7 @@ export const createPunctualProjectSchema = z.object({
   pais: z.string().max(100).optional(),
   editalId: z.string().uuid().nullable().optional(),
   parentProjectId: z.string().uuid().nullable().optional(),
-  attachments: z
-    .array(
-      z.object({
-        fileUrl: z.string().min(1),
-        fileName: z.string().min(1),
-        fileSize: z.number().int().positive().optional(),
-      }),
-    )
-    .optional(),
+  attachments: attachmentsArraySchema,
 });
 
 export type CreatePunctualProjectInput = z.infer<

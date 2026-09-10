@@ -12071,14 +12071,17 @@ o principal insumo de avaliação da diretoria, e hoje não há onde enviá-lo.
 
 **Critérios de aceite:**
 
-- [ ] Submeter projeto anual sem vídeo, planilha ou carta é recusado **no
+- [x] Submeter projeto anual sem vídeo, planilha ou carta é recusado **no
       servidor** (teste chamando a action, não a UI)
-- [ ] Pontual submete sem nenhum dos três
+- [x] Pontual submete sem nenhum dos três
 - [ ] Upload de XLSX no bucket funciona; upload de tipo não permitido falha com
-      mensagem legível
-- [ ] Vídeo enviado aparece reproduzível na tela da diretoria
-- [ ] Projetos anteriores continuam válidos (anexos com `kind = outro`)
-- [ ] Lint passa · Types passam
+      mensagem legível (não verificado nesta sessão — sem navegador; migration
+      aplicada e allowed_mime_types conferido, mas sem upload real testado)
+- [ ] Vídeo enviado aparece reproduzível na tela da diretoria (não verificado
+      nesta sessão — sem navegador; código espelha apps/plataforma, P-6.20, já
+      em produção)
+- [x] Projetos anteriores continuam válidos (anexos com `kind = outro`)
+- [x] Lint passa · Types passam
 
 **Notas:**
 

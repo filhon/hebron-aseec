@@ -34,6 +34,7 @@ import {
   organizationMembers,
   projects,
   projectVersions,
+  projectAttachments,
   auditLog,
   systemSettings,
 } from "@hebron/db/schema";
@@ -150,10 +151,30 @@ function validAnnualInput() {
     beneficiariosDescricao: "Descrição dos beneficiários de teste.",
     resultadosEsperados:
       "Resultados esperados de teste com pelo menos cinquenta caracteres para validação do schema.",
-    cartaRecomendacao: true,
     valorTotal: 12000,
     numeroParcelas: 1,
     mesesPagamento: [6],
+    // P-2.20 CORRETIVO: vídeo/planilha/carta são obrigatórios no anual.
+    attachments: [
+      {
+        kind: "video" as const,
+        bunnyVideoId: "test-video-id",
+        fileName: "video.mp4",
+        fileSize: 1000,
+      },
+      {
+        kind: "planilha" as const,
+        fileUrl: "https://example.test/planilha.xlsx",
+        fileName: "planilha.xlsx",
+        fileSize: 1000,
+      },
+      {
+        kind: "carta" as const,
+        fileUrl: "https://example.test/carta.pdf",
+        fileName: "carta.pdf",
+        fileSize: 1000,
+      },
+    ],
   };
 }
 
@@ -228,6 +249,35 @@ beforeAll(async () => {
       draftFixture(IDS.drafts.pontual, "pontual"),
       draftFixture(IDS.drafts.anualSuperAdmin, "anual"),
     ])
+    .onConflictDoNothing();
+
+  // P-2.20 CORRETIVO: submitProject reconfere os 3 anexos obrigatórios do
+  // anual — os rascunhos fixture acima são inseridos direto (sem passar
+  // pelo wizard/createAnnualDraft), então precisam dos anexos aqui para que
+  // os testes de janela (que já passam por essa checagem antes) sigam
+  // testando só a janela, não anexo ausente.
+  await db
+    .insert(projectAttachments)
+    .values(
+      (["video", "planilha", "carta"] as const).flatMap((kind) => [
+        {
+          projectId: IDS.drafts.anual,
+          kind,
+          fileUrl: kind === "video" ? null : `https://example.test/${kind}.bin`,
+          fileName: `${kind}.bin`,
+          bunnyVideoId: kind === "video" ? "test-video-id" : null,
+          uploadedBy: IDS.users.submissor,
+        },
+        {
+          projectId: IDS.drafts.anualSuperAdmin,
+          kind,
+          fileUrl: kind === "video" ? null : `https://example.test/${kind}.bin`,
+          fileName: `${kind}.bin`,
+          bunnyVideoId: kind === "video" ? "test-video-id" : null,
+          uploadedBy: IDS.users.submissor,
+        },
+      ]),
+    )
     .onConflictDoNothing();
 
   await setJanela("", "");

@@ -49,10 +49,24 @@ import { StepReview } from "./project-wizard-steps/step-review";
 // DOM — sem relação com o defeito corrigido aqui, mas trivial de acertar
 // enquanto o arquivo é recriado.
 
+// kind: mesmo vocabulário de projectAttachmentKindEnum
+// (@hebron/validators/projetos) — string solta aqui para não puxar o pacote
+// de validators inteiro só pelo tipo.
+export type AttachmentKind =
+  | "projeto"
+  | "estatuto"
+  | "video"
+  | "planilha"
+  | "carta";
+
 export type AttachmentItem = {
-  docId: string;
-  storagePath: string;
-  fileUrl: string;
+  kind: AttachmentKind;
+  // Presente para projeto/estatuto/planilha/carta (upload no bucket
+  // Supabase). Ausente para video — usa bunnyVideoId em vez disso (P-2.20
+  // CORRETIVO, upload via Bunny Stream, P-6.20).
+  storagePath?: string;
+  fileUrl?: string;
+  bunnyVideoId?: string;
   fileName: string;
   fileSize: number;
 };
@@ -93,7 +107,6 @@ export type WizardFormData = {
   anoReferencia: string;
   mesesSelecionados: number[];
   // Step 5
-  cartaRecomendacao: boolean;
   anexos: AttachmentItem[];
 };
 
@@ -123,7 +136,6 @@ const INITIAL: WizardFormData = {
   cofinancimento: "",
   anoReferencia: String(new Date().getFullYear() + 1),
   mesesSelecionados: [],
-  cartaRecomendacao: false,
   anexos: [] as AttachmentItem[],
 };
 
@@ -158,6 +170,7 @@ const PONTUAL_STEPS: WizardStep[] = [
 const PAYLOAD_TO_FORM_KEY: Partial<Record<string, keyof WizardFormData>> = {
   organizacaoId: "orgId",
   mesesPagamento: "mesesSelecionados",
+  attachments: "anexos",
 };
 
 function toFormKey(path: string): keyof WizardFormData {
@@ -225,7 +238,6 @@ const ANNUAL_FIELD_STEP: Partial<Record<keyof WizardFormData, number>> = {
   cofinancimento: 3,
   anoReferencia: 4,
   mesesSelecionados: 4,
-  cartaRecomendacao: 5,
   anexos: 5,
 };
 
@@ -239,7 +251,6 @@ const PONTUAL_FIELD_STEP: Partial<Record<keyof WizardFormData, number>> = {
   regiao: 2,
   pais: 2,
   valorTotal: 3,
-  cartaRecomendacao: 4,
   anexos: 4,
 };
 
@@ -266,6 +277,16 @@ function toIsoDateTimeOrUndefined(v: string): string | undefined {
   return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
 }
 
+function buildAttachmentsPayload(anexos: AttachmentItem[]) {
+  return anexos.map((a) => ({
+    kind: a.kind,
+    fileUrl: a.fileUrl,
+    bunnyVideoId: a.bunnyVideoId,
+    fileName: a.fileName,
+    fileSize: a.fileSize,
+  }));
+}
+
 function buildAnnualPayload(data: WizardFormData) {
   return {
     titulo: data.titulo,
@@ -282,18 +303,13 @@ function buildAnnualPayload(data: WizardFormData) {
     beneficiariosQuantidade: toIntOrUndefined(data.beneficiariosQuantidade),
     beneficiariosDescricao: data.beneficiariosDescricao,
     resultadosEsperados: data.resultadosEsperados,
-    cartaRecomendacao: data.cartaRecomendacao,
     valorTotal: toFloatOrUndefined(data.valorTotal),
     numeroParcelas: toIntOrUndefined(data.numeroParcelas),
     mesesPagamento: data.mesesSelecionados,
     editalId: data.editalId,
     parentProjectId: data.parentProjectId,
     cofinancimento: data.cofinancimento || null,
-    attachments: data.anexos.map((a) => ({
-      fileUrl: a.fileUrl,
-      fileName: a.fileName,
-      fileSize: a.fileSize,
-    })),
+    attachments: buildAttachmentsPayload(data.anexos),
   };
 }
 
@@ -313,11 +329,7 @@ function buildPontualPayload(data: WizardFormData) {
     pais: data.pais || undefined,
     editalId: data.editalId,
     parentProjectId: data.parentProjectId,
-    attachments: data.anexos.map((a) => ({
-      fileUrl: a.fileUrl,
-      fileName: a.fileName,
-      fileSize: a.fileSize,
-    })),
+    attachments: buildAttachmentsPayload(data.anexos),
   };
 }
 
@@ -700,7 +712,13 @@ export function ProjectWizard() {
             />
           );
         case 5:
-          return <StepAttachments data={data} onChange={patch} />;
+          return (
+            <StepAttachments
+              data={data}
+              onChange={patch}
+              error={fieldErrors.anexos}
+            />
+          );
         case 6:
           return <StepReview data={data} orgs={orgs} />;
         default:
@@ -730,7 +748,13 @@ export function ProjectWizard() {
       case 3:
         return <StepBudget data={data} onChange={patch} errors={fieldErrors} />;
       case 4:
-        return <StepAttachments data={data} onChange={patch} />;
+        return (
+          <StepAttachments
+            data={data}
+            onChange={patch}
+            error={fieldErrors.anexos}
+          />
+        );
       case 5:
         return <StepReview data={data} orgs={orgs} />;
       default:

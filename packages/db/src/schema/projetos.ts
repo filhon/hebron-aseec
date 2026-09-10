@@ -59,6 +59,15 @@ export const evaluationRecommendationEnum = projetosSchema.enum(
   ["approved", "rejected"],
 );
 
+// P-2.20 CORRETIVO — tipa o anexo (antes só fileUrl/fileName genéricos, sem
+// distinguir vídeo de apresentação/planilha de orçamento/carta de
+// recomendação dos dois PDFs originais). Default 'outro' cobre as linhas
+// existentes, que não tinham essa distinção.
+export const projectAttachmentKindEnum = projetosSchema.enum(
+  "project_attachment_kind",
+  ["projeto", "estatuto", "video", "planilha", "carta", "outro"],
+);
+
 // ---------------------------------------------------------------------------
 // State machine — TypeScript-only; enforced in Server Actions
 // ---------------------------------------------------------------------------
@@ -601,9 +610,16 @@ export const projectAttachments = projetosSchema.table(
     projectId: uuid("project_id")
       .notNull()
       .references(() => projects.id, { onDelete: "cascade" }),
-    fileUrl: text("file_url").notNull(),
+    kind: projectAttachmentKindEnum("kind").notNull().default("outro"),
+    // Nullable: anexos kind='video' não sobem para o bucket Supabase (caro,
+    // sem streaming) — usam bunnyVideoId abaixo. Todos os outros kinds
+    // continuam exigindo fileUrl (checado no schema Zod, não aqui).
+    fileUrl: text("file_url"),
     fileName: text("file_name").notNull(),
     fileSize: integer("file_size"),
+    // guid do vídeo na library Bunny Stream (P-6.20/P-2.20) — reprodução
+    // sempre via signBunnyPlaybackUrl, nunca o guid cru.
+    bunnyVideoId: text("bunny_video_id"),
     uploadedBy: uuid("uploaded_by")
       .notNull()
       .references(() => users.id),

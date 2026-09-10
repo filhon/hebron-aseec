@@ -308,6 +308,7 @@
 | S-285  | 2026-08-27 | P-2.17 — Projetos: a contestação que só o outro lado podia fazer (CORRETIVO)                                                     | concluido                                                                            |
 | S-286  | 2026-09-09 | P-2.18 — Projetos: o pontual que pula a homologação (CORRETIVO)                                                                  | concluido                                                                            |
 | S-287  | 2026-09-10 | P-2.19 — Projetos: a janela de submissão que nunca fechou (CORRETIVO)                                                            | concluido                                                                            |
+| S-288  | 2026-09-10 | P-2.20 — Projetos: os três anexos que a diretoria pediu e o formulário não aceita (CORRETIVO)                                    | parcial                                                                              |
 
 ---
 
@@ -27880,4 +27881,179 @@ texto, em `FeatureFlagsPanel`).
 - `apps/admin/src/app/(dashboard)/configuracoes/page.tsx`
 - `apps/projetos/src/__tests__/submission-window.test.ts`
 - `PROMPTS.md` (critérios de P-2.19 marcados `[x]`)
+- `SESSIONS.md` (esta entrada + linha no índice)
+
+## S-288 — P-2.20 — Projetos: os três anexos que a diretoria pediu e o formulário não aceita (CORRETIVO)
+
+**Prompt:** `PROMPTS.md` § P-2.20
+**Branch:** `fix/P-2.20-projetos-anexos-obrigatorios`
+**Data:** 2026-09-10
+**Modelo:** claude-sonnet-5
+**Status:** parcial — os dois critérios que exigem navegador (upload real de
+XLSX no bucket e reprodução do vídeo na tela da diretoria) ficam sem
+verificação humana nesta sessão (ambiente não interativo); os demais quatro
+estão verificados por teste automatizado.
+
+### Contexto
+
+`AUDIT/06 §1.7`, Q47/Q54: o wizard coletava dois PDFs genéricos (Documento
+do Projeto, Estatuto/CNPJ) e um checkbox de autodeclaração para a carta de
+recomendação. O vídeo de apresentação (até 3 min) — "o principal insumo de
+avaliação da diretoria" pela narrativa do PRD — não tinha onde ser enviado; a
+planilha de orçamento por etapas também não; e a carta nunca virou arquivo de
+verdade.
+
+### Pré-condição verificada
+
+Credenciais Bunny Stream (`BUNNY_STREAM_LIBRARY_ID/API_KEY/CDN_HOSTNAME/
+TOKEN_AUTH_KEY`) não estavam em `apps/projetos/.env.local` no início desta
+sessão — a nota do próprio prompt pede parar e reportar em vez de cair para o
+bucket Supabase por conta própria. Reportado a Filipe; ele confirmou as
+mesmas credenciais já em uso por `apps/plataforma` (mesma library Bunny,
+P-6.20) e autorizou copiá-las para `apps/projetos/.env.local`/`.env.example`
+(`.env.local` é gitignored, nunca commitado).
+
+### Implementação
+
+1. **Tipagem do anexo** — `projetos.project_attachment_kind` (enum: projeto |
+   estatuto | video | planilha | carta | outro, default `outro`),
+   `packages/db/src/schema/projetos.ts` + migration
+   `0099_projetos_attachment_kinds.sql`. `file_url` virou NULLABLE (vídeo não
+   sobe para o bucket Supabase — usa `bunny_video_id`, coluna nova, resolvido
+   sempre via `signBunnyPlaybackUrl`, nunca o guid cru). Migration aplicada
+   contra o banco de dev compartilhado (`pnpm db:migrate`).
+2. **Bucket `project-attachments`** — `allowed_mime_types` ganhou XLSX/XLS/
+   CSV/ODS (planilha) na mesma migration, padrão `ON CONFLICT DO UPDATE` de
+   `0020_storage_buckets.sql`, sem tocar nas policies existentes (mime type
+   não afeta RLS de `storage.objects`, que é por path). `file_size_limit`
+   mantido em 10MB — PDF/planilha/carta são documentos pequenos, sem
+   justificativa para aumentar.
+3. **Vídeo via Bunny Stream** — `packages/integrations/src/bunny-stream.ts`
+   já tinha tudo (P-6.20: `createBunnyVideo`, `createBunnyTusUploadCredentials`,
+   `signBunnyPlaybackUrl`), nenhuma mudança lá. Nova action
+   `apps/projetos/src/actions/video-upload.ts` (`createAttachmentVideoUpload`)
+   espelha `apps/plataforma/src/actions/uploads.ts::createLessonVideoUpload`
+   linha por linha. O limite de 3 minutos é avisado **antes** do upload — o
+   wizard lê a duração do arquivo local (elemento `<video>` temporário +
+   `loadedmetadata`) antes de sequer chamar a action, não depois de subir.
+4. **Obrigatoriedade** (`packages/validators/src/projetos/index.ts`): schema
+   de item de anexo compartilhado (`attachmentsArraySchema`) entre
+   `annualProjectFields`/`createPunctualProjectSchema` — nenhum dos dois
+   reimplementa a forma. `createAnnualProjectSchema.superRefine` exige
+   vídeo/planilha/carta (`REQUIRED_ANNUAL_ATTACHMENT_KINDS`); pontual mantém
+   os mesmos campos no formulário, mas nunca exige. **Reconferido em
+   `submitProject`** (`apps/projetos/src/actions/projects.ts`) contra o banco
+   — defense in depth, não só o schema Zod do wizard. A checagem de anexos
+   foi mesclada na MESMA transação que já fazia `checkAnnualSubmissionWindow`
+   (não uma nova `withAuthenticatedContext` separada): o primeiro rascunho
+   dessa etapa media uma viagem de rede a mais nesse fluxo, que já tem
+   `notifications.test.ts` documentado por ele mesmo como "próximo do limiar
+   de 30s" (não mocka o envio real de e-mail) — confirmado por bisseção
+   (`git stash` do arquivo) que esse teste já estourava os mesmos 30s **sem**
+   nenhuma mudança minha, então a lentidão é pré-existente, mas juntar as
+   duas leituras numa transação só evita adicionar mais uma variável a um
+   caminho já no limite.
+5. **Carta de recomendação** — checkbox removido (`cartaRecomendacao:
+z.boolean()` saiu de `annualProjectFields`); vira upload real, mesmo
+   caminho dos outros anexos tipados. Snapshots antigos com o campo booleano
+   continuam lidos como antes (`snap.cartaRecomendacao` em
+   `pipeline/[id]/page.tsx` já testava `!== undefined`) — projetos anteriores
+   não foram invalidados, só deixam de existir em snapshots novos.
+6. **UI do wizard** (`/impeccable` consultado antes de implementar —
+   `PRODUCT.md` carregado, register=product; sem `DESIGN.md`, mas
+   `design-refs/projetos/Projetos.dc.html` já cobre a etapa Anexos e serve o
+   mesmo papel) — `step-attachments.tsx` reescrito: um único vocabulário
+   visual para os 5 anexos (badge de ícone colorido por kind + botão
+   Selecionar/Trocar + checkmark ao concluir), em vez de dois padrões
+   diferentes coexistindo (guidance do skill: "inconsistent component
+   vocabulary across screens" é uma falha explícita do registro produto).
+   Vídeo tem barra de progresso real (evento `onProgress` do upload TUS);
+   os demais mantêm o spinner "Enviando…" já existente (upload pequeno,
+   progresso não é informativo o bastante para justificar o código extra).
+   O design-ref só desenha vídeo/planilha/carta na etapa Anexos — Documento
+   do Projeto/Estatuto (fora do escopo de Q47) foram mantidos como cards
+   separados acima, sem redesenhar sua lógica de negócio.
+7. **Reprodução na diretoria** (`pipeline/[id]/page.tsx`) — seção "Anexos"
+   nova: vídeo via player mínimo (`AttachmentVideoPlayer`, hls.js dinâmico,
+   controles nativos do `<video>` — sem os controles customizados de
+   `apps/plataforma/src/components/lesson-player.tsx`, que aqui seriam
+   complexidade não pedida), planilha/carta/projeto/estatuto como links de
+   download com o rótulo do `kind`.
+
+### Arquivos fora da lista original, tratados como lacuna óbvia (G1)
+
+- `apps/projetos/package.json` — `tus-js-client`/`hls.js` (mesmas versões
+  já usadas por `apps/plataforma`, P-6.20): sem eles não há upload
+  resumível nem player.
+- `apps/projetos/.env.local`/`.env.example` — credenciais Bunny (ver
+  "Pré-condição verificada" acima).
+- `apps/projetos/src/lib/queries.ts` — `getDirectorProjectDetail` precisa
+  trazer `project_attachments` para a tela da diretoria renderizar
+  qualquer coisa; não havia como cumprir "reprodução do vídeo" em
+  `pipeline/[id]/page.tsx` sem essa leitura em algum lugar.
+- `apps/projetos/src/components/project-wizard-steps/step-review.tsx` —
+  a linha "Carta de recomendação: Confirmada/Não informada" lia
+  `data.cartaRecomendacao` (removido de `WizardFormData`); deixá-la
+  seria um campo morto sempre mostrando "Não informada" mesmo com carta
+  enviada. Removida (a linha "Arquivos anexados" já lista o nome do
+  arquivo da carta quando presente).
+- `apps/projetos/src/components/attachment-video-player.tsx` (novo) — um
+  Server Component (`page.tsx`) não consegue tocar HLS via hls.js sem um
+  Client Component colocado ao lado (mesmo padrão Server/Client já
+  estabelecido no repo, G5).
+
+### Verificação
+
+- `pnpm --filter @hebron/db --filter @hebron/validators --filter
+@hebron/integrations --filter @hebron/projetos lint typecheck`: verdes.
+- `attachment-kinds.test.ts` (novo, 4 testes): verdes — schema Zod recusa
+  criação anual sem os 3 anexos; `submitProject` recusa um rascunho anual
+  pré-existente (inserido direto, sem passar pelo wizard) que não tem os
+  3; pontual submete sem nenhum; anexo legado com `kind='outro'` (default
+  da migration) continua legível.
+- `submission-window.test.ts`, `duplicate-detection.test.ts` (fixtures
+  atualizadas com os 3 anexos obrigatórios para não quebrar com o novo
+  gate): verdes.
+- `notifications.test.ts`: 1 de 3 testes falha por timeout de 30s
+  (`submitProject não retorna erro`) — **pré-existente, não introduzido
+  por este corretivo** (confirmado revertendo `actions/projects.ts` via
+  `git stash` e reexecutando: o mesmo timeout ocorre sem nenhuma mudança
+  minha). O arquivo já documentava isso no próprio cabeçalho ("próximo do
+  limiar de 30s", não mocka envio real de e-mail via Resend). Os outros 2
+  testes do arquivo passam (a notificação acaba sendo gravada em segundo
+  plano depois que o vitest mata o teste por timeout).
+- Upload de vídeo/planilha/carta via UI real e reprodução na tela da
+  diretoria **não foram testados manualmente** nesta sessão (ambiente não
+  interativo) — cobertos só pelos testes automatizados acima mais
+  inspeção do código espelhando `apps/plataforma` (P-6.20, já em produção).
+
+### Débitos novos
+
+- `notifications.test.ts` timeout de 30s em `submitProject não retorna
+erro` — pré-existente (ver acima), não corrigido aqui (arquivo não está
+  na lista de arquivos permitidos deste prompt; a causa é rede real ao
+  Resend, não lógica).
+- Upload manual do vídeo/planilha/carta pela UI e reprodução na tela da
+  diretoria ficam sem verificação humana até a próxima sessão com acesso
+  a um navegador.
+
+### Arquivos modificados
+
+- `packages/db/src/schema/projetos.ts`
+- `packages/db/src/migrations/0099_projetos_attachment_kinds.sql` (novo)
+- `packages/validators/src/projetos/index.ts`
+- `apps/projetos/src/actions/projects.ts`
+- `apps/projetos/src/actions/video-upload.ts` (novo)
+- `apps/projetos/src/components/project-wizard-steps/step-attachments.tsx`
+- `apps/projetos/src/components/project-wizard-steps/step-review.tsx`
+- `apps/projetos/src/components/project-wizard.tsx`
+- `apps/projetos/src/components/attachment-video-player.tsx` (novo)
+- `apps/projetos/src/app/(diretoria)/pipeline/[id]/page.tsx`
+- `apps/projetos/src/lib/queries.ts`
+- `apps/projetos/package.json`
+- `apps/projetos/.env.local` / `.env.example`
+- `apps/projetos/src/__tests__/attachment-kinds.test.ts` (novo)
+- `apps/projetos/src/__tests__/submission-window.test.ts`
+- `apps/projetos/src/__tests__/duplicate-detection.test.ts`
+- `apps/projetos/src/__tests__/notifications.test.ts`
 - `SESSIONS.md` (esta entrada + linha no índice)

@@ -21,6 +21,7 @@ import {
   organizationMembers,
   projects,
   projectVersions,
+  projectAttachments,
   notifications,
   auditLog,
 } from "@hebron/db/schema";
@@ -216,6 +217,28 @@ beforeAll(async () => {
   await db
     .insert(projects)
     .values(draftProjectFixture(IDS.aiFailureDraft, "Projeto Falha de IA"))
+    .onConflictDoNothing();
+
+  // P-2.20 CORRETIVO: submitProject reconfere os 3 anexos obrigatórios do
+  // anual — os rascunhos fixture acima são inseridos direto (sem passar
+  // pelo wizard/createAnnualDraft), então precisam dos anexos aqui para que
+  // os testes sigam testando só duplicidade, não anexo ausente.
+  await db
+    .insert(projectAttachments)
+    .values(
+      [IDS.similarDraft, IDS.distinctDraft, IDS.aiFailureDraft].flatMap(
+        (projectId) =>
+          (["video", "planilha", "carta"] as const).map((kind) => ({
+            projectId,
+            kind,
+            fileUrl:
+              kind === "video" ? null : `https://example.test/${kind}.bin`,
+            fileName: `${kind}.bin`,
+            bunnyVideoId: kind === "video" ? "test-video-id" : null,
+            uploadedBy: IDS.users.submissor,
+          })),
+      ),
+    )
     .onConflictDoNothing();
 });
 

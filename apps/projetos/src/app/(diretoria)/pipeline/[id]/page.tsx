@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { CANONICAL_LOGIN_URL } from "@hebron/auth";
+import { signBunnyPlaybackUrl } from "@hebron/integrations/bunny-stream";
+import { ATTACHMENT_KIND_LABEL } from "@hebron/validators/projetos";
 import {
   ChevronLeft,
   MapPin,
@@ -13,6 +15,7 @@ import {
   XCircle,
   Building2,
   FileText,
+  Paperclip,
   Pencil,
 } from "lucide-react";
 import {
@@ -21,6 +24,7 @@ import {
   getEligibleEvaluators,
   getMyPendingEvaluation,
 } from "../../../../lib/queries";
+import { AttachmentVideoPlayer } from "../../../../components/attachment-video-player";
 import { requireDiretorSession } from "../../../../lib/session";
 import { ScoreIndicator } from "../../../../components/score-indicator";
 import { EvaluationCard } from "../../../../components/evaluation-card";
@@ -88,6 +92,18 @@ export default async function DirectorProjectDetailPage({
 
   const isAnnual = project.tipo === "anual";
   const snap = project.snapshot;
+
+  // Anexos (P-2.20 CORRETIVO) — vídeo via Bunny Stream (URL assinada, nunca
+  // o guid cru), os demais via signed URL já resolvida em queries.ts.
+  const videoAttachment = project.attachments.find(
+    (a) => a.kind === "video" && a.bunnyVideoId,
+  );
+  const videoSrc = videoAttachment?.bunnyVideoId
+    ? signBunnyPlaybackUrl(videoAttachment.bunnyVideoId)
+    : null;
+  const otherAttachments = project.attachments.filter(
+    (a) => a.kind !== "video",
+  );
 
   // Risks derived from AI score + snapshot fields
   const risks: string[] = [];
@@ -421,6 +437,39 @@ export default async function DirectorProjectDetailPage({
               <p className="text-sm text-(--fg) leading-relaxed">
                 {project.expectedResults}
               </p>
+            </div>
+          )}
+
+          {/* Anexos (P-2.20 CORRETIVO) */}
+          {project.attachments.length > 0 && (
+            <div className="rounded-md border border-(--border) bg-(--surface) px-4 py-4 shadow-(--shadow-xs)">
+              <p className="text-xs font-bold uppercase tracking-wider text-(--fg-muted) mb-3 flex items-center gap-1.5">
+                <Paperclip className="w-3.5 h-3.5" aria-hidden />
+                Anexos
+              </p>
+              <div className="flex flex-col gap-3">
+                {videoSrc && <AttachmentVideoPlayer src={videoSrc} />}
+                {otherAttachments.length > 0 && (
+                  <div className="flex flex-col gap-2">
+                    {otherAttachments.map((a) => (
+                      <a
+                        key={a.id}
+                        href={a.fileUrl ?? "#"}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center justify-between gap-3 rounded-(--radius) border border-(--border) px-3 py-2 text-sm hover:border-(--brand) transition-colors"
+                      >
+                        <span className="text-(--fg-muted) shrink-0">
+                          {ATTACHMENT_KIND_LABEL[a.kind]}
+                        </span>
+                        <span className="font-medium text-(--fg) truncate text-right">
+                          {a.fileName}
+                        </span>
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 

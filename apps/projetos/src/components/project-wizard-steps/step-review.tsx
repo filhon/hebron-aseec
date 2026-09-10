@@ -92,10 +92,6 @@ export function StepReview({
       title: "Documentos",
       items: [
         {
-          label: "Carta de recomendação",
-          value: data.cartaRecomendacao ? "Confirmada" : "Não informada",
-        },
-        {
           label: "Arquivos anexados",
           value:
             data.anexos.length > 0

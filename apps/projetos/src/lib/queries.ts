@@ -24,6 +24,7 @@ import {
   organizationMembers,
   organizations,
   paymentSchedules,
+  projectAttachments,
   projectCategories,
   projectVersions,
   projects,
@@ -1076,6 +1077,16 @@ export type DirectorReport = {
   submittedAt: Date | null;
 };
 
+// P-2.20 CORRETIVO — anexos tipados (vídeo via Bunny Stream, os demais via
+// signed URL do bucket project-attachments).
+export type DirectorAttachment = {
+  id: string;
+  kind: "projeto" | "estatuto" | "video" | "planilha" | "carta" | "outro";
+  fileUrl: string | null;
+  fileName: string;
+  bunnyVideoId: string | null;
+};
+
 export type DirectorProjectDetail = {
   id: string;
   titulo: string;
@@ -1121,6 +1132,7 @@ export type DirectorProjectDetail = {
   // viewer, a query traz para qualquer chamador (mesmo padrão de
   // `contestations` acima).
   submitterContestations: SubmissorContestation[];
+  attachments: DirectorAttachment[];
 };
 
 export async function getDirectorProjectDetail(
@@ -1346,6 +1358,19 @@ export async function getDirectorProjectDetail(
       };
     }
 
+    // Anexos (P-2.20 CORRETIVO)
+    const attachmentRows = await tx
+      .select({
+        id: projectAttachments.id,
+        kind: projectAttachments.kind,
+        fileUrl: projectAttachments.fileUrl,
+        fileName: projectAttachments.fileName,
+        bunnyVideoId: projectAttachments.bunnyVideoId,
+      })
+      .from(projectAttachments)
+      .where(eq(projectAttachments.projectId, projectId))
+      .orderBy(projectAttachments.createdAt);
+
     // Pending reports count
     const pendingReportCount = await tx
       .select({ cnt: count() })
@@ -1390,6 +1415,7 @@ export async function getDirectorProjectDetail(
       versions,
       pendingReports: pendingReportCount[0]?.cnt ?? 0,
       submitterContestations: mappedSubmitterContestations,
+      attachments: attachmentRows,
     };
   });
 }
